@@ -3,8 +3,8 @@ import { createDataStore } from './app/data.js';
 import { createRuntime } from './app/runtime.js';
 import { hostWindow, libs, toast } from './host/st.js';
 import { createApp } from './ui/app.js';
-import { ensureStyle, removeStyle } from './ui/dom.js';
-import { createNotices, createSignalHider } from './ui/notice.js';
+import { ensureStyle, promptDialog, removeStyle } from './ui/dom.js';
+import { createNotices } from './ui/notice.js';
 
 const VERSION = typeof __PI_VERSION__ === 'string' ? __PI_VERSION__ : 'dev';
 const KEY = '__plotInjector';
@@ -32,14 +32,13 @@ function boot() {
         onChange: reason => app && app.refresh(reason),
         onError: error => toast('error', `保存失败，内容仍在内存里：${error.message}`),
     });
-    const runtime = createRuntime({ data, notice, emit: reason => app && app.refresh(reason) });
+    const askReason = reason => promptDialog({ title: '改写后续阶段', label: '偏离说明（可修改或留空）', value: reason, multiline: true });
+    const runtime = createRuntime({ data, notice, emit: reason => app && app.refresh(reason), askReason });
     app = createApp({ data, runtime, version: VERSION });
-    const hider = createSignalHider(() => data.settings().hideSignal);
 
     let started = false;
     const ready = data.init().then(() => {
         runtime.start();
-        if (data.settings().hideSignal) hider.start();
         started = true;
         app.refresh('index');
     }).catch(error => {
@@ -65,7 +64,6 @@ function boot() {
             try { subscription && typeof subscription.stop === 'function' && subscription.stop(); } catch { /* 酒馆助手已卸载 */ }
             app.close();
             if (started) runtime.stop();
-            hider.stop();
             notice.destroy();
             removeStyle();
             await data.flush().catch(() => {});

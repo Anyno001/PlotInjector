@@ -145,3 +145,18 @@ export function filterStageData(data, offIds = []) {
 export function mainNodeNames(data) {
     return stageNodes(data).filter(node => node.kind === 'main').map(node => node.name);
 }
+
+// 从 fromStageId 这一段起（含）换成 incoming 里的卷与阶段：同名卷接在后面，新卷追加；返回新的卷列表。
+export function replaceRest(volumes, fromStageId, incoming) {
+    const units = flattenUnits(volumes);
+    const from = units.findIndex(unit => unit.stage.id === fromStageId);
+    if (from < 0) throw new Error('原来的阶段已不存在');
+    const drop = new Set(units.slice(from).map(unit => unit.stage.id));
+    let next = volumes.map(volume => ({ ...volume, stages: volume.stages.filter(stage => !drop.has(stage.id)) }));
+    for (const volume of incoming) {
+        const same = next.find(item => item.key === volume.key);
+        if (same) next = next.map(item => (item === same ? { ...item, stages: [...item.stages, ...volume.stages] } : item));
+        else next.push(volume);
+    }
+    return next.filter(volume => volume.stages.length);
+}

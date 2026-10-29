@@ -42,7 +42,7 @@ export function options(list, value) {
     return list.map(item => `<option value="${esc(item.value)}"${String(item.value) === String(value) ? ' selected' : ''}>${esc(item.label)}</option>`).join('');
 }
 
-// 自绘对话框：叠在主面板之上。actions 的 value 原样返回；点遮罩或 Esc 返回 null。
+// 自绘对话框：叠在主面板之上。actions 的 value 原样返回；正文里带 data-dlg-value 的按钮直接以该值关闭；点遮罩或 Esc 返回 null。
 export function openDialog({ title, html = '', actions = [{ label: '确定', value: true, primary: true }], onMount } = {}) {
     const doc = hostDocument();
     return new Promise(resolve => {
@@ -60,6 +60,8 @@ export function openDialog({ title, html = '', actions = [{ label: '确定', val
         };
         root.addEventListener('click', event => {
             if (event.target === root) return finish(null);
+            const pick = event.target.closest('[data-dlg-value]');
+            if (pick) return finish(pick.dataset.dlgValue);
             const button = event.target.closest('[data-dlg]');
             if (!button) return;
             const action = actions[Number(button.dataset.dlg)];

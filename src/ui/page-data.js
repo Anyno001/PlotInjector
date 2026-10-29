@@ -36,18 +36,16 @@ export function render(view) {
     const orphans = s.verified ? Object.keys(s.verified).filter(name => !referenced(view.data.index()).has(name)) : [];
     const settings = view.data.settings();
     return `<div class="pi-card"><h3>本地文件</h3>
-        <p class="pi-hint">项目数据保存在酒馆服务器的 user/files/pi-* 文件中，浏览器仅保存界面状态。</p>
         ${filesTable(view)}
         <div class="pi-equal pi-acts"><button type="button" class="pi-btn is-sm" data-act="verify">${s.verifying ? '<span class="pi-spin"></span>' : ''}重新核对</button>
             <button type="button" class="pi-btn is-sm" data-act="orphans"${orphans.length ? '' : ' disabled'}>清理孤立文件${orphans.length ? `（${orphans.length}）` : ''}</button>
             <button type="button" class="pi-btn is-sm" data-act="clear-chats">清空全部讨论记录</button></div></div>
         <div class="pi-card"><h3>版本更新</h3>
-        <p class="pi-hint">当前版本 v${esc(view.version)}。默认自动使用最新发布版本。</p>
-        <label class="pi-field"><span>指定版本</span><input class="pi-inp" data-set="loaderRef" value="${esc(settings.loaderRef)}" placeholder="留空跟随最新版本"></label>
-        <p class="pi-hint">填写 v0.1.0 等版本号可固定版本，填写 main 使用开发中的最新代码。修改后刷新酒馆页面生效。</p></div>
+        <p class="pi-hint">当前版本 v${esc(view.version)}，修改后刷新酒馆页面生效。</p>
+        <label class="pi-field"><span>指定版本</span><input class="pi-inp" data-set="loaderRef" value="${esc(settings.loaderRef)}" placeholder="留空跟随最新版本，可填 v0.1.0 或 main"></label></div>
         <div class="pi-card"><h3>重置插件</h3>
-        <p class="pi-hint">删除所有项目、讨论记录和当前聊天的进度，其他聊天的进度保留。执行前自动下载zip备份，确认后无法撤销。</p>
-        <button type="button" class="pi-btn is-sm is-danger" data-act="wipe">备份并删除</button></div>`;
+        <p class="pi-hint">删除所有项目、讨论记录和当前聊天的进度，执行前自动下载备份。</p>
+        <div class="pi-equal is-one pi-acts"><button type="button" class="pi-btn is-sm is-danger" data-act="wipe">备份并删除</button></div></div>`;
 }
 
 export function onInput(view, target) {

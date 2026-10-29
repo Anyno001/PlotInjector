@@ -1,6 +1,8 @@
-import { buildCheckMessages, cleanFloorText, hasSignal, parseCheckReply } from '../core/check.js';
-import { buildEntries, toWorldInfoEntry } from '../core/inject.js';
-import { flattenUnits, stageLabel, stageNodes, volumeLabel } from '../core/outline.js';
+import { filterAcuLore } from '../core/acu.js';
+import { buildCheckMessages, cleanFloorText, parseCheckReply } from '../core/check.js';
+import { buildEntries, buildIndexText, toWorldInfoEntry } from '../core/inject.js';
+import { parseOutlineReply, rewriteRestMessages } from '../core/prompts.js';
+import { flattenUnits, replaceRest, stageLabel, stageNodes, volumeLabel } from '../core/outline.js';
 import { advance, currentIndex, emptyProgress, goTo, isMuted, mute, uncheckByNames, unitStates } from '../core/progress.js';
 import { resolveLlm } from '../core/store.js';
 import { requestLlm } from '../host/llm.js';
@@ -12,8 +14,9 @@ export const VIRTUAL_WORLD = '剧情注入器';
 
 const placeOf = unit => `${volumeLabel(unit.volume.key)}·${stageLabel(unit.stage.key)}`;
 
-// 运行时：注入、报信、每 N 楼检测。UI 关着也在跑。
-export function createRuntime({ data, notice, emit }) {
+// 运行时：注入、每 N 楼检测、偏离大纲时提醒或自动改写。UI 关着也在跑。
+// askReason 由入口传入（弹输入框），运行时本身不依赖界面。
+export function createRuntime({ data, notice, emit, askReason = async () => '' }) {
     const view = hostWindow();
     let progress = null;
     let progressFor = '';
@@ -73,8 +76,15 @@ export function createRuntime({ data, notice, emit }) {
         return Boolean(eventTypes().WORLDINFO_ENTRIES_LOADED);
     }
 
+    // 先去掉屏蔽的数据库条目（不论有没有启用项目），再追加本项目的虚拟条目。
     function onEntriesLoaded(payload) {
-        if (!payload || !Array.isArray(payload.chatLore)) return;
+        if (!payload) return;
+        try {
+            filterAcuLore(data.settings().acu, payload);
+        } catch (error) {
+            console.error('[剧情注入器] 屏蔽数据库条目失败', error);
+        }
+        if (!Array.isArray(payload.chatLore)) return;
         try {
             payload.chatLore.push(...virtualEntries());
         } catch (error) {
@@ -127,69 +137,102 @@ export function createRuntime({ data, notice, emit }) {
         setProgress(goTo(prog, units(), unitId));
     }
 
-    function proposeAdvance({ unit, source, reason = '', messageId = null }) {
+    function proposeAdvance({ unit, reason = '' }) {
         const settings = data.settings();
         const prog = currentProgress();
         if (!prog || isMuted(prog, unit.id)) return;
         if (settings.handleMode === 'nodes') return;
         const step = advance(prog, units());
         if (!step) return;
-        const signal = source === 'signal' ? { unitId: unit.id, messageId, at: Date.now() } : null;
         if (settings.handleMode === 'auto') {
-            const review = source === 'signal' && settings.switchSource === 'both' ? { from: unit.id, to: step.to.id } : null;
-            setProgress({ ...step.progress, signal: signal ? { ...signal, advanced: true, to: step.to.id } : null, review });
+            setProgress(step.progress);
             notice.show({
                 id: 'advance',
                 title: `已切到 ${placeOf(step.to)}`,
-                body: reason || (source === 'signal' ? 'AI 报告本阶段已演完。' : '检测判断本阶段已演完。'),
+                body: reason || '检测判断本阶段已演完。',
                 actions: [{ label: '撤销', run: () => backTo(unit.id) }],
                 timeout: 12000,
             });
             return;
         }
-        if (signal) setProgress({ ...prog, signal });
         notice.show({
             id: 'advance',
             title: `${placeOf(unit)} 已演完`,
-            body: reason || (source === 'signal' ? 'AI 报告本阶段已演完。' : '检测判断本阶段已演完。'),
+            body: reason || '检测判断本阶段已演完。',
             actions: [
-                { label: '打开下一段', primary: true, run: () => {
-                    const done = openNext();
-                    if (done && source === 'signal' && data.settings().switchSource === 'both') {
-                        setProgress({ ...currentProgress(), review: { from: unit.id, to: done.to.id } });
-                    }
-                } },
+                { label: '打开下一段', primary: true, run: () => openNext() },
                 { label: '暂不', run: () => notice.hide('advance') },
                 { label: '本阶段不再提醒', run: () => setProgress(mute(currentProgress(), unit.id)) },
             ],
         });
     }
 
-    function handleSignal(messageId) {
-        const unit = activeUnit();
+    // 按最近正文改写当前段及之后的阶段，直接替换并把进度移到改写后的第一段；返回撤销用的快照。
+    async function rewriteRest(reason) {
+        const project = activeProject();
         const prog = currentProgress();
-        if (!unit || !prog) return;
-        if (prog.signal && prog.signal.unitId === unit.id) return;
-        proposeAdvance({ unit, source: 'signal', messageId });
+        const unit = activeUnit();
+        if (!project || !prog || !unit) throw new Error('当前卡没有启用的项目');
+        const list = units();
+        const from = list.findIndex(item => item.id === unit.id);
+        const recent = recentFloors(6).map(floor => floor.text).join('\n\n');
+        const reply = await requestLlm(rewriteRestMessages({ setting: project.setting.text, volumes: project.outline.volumes, fromUnitIndex: from, units: list, recent, reason }), resolveLlm(data.settings(), 'outline'));
+        const parsed = parseOutlineReply(reply);
+        if (!parsed.ok) throw new Error(`改写结果格式有误：${parsed.error}`);
+        const before = { volumes: project.outline.volumes, progress: prog };
+        const volumes = replaceRest(project.outline.volumes, unit.stage.id, parsed.volumes);
+        data.updateProject(project.id, current => ({ ...current, outline: { ...current.outline, volumes } }));
+        const first = parsed.volumes[0] && parsed.volumes[0].stages[0];
+        if (first) setProgress(goTo(currentProgress(), flattenUnits(volumes), first.id));
+        return before;
     }
 
-    // 滑动或重新生成后报信消失：撤回提示；已自动切换且还停在切过去的那段时退回。
-    function revokeSignalIfGone() {
-        const prog = currentProgress();
-        if (!prog || !prog.signal) return;
-        const msg = chatMessages()[prog.signal.messageId];
-        if (msg && hasSignal(msg.mes)) return;
-        const signal = prog.signal;
-        if (signal.advanced) {
-            const unit = activeUnit();
-            if (unit && unit.id === signal.to) {
-                setProgress({ ...goTo(prog, units(), signal.unitId), review: null });
-                toast('info', '报信的回复已被替换，剧情退回上一段。');
-                return;
-            }
+    function undoRewrite(projectId, before) {
+        data.updateProject(projectId, current => ({ ...current, outline: { ...current.outline, volumes: before.volumes } }));
+        setProgress(before.progress);
+        toast('info', '已撤销改写，恢复原来的大纲和进度。');
+    }
+
+    async function runRewrite(reason, { auto = false } = {}) {
+        const projectId = activeId();
+        notice.show({ id: 'offtrack', title: '正在改写后续阶段…', body: reason });
+        try {
+            const before = await rewriteRest(reason);
+            notice.show({
+                id: 'offtrack',
+                title: auto ? '剧情偏离大纲，已自动改写后续阶段' : '已改写后续阶段',
+                body: reason,
+                actions: [{ label: '撤销', run: () => undoRewrite(projectId, before) }],
+                timeout: 20000,
+            });
+        } catch (error) {
+            notice.hide('offtrack');
+            toast('error', `改写失败：${error.message}`);
         }
-        setProgress({ ...prog, signal: null });
+    }
+
+    function handleOffTrack(unit, reason) {
         notice.hide('advance');
+        if (data.settings().offTrackMode === 'auto') {
+            runRewrite(reason, { auto: true });
+            return;
+        }
+        notice.show({
+            id: 'offtrack',
+            title: `${placeOf(unit)} 偏离大纲`,
+            body: `${reason || '正文走向与后续阶段冲突。'}后续阶段可能接不上，建议改写。`,
+            actions: [
+                { label: '改写后续阶段', primary: true, run: async () => {
+                    const note = await askReason(reason);
+                    if (note != null) runRewrite(note.trim() || reason);
+                } },
+                { label: '暂不', run: () => notice.hide('offtrack') },
+                { label: '本阶段不再提醒', run: () => {
+                    const prog = currentProgress();
+                    if (prog && !prog.offMuted.includes(unit.id)) setProgress({ ...prog, offMuted: [...prog.offMuted, unit.id] });
+                } },
+            ],
+        });
     }
 
     function recentFloors(count) {
@@ -213,9 +256,7 @@ export function createRuntime({ data, notice, emit }) {
             if (manual) toast('info', '当前卡没有启用的项目。');
             return null;
         }
-        const review = prog.review;
-        const list = units();
-        const unit = review ? list.find(item => item.id === review.from) : activeUnit();
+        const unit = activeUnit();
         if (!unit) return null;
         const floors = recentFloors(settings.checkFloors);
         if (!floors.length) {
@@ -225,27 +266,18 @@ export function createRuntime({ data, notice, emit }) {
         checking = true;
         emit('checking');
         try {
-            const off = (prog.slots[unit.id] && prog.slots[unit.id].off) || [];
-            const reply = await requestLlm(buildCheckMessages(unit, off, floors), resolveLlm(settings, 'check'), { timeoutMs: 120000 });
+            const list = units();
+            const index = buildIndexText(list, unitStates(list, prog), prog);
+            const reply = await requestLlm(buildCheckMessages(unit, index, floors), resolveLlm(settings, 'check'), { timeoutMs: 120000 });
             const result = parseCheckReply(reply);
             let next = currentProgress();
             next = uncheckByNames(next, unit.id, stageNodes(unit.stage.data), result.done);
-            next = { ...next, lastCheckFloor: floorCount(), review: null };
+            next = { ...next, lastCheckFloor: floorCount() };
             setProgress(next);
-            if (review) {
-                if (!result.stageDone) {
-                    notice.show({
-                        id: 'advance',
-                        title: `复核：${placeOf(unit)} 可能还没演完`,
-                        body: result.reason || '检测认为上一段的主线节点未全部发生。',
-                        actions: [
-                            { label: '退回上一段', primary: true, run: () => backTo(unit.id) },
-                            { label: '保持现状', run: () => notice.hide('advance') },
-                        ],
-                    });
-                }
+            if (result.offTrack && settings.offTrackMode !== 'off' && !next.offMuted.includes(unit.id)) {
+                handleOffTrack(unit, result.offReason || result.reason);
             } else if (result.stageDone) {
-                proposeAdvance({ unit, source: 'check', reason: result.reason });
+                proposeAdvance({ unit, reason: result.reason });
             } else if (manual) {
                 toast('info', result.reason || '本阶段尚未演完。');
             }
@@ -264,9 +296,6 @@ export function createRuntime({ data, notice, emit }) {
         const project = activeProject();
         if (!project) return;
         const settings = data.settings();
-        const msg = chatMessages()[messageId];
-        if (msg && !msg.is_user && !msg.is_system && settings.switchSource !== 'check' && hasSignal(msg.mes)) handleSignal(Number(messageId));
-        if (settings.switchSource === 'signal') return;
         const prog = currentProgress();
         const floors = floorCount();
         if (floors - prog.lastCheckFloor >= settings.checkEvery) view.setTimeout(() => checkNow(), 0);
@@ -277,19 +306,13 @@ export function createRuntime({ data, notice, emit }) {
         if (!prog) return;
         const floors = floorCount();
         if (prog.lastCheckFloor > floors) setProgress({ ...prog, lastCheckFloor: floors });
-        revokeSignalIfGone();
-    }
-
-    function onSwiped(messageId) {
-        revokeSignalIfGone();
-        const msg = chatMessages()[messageId];
-        if (msg && !msg.is_user && hasSignal(msg.mes) && data.settings().switchSource !== 'check') handleSignal(Number(messageId));
     }
 
     async function onChatChanged() {
         progress = null;
         progressFor = '';
         notice.hide('advance');
+        notice.hide('offtrack');
         const id = activeId();
         if (id) {
             try {
@@ -343,7 +366,6 @@ export function createRuntime({ data, notice, emit }) {
         if (types.WORLDINFO_ENTRIES_LOADED) on(types.WORLDINFO_ENTRIES_LOADED, onEntriesLoaded);
         on(types.CHAT_CHANGED, onChatChanged);
         on(types.MESSAGE_RECEIVED, onMessageReceived);
-        on(types.MESSAGE_SWIPED, onSwiped);
         on(types.MESSAGE_UPDATED, onMessageChanged);
         on(types.MESSAGE_DELETED, onMessageChanged);
         onChatChanged();
@@ -373,6 +395,7 @@ export function createRuntime({ data, notice, emit }) {
         switchProject,
         floorCount,
         recentFloors,
+        rewriteRest,
         injectMode: () => (hasEntriesEvent() ? 'virtual' : 'book'),
         refresh: () => { scheduleFallback(); emit('progress'); },
     };

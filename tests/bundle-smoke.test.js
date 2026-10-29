@@ -58,6 +58,7 @@ function makeHost() {
     win.TavernHelper = {
         async generateRaw({ ordered_prompts: prompts }) {
             llmCalls.push(prompts);
+            if (win.__reply) return win.__reply(prompts);
             return '{"done":["甲事件"],"stageDone":true,"reason":"甲已发生"}';
         },
     };
@@ -109,15 +110,16 @@ async function entriesNow(eventSource) {
     return payload.chatLore;
 }
 
-test('发布文件启动后，本卡项目的设定、索引、当前阶段详细作为常驻虚拟条目进入世界书管线', async () => {
+test('发布文件启动后，本卡项目的设定和当前阶段详细作为常驻虚拟条目进入世界书管线，剧情索引不注入', async () => {
     const host = await boot();
     assert.equal(host.win.__errors.length, 0, host.win.__errors.join('\n'));
     await withProject(host);
     const lore = await entriesNow(host.eventSource);
-    assert.deepEqual(lore.map(entry => entry.comment), ['剧情注入器·设定', '剧情注入器·剧情索引', '剧情注入器·卷一·测试·阶段一']);
+    assert.deepEqual(lore.map(entry => entry.comment), ['剧情注入器·设定', '剧情注入器·卷一·测试·阶段一']);
     assert.ok(lore.every(entry => entry.constant && entry.ignoreBudget && !entry.disable && entry.world === '剧情注入器'));
-    assert.deepEqual(lore.map(entry => entry.position), [1, 1, 4]);
+    assert.deepEqual(lore.map(entry => entry.position), [1, 4]);
     assert.doesNotMatch(lore[1].content, /undefined/);
+    assert.match(lore[1].content, /尚未演完的剧情规划/);
     await host.instance.data.flush();
     const index = JSON.parse(host.files.get('pi-index.json'));
     assert.equal(index.projects.length, 1);
@@ -128,18 +130,22 @@ test('发布文件启动后，本卡项目的设定、索引、当前阶段详�
     assert.equal((await entriesNow(host.eventSource)).length, 0);
 });
 
-test('AI 正文带 <剧情推进/> 时询问；点「打开下一段」后详细换成下一阶段，进度写进聊天元数据', async () => {
+test('AI 正文里的 <剧情推进/> 不再触发推进；检测判定演完后询问，点「打开下一段」换详细', async () => {
     const host = await boot();
     await withProject(host);
-    host.instance.data.updateSettings({ switchSource: 'signal' });
+    host.instance.data.updateSettings({ checkEvery: 99 });
     host.context.chat.push({ is_user: true, mes: '你好' }, { is_user: false, mes: '甲发生了。\n<剧情推进/>' });
     await host.eventSource.emit('message_received', 1, 'normal');
+    assert.equal(host.win.document.querySelector('[data-notice="advance"]'), null);
+    host.instance.data.updateSettings({ checkEvery: 1 });
+    await host.eventSource.emit('message_received', 1, 'normal');
+    await tick(10);
     const card = host.win.document.querySelector('[data-notice="advance"]');
-    assert.ok(card, '应弹出询问卡片');
+    assert.ok(card, '检测判定演完后应弹出询问卡片');
     card.querySelector('[data-act="0"]').click();
     const lore = await entriesNow(host.eventSource);
-    assert.match(lore[2].content, /阶段二_发展/);
-    assert.match(lore[1].content, /已过：卷一·测试·阶段一 开端（甲事件）/);
+    assert.match(lore[1].content, /阶段二_发展/);
+    assert.ok(lore.every(entry => !/剧情推进/.test(entry.content)));
     const meta = host.context.chatMetadata.plotInjector;
     assert.ok(meta.byProject[meta.projectId].current);
     await host.instance.destroy();
@@ -148,15 +154,76 @@ test('AI 正文带 <剧情推进/> 时询问；点「打开下一段」后详细
 test('每 N 楼兜底检测：到点调用检测接口，取消已演节点并提示', async () => {
     const host = await boot();
     await withProject(host);
-    host.instance.data.updateSettings({ switchSource: 'check', checkEvery: 2 });
+    host.instance.data.updateSettings({ checkEvery: 2 });
     host.context.chat.push({ is_user: true, mes: '一' }, { is_user: false, mes: '<think>想</think>甲发生了。' });
     await host.eventSource.emit('message_received', 1, 'normal');
     await tick(10);
     assert.equal(host.llmCalls.length, 1);
     assert.doesNotMatch(host.llmCalls[0][1].content, /<think>|想/);
+    assert.match(host.llmCalls[0][1].content, /【剧情索引】/);
     assert.ok(host.win.document.querySelector('[data-notice="advance"]'));
     const lore = await entriesNow(host.eventSource);
-    assert.doesNotMatch(lore[2].content, /甲事件/);
+    assert.doesNotMatch(lore[1].content, /甲事件/);
+    await host.instance.destroy();
+});
+
+const REWRITE = '```yaml\n剧情_卷一_测试:\n  阶段一_新开端:\n    时间范围: 偏离之后\n    主线节点:\n      - 名称: 丙事件\n        事件: 丙发生。\n```';
+
+test('检测发现偏离大纲时弹提醒；改写后续阶段可填说明，改写后能撤销', async () => {
+    const host = await boot();
+    const project = await withProject(host);
+    host.win.__reply = prompts => (/剧情进度核对员/.test(prompts[0].content)
+        ? '{"done":[],"stageDone":true,"offTrack":true,"offReason":"甲已死，乙事件无法发生","reason":"x"}'
+        : REWRITE);
+    host.instance.data.updateSettings({ checkEvery: 1 });
+    host.context.chat.push({ is_user: true, mes: '一' }, { is_user: false, mes: '甲死了。' });
+    await host.eventSource.emit('message_received', 1, 'normal');
+    await tick(10);
+    const doc = host.win.document;
+    const card = doc.querySelector('[data-notice="offtrack"]');
+    assert.ok(card, '应弹出偏离提醒');
+    assert.match(card.textContent, /甲已死，乙事件无法发生/);
+    assert.equal(doc.querySelector('[data-notice="advance"]'), null, '偏离优先于推进');
+    card.querySelector('[data-act="0"]').click();
+    await tick(10);
+    const input = doc.querySelector('.pi-dialog [data-dlg-input]');
+    assert.equal(input.value, '甲已死，乙事件无法发生');
+    input.value = '甲死了，改成丙线';
+    doc.querySelector('.pi-dialog .pi-dlg-acts .is-primary').click();
+    await tick(20);
+    const rewriteCall = host.llmCalls.at(-1);
+    assert.match(rewriteCall[1].content, /【偏转说明】\n甲死了，改成丙线/);
+    const stages = () => host.instance.data.project(project.id).outline.volumes[0].stages.map(stage => stage.key).join(',');
+    assert.equal(stages(), '阶段一_新开端');
+    let lore = await entriesNow(host.eventSource);
+    assert.match(lore[1].content, /阶段一_新开端/);
+    doc.querySelector('[data-notice="offtrack"] [data-act="0"]').click();
+    await tick(10);
+    assert.equal(stages(), '阶段一_开端,阶段二_发展');
+    lore = await entriesNow(host.eventSource);
+    assert.match(lore[1].content, /阶段一_开端/);
+    assert.equal(host.win.__errors.length, 0, host.win.__errors.join('\n'));
+    await host.instance.destroy();
+});
+
+test('偏离设为自动改写时不询问直接改写；设为不检查时不提醒', async () => {
+    const host = await boot();
+    const project = await withProject(host);
+    host.win.__reply = prompts => (/剧情进度核对员/.test(prompts[0].content)
+        ? '{"done":[],"stageDone":false,"offTrack":true,"offReason":"走向冲突","reason":"x"}'
+        : REWRITE);
+    host.instance.data.updateSettings({ checkEvery: 1, offTrackMode: 'off' });
+    host.context.chat.push({ is_user: true, mes: '一' }, { is_user: false, mes: '正文' });
+    await host.eventSource.emit('message_received', 1, 'normal');
+    await tick(10);
+    assert.equal(host.win.document.querySelector('[data-notice="offtrack"]'), null);
+    host.instance.data.updateSettings({ offTrackMode: 'auto' });
+    host.context.chat.push({ is_user: true, mes: '二' }, { is_user: false, mes: '正文' });
+    await host.eventSource.emit('message_received', 3, 'normal');
+    await tick(20);
+    assert.equal(host.win.document.querySelector('.pi-dialog'), null, '自动模式不弹输入框');
+    assert.equal(host.instance.data.project(project.id).outline.volumes[0].stages.map(stage => stage.key).join(','), '阶段一_新开端');
+    assert.match(host.win.document.querySelector('[data-notice="offtrack"]').textContent, /已自动改写/);
     await host.instance.destroy();
 });
 
@@ -184,46 +251,48 @@ test('打开界面后四个页签、设置页、数据管理页都能渲染', as
     assert.equal(doc.getElementById('pi-style'), null);
 });
 
-test('接口预设：获取模型后下拉选择，多个用途共用一个预设，删除后回到酒馆连接', async () => {
+test('模型接口：获取列表后下拉选择；保存为预设后另一个用途一键载入', async () => {
     const host = await boot();
     await withProject(host);
     host.click();
     await tick(10);
     const doc = host.win.document;
     const fire = (node, type) => node.dispatchEvent(new host.win.Event(type, { bubbles: true }));
+    const settings = () => host.instance.data.settings();
     doc.querySelector('.pi-side [data-act="page"][data-page="settings"]').click();
     await tick(10);
-    doc.querySelector('[data-act="preset-new"]').click();
-    await tick(10);
-    const dlg = doc.querySelector('.pi-dialog');
-    dlg.querySelector('[data-f="name"]').value = '测试接口';
-    dlg.querySelector('[data-f="endpoint"]').value = 'https://api.example.com/v1';
-    dlg.querySelector('[data-fetch-models]').click();
+    const source = doc.querySelector('select[data-llm="discuss"][data-k="source"]');
+    source.value = 'custom';
+    fire(source, 'change');
+    const endpoint = doc.querySelector('input[data-llm="discuss"][data-k="endpoint"]');
+    endpoint.value = 'https://api.example.com/v1';
+    fire(endpoint, 'input');
+    doc.querySelector('[data-act="models"][data-role="discuss"]').click();
     await tick(30);
-    const pick = dlg.querySelector('select[data-f="model"]');
+    const pick = doc.querySelector('select[data-llm="discuss"][data-k="model"]');
     assert.ok(pick, '获取后应出现模型下拉框');
     assert.deepEqual([...pick.options].filter(option => !option.disabled).map(option => option.value), ['model-a', 'model-b', '__manual']);
     pick.value = 'model-b';
-    dlg.querySelector('.pi-dlg-acts .is-primary').click();
+    fire(pick, 'change');
+    assert.equal(settings().llm.discuss.model, 'model-b');
+
+    doc.querySelector('[data-act="preset-save"]').click();
     await tick(10);
-    const settings = () => host.instance.data.settings();
+    doc.querySelector('.pi-dialog [data-dlg-input]').value = '我的接口';
+    doc.querySelector('.pi-dialog .pi-dlg-acts .is-primary').click();
+    await tick(10);
     assert.equal(settings().presets.length, 1);
-    assert.equal(settings().presets[0].model, 'model-b');
-    const id = settings().presets[0].id;
-    for (const role of ['discuss', 'check']) {
-        const select = doc.querySelector(`[data-role-pick="${role}"]`);
-        select.value = `p:${id}`;
-        fire(select, 'change');
-    }
-    for (const role of ['discuss', 'check']) assert.equal(`${settings().llm[role].source}:${settings().llm[role].presetId}`, `preset:${id}`);
-    assert.equal(settings().llm.outline.source, 'tavern');
-    doc.querySelector(`[data-act="preset-del"][data-id="${id}"]`).click();
+    assert.equal(settings().presets[0].name, '我的接口');
+
+    doc.querySelector('[data-act="llm-role"][data-role="check"]').click();
     await tick(10);
-    doc.querySelector('.pi-dialog .pi-dlg-acts .is-danger').click();
+    doc.querySelector('[data-act="preset-load"]').click();
     await tick(10);
-    assert.equal(settings().presets.length, 0);
-    assert.equal(settings().llm.discuss.source, 'tavern');
-    assert.equal(settings().llm.check.source, 'tavern');
+    doc.querySelector('.pi-dialog .pi-preset-pick').click();
+    await tick(10);
+    const check = settings().llm.check;
+    assert.equal(`${check.source}|${check.endpoint}|${check.model}`, 'custom|https://api.example.com/v1|model-b');
+    assert.equal(doc.querySelector('input[data-llm="check"][data-k="endpoint"]').value, 'https://api.example.com/v1');
     assert.equal(host.win.__errors.length, 0, host.win.__errors.join('\n'));
     await host.instance.destroy();
 });
@@ -251,7 +320,116 @@ test('世界书条目页：开启与已关闭分两区，勾选框直接开关�
     await tick(20);
     assert.equal(book.entries[0].disable, true);
     assert.deepEqual(sections(), [[], [['0', false], ['1', false]]]);
+    doc.querySelector('[data-act="wb-bulk"][data-group="off"]').click();
+    await tick(20);
+    assert.deepEqual(sections(), [[['0', true], ['1', true]], []]);
+    assert.equal(book.entries[1].disable, false);
+    doc.querySelector('[data-act="wb-bulk"][data-group="on"]').click();
+    await tick(20);
+    assert.deepEqual(sections(), [[], [['0', false], ['1', false]]]);
     assert.equal(host.win.__errors.length, 0, host.win.__errors.join('\n'));
+    await host.instance.destroy();
+});
+
+test('世界书条目页：数据库条目按字段分组，字段一键开关只影响该字段，屏蔽不改世界书、扫描时生效', async () => {
+    const host = await boot();
+    await withProject(host);
+    const titles = ['手写剧情', 'TavernDB-ACU-ImportantPersonsIndex', 'TavernDB-ACU-CustomExport-人物档案-1', 'TavernDB-ACU-CustomExport-剧情纪要-上', 'TavernDB-ACU-CustomExport-人物档案-2', 'TavernDB-ACU-CustomExport-剧情纪要-下', 'TavernDB-ACU-OutlineTable'];
+    const book = { entries: Object.fromEntries(titles.map((comment, uid) => [uid, { uid, comment, content: 'x', disable: false }])) };
+    const saved = [];
+    host.context.chatMetadata.world_info = '测试书';
+    host.context.loadWorldInfo = async () => JSON.parse(JSON.stringify(book));
+    host.context.saveWorldInfo = async (name, data) => { saved.push(name); book.entries = data.entries; };
+    host.click();
+    await tick(10);
+    const doc = host.win.document;
+    const fire = (node, type) => node.dispatchEvent(new host.win.Event(type, { bubbles: true }));
+    doc.querySelector('.pi-side [data-act="page"][data-page="books"]').click();
+    await tick(10);
+    doc.querySelector('[data-act="open-book"]').click();
+    await tick(20);
+    const [opened, closed, acu] = doc.querySelectorAll('.pi-wb-sec');
+    assert.deepEqual([...opened.querySelectorAll('[data-wb-toggle]')].map(input => input.dataset.wbToggle), ['0']);
+    assert.equal(closed.querySelectorAll('[data-wb-toggle]').length, 0);
+    assert.equal(acu.querySelectorAll('[data-acu-toggle]').length, 0, '字段默认收起');
+    for (const hd of [...acu.querySelectorAll('[data-act="acu-fold"]')]) doc.querySelector(`[data-act="acu-fold"][data-field="${hd.dataset.field}"]`).click();
+    await tick(10);
+    const groups = [...doc.querySelectorAll('.pi-wb-sub')].map(sub => [sub.querySelector('.pi-wb-field').textContent, sub.querySelectorAll('[data-acu-toggle]').length]);
+    assert.deepEqual(groups, [['人物档案', 2], ['剧情纪要', 2], ['英文字段', 2]]);
+
+    doc.querySelector('[data-act="acu-field"][data-field="剧情纪要"][data-on="0"]').click();
+    await tick(10);
+    assert.equal(saved.length, 0, '屏蔽不应写世界书');
+    const scan = async () => {
+        const payload = { globalLore: [], characterLore: titles.map(comment => ({ comment })), chatLore: [], personaLore: [] };
+        await host.eventSource.emit('worldinfo_entries_loaded', payload);
+        return payload.characterLore.map(item => item.comment);
+    };
+    let left = await scan();
+    assert.ok(!left.includes('TavernDB-ACU-CustomExport-剧情纪要-上') && !left.includes('TavernDB-ACU-CustomExport-剧情纪要-下'));
+    assert.ok(left.includes('TavernDB-ACU-CustomExport-人物档案-1'), '只屏蔽剧情纪要，人物档案不动');
+    titles.push('TavernDB-ACU-CustomExport-剧情纪要-3');
+    assert.ok(!(await scan()).includes('TavernDB-ACU-CustomExport-剧情纪要-3'), '剧情纪要新增条目跟随屏蔽');
+
+    const one = doc.querySelector('[data-acu-toggle="TavernDB-ACU-CustomExport-剧情纪要-上"]');
+    one.checked = true;
+    fire(one, 'change');
+    assert.ok((await scan()).includes('TavernDB-ACU-CustomExport-剧情纪要-上'));
+    doc.querySelector('[data-act="acu-field"][data-field="剧情纪要"][data-on="1"]').click();
+    await tick(10);
+    left = await scan();
+    assert.ok(left.includes('TavernDB-ACU-CustomExport-剧情纪要-下') && left.includes('TavernDB-ACU-CustomExport-剧情纪要-3'));
+
+    doc.querySelector('[data-act="wb-bulk"][data-group="on"]').click();
+    await tick(20);
+    assert.equal(book.entries[0].disable, true);
+    assert.deepEqual([1, 2, 3, 4, 5, 6].map(i => book.entries[i].disable), [false, false, false, false, false, false]);
+    assert.equal(host.win.__errors.length, 0, host.win.__errors.join('\n'));
+    await host.instance.destroy();
+});
+
+test('大纲页：阶段节点按主线/支线/世界动态切换显示', async () => {
+    const host = await boot();
+    await withProject(host);
+    host.click();
+    await tick(10);
+    const doc = host.win.document;
+    doc.querySelector('[data-act="tab"][data-tab="outline"]').click();
+    [...doc.querySelectorAll('.pi-titem')].find(item => item.textContent.includes('阶段一')).click();
+    await tick(10);
+    const visible = () => [...doc.querySelectorAll('.pi-body .pi-card h3')].map(h => (h.textContent.match(/主线节点|支线事件|世界动态/) || [])[0]).filter(Boolean);
+    assert.deepEqual(visible(), ['主线节点']);
+    doc.querySelector('[data-act="node-kind"][data-kind="world"]').click();
+    await tick(10);
+    assert.deepEqual(visible(), ['世界动态']);
+    assert.equal(host.win.__errors.length, 0, host.win.__errors.join('\n'));
+    await host.instance.destroy();
+});
+
+test('讨论页清空讨论：可先导出，设定和大纲不受影响', async () => {
+    const host = await boot();
+    const project = await withProject(host);
+    await host.instance.data.loadChat(project.id);
+    host.instance.data.saveChat(project.id, { ...host.instance.data.chat(project.id), summary: '早期', messages: [{ id: 'm1', role: 'user', content: '想法', at: 1 }] });
+    const downloads = [];
+    host.win.URL.createObjectURL = blob => { downloads.push(blob); return 'blob:x'; };
+    host.win.URL.revokeObjectURL = () => {};
+    host.click();
+    await tick(10);
+    const doc = host.win.document;
+    doc.querySelector('[data-act="tab"][data-tab="discuss"]').click();
+    await tick(10);
+    doc.querySelector('[data-act="clear-talk"]').click();
+    await tick(10);
+    doc.querySelector('.pi-dialog .pi-dlg-acts .is-primary').click();
+    await tick(10);
+    assert.equal(downloads.length, 1);
+    const chat = host.instance.data.chat(project.id);
+    assert.equal(chat.messages.length, 0);
+    assert.equal(chat.summary, '');
+    assert.equal(chat.refs.setting, true);
+    assert.equal(host.instance.data.project(project.id).setting.text, '世界观声明:\n基于: 测试');
+    assert.equal(doc.querySelector('[data-act="clear-talk"]'), null);
     await host.instance.destroy();
 });
 
@@ -288,15 +466,17 @@ test('界面操作改动立即反映到注入内容与本地文件', async () =>
     box.checked = false;
     fire(box, 'change');
     let lore = await entriesNow(host.eventSource);
-    assert.doesNotMatch(lore[2].content, /甲事件/);
+    assert.doesNotMatch(lore[1].content, /甲事件/);
 
     doc.querySelector('[data-act="tab"][data-tab="outline"]').click();
     [...doc.querySelectorAll('.pi-titem')].find(item => item.textContent.includes('阶段二')).click();
     const range = doc.querySelector('[data-stage-field="时间范围"]');
     range.value = '改过的时间';
     fire(range, 'input');
-    lore = await entriesNow(host.eventSource);
-    assert.match(lore[1].content, /下一段：.*改过的时间/);
+    doc.querySelector('[data-act="tab"][data-tab="run"]').click();
+    doc.querySelector('[data-act="index-toggle"]').click();
+    assert.match(doc.querySelector('.pi-body .pi-pre').textContent, /【下一段】\n- 卷一·测试·阶段二 发展｜时间范围：改过的时间/);
+    doc.querySelector('[data-act="tab"][data-tab="outline"]').click();
 
     doc.querySelector('[data-act="tab"][data-tab="setting"]').click();
     const setting = doc.querySelector('[data-setting]');

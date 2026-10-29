@@ -1,5 +1,5 @@
 import { filterStageData, flattenUnits, splitStageKey, splitVolumeKey, stageLabel, stageNodes, volumeLabel } from './outline.js';
-import { INDEX_SLOT, SETTING_SLOT, offNodes, unitStates } from './progress.js';
+import { SETTING_SLOT, offNodes, unitStates } from './progress.js';
 import { stringifyYaml } from './yaml.js';
 
 // 位置编号与酒馆 world_info_position 一致。
@@ -17,11 +17,9 @@ export const ROLES = [
     { value: 1, label: '用户' },
     { value: 2, label: 'AI' },
 ];
-export const SIGNAL_TAG = '<剧情推进/>';
 
 export const DEFAULT_PARAMS = {
     setting: { position: 1, depth: 4, role: 0, order: 80, enabled: true },
-    index: { position: 1, depth: 4, role: 0, order: 90, enabled: true },
     detail: { position: 4, depth: 4, role: 0, order: 100, enabled: true },
 };
 
@@ -60,42 +58,47 @@ function rangeOf(unit) {
     return value ? String(value).trim() : '';
 }
 
-export function buildIndexText(units, states, progress, settings) {
-    const keepDone = Math.max(0, Number(settings.keepDone ?? 2));
+// 剧情索引：插件内部用，只给进度检测模型看，不注入正文。
+// 不占正文 token，所以写全：已过各段的主线节点、当前段节点完成情况、下一段的时间范围/AI指令/主线节点、其后各段名称。
+const LATER_LIMIT = 6;
+
+function nodeLine(node, mark) {
+    const event = node.item && node.item.事件 ? `：${String(node.item.事件).replace(/\s+/g, ' ').slice(0, 120)}` : '';
+    return `  - ${mark ? `[${mark}] ` : ''}${node.label}｜${node.name}${event}`;
+}
+
+export function buildIndexText(units, states, progress) {
+    const lines = [];
     const done = units.filter(unit => states[unit.id] === 'done');
     const active = units.filter(unit => states[unit.id] === 'active');
     const next = units.filter(unit => states[unit.id] === 'next');
-    const lines = [];
+    const later = units.filter(unit => states[unit.id] === 'todo');
     if (done.length) {
-        const recent = keepDone ? done.slice(-keepDone) : [];
-        const folded = done.slice(0, done.length - recent.length);
-        const foldedVolumes = [...new Set(folded.map(unit => volumeLabel(unit.volume.key)))];
-        const parts = [];
-        if (foldedVolumes.length) parts.push(`${foldedVolumes.join('、')}（前情）`);
-        for (const unit of recent) {
+        lines.push('【已过】');
+        for (const unit of done) {
             const names = stageNodes(unit.stage.data).filter(node => node.kind === 'main').map(node => node.name);
-            parts.push(`${stagePlace(unit)}${names.length ? `（${names.join('／')}）` : ''}`);
+            lines.push(`- ${stagePlace(unit)}${names.length ? `（${names.join('／')}）` : ''}`);
         }
-        lines.push(`已过：${parts.join('；')}`);
     }
     for (const unit of active) {
+        const off = new Set(offNodes(progress, unit.id));
         const range = rangeOf(unit);
-        lines.push(`当前：${stagePlace(unit)}${range ? `｜时间范围：${range}` : ''}`);
+        lines.push('【当前】', `- ${stagePlace(unit)}${range ? `｜时间范围：${range}` : ''}`);
+        for (const node of stageNodes(unit.stage.data).filter(item => item.kind !== 'world')) lines.push(nodeLine(node, off.has(node.id) ? '已演' : '未演'));
     }
-    const visibility = settings.nextVisibility || 'range';
     for (const unit of next) {
         const range = rangeOf(unit);
-        let line = `下一段：${stagePlace(unit)}`;
-        if (visibility !== 'name' && range) line += `｜时间范围：${range}`;
         const instr = unit.stage.data && unit.stage.data.AI指令;
-        if (visibility === 'instr' && instr) line += `｜${String(instr).trim()}`;
-        lines.push(line);
+        lines.push('【下一段】', `- ${stagePlace(unit)}${range ? `｜时间范围：${range}` : ''}`);
+        if (instr) lines.push(`  AI指令：${String(instr).trim()}`);
+        for (const node of stageNodes(unit.stage.data).filter(item => item.kind === 'main')) lines.push(nodeLine(node, ''));
     }
-    if (!lines.length) return '';
-    if (next.length && settings.switchSource !== 'check') {
-        lines.push(`当前阶段的主线节点都已发生、剧情进入下一段的时间范围时，在正文末尾单独一行输出 ${SIGNAL_TAG}。`);
+    if (later.length) {
+        lines.push('【之后】');
+        for (const unit of later.slice(0, LATER_LIMIT)) lines.push(`- ${stagePlace(unit)}`);
+        if (later.length > LATER_LIMIT) lines.push(`- ……另有 ${later.length - LATER_LIMIT} 段`);
     }
-    return `<剧情索引>\n${lines.join('\n')}\n</剧情索引>`;
+    return lines.join('\n');
 }
 
 export function buildDetailText(unit, off, settings) {
@@ -103,7 +106,8 @@ export function buildDetailText(unit, off, settings) {
     const data = filterStageData(unit.stage.data, off);
     const body = stringifyYaml({ [unit.stage.key]: data }).trimEnd();
     const vol = splitVolumeKey(unit.volume.key).short;
-    return `<${tag} 卷="${vol}" 阶段="${unit.stage.key}">\n${body}\n</${tag}>`;
+    const note = '以下是当前正在进行、尚未演完的剧情规划，列出的事件还没有发生，不要当作已发生的事实或前情；按正文进展自然推进到这些事件，不必一次写完。';
+    return `<${tag} 卷="${vol}" 阶段="${unit.stage.key}">\n${note}\n${body}\n</${tag}>`;
 }
 
 // 执行页与注入共用：返回本轮要注入的条目（含停用的，UI 需要显示），注入时只取 enabled。
@@ -121,13 +125,6 @@ export function buildEntries(project, progress, settings) {
     const units = flattenUnits(project.outline && project.outline.volumes);
     if (units.length) {
         const states = unitStates(units, progress);
-        const indexText = buildIndexText(units, states, progress, settings);
-        if (indexText) {
-            entries.push({
-                slotId: INDEX_SLOT, kind: 'index', title: '剧情索引',
-                content: indexText, ...pickParams(defaults.index, progress.slots[INDEX_SLOT]),
-            });
-        }
         for (const unit of units) {
             if (states[unit.id] !== 'active') continue;
             const off = offNodes(progress, unit.id);

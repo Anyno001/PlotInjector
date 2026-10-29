@@ -1,9 +1,9 @@
 import { flattenUnits, makeId, outlineToText, stageLabel, volumeLabel } from '../core/outline.js';
 import { chatRequest, discussSystemPrompt, foldCandidates, foldMessages, hasYamlBlock, needsFold } from '../core/prompts.js';
-import { toast } from '../host/st.js';
+import { downloadBlob, toast } from '../host/st.js';
 import { bookEntries, loadBook } from '../host/worldbook.js';
 import { ask, guideText } from './ai.js';
-import { confirmDialog, esc, openDialog, promptDialog } from './dom.js';
+import { choiceDialog, confirmDialog, esc, openDialog, promptDialog } from './dom.js';
 import { ICONS } from './styles.js';
 import { pickWorldbookEntries } from './wb-import.js';
 import { renderMarkdown } from './markdown.js';
@@ -27,7 +27,8 @@ export function render(view) {
         <button type="button" class="pi-chip${refs.setting ? ' is-on' : ''}" data-act="ref" data-ref="setting">当前设定</button>
         <button type="button" class="pi-chip${refs.outline ? ' is-on' : ''}" data-act="ref" data-ref="outline">当前大纲</button>
         ${refs.oc.map((oc, i) => `<button type="button" class="pi-chip is-on" data-act="ref-oc-del" data-i="${i}" title="点击移除">${esc(oc.title)} ×</button>`).join('')}
-        <button type="button" class="pi-chip" data-act="ref-oc">＋世界书条目</button></div>`;
+        <button type="button" class="pi-chip" data-act="ref-oc">＋世界书条目</button>
+        ${chat.messages.length ? '<button type="button" class="pi-chip pi-chip-end" data-act="clear-talk">清空讨论</button>' : ''}</div>`;
     const messages = live.map(msg => {
         const isUser = msg.role === 'user';
         const tools = `<div class="pi-msg-tools">
@@ -95,7 +96,30 @@ function updateChat(view, fn) {
     view.data.saveChat(view.projectId, fn(chat));
 }
 
+function talkMarkdown(view, chat) {
+    const name = view.project().name;
+    const lines = [`# ${name} · 讨论记录`, ''];
+    if (chat.summary) lines.push('## 早期摘要', '', chat.summary, '');
+    for (const msg of chat.messages) lines.push(`## ${msg.role === 'user' ? '我' : 'AI'}`, '', msg.content, '');
+    return lines.join('\n');
+}
+
 export const actions = {
+    // 清空本项目的讨论，设定、大纲和附带参考都保留；可先导出一份。
+    async 'clear-talk'(view) {
+        const chat = view.data.chat(view.projectId);
+        if (!chat || !chat.messages.length) return;
+        const choice = await choiceDialog({
+            title: '清空讨论',
+            body: `删除这个项目的全部 ${chat.messages.length} 条讨论消息和摘要。设定、大纲和附带参考不受影响。`,
+            choices: [{ label: '取消', value: null }, { label: '直接清空', value: 'clear', danger: true }, { label: '导出后清空', value: 'export', primary: true }],
+        });
+        if (!choice) return;
+        if (choice === 'export') downloadBlob(`${view.project().name}-讨论记录-${new Date().toISOString().slice(0, 10)}.md`, talkMarkdown(view, chat), 'text/markdown');
+        view.data.saveChat(view.projectId, { ...chat, summary: '', messages: [] });
+        st(view).draft = '';
+        view.renderBody();
+    },
     send(view, target) {
         const box = target.closest('.pi-body').querySelector('[data-compose]');
         const text = box.value.trim();

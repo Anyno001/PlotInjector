@@ -1,4 +1,4 @@
-// PlotInjector v0.1.5
+// PlotInjector v0.1.6
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -137,11 +137,22 @@
     }
     return out;
   }
+  function replaceRest(volumes, fromStageId, incoming) {
+    let units = flattenUnits(volumes), from = units.findIndex((unit) => unit.stage.id === fromStageId);
+    if (from < 0) throw new Error("原来的阶段已不存在");
+    let drop = new Set(units.slice(from).map((unit) => unit.stage.id)), next = volumes.map((volume) => ({ ...volume, stages: volume.stages.filter((stage) => !drop.has(stage.id)) }));
+    for (let volume of incoming) {
+      let same = next.find((item) => item.key === volume.key);
+      same ? next = next.map((item) => item === same ? { ...item, stages: [...item.stages, ...volume.stages] } : item) : next.push(volume);
+    }
+    return next.filter((volume) => volume.stages.length);
+  }
 
   // src/core/progress.js
-  var SETTING_SLOT = "@setting", INDEX_SLOT = "@index", STATES = ["done", "active", "next", "todo"], STATE_LABELS = { done: "已过", active: "进行中", next: "下一段", todo: "未到" };
+  var SETTING_SLOT = "@setting";
+  var STATES = ["done", "active", "next", "todo"], STATE_LABELS = { done: "已过", active: "进行中", next: "下一段", todo: "未到" };
   function emptyProgress(projectId) {
-    return { projectId, current: null, slots: {}, lastCheckFloor: 0, muted: [], signal: null, review: null };
+    return { projectId, current: null, slots: {}, lastCheckFloor: 0, muted: [], offMuted: [] };
   }
   function normalizeProgress(value, projectId) {
     let base = emptyProgress(projectId);
@@ -150,6 +161,7 @@
       ...value,
       slots: value.slots && typeof value.slots == "object" ? value.slots : {},
       muted: Array.isArray(value.muted) ? value.muted : [],
+      offMuted: Array.isArray(value.offMuted) ? value.offMuted : [],
       lastCheckFloor: Number(value.lastCheckFloor) || 0
     };
   }
@@ -190,7 +202,7 @@
         let { state, ...rest } = slots[unit.id];
         slots[unit.id] = rest;
       }
-    return { ...progress, current: unitId, slots, signal: null };
+    return { ...progress, current: unitId, slots };
   }
   function advance(progress, units) {
     let cur = currentIndex(units, progress);
@@ -218,9 +230,8 @@
     { value: 0, label: "系统" },
     { value: 1, label: "用户" },
     { value: 2, label: "AI" }
-  ], SIGNAL_TAG = "<剧情推进/>", DEFAULT_PARAMS = {
+  ], DEFAULT_PARAMS = {
     setting: { position: 1, depth: 4, role: 0, order: 80, enabled: !0 },
-    index: { position: 1, depth: 4, role: 0, order: 90, enabled: !0 },
     detail: { position: 4, depth: 4, role: 0, order: 100, enabled: !0 }
   };
   function positionLabel(entry) {
@@ -243,36 +254,42 @@
     let value = unit.stage.data && unit.stage.data.时间范围;
     return value ? String(value).trim() : "";
   }
-  function buildIndexText(units, states, progress, settings) {
-    let keepDone = Math.max(0, Number(settings.keepDone ?? 2)), done = units.filter((unit) => states[unit.id] === "done"), active = units.filter((unit) => states[unit.id] === "active"), next = units.filter((unit) => states[unit.id] === "next"), lines = [];
+  var LATER_LIMIT = 6;
+  function nodeLine(node, mark) {
+    let event = node.item && node.item.事件 ? `：${String(node.item.事件).replace(/\s+/g, " ").slice(0, 120)}` : "";
+    return `  - ${mark ? `[${mark}] ` : ""}${node.label}｜${node.name}${event}`;
+  }
+  function buildIndexText(units, states, progress) {
+    let lines = [], done = units.filter((unit) => states[unit.id] === "done"), active = units.filter((unit) => states[unit.id] === "active"), next = units.filter((unit) => states[unit.id] === "next"), later = units.filter((unit) => states[unit.id] === "todo");
     if (done.length) {
-      let recent = keepDone ? done.slice(-keepDone) : [], folded = done.slice(0, done.length - recent.length), foldedVolumes = [...new Set(folded.map((unit) => volumeLabel(unit.volume.key)))], parts = [];
-      foldedVolumes.length && parts.push(`${foldedVolumes.join("、")}（前情）`);
-      for (let unit of recent) {
+      lines.push("【已过】");
+      for (let unit of done) {
         let names = stageNodes(unit.stage.data).filter((node) => node.kind === "main").map((node) => node.name);
-        parts.push(`${stagePlace(unit)}${names.length ? `（${names.join("／")}）` : ""}`);
+        lines.push(`- ${stagePlace(unit)}${names.length ? `（${names.join("／")}）` : ""}`);
       }
-      lines.push(`已过：${parts.join("；")}`);
     }
     for (let unit of active) {
-      let range = rangeOf(unit);
-      lines.push(`当前：${stagePlace(unit)}${range ? `｜时间范围：${range}` : ""}`);
+      let off = new Set(offNodes(progress, unit.id)), range = rangeOf(unit);
+      lines.push("【当前】", `- ${stagePlace(unit)}${range ? `｜时间范围：${range}` : ""}`);
+      for (let node of stageNodes(unit.stage.data).filter((item) => item.kind !== "world")) lines.push(nodeLine(node, off.has(node.id) ? "已演" : "未演"));
     }
-    let visibility = settings.nextVisibility || "range";
     for (let unit of next) {
-      let range = rangeOf(unit), line = `下一段：${stagePlace(unit)}`;
-      visibility !== "name" && range && (line += `｜时间范围：${range}`);
-      let instr = unit.stage.data && unit.stage.data.AI指令;
-      visibility === "instr" && instr && (line += `｜${String(instr).trim()}`), lines.push(line);
+      let range = rangeOf(unit), instr = unit.stage.data && unit.stage.data.AI指令;
+      lines.push("【下一段】", `- ${stagePlace(unit)}${range ? `｜时间范围：${range}` : ""}`), instr && lines.push(`  AI指令：${String(instr).trim()}`);
+      for (let node of stageNodes(unit.stage.data).filter((item) => item.kind === "main")) lines.push(nodeLine(node, ""));
     }
-    return lines.length ? (next.length && settings.switchSource !== "check" && lines.push(`当前阶段的主线节点都已发生、剧情进入下一段的时间范围时，在正文末尾单独一行输出 ${SIGNAL_TAG}。`), `<剧情索引>
-${lines.join(`
-`)}
-</剧情索引>`) : "";
+    if (later.length) {
+      lines.push("【之后】");
+      for (let unit of later.slice(0, LATER_LIMIT)) lines.push(`- ${stagePlace(unit)}`);
+      later.length > LATER_LIMIT && lines.push(`- ……另有 ${later.length - LATER_LIMIT} 段`);
+    }
+    return lines.join(`
+`);
   }
   function buildDetailText(unit, off, settings) {
     let tag = String(settings.tagName || "剧情参考").trim() || "剧情参考", data = filterStageData(unit.stage.data, off), body = stringifyYaml({ [unit.stage.key]: data }).trimEnd(), vol = splitVolumeKey(unit.volume.key).short;
     return `<${tag} 卷="${vol}" 阶段="${unit.stage.key}">
+以下是当前正在进行、尚未演完的剧情规划，列出的事件还没有发生，不要当作已发生的事实或前情；按正文进展自然推进到这些事件，不必一次写完。
 ${body}
 </${tag}>`;
   }
@@ -289,14 +306,7 @@ ${body}
     });
     let units = flattenUnits(project.outline && project.outline.volumes);
     if (units.length) {
-      let states = unitStates(units, progress), indexText = buildIndexText(units, states, progress, settings);
-      indexText && entries.push({
-        slotId: INDEX_SLOT,
-        kind: "index",
-        title: "剧情索引",
-        content: indexText,
-        ...pickParams(defaults.index, progress.slots[INDEX_SLOT])
-      });
+      let states = unitStates(units, progress);
       for (let unit of units) {
         if (states[unit.id] !== "active") continue;
         let off = offNodes(progress, unit.id);
@@ -359,60 +369,104 @@ ${body}
     };
   }
 
+  // src/core/acu.js
+  var ACU = /^TavernDB-ACU/i, CUSTOM = /^TavernDB-ACU-CustomExport-/i, TAIL = /-(?:\d+|包裹|上|下)$/, EN_FIELD = "英文字段", DEFAULT_ACU = { fields: {}, overrides: {} };
+  function acuField(title) {
+    let name = String(title || "");
+    if (!ACU.test(name)) return "";
+    let rest = name.replace(CUSTOM, "");
+    return rest === name || !/^[一-鿿]/.test(rest) ? EN_FIELD : rest.replace(TAIL, "") || rest;
+  }
+  function normalizeAcu(value) {
+    let src = value && typeof value == "object" ? value : {}, fields = {}, overrides = {};
+    if (src.fields && typeof src.fields == "object")
+      for (let [name, blocked] of Object.entries(src.fields)) name && blocked === !0 && (fields[name] = !0);
+    if (src.overrides && typeof src.overrides == "object")
+      for (let [name, blocked] of Object.entries(src.overrides)) acuField(name) && typeof blocked == "boolean" && (overrides[name] = blocked);
+    return { fields, overrides };
+  }
+  function acuBlocked(acu, title) {
+    let field = acuField(title);
+    if (!field) return !1;
+    let name = String(title);
+    return Object.prototype.hasOwnProperty.call(acu.overrides, name) ? acu.overrides[name] : !!acu.fields[field];
+  }
+  function setAcuEntry(acu, title, blocked) {
+    let field = acuField(title);
+    if (!field) return acu;
+    let overrides = { ...acu.overrides };
+    return !!acu.fields[field] === blocked ? delete overrides[title] : overrides[title] = blocked, { ...acu, overrides };
+  }
+  function setAcuField(acu, field, blocked) {
+    let fields = { ...acu.fields };
+    blocked ? fields[field] = !0 : delete fields[field];
+    let overrides = {};
+    for (let [name, value] of Object.entries(acu.overrides)) acuField(name) !== field && (overrides[name] = value);
+    return { fields, overrides };
+  }
+  function filterAcuLore(acu, payload) {
+    let removed = 0;
+    for (let key of ["globalLore", "characterLore", "chatLore", "personaLore"]) {
+      let list = payload && payload[key];
+      if (Array.isArray(list))
+        for (let i = list.length - 1; i >= 0; i -= 1)
+          list[i] && acuBlocked(acu, list[i].comment) && (list.splice(i, 1), removed += 1);
+    }
+    return removed;
+  }
+
   // src/core/store.js
   var INDEX_FILE = "pi-index.json", projectFile = (id) => `pi-p-${id}.json`, chatFile = (id) => `pi-c-${id}.json`, FILE_PREFIX = "pi-", LLM_ROLES = [
     { key: "discuss", label: "讨论" },
     { key: "outline", label: "写设定与大纲" },
     { key: "check", label: "进度检测" }
-  ], DEFAULT_LLM = { source: "tavern", presetId: "" }, DEFAULT_PRESET = { id: "", name: "", endpoint: "", apiKey: "", model: "", temperature: "" };
-  function normalizePreset(value) {
-    let src = value && typeof value == "object" ? value : {}, out = { ...DEFAULT_PRESET };
-    for (let key of Object.keys(DEFAULT_PRESET)) out[key] = String(src[key] ?? "").trim();
+  ], DEFAULT_LLM = { source: "tavern", endpoint: "", apiKey: "", model: "", temperature: "" };
+  var CONN_KEYS = ["endpoint", "apiKey", "model", "temperature"];
+  function pickConn(src) {
+    let out = {};
+    for (let key of CONN_KEYS) out[key] = String(src && src[key] != null ? src[key] : "").trim();
     return out;
   }
-  var sameConnection = (a, b) => ["endpoint", "apiKey", "model", "temperature"].every((key) => String(a[key] ?? "").trim() === String(b[key] ?? "").trim());
+  function normalizePreset(value) {
+    let src = value && typeof value == "object" ? value : {};
+    return { id: String(src.id || "").trim(), name: String(src.name || "").trim(), ...pickConn(src) };
+  }
   function normalizeLlm(src) {
     let presets = (Array.isArray(src.presets) ? src.presets : []).map(normalizePreset).filter((item) => item.id), llm = {};
     for (let { key } of LLM_ROLES) {
-      let role = src.llm && src.llm[key] && typeof src.llm[key] == "object" ? src.llm[key] : {};
-      if (role.source === "custom") {
-        let preset = presets.find((item) => sameConnection(item, role));
-        preset || (preset = normalizePreset({ ...role, id: makeId("api"), name: String(role.model || "").trim() || `接口${presets.length + 1}` }), presets.push(preset)), llm[key] = { source: "preset", presetId: preset.id };
-      } else role.source === "preset" && presets.some((item) => item.id === role.presetId) ? llm[key] = { source: "preset", presetId: role.presetId } : llm[key] = { ...DEFAULT_LLM };
+      let role = src.llm && src.llm[key] && typeof src.llm[key] == "object" ? src.llm[key] : {}, linked = role.source === "preset" && presets.find((item) => item.id === role.presetId);
+      linked ? llm[key] = { source: "custom", ...pickConn(linked) } : role.source === "custom" ? llm[key] = { source: "custom", ...pickConn(role) } : llm[key] = { ...DEFAULT_LLM, ...pickConn(role), source: "tavern" };
     }
     return { llm, presets };
   }
   function resolveLlm(settings, role) {
-    let pick = settings.llm && settings.llm[role], preset = pick && pick.source === "preset" && (settings.presets || []).find((item) => item.id === pick.presetId);
-    return preset ? { ...preset, source: "custom" } : { source: "tavern" };
+    let llm = settings.llm && settings.llm[role];
+    return llm && llm.source === "custom" ? { ...llm } : { source: "tavern" };
   }
   var DEFAULT_SETTINGS = {
     tagName: "剧情参考",
-    nextVisibility: "range",
-    keepDone: 2,
-    switchSource: "both",
+    offTrackMode: "ask",
     handleMode: "ask",
     checkEvery: 3,
     checkFloors: 3,
-    hideSignal: !0,
     guide: "",
     loaderRef: "",
     llm: { discuss: { ...DEFAULT_LLM }, outline: { ...DEFAULT_LLM }, check: { ...DEFAULT_LLM } },
-    presets: []
-  }, SWITCH_SOURCES = ["signal", "check", "both"], HANDLE_MODES = ["ask", "auto", "nodes"], VISIBILITY = ["name", "range", "instr"];
+    presets: [],
+    acu: DEFAULT_ACU
+  }, HANDLE_MODES = ["ask", "auto", "nodes"], OFF_MODES = ["ask", "auto", "off"];
   function normalizeSettings(value) {
     let src = value && typeof value == "object" ? value : {}, { llm, presets } = normalizeLlm(src);
     return {
       ...DEFAULT_SETTINGS,
       ...src,
-      nextVisibility: VISIBILITY.includes(src.nextVisibility) ? src.nextVisibility : DEFAULT_SETTINGS.nextVisibility,
-      switchSource: SWITCH_SOURCES.includes(src.switchSource) ? src.switchSource : DEFAULT_SETTINGS.switchSource,
+      offTrackMode: OFF_MODES.includes(src.offTrackMode) ? src.offTrackMode : DEFAULT_SETTINGS.offTrackMode,
       handleMode: HANDLE_MODES.includes(src.handleMode) ? src.handleMode : DEFAULT_SETTINGS.handleMode,
-      keepDone: Math.max(0, Math.min(20, Number(src.keepDone ?? DEFAULT_SETTINGS.keepDone) || 0)),
       checkEvery: Math.max(1, Math.min(50, Number(src.checkEvery) || DEFAULT_SETTINGS.checkEvery)),
       checkFloors: Math.max(1, Math.min(20, Number(src.checkFloors) || DEFAULT_SETTINGS.checkFloors)),
       llm,
-      presets
+      presets,
+      acu: normalizeAcu(src.acu)
     };
   }
   function emptyIndex() {
@@ -761,34 +815,29 @@ ${body}
   }
 
   // src/core/check.js
-  var SIGNAL_PATTERN = /<\s*剧情推进\s*\/?\s*>/;
-  function hasSignal(text) {
-    return SIGNAL_PATTERN.test(String(text || ""));
-  }
   function cleanFloorText(text, limit = 3e3) {
     let out = String(text || "");
     return out = out.replace(/<(think|thinking|reasoning|status|statusbar|状态栏|details)\b[^>]*>[\s\S]*?<\/\1>/gi, ""), out = out.replace(/```[\s\S]*?```/g, ""), out = out.replace(/<\s*剧情推进\s*\/?\s*>/g, ""), out = out.replace(/<[^>\n]{1,80}>/g, ""), out = out.replace(/\n{3,}/g, `
 
 `).trim(), out.length > limit ? out.slice(-limit) : out;
   }
-  function buildCheckMessages(unit, offIds, floors) {
-    let off = new Set(offIds || []), list = stageNodes(unit.stage.data).filter((node) => node.kind !== "world").map((node) => `- [${off.has(node.id) ? "已演" : "未演"}] ${node.label}｜${node.name}${node.item && node.item.事件 ? `：${String(node.item.事件).slice(0, 160)}` : ""}`), range = unit.stage.data && unit.stage.data.时间范围, system = [
-      "你是剧情进度核对员。根据最近的正文，判断当前阶段的哪些节点已经在正文中实际发生。",
+  function buildCheckMessages(unit, index, floors) {
+    let system = [
+      "你是剧情进度核对员。根据最近的正文，对照剧情索引判断进度。",
       "只认正文里已经写出的事件，计划、预告、角色设想不算发生。",
       "若剧情走了某个节点的「偏转」分支，在 reason 里写明是哪个节点、怎么偏的。",
-      '只输出一个 JSON 对象，不加说明：{"done":["节点名"],"stageDone":true或false,"reason":"一句话"}',
-      "done 只填下方列表里出现过的节点名，原样照抄；stageDone 表示所有主线节点都已发生、剧情已进入下一段。"
+      "另外判断剧情是否严重偏离大纲：正文的走向已经和【当前】【下一段】冲突，照原计划写下去会接不上（例如关键人物已死、关键事件已不可能发生、地点或立场彻底改变）。普通的细节出入、走了偏转分支都不算严重偏离。",
+      '只输出一个 JSON 对象，不加说明：{"done":["节点名"],"stageDone":true或false,"offTrack":true或false,"offReason":"偏离说明，没有就留空","reason":"一句话"}',
+      "done 只填【当前】里出现过的节点名，原样照抄；stageDone 表示当前段所有主线节点都已发生、剧情已进入下一段。"
     ].join(`
 `), user = [
-      `当前阶段：${volumeLabel(unit.volume.key)}·${stageLabel(unit.stage.key)}`,
-      range ? `时间范围：${range}` : "",
-      "节点：",
-      ...list,
+      `【剧情索引】
+${index}`,
       "",
-      "最近正文：",
+      "【最近正文】",
       ...floors.map((floor) => `【第 ${floor.index} 楼】
 ${floor.text}`)
-    ].filter((line) => line !== "").join(`
+    ].join(`
 `);
     return [{ role: "system", content: system }, { role: "user", content: user }];
   }
@@ -801,7 +850,190 @@ ${floor.text}`)
     } catch {
       throw new Error("检测结果 JSON 无法解析");
     }
-    return { done: Array.isArray(value.done) ? value.done.map((item) => String(item).trim()).filter(Boolean) : [], stageDone: value.stageDone === !0 || value.stageDone === "true", reason: String(value.reason || "").trim() };
+    let done = Array.isArray(value.done) ? value.done.map((item) => String(item).trim()).filter(Boolean) : [], flag = (item) => item === !0 || item === "true";
+    return { done, stageDone: flag(value.stageDone), offTrack: flag(value.offTrack), offReason: String(value.offReason || "").trim(), reason: String(value.reason || "").trim() };
+  }
+
+  // src/core/prompts.js
+  var SAMPLE_STAGE = `剧情_卷一_示例:
+  阶段一_开端:
+    时间范围: 故事开始至主角离开故乡
+    AI指令: 推进主角得知变故并决定出发的事件。
+    主线节点:
+      - 名称: 主角得知变故
+        地点: 故乡
+        事件: 用一到三句话写清谁做了什么、结果如何。
+        偏转: 若主角做出不同选择，后续如何调整。
+    支线事件:
+      - 名称: 旧友送行
+        地点: 村口
+        事件: 一句话事件。
+        触发: 出现这种情况时发生。
+    世界动态:
+      - 类型: 传闻
+        来源: 谁传出
+        内容: 外界正在发生什么。
+`, FOLD_KEEP = 16, FOLD_CHARS = 24e3;
+  function discussSystemPrompt({ guide, refs }) {
+    let parts = [
+      "你在帮用户构思一条同人 if 线：一起把世界观、人物处境、信息差和大纲方向想清楚。",
+      "每次回复先回应用户的想法，再指出缺口或矛盾，最后给出两三个可选方向。不写小说正文。"
+    ];
+    return refs.length && parts.push(...refs.map((ref) => `【参考·${ref.title}】
+${ref.text}`)), guide && parts.push(`【写作基准：同人世界观速成】
+${guide}`), parts.join(`
+
+`);
+  }
+  function needsFold(messages) {
+    let live = messages.filter((msg) => !msg.folded), chars = live.reduce((sum, msg) => sum + String(msg.content || "").length, 0);
+    return live.length > FOLD_KEEP + 4 || chars > FOLD_CHARS;
+  }
+  function foldCandidates(messages) {
+    let live = messages.filter((msg) => !msg.folded);
+    return live.slice(0, Math.max(0, live.length - FOLD_KEEP));
+  }
+  function foldMessages(summary, messages) {
+    let text = messages.map((msg) => `${msg.role === "user" ? "用户" : "AI"}：${msg.content}`).join(`
+
+`);
+    return [
+      { role: "system", content: "把下面的讨论压缩成要点摘要：保留已经敲定的设定、人物关系、剧情走向和仍未决定的问题，删掉寒暄和被否掉的方案。只输出摘要。" },
+      { role: "user", content: `${summary ? `【已有摘要】
+${summary}
+
+` : ""}【新的讨论】
+${text}` }
+    ];
+  }
+  function chatRequest(system, summary, messages) {
+    let out = [{ role: "system", content: system }];
+    summary && out.push({ role: "system", content: `【之前讨论的摘要】
+${summary}` });
+    for (let msg of messages.filter((item) => !item.folded)) out.push({ role: msg.role === "user" ? "user" : "assistant", content: msg.content });
+    return out;
+  }
+  function transcript(summary, messages, limit = 3e4) {
+    let text = messages.filter((msg) => !msg.folded).map((msg) => `${msg.role === "user" ? "用户" : "AI"}：${msg.content}`).join(`
+
+`), joined = `${summary ? `【摘要】
+${summary}
+
+` : ""}${text}`;
+    return joined.length > limit ? joined.slice(-limit) : joined;
+  }
+  function settingMessages({ guide, talk, current, append }) {
+    let system = `${guide}
+
+按上面的规则产出，只回「世界观正文」「补定」「速查」三段。`, user = [
+      current ? `【已有世界观正文】
+${current}` : "",
+      append ? "已有正文不改动，只把新增事实写成一段 [追加]。" : "",
+      `【讨论记录】
+${talk}`
+    ].filter(Boolean).join(`
+
+`);
+    return [{ role: "system", content: system }, { role: "user", content: user }];
+  }
+  function rewriteBlockMessages({ guide, current, blockText, fixes }) {
+    return [
+      { role: "system", content: `${guide}
+
+只重写用户指定的一个分块，保留分块标题行，只输出这个分块。` },
+      { role: "user", content: `【完整正文】
+${current}
+
+【要重写的分块】
+${blockText}
+
+【用户的修改】
+${fixes}` }
+    ];
+  }
+  function formatSample(volumes) {
+    for (let volume of volumes || []) {
+      let stage = volume.stages[0];
+      if (stage) return `${volume.key}:
+${stageToText(stage).replace(/^/gm, "  ").trimEnd()}
+`;
+    }
+    return SAMPLE_STAGE;
+  }
+  var OUTLINE_RULES = [
+    "只输出一个 ```yaml 代码块，不加说明。",
+    "顶层键是卷名，写作「剧情_卷X_标题」；卷下是阶段，写作「阶段N_标题」；阶段字段为 时间范围、AI指令、主线节点、支线事件、世界动态。",
+    "节点字段：名称、地点、事件、偏转；支线事件多一个 触发；世界动态为 类型、来源、内容。",
+    "每个阶段 2 到 4 个主线节点，事件写已经发生的事实，偏转写玩家改变选择后的调整。",
+    "时间范围写清本阶段从什么时候到什么时候，用来判断何时切到下一段。"
+  ].join(`
+`);
+  function outlineMessages({ setting, talk, volumes, volumeNo, request }) {
+    let known = (volumes || []).map((volume) => `${volumeLabel(volume.key)}：${volume.stages.map((stage) => stageLabel(stage.key)).join("、")}`), system = `你按用户的设定写剧情大纲，格式必须与样例一致。
+${OUTLINE_RULES}
+
+【格式样例】
+${formatSample(volumes)}`, user = [
+      setting ? `【设定】
+${setting}` : "",
+      talk ? `【讨论摘要】
+${talk}` : "",
+      known.length ? `【已有的卷】
+${known.join(`
+`)}` : "",
+      `只写第 ${volumeNo} 卷。${request || ""}`
+    ].filter(Boolean).join(`
+
+`);
+    return [{ role: "system", content: system }, { role: "user", content: user }];
+  }
+  function rewriteRestMessages({ setting, volumes, fromUnitIndex, units, recent, reason }) {
+    let rest = units.slice(fromUnitIndex), byVolume = /* @__PURE__ */ new Map();
+    for (let unit of rest)
+      byVolume.has(unit.volume) || byVolume.set(unit.volume, []), byVolume.get(unit.volume).push(unit.stage);
+    let restText = outlineToText([...byVolume.entries()].map(([volume, stages]) => ({ ...volume, stages }))), system = `剧情在执行中偏离了大纲。按已经发生的正文改写剩余阶段，保持卷名与阶段名格式。
+${OUTLINE_RULES}
+
+【格式样例】
+${formatSample(volumes)}`, user = [
+      setting ? `【设定】
+${setting}` : "",
+      `【需要改写的剩余阶段】
+${restText}`,
+      reason ? `【偏转说明】
+${reason}` : "",
+      `【最近正文】
+${recent}`
+    ].filter(Boolean).join(`
+
+`);
+    return [{ role: "system", content: system }, { role: "user", content: user }];
+  }
+  function fixYamlMessages(text, error) {
+    return [
+      { role: "system", content: `修正下面 YAML 的格式错误，内容不变。
+${OUTLINE_RULES}` },
+      { role: "user", content: `【错误】${error}
+
+${text}` }
+    ];
+  }
+  function extractYaml(text) {
+    let raw = String(text || ""), fenced = /```ya?ml\s*\n([\s\S]*?)```/i.exec(raw) || /```\s*\n([\s\S]*?)```/.exec(raw);
+    return (fenced ? fenced[1] : raw).trim();
+  }
+  function hasYamlBlock(text) {
+    return /```ya?ml\s*\n[\s\S]*?```/i.test(String(text || ""));
+  }
+  function parseOutlineReply(text, idOf) {
+    let yaml = extractYaml(text);
+    try {
+      return { ok: !0, yaml, volumes: volumesFromValue(parseYaml(yaml), idOf) };
+    } catch (error) {
+      let line = yamlErrorLine(error);
+      return { ok: !1, yaml, line, error: `${line ? `第 ${line} 行：` : ""}${String(error.message || error).split(`
+`)[0]}` };
+    }
   }
 
   // src/host/llm.js
@@ -1002,7 +1234,7 @@ ${floor.text}`)
 
   // src/app/runtime.js
   var VIRTUAL_WORLD = "剧情注入器", placeOf = (unit) => `${volumeLabel(unit.volume.key)}·${stageLabel(unit.stage.key)}`;
-  function createRuntime({ data, notice, emit }) {
+  function createRuntime({ data, notice, emit, askReason = async () => "" }) {
     let view = hostWindow(), progress = null, progressFor = "", checking = !1, mismatchShownFor = "", fallbackTimer = 0, listeners = [];
     function activeId() {
       return data.activeIdFor(cardKey());
@@ -1037,12 +1269,19 @@ ${floor.text}`)
       return !!eventTypes().WORLDINFO_ENTRIES_LOADED;
     }
     function onEntriesLoaded(payload) {
-      if (!(!payload || !Array.isArray(payload.chatLore)))
+      if (payload) {
         try {
-          payload.chatLore.push(...virtualEntries());
+          filterAcuLore(data.settings().acu, payload);
         } catch (error) {
-          console.error("[剧情注入器] 注入失败", error);
+          console.error("[剧情注入器] 屏蔽数据库条目失败", error);
         }
+        if (Array.isArray(payload.chatLore))
+          try {
+            payload.chatLore.push(...virtualEntries());
+          } catch (error) {
+            console.error("[剧情注入器] 注入失败", error);
+          }
+      }
     }
     function scheduleFallback() {
       hasEntriesEvent() || (view.clearTimeout(fallbackTimer), fallbackTimer = view.setTimeout(async () => {
@@ -1072,55 +1311,85 @@ ${floor.text}`)
       let prog = currentProgress();
       prog && setProgress(goTo(prog, units(), unitId));
     }
-    function proposeAdvance({ unit, source, reason = "", messageId = null }) {
+    function proposeAdvance({ unit, reason = "" }) {
       let settings = data.settings(), prog = currentProgress();
       if (!prog || isMuted(prog, unit.id) || settings.handleMode === "nodes") return;
       let step = advance(prog, units());
-      if (!step) return;
-      let signal = source === "signal" ? { unitId: unit.id, messageId, at: Date.now() } : null;
-      if (settings.handleMode === "auto") {
-        let review = source === "signal" && settings.switchSource === "both" ? { from: unit.id, to: step.to.id } : null;
-        setProgress({ ...step.progress, signal: signal ? { ...signal, advanced: !0, to: step.to.id } : null, review }), notice.show({
-          id: "advance",
-          title: `已切到 ${placeOf(step.to)}`,
-          body: reason || (source === "signal" ? "AI 报告本阶段已演完。" : "检测判断本阶段已演完。"),
-          actions: [{ label: "撤销", run: () => backTo(unit.id) }],
-          timeout: 12e3
-        });
-        return;
-      }
-      signal && setProgress({ ...prog, signal }), notice.show({
-        id: "advance",
-        title: `${placeOf(unit)} 已演完`,
-        body: reason || (source === "signal" ? "AI 报告本阶段已演完。" : "检测判断本阶段已演完。"),
-        actions: [
-          { label: "打开下一段", primary: !0, run: () => {
-            let done = openNext();
-            done && source === "signal" && data.settings().switchSource === "both" && setProgress({ ...currentProgress(), review: { from: unit.id, to: done.to.id } });
-          } },
-          { label: "暂不", run: () => notice.hide("advance") },
-          { label: "本阶段不再提醒", run: () => setProgress(mute(currentProgress(), unit.id)) }
-        ]
-      });
-    }
-    function handleSignal(messageId) {
-      let unit = activeUnit(), prog = currentProgress();
-      !unit || !prog || prog.signal && prog.signal.unitId === unit.id || proposeAdvance({ unit, source: "signal", messageId });
-    }
-    function revokeSignalIfGone() {
-      let prog = currentProgress();
-      if (!prog || !prog.signal) return;
-      let msg = chatMessages()[prog.signal.messageId];
-      if (msg && hasSignal(msg.mes)) return;
-      let signal = prog.signal;
-      if (signal.advanced) {
-        let unit = activeUnit();
-        if (unit && unit.id === signal.to) {
-          setProgress({ ...goTo(prog, units(), signal.unitId), review: null }), toast("info", "报信的回复已被替换，剧情退回上一段。");
+      if (step) {
+        if (settings.handleMode === "auto") {
+          setProgress(step.progress), notice.show({
+            id: "advance",
+            title: `已切到 ${placeOf(step.to)}`,
+            body: reason || "检测判断本阶段已演完。",
+            actions: [{ label: "撤销", run: () => backTo(unit.id) }],
+            timeout: 12e3
+          });
           return;
         }
+        notice.show({
+          id: "advance",
+          title: `${placeOf(unit)} 已演完`,
+          body: reason || "检测判断本阶段已演完。",
+          actions: [
+            { label: "打开下一段", primary: !0, run: () => openNext() },
+            { label: "暂不", run: () => notice.hide("advance") },
+            { label: "本阶段不再提醒", run: () => setProgress(mute(currentProgress(), unit.id)) }
+          ]
+        });
       }
-      setProgress({ ...prog, signal: null }), notice.hide("advance");
+    }
+    async function rewriteRest(reason) {
+      let project = activeProject(), prog = currentProgress(), unit = activeUnit();
+      if (!project || !prog || !unit) throw new Error("当前卡没有启用的项目");
+      let list = units(), from = list.findIndex((item) => item.id === unit.id), recent = recentFloors(6).map((floor) => floor.text).join(`
+
+`), reply2 = await requestLlm(rewriteRestMessages({ setting: project.setting.text, volumes: project.outline.volumes, fromUnitIndex: from, units: list, recent, reason }), resolveLlm(data.settings(), "outline")), parsed = parseOutlineReply(reply2);
+      if (!parsed.ok) throw new Error(`改写结果格式有误：${parsed.error}`);
+      let before = { volumes: project.outline.volumes, progress: prog }, volumes = replaceRest(project.outline.volumes, unit.stage.id, parsed.volumes);
+      data.updateProject(project.id, (current) => ({ ...current, outline: { ...current.outline, volumes } }));
+      let first = parsed.volumes[0] && parsed.volumes[0].stages[0];
+      return first && setProgress(goTo(currentProgress(), flattenUnits(volumes), first.id)), before;
+    }
+    function undoRewrite(projectId, before) {
+      data.updateProject(projectId, (current) => ({ ...current, outline: { ...current.outline, volumes: before.volumes } })), setProgress(before.progress), toast("info", "已撤销改写，恢复原来的大纲和进度。");
+    }
+    async function runRewrite(reason, { auto = !1 } = {}) {
+      let projectId = activeId();
+      notice.show({ id: "offtrack", title: "正在改写后续阶段…", body: reason });
+      try {
+        let before = await rewriteRest(reason);
+        notice.show({
+          id: "offtrack",
+          title: auto ? "剧情偏离大纲，已自动改写后续阶段" : "已改写后续阶段",
+          body: reason,
+          actions: [{ label: "撤销", run: () => undoRewrite(projectId, before) }],
+          timeout: 2e4
+        });
+      } catch (error) {
+        notice.hide("offtrack"), toast("error", `改写失败：${error.message}`);
+      }
+    }
+    function handleOffTrack(unit, reason) {
+      if (notice.hide("advance"), data.settings().offTrackMode === "auto") {
+        runRewrite(reason, { auto: !0 });
+        return;
+      }
+      notice.show({
+        id: "offtrack",
+        title: `${placeOf(unit)} 偏离大纲`,
+        body: `${reason || "正文走向与后续阶段冲突。"}后续阶段可能接不上，建议改写。`,
+        actions: [
+          { label: "改写后续阶段", primary: !0, run: async () => {
+            let note = await askReason(reason);
+            note != null && runRewrite(note.trim() || reason);
+          } },
+          { label: "暂不", run: () => notice.hide("offtrack") },
+          { label: "本阶段不再提醒", run: () => {
+            let prog = currentProgress();
+            prog && !prog.offMuted.includes(unit.id) && setProgress({ ...prog, offMuted: [...prog.offMuted, unit.id] });
+          } }
+        ]
+      });
     }
     function recentFloors(count) {
       let out = [], chat = chatMessages();
@@ -1137,23 +1406,15 @@ ${floor.text}`)
       let project = activeProject(), prog = currentProgress(), settings = data.settings();
       if (!project || !prog)
         return manual && toast("info", "当前卡没有启用的项目。"), null;
-      let review = prog.review, list = units(), unit = review ? list.find((item) => item.id === review.from) : activeUnit();
+      let unit = activeUnit();
       if (!unit) return null;
       let floors = recentFloors(settings.checkFloors);
       if (!floors.length)
         return manual && toast("info", "还没有可检测的正文。"), null;
       checking = !0, emit("checking");
       try {
-        let off = prog.slots[unit.id] && prog.slots[unit.id].off || [], reply2 = await requestLlm(buildCheckMessages(unit, off, floors), resolveLlm(settings, "check"), { timeoutMs: 12e4 }), result = parseCheckReply(reply2), next = currentProgress();
-        return next = uncheckByNames(next, unit.id, stageNodes(unit.stage.data), result.done), next = { ...next, lastCheckFloor: floorCount(), review: null }, setProgress(next), review ? result.stageDone || notice.show({
-          id: "advance",
-          title: `复核：${placeOf(unit)} 可能还没演完`,
-          body: result.reason || "检测认为上一段的主线节点未全部发生。",
-          actions: [
-            { label: "退回上一段", primary: !0, run: () => backTo(unit.id) },
-            { label: "保持现状", run: () => notice.hide("advance") }
-          ]
-        }) : result.stageDone ? proposeAdvance({ unit, source: "check", reason: result.reason }) : manual && toast("info", result.reason || "本阶段尚未演完。"), result;
+        let list = units(), index = buildIndexText(list, unitStates(list, prog), prog), reply2 = await requestLlm(buildCheckMessages(unit, index, floors), resolveLlm(settings, "check"), { timeoutMs: 12e4 }), result = parseCheckReply(reply2), next = currentProgress();
+        return next = uncheckByNames(next, unit.id, stageNodes(unit.stage.data), result.done), next = { ...next, lastCheckFloor: floorCount() }, setProgress(next), result.offTrack && settings.offTrackMode !== "off" && !next.offMuted.includes(unit.id) ? handleOffTrack(unit, result.offReason || result.reason) : result.stageDone ? proposeAdvance({ unit, reason: result.reason }) : manual && toast("info", result.reason || "本阶段尚未演完。"), result;
       } catch (error) {
         return setProgress({ ...currentProgress(), lastCheckFloor: floorCount() }), toast(manual ? "error" : "warning", `进度检测失败：${error.message}`), null;
       } finally {
@@ -1162,24 +1423,17 @@ ${floor.text}`)
     }
     function onMessageReceived(messageId) {
       if (!activeProject()) return;
-      let settings = data.settings(), msg = chatMessages()[messageId];
-      if (msg && !msg.is_user && !msg.is_system && settings.switchSource !== "check" && hasSignal(msg.mes) && handleSignal(Number(messageId)), settings.switchSource === "signal") return;
-      let prog = currentProgress();
+      let settings = data.settings(), prog = currentProgress();
       floorCount() - prog.lastCheckFloor >= settings.checkEvery && view.setTimeout(() => checkNow(), 0);
     }
     function onMessageChanged() {
       let prog = currentProgress();
       if (!prog) return;
       let floors = floorCount();
-      prog.lastCheckFloor > floors && setProgress({ ...prog, lastCheckFloor: floors }), revokeSignalIfGone();
-    }
-    function onSwiped(messageId) {
-      revokeSignalIfGone();
-      let msg = chatMessages()[messageId];
-      msg && !msg.is_user && hasSignal(msg.mes) && data.settings().switchSource !== "check" && handleSignal(Number(messageId));
+      prog.lastCheckFloor > floors && setProgress({ ...prog, lastCheckFloor: floors });
     }
     async function onChatChanged() {
-      progress = null, progressFor = "", notice.hide("advance");
+      progress = null, progressFor = "", notice.hide("advance"), notice.hide("offtrack");
       let id = activeId();
       if (id)
         try {
@@ -1214,7 +1468,7 @@ ${floor.text}`)
     }
     function start() {
       let types = eventTypes();
-      types.WORLDINFO_ENTRIES_LOADED && on(types.WORLDINFO_ENTRIES_LOADED, onEntriesLoaded), on(types.CHAT_CHANGED, onChatChanged), on(types.MESSAGE_RECEIVED, onMessageReceived), on(types.MESSAGE_SWIPED, onSwiped), on(types.MESSAGE_UPDATED, onMessageChanged), on(types.MESSAGE_DELETED, onMessageChanged), onChatChanged();
+      types.WORLDINFO_ENTRIES_LOADED && on(types.WORLDINFO_ENTRIES_LOADED, onEntriesLoaded), on(types.CHAT_CHANGED, onChatChanged), on(types.MESSAGE_RECEIVED, onMessageReceived), on(types.MESSAGE_UPDATED, onMessageChanged), on(types.MESSAGE_DELETED, onMessageChanged), onChatChanged();
     }
     function stop() {
       let c = ctx();
@@ -1241,6 +1495,7 @@ ${floor.text}`)
       switchProject,
       floorCount,
       recentFloors,
+      rewriteRest,
       injectMode: () => hasEntriesEvent() ? "virtual" : "book",
       refresh: () => {
         scheduleFallback(), emit("progress");
@@ -1305,19 +1560,38 @@ ${floor.text}`)
 .pi-row.is-top{align-items:flex-start}
 .pi-inline{display:flex;gap:8px;align-items:stretch}
 .pi-inline>.pi-inp,.pi-inline>.pi-sel{flex:1;min-width:0}
-.pi-inline>.pi-btn{min-height:0;flex-shrink:0}
+.pi-inline>.pi-btn{min-height:0;flex-shrink:0;width:96px}
 .pi-inline>.pi-grow{flex:1;min-width:0;display:flex}
 .pi-inline>.pi-grow>.pi-inp,.pi-inline>.pi-grow>.pi-sel{flex:1;min-width:0}
-.pi-equal{display:grid;grid-template-columns:repeat(3,minmax(0,140px));gap:8px;justify-content:center}
-.pi-equal>.pi-btn{width:100%;padding:0 6px;white-space:normal;line-height:1.3}
+.pi-equal,.pi-tools{display:grid;grid-template-columns:repeat(var(--pi-cols,3),minmax(0,150px));gap:8px;justify-content:center;align-items:stretch}
+.pi-equal>.pi-btn,.pi-tools>.pi-btn{width:100%;padding:0 6px;white-space:normal;line-height:1.3}
+.pi-equal.is-one,.pi-tools.is-c1{--pi-cols:1}
+.pi-tools.is-c2{--pi-cols:2}
+.pi-tools.is-c3{--pi-cols:3}
+.pi-tools.is-c4{--pi-cols:4}
+.pi-tools{margin:2px 0 10px}
+.pi-tools.is-end{margin:10px 0 0}
+.pi-tools>.pi-check{grid-column:1/-1;justify-content:center;padding:0}
+.pi-pair{display:grid;grid-template-columns:repeat(var(--pi-cols,2),minmax(0,1fr));gap:0 10px}
+.pi-pair.is-c3{--pi-cols:3}
+.pi-pair.is-c4{--pi-cols:4}
+.pi-pair .pi-inp,.pi-pair .pi-sel{width:100%}
 .pi-presets{display:flex;flex-direction:column;gap:6px;margin-bottom:8px}
-.pi-preset{display:flex;align-items:center;gap:8px;padding:6px 6px 6px 12px;border:1.5px solid var(--pi-line);border-radius:var(--pi-r-in);min-width:0}
+.pi-preset-pick{flex:1;min-width:0;display:flex;align-items:center;gap:8px;padding:4px 0;border:0;background:none;color:inherit;cursor:pointer;text-align:left;font-family:inherit}
+.pi-preset:hover{border-color:var(--pi-accent)}
+.pi-preset{display:flex;align-items:center;gap:8px;padding:4px 6px 4px 12px;border:1.5px solid var(--pi-line);border-radius:var(--pi-r-in);min-width:0}
 .pi-preset-name{font-weight:600;font-size:13px;flex-shrink:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pi-preset-model{flex:1;min-width:0;font-size:12px;color:var(--pi-txt2);font-family:var(--pi-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pi-roles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0 10px;margin-top:12px}
 .pi-wb-sec{margin-top:8px}
 .pi-wb-sec-hd{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--pi-txt2);padding:2px 0 4px;border-bottom:1px solid var(--pi-line);margin-bottom:2px}
 .pi-wb-sec-hd small{font-weight:400}
+.pi-wb-bulk{margin-left:auto;display:flex;gap:4px}
+.pi-wb-bulk>.pi-btn{min-width:96px}
+.pi-wb-sub{margin:4px 0 0 4px;padding-left:10px;border-left:2px solid var(--pi-line)}
+.pi-wb-sub-hd{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--pi-txt2);padding:4px 0 2px}
+.pi-wb-sub-hd small{font-weight:400}
+.pi-wb-sub-hd.is-fold{cursor:pointer}
+.pi-wb-field{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pi-wb-row{display:flex;align-items:center;gap:8px;padding:3px 0;min-width:0}
 .pi-wb-row input{width:15px;height:15px;margin:0;accent-color:var(--pi-accent);flex-shrink:0;cursor:pointer}
 .pi-wb-title{flex:1;min-width:0;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -1327,9 +1601,10 @@ ${floor.text}`)
 .pi-seg{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:2px;padding:3px;background:var(--pi-surf);border-radius:20px;margin-bottom:6px}
 .pi-seg-btn{padding:5px 6px;border:0;border-radius:16px;background:none;color:var(--pi-txt2);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pi-seg-btn.is-sel{background:var(--pi-bg);color:var(--pi-dark);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.pi-inp,.pi-sel{height:36px}
 .pi-inp,.pi-sel,.pi-ta{width:100%;padding:7px 11px;border:1.5px solid var(--pi-line);border-radius:var(--pi-r-in);font-size:13px;color:var(--pi-txt);background:var(--pi-bg);outline:none;font-family:inherit}
 .pi-inp:focus,.pi-sel:focus,.pi-ta:focus{border-color:var(--pi-accent)}
-.pi-inp.is-num{width:74px}
+.pi-inp.is-num{width:84px}
 .pi-ta{resize:vertical;min-height:80px;line-height:1.6}
 .pi-ta.is-mono{font-family:var(--pi-mono);font-size:12px;line-height:1.5}
 .pi-ta.is-tall{min-height:360px}
@@ -1363,11 +1638,15 @@ ${floor.text}`)
 .pi-entry-bd{padding:4px 10px 10px;border-top:1px dashed var(--pi-line)}
 .pi-pre{white-space:pre-wrap;word-break:break-word;font-family:var(--pi-mono);font-size:12px;line-height:1.5;background:var(--pi-surf);border-radius:var(--pi-r-in);padding:8px 10px;max-height:320px;overflow:auto;margin:6px 0 0}
 .pi-units{display:flex;flex-direction:column;gap:2px}
-.pi-unit{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:var(--pi-r-in);font-size:13px}
+.pi-unit{display:grid;grid-template-columns:52px minmax(0,1fr) 84px 76px;align-items:center;gap:8px;padding:6px 8px;border-radius:var(--pi-r-in);font-size:13px}
+.pi-unit>.pi-badge{justify-self:start}
+.pi-unit .pi-unit-act{justify-self:stretch}
+.pi-unit .pi-unit-act .pi-btn{width:100%;padding:0 4px}
 .pi-unit:hover{background:var(--pi-surf)}
 .pi-unit .pi-uname{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pi-unit.is-active{background:var(--pi-accent-soft)}
-.pi-unit .pi-sel{width:auto;padding:2px 6px;font-size:12px}
+.pi-unit .pi-sel{width:100%;height:28px;padding:2px 6px;font-size:12px;text-align:center;text-align-last:center}
+.pi-unmute{border:0;cursor:pointer;font-family:inherit;margin-left:4px}
 .pi-card-sub{padding:2px 8px 8px 30px}
 .pi-vol-hd{font-size:12px;font-weight:700;color:var(--pi-txt2);margin:8px 0 2px;padding:0 8px}
 .pi-tree{display:grid;grid-template-columns:220px 1fr;gap:10px;align-items:start}
@@ -1379,8 +1658,10 @@ ${floor.text}`)
 .pi-titem.is-stage{padding-left:18px}
 .pi-titem .pi-pname{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pi-node{border:1.5px solid var(--pi-line);border-radius:var(--pi-r-in);padding:8px 10px;margin-bottom:8px}
+.pi-node-seg{margin:0 0 10px}
 .pi-node-hd{display:flex;align-items:center;gap:6px;margin-bottom:6px}
 .pi-node-hd .pi-grow{flex:1}
+.pi-node-hd>.pi-btn{min-width:60px}
 .pi-chat{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding:4px 2px 10px;scrollbar-width:none;min-height:0}
 .pi-msg{max-width:86%;padding:9px 12px;border-radius:var(--pi-r);background:var(--pi-bg);font-size:13px;line-height:1.65;word-break:break-word}
 .pi-md>:first-child{margin-top:0}
@@ -1417,6 +1698,7 @@ ${floor.text}`)
 .pi-send:disabled{opacity:.45;cursor:not-allowed;transform:none}
 .pi-refs{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
 .pi-chip{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border:1.5px solid var(--pi-line);border-radius:20px;font-size:12px;cursor:pointer;background:var(--pi-bg);color:var(--pi-txt2);font-family:inherit}
+.pi-chip-end{margin-left:auto}
 .pi-chip.is-on{border-color:var(--pi-accent);color:var(--pi-accent);background:var(--pi-accent-soft)}
 .pi-diff{font-family:var(--pi-mono);font-size:12px;line-height:1.5;white-space:pre-wrap;word-break:break-word;background:var(--pi-surf);border-radius:var(--pi-r-in);padding:6px 0;max-height:360px;overflow:auto}
 .pi-diff div{padding:0 10px}
@@ -1436,12 +1718,14 @@ ${floor.text}`)
 .pi-dialog-box{width:440px;max-width:92vw;max-height:80vh;overflow-y:auto;background:var(--pi-bg);border-radius:var(--pi-r);box-shadow:var(--pi-shadow);padding:16px;scrollbar-width:none}
 .pi-dialog-box h4{margin:0 0 8px;font-size:15px;color:var(--pi-dark)}
 .pi-dialog-box .pi-dlg-acts{display:flex;gap:8px;justify-content:flex-end;margin-top:12px;flex-wrap:wrap}
+.pi-dialog-box .pi-dlg-acts>.pi-btn{min-width:88px}
 .pi-dialog-box ul{margin:6px 0;padding-left:18px;font-size:12px;color:var(--pi-txt2);max-height:200px;overflow-y:auto}
 .pi-notices{position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;z-index:10040;display:flex;flex-direction:column;justify-content:flex-end;align-items:flex-end;gap:8px;padding:16px;box-sizing:border-box;pointer-events:none}
 .pi-notice{pointer-events:auto;width:340px;max-width:100%;background:var(--pi-bg);border-radius:var(--pi-r);box-shadow:var(--pi-shadow);padding:12px 14px;border-left:4px solid var(--pi-accent)}
 .pi-notice b{display:block;font-size:13px;color:var(--pi-dark);margin-bottom:3px}
 .pi-notice p{margin:0 0 8px;font-size:12px;color:var(--pi-txt2)}
-.pi-notice .pi-row{gap:6px}
+.pi-notice .pi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:6px}
+.pi-notice .pi-row>.pi-btn{width:100%;padding:0 6px}
 @media (max-width:720px){
 .pi-overlay{align-items:stretch}
 .pi-panel{grid-template-columns:minmax(0,1fr);width:100vw;max-width:100vw;height:100vh;height:100dvh;max-height:none;border-radius:0}
@@ -1455,9 +1739,9 @@ ${floor.text}`)
 .pi-tree,.pi-split{grid-template-columns:minmax(0,1fr)}
 .pi-entry-hd{flex-wrap:wrap}
 .pi-wb .pi-entry-hd{flex-wrap:nowrap}
-.pi-roles{grid-template-columns:minmax(0,1fr)}
 .pi-card h3{flex-wrap:wrap}
-.pi-unit{flex-wrap:wrap}
+.pi-tools.is-c4{--pi-cols:2}
+.pi-unit{grid-template-columns:48px minmax(0,1fr) 72px 68px;gap:6px;padding:6px}
 .pi-tree-list{max-height:220px}
 .pi-msg{max-width:94%}
 .pi-body{padding:10px}
@@ -1522,6 +1806,8 @@ ${floor.text}`)
       };
       root.addEventListener("click", (event) => {
         if (event.target === root) return finish(null);
+        let pick = event.target.closest("[data-dlg-value]");
+        if (pick) return finish(pick.dataset.dlgValue);
         let button = event.target.closest("[data-dlg]");
         if (!button) return;
         let action = actions8[Number(button.dataset.dlg)], value = typeof action.value == "function" ? action.value(root) : action.value;
@@ -1565,188 +1851,6 @@ ${floor.text}`)
     refreshOn: () => refreshOn3,
     render: () => render3
   });
-
-  // src/core/prompts.js
-  var SAMPLE_STAGE = `剧情_卷一_示例:
-  阶段一_开端:
-    时间范围: 故事开始至主角离开故乡
-    AI指令: 推进主角得知变故并决定出发的事件。
-    主线节点:
-      - 名称: 主角得知变故
-        地点: 故乡
-        事件: 用一到三句话写清谁做了什么、结果如何。
-        偏转: 若主角做出不同选择，后续如何调整。
-    支线事件:
-      - 名称: 旧友送行
-        地点: 村口
-        事件: 一句话事件。
-        触发: 出现这种情况时发生。
-    世界动态:
-      - 类型: 传闻
-        来源: 谁传出
-        内容: 外界正在发生什么。
-`, FOLD_KEEP = 16, FOLD_CHARS = 24e3;
-  function discussSystemPrompt({ guide, refs }) {
-    let parts = [
-      "你在帮用户构思一条同人 if 线：一起把世界观、人物处境、信息差和大纲方向想清楚。",
-      "每次回复先回应用户的想法，再指出缺口或矛盾，最后给出两三个可选方向。不写小说正文。"
-    ];
-    return refs.length && parts.push(...refs.map((ref) => `【参考·${ref.title}】
-${ref.text}`)), guide && parts.push(`【写作基准：同人世界观速成】
-${guide}`), parts.join(`
-
-`);
-  }
-  function needsFold(messages) {
-    let live = messages.filter((msg) => !msg.folded), chars = live.reduce((sum, msg) => sum + String(msg.content || "").length, 0);
-    return live.length > FOLD_KEEP + 4 || chars > FOLD_CHARS;
-  }
-  function foldCandidates(messages) {
-    let live = messages.filter((msg) => !msg.folded);
-    return live.slice(0, Math.max(0, live.length - FOLD_KEEP));
-  }
-  function foldMessages(summary, messages) {
-    let text = messages.map((msg) => `${msg.role === "user" ? "用户" : "AI"}：${msg.content}`).join(`
-
-`);
-    return [
-      { role: "system", content: "把下面的讨论压缩成要点摘要：保留已经敲定的设定、人物关系、剧情走向和仍未决定的问题，删掉寒暄和被否掉的方案。只输出摘要。" },
-      { role: "user", content: `${summary ? `【已有摘要】
-${summary}
-
-` : ""}【新的讨论】
-${text}` }
-    ];
-  }
-  function chatRequest(system, summary, messages) {
-    let out = [{ role: "system", content: system }];
-    summary && out.push({ role: "system", content: `【之前讨论的摘要】
-${summary}` });
-    for (let msg of messages.filter((item) => !item.folded)) out.push({ role: msg.role === "user" ? "user" : "assistant", content: msg.content });
-    return out;
-  }
-  function transcript(summary, messages, limit = 3e4) {
-    let text = messages.filter((msg) => !msg.folded).map((msg) => `${msg.role === "user" ? "用户" : "AI"}：${msg.content}`).join(`
-
-`), joined = `${summary ? `【摘要】
-${summary}
-
-` : ""}${text}`;
-    return joined.length > limit ? joined.slice(-limit) : joined;
-  }
-  function settingMessages({ guide, talk, current, append }) {
-    let system = `${guide}
-
-按上面的规则产出，只回「世界观正文」「补定」「速查」三段。`, user = [
-      current ? `【已有世界观正文】
-${current}` : "",
-      append ? "已有正文不改动，只把新增事实写成一段 [追加]。" : "",
-      `【讨论记录】
-${talk}`
-    ].filter(Boolean).join(`
-
-`);
-    return [{ role: "system", content: system }, { role: "user", content: user }];
-  }
-  function rewriteBlockMessages({ guide, current, blockText, fixes }) {
-    return [
-      { role: "system", content: `${guide}
-
-只重写用户指定的一个分块，保留分块标题行，只输出这个分块。` },
-      { role: "user", content: `【完整正文】
-${current}
-
-【要重写的分块】
-${blockText}
-
-【用户的修改】
-${fixes}` }
-    ];
-  }
-  function formatSample(volumes) {
-    for (let volume of volumes || []) {
-      let stage = volume.stages[0];
-      if (stage) return `${volume.key}:
-${stageToText(stage).replace(/^/gm, "  ").trimEnd()}
-`;
-    }
-    return SAMPLE_STAGE;
-  }
-  var OUTLINE_RULES = [
-    "只输出一个 ```yaml 代码块，不加说明。",
-    "顶层键是卷名，写作「剧情_卷X_标题」；卷下是阶段，写作「阶段N_标题」；阶段字段为 时间范围、AI指令、主线节点、支线事件、世界动态。",
-    "节点字段：名称、地点、事件、偏转；支线事件多一个 触发；世界动态为 类型、来源、内容。",
-    "每个阶段 2 到 4 个主线节点，事件写已经发生的事实，偏转写玩家改变选择后的调整。",
-    "时间范围写清本阶段从什么时候到什么时候，用来判断何时切到下一段。"
-  ].join(`
-`);
-  function outlineMessages({ setting, talk, volumes, volumeNo, request }) {
-    let known = (volumes || []).map((volume) => `${volumeLabel(volume.key)}：${volume.stages.map((stage) => stageLabel(stage.key)).join("、")}`), system = `你按用户的设定写剧情大纲，格式必须与样例一致。
-${OUTLINE_RULES}
-
-【格式样例】
-${formatSample(volumes)}`, user = [
-      setting ? `【设定】
-${setting}` : "",
-      talk ? `【讨论摘要】
-${talk}` : "",
-      known.length ? `【已有的卷】
-${known.join(`
-`)}` : "",
-      `只写第 ${volumeNo} 卷。${request || ""}`
-    ].filter(Boolean).join(`
-
-`);
-    return [{ role: "system", content: system }, { role: "user", content: user }];
-  }
-  function rewriteRestMessages({ setting, volumes, fromUnitIndex, units, recent, reason }) {
-    let rest = units.slice(fromUnitIndex), byVolume = /* @__PURE__ */ new Map();
-    for (let unit of rest)
-      byVolume.has(unit.volume) || byVolume.set(unit.volume, []), byVolume.get(unit.volume).push(unit.stage);
-    let restText = outlineToText([...byVolume.entries()].map(([volume, stages]) => ({ ...volume, stages }))), system = `剧情在执行中偏离了大纲。按已经发生的正文改写剩余阶段，保持卷名与阶段名格式。
-${OUTLINE_RULES}
-
-【格式样例】
-${formatSample(volumes)}`, user = [
-      setting ? `【设定】
-${setting}` : "",
-      `【需要改写的剩余阶段】
-${restText}`,
-      reason ? `【偏转说明】
-${reason}` : "",
-      `【最近正文】
-${recent}`
-    ].filter(Boolean).join(`
-
-`);
-    return [{ role: "system", content: system }, { role: "user", content: user }];
-  }
-  function fixYamlMessages(text, error) {
-    return [
-      { role: "system", content: `修正下面 YAML 的格式错误，内容不变。
-${OUTLINE_RULES}` },
-      { role: "user", content: `【错误】${error}
-
-${text}` }
-    ];
-  }
-  function extractYaml(text) {
-    let raw = String(text || ""), fenced = /```ya?ml\s*\n([\s\S]*?)```/i.exec(raw) || /```\s*\n([\s\S]*?)```/.exec(raw);
-    return (fenced ? fenced[1] : raw).trim();
-  }
-  function hasYamlBlock(text) {
-    return /```ya?ml\s*\n[\s\S]*?```/i.test(String(text || ""));
-  }
-  function parseOutlineReply(text, idOf) {
-    let yaml = extractYaml(text);
-    try {
-      return { ok: !0, yaml, volumes: volumesFromValue(parseYaml(yaml), idOf) };
-    } catch (error) {
-      let line = yamlErrorLine(error);
-      return { ok: !1, yaml, line, error: `${line ? `第 ${line} 行：` : ""}${String(error.message || error).split(`
-`)[0]}` };
-    }
-  }
 
   // src/core/guide.js
   var BUILTIN_GUIDE = `# 同人世界观速成
@@ -2062,34 +2166,38 @@ NSFW指引（涉及成人内容时）:
     let items = (Array.isArray(stage.data[meta2.field]) ? stage.data[meta2.field] : []).map((item, index) => {
       let value = item && typeof item == "object" ? item : { 内容: String(item ?? "") }, keys = [.../* @__PURE__ */ new Set([...NODE_KEYS[meta2.kind], ...Object.keys(value)])];
       return `<div class="pi-node"><div class="pi-node-hd"><span class="pi-badge">${esc(meta2.label)} ${index + 1}</span><span class="pi-grow"></span>
-            <button type="button" class="pi-btn is-sm is-ghost" data-act="node-up" data-field="${esc(meta2.field)}" data-i="${index}"${index ? "" : " disabled"}>上移</button>
-            <button type="button" class="pi-btn is-sm is-ghost is-danger" data-act="node-del" data-field="${esc(meta2.field)}" data-i="${index}">删除</button></div>
+            <button type="button" class="pi-btn is-sm" data-act="node-up" data-field="${esc(meta2.field)}" data-i="${index}"${index ? "" : " disabled"}>上移</button>
+            <button type="button" class="pi-btn is-sm is-danger" data-act="node-del" data-field="${esc(meta2.field)}" data-i="${index}">删除</button></div>
             ${keys.map((key) => `<label class="pi-field"><span>${esc(key)}</span>${LONG_KEYS.has(key) ? `<textarea class="pi-ta" rows="2" data-node-field="${esc(meta2.field)}" data-i="${index}" data-k="${esc(key)}">${esc(value[key] ?? "")}</textarea>` : `<input class="pi-inp" data-node-field="${esc(meta2.field)}" data-i="${index}" data-k="${esc(key)}" value="${esc(value[key] ?? "")}">`}</label>`).join("")}</div>`;
     }).join("");
     return `<div class="pi-card"><h3>${esc(meta2.field)}<span class="pi-spacer"></span><button type="button" class="pi-btn is-sm" data-act="node-add" data-field="${esc(meta2.field)}" data-kind="${meta2.kind}">添加</button></h3>
         ${items || '<p class="pi-hint">无</p>'}</div>`;
   }
-  function stageEditor(volume, stage, raw) {
-    let known = /* @__PURE__ */ new Set(["时间范围", "AI指令", ...NODE_FIELDS.map((item) => item.field)]), extra = Object.keys(stage.data).filter((key) => !known.has(key)), head = `<div class="pi-card"><h3>阶段<span class="pi-spacer"></span>
-        <button type="button" class="pi-btn is-sm is-ghost" data-act="stage-up">上移</button>
+  function nodeTabs(stage, kind) {
+    let count = (meta2) => Array.isArray(stage.data[meta2.field]) ? stage.data[meta2.field].length : 0;
+    return `<div class="pi-seg pi-node-seg">${NODE_FIELDS.map((meta2) => `<button type="button" class="pi-seg-btn${meta2.kind === kind ? " is-sel" : ""}" data-act="node-kind" data-kind="${meta2.kind}">${esc(meta2.label)} ${count(meta2)}</button>`).join("")}</div>`;
+  }
+  function stageEditor(volume, stage, raw, kind) {
+    let known = /* @__PURE__ */ new Set(["时间范围", "AI指令", ...NODE_FIELDS.map((item) => item.field)]), extra = Object.keys(stage.data).filter((key) => !known.has(key)), head = `<div class="pi-card"><h3>阶段</h3>
+        <p class="pi-hint">所属：${esc(volumeLabel(volume.key))}</p>
+        <div class="pi-tools is-c3"><button type="button" class="pi-btn is-sm" data-act="stage-up">上移</button>
         <button type="button" class="pi-btn is-sm" data-act="raw">${raw ? "表单编辑" : "YAML 原文"}</button>
-        <button type="button" class="pi-btn is-sm is-danger" data-act="stage-del">删除阶段</button></h3>
-        <p class="pi-hint">所属：${esc(volumeLabel(volume.key))}</p>`;
+        <button type="button" class="pi-btn is-sm is-danger" data-act="stage-del">删除阶段</button></div>`;
     return raw ? `${head}<textarea class="pi-ta is-mono is-tall" data-raw>${esc(stageToText(stage))}</textarea>
-            <div class="pi-row"><button type="button" class="pi-btn is-primary is-sm" data-act="raw-apply">应用</button><span class="pi-status" data-raw-status></span></div></div>` : `${head}<label class="pi-field"><span>阶段名（阶段N_标题）</span><input class="pi-inp" data-stage-key value="${esc(stage.key)}"></label>
+            <div class="pi-tools is-c1 is-end"><button type="button" class="pi-btn is-primary is-sm" data-act="raw-apply">应用</button></div><p class="pi-status" data-raw-status></p></div>` : `${head}<label class="pi-field"><span>阶段名（阶段N_标题）</span><input class="pi-inp" data-stage-key value="${esc(stage.key)}"></label>
         <label class="pi-field"><span>时间范围（用来判断何时切到下一段）</span><input class="pi-inp" data-stage-field="时间范围" value="${esc(stage.data.时间范围 ?? "")}"></label>
         <label class="pi-field"><span>AI指令</span><textarea class="pi-ta" rows="2" data-stage-field="AI指令">${esc(stage.data.AI指令 ?? "")}</textarea></label>
         ${extra.length ? `<p class="pi-hint">另有字段：${esc(extra.join("、"))}（在 YAML 原文里编辑）</p>` : ""}</div>
-        ${NODE_FIELDS.map((meta2) => nodeEditor(stage, meta2)).join("")}`;
+        ${nodeTabs(stage, kind)}${nodeEditor(stage, NODE_FIELDS.find((meta2) => meta2.kind === kind))}`;
   }
   function volumeEditor(volume) {
-    return `<div class="pi-card"><h3>卷<span class="pi-spacer"></span>
-        <button type="button" class="pi-btn is-sm is-ghost" data-act="vol-up">上移</button>
+    return `<div class="pi-card"><h3>卷</h3>
+        <div class="pi-tools is-c4"><button type="button" class="pi-btn is-sm" data-act="stage-add">＋新阶段</button>
+        <button type="button" class="pi-btn is-sm" data-act="vol-up">上移</button>
         <button type="button" class="pi-btn is-sm" data-act="vol-export">导出本卷</button>
-        <button type="button" class="pi-btn is-sm is-danger" data-act="vol-del">删除卷</button></h3>
+        <button type="button" class="pi-btn is-sm is-danger" data-act="vol-del">删除卷</button></div>
         <label class="pi-field"><span>卷名（剧情_卷X_标题）</span><input class="pi-inp" data-vol-key value="${esc(volume.key)}"></label>
-        <p class="pi-hint">${volume.stages.length} 个阶段</p>
-        <button type="button" class="pi-btn is-sm" data-act="stage-add">＋新阶段</button></div>`;
+        <p class="pi-hint">${volume.stages.length} 个阶段</p></div>`;
   }
   function draftHtml(view, draft) {
     if (!draft) return "";
@@ -2098,25 +2206,26 @@ NSFW指引（涉及成人内容时）:
       return `<div class="pi-card"><h3>${title}<span class="pi-badge is-danger">格式错误</span></h3>
             <p class="pi-hint">${esc(draft.error)}</p>
             <textarea class="pi-ta is-mono is-tall" data-draft-yaml>${esc(draft.yaml)}</textarea>
-            <div class="pi-row"><button type="button" class="pi-btn is-primary is-sm" data-act="draft-fix"${view.busy.outline ? " disabled" : ""}>让 AI 修正格式</button>
-            <button type="button" class="pi-btn is-sm" data-act="draft-reparse">按上面的文本重新解析</button>
-            <button type="button" class="pi-btn is-sm is-ghost" data-act="draft-drop">丢弃</button></div></div>`;
+            <div class="pi-tools is-c3 is-end"><button type="button" class="pi-btn is-primary is-sm" data-act="draft-fix"${view.busy.outline ? " disabled" : ""}>让 AI 修正格式</button>
+            <button type="button" class="pi-btn is-sm" data-act="draft-reparse">重新解析</button>
+            <button type="button" class="pi-btn is-sm is-danger" data-act="draft-drop">丢弃</button></div></div>`;
     let summary = draft.volumes.map((volume) => `<p class="pi-hint"><b>${esc(volumeLabel(volume.key))}</b>：${volume.stages.map((stage) => esc(stageLabel(stage.key))).join("、")}</p>`).join(""), buttons = draft.mode === "rewrite" ? '<button type="button" class="pi-btn is-primary is-sm" data-act="draft-rest">替换剩余阶段</button>' : `<button type="button" class="pi-btn is-primary is-sm" data-act="draft-new">存为新卷</button>
            <button type="button" class="pi-btn is-sm" data-act="draft-replace">替换选中卷</button>
            <button type="button" class="pi-btn is-sm" data-act="draft-append">追加为新阶段</button>`;
     return `<div class="pi-card"><h3>${title}<span class="pi-badge is-ok">已解析</span></h3>${summary}
         <details><summary class="pi-hint">YAML 原文</summary><pre class="pi-pre">${esc(draft.yaml)}</pre></details>
-        <div class="pi-row">${buttons}<button type="button" class="pi-btn is-sm is-ghost" data-act="draft-drop">丢弃</button></div></div>`;
+        <div class="pi-tools is-end ${draft.mode === "rewrite" ? "is-c2" : "is-c4"}">${buttons}<button type="button" class="pi-btn is-sm is-danger" data-act="draft-drop">丢弃</button></div></div>`;
   }
   function render(view) {
-    let project = view.project(), s = st(view), { volume, stage } = findSel(project, s.sel), busy = view.busy.outline, editor = stage ? stageEditor(volume, stage, s.raw) : volume ? volumeEditor(volume) : '<div class="pi-card"><p class="pi-hint">从左边选一卷或一个阶段编辑。</p></div>';
-    return `<div class="pi-card"><h3>大纲<span class="pi-spacer"></span>
-            <button type="button" class="pi-btn is-sm" data-act="import-file">导入 YAML</button>
+    let project = view.project(), s = st(view), { volume, stage } = findSel(project, s.sel), busy = view.busy.outline, kind = NODE_FIELDS.some((meta2) => meta2.kind === s.nodeKind) ? s.nodeKind : NODE_FIELDS[0].kind, editor = stage ? stageEditor(volume, stage, s.raw, kind) : volume ? volumeEditor(volume) : '<div class="pi-card"><p class="pi-hint">从左边选一卷或一个阶段编辑。</p></div>';
+    return `<div class="pi-card"><h3>大纲</h3>
+        <div class="pi-tools is-c4">
+            <button type="button" class="pi-btn is-sm" data-act="import-file">导入YAML</button>
             <button type="button" class="pi-btn is-sm" data-act="import-paste">粘贴</button>
             <button type="button" class="pi-btn is-sm" data-act="import-wb">从世界书</button>
-            <button type="button" class="pi-btn is-sm" data-act="export"${project.outline.volumes.length ? "" : " disabled"}>导出</button></h3>
-        <div class="pi-row"><input class="pi-inp pi-grow" data-ai-request placeholder="给 AI 的额外要求（可空）" value="${esc(s.request || "")}">
-            <button type="button" class="pi-btn is-accent is-sm" data-act="ai-volume"${busy ? " disabled" : ""}>${busy ? '<span class="pi-spin"></span>写作中' : `AI 写第 ${project.outline.volumes.length + 1} 卷`}</button></div>
+            <button type="button" class="pi-btn is-sm" data-act="export"${project.outline.volumes.length ? "" : " disabled"}>导出</button></div>
+        <div class="pi-inline"><input class="pi-inp" data-ai-request placeholder="给 AI 的额外要求（可空）" value="${esc(s.request || "")}">
+            <button type="button" class="pi-btn is-accent is-sm is-wide" data-act="ai-volume"${busy ? " disabled" : ""}>${busy ? '<span class="pi-spin"></span>写作中' : `AI 写第 ${project.outline.volumes.length + 1} 卷`}</button></div>
         </div>
         ${draftHtml(view, s.draft)}
         <div class="pi-tree"><div class="pi-tree-list">${treeHtml(project, s.sel)}
@@ -2177,18 +2286,17 @@ NSFW指引（涉及成人内容时）:
     reply2 && setDraft(view, "rewrite", reply2, { fromUnitId: units[from].id });
   }
   function applyRest(view, draft) {
-    let project = view.project(), units = flattenUnits(project.outline.volumes), from = units.findIndex((unit) => unit.id === draft.fromUnitId);
-    if (from < 0) throw new Error("原来的阶段已不存在，改用「存为新卷」。");
-    let drop = new Set(units.slice(from).map((unit) => unit.stage.id)), volumes = project.outline.volumes.map((volume) => ({ ...volume, stages: volume.stages.filter((stage) => !drop.has(stage.id)) }));
-    for (let incoming of draft.volumes) {
-      let same = volumes.find((volume) => volume.key === incoming.key);
-      same ? volumes = volumes.map((volume) => volume === same ? { ...volume, stages: [...volume.stages, ...incoming.stages] } : volume) : volumes.push(incoming);
-    }
-    volumes = volumes.filter((volume) => volume.stages.length), update(view, () => volumes);
+    let project = view.project(), unit = flattenUnits(project.outline.volumes).find((item) => item.id === draft.fromUnitId);
+    if (!unit) throw new Error("原来的阶段已不存在，改用「存为新卷」。");
+    let volumes = replaceRest(project.outline.volumes, unit.stage.id, draft.volumes);
+    update(view, () => volumes);
     let first = draft.volumes[0] && draft.volumes[0].stages[0];
     first && view.runtime.activeId() === view.projectId && view.runtime.setProgress(goTo(view.runtime.progress(), flattenUnits(volumes), first.id));
   }
   var actions = {
+    "node-kind"(view, target) {
+      st(view).nodeKind = target.dataset.kind, view.renderBody();
+    },
     sel(view, target) {
       st(view).sel = target.dataset.id, st(view).raw = !1, view.renderBody();
     },
@@ -2467,31 +2575,32 @@ ${yaml}
             <span class="pi-etitle">${esc(block.title)}</span>${status}</div>
             ${open ? `<div class="pi-entry-bd">${diffHtml(old ? old.text : "", block.text)}</div>` : ""}</div>`;
     }).join("");
-    return `<div class="pi-card"><h3>新稿对比 ${checkBadge(draft.check)}<span class="pi-spacer"></span>
-        <button type="button" class="pi-btn is-sm is-ghost" data-act="draft-drop">丢弃</button>
+    return `<div class="pi-card"><h3>新稿对比 ${checkBadge(draft.check)}</h3>
+        <p class="pi-hint">勾选的分块替换旧稿，新分块追加到末尾。</p>${rows}
+        ${fixesHtml(draft.fixes, "draft")}
+        <div class="pi-tools is-c3 is-end"><button type="button" class="pi-btn is-sm is-primary" data-act="draft-all">全部采用</button>
         <button type="button" class="pi-btn is-sm" data-act="draft-pick">采用勾选的分块</button>
-        <button type="button" class="pi-btn is-sm is-primary" data-act="draft-all">全部采用</button></h3>
-        <p class="pi-hint">点分块看改动；勾选的分块替换旧稿，旧稿没有的追加到末尾。</p>${rows}
-        ${fixesHtml(draft.fixes, "draft")}</div>`;
+        <button type="button" class="pi-btn is-sm is-danger" data-act="draft-drop">丢弃</button></div></div>`;
   }
   function historyHtml(project, at) {
     let list = project.setting.history;
     if (!list.length) return '<div class="pi-card"><h3>历史版本</h3><p class="pi-hint">还没有历史版本。</p></div>';
     let fmt = (time) => new Date(time).toLocaleString(), chosen = list[at];
-    return `<div class="pi-card"><h3>历史版本<span class="pi-spacer"></span><span class="pi-hint">保留最近 10 版</span></h3>
+    return `<div class="pi-card"><h3>历史版本</h3>
         ${list.map((item, i) => `<div class="pi-row"><span class="pi-grow">${esc(fmt(item.at))} · ${item.text.length} 字</span>
-            <button type="button" class="pi-btn is-sm is-ghost" data-act="hist-diff" data-i="${i}">对比当前</button>
+            <button type="button" class="pi-btn is-sm" data-act="hist-diff" data-i="${i}">对比当前</button>
             <button type="button" class="pi-btn is-sm" data-act="hist-restore" data-i="${i}">回退到此版</button></div>`).join("")}
         ${chosen ? `<p class="pi-hint">${esc(fmt(chosen.at))} → 当前</p>${diffHtml(chosen.text, project.setting.text)}` : ""}</div>`;
   }
   function render2(view) {
     let project = view.project(), s = st2(view), text = project.setting.text, blocks = splitBlocks(text).filter((block) => block.title !== "开头"), busy = view.busy.setting;
     return `${s.draft ? draftHtml2(view, project, s.draft) : ""}
-        <div class="pi-card"><h3>设定 ${checkBadge(project.setting.check)}<span class="pi-spacer"></span>
-            <label class="pi-check"><input type="checkbox" data-append${s.append ? " checked" : ""}>只追加</label>
+        <div class="pi-card"><h3>设定 ${checkBadge(project.setting.check)}</h3>
+        <div class="pi-tools is-c3">
             <button type="button" class="pi-btn is-sm is-accent" data-act="from-talk"${busy ? " disabled" : ""}>${busy ? '<span class="pi-spin"></span>整理中' : "从讨论整理"}</button>
             <button type="button" class="pi-btn is-sm" data-act="import-wb">从世界书导入</button>
-            <button type="button" class="pi-btn is-sm${s.history ? " is-primary" : ""}" data-act="history">历史 ${project.setting.history.length}</button></h3>
+            <button type="button" class="pi-btn is-sm${s.history ? " is-primary" : ""}" data-act="history">历史版本 ${project.setting.history.length}</button>
+            <label class="pi-check"><input type="checkbox" data-append${s.append ? " checked" : ""}><span>只追加，不改动已有分块</span></label></div>
         ${blocks.length ? `<div class="pi-toc">${blocks.map((block) => `<button type="button" class="pi-chip" data-act="jump" data-key="${esc(block.key)}">${esc(block.title)}</button>`).join("")}</div>` : ""}
         <textarea class="pi-ta is-tall" data-setting placeholder="世界观正文。执行时作为常驻条目注入（角色定义后），取代世界书里手改的剧情设定条目。">${esc(text)}</textarea>
         <div class="pi-row"><span class="pi-hint pi-grow">≈<span data-tokens>${estimateTokens(text)}</span> token</span><span class="pi-status" data-save-status></span></div>
@@ -2619,7 +2728,8 @@ ${parsed.body}` : parsed.body;
         <button type="button" class="pi-chip${refs.setting ? " is-on" : ""}" data-act="ref" data-ref="setting">当前设定</button>
         <button type="button" class="pi-chip${refs.outline ? " is-on" : ""}" data-act="ref" data-ref="outline">当前大纲</button>
         ${refs.oc.map((oc, i) => `<button type="button" class="pi-chip is-on" data-act="ref-oc-del" data-i="${i}" title="点击移除">${esc(oc.title)} ×</button>`).join("")}
-        <button type="button" class="pi-chip" data-act="ref-oc">＋世界书条目</button></div>`, messages = live.map((msg) => {
+        <button type="button" class="pi-chip" data-act="ref-oc">＋世界书条目</button>
+        ${chat.messages.length ? '<button type="button" class="pi-chip pi-chip-end" data-act="clear-talk">清空讨论</button>' : ""}</div>`, messages = live.map((msg) => {
       let isUser = msg.role === "user", tools = `<div class="pi-msg-tools">
             <button type="button" class="pi-btn is-sm is-ghost" data-act="msg-edit" data-id="${esc(msg.id)}">编辑</button>
             <button type="button" class="pi-btn is-sm is-ghost" data-act="msg-del" data-id="${esc(msg.id)}">删除</button>
@@ -2673,7 +2783,25 @@ ${parsed.body}` : parsed.body;
     let chat = view.data.chat(view.projectId);
     view.data.saveChat(view.projectId, fn(chat));
   }
+  function talkMarkdown(view, chat) {
+    let lines = [`# ${view.project().name} · 讨论记录`, ""];
+    chat.summary && lines.push("## 早期摘要", "", chat.summary, "");
+    for (let msg of chat.messages) lines.push(`## ${msg.role === "user" ? "我" : "AI"}`, "", msg.content, "");
+    return lines.join(`
+`);
+  }
   var actions3 = {
+    // 清空本项目的讨论，设定、大纲和附带参考都保留；可先导出一份。
+    async "clear-talk"(view) {
+      let chat = view.data.chat(view.projectId);
+      if (!chat || !chat.messages.length) return;
+      let choice = await choiceDialog({
+        title: "清空讨论",
+        body: `删除这个项目的全部 ${chat.messages.length} 条讨论消息和摘要。设定、大纲和附带参考不受影响。`,
+        choices: [{ label: "取消", value: null }, { label: "直接清空", value: "clear", danger: !0 }, { label: "导出后清空", value: "export", primary: !0 }]
+      });
+      choice && (choice === "export" && downloadBlob(`${view.project().name}-讨论记录-${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}.md`, talkMarkdown(view, chat), "text/markdown"), view.data.saveChat(view.projectId, { ...chat, summary: "", messages: [] }), st3(view).draft = "", view.renderBody());
+    },
     send(view, target) {
       let box = target.closest(".pi-body").querySelector("[data-compose]"), text = box.value.trim();
       if (text)
@@ -2744,15 +2872,15 @@ ${parsed.body}` : parsed.body;
   var STATE_BADGE = { done: "", active: "is-accent", next: "is-warn", todo: "" };
   function entryRow(entry, expanded) {
     let tokens = estimateTokens(entry.content), atDepth = entry.position === 4, body = expanded ? `<div class="pi-entry-bd">
-        <div class="pi-row">
+        <div class="pi-pair ${atDepth ? "is-c4" : ""}">
             <label class="pi-field"><span>位置</span><select class="pi-sel" data-slot="${esc(entry.slotId)}" data-slot-field="position">${options(POSITIONS, entry.position)}</select></label>
-            ${atDepth ? `<label class="pi-field"><span>深度</span><input class="pi-inp is-num" type="number" min="0" data-slot="${esc(entry.slotId)}" data-slot-field="depth" value="${entry.depth}"></label>
+            ${atDepth ? `<label class="pi-field"><span>深度</span><input class="pi-inp" type="number" min="0" data-slot="${esc(entry.slotId)}" data-slot-field="depth" value="${entry.depth}"></label>
             <label class="pi-field"><span>角色</span><select class="pi-sel" data-slot="${esc(entry.slotId)}" data-slot-field="role">${options(ROLES, entry.role)}</select></label>` : ""}
-            <label class="pi-field"><span>顺序</span><input class="pi-inp is-num" type="number" data-slot="${esc(entry.slotId)}" data-slot-field="order" value="${entry.order}"></label>
+            <label class="pi-field"><span>顺序</span><input class="pi-inp" type="number" data-slot="${esc(entry.slotId)}" data-slot-field="order" value="${entry.order}"></label>
         </div>
-        <div class="pi-row">
+        <div class="pi-tools is-c2">
             <button type="button" class="pi-btn is-sm" data-act="save-default" data-slot="${esc(entry.slotId)}" data-kind="${entry.kind}">设为本项目默认</button>
-            <button type="button" class="pi-btn is-sm is-ghost" data-act="reset-slot" data-slot="${esc(entry.slotId)}">恢复默认</button>
+            <button type="button" class="pi-btn is-sm" data-act="reset-slot" data-slot="${esc(entry.slotId)}">恢复默认</button>
         </div>
         <pre class="pi-pre">${esc(entry.content)}</pre></div>` : "";
     return `<div class="pi-entry${entry.enabled ? "" : " is-off"}">
@@ -2767,8 +2895,7 @@ ${parsed.body}` : parsed.body;
     let off = new Set(offNodes(progress, unit.id)), nodes = stageNodes(unit.stage.data);
     return nodes.length ? `<div class="pi-card-sub">${nodes.map((node) => `<label class="pi-check${off.has(node.id) ? " is-off" : ""}">
         <input type="checkbox" data-node="${esc(node.id)}" data-unit="${esc(unit.id)}"${off.has(node.id) ? "" : " checked"}>
-        <span><span class="pi-badge">${esc(node.label)}</span> ${esc(node.name)}</span></label>`).join("")}
-        <p class="pi-hint">已演完的节点取消勾选后，不再写进详细条目。</p></div>` : "";
+        <span><span class="pi-badge">${esc(node.label)}</span> ${esc(node.name)}</span></label>`).join("")}</div>` : "";
   }
   function unitList(units, states, progress) {
     let lastVol = null, stateOpts = [{ value: "", label: "自动" }, ...Object.entries(STATE_LABELS).map(([value, label]) => ({ value, label }))];
@@ -2778,10 +2905,9 @@ ${parsed.body}` : parsed.body;
       let state = states[unit.id], manual = progress.slots[unit.id] && progress.slots[unit.id].state || "", muted = progress.muted.includes(unit.id), range = unit.stage.data && unit.stage.data.时间范围;
       return `${head}<div class="pi-unit${state === "active" ? " is-active" : ""}">
             <span class="pi-badge ${STATE_BADGE[state]}">${STATE_LABELS[state]}</span>
-            <span class="pi-uname" title="${esc(range || "")}">${esc(stageLabel(unit.stage.key))}</span>
-            ${muted ? `<button type="button" class="pi-btn is-sm is-ghost" data-act="unmute" data-unit="${esc(unit.id)}" title="恢复提醒">不再提醒</button>` : ""}
+            <span class="pi-uname" title="${esc(range || "")}">${esc(stageLabel(unit.stage.key))}${muted ? ` <button type="button" class="pi-badge is-warn pi-unmute" data-act="unmute" data-unit="${esc(unit.id)}" title="点击恢复提醒">不再提醒</button>` : ""}</span>
             <select class="pi-sel" data-unit-state="${esc(unit.id)}" title="手动改状态">${options(stateOpts, manual)}</select>
-            ${state === "active" ? "" : `<button type="button" class="pi-btn is-sm is-ghost" data-act="goto" data-unit="${esc(unit.id)}">设为当前</button>`}
+            <span class="pi-unit-act">${state === "active" ? "" : `<button type="button" class="pi-btn is-sm" data-act="goto" data-unit="${esc(unit.id)}">设为当前</button>`}</span>
         </div>${state === "active" ? nodeList(unit, progress) : ""}`;
     }).join("");
   }
@@ -2792,16 +2918,19 @@ ${parsed.body}` : parsed.body;
     if (activeId !== project.id) {
       let other = data.index().projects.find((item) => item.id === activeId);
       return `<div class="pi-card"><h3>启用</h3>
-            <p class="pi-hint">「${esc(cardName())}」${other ? `当前启用的是「${esc(other.name)}」` : "还没有启用项目"}。一张卡同时只注入一个项目，进度跟聊天走。</p>
+            <p class="pi-hint">「${esc(cardName())}」${other ? `当前启用的是「${esc(other.name)}」` : "还没有启用项目"}。</p>
             <button type="button" class="pi-btn is-primary" data-act="activate">设为本卡当前项目</button></div>`;
     }
-    let progress = runtime.progress(), entries = runtime.entries(), units = flattenUnits(project.outline.volumes), states = unitStates(units, progress), total = entries.filter((entry) => entry.enabled).reduce((sum, entry) => sum + estimateTokens(entry.content), 0), mode = runtime.injectMode() === "virtual" ? '<span class="pi-badge is-ok">虚拟条目</span>' : '<span class="pi-badge is-warn">专用世界书</span>', settings = data.settings(), checking = runtime.isChecking(), checkInfo = settings.switchSource === "signal" ? "只用 AI 报信" : `每 ${settings.checkEvery} 楼检测 · 上次第 ${progress.lastCheckFloor} 楼 · 当前 ${runtime.floorCount()} 楼`;
-    return `<div class="pi-card"><h3>注入条目 ${mode}<span class="pi-spacer"></span><span class="pi-badge">共 ≈${total} token</span>
-            <button type="button" class="pi-btn is-sm" data-act="preview">预览最终注入</button></h3>
+    let progress = runtime.progress(), entries = runtime.entries(), units = flattenUnits(project.outline.volumes), states = unitStates(units, progress), total = entries.filter((entry) => entry.enabled).reduce((sum, entry) => sum + estimateTokens(entry.content), 0), mode = runtime.injectMode() === "virtual" ? '<span class="pi-badge is-ok">虚拟条目</span>' : '<span class="pi-badge is-warn">专用世界书</span>', settings = data.settings(), checking = runtime.isChecking(), checkInfo = `每 ${settings.checkEvery} 楼检测 · 上次第 ${progress.lastCheckFloor} 楼 · 当前 ${runtime.floorCount()} 楼`;
+    return `<div class="pi-card"><h3>注入条目 ${mode}<span class="pi-spacer"></span><span class="pi-badge">共 ≈${total} token</span></h3>
+        <div class="pi-tools is-c1"><button type="button" class="pi-btn is-sm" data-act="preview">预览最终注入</button></div>
         ${entries.length ? entries.map((entry) => entryRow(entry, st7.open === entry.slotId)).join("") : '<p class="pi-hint">设定和大纲都为空，没有可注入的内容。</p>'}
         </div>
+        ${units.length ? `<div class="pi-card"><h3>剧情索引<span class="pi-badge">不注入正文</span><span class="pi-spacer"></span>
+            <button type="button" class="pi-btn is-sm is-ghost" data-act="index-toggle">${st7.indexOpen ? "收起" : "查看"}</button></h3>
+            ${st7.indexOpen ? `<pre class="pi-pre">${esc(buildIndexText(units, states, progress))}</pre>` : ""}</div>` : ""}
         <div class="pi-card"><h3>阶段<span class="pi-spacer"></span><span class="pi-hint">${esc(checkInfo)}</span></h3>
-        ${units.length ? `<div class="pi-row">
+        ${units.length ? `<div class="pi-tools is-c3">
             <button type="button" class="pi-btn is-primary is-sm" data-act="next">打开下一段</button>
             <button type="button" class="pi-btn is-sm" data-act="check"${checking ? " disabled" : ""}>${checking ? '<span class="pi-spin"></span>检测中' : "立即检测"}</button>
             <button type="button" class="pi-btn is-sm" data-act="rewrite">让 AI 改写后续阶段</button></div>
@@ -2814,6 +2943,10 @@ ${parsed.body}` : parsed.body;
   }
   var actions4 = {
     activate: (view) => view.runtime.switchProject(view.projectId),
+    "index-toggle"(view) {
+      let st7 = view.tabState("run");
+      st7.indexOpen = !st7.indexOpen, view.renderBody();
+    },
     "toggle-entry"(view, target, event) {
       if (event.target.closest("input,select")) return;
       let st7 = view.tabState("run");
@@ -2844,7 +2977,7 @@ ${parsed.body}` : parsed.body;
         let list = entries.filter((entry) => entry.position === pos.value).sort((a, b) => a.order - b.order);
         return list.length ? list.map((entry) => `<p class="pi-hint"><span class="pi-badge is-dark">${esc(positionLabel(entry))}</span> ${esc(entry.title)} · 顺序 ${entry.order}</p><pre class="pi-pre">${esc(entry.content)}</pre>`).join("") : "";
       }).join("") : '<p class="pi-hint">没有启用的条目。</p>';
-      return openDialog({ title: "最终注入预览", html: `<p class="pi-hint">按位置分组，组内按顺序排列；实际与世界书条目一起排序。</p>${html}`, actions: [{ label: "关闭", value: !0, primary: !0 }] });
+      return openDialog({ title: "最终注入预览", html: `${html}`, actions: [{ label: "关闭", value: !0, primary: !0 }] });
     }
   };
   function onChange2(view, target) {
@@ -2871,68 +3004,33 @@ ${parsed.body}` : parsed.body;
     refreshOn: () => refreshOn4,
     render: () => render5
   });
-  var st4 = (view) => view.tabState("settings");
-  function modelInput(value) {
-    return `<input class="pi-inp" data-f="model" value="${esc(value)}" placeholder="模型名称">`;
+  var st4 = (view) => view.tabState("settings"), currentRole = (view) => LLM_ROLES.some((item) => item.key === st4(view).role) ? st4(view).role : LLM_ROLES[0].key;
+  function modelField(view, role, llm) {
+    let s = st4(view), models = s.models?.[role] || [];
+    return `<div class="pi-field"><span>模型</span><div class="pi-inline">${!models.length || s.manual?.[role] ? `<input class="pi-inp" data-llm="${role}" data-k="model" value="${esc(llm.model)}" placeholder="模型名称">` : `<select class="pi-sel" data-llm="${role}" data-k="model">${llm.model && !models.includes(llm.model) ? `<option value="${esc(llm.model)}" selected>${esc(llm.model)}</option>` : ""}
+            ${llm.model ? "" : '<option value="" selected disabled>选择模型</option>'}${options(models.map((model) => ({ value: model, label: model })), llm.model)}
+            <option value="__manual">手动输入…</option></select>`}
+        <button type="button" class="pi-btn" data-act="models" data-role="${role}">${s.loading === role ? '<span class="pi-spin"></span>' : ""}获取列表</button></div></div>`;
   }
-  function modelSelect(models, value) {
-    let extra = value && !models.includes(value) ? `<option value="${esc(value)}">${esc(value)}</option>` : "";
-    return `<select class="pi-sel" data-f="model">${value ? "" : '<option value="" selected disabled>选择模型</option>'}${extra}${options(models.map((model) => ({ value: model, label: model })), value)}<option value="__manual">手动输入…</option></select>`;
-  }
-  function readPreset(box) {
-    let out = {};
-    for (let key of ["name", "endpoint", "apiKey", "model", "temperature"]) out[key] = box.querySelector(`[data-f="${key}"]`).value.trim();
-    return out;
-  }
-  function editPreset(preset, isNew = !1) {
-    let html = `<label class="pi-field"><span>名称</span><input class="pi-inp" data-f="name" value="${esc(preset.name)}" placeholder="如：DeepSeek"></label>
-        <label class="pi-field"><span>接口地址</span><input class="pi-inp" data-f="endpoint" value="${esc(preset.endpoint)}" placeholder="https://api.example.com/v1"></label>
-        <label class="pi-field"><span>API密钥</span><input class="pi-inp" type="password" autocomplete="off" data-f="apiKey" value="${esc(preset.apiKey)}"></label>
-        <div class="pi-field"><span>模型</span><div class="pi-inline"><span class="pi-grow" data-model-box>${modelInput(preset.model)}</span>
-            <button type="button" class="pi-btn" data-fetch-models>获取列表</button></div></div>
-        <label class="pi-field"><span>温度</span><input class="pi-inp is-num" data-f="temperature" value="${esc(preset.temperature)}" placeholder="默认"></label>
-        <p class="pi-hint">兼容OpenAI格式的接口，经酒馆后端转发。密钥保存在酒馆服务器的 pi-index.json 中。</p>`;
-    return openDialog({
-      title: isNew ? "新建接口预设" : "编辑接口预设",
-      html,
-      actions: [
-        { label: "取消", value: null },
-        { label: "保存", primary: !0, value: (box) => ({ ...preset, ...readPreset(box) }) }
-      ],
-      onMount(box) {
-        let slot = box.querySelector("[data-model-box]"), button = box.querySelector("[data-fetch-models]"), models = [];
-        button.addEventListener("click", async () => {
-          let current = readPreset(box);
-          button.disabled = !0, button.innerHTML = '<span class="pi-spin"></span>获取列表';
-          try {
-            models = await fetchModels(current), slot.innerHTML = modelSelect(models, current.model), toast("success", `获取到${models.length}个模型。`);
-          } catch (error) {
-            toast("error", error.message);
-          } finally {
-            button.disabled = !1, button.textContent = "获取列表";
-          }
-        }), slot.addEventListener("change", (event) => {
-          event.target.value === "__manual" && (slot.innerHTML = modelInput(""), slot.querySelector("input").focus());
-        });
-      }
-    });
-  }
-  function apiCard(s) {
-    let presets = s.presets, usedBy = (id) => LLM_ROLES.filter((role) => s.llm[role.key].source === "preset" && s.llm[role.key].presetId === id).map((role) => role.label), list = presets.map((preset) => `<div class="pi-preset">
-            <span class="pi-preset-name" title="${esc(preset.name)}">${esc(preset.name)}</span>
-            <span class="pi-preset-model" title="${esc(preset.model)}">${esc(preset.model || "未选模型")}</span>
-            ${usedBy(preset.id).length ? `<span class="pi-badge is-accent">${esc(usedBy(preset.id).join("、"))}</span>` : ""}
-            <button type="button" class="pi-icon-btn" data-act="preset-edit" data-id="${esc(preset.id)}" title="编辑">${ICONS.pencil}</button>
-            <button type="button" class="pi-icon-btn is-danger" data-act="preset-del" data-id="${esc(preset.id)}" title="删除">${ICONS.trash}</button></div>`).join(""), choices = [{ value: "tavern", label: "酒馆当前连接" }, ...presets.map((preset) => ({ value: `p:${preset.id}`, label: preset.name }))], picks = LLM_ROLES.map((role) => {
-      let llm = s.llm[role.key], value = llm.source === "preset" ? `p:${llm.presetId}` : "tavern";
-      return `<label class="pi-field"><span>${esc(role.label)}</span><select class="pi-sel" data-role-pick="${role.key}">${options(choices, value)}</select></label>`;
-    }).join("");
+  function llmCard(view, s) {
+    let role = currentRole(view), llm = s.llm[role], custom = llm.source === "custom";
     return `<div class="pi-card"><h3>模型接口</h3>
-        <p class="pi-hint">接口预设保存一套地址、密钥和模型，三个用途可共用同一个预设。</p>
-        ${list ? `<div class="pi-presets">${list}</div>` : ""}
-        <button type="button" class="pi-btn is-sm" data-act="preset-new">${ICONS.plus}新建接口预设</button>
-        <div class="pi-roles">${picks}</div>
-        <p class="pi-hint">与主聊天共用酒馆连接时需要排队，进度检测建议单独使用一个低价模型。</p></div>`;
+        <div class="pi-seg">${LLM_ROLES.map((item) => `<button type="button" class="pi-seg-btn${item.key === role ? " is-sel" : ""}" data-act="llm-role" data-role="${item.key}">${esc(item.label)}</button>`).join("")}</div>
+        <label class="pi-field"><span>接口来源</span><select class="pi-sel" data-llm="${role}" data-k="source">${options([{ value: "tavern", label: "酒馆当前连接" }, { value: "custom", label: "独立接口（OpenAI兼容）" }], llm.source)}</select></label>
+        ${custom ? `<label class="pi-field"><span>接口地址</span><input class="pi-inp" data-llm="${role}" data-k="endpoint" value="${esc(llm.endpoint)}" placeholder="https://api.example.com/v1"></label>
+        <label class="pi-field"><span>API密钥</span><input class="pi-inp" type="password" autocomplete="off" data-llm="${role}" data-k="apiKey" value="${esc(llm.apiKey)}"></label>
+        ${modelField(view, role, llm)}
+        <label class="pi-field"><span>温度</span><input class="pi-inp" data-llm="${role}" data-k="temperature" value="${esc(llm.temperature)}" placeholder="默认"></label>` : ""}
+        <div class="pi-tools is-c2 is-end"><button type="button" class="pi-btn is-sm" data-act="preset-load"${s.presets.length ? "" : " disabled"}>载入预设</button>
+            <button type="button" class="pi-btn is-sm" data-act="preset-save"${custom ? "" : " disabled"}>保存为预设</button></div>
+        </div>`;
+  }
+  function pickPreset(presets) {
+    let html = presets.map((preset) => `<div class="pi-preset">
+            <button type="button" class="pi-preset-pick" data-dlg-value="load:${esc(preset.id)}">
+                <span class="pi-preset-name">${esc(preset.name)}</span><span class="pi-preset-model">${esc(preset.model || "未选模型")}</span></button>
+            <button type="button" class="pi-icon-btn is-danger" data-dlg-value="del:${esc(preset.id)}" title="删除">${ICONS.trash}</button></div>`).join("");
+    return openDialog({ title: "载入接口预设", html: `<div class="pi-presets">${html}</div>`, actions: [{ label: "取消", value: null }] });
   }
   function guideCard(view, s) {
     let open = st4(view).guideOpen, status = s.guide ? "自定义版本" : "内置版本";
@@ -2940,61 +3038,79 @@ ${parsed.body}` : parsed.body;
             <button type="button" class="pi-btn is-sm is-ghost" data-act="guide-toggle">${open ? "收起" : "编辑"}</button></h3>
         <p class="pi-hint">当前使用：${status}</p>
         ${open ? `<div class="pi-row pi-acts-top"><button type="button" class="pi-btn is-sm is-ghost" data-act="guide-reset"${s.guide ? "" : " disabled"}>恢复内置版本</button></div>
-        <textarea class="pi-ta is-mono is-tall" data-set="guide" placeholder="留空则使用内置版本">${esc(s.guide)}</textarea>` : ""}</div>`;
+        <textarea class="pi-ta is-mono is-tall" data-guide>${esc(s.guide || BUILTIN_GUIDE)}</textarea>` : ""}</div>`;
   }
   function render5(view) {
-    let s = view.data.settings(), visibility = [{ value: "name", label: "仅名称" }, { value: "range", label: "名称与时间范围" }, { value: "instr", label: "名称、时间范围与AI指令" }], sources = [{ value: "both", label: "AI标记与定期检测" }, { value: "signal", label: "仅AI标记" }, { value: "check", label: "仅定期检测" }], modes = [{ value: "ask", label: "弹出确认" }, { value: "auto", label: "自动推进（可撤销）" }, { value: "nodes", label: "仅勾选节点，不推进阶段" }], checking = s.switchSource !== "signal";
+    let s = view.data.settings(), modes = [{ value: "ask", label: "弹出确认" }, { value: "auto", label: "自动推进（可撤销）" }, { value: "nodes", label: "仅勾选节点，不推进阶段" }], offModes = [{ value: "ask", label: "弹出提醒" }, { value: "auto", label: "自动改写后续阶段（可撤销）" }, { value: "off", label: "不检查偏离" }];
     return `<div class="pi-card"><h3>注入内容</h3>
-        <div class="pi-row is-top">
-            <label class="pi-field pi-grow"><span>详细条目的标签名</span><input class="pi-inp" data-set="tagName" value="${esc(s.tagName)}"></label>
-            <label class="pi-field"><span>保留已完成阶段数</span><input class="pi-inp is-num" type="number" min="0" data-set="keepDone" value="${s.keepDone}"></label></div>
-        <label class="pi-field"><span>索引中下一阶段的显示内容</span><select class="pi-sel" data-set="nextVisibility">${options(visibility, s.nextVisibility)}</select></label>
-        <label class="pi-check"><input type="checkbox" data-set="hideSignal"${s.hideSignal ? " checked" : ""}><span>在聊天中隐藏 &lt;剧情推进/&gt; 标记（仅隐藏显示，不修改楼层原文）</span></label></div>
+        <label class="pi-field"><span>详细条目的标签名</span><input class="pi-inp" data-set="tagName" value="${esc(s.tagName)}"></label></div>
         <div class="pi-card"><h3>阶段推进</h3>
-        <label class="pi-field"><span>判断方式</span><select class="pi-sel" data-set="switchSource">${options(sources, s.switchSource)}</select></label>
+        <div class="pi-pair"><label class="pi-field"><span>检测间隔（楼）</span><input class="pi-inp" type="number" min="1" data-set="checkEvery" value="${s.checkEvery}"></label>
+            <label class="pi-field"><span>每次读取楼数</span><input class="pi-inp" type="number" min="1" data-set="checkFloors" value="${s.checkFloors}"></label></div>
         <label class="pi-field"><span>判定阶段已演完后</span><select class="pi-sel" data-set="handleMode">${options(modes, s.handleMode)}</select></label>
-        ${checking ? `<div class="pi-row is-top"><label class="pi-field"><span>检测间隔（楼）</span><input class="pi-inp is-num" type="number" min="1" data-set="checkEvery" value="${s.checkEvery}"></label>
-            <label class="pi-field"><span>每次读取楼数</span><input class="pi-inp is-num" type="number" min="1" data-set="checkFloors" value="${s.checkFloors}"></label></div>` : ""}</div>
-        ${apiCard(s)}
+        <label class="pi-field"><span>偏离大纲时</span><select class="pi-sel" data-set="offTrackMode">${options(offModes, s.offTrackMode)}</select></label></div>
+        ${llmCard(view, s)}
         ${guideCard(view, s)}`;
   }
-  var NUMERIC = /* @__PURE__ */ new Set(["keepDone", "checkEvery", "checkFloors"]);
+  var NUMERIC = /* @__PURE__ */ new Set(["checkEvery", "checkFloors"]);
   function readValue(target) {
     return target.type === "checkbox" ? target.checked : NUMERIC.has(target.dataset.set) ? Number(target.value) : target.value;
   }
+  function setRole(view, role, patch) {
+    let llm = view.data.settings().llm;
+    view.data.updateSettings({ llm: { ...llm, [role]: { ...llm[role], ...patch } } });
+  }
   function onInput4(view, target) {
-    target.dataset.set && target.type !== "checkbox" && target.tagName !== "SELECT" && view.data.updateSettings({ [target.dataset.set]: readValue(target) });
+    if (target.dataset.guide !== void 0) {
+      let text = target.value;
+      view.data.updateSettings({ guide: text.trim() === BUILTIN_GUIDE.trim() ? "" : text });
+      return;
+    }
+    target.dataset.set && target.type !== "checkbox" && target.tagName !== "SELECT" && view.data.updateSettings({ [target.dataset.set]: readValue(target) }), target.dataset.llm && target.tagName === "INPUT" && setRole(view, target.dataset.llm, { [target.dataset.k]: target.value.trim() });
   }
   function onChange3(view, target) {
-    if (target.dataset.set && (target.type === "checkbox" || target.tagName === "SELECT") && (view.data.updateSettings({ [target.dataset.set]: readValue(target) }), view.runtime.refresh(), view.renderBody()), target.dataset.rolePick) {
-      let value = target.value, pick = value.startsWith("p:") ? { source: "preset", presetId: value.slice(2) } : { source: "tavern", presetId: "" };
-      view.data.updateSettings({ llm: { ...view.data.settings().llm, [target.dataset.rolePick]: pick } }), view.renderBody();
-    }
-    target.dataset.set && target.tagName !== "SELECT" && target.type !== "checkbox" && view.runtime.refresh();
+    target.dataset.set && (target.type === "checkbox" || target.tagName === "SELECT") && (view.data.updateSettings({ [target.dataset.set]: readValue(target) }), view.runtime.refresh(), view.renderBody()), target.dataset.llm && target.tagName === "SELECT" && (target.value === "__manual" ? st4(view).manual = { ...st4(view).manual, [target.dataset.llm]: !0 } : setRole(view, target.dataset.llm, { [target.dataset.k]: target.value }), view.renderBody()), target.dataset.set && target.tagName !== "SELECT" && target.type !== "checkbox" && view.runtime.refresh();
   }
-  function savePreset(view, preset) {
-    let s = view.data.settings(), name = preset.name || preset.model || `接口${s.presets.length + 1}`, next = { ...preset, name }, presets = s.presets.some((item) => item.id === next.id) ? s.presets.map((item) => item.id === next.id ? next : item) : [...s.presets, next];
-    view.data.updateSettings({ presets });
-  }
-  var actions5 = {
-    async "preset-new"(view) {
-      let result = await editPreset({ ...DEFAULT_PRESET, id: makeId("api") }, !0);
-      result && (savePreset(view, result), view.renderBody());
+  var CONN_KEYS2 = ["endpoint", "apiKey", "model", "temperature"], actions5 = {
+    async models(view, target) {
+      let role = target.dataset.role, s = st4(view);
+      if (!s.loading) {
+        s.loading = role, view.renderBody();
+        try {
+          let models = await fetchModels(view.data.settings().llm[role]);
+          s.models = { ...s.models, [role]: models }, s.manual = { ...s.manual, [role]: !1 }, toast("success", `获取到${models.length}个模型，可在下拉框中选择。`);
+        } finally {
+          s.loading = "", view.renderBody();
+        }
+      }
     },
-    async "preset-edit"(view, target) {
-      let preset = view.data.settings().presets.find((item) => item.id === target.dataset.id);
-      if (!preset) return;
-      let result = await editPreset(preset);
-      result && (savePreset(view, result), view.renderBody());
+    "llm-role"(view, target) {
+      st4(view).role = target.dataset.role, view.renderBody();
     },
-    async "preset-del"(view, target) {
-      let s = view.data.settings(), preset = s.presets.find((item) => item.id === target.dataset.id);
-      if (!preset) return;
-      let users = LLM_ROLES.filter((role) => s.llm[role.key].presetId === preset.id).map((role) => role.label), body = users.length ? `${users.join("、")}正在使用这个预设，删除后改用酒馆当前连接。` : "";
-      if (!await confirmDialog({ title: `删除接口预设「${preset.name}」`, body, okLabel: "删除", danger: !0 })) return;
-      let llm = { ...s.llm };
-      for (let role of LLM_ROLES) llm[role.key].presetId === preset.id && (llm[role.key] = { source: "tavern", presetId: "" });
-      view.data.updateSettings({ presets: s.presets.filter((item) => item.id !== preset.id), llm }), view.renderBody();
+    // 同名预设直接覆盖，不同名新建一份。
+    async "preset-save"(view) {
+      let s = view.data.settings(), llm = s.llm[currentRole(view)];
+      if (!llm.endpoint) throw new Error("请先填写接口地址");
+      let name = await promptDialog({ title: "保存为预设", label: "预设名称", value: llm.model, placeholder: "如：DeepSeek" });
+      if (name == null || !name.trim()) return;
+      let conn = Object.fromEntries(CONN_KEYS2.map((key) => [key, llm[key]])), same = s.presets.find((item) => item.name === name.trim()), presets = same ? s.presets.map((item) => item === same ? { ...item, ...conn } : item) : [...s.presets, { id: makeId("api"), name: name.trim(), ...conn }];
+      view.data.updateSettings({ presets }), toast("success", same ? `已更新预设「${name.trim()}」。` : `已保存预设「${name.trim()}」。`), view.renderBody();
+    },
+    async "preset-load"(view) {
+      let role = currentRole(view);
+      for (; ; ) {
+        let presets = view.data.settings().presets;
+        if (!presets.length) return view.renderBody();
+        let result = await pickPreset(presets);
+        if (!result) return;
+        let [act, id] = [result.slice(0, result.indexOf(":")), result.slice(result.indexOf(":") + 1)], preset = presets.find((item) => item.id === id);
+        if (!preset) return;
+        if (act === "del") {
+          await confirmDialog({ title: `删除预设「${preset.name}」`, body: "已载入这个预设的用途不受影响。", okLabel: "删除", danger: !0 }) && view.data.updateSettings({ presets: presets.filter((item) => item.id !== id) });
+          continue;
+        }
+        return setRole(view, role, { source: "custom", ...Object.fromEntries(CONN_KEYS2.map((key) => [key, preset[key]])) }), st4(view).manual = { ...st4(view).manual, [role]: !1 }, toast("success", `已为「${LLM_ROLES.find((item) => item.key === role).label}」载入预设「${preset.name}」。`), view.renderBody();
+      }
     },
     "guide-toggle"(view) {
       st4(view).guideOpen = !st4(view).guideOpen, view.renderBody();
@@ -3067,18 +3183,16 @@ ${parsed.body}` : parsed.body;
     !s.verified && !s.verifying && verify(view);
     let orphans = s.verified ? Object.keys(s.verified).filter((name) => !referenced(view.data.index()).has(name)) : [], settings = view.data.settings();
     return `<div class="pi-card"><h3>本地文件</h3>
-        <p class="pi-hint">项目数据保存在酒馆服务器的 user/files/pi-* 文件中，浏览器仅保存界面状态。</p>
         ${filesTable(view)}
         <div class="pi-equal pi-acts"><button type="button" class="pi-btn is-sm" data-act="verify">${s.verifying ? '<span class="pi-spin"></span>' : ""}重新核对</button>
             <button type="button" class="pi-btn is-sm" data-act="orphans"${orphans.length ? "" : " disabled"}>清理孤立文件${orphans.length ? `（${orphans.length}）` : ""}</button>
             <button type="button" class="pi-btn is-sm" data-act="clear-chats">清空全部讨论记录</button></div></div>
         <div class="pi-card"><h3>版本更新</h3>
-        <p class="pi-hint">当前版本 v${esc(view.version)}。默认自动使用最新发布版本。</p>
-        <label class="pi-field"><span>指定版本</span><input class="pi-inp" data-set="loaderRef" value="${esc(settings.loaderRef)}" placeholder="留空跟随最新版本"></label>
-        <p class="pi-hint">填写 v0.1.0 等版本号可固定版本，填写 main 使用开发中的最新代码。修改后刷新酒馆页面生效。</p></div>
+        <p class="pi-hint">当前版本 v${esc(view.version)}，修改后刷新酒馆页面生效。</p>
+        <label class="pi-field"><span>指定版本</span><input class="pi-inp" data-set="loaderRef" value="${esc(settings.loaderRef)}" placeholder="留空跟随最新版本，可填 v0.1.0 或 main"></label></div>
         <div class="pi-card"><h3>重置插件</h3>
-        <p class="pi-hint">删除所有项目、讨论记录和当前聊天的进度，其他聊天的进度保留。执行前自动下载zip备份，确认后无法撤销。</p>
-        <button type="button" class="pi-btn is-sm is-danger" data-act="wipe">备份并删除</button></div>`;
+        <p class="pi-hint">删除所有项目、讨论记录和当前聊天的进度，执行前自动下载备份。</p>
+        <div class="pi-equal is-one pi-acts"><button type="button" class="pi-btn is-sm is-danger" data-act="wipe">备份并删除</button></div></div>`;
   }
   function onInput5(view, target) {
     target.dataset.set === "loaderRef" && view.data.updateSettings({ loaderRef: target.value.trim() });
@@ -3148,17 +3262,47 @@ ${parsed.body}` : parsed.body;
     refreshOn: () => refreshOn6,
     render: () => render7
   });
-  var st6 = (view) => view.tabState("books");
+  var st6 = (view) => view.tabState("books"), GROUPS = {
+    on: (entries) => entries.filter((entry) => !acuField(entry.title) && !entry.disabled),
+    off: (entries) => entries.filter((entry) => !acuField(entry.title) && entry.disabled)
+  }, delBtn = (entry) => `<button type="button" class="pi-icon-btn is-danger" data-act="wb-delete" data-key="${esc(entry.key)}" title="删除">${ICONS.trash}</button>`;
   function entryRow2(entry) {
     return `<div class="pi-wb-row${entry.disabled ? " is-off" : ""}">
         <input type="checkbox" data-wb-toggle="${esc(entry.key)}" title="${entry.disabled ? "开启" : "关闭"}"${entry.disabled ? "" : " checked"}>
         <span class="pi-wb-title" title="${esc(entry.title)}">${esc(entry.title)}</span>
-        ${entry.constant ? '<span class="pi-badge">常驻</span>' : ""}
-        <button type="button" class="pi-icon-btn is-danger" data-act="wb-delete" data-key="${esc(entry.key)}" title="删除">${ICONS.trash}</button></div>`;
+        ${entry.constant ? '<span class="pi-badge">常驻</span>' : ""}${delBtn(entry)}</div>`;
   }
-  function section(title, entries, empty) {
-    return `<div class="pi-wb-sec"><div class="pi-wb-sec-hd">${title}<small>${entries.length}</small></div>
+  function acuRow(acu, entry) {
+    let blocked = acuBlocked(acu, entry.title);
+    return `<div class="pi-wb-row${blocked ? " is-off" : ""}">
+        <input type="checkbox" data-acu-toggle="${esc(entry.title)}" title="${blocked ? "取消屏蔽" : "屏蔽"}"${blocked ? "" : " checked"}>
+        <span class="pi-wb-title" title="${esc(entry.title)}">${esc(entry.title)}</span>
+        ${entry.disabled ? '<span class="pi-badge" title="世界书里本身已关闭，不会被触发">世界书已关闭</span>' : ""}${delBtn(entry)}</div>`;
+  }
+  var bulkBtn = (group, on, label, disabled) => `<button type="button" class="pi-btn is-sm is-ghost" data-act="wb-bulk" data-group="${group}" data-on="${on ? 1 : 0}"${disabled ? " disabled" : ""}>${label}</button>`, fieldBtn = (field, on, label, disabled) => `<button type="button" class="pi-btn is-sm is-ghost" data-act="acu-field" data-field="${esc(field)}" data-on="${on ? 1 : 0}"${disabled ? " disabled" : ""}>${label}</button>`;
+  function section(title, entries, empty, bulk = "") {
+    return `<div class="pi-wb-sec"><div class="pi-wb-sec-hd">${title}<small>${entries.length}</small>${entries.length ? `<span class="pi-wb-bulk">${bulk}</span>` : ""}</div>
         ${entries.map(entryRow2).join("") || `<p class="pi-hint">${empty}</p>`}</div>`;
+  }
+  function acuFields(entries) {
+    let map = /* @__PURE__ */ new Map();
+    for (let entry of entries) {
+      let field = acuField(entry.title);
+      field && (map.has(field) || map.set(field, []), map.get(field).push(entry));
+    }
+    return [...map].sort(([a], [b]) => +(a === EN_FIELD) - +(b === EN_FIELD));
+  }
+  function acuSection(acu, entries, openFields) {
+    let fields = acuFields(entries);
+    if (!fields.length) return "";
+    let total = fields.reduce((sum, [, list]) => sum + list.length, 0), sub = ([field, list]) => {
+      let blocked = list.filter((entry) => acuBlocked(acu, entry.title)).length, bulk = fieldBtn(field, !0, "一键勾选", !blocked) + fieldBtn(field, !1, "一键取消", blocked === list.length), open = openFields.has(field);
+      return `<div class="pi-wb-sub"><div class="pi-wb-sub-hd is-fold" data-act="acu-fold" data-field="${esc(field)}">${open ? ICONS.caretDown : ICONS.caret}<span class="pi-wb-field" title="${esc(field)}">${esc(field)}</span><small>${list.length - blocked}/${list.length}</small><span class="pi-wb-bulk">${bulk}</span></div>
+            ${open ? list.map((entry) => acuRow(acu, entry)).join("") : ""}</div>`;
+    };
+    return `<div class="pi-wb-sec"><div class="pi-wb-sec-hd">临时屏蔽<small>${total}</small></div>
+        <p class="pi-hint">取消勾选即屏蔽，不改动世界书；同字段的新条目跟随该字段。</p>
+        ${fields.map(sub).join("")}</div>`;
   }
   function render7(view) {
     let s = st6(view), fallback = allBookNames().filter((name) => name.startsWith("剧情注入器·")), list = [...boundBookNames(), ...fallback.filter((name) => !boundBookNames().some((item) => item.name === name)).map((name) => ({ name, source: "专用" }))].map((book) => {
@@ -3166,14 +3310,19 @@ ${parsed.body}` : parsed.body;
       return `<div class="pi-entry"><div class="pi-entry-hd" data-act="open-book" data-book="${esc(book.name)}">
             ${open ? ICONS.caretDown : ICONS.caret}<span class="pi-etitle" title="${esc(book.name)}">${esc(book.name)}</span><span class="pi-badge">${esc(book.source)}</span>
             ${book.source === "专用" ? `<button type="button" class="pi-btn is-sm is-danger" data-act="delete-book" data-book="${esc(book.name)}">整本删除</button>` : ""}</div>
-            ${entries ? `<div class="pi-entry-bd">${entries.length ? `${section("已开启", entries.filter((entry) => !entry.disabled), "没有开启的条目")}
-                ${section("已关闭", entries.filter((entry) => entry.disabled), "没有关闭的条目")}` : '<p class="pi-hint">没有条目</p>'}</div>` : ""}</div>`;
+            ${entries ? `<div class="pi-entry-bd">${entries.length ? `${section("已开启", GROUPS.on(entries), "没有开启的条目", bulkBtn("on", !1, "全部取消勾选"))}
+                ${section("已关闭", GROUPS.off(entries), "没有关闭的条目", bulkBtn("off", !0, "全部勾选"))}
+                ${acuSection(view.data.settings().acu, entries, s.openFields || /* @__PURE__ */ new Set())}` : '<p class="pi-hint">没有条目</p>'}</div>` : ""}</div>`;
     }).join("");
     return `<div class="pi-card pi-wb"><h3>当前角色卡的世界书</h3>
-        <p class="pi-hint">「${esc(cardName() || "未打开角色卡")}」关联的世界书。原先手写的剧情条目与注入内容重复时，取消勾选即可关闭；删除前自动下载备份。</p>
+        <p class="pi-hint">「${esc(cardName() || "未打开角色卡")}」关联的世界书。</p>
         ${list || '<p class="pi-hint">没有关联的世界书。</p>'}</div>`;
   }
   async function onChange4(view, target) {
+    if (target.dataset.acuToggle) {
+      let acu = view.data.settings().acu;
+      return view.data.updateSettings({ acu: setAcuEntry(acu, target.dataset.acuToggle, !target.checked) }), view.renderBody();
+    }
     let key = target.dataset.wbToggle;
     key && (target.disabled = !0, await setEntriesDisabled(st6(view).book, [key], !target.checked), await reloadBook(view));
   }
@@ -3181,6 +3330,23 @@ ${parsed.body}` : parsed.body;
     st6(view).entries = bookEntries(await loadBook(st6(view).book)), view.renderBody();
   }
   var actions7 = {
+    // 整组一次改完：data-group 指定哪一组，data-on=1 全部勾选，0 全部取消。数据库分组改的是屏蔽设置。
+    async "wb-bulk"(view, target) {
+      let on = target.dataset.on === "1", group = target.dataset.group, pick = GROUPS[group];
+      if (!pick) return;
+      let keys = pick(st6(view).entries || []).filter((entry) => entry.disabled === on).map((entry) => entry.key);
+      keys.length && (target.disabled = !0, await setEntriesDisabled(st6(view).book, keys, !on), await reloadBook(view));
+    },
+    // 一个字段整体放行或屏蔽，同字段以后新增的条目也照此处理。
+    "acu-fold"(view, target, event) {
+      if (event.target.closest("button")) return;
+      let s = st6(view), open = new Set(s.openFields || []);
+      open.has(target.dataset.field) ? open.delete(target.dataset.field) : open.add(target.dataset.field), s.openFields = open, view.renderBody();
+    },
+    "acu-field"(view, target) {
+      let acu = view.data.settings().acu;
+      view.data.updateSettings({ acu: setAcuField(acu, target.dataset.field, target.dataset.on !== "1") }), view.renderBody();
+    },
     async "open-book"(view, target, event) {
       if (event.target.closest("button,input")) return;
       let s = st6(view);
@@ -3471,40 +3637,9 @@ ${parsed.body}` : parsed.body;
     }
     return { show, hide, destroy };
   }
-  var SIGNAL_TEXT = /\s*<\s*剧情推进\s*\/?\s*>\s*/g;
-  function createSignalHider(enabled) {
-    let doc = hostDocument(), view = hostWindow(), observer = null, frame = 0, dirty = /* @__PURE__ */ new Set();
-    function scrub(root) {
-      let walker = doc.createTreeWalker(root, view.NodeFilter.SHOW_TEXT), hits = [];
-      for (; walker.nextNode(); ) walker.currentNode.nodeValue.includes("剧情推进") && hits.push(walker.currentNode);
-      for (let node of hits) node.nodeValue = node.nodeValue.replace(SIGNAL_TEXT, " ").replace(/^ $/, "");
-    }
-    function flush() {
-      frame = 0;
-      for (let node of dirty) node.isConnected && scrub(node);
-      dirty.clear();
-    }
-    function start() {
-      let chat = doc.getElementById("chat");
-      !chat || observer || (chat.querySelectorAll(".mes_text").forEach(scrub), observer = new view.MutationObserver((records) => {
-        if (enabled()) {
-          for (let record of records) {
-            let target = record.target.nodeType === 1 ? record.target : record.target.parentElement, text = target && target.closest ? target.closest(".mes_text") : null;
-            if (text) dirty.add(text);
-            else for (let added of record.addedNodes) added.nodeType === 1 && added.querySelectorAll?.(".mes_text").forEach((item) => dirty.add(item));
-          }
-          dirty.size && !frame && (frame = view.requestAnimationFrame(flush));
-        }
-      }), observer.observe(chat, { childList: !0, subtree: !0, characterData: !0 }));
-    }
-    function stop() {
-      observer?.disconnect(), observer = null, frame && view.cancelAnimationFrame(frame), frame = 0, dirty.clear();
-    }
-    return { start, stop, rescan: () => doc.querySelectorAll("#chat .mes_text").forEach(scrub) };
-  }
 
   // src/index.js
-  var VERSION = "0.1.5", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.1.6", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")
@@ -3523,10 +3658,10 @@ ${parsed.body}` : parsed.body;
     let app = null, notice = createNotices(), data = createDataStore({
       onChange: (reason) => app && app.refresh(reason),
       onError: (error) => toast("error", `保存失败，内容仍在内存里：${error.message}`)
-    }), runtime = createRuntime({ data, notice, emit: (reason) => app && app.refresh(reason) });
+    }), runtime = createRuntime({ data, notice, emit: (reason) => app && app.refresh(reason), askReason: (reason) => promptDialog({ title: "改写后续阶段", label: "偏离说明（可修改或留空）", value: reason, multiline: !0 }) });
     app = createApp({ data, runtime, version: VERSION });
-    let hider = createSignalHider(() => data.settings().hideSignal), started = !1, ready = data.init().then(() => {
-      runtime.start(), data.settings().hideSignal && hider.start(), started = !0, app.refresh("index");
+    let started = !1, ready = data.init().then(() => {
+      runtime.start(), started = !0, app.refresh("index");
     }).catch((error) => {
       toast("error", `读取本地数据失败：${error.message}`);
     }), subscription = null;
@@ -3543,7 +3678,7 @@ ${parsed.body}` : parsed.body;
           subscription && typeof subscription.stop == "function" && subscription.stop();
         } catch {
         }
-        app.close(), started && runtime.stop(), hider.stop(), notice.destroy(), removeStyle(), await data.flush().catch(() => {
+        app.close(), started && runtime.stop(), notice.destroy(), removeStyle(), await data.flush().catch(() => {
         });
       }
     };

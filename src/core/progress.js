@@ -5,7 +5,7 @@ export const STATES = ['done', 'active', 'next', 'todo'];
 export const STATE_LABELS = { done: '已过', active: '进行中', next: '下一段', todo: '未到' };
 
 export function emptyProgress(projectId) {
-    return { projectId, current: null, slots: {}, lastCheckFloor: 0, muted: [], signal: null, review: null };
+    return { projectId, current: null, slots: {}, lastCheckFloor: 0, muted: [], offMuted: [] };
 }
 
 export function normalizeProgress(value, projectId) {
@@ -16,6 +16,7 @@ export function normalizeProgress(value, projectId) {
         ...value,
         slots: value.slots && typeof value.slots === 'object' ? value.slots : {},
         muted: Array.isArray(value.muted) ? value.muted : [],
+        offMuted: Array.isArray(value.offMuted) ? value.offMuted : [],
         lastCheckFloor: Number(value.lastCheckFloor) || 0,
     };
 }
@@ -72,7 +73,7 @@ export function goTo(progress, units, unitId) {
             slots[unit.id] = rest;
         }
     }
-    return { ...progress, current: unitId, slots, signal: null };
+    return { ...progress, current: unitId, slots };
 }
 
 // 打开下一段：当前转已过、下一段转进行中；本卷最后一段自动进入下一卷第一段（单元表本就跨卷连续）。

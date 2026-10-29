@@ -1,4 +1,4 @@
-import { NODE_FIELDS, flattenUnits, makeId, outlineToText, parseOutlineText, stageLabel, stageToText, volumeLabel, volumeToText } from '../core/outline.js';
+import { NODE_FIELDS, flattenUnits, makeId, outlineToText, parseOutlineText, replaceRest, stageLabel, stageToText, volumeLabel, volumeToText } from '../core/outline.js';
 import { currentIndex, goTo } from '../core/progress.js';
 import { fixYamlMessages, outlineMessages, parseOutlineReply, rewriteRestMessages } from '../core/prompts.js';
 import { downloadBlob, toast } from '../host/st.js';
@@ -37,8 +37,8 @@ function nodeEditor(stage, meta) {
         const value = item && typeof item === 'object' ? item : { 内容: String(item ?? '') };
         const keys = [...new Set([...NODE_KEYS[meta.kind], ...Object.keys(value)])];
         return `<div class="pi-node"><div class="pi-node-hd"><span class="pi-badge">${esc(meta.label)} ${index + 1}</span><span class="pi-grow"></span>
-            <button type="button" class="pi-btn is-sm is-ghost" data-act="node-up" data-field="${esc(meta.field)}" data-i="${index}"${index ? '' : ' disabled'}>上移</button>
-            <button type="button" class="pi-btn is-sm is-ghost is-danger" data-act="node-del" data-field="${esc(meta.field)}" data-i="${index}">删除</button></div>
+            <button type="button" class="pi-btn is-sm" data-act="node-up" data-field="${esc(meta.field)}" data-i="${index}"${index ? '' : ' disabled'}>上移</button>
+            <button type="button" class="pi-btn is-sm is-danger" data-act="node-del" data-field="${esc(meta.field)}" data-i="${index}">删除</button></div>
             ${keys.map(key => `<label class="pi-field"><span>${esc(key)}</span>${LONG_KEYS.has(key)
                 ? `<textarea class="pi-ta" rows="2" data-node-field="${esc(meta.field)}" data-i="${index}" data-k="${esc(key)}">${esc(value[key] ?? '')}</textarea>`
                 : `<input class="pi-inp" data-node-field="${esc(meta.field)}" data-i="${index}" data-k="${esc(key)}" value="${esc(value[key] ?? '')}">`}</label>`).join('')}</div>`;
@@ -47,33 +47,39 @@ function nodeEditor(stage, meta) {
         ${items || '<p class="pi-hint">无</p>'}</div>`;
 }
 
-function stageEditor(volume, stage, raw) {
+// 节点按 主线 / 支线 / 世界动态 分开看，一次只展开一类，避免一长串。
+function nodeTabs(stage, kind) {
+    const count = meta => (Array.isArray(stage.data[meta.field]) ? stage.data[meta.field].length : 0);
+    return `<div class="pi-seg pi-node-seg">${NODE_FIELDS.map(meta => `<button type="button" class="pi-seg-btn${meta.kind === kind ? ' is-sel' : ''}" data-act="node-kind" data-kind="${meta.kind}">${esc(meta.label)} ${count(meta)}</button>`).join('')}</div>`;
+}
+
+function stageEditor(volume, stage, raw, kind) {
     const known = new Set(['时间范围', 'AI指令', ...NODE_FIELDS.map(item => item.field)]);
     const extra = Object.keys(stage.data).filter(key => !known.has(key));
-    const head = `<div class="pi-card"><h3>阶段<span class="pi-spacer"></span>
-        <button type="button" class="pi-btn is-sm is-ghost" data-act="stage-up">上移</button>
+    const head = `<div class="pi-card"><h3>阶段</h3>
+        <p class="pi-hint">所属：${esc(volumeLabel(volume.key))}</p>
+        <div class="pi-tools is-c3"><button type="button" class="pi-btn is-sm" data-act="stage-up">上移</button>
         <button type="button" class="pi-btn is-sm" data-act="raw">${raw ? '表单编辑' : 'YAML 原文'}</button>
-        <button type="button" class="pi-btn is-sm is-danger" data-act="stage-del">删除阶段</button></h3>
-        <p class="pi-hint">所属：${esc(volumeLabel(volume.key))}</p>`;
+        <button type="button" class="pi-btn is-sm is-danger" data-act="stage-del">删除阶段</button></div>`;
     if (raw) {
         return `${head}<textarea class="pi-ta is-mono is-tall" data-raw>${esc(stageToText(stage))}</textarea>
-            <div class="pi-row"><button type="button" class="pi-btn is-primary is-sm" data-act="raw-apply">应用</button><span class="pi-status" data-raw-status></span></div></div>`;
+            <div class="pi-tools is-c1 is-end"><button type="button" class="pi-btn is-primary is-sm" data-act="raw-apply">应用</button></div><p class="pi-status" data-raw-status></p></div>`;
     }
     return `${head}<label class="pi-field"><span>阶段名（阶段N_标题）</span><input class="pi-inp" data-stage-key value="${esc(stage.key)}"></label>
         <label class="pi-field"><span>时间范围（用来判断何时切到下一段）</span><input class="pi-inp" data-stage-field="时间范围" value="${esc(stage.data.时间范围 ?? '')}"></label>
         <label class="pi-field"><span>AI指令</span><textarea class="pi-ta" rows="2" data-stage-field="AI指令">${esc(stage.data.AI指令 ?? '')}</textarea></label>
         ${extra.length ? `<p class="pi-hint">另有字段：${esc(extra.join('、'))}（在 YAML 原文里编辑）</p>` : ''}</div>
-        ${NODE_FIELDS.map(meta => nodeEditor(stage, meta)).join('')}`;
+        ${nodeTabs(stage, kind)}${nodeEditor(stage, NODE_FIELDS.find(meta => meta.kind === kind))}`;
 }
 
 function volumeEditor(volume) {
-    return `<div class="pi-card"><h3>卷<span class="pi-spacer"></span>
-        <button type="button" class="pi-btn is-sm is-ghost" data-act="vol-up">上移</button>
+    return `<div class="pi-card"><h3>卷</h3>
+        <div class="pi-tools is-c4"><button type="button" class="pi-btn is-sm" data-act="stage-add">＋新阶段</button>
+        <button type="button" class="pi-btn is-sm" data-act="vol-up">上移</button>
         <button type="button" class="pi-btn is-sm" data-act="vol-export">导出本卷</button>
-        <button type="button" class="pi-btn is-sm is-danger" data-act="vol-del">删除卷</button></h3>
+        <button type="button" class="pi-btn is-sm is-danger" data-act="vol-del">删除卷</button></div>
         <label class="pi-field"><span>卷名（剧情_卷X_标题）</span><input class="pi-inp" data-vol-key value="${esc(volume.key)}"></label>
-        <p class="pi-hint">${volume.stages.length} 个阶段</p>
-        <button type="button" class="pi-btn is-sm" data-act="stage-add">${'＋'}新阶段</button></div>`;
+        <p class="pi-hint">${volume.stages.length} 个阶段</p></div>`;
 }
 
 function draftHtml(view, draft) {
@@ -83,9 +89,9 @@ function draftHtml(view, draft) {
         return `<div class="pi-card"><h3>${title}<span class="pi-badge is-danger">格式错误</span></h3>
             <p class="pi-hint">${esc(draft.error)}</p>
             <textarea class="pi-ta is-mono is-tall" data-draft-yaml>${esc(draft.yaml)}</textarea>
-            <div class="pi-row"><button type="button" class="pi-btn is-primary is-sm" data-act="draft-fix"${view.busy.outline ? ' disabled' : ''}>让 AI 修正格式</button>
-            <button type="button" class="pi-btn is-sm" data-act="draft-reparse">按上面的文本重新解析</button>
-            <button type="button" class="pi-btn is-sm is-ghost" data-act="draft-drop">丢弃</button></div></div>`;
+            <div class="pi-tools is-c3 is-end"><button type="button" class="pi-btn is-primary is-sm" data-act="draft-fix"${view.busy.outline ? ' disabled' : ''}>让 AI 修正格式</button>
+            <button type="button" class="pi-btn is-sm" data-act="draft-reparse">重新解析</button>
+            <button type="button" class="pi-btn is-sm is-danger" data-act="draft-drop">丢弃</button></div></div>`;
     }
     const summary = draft.volumes.map(volume => `<p class="pi-hint"><b>${esc(volumeLabel(volume.key))}</b>：${volume.stages.map(stage => esc(stageLabel(stage.key))).join('、')}</p>`).join('');
     const buttons = draft.mode === 'rewrite'
@@ -95,7 +101,7 @@ function draftHtml(view, draft) {
            <button type="button" class="pi-btn is-sm" data-act="draft-append">追加为新阶段</button>`;
     return `<div class="pi-card"><h3>${title}<span class="pi-badge is-ok">已解析</span></h3>${summary}
         <details><summary class="pi-hint">YAML 原文</summary><pre class="pi-pre">${esc(draft.yaml)}</pre></details>
-        <div class="pi-row">${buttons}<button type="button" class="pi-btn is-sm is-ghost" data-act="draft-drop">丢弃</button></div></div>`;
+        <div class="pi-tools is-end ${draft.mode === 'rewrite' ? 'is-c2' : 'is-c4'}">${buttons}<button type="button" class="pi-btn is-sm is-danger" data-act="draft-drop">丢弃</button></div></div>`;
 }
 
 export function render(view) {
@@ -103,14 +109,16 @@ export function render(view) {
     const s = st(view);
     const { volume, stage } = findSel(project, s.sel);
     const busy = view.busy.outline;
-    const editor = stage ? stageEditor(volume, stage, s.raw) : volume ? volumeEditor(volume) : '<div class="pi-card"><p class="pi-hint">从左边选一卷或一个阶段编辑。</p></div>';
-    return `<div class="pi-card"><h3>大纲<span class="pi-spacer"></span>
-            <button type="button" class="pi-btn is-sm" data-act="import-file">导入 YAML</button>
+    const kind = NODE_FIELDS.some(meta => meta.kind === s.nodeKind) ? s.nodeKind : NODE_FIELDS[0].kind;
+    const editor = stage ? stageEditor(volume, stage, s.raw, kind) : volume ? volumeEditor(volume) : '<div class="pi-card"><p class="pi-hint">从左边选一卷或一个阶段编辑。</p></div>';
+    return `<div class="pi-card"><h3>大纲</h3>
+        <div class="pi-tools is-c4">
+            <button type="button" class="pi-btn is-sm" data-act="import-file">导入YAML</button>
             <button type="button" class="pi-btn is-sm" data-act="import-paste">粘贴</button>
             <button type="button" class="pi-btn is-sm" data-act="import-wb">从世界书</button>
-            <button type="button" class="pi-btn is-sm" data-act="export"${project.outline.volumes.length ? '' : ' disabled'}>导出</button></h3>
-        <div class="pi-row"><input class="pi-inp pi-grow" data-ai-request placeholder="给 AI 的额外要求（可空）" value="${esc(s.request || '')}">
-            <button type="button" class="pi-btn is-accent is-sm" data-act="ai-volume"${busy ? ' disabled' : ''}>${busy ? '<span class="pi-spin"></span>写作中' : `AI 写第 ${project.outline.volumes.length + 1} 卷`}</button></div>
+            <button type="button" class="pi-btn is-sm" data-act="export"${project.outline.volumes.length ? '' : ' disabled'}>导出</button></div>
+        <div class="pi-inline"><input class="pi-inp" data-ai-request placeholder="给 AI 的额外要求（可空）" value="${esc(s.request || '')}">
+            <button type="button" class="pi-btn is-accent is-sm is-wide" data-act="ai-volume"${busy ? ' disabled' : ''}>${busy ? '<span class="pi-spin"></span>写作中' : `AI 写第 ${project.outline.volumes.length + 1} 卷`}</button></div>
         </div>
         ${draftHtml(view, s.draft)}
         <div class="pi-tree"><div class="pi-tree-list">${treeHtml(project, s.sel)}
@@ -192,23 +200,19 @@ export async function startRewrite(view) {
 
 function applyRest(view, draft) {
     const project = view.project();
-    const units = flattenUnits(project.outline.volumes);
-    const from = units.findIndex(unit => unit.id === draft.fromUnitId);
-    if (from < 0) throw new Error('原来的阶段已不存在，改用「存为新卷」。');
-    const drop = new Set(units.slice(from).map(unit => unit.stage.id));
-    let volumes = project.outline.volumes.map(volume => ({ ...volume, stages: volume.stages.filter(stage => !drop.has(stage.id)) }));
-    for (const incoming of draft.volumes) {
-        const same = volumes.find(volume => volume.key === incoming.key);
-        if (same) volumes = volumes.map(volume => (volume === same ? { ...volume, stages: [...volume.stages, ...incoming.stages] } : volume));
-        else volumes.push(incoming);
-    }
-    volumes = volumes.filter(volume => volume.stages.length);
+    const unit = flattenUnits(project.outline.volumes).find(item => item.id === draft.fromUnitId);
+    if (!unit) throw new Error('原来的阶段已不存在，改用「存为新卷」。');
+    const volumes = replaceRest(project.outline.volumes, unit.stage.id, draft.volumes);
     update(view, () => volumes);
     const first = draft.volumes[0] && draft.volumes[0].stages[0];
     if (first && view.runtime.activeId() === view.projectId) view.runtime.setProgress(goTo(view.runtime.progress(), flattenUnits(volumes), first.id));
 }
 
 export const actions = {
+    'node-kind'(view, target) {
+        st(view).nodeKind = target.dataset.kind;
+        view.renderBody();
+    },
     sel(view, target) {
         st(view).sel = target.dataset.id;
         st(view).raw = false;

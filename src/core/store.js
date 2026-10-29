@@ -1,5 +1,6 @@
 import { DEFAULT_PARAMS } from './inject.js';
 import { makeId } from './outline.js';
+import { DEFAULT_ACU, normalizeAcu } from './acu.js';
 
 export const INDEX_FILE = 'pi-index.json';
 export const projectFile = id => `pi-p-${id}.json`;
@@ -12,66 +13,56 @@ export const LLM_ROLES = [
     { key: 'check', label: '进度检测' },
 ];
 
-// 每个用途只记「用酒馆连接」或「用哪个接口预设」；地址、密钥、模型存在预设里，多个用途共用一份。
-export const DEFAULT_LLM = { source: 'tavern', presetId: '' };
+// 每个用途各存一套连接（同 v0.1.4）。接口预设只是存下来的连接，载入时复制进某个用途，之后互不影响。
+export const DEFAULT_LLM = { source: 'tavern', endpoint: '', apiKey: '', model: '', temperature: '' };
 export const DEFAULT_PRESET = { id: '', name: '', endpoint: '', apiKey: '', model: '', temperature: '' };
+const CONN_KEYS = ['endpoint', 'apiKey', 'model', 'temperature'];
 
-function normalizePreset(value) {
-    const src = value && typeof value === 'object' ? value : {};
-    const out = { ...DEFAULT_PRESET };
-    for (const key of Object.keys(DEFAULT_PRESET)) out[key] = String(src[key] ?? '').trim();
+function pickConn(src) {
+    const out = {};
+    for (const key of CONN_KEYS) out[key] = String(src && src[key] != null ? src[key] : '').trim();
     return out;
 }
 
-const sameConnection = (a, b) => ['endpoint', 'apiKey', 'model', 'temperature'].every(key => String(a[key] ?? '').trim() === String(b[key] ?? '').trim());
+function normalizePreset(value) {
+    const src = value && typeof value === 'object' ? value : {};
+    return { id: String(src.id || '').trim(), name: String(src.name || '').trim(), ...pickConn(src) };
+}
 
-// 旧版每个用途各存一套地址/密钥/模型（source: 'custom'），读入时合并成预设，相同的只建一份。
+// v0.1.5 的用途存的是 { source: 'preset', presetId }，读入时展开回独立接口。
 function normalizeLlm(src) {
     const presets = (Array.isArray(src.presets) ? src.presets : []).map(normalizePreset).filter(item => item.id);
     const llm = {};
     for (const { key } of LLM_ROLES) {
         const role = src.llm && src.llm[key] && typeof src.llm[key] === 'object' ? src.llm[key] : {};
-        if (role.source === 'custom') {
-            let preset = presets.find(item => sameConnection(item, role));
-            if (!preset) {
-                preset = normalizePreset({ ...role, id: makeId('api'), name: String(role.model || '').trim() || `接口${presets.length + 1}` });
-                presets.push(preset);
-            }
-            llm[key] = { source: 'preset', presetId: preset.id };
-        } else if (role.source === 'preset' && presets.some(item => item.id === role.presetId)) {
-            llm[key] = { source: 'preset', presetId: role.presetId };
-        } else {
-            llm[key] = { ...DEFAULT_LLM };
-        }
+        const linked = role.source === 'preset' && presets.find(item => item.id === role.presetId);
+        if (linked) llm[key] = { source: 'custom', ...pickConn(linked) };
+        else if (role.source === 'custom') llm[key] = { source: 'custom', ...pickConn(role) };
+        else llm[key] = { ...DEFAULT_LLM, ...pickConn(role), source: 'tavern' };
     }
     return { llm, presets };
 }
 
-// 发请求用：预设展开成 { source: 'custom', endpoint, apiKey, model, temperature }。
 export function resolveLlm(settings, role) {
-    const pick = settings.llm && settings.llm[role];
-    const preset = pick && pick.source === 'preset' && (settings.presets || []).find(item => item.id === pick.presetId);
-    return preset ? { ...preset, source: 'custom' } : { source: 'tavern' };
+    const llm = settings.llm && settings.llm[role];
+    return llm && llm.source === 'custom' ? { ...llm } : { source: 'tavern' };
 }
 
 export const DEFAULT_SETTINGS = {
     tagName: '剧情参考',
-    nextVisibility: 'range',
-    keepDone: 2,
-    switchSource: 'both',
+    offTrackMode: 'ask',
     handleMode: 'ask',
     checkEvery: 3,
     checkFloors: 3,
-    hideSignal: true,
     guide: '',
     loaderRef: '',
     llm: { discuss: { ...DEFAULT_LLM }, outline: { ...DEFAULT_LLM }, check: { ...DEFAULT_LLM } },
     presets: [],
+    acu: DEFAULT_ACU,
 };
 
-const SWITCH_SOURCES = ['signal', 'check', 'both'];
 const HANDLE_MODES = ['ask', 'auto', 'nodes'];
-const VISIBILITY = ['name', 'range', 'instr'];
+const OFF_MODES = ['ask', 'auto', 'off'];
 
 export function normalizeSettings(value) {
     const src = value && typeof value === 'object' ? value : {};
@@ -79,14 +70,13 @@ export function normalizeSettings(value) {
     return {
         ...DEFAULT_SETTINGS,
         ...src,
-        nextVisibility: VISIBILITY.includes(src.nextVisibility) ? src.nextVisibility : DEFAULT_SETTINGS.nextVisibility,
-        switchSource: SWITCH_SOURCES.includes(src.switchSource) ? src.switchSource : DEFAULT_SETTINGS.switchSource,
+        offTrackMode: OFF_MODES.includes(src.offTrackMode) ? src.offTrackMode : DEFAULT_SETTINGS.offTrackMode,
         handleMode: HANDLE_MODES.includes(src.handleMode) ? src.handleMode : DEFAULT_SETTINGS.handleMode,
-        keepDone: Math.max(0, Math.min(20, Number(src.keepDone ?? DEFAULT_SETTINGS.keepDone) || 0)),
         checkEvery: Math.max(1, Math.min(50, Number(src.checkEvery) || DEFAULT_SETTINGS.checkEvery)),
         checkFloors: Math.max(1, Math.min(20, Number(src.checkFloors) || DEFAULT_SETTINGS.checkFloors)),
         llm,
         presets,
+        acu: normalizeAcu(src.acu),
     };
 }
 

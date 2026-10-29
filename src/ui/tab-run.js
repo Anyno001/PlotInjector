@@ -1,4 +1,4 @@
-import { DEFAULT_PARAMS, POSITIONS, ROLES, positionLabel } from '../core/inject.js';
+import { DEFAULT_PARAMS, POSITIONS, ROLES, buildIndexText, positionLabel } from '../core/inject.js';
 import { flattenUnits, stageLabel, stageNodes, volumeLabel } from '../core/outline.js';
 import { STATE_LABELS, goTo, offNodes, patchSlot, setNodeChecked, unitStates } from '../core/progress.js';
 import { estimateTokens } from '../core/tokens.js';
@@ -12,15 +12,15 @@ function entryRow(entry, expanded) {
     const tokens = estimateTokens(entry.content);
     const atDepth = entry.position === 4;
     const body = expanded ? `<div class="pi-entry-bd">
-        <div class="pi-row">
+        <div class="pi-pair ${atDepth ? 'is-c4' : ''}">
             <label class="pi-field"><span>位置</span><select class="pi-sel" data-slot="${esc(entry.slotId)}" data-slot-field="position">${options(POSITIONS, entry.position)}</select></label>
-            ${atDepth ? `<label class="pi-field"><span>深度</span><input class="pi-inp is-num" type="number" min="0" data-slot="${esc(entry.slotId)}" data-slot-field="depth" value="${entry.depth}"></label>
+            ${atDepth ? `<label class="pi-field"><span>深度</span><input class="pi-inp" type="number" min="0" data-slot="${esc(entry.slotId)}" data-slot-field="depth" value="${entry.depth}"></label>
             <label class="pi-field"><span>角色</span><select class="pi-sel" data-slot="${esc(entry.slotId)}" data-slot-field="role">${options(ROLES, entry.role)}</select></label>` : ''}
-            <label class="pi-field"><span>顺序</span><input class="pi-inp is-num" type="number" data-slot="${esc(entry.slotId)}" data-slot-field="order" value="${entry.order}"></label>
+            <label class="pi-field"><span>顺序</span><input class="pi-inp" type="number" data-slot="${esc(entry.slotId)}" data-slot-field="order" value="${entry.order}"></label>
         </div>
-        <div class="pi-row">
+        <div class="pi-tools is-c2">
             <button type="button" class="pi-btn is-sm" data-act="save-default" data-slot="${esc(entry.slotId)}" data-kind="${entry.kind}">设为本项目默认</button>
-            <button type="button" class="pi-btn is-sm is-ghost" data-act="reset-slot" data-slot="${esc(entry.slotId)}">恢复默认</button>
+            <button type="button" class="pi-btn is-sm" data-act="reset-slot" data-slot="${esc(entry.slotId)}">恢复默认</button>
         </div>
         <pre class="pi-pre">${esc(entry.content)}</pre></div>` : '';
     return `<div class="pi-entry${entry.enabled ? '' : ' is-off'}">
@@ -38,8 +38,7 @@ function nodeList(unit, progress) {
     if (!nodes.length) return '';
     return `<div class="pi-card-sub">${nodes.map(node => `<label class="pi-check${off.has(node.id) ? ' is-off' : ''}">
         <input type="checkbox" data-node="${esc(node.id)}" data-unit="${esc(unit.id)}"${off.has(node.id) ? '' : ' checked'}>
-        <span><span class="pi-badge">${esc(node.label)}</span> ${esc(node.name)}</span></label>`).join('')}
-        <p class="pi-hint">已演完的节点取消勾选后，不再写进详细条目。</p></div>`;
+        <span><span class="pi-badge">${esc(node.label)}</span> ${esc(node.name)}</span></label>`).join('')}</div>`;
 }
 
 function unitList(units, states, progress) {
@@ -54,10 +53,9 @@ function unitList(units, states, progress) {
         const range = unit.stage.data && unit.stage.data.时间范围;
         return `${head}<div class="pi-unit${state === 'active' ? ' is-active' : ''}">
             <span class="pi-badge ${STATE_BADGE[state]}">${STATE_LABELS[state]}</span>
-            <span class="pi-uname" title="${esc(range || '')}">${esc(stageLabel(unit.stage.key))}</span>
-            ${muted ? `<button type="button" class="pi-btn is-sm is-ghost" data-act="unmute" data-unit="${esc(unit.id)}" title="恢复提醒">不再提醒</button>` : ''}
+            <span class="pi-uname" title="${esc(range || '')}">${esc(stageLabel(unit.stage.key))}${muted ? ` <button type="button" class="pi-badge is-warn pi-unmute" data-act="unmute" data-unit="${esc(unit.id)}" title="点击恢复提醒">不再提醒</button>` : ''}</span>
             <select class="pi-sel" data-unit-state="${esc(unit.id)}" title="手动改状态">${options(stateOpts, manual)}</select>
-            ${state === 'active' ? '' : `<button type="button" class="pi-btn is-sm is-ghost" data-act="goto" data-unit="${esc(unit.id)}">设为当前</button>`}
+            <span class="pi-unit-act">${state === 'active' ? '' : `<button type="button" class="pi-btn is-sm" data-act="goto" data-unit="${esc(unit.id)}">设为当前</button>`}</span>
         </div>${state === 'active' ? nodeList(unit, progress) : ''}`;
     }).join('');
 }
@@ -71,7 +69,7 @@ export function render(view) {
     if (activeId !== project.id) {
         const other = data.index().projects.find(item => item.id === activeId);
         return `<div class="pi-card"><h3>启用</h3>
-            <p class="pi-hint">「${esc(cardName())}」${other ? `当前启用的是「${esc(other.name)}」` : '还没有启用项目'}。一张卡同时只注入一个项目，进度跟聊天走。</p>
+            <p class="pi-hint">「${esc(cardName())}」${other ? `当前启用的是「${esc(other.name)}」` : '还没有启用项目'}。</p>
             <button type="button" class="pi-btn is-primary" data-act="activate">设为本卡当前项目</button></div>`;
     }
     const progress = runtime.progress();
@@ -82,13 +80,16 @@ export function render(view) {
     const mode = runtime.injectMode() === 'virtual' ? '<span class="pi-badge is-ok">虚拟条目</span>' : '<span class="pi-badge is-warn">专用世界书</span>';
     const settings = data.settings();
     const checking = runtime.isChecking();
-    const checkInfo = settings.switchSource === 'signal' ? '只用 AI 报信' : `每 ${settings.checkEvery} 楼检测 · 上次第 ${progress.lastCheckFloor} 楼 · 当前 ${runtime.floorCount()} 楼`;
-    return `<div class="pi-card"><h3>注入条目 ${mode}<span class="pi-spacer"></span><span class="pi-badge">共 ≈${total} token</span>
-            <button type="button" class="pi-btn is-sm" data-act="preview">预览最终注入</button></h3>
+    const checkInfo = `每 ${settings.checkEvery} 楼检测 · 上次第 ${progress.lastCheckFloor} 楼 · 当前 ${runtime.floorCount()} 楼`;
+    return `<div class="pi-card"><h3>注入条目 ${mode}<span class="pi-spacer"></span><span class="pi-badge">共 ≈${total} token</span></h3>
+        <div class="pi-tools is-c1"><button type="button" class="pi-btn is-sm" data-act="preview">预览最终注入</button></div>
         ${entries.length ? entries.map(entry => entryRow(entry, st.open === entry.slotId)).join('') : '<p class="pi-hint">设定和大纲都为空，没有可注入的内容。</p>'}
         </div>
+        ${units.length ? `<div class="pi-card"><h3>剧情索引<span class="pi-badge">不注入正文</span><span class="pi-spacer"></span>
+            <button type="button" class="pi-btn is-sm is-ghost" data-act="index-toggle">${st.indexOpen ? '收起' : '查看'}</button></h3>
+            ${st.indexOpen ? `<pre class="pi-pre">${esc(buildIndexText(units, states, progress))}</pre>` : ''}</div>` : ''}
         <div class="pi-card"><h3>阶段<span class="pi-spacer"></span><span class="pi-hint">${esc(checkInfo)}</span></h3>
-        ${units.length ? `<div class="pi-row">
+        ${units.length ? `<div class="pi-tools is-c3">
             <button type="button" class="pi-btn is-primary is-sm" data-act="next">打开下一段</button>
             <button type="button" class="pi-btn is-sm" data-act="check"${checking ? ' disabled' : ''}>${checking ? '<span class="pi-spin"></span>检测中' : '立即检测'}</button>
             <button type="button" class="pi-btn is-sm" data-act="rewrite">让 AI 改写后续阶段</button></div>
@@ -103,6 +104,11 @@ function setSlot(view, slotId, patch) {
 
 export const actions = {
     activate: view => view.runtime.switchProject(view.projectId),
+    'index-toggle'(view) {
+        const st = view.tabState('run');
+        st.indexOpen = !st.indexOpen;
+        view.renderBody();
+    },
     'toggle-entry'(view, target, event) {
         if (event.target.closest('input,select')) return;
         const st = view.tabState('run');
@@ -138,7 +144,7 @@ export const actions = {
             if (!list.length) return '';
             return list.map(entry => `<p class="pi-hint"><span class="pi-badge is-dark">${esc(positionLabel(entry))}</span> ${esc(entry.title)} · 顺序 ${entry.order}</p><pre class="pi-pre">${esc(entry.content)}</pre>`).join('');
         }).join('') : '<p class="pi-hint">没有启用的条目。</p>';
-        return openDialog({ title: '最终注入预览', html: `<p class="pi-hint">按位置分组，组内按顺序排列；实际与世界书条目一起排序。</p>${html}`, actions: [{ label: '关闭', value: true, primary: true }] });
+        return openDialog({ title: '最终注入预览', html: `${html}`, actions: [{ label: '关闭', value: true, primary: true }] });
     },
 };
 

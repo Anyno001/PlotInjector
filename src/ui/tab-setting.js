@@ -34,12 +34,12 @@ function draftHtml(view, project, draft) {
             <span class="pi-etitle">${esc(block.title)}</span>${status}</div>
             ${open ? `<div class="pi-entry-bd">${diffHtml(old ? old.text : '', block.text)}</div>` : ''}</div>`;
     }).join('');
-    return `<div class="pi-card"><h3>新稿对比 ${checkBadge(draft.check)}<span class="pi-spacer"></span>
-        <button type="button" class="pi-btn is-sm is-ghost" data-act="draft-drop">丢弃</button>
+    return `<div class="pi-card"><h3>新稿对比 ${checkBadge(draft.check)}</h3>
+        <p class="pi-hint">勾选的分块替换旧稿，新分块追加到末尾。</p>${rows}
+        ${fixesHtml(draft.fixes, 'draft')}
+        <div class="pi-tools is-c3 is-end"><button type="button" class="pi-btn is-sm is-primary" data-act="draft-all">全部采用</button>
         <button type="button" class="pi-btn is-sm" data-act="draft-pick">采用勾选的分块</button>
-        <button type="button" class="pi-btn is-sm is-primary" data-act="draft-all">全部采用</button></h3>
-        <p class="pi-hint">点分块看改动；勾选的分块替换旧稿，旧稿没有的追加到末尾。</p>${rows}
-        ${fixesHtml(draft.fixes, 'draft')}</div>`;
+        <button type="button" class="pi-btn is-sm is-danger" data-act="draft-drop">丢弃</button></div></div>`;
 }
 
 function historyHtml(project, at) {
@@ -47,9 +47,9 @@ function historyHtml(project, at) {
     if (!list.length) return '<div class="pi-card"><h3>历史版本</h3><p class="pi-hint">还没有历史版本。</p></div>';
     const fmt = time => new Date(time).toLocaleString();
     const chosen = list[at];
-    return `<div class="pi-card"><h3>历史版本<span class="pi-spacer"></span><span class="pi-hint">保留最近 10 版</span></h3>
+    return `<div class="pi-card"><h3>历史版本</h3>
         ${list.map((item, i) => `<div class="pi-row"><span class="pi-grow">${esc(fmt(item.at))} · ${item.text.length} 字</span>
-            <button type="button" class="pi-btn is-sm is-ghost" data-act="hist-diff" data-i="${i}">对比当前</button>
+            <button type="button" class="pi-btn is-sm" data-act="hist-diff" data-i="${i}">对比当前</button>
             <button type="button" class="pi-btn is-sm" data-act="hist-restore" data-i="${i}">回退到此版</button></div>`).join('')}
         ${chosen ? `<p class="pi-hint">${esc(fmt(chosen.at))} → 当前</p>${diffHtml(chosen.text, project.setting.text)}` : ''}</div>`;
 }
@@ -61,11 +61,12 @@ export function render(view) {
     const blocks = splitBlocks(text).filter(block => block.title !== '开头');
     const busy = view.busy.setting;
     return `${s.draft ? draftHtml(view, project, s.draft) : ''}
-        <div class="pi-card"><h3>设定 ${checkBadge(project.setting.check)}<span class="pi-spacer"></span>
-            <label class="pi-check"><input type="checkbox" data-append${s.append ? ' checked' : ''}>只追加</label>
+        <div class="pi-card"><h3>设定 ${checkBadge(project.setting.check)}</h3>
+        <div class="pi-tools is-c3">
             <button type="button" class="pi-btn is-sm is-accent" data-act="from-talk"${busy ? ' disabled' : ''}>${busy ? '<span class="pi-spin"></span>整理中' : '从讨论整理'}</button>
             <button type="button" class="pi-btn is-sm" data-act="import-wb">从世界书导入</button>
-            <button type="button" class="pi-btn is-sm${s.history ? ' is-primary' : ''}" data-act="history">历史 ${project.setting.history.length}</button></h3>
+            <button type="button" class="pi-btn is-sm${s.history ? ' is-primary' : ''}" data-act="history">历史版本 ${project.setting.history.length}</button>
+            <label class="pi-check"><input type="checkbox" data-append${s.append ? ' checked' : ''}><span>只追加，不改动已有分块</span></label></div>
         ${blocks.length ? `<div class="pi-toc">${blocks.map(block => `<button type="button" class="pi-chip" data-act="jump" data-key="${esc(block.key)}">${esc(block.title)}</button>`).join('')}</div>` : ''}
         <textarea class="pi-ta is-tall" data-setting placeholder="世界观正文。执行时作为常驻条目注入（角色定义后），取代世界书里手改的剧情设定条目。">${esc(text)}</textarea>
         <div class="pi-row"><span class="pi-hint pi-grow">≈<span data-tokens>${estimateTokens(text)}</span> token</span><span class="pi-status" data-save-status></span></div>
