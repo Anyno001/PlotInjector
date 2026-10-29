@@ -45,7 +45,9 @@ function boot() {
     });
 
     let subscription = null;
-    if (typeof eventOn === 'function' && typeof getButtonEvent === 'function') {
+    // 自动更新版的加载器已经绑了按钮，这里只在单文件版里绑。
+    const loaderBound = Boolean(window.__plotInjectorLoader && window.__plotInjectorLoader.bound);
+    if (!loaderBound && typeof eventOn === 'function' && typeof getButtonEvent === 'function') {
         if (typeof appendInexistentScriptButtons === 'function') appendInexistentScriptButtons([{ name: BUTTON, visible: true }]);
         subscription = eventOn(getButtonEvent(BUTTON), () => app.open());
     }
@@ -72,4 +74,9 @@ function boot() {
     console.info(`[剧情注入器] v${VERSION} 已加载`);
 }
 
-boot();
+try {
+    boot();
+} catch (error) {
+    console.error('[剧情注入器] 启动失败', error);
+    toast('error', `启动失败：${error.message}`);
+}

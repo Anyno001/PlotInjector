@@ -2,7 +2,7 @@
 
 个人自用的 SillyTavern 酒馆助手脚本，不提供支持，不接受需求与问题反馈。
 
-当前版本：v0.1.0
+当前版本：v0.1.1
 
 ## 功能
 
@@ -37,6 +37,12 @@ npm run build   # 生成 dist/ 与 loader/plot-injector.json
 ```
 
 ## 更新日志
+
+### v0.1.1
+
+- 加载器先绑定 QR 按钮再下载程序：下载中点按钮提示进度，失败时提示原因。
+- 网络请求加超时；连不上 api.github.com 时改从 jsDelivr 读取最新版本，下载再加 fastly.jsdelivr.net 备用地址。
+- 需要重新导入 loader/plot-injector.json。
 
 ### v0.1.0
 

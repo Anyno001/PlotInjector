@@ -1,4 +1,4 @@
-// PlotInjector v0.1.0
+// PlotInjector v0.1.1
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -3223,7 +3223,7 @@ ${parsed.body}` : parsed.body;
   }
 
   // src/index.js
-  var VERSION = "0.1.0", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.1.1", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")
@@ -3248,7 +3248,7 @@ ${parsed.body}` : parsed.body;
     }).catch((error) => {
       toast("error", `读取本地数据失败：${error.message}`);
     }), subscription = null;
-    typeof eventOn == "function" && typeof getButtonEvent == "function" && (typeof appendInexistentScriptButtons == "function" && appendInexistentScriptButtons([{ name: BUTTON, visible: !0 }]), subscription = eventOn(getButtonEvent(BUTTON), () => app.open()));
+    !(window.__plotInjectorLoader && window.__plotInjectorLoader.bound) && typeof eventOn == "function" && typeof getButtonEvent == "function" && (typeof appendInexistentScriptButtons == "function" && appendInexistentScriptButtons([{ name: BUTTON, visible: !0 }]), subscription = eventOn(getButtonEvent(BUTTON), () => app.open()));
     let instance = {
       version: VERSION,
       open: () => app.open(),
@@ -3267,5 +3267,9 @@ ${parsed.body}` : parsed.body;
     };
     host[KEY2] = instance, window.addEventListener("pagehide", () => instance.destroy(), { once: !0 }), console.info(`[剧情注入器] v${VERSION} 已加载`);
   }
-  boot();
+  try {
+    boot();
+  } catch (error) {
+    console.error("[剧情注入器] 启动失败", error), toast("error", `启动失败：${error.message}`);
+  }
 })();
