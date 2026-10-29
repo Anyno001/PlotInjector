@@ -10,7 +10,7 @@ import { buildEntries, toWorldInfoEntry } from '../src/core/inject.js';
 import { cleanFloorText, hasSignal, parseCheckReply } from '../src/core/check.js';
 import { mergeBlocks, parseSettingReply, splitBlocks } from '../src/core/setting.js';
 import { parseOutlineReply } from '../src/core/prompts.js';
-import { normalizeSettings, newProject } from '../src/core/store.js';
+import { normalizeSettings, newProject, resolveLlm } from '../src/core/store.js';
 import { buildZip, crc32 } from '../src/core/zip.js';
 
 setYamlLib(YAML);
@@ -203,4 +203,17 @@ test('zip 备份结构与 CRC 正确', () => {
     assert.equal(view.getUint32(0, true), 0x04034b50);
     assert.equal(view.getUint32(zip.length - 22, true), 0x06054b50);
     assert.equal(view.getUint16(zip.length - 22 + 10, true), 2);
+});
+
+test('旧版每个用途各存的独立接口合并成预设，相同的只建一份', () => {
+    const old = { source: 'custom', endpoint: 'https://a.example/v1', apiKey: 'k', model: 'm1', temperature: '' };
+    const s = normalizeSettings({ llm: { discuss: old, outline: { ...old }, check: { ...old, model: 'cheap' } } });
+    assert.equal(s.presets.length, 2);
+    assert.equal(s.llm.discuss.presetId, s.llm.outline.presetId);
+    assert.notEqual(s.llm.discuss.presetId, s.llm.check.presetId);
+    assert.deepEqual(resolveLlm(s, 'check'), { ...s.presets.find(item => item.model === 'cheap'), source: 'custom' });
+    assert.deepEqual(normalizeSettings(s), s);
+    const missing = normalizeSettings({ ...s, presets: [] });
+    assert.equal(missing.llm.discuss.source, 'tavern');
+    assert.deepEqual(resolveLlm(missing, 'discuss'), { source: 'tavern' });
 });

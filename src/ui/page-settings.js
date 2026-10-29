@@ -1,57 +1,103 @@
-import { BUILTIN_GUIDE } from '../core/guide.js';
-import { LLM_ROLES } from '../core/store.js';
+import { makeId } from '../core/outline.js';
+import { DEFAULT_PRESET, LLM_ROLES } from '../core/store.js';
 import { fetchModels } from '../host/llm.js';
 import { toast } from '../host/st.js';
-import { esc, options } from './dom.js';
+import { confirmDialog, esc, openDialog, options } from './dom.js';
+import { ICONS } from './styles.js';
 
 const st = view => view.tabState('settings');
 
-const ROLE_HINT = {
-    discuss: '讨论页的对话。',
-    outline: '整理设定、编写大纲时的生成。',
-    check: '每隔数楼判断当前阶段是否已演完。',
-};
-
-// 拉到模型列表后用下拉框直接选；列表里没有的模型可切到手动输入。
-function modelField(view, role, llm) {
-    const s = st(view);
-    const models = s.models?.[role] || [];
-    const manual = !models.length || s.manual?.[role];
-    const input = manual
-        ? `<input class="pi-inp" data-llm="${role}" data-k="model" value="${esc(llm.model)}" placeholder="模型名称">`
-        : `<select class="pi-sel" data-llm="${role}" data-k="model">${llm.model && !models.includes(llm.model) ? `<option value="${esc(llm.model)}" selected>${esc(llm.model)}</option>` : ''}
-            ${!llm.model ? '<option value="" selected disabled>选择模型</option>' : ''}${options(models.map(model => ({ value: model, label: model })), llm.model)}
-            <option value="__manual">手动输入…</option></select>`;
-    return `<div class="pi-field"><span>模型</span><div class="pi-inline">${input}
-        <button type="button" class="pi-btn" data-act="models" data-role="${role}">${s.loading === role ? '<span class="pi-spin"></span>' : ''}获取列表</button></div></div>`;
+function modelInput(value) {
+    return `<input class="pi-inp" data-f="model" value="${esc(value)}" placeholder="模型名称">`;
 }
 
-function llmCard(view, s) {
-    const role = LLM_ROLES.some(item => item.key === st(view).role) ? st(view).role : LLM_ROLES[0].key;
-    const llm = s.llm[role];
-    const custom = llm.source === 'custom';
-    const seg = LLM_ROLES.map(item => `<button type="button" class="pi-seg-btn${item.key === role ? ' is-sel' : ''}" data-act="llm-role" data-role="${item.key}">${esc(item.label)}</button>`).join('');
+// 获取到列表后换成下拉框；列表里没有的模型选「手动输入…」切回输入框。
+function modelSelect(models, value) {
+    const extra = value && !models.includes(value) ? `<option value="${esc(value)}">${esc(value)}</option>` : '';
+    const empty = value ? '' : '<option value="" selected disabled>选择模型</option>';
+    return `<select class="pi-sel" data-f="model">${empty}${extra}${options(models.map(model => ({ value: model, label: model })), value)}<option value="__manual">手动输入…</option></select>`;
+}
+
+function readPreset(box) {
+    const out = {};
+    for (const key of ['name', 'endpoint', 'apiKey', 'model', 'temperature']) out[key] = box.querySelector(`[data-f="${key}"]`).value.trim();
+    return out;
+}
+
+function editPreset(preset, isNew = false) {
+    const html = `<label class="pi-field"><span>名称</span><input class="pi-inp" data-f="name" value="${esc(preset.name)}" placeholder="如：DeepSeek"></label>
+        <label class="pi-field"><span>接口地址</span><input class="pi-inp" data-f="endpoint" value="${esc(preset.endpoint)}" placeholder="https://api.example.com/v1"></label>
+        <label class="pi-field"><span>API密钥</span><input class="pi-inp" type="password" autocomplete="off" data-f="apiKey" value="${esc(preset.apiKey)}"></label>
+        <div class="pi-field"><span>模型</span><div class="pi-inline"><span class="pi-grow" data-model-box>${modelInput(preset.model)}</span>
+            <button type="button" class="pi-btn" data-fetch-models>获取列表</button></div></div>
+        <label class="pi-field"><span>温度</span><input class="pi-inp is-num" data-f="temperature" value="${esc(preset.temperature)}" placeholder="默认"></label>
+        <p class="pi-hint">兼容OpenAI格式的接口，经酒馆后端转发。密钥保存在酒馆服务器的 pi-index.json 中。</p>`;
+    return openDialog({
+        title: isNew ? '新建接口预设' : '编辑接口预设',
+        html,
+        actions: [
+            { label: '取消', value: null },
+            { label: '保存', primary: true, value: box => ({ ...preset, ...readPreset(box) }) },
+        ],
+        onMount(box) {
+            const slot = box.querySelector('[data-model-box]');
+            const button = box.querySelector('[data-fetch-models]');
+            let models = [];
+            button.addEventListener('click', async () => {
+                const current = readPreset(box);
+                button.disabled = true;
+                button.innerHTML = '<span class="pi-spin"></span>获取列表';
+                try {
+                    models = await fetchModels(current);
+                    slot.innerHTML = modelSelect(models, current.model);
+                    toast('success', `获取到${models.length}个模型。`);
+                } catch (error) {
+                    toast('error', error.message);
+                } finally {
+                    button.disabled = false;
+                    button.textContent = '获取列表';
+                }
+            });
+            slot.addEventListener('change', event => {
+                if (event.target.value === '__manual') {
+                    slot.innerHTML = modelInput('');
+                    slot.querySelector('input').focus();
+                }
+            });
+        },
+    });
+}
+
+function apiCard(s) {
+    const presets = s.presets;
+    const usedBy = id => LLM_ROLES.filter(role => s.llm[role.key].source === 'preset' && s.llm[role.key].presetId === id).map(role => role.label);
+    const list = presets.map(preset => `<div class="pi-preset">
+            <span class="pi-preset-name" title="${esc(preset.name)}">${esc(preset.name)}</span>
+            <span class="pi-preset-model" title="${esc(preset.model)}">${esc(preset.model || '未选模型')}</span>
+            ${usedBy(preset.id).length ? `<span class="pi-badge is-accent">${esc(usedBy(preset.id).join('、'))}</span>` : ''}
+            <button type="button" class="pi-icon-btn" data-act="preset-edit" data-id="${esc(preset.id)}" title="编辑">${ICONS.pencil}</button>
+            <button type="button" class="pi-icon-btn is-danger" data-act="preset-del" data-id="${esc(preset.id)}" title="删除">${ICONS.trash}</button></div>`).join('');
+    const choices = [{ value: 'tavern', label: '酒馆当前连接' }, ...presets.map(preset => ({ value: `p:${preset.id}`, label: preset.name }))];
+    const picks = LLM_ROLES.map(role => {
+        const llm = s.llm[role.key];
+        const value = llm.source === 'preset' ? `p:${llm.presetId}` : 'tavern';
+        return `<label class="pi-field"><span>${esc(role.label)}</span><select class="pi-sel" data-role-pick="${role.key}">${options(choices, value)}</select></label>`;
+    }).join('');
     return `<div class="pi-card"><h3>模型接口</h3>
-        <div class="pi-seg">${seg}</div>
-        <p class="pi-hint">${ROLE_HINT[role]}</p>
-        <label class="pi-field"><span>接口来源</span><select class="pi-sel" data-llm="${role}" data-k="source">${options([{ value: 'tavern', label: '酒馆当前连接' }, { value: 'custom', label: '独立接口（OpenAI兼容）' }], llm.source)}</select></label>
-        ${custom ? `<label class="pi-field"><span>接口地址</span><input class="pi-inp" data-llm="${role}" data-k="endpoint" value="${esc(llm.endpoint)}" placeholder="https://api.example.com/v1"></label>
-        <label class="pi-field"><span>API密钥</span><input class="pi-inp" type="password" autocomplete="off" data-llm="${role}" data-k="apiKey" value="${esc(llm.apiKey)}"></label>
-        ${modelField(view, role, llm)}
-        <label class="pi-field"><span>温度</span><input class="pi-inp is-num" data-llm="${role}" data-k="temperature" value="${esc(llm.temperature)}" placeholder="默认"></label>
-        <p class="pi-hint">密钥保存在酒馆服务器的 pi-index.json 中。</p>`
-        : `<p class="pi-hint">${role === 'check' ? '与主聊天共用酒馆连接时需要排队，建议为进度检测单独配置一个低价模型。' : '使用酒馆当前连接的模型。'}</p>`}
-        </div>`;
+        <p class="pi-hint">接口预设保存一套地址、密钥和模型，三个用途可共用同一个预设。</p>
+        ${list ? `<div class="pi-presets">${list}</div>` : ''}
+        <button type="button" class="pi-btn is-sm" data-act="preset-new">${ICONS.plus}新建接口预设</button>
+        <div class="pi-roles">${picks}</div>
+        <p class="pi-hint">与主聊天共用酒馆连接时需要排队，进度检测建议单独使用一个低价模型。</p></div>`;
 }
 
 function guideCard(view, s) {
     const open = st(view).guideOpen;
-    const status = s.guide ? `自定义文本，${s.guide.length}字` : '内置版本';
+    const status = s.guide ? '自定义版本' : '内置版本';
     return `<div class="pi-card"><h3>写作基准<span class="pi-spacer"></span>
             <button type="button" class="pi-btn is-sm is-ghost" data-act="guide-toggle">${open ? '收起' : '编辑'}</button></h3>
-        <p class="pi-hint">讨论与整理设定时参照的《同人世界观速成》。当前使用：${status}。</p>
-        ${open ? `<div class="pi-row pi-acts-top"><button type="button" class="pi-btn is-sm" data-act="guide-show">载入内置文本</button>
-            <button type="button" class="pi-btn is-sm is-ghost" data-act="guide-reset"${s.guide ? '' : ' disabled'}>恢复内置版本</button></div>
+        <p class="pi-hint">当前使用：${status}</p>
+        ${open ? `<div class="pi-row pi-acts-top"><button type="button" class="pi-btn is-sm is-ghost" data-act="guide-reset"${s.guide ? '' : ' disabled'}>恢复内置版本</button></div>
         <textarea class="pi-ta is-mono is-tall" data-set="guide" placeholder="留空则使用内置版本">${esc(s.guide)}</textarea>` : ''}</div>`;
 }
 
@@ -72,12 +118,8 @@ export function render(view) {
         <label class="pi-field"><span>判定阶段已演完后</span><select class="pi-sel" data-set="handleMode">${options(modes, s.handleMode)}</select></label>
         ${checking ? `<div class="pi-row is-top"><label class="pi-field"><span>检测间隔（楼）</span><input class="pi-inp is-num" type="number" min="1" data-set="checkEvery" value="${s.checkEvery}"></label>
             <label class="pi-field"><span>每次读取楼数</span><input class="pi-inp is-num" type="number" min="1" data-set="checkFloors" value="${s.checkFloors}"></label></div>` : ''}</div>
-        ${llmCard(view, s)}
-        ${guideCard(view, s)}
-        <div class="pi-card"><h3>版本更新</h3>
-        <p class="pi-hint">当前版本 v${esc(view.version)}。默认自动使用最新发布版本。</p>
-        <label class="pi-field"><span>指定版本</span><input class="pi-inp" data-set="loaderRef" value="${esc(s.loaderRef)}" placeholder="留空跟随最新版本"></label>
-        <p class="pi-hint">填写 v0.1.0 等版本号可固定版本，填写 main 使用开发中的最新代码。修改后刷新酒馆页面生效。</p></div>`;
+        ${apiCard(s)}
+        ${guideCard(view, s)}`;
 }
 
 const NUMERIC = new Set(['keepDone', 'checkEvery', 'checkFloors']);
@@ -87,15 +129,8 @@ function readValue(target) {
     return NUMERIC.has(target.dataset.set) ? Number(target.value) : target.value;
 }
 
-function applyLlm(view, target) {
-    const role = target.dataset.llm;
-    const llm = view.data.settings().llm;
-    view.data.updateSettings({ llm: { ...llm, [role]: { ...llm[role], [target.dataset.k]: target.value.trim() } } });
-}
-
 export function onInput(view, target) {
     if (target.dataset.set && target.type !== 'checkbox' && target.tagName !== 'SELECT') view.data.updateSettings({ [target.dataset.set]: readValue(target) });
-    if (target.dataset.llm && target.tagName === 'INPUT') applyLlm(view, target);
 }
 
 export function onChange(view, target) {
@@ -104,44 +139,52 @@ export function onChange(view, target) {
         view.runtime.refresh();
         view.renderBody();
     }
-    if (target.dataset.llm && target.tagName === 'SELECT') {
-        if (target.value === '__manual') {
-            st(view).manual = { ...st(view).manual, [target.dataset.llm]: true };
-        } else {
-            applyLlm(view, target);
-        }
+    if (target.dataset.rolePick) {
+        const value = target.value;
+        const pick = value.startsWith('p:') ? { source: 'preset', presetId: value.slice(2) } : { source: 'tavern', presetId: '' };
+        view.data.updateSettings({ llm: { ...view.data.settings().llm, [target.dataset.rolePick]: pick } });
         view.renderBody();
     }
     if (target.dataset.set && target.tagName !== 'SELECT' && target.type !== 'checkbox') view.runtime.refresh();
 }
 
+function savePreset(view, preset) {
+    const s = view.data.settings();
+    const name = preset.name || preset.model || `接口${s.presets.length + 1}`;
+    const next = { ...preset, name };
+    const presets = s.presets.some(item => item.id === next.id) ? s.presets.map(item => (item.id === next.id ? next : item)) : [...s.presets, next];
+    view.data.updateSettings({ presets });
+}
+
 export const actions = {
-    async models(view, target) {
-        const role = target.dataset.role;
-        const s = st(view);
-        if (s.loading) return;
-        s.loading = role;
+    async 'preset-new'(view) {
+        const result = await editPreset({ ...DEFAULT_PRESET, id: makeId('api') }, true);
+        if (!result) return;
+        savePreset(view, result);
         view.renderBody();
-        try {
-            const models = await fetchModels(view.data.settings().llm[role]);
-            s.models = { ...s.models, [role]: models };
-            s.manual = { ...s.manual, [role]: false };
-            toast('success', `获取到${models.length}个模型，可在下拉框中选择。`);
-        } finally {
-            s.loading = '';
-            view.renderBody();
-        }
     },
-    'llm-role'(view, target) {
-        st(view).role = target.dataset.role;
+    async 'preset-edit'(view, target) {
+        const preset = view.data.settings().presets.find(item => item.id === target.dataset.id);
+        if (!preset) return;
+        const result = await editPreset(preset);
+        if (!result) return;
+        savePreset(view, result);
+        view.renderBody();
+    },
+    async 'preset-del'(view, target) {
+        const s = view.data.settings();
+        const preset = s.presets.find(item => item.id === target.dataset.id);
+        if (!preset) return;
+        const users = LLM_ROLES.filter(role => s.llm[role.key].presetId === preset.id).map(role => role.label);
+        const body = users.length ? `${users.join('、')}正在使用这个预设，删除后改用酒馆当前连接。` : '';
+        if (!(await confirmDialog({ title: `删除接口预设「${preset.name}」`, body, okLabel: '删除', danger: true }))) return;
+        const llm = { ...s.llm };
+        for (const role of LLM_ROLES) if (llm[role.key].presetId === preset.id) llm[role.key] = { source: 'tavern', presetId: '' };
+        view.data.updateSettings({ presets: s.presets.filter(item => item.id !== preset.id), llm });
         view.renderBody();
     },
     'guide-toggle'(view) {
         st(view).guideOpen = !st(view).guideOpen;
-        view.renderBody();
-    },
-    'guide-show'(view) {
-        view.data.updateSettings({ guide: BUILTIN_GUIDE });
         view.renderBody();
     },
     'guide-reset'(view) {

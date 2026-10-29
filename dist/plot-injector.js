@@ -1,4 +1,4 @@
-// PlotInjector v0.1.4
+// PlotInjector v0.1.5
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -364,7 +364,29 @@ ${body}
     { key: "discuss", label: "讨论" },
     { key: "outline", label: "写设定与大纲" },
     { key: "check", label: "进度检测" }
-  ], DEFAULT_LLM = { source: "tavern", endpoint: "", apiKey: "", model: "", temperature: "" }, DEFAULT_SETTINGS = {
+  ], DEFAULT_LLM = { source: "tavern", presetId: "" }, DEFAULT_PRESET = { id: "", name: "", endpoint: "", apiKey: "", model: "", temperature: "" };
+  function normalizePreset(value) {
+    let src = value && typeof value == "object" ? value : {}, out = { ...DEFAULT_PRESET };
+    for (let key of Object.keys(DEFAULT_PRESET)) out[key] = String(src[key] ?? "").trim();
+    return out;
+  }
+  var sameConnection = (a, b) => ["endpoint", "apiKey", "model", "temperature"].every((key) => String(a[key] ?? "").trim() === String(b[key] ?? "").trim());
+  function normalizeLlm(src) {
+    let presets = (Array.isArray(src.presets) ? src.presets : []).map(normalizePreset).filter((item) => item.id), llm = {};
+    for (let { key } of LLM_ROLES) {
+      let role = src.llm && src.llm[key] && typeof src.llm[key] == "object" ? src.llm[key] : {};
+      if (role.source === "custom") {
+        let preset = presets.find((item) => sameConnection(item, role));
+        preset || (preset = normalizePreset({ ...role, id: makeId("api"), name: String(role.model || "").trim() || `接口${presets.length + 1}` }), presets.push(preset)), llm[key] = { source: "preset", presetId: preset.id };
+      } else role.source === "preset" && presets.some((item) => item.id === role.presetId) ? llm[key] = { source: "preset", presetId: role.presetId } : llm[key] = { ...DEFAULT_LLM };
+    }
+    return { llm, presets };
+  }
+  function resolveLlm(settings, role) {
+    let pick = settings.llm && settings.llm[role], preset = pick && pick.source === "preset" && (settings.presets || []).find((item) => item.id === pick.presetId);
+    return preset ? { ...preset, source: "custom" } : { source: "tavern" };
+  }
+  var DEFAULT_SETTINGS = {
     tagName: "剧情参考",
     nextVisibility: "range",
     keepDone: 2,
@@ -375,11 +397,11 @@ ${body}
     hideSignal: !0,
     guide: "",
     loaderRef: "",
-    llm: { discuss: { ...DEFAULT_LLM }, outline: { ...DEFAULT_LLM }, check: { ...DEFAULT_LLM } }
+    llm: { discuss: { ...DEFAULT_LLM }, outline: { ...DEFAULT_LLM }, check: { ...DEFAULT_LLM } },
+    presets: []
   }, SWITCH_SOURCES = ["signal", "check", "both"], HANDLE_MODES = ["ask", "auto", "nodes"], VISIBILITY = ["name", "range", "instr"];
   function normalizeSettings(value) {
-    let src = value && typeof value == "object" ? value : {}, llm = {};
-    for (let { key } of LLM_ROLES) llm[key] = { ...DEFAULT_LLM, ...src.llm && src.llm[key] };
+    let src = value && typeof value == "object" ? value : {}, { llm, presets } = normalizeLlm(src);
     return {
       ...DEFAULT_SETTINGS,
       ...src,
@@ -389,7 +411,8 @@ ${body}
       keepDone: Math.max(0, Math.min(20, Number(src.keepDone ?? DEFAULT_SETTINGS.keepDone) || 0)),
       checkEvery: Math.max(1, Math.min(50, Number(src.checkEvery) || DEFAULT_SETTINGS.checkEvery)),
       checkFloors: Math.max(1, Math.min(20, Number(src.checkFloors) || DEFAULT_SETTINGS.checkFloors)),
-      llm
+      llm,
+      presets
     };
   }
   function emptyIndex() {
@@ -608,25 +631,25 @@ ${body}
   }
 
   // src/app/data.js
-  function createDataStore({ onChange: onChange4 = () => {
+  function createDataStore({ onChange: onChange5 = () => {
   }, onError = () => {
   } } = {}) {
     let index = emptyIndex(), ready = !1, projects = /* @__PURE__ */ new Map(), chats = /* @__PURE__ */ new Map(), loading = /* @__PURE__ */ new Map(), failed = /* @__PURE__ */ new Set(), writer = createWriter({
       onSaved(name, bytes) {
         if (failed.delete(name), name === INDEX_FILE) return;
         let id = /^pi-[pc]-(.+)\.json$/.exec(name)?.[1], meta2 = index.projects.find((item) => item.id === id), kind = name.startsWith("pi-p-") ? "project" : "chat", knownFile = index.files.includes(name);
-        meta2 && meta2.bytes[kind] !== bytes && (index = { ...index, projects: index.projects.map((item) => item === meta2 ? { ...item, bytes: { ...item.bytes, [kind]: bytes } } : item) }), knownFile || (index = { ...index, files: [...index.files, name] }), (!knownFile || meta2 && meta2.bytes[kind] !== bytes) && writer.schedule(INDEX_FILE, index), onChange4("saved");
+        meta2 && meta2.bytes[kind] !== bytes && (index = { ...index, projects: index.projects.map((item) => item === meta2 ? { ...item, bytes: { ...item.bytes, [kind]: bytes } } : item) }), knownFile || (index = { ...index, files: [...index.files, name] }), (!knownFile || meta2 && meta2.bytes[kind] !== bytes) && writer.schedule(INDEX_FILE, index), onChange5("saved");
       },
       onError(name, error) {
-        failed.add(name), onError(error), onChange4("save-failed");
+        failed.add(name), onError(error), onChange5("save-failed");
       }
     });
     function setIndex(next) {
-      index = next, writer.schedule(INDEX_FILE, index), onChange4("index");
+      index = next, writer.schedule(INDEX_FILE, index), onChange5("index");
     }
     async function init() {
       let file = await readJsonFile(INDEX_FILE);
-      index = normalizeIndex(file && file.value), index.files.includes(INDEX_FILE) || (index = { ...index, files: [INDEX_FILE, ...index.files] }), ready = !0, onChange4("index");
+      index = normalizeIndex(file && file.value), index.files.includes(INDEX_FILE) || (index = { ...index, files: [INDEX_FILE, ...index.files] }), ready = !0, onChange5("index");
     }
     async function loadProject(id) {
       if (projects.has(id)) return projects.get(id);
@@ -641,7 +664,7 @@ ${body}
       setIndex({ ...index, projects: index.projects.map((item) => item.id === id ? { ...item, ...patch, updatedAt: Date.now() } : item) });
     }
     function saveProject(project) {
-      projects.set(project.id, project), writer.schedule(projectFile(project.id), project), touch(project.id, { name: project.name }), onChange4("project", project.id);
+      projects.set(project.id, project), writer.schedule(projectFile(project.id), project), touch(project.id, { name: project.name }), onChange5("project", project.id);
     }
     function updateProject(id, fn) {
       let current = projects.get(id);
@@ -657,7 +680,7 @@ ${body}
         ...index,
         projects: [...index.projects, { id: project.id, name: project.name, group, updatedAt: Date.now(), bytes: { project: bytes } }],
         files: index.files.includes(projectFile(project.id)) ? index.files : [...index.files, projectFile(project.id)]
-      }, writer.schedule(INDEX_FILE, index), onChange4("index"), project;
+      }, writer.schedule(INDEX_FILE, index), onChange5("index"), project;
     }
     async function deleteProject(id) {
       writer.cancel(projectFile(id)), writer.cancel(chatFile(id)), await deleteFile(projectFile(id)), await deleteFile(chatFile(id)), projects.delete(id), chats.delete(id);
@@ -676,7 +699,7 @@ ${body}
       return chats.set(id, chat), chat;
     }
     function saveChat(id, chat) {
-      chats.set(id, chat), writer.schedule(chatFile(id), chat), onChange4("chat", id);
+      chats.set(id, chat), writer.schedule(chatFile(id), chat), onChange5("chat", id);
     }
     async function clearChat(id) {
       writer.cancel(chatFile(id)), await deleteFile(chatFile(id)), chats.set(id, emptyChat());
@@ -705,7 +728,7 @@ ${body}
     }
     function resetAll() {
       for (let name of [...index.files]) writer.cancel(name);
-      projects.clear(), chats.clear(), index = emptyIndex(), onChange4("index");
+      projects.clear(), chats.clear(), index = emptyIndex(), onChange5("index");
     }
     return {
       init,
@@ -1121,7 +1144,7 @@ ${floor.text}`)
         return manual && toast("info", "还没有可检测的正文。"), null;
       checking = !0, emit("checking");
       try {
-        let off = prog.slots[unit.id] && prog.slots[unit.id].off || [], reply2 = await requestLlm(buildCheckMessages(unit, off, floors), settings.llm.check, { timeoutMs: 12e4 }), result = parseCheckReply(reply2), next = currentProgress();
+        let off = prog.slots[unit.id] && prog.slots[unit.id].off || [], reply2 = await requestLlm(buildCheckMessages(unit, off, floors), resolveLlm(settings, "check"), { timeoutMs: 12e4 }), result = parseCheckReply(reply2), next = currentProgress();
         return next = uncheckByNames(next, unit.id, stageNodes(unit.stage.data), result.done), next = { ...next, lastCheckFloor: floorCount(), review: null }, setProgress(next), review ? result.stageDone || notice.show({
           id: "advance",
           title: `复核：${placeOf(unit)} 可能还没演完`,
@@ -1260,6 +1283,7 @@ ${floor.text}`)
 .pi-top-end{grid-column:3;justify-self:end;display:flex;align-items:center;gap:6px}
 .pi-icon-btn{width:28px;height:28px;border:0;border-radius:8px;background:none;color:var(--pi-txt2);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;padding:0}
 .pi-icon-btn:hover{color:var(--pi-dark);background:var(--pi-surf)}
+.pi-icon-btn.is-danger:hover{color:var(--pi-danger);background:var(--pi-danger-soft)}
 .pi-menu{display:none}
 .pi-tabs{grid-column:2;display:grid;grid-auto-flow:column;grid-auto-columns:76px;gap:4px}
 .pi-tab{text-align:center;padding:6px 0;border:0;border-radius:20px;background:none;color:var(--pi-txt2);font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:inherit}
@@ -1282,6 +1306,22 @@ ${floor.text}`)
 .pi-inline{display:flex;gap:8px;align-items:stretch}
 .pi-inline>.pi-inp,.pi-inline>.pi-sel{flex:1;min-width:0}
 .pi-inline>.pi-btn{min-height:0;flex-shrink:0}
+.pi-inline>.pi-grow{flex:1;min-width:0;display:flex}
+.pi-inline>.pi-grow>.pi-inp,.pi-inline>.pi-grow>.pi-sel{flex:1;min-width:0}
+.pi-equal{display:grid;grid-template-columns:repeat(3,minmax(0,140px));gap:8px;justify-content:center}
+.pi-equal>.pi-btn{width:100%;padding:0 6px;white-space:normal;line-height:1.3}
+.pi-presets{display:flex;flex-direction:column;gap:6px;margin-bottom:8px}
+.pi-preset{display:flex;align-items:center;gap:8px;padding:6px 6px 6px 12px;border:1.5px solid var(--pi-line);border-radius:var(--pi-r-in);min-width:0}
+.pi-preset-name{font-weight:600;font-size:13px;flex-shrink:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pi-preset-model{flex:1;min-width:0;font-size:12px;color:var(--pi-txt2);font-family:var(--pi-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pi-roles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0 10px;margin-top:12px}
+.pi-wb-sec{margin-top:8px}
+.pi-wb-sec-hd{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--pi-txt2);padding:2px 0 4px;border-bottom:1px solid var(--pi-line);margin-bottom:2px}
+.pi-wb-sec-hd small{font-weight:400}
+.pi-wb-row{display:flex;align-items:center;gap:8px;padding:3px 0;min-width:0}
+.pi-wb-row input{width:15px;height:15px;margin:0;accent-color:var(--pi-accent);flex-shrink:0;cursor:pointer}
+.pi-wb-title{flex:1;min-width:0;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pi-wb-row.is-off .pi-wb-title{color:var(--pi-txt2)}
 .pi-acts{margin-top:12px}
 .pi-acts-top{margin-bottom:8px}
 .pi-seg{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:2px;padding:3px;background:var(--pi-surf);border-radius:20px;margin-bottom:6px}
@@ -1414,6 +1454,8 @@ ${floor.text}`)
 .pi-tabs{grid-column:1/-1;grid-row:2;grid-auto-columns:1fr}
 .pi-tree,.pi-split{grid-template-columns:minmax(0,1fr)}
 .pi-entry-hd{flex-wrap:wrap}
+.pi-wb .pi-entry-hd{flex-wrap:nowrap}
+.pi-roles{grid-template-columns:minmax(0,1fr)}
 .pi-card h3{flex-wrap:wrap}
 .pi-unit{flex-wrap:wrap}
 .pi-tree-list{max-height:220px}
@@ -1428,6 +1470,7 @@ ${floor.text}`)
     caret: '<svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M3 2l4 3-4 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     caretDown: '<svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 3l3 4 3-4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     send: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 13V3M3.5 7.5L8 3l4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    trash: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M2.5 4h11M6.5 4V2.5h3V4M4 4l.7 9.5h6.6L12 4M6.8 6.5v4.5M9.2 6.5v4.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     menu: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2.5 4h11M2.5 8h11M2.5 12h11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
     pencil: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M10.5 2.5l3 3-8 8h-3v-3l8-8z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M9 4l3 3" stroke="currentColor" stroke-width="1.3"/></svg>',
     search: '<svg width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.4"/><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
@@ -1839,7 +1882,7 @@ NSFW指引（涉及成人内容时）:
 
   // src/ui/ai.js
   function ask(view, role, messages) {
-    return requestLlm(messages, view.data.settings().llm[role]);
+    return requestLlm(messages, resolveLlm(view.data.settings(), role));
   }
   function guideText(view) {
     return String(view.data.settings().guide || "").trim() || BUILTIN_GUIDE;
@@ -2585,7 +2628,7 @@ ${parsed.body}` : parsed.body;
             <button type="button" class="pi-btn is-sm is-ghost" data-act="to-outline">据此写大纲</button>
             ${hasYamlBlock(msg.content) ? `<button type="button" class="pi-btn is-sm is-ghost" data-act="use-yaml" data-id="${esc(msg.id)}">把 YAML 送到大纲</button>` : ""}`}</div>`;
       return `<div class="pi-msg ${isUser ? "is-user" : "is-ai"}"><div class="pi-md">${renderMarkdown(msg.content)}</div>${tools}</div>`;
-    }).join(""), empty = chat.messages.length ? "" : '<div class="pi-empty">说说这条 if 线的想法：原作、角色、类型、基调，一句话也行。<br>AI 按「同人世界观速成」帮你把设定想清楚。</div>';
+    }).join(""), empty = chat.messages.length ? "" : '<div class="pi-empty">说说这条 if 线的想法：原作、角色、类型、基调，一句话也行。<br>AI 会帮你把设定想清楚。</div>';
     return `${chips}<div class="pi-chat">
         ${folded ? `<button type="button" class="pi-msg-fold" data-act="summary">更早的 ${folded} 条已折成摘要 · 查看</button>` : ""}
         ${empty}${messages}${busy ? '<div class="pi-msg is-ai"><span class="pi-spin"></span></div>' : ""}</div>
@@ -2828,38 +2871,75 @@ ${parsed.body}` : parsed.body;
     refreshOn: () => refreshOn4,
     render: () => render5
   });
-  var st4 = (view) => view.tabState("settings"), ROLE_HINT = {
-    discuss: "讨论页的对话。",
-    outline: "整理设定、编写大纲时的生成。",
-    check: "每隔数楼判断当前阶段是否已演完。"
-  };
-  function modelField(view, role, llm) {
-    let s = st4(view), models = s.models?.[role] || [];
-    return `<div class="pi-field"><span>模型</span><div class="pi-inline">${!models.length || s.manual?.[role] ? `<input class="pi-inp" data-llm="${role}" data-k="model" value="${esc(llm.model)}" placeholder="模型名称">` : `<select class="pi-sel" data-llm="${role}" data-k="model">${llm.model && !models.includes(llm.model) ? `<option value="${esc(llm.model)}" selected>${esc(llm.model)}</option>` : ""}
-            ${llm.model ? "" : '<option value="" selected disabled>选择模型</option>'}${options(models.map((model) => ({ value: model, label: model })), llm.model)}
-            <option value="__manual">手动输入…</option></select>`}
-        <button type="button" class="pi-btn" data-act="models" data-role="${role}">${s.loading === role ? '<span class="pi-spin"></span>' : ""}获取列表</button></div></div>`;
+  var st4 = (view) => view.tabState("settings");
+  function modelInput(value) {
+    return `<input class="pi-inp" data-f="model" value="${esc(value)}" placeholder="模型名称">`;
   }
-  function llmCard(view, s) {
-    let role = LLM_ROLES.some((item) => item.key === st4(view).role) ? st4(view).role : LLM_ROLES[0].key, llm = s.llm[role], custom = llm.source === "custom";
+  function modelSelect(models, value) {
+    let extra = value && !models.includes(value) ? `<option value="${esc(value)}">${esc(value)}</option>` : "";
+    return `<select class="pi-sel" data-f="model">${value ? "" : '<option value="" selected disabled>选择模型</option>'}${extra}${options(models.map((model) => ({ value: model, label: model })), value)}<option value="__manual">手动输入…</option></select>`;
+  }
+  function readPreset(box) {
+    let out = {};
+    for (let key of ["name", "endpoint", "apiKey", "model", "temperature"]) out[key] = box.querySelector(`[data-f="${key}"]`).value.trim();
+    return out;
+  }
+  function editPreset(preset, isNew = !1) {
+    let html = `<label class="pi-field"><span>名称</span><input class="pi-inp" data-f="name" value="${esc(preset.name)}" placeholder="如：DeepSeek"></label>
+        <label class="pi-field"><span>接口地址</span><input class="pi-inp" data-f="endpoint" value="${esc(preset.endpoint)}" placeholder="https://api.example.com/v1"></label>
+        <label class="pi-field"><span>API密钥</span><input class="pi-inp" type="password" autocomplete="off" data-f="apiKey" value="${esc(preset.apiKey)}"></label>
+        <div class="pi-field"><span>模型</span><div class="pi-inline"><span class="pi-grow" data-model-box>${modelInput(preset.model)}</span>
+            <button type="button" class="pi-btn" data-fetch-models>获取列表</button></div></div>
+        <label class="pi-field"><span>温度</span><input class="pi-inp is-num" data-f="temperature" value="${esc(preset.temperature)}" placeholder="默认"></label>
+        <p class="pi-hint">兼容OpenAI格式的接口，经酒馆后端转发。密钥保存在酒馆服务器的 pi-index.json 中。</p>`;
+    return openDialog({
+      title: isNew ? "新建接口预设" : "编辑接口预设",
+      html,
+      actions: [
+        { label: "取消", value: null },
+        { label: "保存", primary: !0, value: (box) => ({ ...preset, ...readPreset(box) }) }
+      ],
+      onMount(box) {
+        let slot = box.querySelector("[data-model-box]"), button = box.querySelector("[data-fetch-models]"), models = [];
+        button.addEventListener("click", async () => {
+          let current = readPreset(box);
+          button.disabled = !0, button.innerHTML = '<span class="pi-spin"></span>获取列表';
+          try {
+            models = await fetchModels(current), slot.innerHTML = modelSelect(models, current.model), toast("success", `获取到${models.length}个模型。`);
+          } catch (error) {
+            toast("error", error.message);
+          } finally {
+            button.disabled = !1, button.textContent = "获取列表";
+          }
+        }), slot.addEventListener("change", (event) => {
+          event.target.value === "__manual" && (slot.innerHTML = modelInput(""), slot.querySelector("input").focus());
+        });
+      }
+    });
+  }
+  function apiCard(s) {
+    let presets = s.presets, usedBy = (id) => LLM_ROLES.filter((role) => s.llm[role.key].source === "preset" && s.llm[role.key].presetId === id).map((role) => role.label), list = presets.map((preset) => `<div class="pi-preset">
+            <span class="pi-preset-name" title="${esc(preset.name)}">${esc(preset.name)}</span>
+            <span class="pi-preset-model" title="${esc(preset.model)}">${esc(preset.model || "未选模型")}</span>
+            ${usedBy(preset.id).length ? `<span class="pi-badge is-accent">${esc(usedBy(preset.id).join("、"))}</span>` : ""}
+            <button type="button" class="pi-icon-btn" data-act="preset-edit" data-id="${esc(preset.id)}" title="编辑">${ICONS.pencil}</button>
+            <button type="button" class="pi-icon-btn is-danger" data-act="preset-del" data-id="${esc(preset.id)}" title="删除">${ICONS.trash}</button></div>`).join(""), choices = [{ value: "tavern", label: "酒馆当前连接" }, ...presets.map((preset) => ({ value: `p:${preset.id}`, label: preset.name }))], picks = LLM_ROLES.map((role) => {
+      let llm = s.llm[role.key], value = llm.source === "preset" ? `p:${llm.presetId}` : "tavern";
+      return `<label class="pi-field"><span>${esc(role.label)}</span><select class="pi-sel" data-role-pick="${role.key}">${options(choices, value)}</select></label>`;
+    }).join("");
     return `<div class="pi-card"><h3>模型接口</h3>
-        <div class="pi-seg">${LLM_ROLES.map((item) => `<button type="button" class="pi-seg-btn${item.key === role ? " is-sel" : ""}" data-act="llm-role" data-role="${item.key}">${esc(item.label)}</button>`).join("")}</div>
-        <p class="pi-hint">${ROLE_HINT[role]}</p>
-        <label class="pi-field"><span>接口来源</span><select class="pi-sel" data-llm="${role}" data-k="source">${options([{ value: "tavern", label: "酒馆当前连接" }, { value: "custom", label: "独立接口（OpenAI兼容）" }], llm.source)}</select></label>
-        ${custom ? `<label class="pi-field"><span>接口地址</span><input class="pi-inp" data-llm="${role}" data-k="endpoint" value="${esc(llm.endpoint)}" placeholder="https://api.example.com/v1"></label>
-        <label class="pi-field"><span>API密钥</span><input class="pi-inp" type="password" autocomplete="off" data-llm="${role}" data-k="apiKey" value="${esc(llm.apiKey)}"></label>
-        ${modelField(view, role, llm)}
-        <label class="pi-field"><span>温度</span><input class="pi-inp is-num" data-llm="${role}" data-k="temperature" value="${esc(llm.temperature)}" placeholder="默认"></label>
-        <p class="pi-hint">密钥保存在酒馆服务器的 pi-index.json 中。</p>` : `<p class="pi-hint">${role === "check" ? "与主聊天共用酒馆连接时需要排队，建议为进度检测单独配置一个低价模型。" : "使用酒馆当前连接的模型。"}</p>`}
-        </div>`;
+        <p class="pi-hint">接口预设保存一套地址、密钥和模型，三个用途可共用同一个预设。</p>
+        ${list ? `<div class="pi-presets">${list}</div>` : ""}
+        <button type="button" class="pi-btn is-sm" data-act="preset-new">${ICONS.plus}新建接口预设</button>
+        <div class="pi-roles">${picks}</div>
+        <p class="pi-hint">与主聊天共用酒馆连接时需要排队，进度检测建议单独使用一个低价模型。</p></div>`;
   }
   function guideCard(view, s) {
-    let open = st4(view).guideOpen, status = s.guide ? `自定义文本，${s.guide.length}字` : "内置版本";
+    let open = st4(view).guideOpen, status = s.guide ? "自定义版本" : "内置版本";
     return `<div class="pi-card"><h3>写作基准<span class="pi-spacer"></span>
             <button type="button" class="pi-btn is-sm is-ghost" data-act="guide-toggle">${open ? "收起" : "编辑"}</button></h3>
-        <p class="pi-hint">讨论与整理设定时参照的《同人世界观速成》。当前使用：${status}。</p>
-        ${open ? `<div class="pi-row pi-acts-top"><button type="button" class="pi-btn is-sm" data-act="guide-show">载入内置文本</button>
-            <button type="button" class="pi-btn is-sm is-ghost" data-act="guide-reset"${s.guide ? "" : " disabled"}>恢复内置版本</button></div>
+        <p class="pi-hint">当前使用：${status}</p>
+        ${open ? `<div class="pi-row pi-acts-top"><button type="button" class="pi-btn is-sm is-ghost" data-act="guide-reset"${s.guide ? "" : " disabled"}>恢复内置版本</button></div>
         <textarea class="pi-ta is-mono is-tall" data-set="guide" placeholder="留空则使用内置版本">${esc(s.guide)}</textarea>` : ""}</div>`;
   }
   function render5(view) {
@@ -2875,48 +2955,49 @@ ${parsed.body}` : parsed.body;
         <label class="pi-field"><span>判定阶段已演完后</span><select class="pi-sel" data-set="handleMode">${options(modes, s.handleMode)}</select></label>
         ${checking ? `<div class="pi-row is-top"><label class="pi-field"><span>检测间隔（楼）</span><input class="pi-inp is-num" type="number" min="1" data-set="checkEvery" value="${s.checkEvery}"></label>
             <label class="pi-field"><span>每次读取楼数</span><input class="pi-inp is-num" type="number" min="1" data-set="checkFloors" value="${s.checkFloors}"></label></div>` : ""}</div>
-        ${llmCard(view, s)}
-        ${guideCard(view, s)}
-        <div class="pi-card"><h3>版本更新</h3>
-        <p class="pi-hint">当前版本 v${esc(view.version)}。默认自动使用最新发布版本。</p>
-        <label class="pi-field"><span>指定版本</span><input class="pi-inp" data-set="loaderRef" value="${esc(s.loaderRef)}" placeholder="留空跟随最新版本"></label>
-        <p class="pi-hint">填写 v0.1.0 等版本号可固定版本，填写 main 使用开发中的最新代码。修改后刷新酒馆页面生效。</p></div>`;
+        ${apiCard(s)}
+        ${guideCard(view, s)}`;
   }
   var NUMERIC = /* @__PURE__ */ new Set(["keepDone", "checkEvery", "checkFloors"]);
   function readValue(target) {
     return target.type === "checkbox" ? target.checked : NUMERIC.has(target.dataset.set) ? Number(target.value) : target.value;
   }
-  function applyLlm(view, target) {
-    let role = target.dataset.llm, llm = view.data.settings().llm;
-    view.data.updateSettings({ llm: { ...llm, [role]: { ...llm[role], [target.dataset.k]: target.value.trim() } } });
-  }
   function onInput4(view, target) {
-    target.dataset.set && target.type !== "checkbox" && target.tagName !== "SELECT" && view.data.updateSettings({ [target.dataset.set]: readValue(target) }), target.dataset.llm && target.tagName === "INPUT" && applyLlm(view, target);
+    target.dataset.set && target.type !== "checkbox" && target.tagName !== "SELECT" && view.data.updateSettings({ [target.dataset.set]: readValue(target) });
   }
   function onChange3(view, target) {
-    target.dataset.set && (target.type === "checkbox" || target.tagName === "SELECT") && (view.data.updateSettings({ [target.dataset.set]: readValue(target) }), view.runtime.refresh(), view.renderBody()), target.dataset.llm && target.tagName === "SELECT" && (target.value === "__manual" ? st4(view).manual = { ...st4(view).manual, [target.dataset.llm]: !0 } : applyLlm(view, target), view.renderBody()), target.dataset.set && target.tagName !== "SELECT" && target.type !== "checkbox" && view.runtime.refresh();
+    if (target.dataset.set && (target.type === "checkbox" || target.tagName === "SELECT") && (view.data.updateSettings({ [target.dataset.set]: readValue(target) }), view.runtime.refresh(), view.renderBody()), target.dataset.rolePick) {
+      let value = target.value, pick = value.startsWith("p:") ? { source: "preset", presetId: value.slice(2) } : { source: "tavern", presetId: "" };
+      view.data.updateSettings({ llm: { ...view.data.settings().llm, [target.dataset.rolePick]: pick } }), view.renderBody();
+    }
+    target.dataset.set && target.tagName !== "SELECT" && target.type !== "checkbox" && view.runtime.refresh();
+  }
+  function savePreset(view, preset) {
+    let s = view.data.settings(), name = preset.name || preset.model || `接口${s.presets.length + 1}`, next = { ...preset, name }, presets = s.presets.some((item) => item.id === next.id) ? s.presets.map((item) => item.id === next.id ? next : item) : [...s.presets, next];
+    view.data.updateSettings({ presets });
   }
   var actions5 = {
-    async models(view, target) {
-      let role = target.dataset.role, s = st4(view);
-      if (!s.loading) {
-        s.loading = role, view.renderBody();
-        try {
-          let models = await fetchModels(view.data.settings().llm[role]);
-          s.models = { ...s.models, [role]: models }, s.manual = { ...s.manual, [role]: !1 }, toast("success", `获取到${models.length}个模型，可在下拉框中选择。`);
-        } finally {
-          s.loading = "", view.renderBody();
-        }
-      }
+    async "preset-new"(view) {
+      let result = await editPreset({ ...DEFAULT_PRESET, id: makeId("api") }, !0);
+      result && (savePreset(view, result), view.renderBody());
     },
-    "llm-role"(view, target) {
-      st4(view).role = target.dataset.role, view.renderBody();
+    async "preset-edit"(view, target) {
+      let preset = view.data.settings().presets.find((item) => item.id === target.dataset.id);
+      if (!preset) return;
+      let result = await editPreset(preset);
+      result && (savePreset(view, result), view.renderBody());
+    },
+    async "preset-del"(view, target) {
+      let s = view.data.settings(), preset = s.presets.find((item) => item.id === target.dataset.id);
+      if (!preset) return;
+      let users = LLM_ROLES.filter((role) => s.llm[role.key].presetId === preset.id).map((role) => role.label), body = users.length ? `${users.join("、")}正在使用这个预设，删除后改用酒馆当前连接。` : "";
+      if (!await confirmDialog({ title: `删除接口预设「${preset.name}」`, body, okLabel: "删除", danger: !0 })) return;
+      let llm = { ...s.llm };
+      for (let role of LLM_ROLES) llm[role.key].presetId === preset.id && (llm[role.key] = { source: "tavern", presetId: "" });
+      view.data.updateSettings({ presets: s.presets.filter((item) => item.id !== preset.id), llm }), view.renderBody();
     },
     "guide-toggle"(view) {
       st4(view).guideOpen = !st4(view).guideOpen, view.renderBody();
-    },
-    "guide-show"(view) {
-      view.data.updateSettings({ guide: BUILTIN_GUIDE }), view.renderBody();
     },
     "guide-reset"(view) {
       view.data.updateSettings({ guide: "" }), view.renderBody();
@@ -2927,6 +3008,7 @@ ${parsed.body}` : parsed.body;
   var page_data_exports = {};
   __export(page_data_exports, {
     actions: () => actions6,
+    onInput: () => onInput5,
     refreshOn: () => refreshOn5,
     render: () => render6
   });
@@ -2983,16 +3065,23 @@ ${parsed.body}` : parsed.body;
   function render6(view) {
     let s = st5(view);
     !s.verified && !s.verifying && verify(view);
-    let orphans = s.verified ? Object.keys(s.verified).filter((name) => !referenced(view.data.index()).has(name)) : [];
-    return `<div class="pi-card"><h3>本地文件<span class="pi-spacer"></span>
-            <button type="button" class="pi-btn is-sm" data-act="verify">${s.verifying ? '<span class="pi-spin"></span>' : ""}重新核对</button></h3>
+    let orphans = s.verified ? Object.keys(s.verified).filter((name) => !referenced(view.data.index()).has(name)) : [], settings = view.data.settings();
+    return `<div class="pi-card"><h3>本地文件</h3>
         <p class="pi-hint">项目数据保存在酒馆服务器的 user/files/pi-* 文件中，浏览器仅保存界面状态。</p>
         ${filesTable(view)}
-        <div class="pi-row pi-acts"><button type="button" class="pi-btn is-sm" data-act="orphans"${orphans.length ? "" : " disabled"}>清理孤立文件${orphans.length ? `（${orphans.length}）` : ""}</button>
-            <button type="button" class="pi-btn is-sm" data-act="clear-chats">清空所有讨论记录</button></div></div>
-        <div class="pi-card"><h3>全部清除</h3>
-        <p class="pi-hint">先下载一份 zip 备份，再删除全部 pi-* 文件和当前聊天里的进度。其他聊天里的进度不动。</p>
-        <button type="button" class="pi-btn is-sm is-danger" data-act="wipe">全部清除</button></div>`;
+        <div class="pi-equal pi-acts"><button type="button" class="pi-btn is-sm" data-act="verify">${s.verifying ? '<span class="pi-spin"></span>' : ""}重新核对</button>
+            <button type="button" class="pi-btn is-sm" data-act="orphans"${orphans.length ? "" : " disabled"}>清理孤立文件${orphans.length ? `（${orphans.length}）` : ""}</button>
+            <button type="button" class="pi-btn is-sm" data-act="clear-chats">清空全部讨论记录</button></div></div>
+        <div class="pi-card"><h3>版本更新</h3>
+        <p class="pi-hint">当前版本 v${esc(view.version)}。默认自动使用最新发布版本。</p>
+        <label class="pi-field"><span>指定版本</span><input class="pi-inp" data-set="loaderRef" value="${esc(settings.loaderRef)}" placeholder="留空跟随最新版本"></label>
+        <p class="pi-hint">填写 v0.1.0 等版本号可固定版本，填写 main 使用开发中的最新代码。修改后刷新酒馆页面生效。</p></div>
+        <div class="pi-card"><h3>重置插件</h3>
+        <p class="pi-hint">删除所有项目、讨论记录和当前聊天的进度，其他聊天的进度保留。执行前自动下载zip备份，确认后无法撤销。</p>
+        <button type="button" class="pi-btn is-sm is-danger" data-act="wipe">备份并删除</button></div>`;
+  }
+  function onInput5(view, target) {
+    target.dataset.set === "loaderRef" && view.data.updateSettings({ loaderRef: target.value.trim() });
   }
   async function verify(view) {
     let s = st5(view);
@@ -3032,7 +3121,7 @@ ${parsed.body}` : parsed.body;
     },
     async "clear-chats"(view) {
       let ids = view.data.index().projects.map((item) => item.id);
-      if (await confirmDialog({ title: "清空所有讨论记录", list: ids.map(chatFile), okLabel: "清空", danger: !0 })) {
+      if (await confirmDialog({ title: "清空全部讨论记录", list: ids.map(chatFile), okLabel: "清空", danger: !0 })) {
         for (let id of ids) await view.data.clearChat(id);
         st5(view).verified = null, view.renderBody();
       }
@@ -3044,7 +3133,7 @@ ${parsed.body}` : parsed.body;
         text != null && files.push({ name, data: text });
       }
       if (!files.length) throw new Error("没有可清除的文件");
-      if (downloadBlob(`剧情注入器备份-${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}.zip`, buildZip(files), "application/zip"), !!await confirmDialog({ title: "全部清除", body: "备份已下载。确认后删除以下文件和当前聊天的进度，无法撤销。", list: files.map((file) => file.name), okLabel: "全部删除", danger: !0 })) {
+      if (downloadBlob(`剧情注入器备份-${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}.zip`, buildZip(files), "application/zip"), !!await confirmDialog({ title: "重置插件", body: "备份已下载。确认后删除以下文件和当前聊天的进度，无法撤销。", list: files.map((file) => file.name), okLabel: "全部删除", danger: !0 })) {
         for (let file of files) await deleteFile(file.name);
         await clearChatProgress(), view.data.resetAll(), view.projectId = "", st5(view).verified = null, view.runtime.refresh(), view.render(), toast("success", "已全部清除。");
       }
@@ -3055,28 +3144,38 @@ ${parsed.body}` : parsed.body;
   var page_books_exports = {};
   __export(page_books_exports, {
     actions: () => actions7,
+    onChange: () => onChange4,
     refreshOn: () => refreshOn6,
     render: () => render7
   });
   var st6 = (view) => view.tabState("books");
+  function entryRow2(entry) {
+    return `<div class="pi-wb-row${entry.disabled ? " is-off" : ""}">
+        <input type="checkbox" data-wb-toggle="${esc(entry.key)}" title="${entry.disabled ? "开启" : "关闭"}"${entry.disabled ? "" : " checked"}>
+        <span class="pi-wb-title" title="${esc(entry.title)}">${esc(entry.title)}</span>
+        ${entry.constant ? '<span class="pi-badge">常驻</span>' : ""}
+        <button type="button" class="pi-icon-btn is-danger" data-act="wb-delete" data-key="${esc(entry.key)}" title="删除">${ICONS.trash}</button></div>`;
+  }
+  function section(title, entries, empty) {
+    return `<div class="pi-wb-sec"><div class="pi-wb-sec-hd">${title}<small>${entries.length}</small></div>
+        ${entries.map(entryRow2).join("") || `<p class="pi-hint">${empty}</p>`}</div>`;
+  }
   function render7(view) {
     let s = st6(view), fallback = allBookNames().filter((name) => name.startsWith("剧情注入器·")), list = [...boundBookNames(), ...fallback.filter((name) => !boundBookNames().some((item) => item.name === name)).map((name) => ({ name, source: "专用" }))].map((book) => {
-      let entries = s.book === book.name && s.entries ? s.entries : null;
+      let open = s.book === book.name, entries = open && s.entries ? s.entries : null;
       return `<div class="pi-entry"><div class="pi-entry-hd" data-act="open-book" data-book="${esc(book.name)}">
-            <span class="pi-etitle">${esc(book.name)}</span><span class="pi-badge">${esc(book.source)}</span>
+            ${open ? ICONS.caretDown : ICONS.caret}<span class="pi-etitle" title="${esc(book.name)}">${esc(book.name)}</span><span class="pi-badge">${esc(book.source)}</span>
             ${book.source === "专用" ? `<button type="button" class="pi-btn is-sm is-danger" data-act="delete-book" data-book="${esc(book.name)}">整本删除</button>` : ""}</div>
-            ${entries ? `<div class="pi-entry-bd">${entries.map((entry) => `<label class="pi-check${entry.disabled ? " is-off" : ""}"><input type="checkbox" data-wb-pick="${esc(entry.key)}">
-                <span>${esc(entry.title)} ${entry.constant ? '<span class="pi-badge">常驻</span>' : ""}${entry.disabled ? '<span class="pi-badge">已关闭</span>' : ""}</span></label>`).join("") || '<p class="pi-hint">没有条目</p>'}
-                <div class="pi-row pi-acts"><button type="button" class="pi-btn is-sm" data-act="wb-disable">关闭所选</button>
-                <button type="button" class="pi-btn is-sm" data-act="wb-enable">开启所选</button>
-                <button type="button" class="pi-btn is-sm is-danger" data-act="wb-delete">删除所选</button></div></div>` : ""}</div>`;
+            ${entries ? `<div class="pi-entry-bd">${entries.length ? `${section("已开启", entries.filter((entry) => !entry.disabled), "没有开启的条目")}
+                ${section("已关闭", entries.filter((entry) => entry.disabled), "没有关闭的条目")}` : '<p class="pi-hint">没有条目</p>'}</div>` : ""}</div>`;
     }).join("");
-    return `<div class="pi-card"><h3>当前角色卡的世界书</h3>
-        <p class="pi-hint">「${esc(cardName() || "未打开角色卡")}」关联的世界书。原先手写的剧情条目与注入内容重复时，可在此关闭或删除；删除前自动下载备份。</p>
+    return `<div class="pi-card pi-wb"><h3>当前角色卡的世界书</h3>
+        <p class="pi-hint">「${esc(cardName() || "未打开角色卡")}」关联的世界书。原先手写的剧情条目与注入内容重复时，取消勾选即可关闭；删除前自动下载备份。</p>
         ${list || '<p class="pi-hint">没有关联的世界书。</p>'}</div>`;
   }
-  async function selectedKeys(target) {
-    return [...target.closest(".pi-entry").querySelectorAll("[data-wb-pick]:checked")].map((input) => input.dataset.wbPick);
+  async function onChange4(view, target) {
+    let key = target.dataset.wbToggle;
+    key && (target.disabled = !0, await setEntriesDisabled(st6(view).book, [key], !target.checked), await reloadBook(view));
   }
   async function reloadBook(view) {
     st6(view).entries = bookEntries(await loadBook(st6(view).book)), view.renderBody();
@@ -3089,19 +3188,9 @@ ${parsed.body}` : parsed.body;
         return s.book = "", s.entries = null, view.renderBody();
       s.book = target.dataset.book, s.entries = null, await reloadBook(view);
     },
-    async "wb-disable"(view, target) {
-      let keys = await selectedKeys(target);
-      keys.length && (await setEntriesDisabled(st6(view).book, keys, !0), await reloadBook(view));
-    },
-    async "wb-enable"(view, target) {
-      let keys = await selectedKeys(target);
-      keys.length && (await setEntriesDisabled(st6(view).book, keys, !1), await reloadBook(view));
-    },
     async "wb-delete"(view, target) {
-      let keys = await selectedKeys(target);
-      if (!keys.length) return;
-      let titles = st6(view).entries.filter((entry) => keys.includes(entry.key)).map((entry) => entry.title);
-      if (!await confirmDialog({ title: `从「${st6(view).book}」删除条目`, body: "删除前会下载这些条目的备份。", list: titles, okLabel: "删除", danger: !0 })) return;
+      let keys = [target.dataset.key], titles = st6(view).entries.filter((entry) => keys.includes(entry.key)).map((entry) => entry.title);
+      if (!await confirmDialog({ title: `从「${st6(view).book}」删除条目`, body: "删除前会下载这个条目的备份。", list: titles, okLabel: "删除", danger: !0 })) return;
       let backup = await deleteEntries(st6(view).book, keys);
       downloadBlob(`${st6(view).book}-已删条目备份.json`, JSON.stringify(backup, null, 2)), await reloadBook(view);
     },
@@ -3308,13 +3397,13 @@ ${parsed.body}` : parsed.body;
       let item = event.target.closest(".pi-pitem");
       !item || !root.contains(item) || (event.preventDefault(), projectMenu(item.dataset.id));
     }
-    function onChange4(event) {
+    function onChange5(event) {
       let target = event.target;
       if (target.dataset.psearch !== void 0) return;
       let handler = current().onChange;
       handler && Promise.resolve(handler(view, target, event)).catch((error) => toast("error", error.message || String(error)));
     }
-    function onInput5(event) {
+    function onInput6(event) {
       if (event.target.dataset.psearch !== void 0)
         return view.search = event.target.value, applySearch();
       let handler = current().onInput;
@@ -3328,7 +3417,7 @@ ${parsed.body}` : parsed.body;
       let ui = readUi();
       view.drawer = !1, root = el(`<div class="pi-root pi-overlay"><div class="pi-panel"><aside class="pi-side"></aside>
             <div class="pi-scrim" data-act="drawer"></div>
-            <section class="pi-main"><header class="pi-top"></header><div class="pi-body"></div></section></div></div>`), root.addEventListener("click", onClick), root.addEventListener("contextmenu", onContext), root.addEventListener("change", onChange4), root.addEventListener("input", onInput5), root.addEventListener("focusout", (event) => current().onBlur?.(view, event.target, event)), root.addEventListener("mousedown", (event) => {
+            <section class="pi-main"><header class="pi-top"></header><div class="pi-body"></div></section></div></div>`), root.addEventListener("click", onClick), root.addEventListener("contextmenu", onContext), root.addEventListener("change", onChange5), root.addEventListener("input", onInput6), root.addEventListener("focusout", (event) => current().onBlur?.(view, event.target, event)), root.addEventListener("mousedown", (event) => {
         event.target === root && (root.dataset.down = "1");
       }), root.addEventListener("mouseup", (event) => {
         event.target === root && root.dataset.down && close(), delete root.dataset.down;
@@ -3415,7 +3504,7 @@ ${parsed.body}` : parsed.body;
   }
 
   // src/index.js
-  var VERSION = "0.1.4", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.1.5", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")

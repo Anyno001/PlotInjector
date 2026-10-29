@@ -2,6 +2,7 @@ import { buildCheckMessages, cleanFloorText, hasSignal, parseCheckReply } from '
 import { buildEntries, toWorldInfoEntry } from '../core/inject.js';
 import { flattenUnits, stageLabel, stageNodes, volumeLabel } from '../core/outline.js';
 import { advance, currentIndex, emptyProgress, goTo, isMuted, mute, uncheckByNames, unitStates } from '../core/progress.js';
+import { resolveLlm } from '../core/store.js';
 import { requestLlm } from '../host/llm.js';
 import { cardKey, cardName, chatMessages, ctx, hostWindow, toast } from '../host/st.js';
 import { writeFallbackBook } from '../host/worldbook.js';
@@ -225,7 +226,7 @@ export function createRuntime({ data, notice, emit }) {
         emit('checking');
         try {
             const off = (prog.slots[unit.id] && prog.slots[unit.id].off) || [];
-            const reply = await requestLlm(buildCheckMessages(unit, off, floors), settings.llm.check, { timeoutMs: 120000 });
+            const reply = await requestLlm(buildCheckMessages(unit, off, floors), resolveLlm(settings, 'check'), { timeoutMs: 120000 });
             const result = parseCheckReply(reply);
             let next = currentProgress();
             next = uncheckByNames(next, unit.id, stageNodes(unit.stage.data), result.done);

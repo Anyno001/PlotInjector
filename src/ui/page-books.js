@@ -1,8 +1,23 @@
 import { cardName, downloadBlob } from '../host/st.js';
 import { allBookNames, bookEntries, boundBookNames, deleteBook, deleteEntries, loadBook, setEntriesDisabled } from '../host/worldbook.js';
 import { confirmDialog, esc } from './dom.js';
+import { ICONS } from './styles.js';
 
 const st = view => view.tabState('books');
+
+// 勾选框即开关：勾上为开启，取消为关闭。开启与已关闭分两区显示。
+function entryRow(entry) {
+    return `<div class="pi-wb-row${entry.disabled ? ' is-off' : ''}">
+        <input type="checkbox" data-wb-toggle="${esc(entry.key)}" title="${entry.disabled ? '开启' : '关闭'}"${entry.disabled ? '' : ' checked'}>
+        <span class="pi-wb-title" title="${esc(entry.title)}">${esc(entry.title)}</span>
+        ${entry.constant ? '<span class="pi-badge">常驻</span>' : ''}
+        <button type="button" class="pi-icon-btn is-danger" data-act="wb-delete" data-key="${esc(entry.key)}" title="删除">${ICONS.trash}</button></div>`;
+}
+
+function section(title, entries, empty) {
+    return `<div class="pi-wb-sec"><div class="pi-wb-sec-hd">${title}<small>${entries.length}</small></div>
+        ${entries.map(entryRow).join('') || `<p class="pi-hint">${empty}</p>`}</div>`;
+}
 
 export function render(view) {
     const s = st(view);
@@ -12,21 +27,22 @@ export function render(view) {
         const open = s.book === book.name;
         const entries = open && s.entries ? s.entries : null;
         return `<div class="pi-entry"><div class="pi-entry-hd" data-act="open-book" data-book="${esc(book.name)}">
-            <span class="pi-etitle">${esc(book.name)}</span><span class="pi-badge">${esc(book.source)}</span>
+            ${open ? ICONS.caretDown : ICONS.caret}<span class="pi-etitle" title="${esc(book.name)}">${esc(book.name)}</span><span class="pi-badge">${esc(book.source)}</span>
             ${book.source === '专用' ? `<button type="button" class="pi-btn is-sm is-danger" data-act="delete-book" data-book="${esc(book.name)}">整本删除</button>` : ''}</div>
-            ${entries ? `<div class="pi-entry-bd">${entries.map(entry => `<label class="pi-check${entry.disabled ? ' is-off' : ''}"><input type="checkbox" data-wb-pick="${esc(entry.key)}">
-                <span>${esc(entry.title)} ${entry.constant ? '<span class="pi-badge">常驻</span>' : ''}${entry.disabled ? '<span class="pi-badge">已关闭</span>' : ''}</span></label>`).join('') || '<p class="pi-hint">没有条目</p>'}
-                <div class="pi-row pi-acts"><button type="button" class="pi-btn is-sm" data-act="wb-disable">关闭所选</button>
-                <button type="button" class="pi-btn is-sm" data-act="wb-enable">开启所选</button>
-                <button type="button" class="pi-btn is-sm is-danger" data-act="wb-delete">删除所选</button></div></div>` : ''}</div>`;
+            ${entries ? `<div class="pi-entry-bd">${entries.length ? `${section('已开启', entries.filter(entry => !entry.disabled), '没有开启的条目')}
+                ${section('已关闭', entries.filter(entry => entry.disabled), '没有关闭的条目')}` : '<p class="pi-hint">没有条目</p>'}</div>` : ''}</div>`;
     }).join('');
-    return `<div class="pi-card"><h3>当前角色卡的世界书</h3>
-        <p class="pi-hint">「${esc(cardName() || '未打开角色卡')}」关联的世界书。原先手写的剧情条目与注入内容重复时，可在此关闭或删除；删除前自动下载备份。</p>
+    return `<div class="pi-card pi-wb"><h3>当前角色卡的世界书</h3>
+        <p class="pi-hint">「${esc(cardName() || '未打开角色卡')}」关联的世界书。原先手写的剧情条目与注入内容重复时，取消勾选即可关闭；删除前自动下载备份。</p>
         ${list || '<p class="pi-hint">没有关联的世界书。</p>'}</div>`;
 }
 
-async function selectedKeys(target) {
-    return [...target.closest('.pi-entry').querySelectorAll('[data-wb-pick]:checked')].map(input => input.dataset.wbPick);
+export async function onChange(view, target) {
+    const key = target.dataset.wbToggle;
+    if (!key) return;
+    target.disabled = true;
+    await setEntriesDisabled(st(view).book, [key], !target.checked);
+    await reloadBook(view);
 }
 
 async function reloadBook(view) {
@@ -43,23 +59,10 @@ export const actions = {
         s.entries = null;
         await reloadBook(view);
     },
-    async 'wb-disable'(view, target) {
-        const keys = await selectedKeys(target);
-        if (!keys.length) return;
-        await setEntriesDisabled(st(view).book, keys, true);
-        await reloadBook(view);
-    },
-    async 'wb-enable'(view, target) {
-        const keys = await selectedKeys(target);
-        if (!keys.length) return;
-        await setEntriesDisabled(st(view).book, keys, false);
-        await reloadBook(view);
-    },
     async 'wb-delete'(view, target) {
-        const keys = await selectedKeys(target);
-        if (!keys.length) return;
+        const keys = [target.dataset.key];
         const titles = st(view).entries.filter(entry => keys.includes(entry.key)).map(entry => entry.title);
-        if (!(await confirmDialog({ title: `从「${st(view).book}」删除条目`, body: '删除前会下载这些条目的备份。', list: titles, okLabel: '删除', danger: true }))) return;
+        if (!(await confirmDialog({ title: `从「${st(view).book}」删除条目`, body: '删除前会下载这个条目的备份。', list: titles, okLabel: '删除', danger: true }))) return;
         const backup = await deleteEntries(st(view).book, keys);
         downloadBlob(`${st(view).book}-已删条目备份.json`, JSON.stringify(backup, null, 2));
         await reloadBook(view);

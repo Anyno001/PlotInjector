@@ -12,7 +12,47 @@ export const LLM_ROLES = [
     { key: 'check', label: '进度检测' },
 ];
 
-export const DEFAULT_LLM = { source: 'tavern', endpoint: '', apiKey: '', model: '', temperature: '' };
+// 每个用途只记「用酒馆连接」或「用哪个接口预设」；地址、密钥、模型存在预设里，多个用途共用一份。
+export const DEFAULT_LLM = { source: 'tavern', presetId: '' };
+export const DEFAULT_PRESET = { id: '', name: '', endpoint: '', apiKey: '', model: '', temperature: '' };
+
+function normalizePreset(value) {
+    const src = value && typeof value === 'object' ? value : {};
+    const out = { ...DEFAULT_PRESET };
+    for (const key of Object.keys(DEFAULT_PRESET)) out[key] = String(src[key] ?? '').trim();
+    return out;
+}
+
+const sameConnection = (a, b) => ['endpoint', 'apiKey', 'model', 'temperature'].every(key => String(a[key] ?? '').trim() === String(b[key] ?? '').trim());
+
+// 旧版每个用途各存一套地址/密钥/模型（source: 'custom'），读入时合并成预设，相同的只建一份。
+function normalizeLlm(src) {
+    const presets = (Array.isArray(src.presets) ? src.presets : []).map(normalizePreset).filter(item => item.id);
+    const llm = {};
+    for (const { key } of LLM_ROLES) {
+        const role = src.llm && src.llm[key] && typeof src.llm[key] === 'object' ? src.llm[key] : {};
+        if (role.source === 'custom') {
+            let preset = presets.find(item => sameConnection(item, role));
+            if (!preset) {
+                preset = normalizePreset({ ...role, id: makeId('api'), name: String(role.model || '').trim() || `接口${presets.length + 1}` });
+                presets.push(preset);
+            }
+            llm[key] = { source: 'preset', presetId: preset.id };
+        } else if (role.source === 'preset' && presets.some(item => item.id === role.presetId)) {
+            llm[key] = { source: 'preset', presetId: role.presetId };
+        } else {
+            llm[key] = { ...DEFAULT_LLM };
+        }
+    }
+    return { llm, presets };
+}
+
+// 发请求用：预设展开成 { source: 'custom', endpoint, apiKey, model, temperature }。
+export function resolveLlm(settings, role) {
+    const pick = settings.llm && settings.llm[role];
+    const preset = pick && pick.source === 'preset' && (settings.presets || []).find(item => item.id === pick.presetId);
+    return preset ? { ...preset, source: 'custom' } : { source: 'tavern' };
+}
 
 export const DEFAULT_SETTINGS = {
     tagName: '剧情参考',
@@ -26,6 +66,7 @@ export const DEFAULT_SETTINGS = {
     guide: '',
     loaderRef: '',
     llm: { discuss: { ...DEFAULT_LLM }, outline: { ...DEFAULT_LLM }, check: { ...DEFAULT_LLM } },
+    presets: [],
 };
 
 const SWITCH_SOURCES = ['signal', 'check', 'both'];
@@ -34,8 +75,7 @@ const VISIBILITY = ['name', 'range', 'instr'];
 
 export function normalizeSettings(value) {
     const src = value && typeof value === 'object' ? value : {};
-    const llm = {};
-    for (const { key } of LLM_ROLES) llm[key] = { ...DEFAULT_LLM, ...(src.llm && src.llm[key]) };
+    const { llm, presets } = normalizeLlm(src);
     return {
         ...DEFAULT_SETTINGS,
         ...src,
@@ -46,6 +86,7 @@ export function normalizeSettings(value) {
         checkEvery: Math.max(1, Math.min(50, Number(src.checkEvery) || DEFAULT_SETTINGS.checkEvery)),
         checkFloors: Math.max(1, Math.min(20, Number(src.checkFloors) || DEFAULT_SETTINGS.checkFloors)),
         llm,
+        presets,
     };
 }
 

@@ -34,15 +34,24 @@ export function render(view) {
     const s = st(view);
     if (!s.verified && !s.verifying) verify(view);
     const orphans = s.verified ? Object.keys(s.verified).filter(name => !referenced(view.data.index()).has(name)) : [];
-    return `<div class="pi-card"><h3>本地文件<span class="pi-spacer"></span>
-            <button type="button" class="pi-btn is-sm" data-act="verify">${s.verifying ? '<span class="pi-spin"></span>' : ''}重新核对</button></h3>
+    const settings = view.data.settings();
+    return `<div class="pi-card"><h3>本地文件</h3>
         <p class="pi-hint">项目数据保存在酒馆服务器的 user/files/pi-* 文件中，浏览器仅保存界面状态。</p>
         ${filesTable(view)}
-        <div class="pi-row pi-acts"><button type="button" class="pi-btn is-sm" data-act="orphans"${orphans.length ? '' : ' disabled'}>清理孤立文件${orphans.length ? `（${orphans.length}）` : ''}</button>
-            <button type="button" class="pi-btn is-sm" data-act="clear-chats">清空所有讨论记录</button></div></div>
-        <div class="pi-card"><h3>全部清除</h3>
-        <p class="pi-hint">先下载一份 zip 备份，再删除全部 pi-* 文件和当前聊天里的进度。其他聊天里的进度不动。</p>
-        <button type="button" class="pi-btn is-sm is-danger" data-act="wipe">全部清除</button></div>`;
+        <div class="pi-equal pi-acts"><button type="button" class="pi-btn is-sm" data-act="verify">${s.verifying ? '<span class="pi-spin"></span>' : ''}重新核对</button>
+            <button type="button" class="pi-btn is-sm" data-act="orphans"${orphans.length ? '' : ' disabled'}>清理孤立文件${orphans.length ? `（${orphans.length}）` : ''}</button>
+            <button type="button" class="pi-btn is-sm" data-act="clear-chats">清空全部讨论记录</button></div></div>
+        <div class="pi-card"><h3>版本更新</h3>
+        <p class="pi-hint">当前版本 v${esc(view.version)}。默认自动使用最新发布版本。</p>
+        <label class="pi-field"><span>指定版本</span><input class="pi-inp" data-set="loaderRef" value="${esc(settings.loaderRef)}" placeholder="留空跟随最新版本"></label>
+        <p class="pi-hint">填写 v0.1.0 等版本号可固定版本，填写 main 使用开发中的最新代码。修改后刷新酒馆页面生效。</p></div>
+        <div class="pi-card"><h3>重置插件</h3>
+        <p class="pi-hint">删除所有项目、讨论记录和当前聊天的进度，其他聊天的进度保留。执行前自动下载zip备份，确认后无法撤销。</p>
+        <button type="button" class="pi-btn is-sm is-danger" data-act="wipe">备份并删除</button></div>`;
+}
+
+export function onInput(view, target) {
+    if (target.dataset.set === 'loaderRef') view.data.updateSettings({ loaderRef: target.value.trim() });
 }
 
 async function verify(view) {
@@ -95,7 +104,7 @@ export const actions = {
     },
     async 'clear-chats'(view) {
         const ids = view.data.index().projects.map(item => item.id);
-        if (!(await confirmDialog({ title: '清空所有讨论记录', list: ids.map(chatFile), okLabel: '清空', danger: true }))) return;
+        if (!(await confirmDialog({ title: '清空全部讨论记录', list: ids.map(chatFile), okLabel: '清空', danger: true }))) return;
         for (const id of ids) await view.data.clearChat(id);
         st(view).verified = null;
         view.renderBody();
@@ -110,7 +119,7 @@ export const actions = {
         }
         if (!files.length) throw new Error('没有可清除的文件');
         downloadBlob(`剧情注入器备份-${new Date().toISOString().slice(0, 10)}.zip`, buildZip(files), 'application/zip');
-        const ok = await confirmDialog({ title: '全部清除', body: '备份已下载。确认后删除以下文件和当前聊天的进度，无法撤销。', list: files.map(file => file.name), okLabel: '全部删除', danger: true });
+        const ok = await confirmDialog({ title: '重置插件', body: '备份已下载。确认后删除以下文件和当前聊天的进度，无法撤销。', list: files.map(file => file.name), okLabel: '全部删除', danger: true });
         if (!ok) return;
         for (const file of files) await deleteFile(file.name);
         await clearChatProgress();

@@ -1,9 +1,10 @@
 import { BUILTIN_GUIDE } from '../core/guide.js';
 import { transcript } from '../core/prompts.js';
+import { resolveLlm } from '../core/store.js';
 import { requestLlm } from '../host/llm.js';
 
 export function ask(view, role, messages) {
-    return requestLlm(messages, view.data.settings().llm[role]);
+    return requestLlm(messages, resolveLlm(view.data.settings(), role));
 }
 
 export function guideText(view) {

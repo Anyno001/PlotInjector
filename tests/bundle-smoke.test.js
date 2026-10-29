@@ -184,7 +184,7 @@ test('打开界面后四个页签、设置页、数据管理页都能渲染', as
     assert.equal(doc.getElementById('pi-style'), null);
 });
 
-test('设置页获取模型列表后可在下拉框中选择，也可切回手动输入', async () => {
+test('接口预设：获取模型后下拉选择，多个用途共用一个预设，删除后回到酒馆连接', async () => {
     const host = await boot();
     await withProject(host);
     host.click();
@@ -193,27 +193,64 @@ test('设置页获取模型列表后可在下拉框中选择，也可切回手�
     const fire = (node, type) => node.dispatchEvent(new host.win.Event(type, { bubbles: true }));
     doc.querySelector('.pi-side [data-act="page"][data-page="settings"]').click();
     await tick(10);
-    const source = doc.querySelector('select[data-llm="discuss"][data-k="source"]');
-    source.value = 'custom';
-    fire(source, 'change');
+    doc.querySelector('[data-act="preset-new"]').click();
     await tick(10);
-    const endpoint = doc.querySelector('input[data-llm="discuss"][data-k="endpoint"]');
-    endpoint.value = 'https://api.example.com/v1';
-    fire(endpoint, 'input');
-    doc.querySelector('[data-act="models"][data-role="discuss"]').click();
+    const dlg = doc.querySelector('.pi-dialog');
+    dlg.querySelector('[data-f="name"]').value = '测试接口';
+    dlg.querySelector('[data-f="endpoint"]').value = 'https://api.example.com/v1';
+    dlg.querySelector('[data-fetch-models]').click();
     await tick(30);
-    const pick = doc.querySelector('select[data-llm="discuss"][data-k="model"]');
+    const pick = dlg.querySelector('select[data-f="model"]');
     assert.ok(pick, '获取后应出现模型下拉框');
     assert.deepEqual([...pick.options].filter(option => !option.disabled).map(option => option.value), ['model-a', 'model-b', '__manual']);
     pick.value = 'model-b';
-    fire(pick, 'change');
-    assert.equal(host.instance.data.settings().llm.discuss.model, 'model-b');
-    const again = doc.querySelector('select[data-llm="discuss"][data-k="model"]');
-    again.value = '__manual';
-    fire(again, 'change');
-    const manual = doc.querySelector('input[data-llm="discuss"][data-k="model"]');
-    assert.equal(manual.value, 'model-b');
-    assert.equal(host.instance.data.settings().llm.discuss.model, 'model-b');
+    dlg.querySelector('.pi-dlg-acts .is-primary').click();
+    await tick(10);
+    const settings = () => host.instance.data.settings();
+    assert.equal(settings().presets.length, 1);
+    assert.equal(settings().presets[0].model, 'model-b');
+    const id = settings().presets[0].id;
+    for (const role of ['discuss', 'check']) {
+        const select = doc.querySelector(`[data-role-pick="${role}"]`);
+        select.value = `p:${id}`;
+        fire(select, 'change');
+    }
+    for (const role of ['discuss', 'check']) assert.equal(`${settings().llm[role].source}:${settings().llm[role].presetId}`, `preset:${id}`);
+    assert.equal(settings().llm.outline.source, 'tavern');
+    doc.querySelector(`[data-act="preset-del"][data-id="${id}"]`).click();
+    await tick(10);
+    doc.querySelector('.pi-dialog .pi-dlg-acts .is-danger').click();
+    await tick(10);
+    assert.equal(settings().presets.length, 0);
+    assert.equal(settings().llm.discuss.source, 'tavern');
+    assert.equal(settings().llm.check.source, 'tavern');
+    assert.equal(host.win.__errors.length, 0, host.win.__errors.join('\n'));
+    await host.instance.destroy();
+});
+
+test('世界书条目页：开启与已关闭分两区，勾选框直接开关条目', async () => {
+    const host = await boot();
+    await withProject(host);
+    const book = { entries: { 0: { uid: 0, comment: '很长很长的条目名'.repeat(6), content: 'a', disable: false }, 1: { uid: 1, comment: '旧剧情', content: 'b', disable: true } } };
+    host.context.chatMetadata.world_info = '测试书';
+    host.context.loadWorldInfo = async () => JSON.parse(JSON.stringify(book));
+    host.context.saveWorldInfo = async (name, data) => { book.entries = data.entries; };
+    host.click();
+    await tick(10);
+    const doc = host.win.document;
+    const fire = (node, type) => node.dispatchEvent(new host.win.Event(type, { bubbles: true }));
+    doc.querySelector('.pi-side [data-act="page"][data-page="books"]').click();
+    await tick(10);
+    doc.querySelector('[data-act="open-book"]').click();
+    await tick(20);
+    const sections = () => [...doc.querySelectorAll('.pi-wb-sec')].map(sec => [...sec.querySelectorAll('[data-wb-toggle]')].map(input => [input.dataset.wbToggle, input.checked]));
+    assert.deepEqual(sections(), [[['0', true]], [['1', false]]]);
+    const open = doc.querySelector('[data-wb-toggle="0"]');
+    open.checked = false;
+    fire(open, 'change');
+    await tick(20);
+    assert.equal(book.entries[0].disable, true);
+    assert.deepEqual(sections(), [[], [['0', false], ['1', false]]]);
     assert.equal(host.win.__errors.length, 0, host.win.__errors.join('\n'));
     await host.instance.destroy();
 });

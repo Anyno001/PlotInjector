@@ -34,6 +34,7 @@ export const CSS = `
 .pi-top-end{grid-column:3;justify-self:end;display:flex;align-items:center;gap:6px}
 .pi-icon-btn{width:28px;height:28px;border:0;border-radius:8px;background:none;color:var(--pi-txt2);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;padding:0}
 .pi-icon-btn:hover{color:var(--pi-dark);background:var(--pi-surf)}
+.pi-icon-btn.is-danger:hover{color:var(--pi-danger);background:var(--pi-danger-soft)}
 .pi-menu{display:none}
 .pi-tabs{grid-column:2;display:grid;grid-auto-flow:column;grid-auto-columns:76px;gap:4px}
 .pi-tab{text-align:center;padding:6px 0;border:0;border-radius:20px;background:none;color:var(--pi-txt2);font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:inherit}
@@ -56,6 +57,22 @@ export const CSS = `
 .pi-inline{display:flex;gap:8px;align-items:stretch}
 .pi-inline>.pi-inp,.pi-inline>.pi-sel{flex:1;min-width:0}
 .pi-inline>.pi-btn{min-height:0;flex-shrink:0}
+.pi-inline>.pi-grow{flex:1;min-width:0;display:flex}
+.pi-inline>.pi-grow>.pi-inp,.pi-inline>.pi-grow>.pi-sel{flex:1;min-width:0}
+.pi-equal{display:grid;grid-template-columns:repeat(3,minmax(0,140px));gap:8px;justify-content:center}
+.pi-equal>.pi-btn{width:100%;padding:0 6px;white-space:normal;line-height:1.3}
+.pi-presets{display:flex;flex-direction:column;gap:6px;margin-bottom:8px}
+.pi-preset{display:flex;align-items:center;gap:8px;padding:6px 6px 6px 12px;border:1.5px solid var(--pi-line);border-radius:var(--pi-r-in);min-width:0}
+.pi-preset-name{font-weight:600;font-size:13px;flex-shrink:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pi-preset-model{flex:1;min-width:0;font-size:12px;color:var(--pi-txt2);font-family:var(--pi-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pi-roles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0 10px;margin-top:12px}
+.pi-wb-sec{margin-top:8px}
+.pi-wb-sec-hd{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--pi-txt2);padding:2px 0 4px;border-bottom:1px solid var(--pi-line);margin-bottom:2px}
+.pi-wb-sec-hd small{font-weight:400}
+.pi-wb-row{display:flex;align-items:center;gap:8px;padding:3px 0;min-width:0}
+.pi-wb-row input{width:15px;height:15px;margin:0;accent-color:var(--pi-accent);flex-shrink:0;cursor:pointer}
+.pi-wb-title{flex:1;min-width:0;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pi-wb-row.is-off .pi-wb-title{color:var(--pi-txt2)}
 .pi-acts{margin-top:12px}
 .pi-acts-top{margin-bottom:8px}
 .pi-seg{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:2px;padding:3px;background:var(--pi-surf);border-radius:20px;margin-bottom:6px}
@@ -188,6 +205,8 @@ export const CSS = `
 .pi-tabs{grid-column:1/-1;grid-row:2;grid-auto-columns:1fr}
 .pi-tree,.pi-split{grid-template-columns:minmax(0,1fr)}
 .pi-entry-hd{flex-wrap:wrap}
+.pi-wb .pi-entry-hd{flex-wrap:nowrap}
+.pi-roles{grid-template-columns:minmax(0,1fr)}
 .pi-card h3{flex-wrap:wrap}
 .pi-unit{flex-wrap:wrap}
 .pi-tree-list{max-height:220px}
@@ -204,6 +223,7 @@ export const ICONS = {
     caret: '<svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M3 2l4 3-4 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     caretDown: '<svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 3l3 4 3-4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     send: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 13V3M3.5 7.5L8 3l4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    trash: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M2.5 4h11M6.5 4V2.5h3V4M4 4l.7 9.5h6.6L12 4M6.8 6.5v4.5M9.2 6.5v4.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     menu: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2.5 4h11M2.5 8h11M2.5 12h11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
     pencil: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M10.5 2.5l3 3-8 8h-3v-3l8-8z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M9 4l3 3" stroke="currentColor" stroke-width="1.3"/></svg>',
     search: '<svg width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.4"/><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
