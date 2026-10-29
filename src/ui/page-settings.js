@@ -1,4 +1,5 @@
 import { BUILTIN_GUIDE } from '../core/guide.js';
+import { PACES, PACE_TEXT, paceText } from '../core/inject.js';
 import { makeId } from '../core/outline.js';
 import { LLM_ROLES } from '../core/store.js';
 import { fetchModels } from '../host/llm.js';
@@ -66,13 +67,19 @@ export function render(view) {
     const s = view.data.settings();
     const modes = [{ value: 'ask', label: '弹出确认' }, { value: 'auto', label: '自动推进（可撤销）' }, { value: 'nodes', label: '仅勾选节点，不推进阶段' }];
     const offModes = [{ value: 'ask', label: '弹出提醒' }, { value: 'auto', label: '自动改写后续阶段（可撤销）' }, { value: 'off', label: '不检查偏离' }];
+    const pace = PACES.some(item => item.value === st(view).pace) ? st(view).pace : 'normal';
     return `<div class="pi-card"><h3>注入内容</h3>
-        <label class="pi-field"><span>详细条目的标签名</span><input class="pi-inp" data-set="tagName" value="${esc(s.tagName)}"></label></div>
+        <label class="pi-field"><span>详细条目的标签名</span><input class="pi-inp" data-set="tagName" value="${esc(s.tagName)}"></label>
+        <div class="pi-field"><span>推进速度的提示词（执行页选择速度）</span>
+            <div class="pi-seg">${PACES.map(item => `<button type="button" class="pi-seg-btn${item.value === pace ? ' is-sel' : ''}" data-act="pace-tab" data-pace="${item.value}">${item.label}${s.paceText[item.value] ? '·已改' : ''}</button>`).join('')}</div>
+            <textarea class="pi-ta" rows="3" data-pace-text="${pace}">${esc(paceText(s, pace))}</textarea></div>
+        <div class="pi-tools is-c1"><button type="button" class="pi-btn is-sm" data-act="pace-reset" data-pace="${pace}"${s.paceText[pace] ? '' : ' disabled'}>恢复默认</button></div></div>
         <div class="pi-card"><h3>阶段推进</h3>
         <div class="pi-pair"><label class="pi-field"><span>检测间隔（楼）</span><input class="pi-inp" type="number" min="1" data-set="checkEvery" value="${s.checkEvery}"></label>
             <label class="pi-field"><span>每次读取楼数</span><input class="pi-inp" type="number" min="1" data-set="checkFloors" value="${s.checkFloors}"></label></div>
         <label class="pi-field"><span>判定阶段已演完后</span><select class="pi-sel" data-set="handleMode">${options(modes, s.handleMode)}</select></label>
-        <label class="pi-field"><span>偏离大纲时</span><select class="pi-sel" data-set="offTrackMode">${options(offModes, s.offTrackMode)}</select></label></div>
+        <label class="pi-field"><span>偏离大纲时</span><select class="pi-sel" data-set="offTrackMode">${options(offModes, s.offTrackMode)}</select></label>
+        <label class="pi-check"><input type="checkbox" data-set="carryOver"${s.carryOver ? ' checked' : ''}><span>没演的支线与世界动态延续到后面的阶段</span></label></div>
         ${llmCard(view, s)}
         ${guideCard(view, s)}`;
 }
@@ -90,6 +97,13 @@ function setRole(view, role, patch) {
 }
 
 export function onInput(view, target) {
+    if (target.dataset.paceText) {
+        const key = target.dataset.paceText;
+        const text = target.value.trim() === PACE_TEXT[key] ? '' : target.value;
+        view.data.updateSettings({ paceText: { ...view.data.settings().paceText, [key]: text } });
+        view.runtime.refresh();
+        return;
+    }
     if (target.dataset.guide !== undefined) {
         const text = target.value;
         view.data.updateSettings({ guide: text.trim() === BUILTIN_GUIDE.trim() ? '' : text });
@@ -171,6 +185,15 @@ export const actions = {
             toast('success', `已为「${LLM_ROLES.find(item => item.key === role).label}」载入预设「${preset.name}」。`);
             return view.renderBody();
         }
+    },
+    'pace-tab'(view, target) {
+        st(view).pace = target.dataset.pace;
+        view.renderBody();
+    },
+    'pace-reset'(view, target) {
+        view.data.updateSettings({ paceText: { ...view.data.settings().paceText, [target.dataset.pace]: '' } });
+        view.runtime.refresh();
+        view.renderBody();
     },
     'guide-toggle'(view) {
         st(view).guideOpen = !st(view).guideOpen;

@@ -1,6 +1,5 @@
-import { filterAcuLore } from '../core/acu.js';
 import { buildCheckMessages, cleanFloorText, parseCheckReply } from '../core/check.js';
-import { buildEntries, buildIndexText, toWorldInfoEntry } from '../core/inject.js';
+import { buildEntries, buildIndexText, carriedNodes, toWorldInfoEntry } from '../core/inject.js';
 import { parseOutlineReply, rewriteRestMessages } from '../core/prompts.js';
 import { flattenUnits, replaceRest, stageLabel, stageNodes, volumeLabel } from '../core/outline.js';
 import { advance, currentIndex, emptyProgress, goTo, isMuted, mute, uncheckByNames, unitStates } from '../core/progress.js';
@@ -76,15 +75,8 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
         return Boolean(eventTypes().WORLDINFO_ENTRIES_LOADED);
     }
 
-    // 先去掉屏蔽的数据库条目（不论有没有启用项目），再追加本项目的虚拟条目。
     function onEntriesLoaded(payload) {
-        if (!payload) return;
-        try {
-            filterAcuLore(data.settings().acu, payload);
-        } catch (error) {
-            console.error('[剧情注入器] 屏蔽数据库条目失败', error);
-        }
-        if (!Array.isArray(payload.chatLore)) return;
+        if (!payload || !Array.isArray(payload.chatLore)) return;
         try {
             payload.chatLore.push(...virtualEntries());
         } catch (error) {
@@ -267,11 +259,13 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
         emit('checking');
         try {
             const list = units();
-            const index = buildIndexText(list, unitStates(list, prog), prog);
+            const states = unitStates(list, prog);
+            const index = buildIndexText(list, states, prog, { carryOver: settings.carryOver });
             const reply = await requestLlm(buildCheckMessages(unit, index, floors), resolveLlm(settings, 'check'), { timeoutMs: 120000 });
             const result = parseCheckReply(reply);
             let next = currentProgress();
             next = uncheckByNames(next, unit.id, stageNodes(unit.stage.data), result.done);
+            if (settings.carryOver) for (const item of carriedNodes(list, states, prog)) next = uncheckByNames(next, item.unit.id, [item.node], result.done);
             next = { ...next, lastCheckFloor: floorCount() };
             setProgress(next);
             if (result.offTrack && settings.offTrackMode !== 'off' && !next.offMuted.includes(unit.id)) {

@@ -1,4 +1,4 @@
-// PlotInjector v0.1.6
+// PlotInjector v0.1.7
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -96,16 +96,16 @@
     return at < 0 ? { short: rest, title: "" } : { short: rest.slice(0, at), title: rest.slice(at + 1) };
   }
   function volumeLabel(key) {
-    let { short, title } = splitVolumeKey(key);
-    return title ? `${short}·${title}` : short;
+    let { short, title: title2 } = splitVolumeKey(key);
+    return title2 ? `${short}·${title2}` : short;
   }
   function splitStageKey(key) {
     let text = String(key || ""), at = text.indexOf("_");
     return at < 0 ? { short: text, title: "" } : { short: text.slice(0, at), title: text.slice(at + 1) };
   }
   function stageLabel(key) {
-    let { short, title } = splitStageKey(key);
-    return title ? `${short} ${title}` : short;
+    let { short, title: title2 } = splitStageKey(key);
+    return title2 ? `${short} ${title2}` : short;
   }
   function flattenUnits(volumes) {
     let units = [];
@@ -152,7 +152,7 @@
   var SETTING_SLOT = "@setting";
   var STATES = ["done", "active", "next", "todo"], STATE_LABELS = { done: "已过", active: "进行中", next: "下一段", todo: "未到" };
   function emptyProgress(projectId) {
-    return { projectId, current: null, slots: {}, lastCheckFloor: 0, muted: [], offMuted: [] };
+    return { projectId, current: null, slots: {}, lastCheckFloor: 0, muted: [], offMuted: [], pace: "normal" };
   }
   function normalizeProgress(value, projectId) {
     let base = emptyProgress(projectId);
@@ -162,7 +162,8 @@
       slots: value.slots && typeof value.slots == "object" ? value.slots : {},
       muted: Array.isArray(value.muted) ? value.muted : [],
       offMuted: Array.isArray(value.offMuted) ? value.offMuted : [],
-      lastCheckFloor: Number(value.lastCheckFloor) || 0
+      lastCheckFloor: Number(value.lastCheckFloor) || 0,
+      pace: ["slow", "normal", "fast"].includes(value.pace) ? value.pace : "normal"
     };
   }
   function currentIndex(units, progress) {
@@ -259,7 +260,7 @@
     let event = node.item && node.item.事件 ? `：${String(node.item.事件).replace(/\s+/g, " ").slice(0, 120)}` : "";
     return `  - ${mark ? `[${mark}] ` : ""}${node.label}｜${node.name}${event}`;
   }
-  function buildIndexText(units, states, progress) {
+  function buildIndexText(units, states, progress, { carryOver = !0 } = {}) {
     let lines = [], done = units.filter((unit) => states[unit.id] === "done"), active = units.filter((unit) => states[unit.id] === "active"), next = units.filter((unit) => states[unit.id] === "next"), later = units.filter((unit) => states[unit.id] === "todo");
     if (done.length) {
       lines.push("【已过】");
@@ -272,6 +273,7 @@
       let off = new Set(offNodes(progress, unit.id)), range = rangeOf(unit);
       lines.push("【当前】", `- ${stagePlace(unit)}${range ? `｜时间范围：${range}` : ""}`);
       for (let node of stageNodes(unit.stage.data).filter((item) => item.kind !== "world")) lines.push(nodeLine(node, off.has(node.id) ? "已演" : "未演"));
+      if (carryOver) for (let { node } of carriedNodes(units, states, progress)) node.kind !== "world" && lines.push(nodeLine(node, "未演·延续"));
     }
     for (let unit of next) {
       let range = rangeOf(unit), instr = unit.stage.data && unit.stage.data.AI指令;
@@ -286,11 +288,47 @@
     return lines.join(`
 `);
   }
-  function buildDetailText(unit, off, settings) {
-    let tag = String(settings.tagName || "剧情参考").trim() || "剧情参考", data = filterStageData(unit.stage.data, off), body = stringifyYaml({ [unit.stage.key]: data }).trimEnd(), vol = splitVolumeKey(unit.volume.key).short;
+  var PACES = [
+    { value: "slow", label: "慢速" },
+    { value: "normal", label: "正常" },
+    { value: "fast", label: "快速" }
+  ], PLAN = "以下是当前正在进行、尚未演完的剧情规划，列出的事件还没有发生，不要当作已发生的事实或前情。", PACE_TEXT = {
+    slow: `${PLAN}节奏放慢：以眼前正在进行的场景和人物互动为主，细写当下，每次回复最多推进一小步，不急于触发下一个节点。`,
+    normal: `${PLAN}按正文进展自然推进到这些事件，不必一次写完。`,
+    fast: `${PLAN}节奏加快：尽快让尚未发生的节点依次发生，次要细节一笔带过，收束本阶段并过渡到下一阶段。`
+  };
+  function paceText(settings, pace) {
+    let key = PACE_TEXT[pace] ? pace : "normal";
+    return String(settings.paceText && settings.paceText[key] || "").trim() || PACE_TEXT[key];
+  }
+  function carriedNodes(units, states, progress) {
+    let out = [];
+    for (let unit of units) {
+      if (states[unit.id] !== "done") continue;
+      let off = new Set(offNodes(progress, unit.id));
+      for (let node of stageNodes(unit.stage.data)) node.kind !== "main" && !off.has(node.id) && out.push({ unit, node });
+    }
+    return out;
+  }
+  function carriedText(carried) {
+    return carried.length ? `
+延续自前面阶段、尚未发生的支线与世界动态（可在合适时机自然安排，不必强行发生）：
+${carried.map(({ unit, node }) => {
+      let item = node.item && typeof node.item == "object" ? node.item : {}, parts = [item.地点, item.事件 || item.内容, item.触发 ? `触发：${item.触发}` : ""].filter(Boolean).map((value) => String(value).trim());
+      return `- ${node.label}｜${node.name}（来自${splitStageKey(unit.stage.key).short}）${parts.length ? `：${parts.join("；")}` : ""}`;
+    }).join(`
+`)}` : "";
+  }
+  function buildDetailText(unit, off, settings, { pace = "normal", next = null, carried = [] } = {}) {
+    let tag = String(settings.tagName || "剧情参考").trim() || "剧情参考", data = filterStageData(unit.stage.data, off), body = stringifyYaml({ [unit.stage.key]: data }).trimEnd(), vol = splitVolumeKey(unit.volume.key).short, note = paceText(settings, pace);
+    if (pace === "fast" && next) {
+      let range = rangeOf(next);
+      note += `
+下一阶段：${stagePlace(next)}${range ? `（${range}）` : ""}`;
+    }
     return `<${tag} 卷="${vol}" 阶段="${unit.stage.key}">
-以下是当前正在进行、尚未演完的剧情规划，列出的事件还没有发生，不要当作已发生的事实或前情；按正文进展自然推进到这些事件，不必一次写完。
-${body}
+${note}
+${body}${carriedText(carried)}
 </${tag}>`;
   }
   function buildEntries(project, progress, settings) {
@@ -306,7 +344,7 @@ ${body}
     });
     let units = flattenUnits(project.outline && project.outline.volumes);
     if (units.length) {
-      let states = unitStates(units, progress);
+      let states = unitStates(units, progress), next = units.find((unit) => states[unit.id] === "next") || null, carried = settings.carryOver === !1 ? [] : carriedNodes(units, states, progress);
       for (let unit of units) {
         if (states[unit.id] !== "active") continue;
         let off = offNodes(progress, unit.id);
@@ -315,7 +353,7 @@ ${body}
           kind: "detail",
           title: `${volumeLabel(unit.volume.key)}·${splitStageKey(unit.stage.key).short}`,
           unit,
-          content: buildDetailText(unit, off, settings),
+          content: buildDetailText(unit, off, settings, { pace: progress.pace, next, carried }),
           ...pickParams(defaults.detail, progress.slots[unit.id])
         });
       }
@@ -370,49 +408,79 @@ ${body}
   }
 
   // src/core/acu.js
-  var ACU = /^TavernDB-ACU/i, CUSTOM = /^TavernDB-ACU-CustomExport-/i, TAIL = /-(?:\d+|包裹|上|下)$/, EN_FIELD = "英文字段", DEFAULT_ACU = { fields: {}, overrides: {} };
-  function acuField(title) {
-    let name = String(title || "");
+  var ACU = /^TavernDB-ACU/i, CUSTOM = /^TavernDB-ACU-CustomExport-/i, TAIL = /-(?:\d+|包裹|上|下)$/, EN_FIELD = "英文字段";
+  function acuField(title2) {
+    let name = String(title2 || "");
     if (!ACU.test(name)) return "";
     let rest = name.replace(CUSTOM, "");
     return rest === name || !/^[一-鿿]/.test(rest) ? EN_FIELD : rest.replace(TAIL, "") || rest;
   }
-  function normalizeAcu(value) {
-    let src = value && typeof value == "object" ? value : {}, fields = {}, overrides = {};
-    if (src.fields && typeof src.fields == "object")
-      for (let [name, blocked] of Object.entries(src.fields)) name && blocked === !0 && (fields[name] = !0);
-    if (src.overrides && typeof src.overrides == "object")
-      for (let [name, blocked] of Object.entries(src.overrides)) acuField(name) && typeof blocked == "boolean" && (overrides[name] = blocked);
-    return { fields, overrides };
-  }
-  function acuBlocked(acu, title) {
-    let field = acuField(title);
-    if (!field) return !1;
-    let name = String(title);
-    return Object.prototype.hasOwnProperty.call(acu.overrides, name) ? acu.overrides[name] : !!acu.fields[field];
-  }
-  function setAcuEntry(acu, title, blocked) {
-    let field = acuField(title);
-    if (!field) return acu;
-    let overrides = { ...acu.overrides };
-    return !!acu.fields[field] === blocked ? delete overrides[title] : overrides[title] = blocked, { ...acu, overrides };
-  }
-  function setAcuField(acu, field, blocked) {
-    let fields = { ...acu.fields };
-    blocked ? fields[field] = !0 : delete fields[field];
-    let overrides = {};
-    for (let [name, value] of Object.entries(acu.overrides)) acuField(name) !== field && (overrides[name] = value);
-    return { fields, overrides };
-  }
-  function filterAcuLore(acu, payload) {
-    let removed = 0;
-    for (let key of ["globalLore", "characterLore", "chatLore", "personaLore"]) {
-      let list = payload && payload[key];
-      if (Array.isArray(list))
-        for (let i = list.length - 1; i >= 0; i -= 1)
-          list[i] && acuBlocked(acu, list[i].comment) && (list.splice(i, 1), removed += 1);
+  function groupByField(entries) {
+    let map = /* @__PURE__ */ new Map();
+    for (let entry of entries) {
+      let field = acuField(entry.title);
+      field && (map.has(field) || map.set(field, []), map.get(field).push(entry));
     }
-    return removed;
+    return [...map].sort(([a], [b]) => +(a === EN_FIELD) - +(b === EN_FIELD));
+  }
+
+  // src/core/refs.js
+  var DEFAULT_WB_RULE = { fields: {}, picks: {} }, DEFAULT_MEMO = 10, MEMO_FIELD = /^纪要表?$/, INDEX_FIELD = /纪要/;
+  function entryRefId(book, entry) {
+    return acuField(entry.title) ? `${book}|t:${entry.title}` : `${book}|k:${entry.key}`;
+  }
+  function normalizeWbRule(value) {
+    let src = value && typeof value == "object" ? value : {}, fields = {}, picks = {};
+    if (src.fields && typeof src.fields == "object") for (let [name, on] of Object.entries(src.fields)) name && typeof on == "boolean" && (fields[name] = on);
+    if (src.picks && typeof src.picks == "object") for (let [id, on] of Object.entries(src.picks)) typeof on == "boolean" && (picks[id] = on);
+    return { fields, picks };
+  }
+  var isMemoField = (field) => MEMO_FIELD.test(field);
+  function fieldChecked(rule, field) {
+    return Object.prototype.hasOwnProperty.call(rule.fields, field) ? rule.fields[field] : INDEX_FIELD.test(field) && !isMemoField(field);
+  }
+  var rowNo = (entry) => {
+    let match = /-(\d+)$/.exec(entry.title);
+    return match ? Number(match[1]) : -1;
+  };
+  function defaultSet(rule, books, memo = DEFAULT_MEMO) {
+    let out = /* @__PURE__ */ new Set();
+    for (let book of books) {
+      let memos = [];
+      for (let entry of book.entries) {
+        let field = acuField(entry.title);
+        if (!field) {
+          entry.disabled || out.add(entryRefId(book.name, entry));
+          continue;
+        }
+        isMemoField(field) ? memos.push(entry) : fieldChecked(rule, field) && out.add(entryRefId(book.name, entry));
+      }
+      memos.sort((a, b) => rowNo(b) - rowNo(a)).slice(0, Math.max(0, memo)).forEach((entry) => out.add(entryRefId(book.name, entry)));
+    }
+    return out;
+  }
+  function checkedSet(rule, books, memo = DEFAULT_MEMO) {
+    let out = defaultSet(rule, books, memo);
+    for (let [id, on] of Object.entries(rule.picks))
+      on ? out.add(id) : out.delete(id);
+    return out;
+  }
+  function ruleFromSelection(books, fields, checked, memo = DEFAULT_MEMO) {
+    let rule = { fields: {}, picks: {} };
+    for (let [field, on] of Object.entries(fields)) !isMemoField(field) && on !== fieldChecked(rule, field) && (rule.fields[field] = on);
+    let base = defaultSet(rule, books, memo);
+    for (let book of books)
+      for (let entry of book.entries) {
+        let id = entryRefId(book.name, entry), on = checked.has(id);
+        on !== base.has(id) && (rule.picks[id] = on);
+      }
+    return rule;
+  }
+  function migrateOc(oc) {
+    let rule = { fields: {}, picks: {} };
+    for (let item of Array.isArray(oc) ? oc : [])
+      item && item.book && acuField(item.title) && (rule.picks[`${item.book}|t:${item.title}`] = !0);
+    return rule;
   }
 
   // src/core/store.js
@@ -446,14 +514,15 @@ ${body}
   var DEFAULT_SETTINGS = {
     tagName: "剧情参考",
     offTrackMode: "ask",
+    carryOver: !0,
     handleMode: "ask",
     checkEvery: 3,
     checkFloors: 3,
     guide: "",
+    paceText: { slow: "", normal: "", fast: "" },
     loaderRef: "",
     llm: { discuss: { ...DEFAULT_LLM }, outline: { ...DEFAULT_LLM }, check: { ...DEFAULT_LLM } },
-    presets: [],
-    acu: DEFAULT_ACU
+    presets: []
   }, HANDLE_MODES = ["ask", "auto", "nodes"], OFF_MODES = ["ask", "auto", "off"];
   function normalizeSettings(value) {
     let src = value && typeof value == "object" ? value : {}, { llm, presets } = normalizeLlm(src);
@@ -461,12 +530,13 @@ ${body}
       ...DEFAULT_SETTINGS,
       ...src,
       offTrackMode: OFF_MODES.includes(src.offTrackMode) ? src.offTrackMode : DEFAULT_SETTINGS.offTrackMode,
+      carryOver: src.carryOver !== !1,
       handleMode: HANDLE_MODES.includes(src.handleMode) ? src.handleMode : DEFAULT_SETTINGS.handleMode,
       checkEvery: Math.max(1, Math.min(50, Number(src.checkEvery) || DEFAULT_SETTINGS.checkEvery)),
       checkFloors: Math.max(1, Math.min(20, Number(src.checkFloors) || DEFAULT_SETTINGS.checkFloors)),
+      paceText: Object.fromEntries(["slow", "normal", "fast"].map((key) => [key, String(src.paceText && src.paceText[key] || "")])),
       llm,
-      presets,
-      acu: normalizeAcu(src.acu)
+      presets
     };
   }
   function emptyIndex() {
@@ -517,7 +587,18 @@ ${body}
     };
   }
   function emptyChat() {
-    return { version: 1, summary: "", messages: [], refs: { oc: [], setting: !0, outline: !1 } };
+    return { version: 1, summary: "", messages: [], refs: { setting: !0, outline: !1, progress: !0, floors: 10, memo: DEFAULT_MEMO, wb: DEFAULT_WB_RULE } };
+  }
+  function normalizeRefs(value) {
+    let src = value && typeof value == "object" ? value : {}, floors = Number(src.floors), memo = Number(src.memo);
+    return {
+      setting: src.setting !== !1,
+      outline: !!src.outline,
+      progress: src.progress !== !1,
+      floors: Number.isFinite(floors) ? Math.max(0, Math.min(50, Math.round(floors))) : 10,
+      memo: Number.isFinite(memo) ? Math.max(0, Math.min(100, Math.round(memo))) : DEFAULT_MEMO,
+      wb: src.wb ? normalizeWbRule(src.wb) : migrateOc(src.oc)
+    };
   }
   function normalizeChat(value) {
     let src = value && typeof value == "object" ? value : {};
@@ -525,7 +606,7 @@ ${body}
       version: 1,
       summary: String(src.summary || ""),
       messages: Array.isArray(src.messages) ? src.messages.filter((msg) => msg && typeof msg.content == "string").map((msg) => ({ id: msg.id || makeId("m"), role: msg.role === "user" ? "user" : "assistant", content: msg.content, at: Number(msg.at) || 0, folded: !!msg.folded })) : [],
-      refs: { oc: [], setting: !0, outline: !1, ...src.refs || {} }
+      refs: normalizeRefs(src.refs)
     };
   }
   function groupProjects(projects) {
@@ -569,9 +650,9 @@ ${body}
     if (!c || typeof c.getRequestHeaders != "function") throw new Error("酒馆连接尚未就绪");
     return c.getRequestHeaders();
   }
-  function toast(kind, message, title = "剧情注入器") {
+  function toast(kind, message, title2 = "剧情注入器") {
     let t = hostWindow().toastr;
-    t && typeof t[kind] == "function" ? t[kind](message, title) : console.info(`[剧情注入器] ${message}`);
+    t && typeof t[kind] == "function" ? t[kind](message, title2) : console.info(`[剧情注入器] ${message}`);
   }
   function cardKey() {
     let c = ctx();
@@ -1162,7 +1243,13 @@ ${text}` }
       title: String(entry.comment || "").trim() || [].concat(entry.key || []).slice(0, 3).join("、") || `条目 ${entry.uid ?? key}`,
       content: String(entry.content || ""),
       disabled: !!entry.disable,
-      constant: !!entry.constant
+      constant: !!entry.constant,
+      keys: [].concat(entry.key || []).map(String),
+      keysSecondary: [].concat(entry.keysecondary || []).map(String),
+      position: Number(entry.position) || 0,
+      depth: Number(entry.depth ?? 4),
+      role: Number(entry.role) || 0,
+      order: Number(entry.order ?? 100)
     }));
   }
   async function saveBook(name, data) {
@@ -1170,13 +1257,33 @@ ${text}` }
     if (!c || typeof c.saveWorldInfo != "function") throw new Error("当前酒馆不支持保存世界书");
     await c.saveWorldInfo(name, data, !0), typeof c.reloadWorldInfoEditor == "function" && c.reloadWorldInfoEditor(name);
   }
-  var clone = (value) => hostWindow().structuredClone ? hostWindow().structuredClone(value) : JSON.parse(JSON.stringify(value));
-  async function setEntriesDisabled(name, keys, disabled) {
-    let data = clone(await loadBook(name));
-    for (let key of keys) data.entries[key] && (data.entries[key].disable = disabled);
-    await saveBook(name, data);
+  var queues = /* @__PURE__ */ new Map();
+  function queued(name, job) {
+    let run = (queues.get(name) || Promise.resolve()).catch(() => {
+    }).then(job);
+    return queues.set(name, run), run;
   }
-  async function deleteEntries(name, keys) {
+  var clone = (value) => hostWindow().structuredClone ? hostWindow().structuredClone(value) : JSON.parse(JSON.stringify(value));
+  function setEntriesDisabled(name, keys, disabled) {
+    return queued(name, async () => {
+      let data = clone(await loadBook(name));
+      for (let key of keys) data.entries[key] && (data.entries[key].disable = disabled);
+      await saveBook(name, data);
+    });
+  }
+  var ENTRY_FIELDS = ["constant", "key", "keysecondary", "position", "depth", "role", "order", "content"];
+  function updateEntry(name, key, patch) {
+    return queued(name, async () => {
+      let data = clone(await loadBook(name)), entry = data.entries[key];
+      if (!entry) throw new Error("条目已不存在");
+      for (let field of ENTRY_FIELDS) Object.prototype.hasOwnProperty.call(patch, field) && (entry[field] = patch[field]);
+      Object.prototype.hasOwnProperty.call(patch, "keysecondary") && (entry.selective = patch.keysecondary.length > 0), await saveBook(name, data);
+    });
+  }
+  function deleteEntries(name, keys) {
+    return queued(name, () => deleteNow(name, keys));
+  }
+  async function deleteNow(name, keys) {
     let source = await loadBook(name), backup = { entries: {} }, data = clone(source);
     for (let key of keys)
       data.entries[key] && (backup.entries[key] = data.entries[key], delete data.entries[key]);
@@ -1269,19 +1376,12 @@ ${text}` }
       return !!eventTypes().WORLDINFO_ENTRIES_LOADED;
     }
     function onEntriesLoaded(payload) {
-      if (payload) {
+      if (!(!payload || !Array.isArray(payload.chatLore)))
         try {
-          filterAcuLore(data.settings().acu, payload);
+          payload.chatLore.push(...virtualEntries());
         } catch (error) {
-          console.error("[剧情注入器] 屏蔽数据库条目失败", error);
+          console.error("[剧情注入器] 注入失败", error);
         }
-        if (Array.isArray(payload.chatLore))
-          try {
-            payload.chatLore.push(...virtualEntries());
-          } catch (error) {
-            console.error("[剧情注入器] 注入失败", error);
-          }
-      }
     }
     function scheduleFallback() {
       hasEntriesEvent() || (view.clearTimeout(fallbackTimer), fallbackTimer = view.setTimeout(async () => {
@@ -1413,8 +1513,9 @@ ${text}` }
         return manual && toast("info", "还没有可检测的正文。"), null;
       checking = !0, emit("checking");
       try {
-        let list = units(), index = buildIndexText(list, unitStates(list, prog), prog), reply2 = await requestLlm(buildCheckMessages(unit, index, floors), resolveLlm(settings, "check"), { timeoutMs: 12e4 }), result = parseCheckReply(reply2), next = currentProgress();
-        return next = uncheckByNames(next, unit.id, stageNodes(unit.stage.data), result.done), next = { ...next, lastCheckFloor: floorCount() }, setProgress(next), result.offTrack && settings.offTrackMode !== "off" && !next.offMuted.includes(unit.id) ? handleOffTrack(unit, result.offReason || result.reason) : result.stageDone ? proposeAdvance({ unit, reason: result.reason }) : manual && toast("info", result.reason || "本阶段尚未演完。"), result;
+        let list = units(), states = unitStates(list, prog), index = buildIndexText(list, states, prog, { carryOver: settings.carryOver }), reply2 = await requestLlm(buildCheckMessages(unit, index, floors), resolveLlm(settings, "check"), { timeoutMs: 12e4 }), result = parseCheckReply(reply2), next = currentProgress();
+        if (next = uncheckByNames(next, unit.id, stageNodes(unit.stage.data), result.done), settings.carryOver) for (let item of carriedNodes(list, states, prog)) next = uncheckByNames(next, item.unit.id, [item.node], result.done);
+        return next = { ...next, lastCheckFloor: floorCount() }, setProgress(next), result.offTrack && settings.offTrackMode !== "off" && !next.offMuted.includes(unit.id) ? handleOffTrack(unit, result.offReason || result.reason) : result.stageDone ? proposeAdvance({ unit, reason: result.reason }) : manual && toast("info", result.reason || "本阶段尚未演完。"), result;
       } catch (error) {
         return setProgress({ ...currentProgress(), lastCheckFloor: floorCount() }), toast(manual ? "error" : "warning", `进度检测失败：${error.message}`), null;
       } finally {
@@ -1552,6 +1653,7 @@ ${text}` }
 .pi-card h3{margin:0 0 8px;font-size:12px;font-weight:700;color:var(--pi-dark);display:flex;align-items:center;gap:8px}
 .pi-card h3 .pi-spacer{flex:1}
 .pi-hint{font-size:12px;color:var(--pi-txt2);margin:4px 0}
+.pi-hint.is-warn{color:var(--pi-warn);font-weight:600}
 .pi-empty{text-align:center;color:var(--pi-txt2);padding:40px 10px;font-size:13px}
 .pi-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .pi-row>.pi-grow{flex:1;min-width:0}
@@ -1591,6 +1693,20 @@ ${text}` }
 .pi-wb-sub-hd{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--pi-txt2);padding:4px 0 2px}
 .pi-wb-sub-hd small{font-weight:400}
 .pi-wb-sub-hd.is-fold{cursor:pointer}
+.pi-wb-item{min-width:0}
+.pi-wb-name{flex:1;min-width:0;display:flex;align-items:center;gap:4px;padding:0;border:0;background:none;color:inherit;font:inherit;cursor:pointer;text-align:left}
+.pi-wb-name .pi-wb-title{flex:1}
+.pi-wb-edit{margin:4px 0 10px 23px;padding:10px;border:1.5px solid var(--pi-line);border-radius:var(--pi-r-in)}
+.pi-wb-memo{display:inline-flex;align-items:center;gap:4px;font-weight:500;flex-shrink:0}
+.pi-wb-memo{margin-left:auto;font-size:12px;color:var(--pi-txt2)}
+.pi-wb-memo .pi-inp.is-num{width:52px;height:26px;padding:2px 6px;font-size:12px;text-align:center}
+.pi-wb-sub-hd>input[type=checkbox],.pi-wb-sub-hd>.pi-wb-pad{width:15px;height:15px;margin:0;flex-shrink:0;accent-color:var(--pi-accent)}
+.pi-fix{display:flex;align-items:flex-start;gap:8px;padding:4px 0;font-size:13px}
+.pi-fix-text{flex:1;min-width:0}
+.pi-fix-acts{display:grid;grid-template-columns:repeat(3,56px);gap:4px;flex-shrink:0}
+.pi-fix-acts>.pi-btn{width:100%;padding:0}
+.pi-ref-book+.pi-ref-book{margin-top:12px;padding-top:8px;border-top:1px solid var(--pi-line)}
+.pi-chip:disabled{opacity:.45;cursor:not-allowed}
 .pi-wb-field{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pi-wb-row{display:flex;align-items:center;gap:8px;padding:3px 0;min-width:0}
 .pi-wb-row input{width:15px;height:15px;margin:0;accent-color:var(--pi-accent);flex-shrink:0;cursor:pointer}
@@ -1658,6 +1774,9 @@ ${text}` }
 .pi-titem.is-stage{padding-left:18px}
 .pi-titem .pi-pname{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pi-node{border:1.5px solid var(--pi-line);border-radius:var(--pi-r-in);padding:8px 10px;margin-bottom:8px}
+.pi-pace{display:flex;align-items:center;gap:10px;margin:0 0 10px}
+.pi-pace-label{font-size:12px;color:var(--pi-txt2);font-weight:500;flex-shrink:0}
+.pi-pace .pi-seg{flex:1;margin:0}
 .pi-node-seg{margin:0 0 10px}
 .pi-node-hd{display:flex;align-items:center;gap:6px;margin-bottom:6px}
 .pi-node-hd .pi-grow{flex:1}
@@ -1698,7 +1817,13 @@ ${text}` }
 .pi-send:disabled{opacity:.45;cursor:not-allowed;transform:none}
 .pi-refs{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
 .pi-chip{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border:1.5px solid var(--pi-line);border-radius:20px;font-size:12px;cursor:pointer;background:var(--pi-bg);color:var(--pi-txt2);font-family:inherit}
-.pi-chip-end{margin-left:auto}
+.pi-compose-side{width:40px;height:40px;border:1.5px solid var(--pi-line);border-radius:50%;background:var(--pi-bg);color:var(--pi-txt2);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0}
+.pi-compose-side:hover{color:var(--pi-danger);border-color:var(--pi-danger)}
+.pi-block-chip{padding:0 4px 0 0;gap:0}
+.pi-block-chip>button{border:0;background:none;color:inherit;font:inherit;cursor:pointer;padding:3px 4px 3px 10px}
+.pi-block-chip>.pi-block-del{padding:3px 4px;display:inline-flex;align-items:center;opacity:.6}
+.pi-block-chip>.pi-block-del svg{width:10px;height:10px}
+.pi-block-chip>.pi-block-del:hover{opacity:1;color:var(--pi-danger)}
 .pi-chip.is-on{border-color:var(--pi-accent);color:var(--pi-accent);background:var(--pi-accent-soft)}
 .pi-diff{font-family:var(--pi-mono);font-size:12px;line-height:1.5;white-space:pre-wrap;word-break:break-word;background:var(--pi-surf);border-radius:var(--pi-r-in);padding:6px 0;max-height:360px;overflow:auto}
 .pi-diff div{padding:0 10px}
@@ -1793,11 +1918,11 @@ ${text}` }
   function options(list, value) {
     return list.map((item) => `<option value="${esc(item.value)}"${String(item.value) === String(value) ? " selected" : ""}>${esc(item.label)}</option>`).join("");
   }
-  function openDialog({ title, html = "", actions: actions8 = [{ label: "确定", value: !0, primary: !0 }], onMount } = {}) {
+  function openDialog({ title: title2, html = "", actions: actions8 = [{ label: "确定", value: !0, primary: !0 }], onMount } = {}) {
     let doc = hostDocument();
     return new Promise((resolve) => {
       let root = el(`<div class="pi-root pi-dialog"><div class="pi-dialog-box" role="dialog">
-            ${title ? `<h4>${esc(title)}</h4>` : ""}<div class="pi-dlg-body">${html}</div>
+            ${title2 ? `<h4>${esc(title2)}</h4>` : ""}<div class="pi-dlg-body">${html}</div>
             <div class="pi-dlg-acts">${actions8.map((action, index) => `<button type="button" class="pi-btn${action.primary ? " is-primary" : ""}${action.danger ? " is-danger" : ""}" data-dlg="${index}">${esc(action.label)}</button>`).join("")}</div>
         </div></div>`), finish = (value) => {
         doc.removeEventListener("keydown", onKey, !0), root.remove(), resolve(value);
@@ -1815,20 +1940,20 @@ ${text}` }
       }), doc.addEventListener("keydown", onKey, !0), doc.body.appendChild(root), onMount && onMount(root), root.querySelector("input,textarea,select")?.focus();
     });
   }
-  function confirmDialog({ title, body = "", list = [], okLabel = "确定", danger = !1 }) {
+  function confirmDialog({ title: title2, body = "", list = [], okLabel = "确定", danger = !1 }) {
     let html = `${body ? `<p class="pi-hint">${esc(body)}</p>` : ""}${list.length ? `<ul>${list.map((item) => `<li>${esc(item)}</li>`).join("")}</ul>` : ""}`;
-    return openDialog({ title, html, actions: [{ label: "取消", value: !1 }, { label: okLabel, value: !0, primary: !danger, danger }] }).then(Boolean);
+    return openDialog({ title: title2, html, actions: [{ label: "取消", value: !1 }, { label: okLabel, value: !0, primary: !danger, danger }] }).then(Boolean);
   }
-  function promptDialog({ title, label = "", value = "", multiline = !1, placeholder = "" }) {
+  function promptDialog({ title: title2, label = "", value = "", multiline = !1, placeholder = "" }) {
     let input = multiline ? `<textarea class="pi-ta is-mono is-tall" data-dlg-input placeholder="${esc(placeholder)}">${esc(value)}</textarea>` : `<input class="pi-inp" data-dlg-input value="${esc(value)}" placeholder="${esc(placeholder)}">`;
     return openDialog({
-      title,
+      title: title2,
       html: `<label class="pi-field">${label ? `<span>${esc(label)}</span>` : ""}${input}</label>`,
       actions: [{ label: "取消", value: null }, { label: "确定", primary: !0, value: (root) => root.querySelector("[data-dlg-input]").value }]
     });
   }
-  function choiceDialog({ title, body = "", choices }) {
-    return openDialog({ title, html: body ? `<p class="pi-hint">${esc(body)}</p>` : "", actions: choices });
+  function choiceDialog({ title: title2, body = "", choices }) {
+    return openDialog({ title: title2, html: body ? `<p class="pi-hint">${esc(body)}</p>` : "", actions: choices });
   }
   function pickFiles({ accept = "", multiple = !1 } = {}) {
     let doc = hostDocument();
@@ -2007,58 +2132,132 @@ NSFW指引（涉及成人内容时）:
     }
   }
 
-  // src/ui/wb-import.js
-  async function pickWorldbookEntries(title = "从世界书导入") {
-    let books = boundBookNames();
-    if (!books.length)
-      return toast("info", "当前卡没有关联的世界书。"), [];
-    let loaded = [];
-    for (let book of books)
-      try {
-        loaded.push({ ...book, entries: bookEntries(await loadBook(book.name)) });
-      } catch (error) {
-        loaded.push({ ...book, entries: [], error: error.message });
-      }
-    let html = loaded.map((book, b) => `<p class="pi-hint"><b>${esc(book.name)}</b> <span class="pi-badge">${esc(book.source)}</span>${book.error ? ` <span class="pi-badge is-danger">${esc(book.error)}</span>` : ""}</p>
-        ${book.entries.map((entry, e) => `<label class="pi-check${entry.disabled ? " is-off" : ""}"><input type="checkbox" data-pick="${b}:${e}">
-        <span>${esc(entry.title)} <span class="pi-badge">≈${entry.content.length} 字</span></span></label>`).join("")}`).join(""), picked = await openDialog({
-      title,
-      html,
-      actions: [{ label: "取消", value: null }, { label: "导入选中", primary: !0, value: (root) => [...root.querySelectorAll("[data-pick]:checked")].map((input) => input.dataset.pick) }]
-    });
-    return !picked || !picked.length ? [] : picked.map((code) => {
-      let [b, e] = code.split(":").map(Number);
-      return { book: loaded[b].name, ...loaded[b].entries[e] };
-    });
+  // src/core/tokens.js
+  function estimateTokens(text) {
+    let value = String(text || ""), cjk = (value.match(/[　-鿿가-힯＀-￯]/g) || []).length;
+    return Math.ceil(cjk + (value.length - cjk) / 4);
   }
-  function classifyEntries(entries) {
-    let outline = [], setting = [];
-    for (let entry of entries)
+
+  // src/ui/discuss-refs.js
+  async function loadBoundBooks() {
+    let out = [];
+    for (let book of boundBookNames())
       try {
-        outline.push({ entry, volumes: parseOutlineText(entry.content) });
+        out.push({ name: book.name, source: book.source, entries: bookEntries(await loadBook(book.name)) });
       } catch {
-        setting.push(entry);
+        out.push({ name: book.name, source: book.source, entries: [], error: !0 });
       }
-    return { outline, setting };
+    return out;
   }
-  async function afterImport(entries) {
-    if (!entries.length) return;
-    let choice = await choiceDialog({
-      title: "世界书里的原条目",
-      body: "原条目和注入内容会重复。关闭只改「禁用」，可随时在世界书里重新打开。",
-      choices: [{ label: "保留", value: "keep" }, { label: "删除", value: "delete", danger: !0 }, { label: "关闭", value: "disable", primary: !0 }]
-    });
-    if (!choice || choice === "keep") return;
-    let byBook = /* @__PURE__ */ new Map();
-    for (let entry of entries)
-      byBook.has(entry.book) || byBook.set(entry.book, []), byBook.get(entry.book).push(entry.key);
-    try {
-      for (let [book, keys] of byBook)
-        choice === "disable" ? await setEntriesDisabled(book, keys, !0) : downloadBlob(`${book}-已删条目备份.json`, JSON.stringify(await deleteEntries(book, keys), null, 2));
-      toast("success", choice === "disable" ? "已关闭原条目。" : "已删除原条目，备份已下载。");
-    } catch (error) {
-      toast("error", error.message);
+  function progressText(view) {
+    if (view.runtime.activeId() !== view.projectId) return "";
+    let project = view.project(), units = flattenUnits(project.outline.volumes);
+    if (!units.length) return "";
+    let progress = view.runtime.progress();
+    return buildIndexText(units, unitStates(units, progress), progress, { carryOver: view.data.settings().carryOver });
+  }
+  function floorsText(view, count) {
+    return count ? view.runtime.recentFloors(count).map((floor) => `【第 ${floor.index} 楼】
+${floor.text}`).join(`
+
+`) : "";
+  }
+  async function resolveRefs(view, chat, project) {
+    let refs = [], r = chat.refs;
+    if (r.setting && project.setting.text.trim() && refs.push({ title: "当前设定", text: project.setting.text }), r.outline && project.outline.volumes.length) {
+      let text = outlineToText(project.outline.volumes);
+      refs.push({ title: "当前大纲", text: text.length < 12e3 ? text : flattenUnits(project.outline.volumes).map((unit) => `${volumeLabel(unit.volume.key)}·${stageLabel(unit.stage.key)}`).join(`
+`) });
     }
+    if (r.progress) {
+      let text = progressText(view);
+      text && refs.push({ title: "剧情进度（已演、进行中与之后的阶段）", text });
+    }
+    let floors = floorsText(view, r.floors);
+    floors && refs.push({ title: `最近 ${r.floors} 楼正文`, text: floors });
+    let books = await loadBoundBooks(), checked = checkedSet(r.wb, books, r.memo);
+    for (let book of books)
+      for (let entry of book.entries) checked.has(entryRefId(book.name, entry)) && entry.content.trim() && refs.push({ title: entry.title, text: entry.content });
+    return refs;
+  }
+  function wbSummary(view, chat, rerender) {
+    let s = view.tabState("discuss"), sig = JSON.stringify([view.projectId, chat.refs.wb, chat.refs.memo]);
+    return s.wbSig === sig ? s.wbSum : (s.wbPending !== sig && (s.wbPending = sig, loadBoundBooks().then((books) => {
+      let checked = checkedSet(chat.refs.wb, books, chat.refs.memo), count = 0, tokens = 0;
+      for (let book of books) for (let entry of book.entries) checked.has(entryRefId(book.name, entry)) && (count += 1, tokens += estimateTokens(entry.content));
+      s.wbSig = sig, s.wbSum = { count, tokens, books: books.length }, rerender();
+    }).catch(() => {
+    })), s.wbSum || null);
+  }
+  var row = (id, entry, on, extra = "") => `<label class="pi-wb-row${entry.disabled ? " is-off" : ""}"><input type="checkbox" data-ref-id="${esc(id)}"${extra}${on ? " checked" : ""}>
+    <span class="pi-wb-title" title="${esc(entry.title)}">${esc(entry.title)}</span>${entry.disabled ? '<span class="pi-badge">世界书已关闭</span>' : ""}</label>`;
+  function pickerHtml(books, rule, memo) {
+    let checked = checkedSet(rule, books, memo);
+    return books.map((book) => {
+      let hand = book.entries.filter((entry) => !acuField(entry.title)), fields = groupByField(book.entries), handHtml = hand.length ? `<div class="pi-wb-sec"><div class="pi-wb-sec-hd">世界书条目<small>${hand.length}</small><span class="pi-wb-bulk">
+                <button type="button" class="pi-btn is-sm is-ghost" data-ref-all="${esc(book.name)}" data-on="1">全选</button>
+                <button type="button" class="pi-btn is-sm is-ghost" data-ref-all="${esc(book.name)}" data-on="0">全不选</button></span></div>
+            ${hand.map((entry) => row(entryRefId(book.name, entry), entry, checked.has(entryRefId(book.name, entry)), ` data-ref-hand="${esc(book.name)}"`)).join("")}</div>` : "", acuHtml = fields.length ? `<div class="pi-wb-sec"><div class="pi-wb-sec-hd">数据库条目<small>${fields.reduce((sum, [, list]) => sum + list.length, 0)}</small></div>
+            ${fields.map(([field, list]) => {
+        let memoField = isMemoField(field), lead = memoField ? '<span class="pi-wb-pad"></span>' : `<input type="checkbox" data-ref-field="${esc(field)}"${fieldChecked(rule, field) ? " checked" : ""}>`, memoBox = memoField ? `<span class="pi-wb-memo">最近<input class="pi-inp is-num" type="number" min="0" data-ref-memo value="${memo}">条</span>` : "";
+        return `<div class="pi-wb-sub"><div class="pi-wb-sub-hd">${lead}<button type="button" class="pi-wb-name" data-ref-fold>${ICONS.caret}<span class="pi-wb-field">${esc(field)}</span><small>${list.length}</small></button>${memoBox}</div>
+                    <div class="pi-wb-fold" hidden>${list.map((entry) => row(entryRefId(book.name, entry), entry, checked.has(entryRefId(book.name, entry)), ` data-ref-of="${esc(field)}"${memoField ? " data-ref-memo-row" : ""}`)).join("")}</div></div>`;
+      }).join("")}</div>` : "";
+      return `<div class="pi-ref-book"><p class="pi-hint"><b>${esc(book.name)}</b> <span class="pi-badge">${esc(book.source)}</span></p>${handHtml}${acuHtml || ""}${!hand.length && !fields.length ? '<p class="pi-hint">没有条目</p>' : ""}</div>`;
+    }).join("");
+  }
+  async function pickRefs(chat) {
+    let books = await loadBoundBooks();
+    if (!books.length) return { none: !0 };
+    let memoRows = (box) => [...box.querySelectorAll("[data-ref-memo-row]")], rowNo2 = (input) => Number((/-(\d+)$/.exec(input.closest("label").querySelector(".pi-wb-title").textContent) || [])[1] ?? -1);
+    return await openDialog({
+      title: "附带的世界书条目",
+      html: `<p class="pi-hint" data-ref-sum></p><div class="pi-ref-list">${pickerHtml(books, chat.refs.wb, chat.refs.memo)}</div>`,
+      actions: [{ label: "取消", value: null }, {
+        label: "确定",
+        primary: !0,
+        value: (box) => {
+          let fields = {};
+          box.querySelectorAll("[data-ref-field]").forEach((input) => {
+            fields[input.dataset.refField] = input.checked;
+          });
+          let memoInput = box.querySelector("[data-ref-memo]"), memo = memoInput ? Math.max(0, Math.round(Number(memoInput.value) || 0)) : chat.refs.memo, checked = new Set([...box.querySelectorAll("[data-ref-id]:checked")].map((input) => input.dataset.refId));
+          return { memo, wb: ruleFromSelection(books, fields, checked, memo) };
+        }
+      }],
+      onMount(box) {
+        let byId = /* @__PURE__ */ new Map();
+        for (let book of books) for (let entry of book.entries) byId.set(entryRefId(book.name, entry), entry);
+        let sum = () => {
+          let ids = [...box.querySelectorAll("[data-ref-id]:checked")].map((input) => input.dataset.refId), tokens = ids.reduce((total, id) => total + estimateTokens(byId.get(id)?.content || ""), 0);
+          box.querySelector("[data-ref-sum]").textContent = `已选 ${ids.length} 条，约 ${tokens} token`;
+        }, applyMemo = () => {
+          let n = Math.max(0, Math.round(Number(box.querySelector("[data-ref-memo]")?.value) || 0));
+          for (let book of box.querySelectorAll(".pi-ref-book")) memoRows(book).sort((a, b) => rowNo2(b) - rowNo2(a)).forEach((input, i) => {
+            input.checked = i < n;
+          });
+        };
+        box.addEventListener("click", (event) => {
+          let fold = event.target.closest("[data-ref-fold]");
+          if (fold) {
+            let body = fold.closest(".pi-wb-sub").querySelector(".pi-wb-fold");
+            body.hidden = !body.hidden, fold.querySelector("svg").outerHTML = body.hidden ? ICONS.caret : ICONS.caretDown;
+            return;
+          }
+          let all = event.target.closest("[data-ref-all]");
+          all && ([...box.querySelectorAll("[data-ref-hand]")].filter((input) => input.dataset.refHand === all.dataset.refAll).forEach((input) => {
+            input.checked = all.dataset.on === "1";
+          }), sum());
+        }), box.addEventListener("change", (event) => {
+          let field = event.target.dataset.refField;
+          field !== void 0 && [...box.querySelectorAll("[data-ref-of]")].filter((input) => input.dataset.refOf === field).forEach((input) => {
+            input.checked = event.target.checked;
+          }), sum();
+        }), box.addEventListener("input", (event) => {
+          event.target.matches("[data-ref-memo]") && (applyMemo(), sum());
+        }), sum();
+      }
+    });
   }
 
   // src/ui/markdown.js
@@ -2107,7 +2306,7 @@ NSFW指引（涉及成人内容时）:
         let rows = [];
         for (; i < lines.length && lines[i].includes("|") && lines[i].trim(); ) rows.push(cells(lines[i++]));
         out.push(`<div class="pi-md-table"><table><thead><tr>${head.map((cell) => `<th>${cell}</th>`).join("")}</tr></thead>
-                <tbody>${rows.map((row) => `<tr>${row.map((cell) => `<td>${cell}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`);
+                <tbody>${rows.map((row2) => `<tr>${row2.map((cell) => `<td>${cell}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`);
         continue;
       }
       if (RE.quote.test(line)) {
@@ -2145,6 +2344,62 @@ NSFW指引（涉及成人内容时）:
     showDraft: () => showDraft,
     startRewrite: () => startRewrite
   });
+
+  // src/ui/wb-import.js
+  async function pickWorldbookEntries(title2 = "从世界书导入") {
+    let books = boundBookNames();
+    if (!books.length)
+      return toast("info", "当前卡没有关联的世界书。"), [];
+    let loaded = [];
+    for (let book of books)
+      try {
+        loaded.push({ ...book, entries: bookEntries(await loadBook(book.name)) });
+      } catch (error) {
+        loaded.push({ ...book, entries: [], error: error.message });
+      }
+    let html = loaded.map((book, b) => `<p class="pi-hint"><b>${esc(book.name)}</b> <span class="pi-badge">${esc(book.source)}</span>${book.error ? ` <span class="pi-badge is-danger">${esc(book.error)}</span>` : ""}</p>
+        ${book.entries.map((entry, e) => `<label class="pi-check${entry.disabled ? " is-off" : ""}"><input type="checkbox" data-pick="${b}:${e}">
+        <span>${esc(entry.title)} <span class="pi-badge">≈${entry.content.length} 字</span></span></label>`).join("")}`).join(""), picked = await openDialog({
+      title: title2,
+      html,
+      actions: [{ label: "取消", value: null }, { label: "导入选中", primary: !0, value: (root) => [...root.querySelectorAll("[data-pick]:checked")].map((input) => input.dataset.pick) }]
+    });
+    return !picked || !picked.length ? [] : picked.map((code) => {
+      let [b, e] = code.split(":").map(Number);
+      return { book: loaded[b].name, ...loaded[b].entries[e] };
+    });
+  }
+  function classifyEntries(entries) {
+    let outline = [], setting = [];
+    for (let entry of entries)
+      try {
+        outline.push({ entry, volumes: parseOutlineText(entry.content) });
+      } catch {
+        setting.push(entry);
+      }
+    return { outline, setting };
+  }
+  async function afterImport(entries) {
+    if (!entries.length) return;
+    let choice = await choiceDialog({
+      title: "世界书里的原条目",
+      body: "原条目和注入内容会重复。关闭只改「禁用」，可随时在世界书里重新打开。",
+      choices: [{ label: "保留", value: "keep" }, { label: "删除", value: "delete", danger: !0 }, { label: "关闭", value: "disable", primary: !0 }]
+    });
+    if (!choice || choice === "keep") return;
+    let byBook = /* @__PURE__ */ new Map();
+    for (let entry of entries)
+      byBook.has(entry.book) || byBook.set(entry.book, []), byBook.get(entry.book).push(entry.key);
+    try {
+      for (let [book, keys] of byBook)
+        choice === "disable" ? await setEntriesDisabled(book, keys, !0) : downloadBlob(`${book}-已删条目备份.json`, JSON.stringify(await deleteEntries(book, keys), null, 2));
+      toast("success", choice === "disable" ? "已关闭原条目。" : "已删除原条目，备份已下载。");
+    } catch (error) {
+      toast("error", error.message);
+    }
+  }
+
+  // src/ui/tab-outline.js
   var NODE_KEYS = {
     main: ["名称", "地点", "事件", "偏转"],
     side: ["名称", "地点", "事件", "触发", "偏转"],
@@ -2201,9 +2456,9 @@ NSFW指引（涉及成人内容时）:
   }
   function draftHtml(view, draft) {
     if (!draft) return "";
-    let title = draft.mode === "rewrite" ? "改写后续阶段" : "AI 写的大纲";
+    let title2 = draft.mode === "rewrite" ? "改写后续阶段" : "AI 写的大纲";
     if (!draft.ok)
-      return `<div class="pi-card"><h3>${title}<span class="pi-badge is-danger">格式错误</span></h3>
+      return `<div class="pi-card"><h3>${title2}<span class="pi-badge is-danger">格式错误</span></h3>
             <p class="pi-hint">${esc(draft.error)}</p>
             <textarea class="pi-ta is-mono is-tall" data-draft-yaml>${esc(draft.yaml)}</textarea>
             <div class="pi-tools is-c3 is-end"><button type="button" class="pi-btn is-primary is-sm" data-act="draft-fix"${view.busy.outline ? " disabled" : ""}>让 AI 修正格式</button>
@@ -2212,12 +2467,12 @@ NSFW指引（涉及成人内容时）:
     let summary = draft.volumes.map((volume) => `<p class="pi-hint"><b>${esc(volumeLabel(volume.key))}</b>：${volume.stages.map((stage) => esc(stageLabel(stage.key))).join("、")}</p>`).join(""), buttons = draft.mode === "rewrite" ? '<button type="button" class="pi-btn is-primary is-sm" data-act="draft-rest">替换剩余阶段</button>' : `<button type="button" class="pi-btn is-primary is-sm" data-act="draft-new">存为新卷</button>
            <button type="button" class="pi-btn is-sm" data-act="draft-replace">替换选中卷</button>
            <button type="button" class="pi-btn is-sm" data-act="draft-append">追加为新阶段</button>`;
-    return `<div class="pi-card"><h3>${title}<span class="pi-badge is-ok">已解析</span></h3>${summary}
+    return `<div class="pi-card"><h3>${title2}<span class="pi-badge is-ok">已解析</span></h3>${summary}
         <details><summary class="pi-hint">YAML 原文</summary><pre class="pi-pre">${esc(draft.yaml)}</pre></details>
         <div class="pi-tools is-end ${draft.mode === "rewrite" ? "is-c2" : "is-c4"}">${buttons}<button type="button" class="pi-btn is-sm is-danger" data-act="draft-drop">丢弃</button></div></div>`;
   }
   function render(view) {
-    let project = view.project(), s = st(view), { volume, stage } = findSel(project, s.sel), busy = view.busy.outline, kind = NODE_FIELDS.some((meta2) => meta2.kind === s.nodeKind) ? s.nodeKind : NODE_FIELDS[0].kind, editor = stage ? stageEditor(volume, stage, s.raw, kind) : volume ? volumeEditor(volume) : '<div class="pi-card"><p class="pi-hint">从左边选一卷或一个阶段编辑。</p></div>';
+    let project = view.project(), s = st(view), { volume, stage } = findSel(project, s.sel), busy = view.busy.outline, kind = NODE_FIELDS.some((meta2) => meta2.kind === s.nodeKind) ? s.nodeKind : NODE_FIELDS[0].kind, editor2 = stage ? stageEditor(volume, stage, s.raw, kind) : volume ? volumeEditor(volume) : '<div class="pi-card"><p class="pi-hint">从左边选一卷或一个阶段编辑。</p></div>';
     return `<div class="pi-card"><h3>大纲</h3>
         <div class="pi-tools is-c4">
             <button type="button" class="pi-btn is-sm" data-act="import-file">导入YAML</button>
@@ -2230,7 +2485,7 @@ NSFW指引（涉及成人内容时）:
         ${draftHtml(view, s.draft)}
         <div class="pi-tree"><div class="pi-tree-list">${treeHtml(project, s.sel)}
             <button type="button" class="pi-btn is-sm is-ghost is-block" data-act="vol-add">＋新卷</button></div>
-            <div>${editor}</div></div>`;
+            <div>${editor2}</div></div>`;
   }
   function update(view, fn) {
     return view.data.updateProject(view.projectId, (project) => ({ ...project, outline: { ...project.outline, volumes: fn(project.outline.volumes) } }));
@@ -2487,8 +2742,8 @@ ${yaml}
       let match = HEADING.exec(line);
       if (match) {
         (current.key || current.lines.some((item) => item.trim())) && blocks.push(current);
-        let title = (match[1] || match[2] || match[3]).trim();
-        counts[title] = (counts[title] || 0) + 1, current = { key: counts[title] > 1 ? `${title}#${counts[title]}` : title, title, lines: [line] };
+        let title2 = (match[1] || match[2] || match[3]).trim();
+        counts[title2] = (counts[title2] || 0) + 1, current = { key: counts[title2] > 1 ? `${title2}#${counts[title2]}` : title2, title: title2, lines: [line] };
       } else
         current.lines.push(line);
     }
@@ -2548,12 +2803,6 @@ ${yaml}
     return out;
   }
 
-  // src/core/tokens.js
-  function estimateTokens(text) {
-    let value = String(text || ""), cjk = (value.match(/[　-鿿가-힯＀-￯]/g) || []).length;
-    return Math.ceil(cjk + (value.length - cjk) / 4);
-  }
-
   // src/ui/tab-setting.js
   var st2 = (view) => view.tabState("setting");
   function diffHtml(a, b) {
@@ -2563,9 +2812,10 @@ ${yaml}
     return check ? `<span class="pi-badge ${check === "PASS" ? "is-ok" : "is-danger"}">速查 ${esc(check)}</span>` : "";
   }
   function fixesHtml(fixes, where) {
-    return fixes.length ? `<p class="pi-hint">补定（替你补齐的项，确认或修改）：</p>${fixes.map((fix, i) => `<div class="pi-row"><span class="pi-grow">· ${esc(fix)}</span>
-        <button type="button" class="pi-btn is-sm is-ghost" data-act="fix-ok" data-where="${where}" data-i="${i}">确认</button>
-        <button type="button" class="pi-btn is-sm" data-act="fix-edit" data-where="${where}" data-i="${i}">改</button></div>`).join("")}` : "";
+    return fixes.length ? `<p class="pi-hint">补定（替你补齐的项）：</p>${fixes.map((fix, i) => `<div class="pi-fix"><span class="pi-fix-text">· ${esc(fix)}</span>
+        <span class="pi-fix-acts"><button type="button" class="pi-btn is-sm" data-act="fix-ok" data-where="${where}" data-i="${i}">确认</button>
+        <button type="button" class="pi-btn is-sm" data-act="fix-edit" data-where="${where}" data-i="${i}">修改</button>
+        <button type="button" class="pi-btn is-sm is-danger" data-act="fix-drop" data-where="${where}" data-i="${i}">丢弃</button></span></div>`).join("")}` : "";
   }
   function draftHtml2(view, project, draft) {
     let oldBlocks = new Map(splitBlocks(project.setting.text).map((block) => [block.key, block])), rows = splitBlocks(draft.body).map((block) => {
@@ -2601,7 +2851,7 @@ ${yaml}
             <button type="button" class="pi-btn is-sm" data-act="import-wb">从世界书导入</button>
             <button type="button" class="pi-btn is-sm${s.history ? " is-primary" : ""}" data-act="history">历史版本 ${project.setting.history.length}</button>
             <label class="pi-check"><input type="checkbox" data-append${s.append ? " checked" : ""}><span>只追加，不改动已有分块</span></label></div>
-        ${blocks.length ? `<div class="pi-toc">${blocks.map((block) => `<button type="button" class="pi-chip" data-act="jump" data-key="${esc(block.key)}">${esc(block.title)}</button>`).join("")}</div>` : ""}
+        ${blocks.length ? `<div class="pi-toc">${blocks.map((block) => `<span class="pi-chip pi-block-chip"><button type="button" data-act="jump" data-key="${esc(block.key)}" title="跳到这一块">${esc(block.title)}</button><button type="button" class="pi-block-del" data-act="block-del" data-key="${esc(block.key)}" title="删除整个分块">${ICONS.close}</button></span>`).join("")}</div>` : ""}
         <textarea class="pi-ta is-tall" data-setting placeholder="世界观正文。执行时作为常驻条目注入（角色定义后），取代世界书里手改的剧情设定条目。">${esc(text)}</textarea>
         <div class="pi-row"><span class="pi-hint pi-grow">≈<span data-tokens>${estimateTokens(text)}</span> token</span><span class="pi-status" data-save-status></span></div>
         ${fixesHtml(project.setting.fixes, "saved")}</div>
@@ -2614,17 +2864,31 @@ ${yaml}
     let project = view.project(), history = pushHistory(project.setting.history, project.setting.text);
     history = pushHistory(history, text), setSetting(view, { text, history, ...extra }), view.runtime.refresh();
   }
-  async function editFix(view, where, index) {
-    let s = st2(view), project = view.project(), fixes = where === "draft" ? s.draft.fixes : project.setting.fixes, source = where === "draft" ? s.draft.body : project.setting.text, blocks = splitBlocks(source), result = await openDialog({
-      title: "修改补定",
-      html: `<p class="pi-hint">${esc(fixes[index])}</p>
-            <label class="pi-field"><span>改哪个分块</span><select class="pi-sel" data-f="block">${options(blocks.map((block2) => ({ value: block2.key, label: block2.title })), blocks[0] && blocks[0].key)}</select></label>
-            <label class="pi-field"><span>怎么改</span><textarea class="pi-ta" data-f="text"></textarea></label>`,
-      actions: [{ label: "取消", value: null }, { label: "让 AI 重写该分块", primary: !0, value: (box) => ({ key: box.querySelector("[data-f=block]").value, text: box.querySelector("[data-f=text]").value.trim() }) }]
+  function guessBlock(blocks, fix) {
+    let chars = new Set(String(fix).replace(/\s/g, "")), best = blocks[0], score = -1;
+    for (let block of blocks) {
+      let hit = [...new Set(block.text.replace(/\s/g, ""))].filter((ch) => chars.has(ch)).length;
+      hit > score && (best = block, score = hit);
+    }
+    return best && best.key;
+  }
+  function removeFix(view, where, index) {
+    let s = st2(view);
+    where === "draft" ? s.draft.fixes = s.draft.fixes.filter((_, i) => i !== index) : setSetting(view, { fixes: view.project().setting.fixes.filter((_, i) => i !== index) }), view.renderBody();
+  }
+  async function editFix(view, where, index, drop = !1) {
+    let s = st2(view), project = view.project(), fixes = where === "draft" ? s.draft.fixes : project.setting.fixes, source = where === "draft" ? s.draft.body : project.setting.text, blocks = splitBlocks(source), pick = `<label class="pi-field"><span>${drop ? "写在哪个分块" : "改哪个分块"}</span><select class="pi-sel" data-f="block">${options(blocks.map((block2) => ({ value: block2.key, label: block2.title })), guessBlock(blocks, fixes[index]))}</select></label>`, readKey = (box) => box.querySelector("[data-f=block]").value, result = await openDialog({
+      title: drop ? "丢弃补定" : "修改补定",
+      html: `<p class="pi-hint">${esc(fixes[index])}</p>${blocks.length ? pick : ""}
+            ${drop ? "" : '<label class="pi-field"><span>怎么改</span><textarea class="pi-ta" data-f="text"></textarea></label>'}`,
+      actions: drop ? [{ label: "取消", value: null }, { label: "只从列表移除", value: { listOnly: !0 } }, { label: "让 AI 从正文删掉", primary: !0, danger: !0, value: (box) => blocks.length ? { key: readKey(box), drop: !0 } : { listOnly: !0 } }] : [{ label: "取消", value: null }, { label: "让 AI 重写该分块", primary: !0, value: (box) => ({ key: readKey(box), text: box.querySelector("[data-f=text]").value.trim() }) }]
     });
-    if (!result || !result.text) return;
-    let block = blocks.find((item) => item.key === result.key), reply2 = await runTask(view, "setting", () => ask(view, "outline", rewriteBlockMessages({ guide: guideText(view), current: source, blockText: block.text, fixes: `${fixes[index]}
-改为：${result.text}` })));
+    if (!result) return;
+    if (result.listOnly) return removeFix(view, where, index);
+    if (!result.drop && !result.text) return;
+    let block = blocks.find((item) => item.key === result.key), note = result.drop ? `${fixes[index]}
+改为：删除这一条，正文里不再保留它的内容，其余不变。` : `${fixes[index]}
+改为：${result.text}`, reply2 = await runTask(view, "setting", () => ask(view, "outline", rewriteBlockMessages({ guide: guideText(view), current: source, blockText: block.text, fixes: note })));
     if (!reply2) return;
     let rewritten = splitBlocks(parseSettingReply(reply2).body)[0];
     if (!rewritten) throw new Error("AI 没有返回分块内容");
@@ -2664,6 +2928,7 @@ ${parsed.body}` : parsed.body;
       target.dataset.where === "draft" ? st2(view).draft.fixes = st2(view).draft.fixes.filter((_, i) => i !== index) : setSetting(view, { fixes: view.project().setting.fixes.filter((_, i) => i !== index) }), view.renderBody();
     },
     "fix-edit": (view, target) => editFix(view, target.dataset.where, Number(target.dataset.i)),
+    "fix-drop": (view, target) => editFix(view, target.dataset.where, Number(target.dataset.i), !0),
     async "import-wb"(view) {
       let picked = await pickWorldbookEntries("从世界书导入设定");
       if (!picked.length) return;
@@ -2681,6 +2946,11 @@ ${parsed.body}` : parsed.body;
     async "hist-restore"(view, target) {
       let item = view.project().setting.history[Number(target.dataset.i)];
       !item || !await confirmDialog({ title: "回退设定", body: "当前正文会先存进历史，再换成这一版。" }) || (commit(view, item.text), view.renderBody());
+    },
+    // 删掉整个分块（标题和内容一起），删前的版本留在历史版本里，可回退。
+    async "block-del"(view, target) {
+      let text = view.project().setting.text, blocks = splitBlocks(text), block = blocks.find((item) => item.key === target.dataset.key);
+      block && await confirmDialog({ title: `删除分块「${block.title}」`, body: "删除前的版本保存在历史版本里，可以回退。", okLabel: "删除", danger: !0 }) && (commit(view, joinBlocks(blocks.filter((item) => item.key !== block.key))), view.renderBody());
     },
     jump(view, target) {
       let box = target.closest(".pi-card").querySelector("[data-setting]"), block = splitBlocks(box.value).find((item) => item.key === target.dataset.key);
@@ -2724,12 +2994,12 @@ ${parsed.body}` : parsed.body;
     let chat = view.data.chat(view.projectId);
     if (!chat)
       return view.data.loadChat(view.projectId).then(() => view.renderBody()).catch((error) => toast("error", `读取讨论记录失败：${error.message}`)), '<div class="pi-empty"><span class="pi-spin"></span> 正在读取讨论记录…</div>';
-    let busy = view.busy[`discuss:${view.projectId}`], refs = chat.refs, folded = chat.messages.filter((msg) => msg.folded).length, live = chat.messages.filter((msg) => !msg.folded), lastAi = [...live].reverse().find((msg) => msg.role !== "user"), chips = `<div class="pi-refs"><span class="pi-hint">附带参考：</span>
-        <button type="button" class="pi-chip${refs.setting ? " is-on" : ""}" data-act="ref" data-ref="setting">当前设定</button>
-        <button type="button" class="pi-chip${refs.outline ? " is-on" : ""}" data-act="ref" data-ref="outline">当前大纲</button>
-        ${refs.oc.map((oc, i) => `<button type="button" class="pi-chip is-on" data-act="ref-oc-del" data-i="${i}" title="点击移除">${esc(oc.title)} ×</button>`).join("")}
-        <button type="button" class="pi-chip" data-act="ref-oc">＋世界书条目</button>
-        ${chat.messages.length ? '<button type="button" class="pi-chip pi-chip-end" data-act="clear-talk">清空讨论</button>' : ""}</div>`, messages = live.map((msg) => {
+    let busy = view.busy[`discuss:${view.projectId}`], refs = chat.refs, folded = chat.messages.filter((msg) => msg.folded).length, live = chat.messages.filter((msg) => !msg.folded), lastAi = [...live].reverse().find((msg) => msg.role !== "user"), wb = wbSummary(view, chat, () => view.renderBody()), canProgress = !!progressText(view), chips = `<div class="pi-refs"><span class="pi-hint">附带参考：</span>
+        <button type="button" class="pi-chip${refs.setting ? " is-on" : ""}" data-act="ref" data-ref="setting">设定</button>
+        <button type="button" class="pi-chip${refs.outline ? " is-on" : ""}" data-act="ref" data-ref="outline">大纲</button>
+        <button type="button" class="pi-chip${refs.progress && canProgress ? " is-on" : ""}" data-act="ref" data-ref="progress"${canProgress ? "" : ' disabled title="本项目不是当前聊天启用的项目"'}>剧情进度</button>
+        <button type="button" class="pi-chip${refs.floors ? " is-on" : ""}" data-act="ref-floors">正文 ${refs.floors} 楼</button>
+        <button type="button" class="pi-chip${wb && wb.count ? " is-on" : ""}" data-act="ref-wb">世界书 ${wb ? `${wb.count} 条` : "…"}</button></div>`, messages = live.map((msg) => {
       let isUser = msg.role === "user", tools = `<div class="pi-msg-tools">
             <button type="button" class="pi-btn is-sm is-ghost" data-act="msg-edit" data-id="${esc(msg.id)}">编辑</button>
             <button type="button" class="pi-btn is-sm is-ghost" data-act="msg-del" data-id="${esc(msg.id)}">删除</button>
@@ -2742,23 +3012,8 @@ ${parsed.body}` : parsed.body;
     return `${chips}<div class="pi-chat">
         ${folded ? `<button type="button" class="pi-msg-fold" data-act="summary">更早的 ${folded} 条已折成摘要 · 查看</button>` : ""}
         ${empty}${messages}${busy ? '<div class="pi-msg is-ai"><span class="pi-spin"></span></div>' : ""}</div>
-        <div class="pi-compose"><textarea class="pi-ta" data-compose placeholder="Ctrl+Enter 发送">${esc(st3(view).draft || "")}</textarea>
+        <div class="pi-compose">${chat.messages.length ? `<button type="button" class="pi-compose-side" data-act="clear-talk" title="清空讨论">${ICONS.trash}</button>` : ""}<textarea class="pi-ta" data-compose placeholder="Ctrl+Enter 发送">${esc(st3(view).draft || "")}</textarea>
         <button type="button" class="pi-send" data-act="send" title="发送（Ctrl+Enter）"${busy ? " disabled" : ""}>${ICONS.send}</button></div>`;
-  }
-  async function resolveRefs(view, chat, project) {
-    let refs = [];
-    if (chat.refs.setting && project.setting.text.trim() && refs.push({ title: "当前设定", text: project.setting.text }), chat.refs.outline && project.outline.volumes.length) {
-      let text = outlineToText(project.outline.volumes);
-      refs.push({ title: "当前大纲", text: text.length < 12e3 ? text : flattenUnits(project.outline.volumes).map((unit) => `${volumeLabel(unit.volume.key)}·${stageLabel(unit.stage.key)}`).join(`
-`) });
-    }
-    for (let oc of chat.refs.oc)
-      try {
-        let entry = bookEntries(await loadBook(oc.book)).find((item) => item.key === oc.key);
-        entry && refs.push({ title: entry.title, text: entry.content });
-      } catch {
-      }
-    return refs;
   }
   async function reply(view) {
     let projectId = view.projectId, key = `discuss:${projectId}`;
@@ -2832,16 +3087,18 @@ ${parsed.body}` : parsed.body;
       let key = target.dataset.ref;
       updateChat(view, (chat) => ({ ...chat, refs: { ...chat.refs, [key]: !chat.refs[key] } })), view.renderBody();
     },
-    async "ref-oc"(view) {
-      let picked = await pickWorldbookEntries("附带世界书条目作参考");
-      picked.length && (updateChat(view, (chat) => {
-        let known = new Set(chat.refs.oc.map((oc) => `${oc.book}|${oc.key}`)), add = picked.filter((entry) => !known.has(`${entry.book}|${entry.key}`)).map((entry) => ({ book: entry.book, key: entry.key, title: entry.title }));
-        return { ...chat, refs: { ...chat.refs, oc: [...chat.refs.oc, ...add] } };
-      }), view.renderBody());
+    async "ref-floors"(view) {
+      let chat = view.data.chat(view.projectId), value = await promptDialog({ title: "附带最近正文", label: "楼数（0 为不附带，最多 50）", value: String(chat.refs.floors) });
+      if (value == null) return;
+      let floors = Math.max(0, Math.min(50, Math.round(Number(value) || 0)));
+      updateChat(view, (current) => ({ ...current, refs: { ...current.refs, floors } })), view.renderBody();
     },
-    "ref-oc-del"(view, target) {
-      let index = Number(target.dataset.i);
-      updateChat(view, (chat) => ({ ...chat, refs: { ...chat.refs, oc: chat.refs.oc.filter((_, i) => i !== index) } })), view.renderBody();
+    async "ref-wb"(view) {
+      let result = await pickRefs(view.data.chat(view.projectId));
+      if (result) {
+        if (result.none) return toast("info", "当前卡没有关联的世界书。");
+        updateChat(view, (current) => ({ ...current, refs: { ...current.refs, memo: result.memo, wb: result.wb } })), view.renderBody();
+      }
     },
     "to-setting"(view) {
       return view.go("setting"), actions2["from-talk"](view);
@@ -2891,13 +3148,15 @@ ${parsed.body}` : parsed.body;
             <input type="checkbox" title="启用" data-slot="${esc(entry.slotId)}" data-slot-field="enabled"${entry.enabled ? " checked" : ""}>
         </div>${body}</div>`;
   }
-  function nodeList(unit, progress) {
+  var nodeCheck = (unitId, node, off, from = "") => `<label class="pi-check${off ? " is-off" : ""}">
+        <input type="checkbox" data-node="${esc(node.id)}" data-unit="${esc(unitId)}"${off ? "" : " checked"}>
+        <span><span class="pi-badge">${esc(node.label)}</span> ${esc(node.name)}${from ? ` <span class="pi-hint">来自${esc(from)}</span>` : ""}</span></label>`;
+  function nodeList(unit, progress, carried) {
     let off = new Set(offNodes(progress, unit.id)), nodes = stageNodes(unit.stage.data);
-    return nodes.length ? `<div class="pi-card-sub">${nodes.map((node) => `<label class="pi-check${off.has(node.id) ? " is-off" : ""}">
-        <input type="checkbox" data-node="${esc(node.id)}" data-unit="${esc(unit.id)}"${off.has(node.id) ? "" : " checked"}>
-        <span><span class="pi-badge">${esc(node.label)}</span> ${esc(node.name)}</span></label>`).join("")}</div>` : "";
+    return !nodes.length && !carried.length ? "" : `<div class="pi-card-sub">${nodes.map((node) => nodeCheck(unit.id, node, off.has(node.id))).join("")}
+        ${carried.length ? `<p class="pi-hint">延续自前面阶段</p>${carried.map((item) => nodeCheck(item.unit.id, item.node, !1, stageLabel(item.unit.stage.key))).join("")}` : ""}</div>`;
   }
-  function unitList(units, states, progress) {
+  function unitList(units, states, progress, carried) {
     let lastVol = null, stateOpts = [{ value: "", label: "自动" }, ...Object.entries(STATE_LABELS).map(([value, label]) => ({ value, label }))];
     return units.map((unit) => {
       let head = unit.volume !== lastVol ? `<div class="pi-vol-hd">${esc(volumeLabel(unit.volume.key))}</div>` : "";
@@ -2908,7 +3167,7 @@ ${parsed.body}` : parsed.body;
             <span class="pi-uname" title="${esc(range || "")}">${esc(stageLabel(unit.stage.key))}${muted ? ` <button type="button" class="pi-badge is-warn pi-unmute" data-act="unmute" data-unit="${esc(unit.id)}" title="点击恢复提醒">不再提醒</button>` : ""}</span>
             <select class="pi-sel" data-unit-state="${esc(unit.id)}" title="手动改状态">${options(stateOpts, manual)}</select>
             <span class="pi-unit-act">${state === "active" ? "" : `<button type="button" class="pi-btn is-sm" data-act="goto" data-unit="${esc(unit.id)}">设为当前</button>`}</span>
-        </div>${state === "active" ? nodeList(unit, progress) : ""}`;
+        </div>${state === "active" ? nodeList(unit, progress, carried) : ""}`;
     }).join("");
   }
   function render4(view) {
@@ -2928,13 +3187,14 @@ ${parsed.body}` : parsed.body;
         </div>
         ${units.length ? `<div class="pi-card"><h3>剧情索引<span class="pi-badge">不注入正文</span><span class="pi-spacer"></span>
             <button type="button" class="pi-btn is-sm is-ghost" data-act="index-toggle">${st7.indexOpen ? "收起" : "查看"}</button></h3>
-            ${st7.indexOpen ? `<pre class="pi-pre">${esc(buildIndexText(units, states, progress))}</pre>` : ""}</div>` : ""}
+            ${st7.indexOpen ? `<pre class="pi-pre">${esc(buildIndexText(units, states, progress, { carryOver: settings.carryOver }))}</pre>` : ""}</div>` : ""}
         <div class="pi-card"><h3>阶段<span class="pi-spacer"></span><span class="pi-hint">${esc(checkInfo)}</span></h3>
-        ${units.length ? `<div class="pi-tools is-c3">
+        ${units.length ? `<div class="pi-pace"><span class="pi-pace-label">推进速度</span><div class="pi-seg">${PACES.map((pace) => `<button type="button" class="pi-seg-btn${pace.value === progress.pace ? " is-sel" : ""}" data-act="pace" data-pace="${pace.value}">${pace.label}</button>`).join("")}</div></div>
+        <div class="pi-tools is-c3">
             <button type="button" class="pi-btn is-primary is-sm" data-act="next">打开下一段</button>
             <button type="button" class="pi-btn is-sm" data-act="check"${checking ? " disabled" : ""}>${checking ? '<span class="pi-spin"></span>检测中' : "立即检测"}</button>
             <button type="button" class="pi-btn is-sm" data-act="rewrite">让 AI 改写后续阶段</button></div>
-            <div class="pi-units">${unitList(units, states, progress)}</div>` : '<p class="pi-hint">大纲为空。到「大纲」页导入剧情 YAML，或让 AI 写一卷。</p>'}
+            <div class="pi-units">${unitList(units, states, progress, settings.carryOver ? carriedNodes(units, states, progress) : [])}</div>` : '<p class="pi-hint">大纲为空。到「大纲」页导入剧情 YAML，或让 AI 写一卷。</p>'}
         </div>`;
   }
   function setSlot(view, slotId, patch) {
@@ -2943,6 +3203,10 @@ ${parsed.body}` : parsed.body;
   }
   var actions4 = {
     activate: (view) => view.runtime.switchProject(view.projectId),
+    // 推进速度随聊天保存，改完立即换掉详细条目开头的说明。
+    pace(view, target) {
+      view.runtime.setProgress({ ...view.runtime.progress(), pace: target.dataset.pace }), view.renderBody();
+    },
     "index-toggle"(view) {
       let st7 = view.tabState("run");
       st7.indexOpen = !st7.indexOpen, view.renderBody();
@@ -3041,14 +3305,19 @@ ${parsed.body}` : parsed.body;
         <textarea class="pi-ta is-mono is-tall" data-guide>${esc(s.guide || BUILTIN_GUIDE)}</textarea>` : ""}</div>`;
   }
   function render5(view) {
-    let s = view.data.settings(), modes = [{ value: "ask", label: "弹出确认" }, { value: "auto", label: "自动推进（可撤销）" }, { value: "nodes", label: "仅勾选节点，不推进阶段" }], offModes = [{ value: "ask", label: "弹出提醒" }, { value: "auto", label: "自动改写后续阶段（可撤销）" }, { value: "off", label: "不检查偏离" }];
+    let s = view.data.settings(), modes = [{ value: "ask", label: "弹出确认" }, { value: "auto", label: "自动推进（可撤销）" }, { value: "nodes", label: "仅勾选节点，不推进阶段" }], offModes = [{ value: "ask", label: "弹出提醒" }, { value: "auto", label: "自动改写后续阶段（可撤销）" }, { value: "off", label: "不检查偏离" }], pace = PACES.some((item) => item.value === st4(view).pace) ? st4(view).pace : "normal";
     return `<div class="pi-card"><h3>注入内容</h3>
-        <label class="pi-field"><span>详细条目的标签名</span><input class="pi-inp" data-set="tagName" value="${esc(s.tagName)}"></label></div>
+        <label class="pi-field"><span>详细条目的标签名</span><input class="pi-inp" data-set="tagName" value="${esc(s.tagName)}"></label>
+        <div class="pi-field"><span>推进速度的提示词（执行页选择速度）</span>
+            <div class="pi-seg">${PACES.map((item) => `<button type="button" class="pi-seg-btn${item.value === pace ? " is-sel" : ""}" data-act="pace-tab" data-pace="${item.value}">${item.label}${s.paceText[item.value] ? "·已改" : ""}</button>`).join("")}</div>
+            <textarea class="pi-ta" rows="3" data-pace-text="${pace}">${esc(paceText(s, pace))}</textarea></div>
+        <div class="pi-tools is-c1"><button type="button" class="pi-btn is-sm" data-act="pace-reset" data-pace="${pace}"${s.paceText[pace] ? "" : " disabled"}>恢复默认</button></div></div>
         <div class="pi-card"><h3>阶段推进</h3>
         <div class="pi-pair"><label class="pi-field"><span>检测间隔（楼）</span><input class="pi-inp" type="number" min="1" data-set="checkEvery" value="${s.checkEvery}"></label>
             <label class="pi-field"><span>每次读取楼数</span><input class="pi-inp" type="number" min="1" data-set="checkFloors" value="${s.checkFloors}"></label></div>
         <label class="pi-field"><span>判定阶段已演完后</span><select class="pi-sel" data-set="handleMode">${options(modes, s.handleMode)}</select></label>
-        <label class="pi-field"><span>偏离大纲时</span><select class="pi-sel" data-set="offTrackMode">${options(offModes, s.offTrackMode)}</select></label></div>
+        <label class="pi-field"><span>偏离大纲时</span><select class="pi-sel" data-set="offTrackMode">${options(offModes, s.offTrackMode)}</select></label>
+        <label class="pi-check"><input type="checkbox" data-set="carryOver"${s.carryOver ? " checked" : ""}><span>没演的支线与世界动态延续到后面的阶段</span></label></div>
         ${llmCard(view, s)}
         ${guideCard(view, s)}`;
   }
@@ -3061,6 +3330,11 @@ ${parsed.body}` : parsed.body;
     view.data.updateSettings({ llm: { ...llm, [role]: { ...llm[role], ...patch } } });
   }
   function onInput4(view, target) {
+    if (target.dataset.paceText) {
+      let key = target.dataset.paceText, text = target.value.trim() === PACE_TEXT[key] ? "" : target.value;
+      view.data.updateSettings({ paceText: { ...view.data.settings().paceText, [key]: text } }), view.runtime.refresh();
+      return;
+    }
     if (target.dataset.guide !== void 0) {
       let text = target.value;
       view.data.updateSettings({ guide: text.trim() === BUILTIN_GUIDE.trim() ? "" : text });
@@ -3111,6 +3385,12 @@ ${parsed.body}` : parsed.body;
         }
         return setRole(view, role, { source: "custom", ...Object.fromEntries(CONN_KEYS2.map((key) => [key, preset[key]])) }), st4(view).manual = { ...st4(view).manual, [role]: !1 }, toast("success", `已为「${LLM_ROLES.find((item) => item.key === role).label}」载入预设「${preset.name}」。`), view.renderBody();
       }
+    },
+    "pace-tab"(view, target) {
+      st4(view).pace = target.dataset.pace, view.renderBody();
+    },
+    "pace-reset"(view, target) {
+      view.data.updateSettings({ paceText: { ...view.data.settings().paceText, [target.dataset.pace]: "" } }), view.runtime.refresh(), view.renderBody();
     },
     "guide-toggle"(view) {
       st4(view).guideOpen = !st4(view).guideOpen, view.renderBody();
@@ -3265,44 +3545,43 @@ ${parsed.body}` : parsed.body;
   var st6 = (view) => view.tabState("books"), GROUPS = {
     on: (entries) => entries.filter((entry) => !acuField(entry.title) && !entry.disabled),
     off: (entries) => entries.filter((entry) => !acuField(entry.title) && entry.disabled)
-  }, delBtn = (entry) => `<button type="button" class="pi-icon-btn is-danger" data-act="wb-delete" data-key="${esc(entry.key)}" title="删除">${ICONS.trash}</button>`;
-  function entryRow2(entry) {
-    return `<div class="pi-wb-row${entry.disabled ? " is-off" : ""}">
-        <input type="checkbox" data-wb-toggle="${esc(entry.key)}" title="${entry.disabled ? "开启" : "关闭"}"${entry.disabled ? "" : " checked"}>
-        <span class="pi-wb-title" title="${esc(entry.title)}">${esc(entry.title)}</span>
-        ${entry.constant ? '<span class="pi-badge">常驻</span>' : ""}${delBtn(entry)}</div>`;
+  }, toggle = (entry) => `<input type="checkbox" data-wb-toggle="${esc(entry.key)}" title="${entry.disabled ? "开启" : "关闭"}"${entry.disabled ? "" : " checked"}>`, title = (entry) => `<span class="pi-wb-title" title="${esc(entry.title)}">${esc(entry.title)}</span>`;
+  function editor(entry) {
+    let atDepth = entry.position === 4, key = esc(entry.key);
+    return `<div class="pi-wb-edit">
+        <div class="pi-pair ${atDepth ? "is-c4" : ""}">
+            <label class="pi-field"><span>位置</span><select class="pi-sel" data-wb-edit="${key}" data-f="position">${options(POSITIONS, entry.position)}</select></label>
+            ${atDepth ? `<label class="pi-field"><span>深度</span><input class="pi-inp" type="number" min="0" data-wb-edit="${key}" data-f="depth" value="${entry.depth}"></label>
+            <label class="pi-field"><span>角色</span><select class="pi-sel" data-wb-edit="${key}" data-f="role">${options(ROLES, entry.role)}</select></label>` : ""}
+            <label class="pi-field"><span>顺序</span><input class="pi-inp" type="number" data-wb-edit="${key}" data-f="order" value="${entry.order}"></label>
+        </div>
+        <label class="pi-field"><span>触发方式</span><select class="pi-sel" data-wb-edit="${key}" data-f="constant">${options([{ value: "1", label: "常驻" }, { value: "0", label: "关键词触发" }], entry.constant ? "1" : "0")}</select></label>
+        ${entry.constant ? "" : `<label class="pi-field"><span>主要关键词（逗号分隔）</span><input class="pi-inp" data-wb-edit="${key}" data-f="key" value="${esc(entry.keys.join("，"))}"></label>
+        <label class="pi-field"><span>次要关键词（可空）</span><input class="pi-inp" data-wb-edit="${key}" data-f="keysecondary" value="${esc(entry.keysSecondary.join("，"))}"></label>`}
+        <label class="pi-field"><span>内容</span><textarea class="pi-ta" rows="6" data-wb-edit="${key}" data-f="content">${esc(entry.content)}</textarea></label>
+    </div>`;
   }
-  function acuRow(acu, entry) {
-    let blocked = acuBlocked(acu, entry.title);
-    return `<div class="pi-wb-row${blocked ? " is-off" : ""}">
-        <input type="checkbox" data-acu-toggle="${esc(entry.title)}" title="${blocked ? "取消屏蔽" : "屏蔽"}"${blocked ? "" : " checked"}>
-        <span class="pi-wb-title" title="${esc(entry.title)}">${esc(entry.title)}</span>
-        ${entry.disabled ? '<span class="pi-badge" title="世界书里本身已关闭，不会被触发">世界书已关闭</span>' : ""}${delBtn(entry)}</div>`;
+  function entryRow2(entry, open) {
+    return `<div class="pi-wb-item"><div class="pi-wb-row${entry.disabled ? " is-off" : ""}">${toggle(entry)}
+        <button type="button" class="pi-wb-name" data-act="wb-open" data-key="${esc(entry.key)}">${open ? ICONS.caretDown : ICONS.caret}${title(entry)}</button>
+        ${entry.constant ? '<span class="pi-badge">常驻</span>' : ""}
+        <button type="button" class="pi-icon-btn is-danger" data-act="wb-delete" data-key="${esc(entry.key)}" title="删除">${ICONS.trash}</button></div>
+        ${open ? editor(entry) : ""}</div>`;
   }
-  var bulkBtn = (group, on, label, disabled) => `<button type="button" class="pi-btn is-sm is-ghost" data-act="wb-bulk" data-group="${group}" data-on="${on ? 1 : 0}"${disabled ? " disabled" : ""}>${label}</button>`, fieldBtn = (field, on, label, disabled) => `<button type="button" class="pi-btn is-sm is-ghost" data-act="acu-field" data-field="${esc(field)}" data-on="${on ? 1 : 0}"${disabled ? " disabled" : ""}>${label}</button>`;
-  function section(title, entries, empty, bulk = "") {
-    return `<div class="pi-wb-sec"><div class="pi-wb-sec-hd">${title}<small>${entries.length}</small>${entries.length ? `<span class="pi-wb-bulk">${bulk}</span>` : ""}</div>
-        ${entries.map(entryRow2).join("") || `<p class="pi-hint">${empty}</p>`}</div>`;
+  var bulkBtn = (attrs, label, disabled) => `<button type="button" class="pi-btn is-sm is-ghost" ${attrs}${disabled ? " disabled" : ""}>${label}</button>`;
+  function section(name, entries, empty, bulk, openKey) {
+    return `<div class="pi-wb-sec"><div class="pi-wb-sec-hd">${name}<small>${entries.length}</small>${entries.length ? `<span class="pi-wb-bulk">${bulk}</span>` : ""}</div>
+        ${entries.map((entry) => entryRow2(entry, entry.key === openKey)).join("") || `<p class="pi-hint">${empty}</p>`}</div>`;
   }
-  function acuFields(entries) {
-    let map = /* @__PURE__ */ new Map();
-    for (let entry of entries) {
-      let field = acuField(entry.title);
-      field && (map.has(field) || map.set(field, []), map.get(field).push(entry));
-    }
-    return [...map].sort(([a], [b]) => +(a === EN_FIELD) - +(b === EN_FIELD));
-  }
-  function acuSection(acu, entries, openFields) {
-    let fields = acuFields(entries);
+  function acuSection(entries, openFields) {
+    let fields = groupByField(entries);
     if (!fields.length) return "";
     let total = fields.reduce((sum, [, list]) => sum + list.length, 0), sub = ([field, list]) => {
-      let blocked = list.filter((entry) => acuBlocked(acu, entry.title)).length, bulk = fieldBtn(field, !0, "一键勾选", !blocked) + fieldBtn(field, !1, "一键取消", blocked === list.length), open = openFields.has(field);
-      return `<div class="pi-wb-sub"><div class="pi-wb-sub-hd is-fold" data-act="acu-fold" data-field="${esc(field)}">${open ? ICONS.caretDown : ICONS.caret}<span class="pi-wb-field" title="${esc(field)}">${esc(field)}</span><small>${list.length - blocked}/${list.length}</small><span class="pi-wb-bulk">${bulk}</span></div>
-            ${open ? list.map((entry) => acuRow(acu, entry)).join("") : ""}</div>`;
+      let on = list.filter((entry) => !entry.disabled).length, bulk = bulkBtn(`data-act="acu-field" data-field="${esc(field)}" data-on="1"`, "一键开启", on === list.length) + bulkBtn(`data-act="acu-field" data-field="${esc(field)}" data-on="0"`, "一键关闭", !on), open = openFields.has(field);
+      return `<div class="pi-wb-sub"><div class="pi-wb-sub-hd is-fold" data-act="acu-fold" data-field="${esc(field)}">${open ? ICONS.caretDown : ICONS.caret}<span class="pi-wb-field" title="${esc(field)}">${esc(field)}</span><small>${on}/${list.length}</small><span class="pi-wb-bulk">${bulk}</span></div>
+            ${open ? list.map((entry) => `<div class="pi-wb-row${entry.disabled ? " is-off" : ""}">${toggle(entry)}${title(entry)}</div>`).join("") : ""}</div>`;
     };
-    return `<div class="pi-wb-sec"><div class="pi-wb-sec-hd">临时屏蔽<small>${total}</small></div>
-        <p class="pi-hint">取消勾选即屏蔽，不改动世界书；同字段的新条目跟随该字段。</p>
-        ${fields.map(sub).join("")}</div>`;
+    return `<div class="pi-wb-sec"><div class="pi-wb-sec-hd">数据库条目<small>${total}</small></div>${fields.map(sub).join("")}</div>`;
   }
   function render7(view) {
     let s = st6(view), fallback = allBookNames().filter((name) => name.startsWith("剧情注入器·")), list = [...boundBookNames(), ...fallback.filter((name) => !boundBookNames().some((item) => item.name === name)).map((name) => ({ name, source: "专用" }))].map((book) => {
@@ -3310,19 +3589,26 @@ ${parsed.body}` : parsed.body;
       return `<div class="pi-entry"><div class="pi-entry-hd" data-act="open-book" data-book="${esc(book.name)}">
             ${open ? ICONS.caretDown : ICONS.caret}<span class="pi-etitle" title="${esc(book.name)}">${esc(book.name)}</span><span class="pi-badge">${esc(book.source)}</span>
             ${book.source === "专用" ? `<button type="button" class="pi-btn is-sm is-danger" data-act="delete-book" data-book="${esc(book.name)}">整本删除</button>` : ""}</div>
-            ${entries ? `<div class="pi-entry-bd">${entries.length ? `${section("已开启", GROUPS.on(entries), "没有开启的条目", bulkBtn("on", !1, "全部取消勾选"))}
-                ${section("已关闭", GROUPS.off(entries), "没有关闭的条目", bulkBtn("off", !0, "全部勾选"))}
-                ${acuSection(view.data.settings().acu, entries, s.openFields || /* @__PURE__ */ new Set())}` : '<p class="pi-hint">没有条目</p>'}</div>` : ""}</div>`;
+            ${entries ? `<div class="pi-entry-bd">${entries.length ? `${section("已开启", GROUPS.on(entries), "没有开启的条目", bulkBtn('data-act="wb-bulk" data-group="on"', "全部关闭"), s.openKey)}
+                ${section("已关闭", GROUPS.off(entries), "没有关闭的条目", bulkBtn('data-act="wb-bulk" data-group="off"', "全部开启"), s.openKey)}
+                ${acuSection(entries, s.openFields || /* @__PURE__ */ new Set())}` : '<p class="pi-hint">没有条目</p>'}</div>` : ""}</div>`;
     }).join("");
     return `<div class="pi-card pi-wb"><h3>当前角色卡的世界书</h3>
         <p class="pi-hint">「${esc(cardName() || "未打开角色卡")}」关联的世界书。</p>
+        <p class="pi-hint is-warn">注意：这里的操作真的会修改你的世界书！</p>
         ${list || '<p class="pi-hint">没有关联的世界书。</p>'}</div>`;
   }
+  var splitKeys = (text) => String(text || "").split(/[,，、\n]/).map((item) => item.trim()).filter(Boolean);
+  function editPatch(target) {
+    let field = target.dataset.f, value = target.value;
+    return field === "constant" ? { constant: value === "1" } : field === "key" || field === "keysecondary" ? { [field]: splitKeys(value) } : field === "position" || field === "role" ? { [field]: Number(value) } : field === "depth" || field === "order" ? { [field]: Math.max(0, Math.round(Number(value) || 0)) } : field === "content" ? { content: value } : null;
+  }
+  async function saveEdit(view, target) {
+    let key = target.dataset.wbEdit, patch = editPatch(target);
+    !patch || !(st6(view).entries || []).some((item) => item.key === key) || (await updateEntry(st6(view).book, key, patch), st6(view).entries = bookEntries(await loadBook(st6(view).book)), target.tagName === "SELECT" && view.renderBody());
+  }
   async function onChange4(view, target) {
-    if (target.dataset.acuToggle) {
-      let acu = view.data.settings().acu;
-      return view.data.updateSettings({ acu: setAcuEntry(acu, target.dataset.acuToggle, !target.checked) }), view.renderBody();
-    }
+    if (target.dataset.wbEdit) return saveEdit(view, target);
     let key = target.dataset.wbToggle;
     key && (target.disabled = !0, await setEntriesDisabled(st6(view).book, [key], !target.checked), await reloadBook(view));
   }
@@ -3330,29 +3616,33 @@ ${parsed.body}` : parsed.body;
     st6(view).entries = bookEntries(await loadBook(st6(view).book)), view.renderBody();
   }
   var actions7 = {
-    // 整组一次改完：data-group 指定哪一组，data-on=1 全部勾选，0 全部取消。数据库分组改的是屏蔽设置。
+    // 整区一次改完：「全部关闭」关已开启区，「全部开启」开已关闭区；数据库条目不在其中。
     async "wb-bulk"(view, target) {
-      let on = target.dataset.on === "1", group = target.dataset.group, pick = GROUPS[group];
+      let group = target.dataset.group, pick = GROUPS[group];
       if (!pick) return;
-      let keys = pick(st6(view).entries || []).filter((entry) => entry.disabled === on).map((entry) => entry.key);
-      keys.length && (target.disabled = !0, await setEntriesDisabled(st6(view).book, keys, !on), await reloadBook(view));
+      let keys = pick(st6(view).entries || []).map((entry) => entry.key);
+      keys.length && (target.disabled = !0, await setEntriesDisabled(st6(view).book, keys, group === "on"), await reloadBook(view));
     },
-    // 一个字段整体放行或屏蔽，同字段以后新增的条目也照此处理。
+    "wb-open"(view, target) {
+      let s = st6(view);
+      s.openKey = s.openKey === target.dataset.key ? "" : target.dataset.key, view.renderBody();
+    },
     "acu-fold"(view, target, event) {
       if (event.target.closest("button")) return;
       let s = st6(view), open = new Set(s.openFields || []);
       open.has(target.dataset.field) ? open.delete(target.dataset.field) : open.add(target.dataset.field), s.openFields = open, view.renderBody();
     },
-    "acu-field"(view, target) {
-      let acu = view.data.settings().acu;
-      view.data.updateSettings({ acu: setAcuField(acu, target.dataset.field, target.dataset.on !== "1") }), view.renderBody();
+    // 一个字段的数据库条目整体开或关（写进世界书）。
+    async "acu-field"(view, target) {
+      let on = target.dataset.on === "1", keys = (st6(view).entries || []).filter((entry) => acuField(entry.title) === target.dataset.field && entry.disabled === on).map((entry) => entry.key);
+      keys.length && (target.disabled = !0, await setEntriesDisabled(st6(view).book, keys, !on), await reloadBook(view));
     },
     async "open-book"(view, target, event) {
       if (event.target.closest("button,input")) return;
       let s = st6(view);
       if (s.book === target.dataset.book)
         return s.book = "", s.entries = null, view.renderBody();
-      s.book = target.dataset.book, s.entries = null, await reloadBook(view);
+      s.book = target.dataset.book, s.entries = null, s.openKey = "", await reloadBook(view);
     },
     async "wb-delete"(view, target) {
       let keys = [target.dataset.key], titles = st6(view).entries.filter((entry) => keys.includes(entry.key)).map((entry) => entry.title);
@@ -3373,7 +3663,7 @@ ${parsed.body}` : parsed.body;
     { key: "outline", label: "大纲", mod: tab_outline_exports },
     { key: "run", label: "执行", mod: tab_run_exports }
   ], PAGES = {
-    books: { label: "世界书条目", icon: "book", mod: page_books_exports },
+    books: { label: "世界书管理", icon: "book", mod: page_books_exports },
     data: { label: "数据管理", icon: "box", mod: page_data_exports },
     settings: { label: "设置", icon: "gear", mod: page_settings_exports }
   }, UI_KEY = "pi-ui", SEARCH_FROM = 6;
@@ -3451,9 +3741,9 @@ ${parsed.body}` : parsed.body;
       }
     }
     function topHtml() {
-      let project = view.project(), title = view.page ? PAGES[view.page].label : project ? project.name : "剧情注入器", tabs = view.page || !project ? "" : `<div class="pi-tabs">${TABS.map((tab) => `<button type="button" class="pi-tab${tab.key === view.tab ? " is-sel" : ""}" data-act="tab" data-tab="${tab.key}">${tab.label}</button>`).join("")}</div>`, rename = !view.page && project ? `<button type="button" class="pi-icon-btn" data-act="rename" title="编辑项目名称">${ICONS.pencil}</button>` : "";
+      let project = view.project(), title2 = view.page ? PAGES[view.page].label : project ? project.name : "剧情注入器", tabs = view.page || !project ? "" : `<div class="pi-tabs">${TABS.map((tab) => `<button type="button" class="pi-tab${tab.key === view.tab ? " is-sel" : ""}" data-act="tab" data-tab="${tab.key}">${tab.label}</button>`).join("")}</div>`, rename = !view.page && project ? `<button type="button" class="pi-icon-btn" data-act="rename" title="编辑项目名称">${ICONS.pencil}</button>` : "";
       return `<div class="pi-top-lead"><button type="button" class="pi-icon-btn pi-menu" data-act="drawer" title="项目列表">${ICONS.menu}</button>
-                <span class="pi-top-title">${esc(title)}</span>${rename}</div>${tabs}
+                <span class="pi-top-title">${esc(title2)}</span>${rename}</div>${tabs}
             <div class="pi-top-end"><button type="button" class="pi-icon-btn" data-act="theme" title="${isNight() ? "日间配色" : "夜间配色"}">${isNight() ? ICONS.sun : ICONS.moon}</button>
             <button type="button" class="pi-close" data-act="close" title="关闭">${ICONS.close}</button></div>`;
     }
@@ -3484,7 +3774,7 @@ ${parsed.body}` : parsed.body;
       renderSide(), renderBody();
     }
     async function selectProject(id, tab) {
-      if (view.page = "", setDrawer(!1), view.projectId = id, writeUi({ projectId: id }), render8(), !!id)
+      if (view.page = "", setDrawer(!1), view.projectId = id, writeUi({ projectId: id, page: "" }), render8(), !!id)
         try {
           let project = await data.loadProject(id);
           if (!project) {
@@ -3498,7 +3788,7 @@ ${parsed.body}` : parsed.body;
         }
     }
     function go(tab) {
-      view.page = "", view.tab = tab, writeUi({ tab }), render8();
+      view.page = "", view.tab = tab, writeUi({ tab, page: "" }), render8();
     }
     async function newProject2() {
       setDrawer(!1);
@@ -3547,7 +3837,7 @@ ${parsed.body}` : parsed.body;
       if (act === "new-project") return newProject2();
       if (act === "tab") return go(target.dataset.tab);
       if (act === "page")
-        return view.page = target.dataset.page, setDrawer(!1), render8();
+        return view.page = target.dataset.page, writeUi({ page: view.page }), setDrawer(!1), render8();
       if (act === "drawer") return setDrawer(!view.drawer);
       if (act === "theme")
         return setNight(!isNight()), writeUi({ night: isNight() }), renderSide();
@@ -3589,7 +3879,9 @@ ${parsed.body}` : parsed.body;
         event.target === root && root.dataset.down && close(), delete root.dataset.down;
       }), doc.addEventListener("keydown", onKey, !0), doc.body.appendChild(root);
       let activeId = data.activeIdFor(cardKey()), remembered = data.index().projects.some((item) => item.id === ui.projectId) ? ui.projectId : "", id = activeId || remembered || data.index().projects[0] && data.index().projects[0].id || "";
-      render8(), id && selectProject(id, id === remembered && ui.tab ? ui.tab : void 0);
+      render8();
+      let page = PAGES[ui.page] ? ui.page : "";
+      id && selectProject(id, TABS.some((tab) => tab.key === ui.tab) ? ui.tab : void 0), page && (view.page = page, writeUi({ page }), render8());
     }
     function close() {
       root && (current().unmount?.(view), doc.removeEventListener("keydown", onKey, !0), root.remove(), root = null, data.flush().catch(() => {
@@ -3615,9 +3907,9 @@ ${parsed.body}` : parsed.body;
     function hide(id) {
       view.clearTimeout(timers.get(id)), timers.delete(id), box?.querySelector(`[data-notice="${id}"]`)?.remove();
     }
-    function show({ id, title, body = "", actions: actions8 = [], timeout = 0 }) {
+    function show({ id, title: title2, body = "", actions: actions8 = [], timeout = 0 }) {
       hide(id);
-      let card = el(`<div class="pi-notice" data-notice="${esc(id)}"><b>${esc(title)}</b>${body ? `<p>${esc(body)}</p>` : ""}
+      let card = el(`<div class="pi-notice" data-notice="${esc(id)}"><b>${esc(title2)}</b>${body ? `<p>${esc(body)}</p>` : ""}
             <div class="pi-row">${actions8.map((action, index) => `<button type="button" class="pi-btn is-sm${action.primary ? " is-primary" : ""}" data-act="${index}">${esc(action.label)}</button>`).join("")}</div></div>`);
       card.addEventListener("click", (event) => {
         let button = event.target.closest("[data-act]");
@@ -3639,7 +3931,7 @@ ${parsed.body}` : parsed.body;
   }
 
   // src/index.js
-  var VERSION = "0.1.6", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.1.7", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")

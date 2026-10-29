@@ -3,6 +3,7 @@ import { diffLines, joinBlocks, mergeBlocks, parseSettingReply, pushHistory, spl
 import { estimateTokens } from '../core/tokens.js';
 import { ask, guideText, runTask, talkText } from './ai.js';
 import { confirmDialog, esc, openDialog, options } from './dom.js';
+import { ICONS } from './styles.js';
 import { afterImport, pickWorldbookEntries } from './wb-import.js';
 
 const st = view => view.tabState('setting');
@@ -18,9 +19,10 @@ function checkBadge(check) {
 
 function fixesHtml(fixes, where) {
     if (!fixes.length) return '';
-    return `<p class="pi-hint">补定（替你补齐的项，确认或修改）：</p>${fixes.map((fix, i) => `<div class="pi-row"><span class="pi-grow">· ${esc(fix)}</span>
-        <button type="button" class="pi-btn is-sm is-ghost" data-act="fix-ok" data-where="${where}" data-i="${i}">确认</button>
-        <button type="button" class="pi-btn is-sm" data-act="fix-edit" data-where="${where}" data-i="${i}">改</button></div>`).join('')}`;
+    return `<p class="pi-hint">补定（替你补齐的项）：</p>${fixes.map((fix, i) => `<div class="pi-fix"><span class="pi-fix-text">· ${esc(fix)}</span>
+        <span class="pi-fix-acts"><button type="button" class="pi-btn is-sm" data-act="fix-ok" data-where="${where}" data-i="${i}">确认</button>
+        <button type="button" class="pi-btn is-sm" data-act="fix-edit" data-where="${where}" data-i="${i}">修改</button>
+        <button type="button" class="pi-btn is-sm is-danger" data-act="fix-drop" data-where="${where}" data-i="${i}">丢弃</button></span></div>`).join('')}`;
 }
 
 function draftHtml(view, project, draft) {
@@ -67,7 +69,7 @@ export function render(view) {
             <button type="button" class="pi-btn is-sm" data-act="import-wb">从世界书导入</button>
             <button type="button" class="pi-btn is-sm${s.history ? ' is-primary' : ''}" data-act="history">历史版本 ${project.setting.history.length}</button>
             <label class="pi-check"><input type="checkbox" data-append${s.append ? ' checked' : ''}><span>只追加，不改动已有分块</span></label></div>
-        ${blocks.length ? `<div class="pi-toc">${blocks.map(block => `<button type="button" class="pi-chip" data-act="jump" data-key="${esc(block.key)}">${esc(block.title)}</button>`).join('')}</div>` : ''}
+        ${blocks.length ? `<div class="pi-toc">${blocks.map(block => `<span class="pi-chip pi-block-chip"><button type="button" data-act="jump" data-key="${esc(block.key)}" title="跳到这一块">${esc(block.title)}</button><button type="button" class="pi-block-del" data-act="block-del" data-key="${esc(block.key)}" title="删除整个分块">${ICONS.close}</button></span>`).join('')}</div>` : ''}
         <textarea class="pi-ta is-tall" data-setting placeholder="世界观正文。执行时作为常驻条目注入（角色定义后），取代世界书里手改的剧情设定条目。">${esc(text)}</textarea>
         <div class="pi-row"><span class="pi-hint pi-grow">≈<span data-tokens>${estimateTokens(text)}</span> token</span><span class="pi-status" data-save-status></span></div>
         ${fixesHtml(project.setting.fixes, 'saved')}</div>
@@ -86,22 +88,48 @@ function commit(view, text, extra = {}) {
     view.runtime.refresh();
 }
 
-async function editFix(view, where, index) {
+// 按字面重合度猜补定写在哪个分块，作为下拉框默认值。
+function guessBlock(blocks, fix) {
+    const chars = new Set(String(fix).replace(/\s/g, ''));
+    let best = blocks[0];
+    let score = -1;
+    for (const block of blocks) {
+        const hit = [...new Set(block.text.replace(/\s/g, ''))].filter(ch => chars.has(ch)).length;
+        if (hit > score) { best = block; score = hit; }
+    }
+    return best && best.key;
+}
+
+function removeFix(view, where, index) {
+    const s = st(view);
+    if (where === 'draft') s.draft.fixes = s.draft.fixes.filter((_, i) => i !== index);
+    else setSetting(view, { fixes: view.project().setting.fixes.filter((_, i) => i !== index) });
+    view.renderBody();
+}
+
+// 改：按用户说明让 AI 重写所在分块。丢弃：让 AI 从所在分块里删掉这条补定的内容，或只从列表移除。
+async function editFix(view, where, index, drop = false) {
     const s = st(view);
     const project = view.project();
     const fixes = where === 'draft' ? s.draft.fixes : project.setting.fixes;
     const source = where === 'draft' ? s.draft.body : project.setting.text;
     const blocks = splitBlocks(source);
+    const pick = `<label class="pi-field"><span>${drop ? '写在哪个分块' : '改哪个分块'}</span><select class="pi-sel" data-f="block">${options(blocks.map(block => ({ value: block.key, label: block.title })), guessBlock(blocks, fixes[index]))}</select></label>`;
+    const readKey = box => box.querySelector('[data-f=block]').value;
     const result = await openDialog({
-        title: '修改补定',
-        html: `<p class="pi-hint">${esc(fixes[index])}</p>
-            <label class="pi-field"><span>改哪个分块</span><select class="pi-sel" data-f="block">${options(blocks.map(block => ({ value: block.key, label: block.title })), blocks[0] && blocks[0].key)}</select></label>
-            <label class="pi-field"><span>怎么改</span><textarea class="pi-ta" data-f="text"></textarea></label>`,
-        actions: [{ label: '取消', value: null }, { label: '让 AI 重写该分块', primary: true, value: box => ({ key: box.querySelector('[data-f=block]').value, text: box.querySelector('[data-f=text]').value.trim() }) }],
+        title: drop ? '丢弃补定' : '修改补定',
+        html: `<p class="pi-hint">${esc(fixes[index])}</p>${blocks.length ? pick : ''}
+            ${drop ? '' : '<label class="pi-field"><span>怎么改</span><textarea class="pi-ta" data-f="text"></textarea></label>'}`,
+        actions: drop
+            ? [{ label: '取消', value: null }, { label: '只从列表移除', value: { listOnly: true } }, { label: '让 AI 从正文删掉', primary: true, danger: true, value: box => (blocks.length ? { key: readKey(box), drop: true } : { listOnly: true }) }]
+            : [{ label: '取消', value: null }, { label: '让 AI 重写该分块', primary: true, value: box => ({ key: readKey(box), text: box.querySelector('[data-f=text]').value.trim() }) }],
     });
-    if (!result || !result.text) return;
+    if (!result) return;
+    if (result.listOnly) return removeFix(view, where, index);
+    if (!result.drop && !result.text) return;
     const block = blocks.find(item => item.key === result.key);
-    const reply = await runTask(view, 'setting', () => ask(view, 'outline', rewriteBlockMessages({ guide: guideText(view), current: source, blockText: block.text, fixes: `${fixes[index]}\n改为：${result.text}` })));
+    const note = result.drop ? `${fixes[index]}\n改为：删除这一条，正文里不再保留它的内容，其余不变。` : `${fixes[index]}\n改为：${result.text}`;
+    const reply = await runTask(view, 'setting', () => ask(view, 'outline', rewriteBlockMessages({ guide: guideText(view), current: source, blockText: block.text, fixes: note })));
     if (!reply) return;
     const rewritten = splitBlocks(parseSettingReply(reply).body)[0];
     if (!rewritten) throw new Error('AI 没有返回分块内容');
@@ -155,6 +183,7 @@ export const actions = {
         view.renderBody();
     },
     'fix-edit': (view, target) => editFix(view, target.dataset.where, Number(target.dataset.i)),
+    'fix-drop': (view, target) => editFix(view, target.dataset.where, Number(target.dataset.i), true),
     async 'import-wb'(view) {
         const picked = await pickWorldbookEntries('从世界书导入设定');
         if (!picked.length) return;
@@ -176,6 +205,16 @@ export const actions = {
         const item = view.project().setting.history[Number(target.dataset.i)];
         if (!item || !(await confirmDialog({ title: '回退设定', body: '当前正文会先存进历史，再换成这一版。' }))) return;
         commit(view, item.text);
+        view.renderBody();
+    },
+    // 删掉整个分块（标题和内容一起），删前的版本留在历史版本里，可回退。
+    async 'block-del'(view, target) {
+        const text = view.project().setting.text;
+        const blocks = splitBlocks(text);
+        const block = blocks.find(item => item.key === target.dataset.key);
+        if (!block) return;
+        if (!(await confirmDialog({ title: `删除分块「${block.title}」`, body: '删除前的版本保存在历史版本里，可以回退。', okLabel: '删除', danger: true }))) return;
+        commit(view, joinBlocks(blocks.filter(item => item.key !== block.key)));
         view.renderBody();
     },
     jump(view, target) {

@@ -1,11 +1,10 @@
-import { flattenUnits, makeId, outlineToText, stageLabel, volumeLabel } from '../core/outline.js';
+import { makeId } from '../core/outline.js';
 import { chatRequest, discussSystemPrompt, foldCandidates, foldMessages, hasYamlBlock, needsFold } from '../core/prompts.js';
 import { downloadBlob, toast } from '../host/st.js';
-import { bookEntries, loadBook } from '../host/worldbook.js';
 import { ask, guideText } from './ai.js';
 import { choiceDialog, confirmDialog, esc, openDialog, promptDialog } from './dom.js';
 import { ICONS } from './styles.js';
-import { pickWorldbookEntries } from './wb-import.js';
+import { pickRefs, progressText, resolveRefs, wbSummary } from './discuss-refs.js';
 import { renderMarkdown } from './markdown.js';
 import * as outlineTab from './tab-outline.js';
 import * as settingTab from './tab-setting.js';
@@ -23,12 +22,14 @@ export function render(view) {
     const folded = chat.messages.filter(msg => msg.folded).length;
     const live = chat.messages.filter(msg => !msg.folded);
     const lastAi = [...live].reverse().find(msg => msg.role !== 'user');
+    const wb = wbSummary(view, chat, () => view.renderBody());
+    const canProgress = Boolean(progressText(view));
     const chips = `<div class="pi-refs"><span class="pi-hint">附带参考：</span>
-        <button type="button" class="pi-chip${refs.setting ? ' is-on' : ''}" data-act="ref" data-ref="setting">当前设定</button>
-        <button type="button" class="pi-chip${refs.outline ? ' is-on' : ''}" data-act="ref" data-ref="outline">当前大纲</button>
-        ${refs.oc.map((oc, i) => `<button type="button" class="pi-chip is-on" data-act="ref-oc-del" data-i="${i}" title="点击移除">${esc(oc.title)} ×</button>`).join('')}
-        <button type="button" class="pi-chip" data-act="ref-oc">＋世界书条目</button>
-        ${chat.messages.length ? '<button type="button" class="pi-chip pi-chip-end" data-act="clear-talk">清空讨论</button>' : ''}</div>`;
+        <button type="button" class="pi-chip${refs.setting ? ' is-on' : ''}" data-act="ref" data-ref="setting">设定</button>
+        <button type="button" class="pi-chip${refs.outline ? ' is-on' : ''}" data-act="ref" data-ref="outline">大纲</button>
+        <button type="button" class="pi-chip${refs.progress && canProgress ? ' is-on' : ''}" data-act="ref" data-ref="progress"${canProgress ? '' : ' disabled title="本项目不是当前聊天启用的项目"'}>剧情进度</button>
+        <button type="button" class="pi-chip${refs.floors ? ' is-on' : ''}" data-act="ref-floors">正文 ${refs.floors} 楼</button>
+        <button type="button" class="pi-chip${wb && wb.count ? ' is-on' : ''}" data-act="ref-wb">世界书 ${wb ? `${wb.count} 条` : '…'}</button></div>`;
     const messages = live.map(msg => {
         const isUser = msg.role === 'user';
         const tools = `<div class="pi-msg-tools">
@@ -44,24 +45,8 @@ export function render(view) {
     return `${chips}<div class="pi-chat">
         ${folded ? `<button type="button" class="pi-msg-fold" data-act="summary">更早的 ${folded} 条已折成摘要 · 查看</button>` : ''}
         ${empty}${messages}${busy ? '<div class="pi-msg is-ai"><span class="pi-spin"></span></div>' : ''}</div>
-        <div class="pi-compose"><textarea class="pi-ta" data-compose placeholder="Ctrl+Enter 发送">${esc(st(view).draft || '')}</textarea>
+        <div class="pi-compose">${chat.messages.length ? `<button type="button" class="pi-compose-side" data-act="clear-talk" title="清空讨论">${ICONS.trash}</button>` : ''}<textarea class="pi-ta" data-compose placeholder="Ctrl+Enter 发送">${esc(st(view).draft || '')}</textarea>
         <button type="button" class="pi-send" data-act="send" title="发送（Ctrl+Enter）"${busy ? ' disabled' : ''}>${ICONS.send}</button></div>`;
-}
-
-async function resolveRefs(view, chat, project) {
-    const refs = [];
-    if (chat.refs.setting && project.setting.text.trim()) refs.push({ title: '当前设定', text: project.setting.text });
-    if (chat.refs.outline && project.outline.volumes.length) {
-        const text = outlineToText(project.outline.volumes);
-        refs.push({ title: '当前大纲', text: text.length < 12000 ? text : flattenUnits(project.outline.volumes).map(unit => `${volumeLabel(unit.volume.key)}·${stageLabel(unit.stage.key)}`).join('\n') });
-    }
-    for (const oc of chat.refs.oc) {
-        try {
-            const entry = bookEntries(await loadBook(oc.book)).find(item => item.key === oc.key);
-            if (entry) refs.push({ title: entry.title, text: entry.content });
-        } catch { /* 世界书已删就跳过 */ }
-    }
-    return refs;
 }
 
 // 讨论回复存回发起时的项目，中途切走项目也不丢。
@@ -167,19 +152,19 @@ export const actions = {
         updateChat(view, chat => ({ ...chat, refs: { ...chat.refs, [key]: !chat.refs[key] } }));
         view.renderBody();
     },
-    async 'ref-oc'(view) {
-        const picked = await pickWorldbookEntries('附带世界书条目作参考');
-        if (!picked.length) return;
-        updateChat(view, chat => {
-            const known = new Set(chat.refs.oc.map(oc => `${oc.book}|${oc.key}`));
-            const add = picked.filter(entry => !known.has(`${entry.book}|${entry.key}`)).map(entry => ({ book: entry.book, key: entry.key, title: entry.title }));
-            return { ...chat, refs: { ...chat.refs, oc: [...chat.refs.oc, ...add] } };
-        });
+    async 'ref-floors'(view) {
+        const chat = view.data.chat(view.projectId);
+        const value = await promptDialog({ title: '附带最近正文', label: '楼数（0 为不附带，最多 50）', value: String(chat.refs.floors) });
+        if (value == null) return;
+        const floors = Math.max(0, Math.min(50, Math.round(Number(value) || 0)));
+        updateChat(view, current => ({ ...current, refs: { ...current.refs, floors } }));
         view.renderBody();
     },
-    'ref-oc-del'(view, target) {
-        const index = Number(target.dataset.i);
-        updateChat(view, chat => ({ ...chat, refs: { ...chat.refs, oc: chat.refs.oc.filter((_, i) => i !== index) } }));
+    async 'ref-wb'(view) {
+        const result = await pickRefs(view.data.chat(view.projectId));
+        if (!result) return;
+        if (result.none) return toast('info', '当前卡没有关联的世界书。');
+        updateChat(view, current => ({ ...current, refs: { ...current.refs, memo: result.memo, wb: result.wb } }));
         view.renderBody();
     },
     'to-setting'(view) {

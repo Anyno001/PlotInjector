@@ -44,6 +44,12 @@ export function bookEntries(data) {
         content: String(entry.content || ''),
         disabled: Boolean(entry.disable),
         constant: Boolean(entry.constant),
+        keys: [].concat(entry.key || []).map(String),
+        keysSecondary: [].concat(entry.keysecondary || []).map(String),
+        position: Number(entry.position) || 0,
+        depth: Number(entry.depth ?? 4),
+        role: Number(entry.role) || 0,
+        order: Number(entry.order ?? 100),
     }));
 }
 
@@ -54,16 +60,44 @@ async function saveBook(name, data) {
     if (typeof c.reloadWorldInfoEditor === 'function') c.reloadWorldInfoEditor(name);
 }
 
+// 同一本世界书的改动排队执行：连续改两个字段时，后一次读取要等前一次写完，否则后写的会把前一次改动盖掉。
+const queues = new Map();
+function queued(name, job) {
+    const run = (queues.get(name) || Promise.resolve()).catch(() => {}).then(job);
+    queues.set(name, run);
+    return run;
+}
+
 const clone = value => hostWindow().structuredClone ? hostWindow().structuredClone(value) : JSON.parse(JSON.stringify(value));
 
-export async function setEntriesDisabled(name, keys, disabled) {
-    const data = clone(await loadBook(name));
-    for (const key of keys) if (data.entries[key]) data.entries[key].disable = disabled;
-    await saveBook(name, data);
+export function setEntriesDisabled(name, keys, disabled) {
+    return queued(name, async () => {
+        const data = clone(await loadBook(name));
+        for (const key of keys) if (data.entries[key]) data.entries[key].disable = disabled;
+        await saveBook(name, data);
+    });
+}
+
+// 改一条的触发与位置：constant 常驻 / 关键词触发，key 主要关键词，keysecondary 次要关键词，position/depth/role/order 与酒馆一致。
+const ENTRY_FIELDS = ['constant', 'key', 'keysecondary', 'position', 'depth', 'role', 'order', 'content'];
+
+export function updateEntry(name, key, patch) {
+    return queued(name, async () => {
+        const data = clone(await loadBook(name));
+        const entry = data.entries[key];
+        if (!entry) throw new Error('条目已不存在');
+        for (const field of ENTRY_FIELDS) if (Object.prototype.hasOwnProperty.call(patch, field)) entry[field] = patch[field];
+        if (Object.prototype.hasOwnProperty.call(patch, 'keysecondary')) entry.selective = patch.keysecondary.length > 0;
+        await saveBook(name, data);
+    });
 }
 
 // 删除前返回被删条目组成的世界书 json，供调用方下载备份。
-export async function deleteEntries(name, keys) {
+export function deleteEntries(name, keys) {
+    return queued(name, () => deleteNow(name, keys));
+}
+
+async function deleteNow(name, keys) {
     const source = await loadBook(name);
     const backup = { entries: {} };
     const data = clone(source);

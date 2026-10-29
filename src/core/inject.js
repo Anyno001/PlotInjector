@@ -67,7 +67,7 @@ function nodeLine(node, mark) {
     return `  - ${mark ? `[${mark}] ` : ''}${node.label}｜${node.name}${event}`;
 }
 
-export function buildIndexText(units, states, progress) {
+export function buildIndexText(units, states, progress, { carryOver = true } = {}) {
     const lines = [];
     const done = units.filter(unit => states[unit.id] === 'done');
     const active = units.filter(unit => states[unit.id] === 'active');
@@ -85,6 +85,7 @@ export function buildIndexText(units, states, progress) {
         const range = rangeOf(unit);
         lines.push('【当前】', `- ${stagePlace(unit)}${range ? `｜时间范围：${range}` : ''}`);
         for (const node of stageNodes(unit.stage.data).filter(item => item.kind !== 'world')) lines.push(nodeLine(node, off.has(node.id) ? '已演' : '未演'));
+        if (carryOver) for (const { node } of carriedNodes(units, states, progress)) if (node.kind !== 'world') lines.push(nodeLine(node, '未演·延续'));
     }
     for (const unit of next) {
         const range = rangeOf(unit);
@@ -101,13 +102,57 @@ export function buildIndexText(units, states, progress) {
     return lines.join('\n');
 }
 
-export function buildDetailText(unit, off, settings) {
+// 推进速度：执行页选择，决定详细条目开头那段说明。三段默认文字可在设置里改。
+export const PACES = [
+    { value: 'slow', label: '慢速' },
+    { value: 'normal', label: '正常' },
+    { value: 'fast', label: '快速' },
+];
+const PLAN = '以下是当前正在进行、尚未演完的剧情规划，列出的事件还没有发生，不要当作已发生的事实或前情。';
+export const PACE_TEXT = {
+    slow: `${PLAN}节奏放慢：以眼前正在进行的场景和人物互动为主，细写当下，每次回复最多推进一小步，不急于触发下一个节点。`,
+    normal: `${PLAN}按正文进展自然推进到这些事件，不必一次写完。`,
+    fast: `${PLAN}节奏加快：尽快让尚未发生的节点依次发生，次要细节一笔带过，收束本阶段并过渡到下一阶段。`,
+};
+
+export function paceText(settings, pace) {
+    const key = PACE_TEXT[pace] ? pace : 'normal';
+    return String((settings.paceText && settings.paceText[key]) || '').trim() || PACE_TEXT[key];
+}
+
+// 延续：已过阶段里还勾着（没演）的支线事件与世界动态，带到当前阶段继续可用。返回 [{ unit, node }]
+export function carriedNodes(units, states, progress) {
+    const out = [];
+    for (const unit of units) {
+        if (states[unit.id] !== 'done') continue;
+        const off = new Set(offNodes(progress, unit.id));
+        for (const node of stageNodes(unit.stage.data)) if (node.kind !== 'main' && !off.has(node.id)) out.push({ unit, node });
+    }
+    return out;
+}
+
+function carriedText(carried) {
+    if (!carried.length) return '';
+    const lines = carried.map(({ unit, node }) => {
+        const item = node.item && typeof node.item === 'object' ? node.item : {};
+        const parts = [item.地点, item.事件 || item.内容, item.触发 ? `触发：${item.触发}` : ''].filter(Boolean).map(value => String(value).trim());
+        return `- ${node.label}｜${node.name}（来自${splitStageKey(unit.stage.key).short}）${parts.length ? `：${parts.join('；')}` : ''}`;
+    });
+    return `\n延续自前面阶段、尚未发生的支线与世界动态（可在合适时机自然安排，不必强行发生）：\n${lines.join('\n')}`;
+}
+
+// next：下一阶段，快速时写在说明末尾，让正文知道往哪里收。
+export function buildDetailText(unit, off, settings, { pace = 'normal', next = null, carried = [] } = {}) {
     const tag = String(settings.tagName || '剧情参考').trim() || '剧情参考';
     const data = filterStageData(unit.stage.data, off);
     const body = stringifyYaml({ [unit.stage.key]: data }).trimEnd();
     const vol = splitVolumeKey(unit.volume.key).short;
-    const note = '以下是当前正在进行、尚未演完的剧情规划，列出的事件还没有发生，不要当作已发生的事实或前情；按正文进展自然推进到这些事件，不必一次写完。';
-    return `<${tag} 卷="${vol}" 阶段="${unit.stage.key}">\n${note}\n${body}\n</${tag}>`;
+    let note = paceText(settings, pace);
+    if (pace === 'fast' && next) {
+        const range = rangeOf(next);
+        note += `\n下一阶段：${stagePlace(next)}${range ? `（${range}）` : ''}`;
+    }
+    return `<${tag} 卷="${vol}" 阶段="${unit.stage.key}">\n${note}\n${body}${carriedText(carried)}\n</${tag}>`;
 }
 
 // 执行页与注入共用：返回本轮要注入的条目（含停用的，UI 需要显示），注入时只取 enabled。
@@ -125,12 +170,14 @@ export function buildEntries(project, progress, settings) {
     const units = flattenUnits(project.outline && project.outline.volumes);
     if (units.length) {
         const states = unitStates(units, progress);
+        const next = units.find(unit => states[unit.id] === 'next') || null;
+        const carried = settings.carryOver === false ? [] : carriedNodes(units, states, progress);
         for (const unit of units) {
             if (states[unit.id] !== 'active') continue;
             const off = offNodes(progress, unit.id);
             entries.push({
                 slotId: unit.id, kind: 'detail', title: `${volumeLabel(unit.volume.key)}·${splitStageKey(unit.stage.key).short}`,
-                unit, content: buildDetailText(unit, off, settings), ...pickParams(defaults.detail, progress.slots[unit.id]),
+                unit, content: buildDetailText(unit, off, settings, { pace: progress.pace, next, carried }), ...pickParams(defaults.detail, progress.slots[unit.id]),
             });
         }
     }

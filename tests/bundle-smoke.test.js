@@ -331,15 +331,14 @@ test('世界书条目页：开启与已关闭分两区，勾选框直接开关�
     await host.instance.destroy();
 });
 
-test('世界书条目页：数据库条目按字段分组，字段一键开关只影响该字段，屏蔽不改世界书、扫描时生效', async () => {
+test('世界书条目页：手写条目可开关、编辑位置与关键词和内容；数据库条目按字段折叠，字段一键开关写进世界书', async () => {
     const host = await boot();
     await withProject(host);
-    const titles = ['手写剧情', 'TavernDB-ACU-ImportantPersonsIndex', 'TavernDB-ACU-CustomExport-人物档案-1', 'TavernDB-ACU-CustomExport-剧情纪要-上', 'TavernDB-ACU-CustomExport-人物档案-2', 'TavernDB-ACU-CustomExport-剧情纪要-下', 'TavernDB-ACU-OutlineTable'];
-    const book = { entries: Object.fromEntries(titles.map((comment, uid) => [uid, { uid, comment, content: 'x', disable: false }])) };
-    const saved = [];
+    const titles = ['手写剧情', 'TavernDB-ACU-CustomExport-人物档案-1', 'TavernDB-ACU-CustomExport-纪要-1', 'TavernDB-ACU-CustomExport-人物档案-2', 'TavernDB-ACU-OutlineTable'];
+    const book = { entries: Object.fromEntries(titles.map((comment, uid) => [uid, { uid, comment, content: '原内容', disable: false, key: ['甲'], position: 1, order: 100 }])) };
     host.context.chatMetadata.world_info = '测试书';
     host.context.loadWorldInfo = async () => JSON.parse(JSON.stringify(book));
-    host.context.saveWorldInfo = async (name, data) => { saved.push(name); book.entries = data.entries; };
+    host.context.saveWorldInfo = async (name, data) => { book.entries = data.entries; };
     host.click();
     await tick(10);
     const doc = host.win.document;
@@ -348,42 +347,70 @@ test('世界书条目页：数据库条目按字段分组，字段一键开关�
     await tick(10);
     doc.querySelector('[data-act="open-book"]').click();
     await tick(20);
-    const [opened, closed, acu] = doc.querySelectorAll('.pi-wb-sec');
-    assert.deepEqual([...opened.querySelectorAll('[data-wb-toggle]')].map(input => input.dataset.wbToggle), ['0']);
-    assert.equal(closed.querySelectorAll('[data-wb-toggle]').length, 0);
-    assert.equal(acu.querySelectorAll('[data-acu-toggle]').length, 0, '字段默认收起');
-    for (const hd of [...acu.querySelectorAll('[data-act="acu-fold"]')]) doc.querySelector(`[data-act="acu-fold"][data-field="${hd.dataset.field}"]`).click();
-    await tick(10);
-    const groups = [...doc.querySelectorAll('.pi-wb-sub')].map(sub => [sub.querySelector('.pi-wb-field').textContent, sub.querySelectorAll('[data-acu-toggle]').length]);
-    assert.deepEqual(groups, [['人物档案', 2], ['剧情纪要', 2], ['英文字段', 2]]);
+    const secs = [...doc.querySelectorAll('.pi-wb-sec')];
+    assert.equal(secs.length, 3);
+    assert.equal(secs[0].querySelectorAll('[data-wb-toggle]').length, 1, '已开启区只有手写条目');
+    assert.equal(secs[2].querySelectorAll('[data-wb-toggle]').length, 0, '数据库字段默认收起');
+    assert.deepEqual([...secs[2].querySelectorAll('.pi-wb-field')].map(node => node.textContent), ['人物档案', '纪要', '英文字段']);
 
-    doc.querySelector('[data-act="acu-field"][data-field="剧情纪要"][data-on="0"]').click();
+    doc.querySelector('[data-act="wb-open"][data-key="0"]').click();
     await tick(10);
-    assert.equal(saved.length, 0, '屏蔽不应写世界书');
-    const scan = async () => {
-        const payload = { globalLore: [], characterLore: titles.map(comment => ({ comment })), chatLore: [], personaLore: [] };
-        await host.eventSource.emit('worldinfo_entries_loaded', payload);
-        return payload.characterLore.map(item => item.comment);
-    };
-    let left = await scan();
-    assert.ok(!left.includes('TavernDB-ACU-CustomExport-剧情纪要-上') && !left.includes('TavernDB-ACU-CustomExport-剧情纪要-下'));
-    assert.ok(left.includes('TavernDB-ACU-CustomExport-人物档案-1'), '只屏蔽剧情纪要，人物档案不动');
-    titles.push('TavernDB-ACU-CustomExport-剧情纪要-3');
-    assert.ok(!(await scan()).includes('TavernDB-ACU-CustomExport-剧情纪要-3'), '剧情纪要新增条目跟随屏蔽');
-
-    const one = doc.querySelector('[data-acu-toggle="TavernDB-ACU-CustomExport-剧情纪要-上"]');
-    one.checked = true;
-    fire(one, 'change');
-    assert.ok((await scan()).includes('TavernDB-ACU-CustomExport-剧情纪要-上'));
-    doc.querySelector('[data-act="acu-field"][data-field="剧情纪要"][data-on="1"]').click();
-    await tick(10);
-    left = await scan();
-    assert.ok(left.includes('TavernDB-ACU-CustomExport-剧情纪要-下') && left.includes('TavernDB-ACU-CustomExport-剧情纪要-3'));
-
-    doc.querySelector('[data-act="wb-bulk"][data-group="on"]').click();
+    const pos = doc.querySelector('[data-wb-edit="0"][data-f="position"]');
+    pos.value = '4';
+    fire(pos, 'change');
     await tick(20);
-    assert.equal(book.entries[0].disable, true);
-    assert.deepEqual([1, 2, 3, 4, 5, 6].map(i => book.entries[i].disable), [false, false, false, false, false, false]);
+    assert.equal(book.entries[0].position, 4);
+    assert.ok(doc.querySelector('[data-wb-edit="0"][data-f="depth"]'), '切到 @D 后出现深度');
+    const keys = doc.querySelector('[data-wb-edit="0"][data-f="key"]');
+    keys.value = '乙，丙';
+    fire(keys, 'change');
+    const content = doc.querySelector('[data-wb-edit="0"][data-f="content"]');
+    content.value = '新内容';
+    fire(content, 'change');
+    await tick(20);
+    assert.deepEqual([...book.entries[0].key], ['乙', '丙']);
+    assert.equal(book.entries[0].content, '新内容');
+
+    doc.querySelector('[data-act="acu-field"][data-field="人物档案"][data-on="0"]').click();
+    await tick(20);
+    assert.deepEqual([1, 2, 3, 4].map(i => book.entries[i].disable), [true, false, true, false]);
+    const lore = await entriesNow(host.eventSource);
+    assert.equal(lore.filter(entry => /TavernDB/.test(entry.comment)).length, 0, '插件不再从正文扫描里去掉数据库条目');
+    assert.equal(host.win.__errors.length, 0, host.win.__errors.join('\n'));
+    await host.instance.destroy();
+});
+
+test('讨论页附带参考：世界书只显示条数；默认带手写条目、纪要索引和最新纪要，剧情进度与最近正文一起发给讨论 AI', async () => {
+    const host = await boot();
+    const project = await withProject(host);
+    const book = { entries: {} };
+    const add = (comment, extra = {}) => { const uid = Object.keys(book.entries).length; book.entries[uid] = { uid, comment, content: `【${comment}】`, disable: false, ...extra }; };
+    add('手写设定');
+    add('TavernDB-ACU-CustomExport-纪要索引');
+    for (let n = 1; n <= 12; n += 1) add(`TavernDB-ACU-CustomExport-纪要-${n}`);
+    add('TavernDB-ACU-CustomExport-人物档案-1');
+    host.context.chatMetadata.world_info = '测试书';
+    host.context.loadWorldInfo = async () => JSON.parse(JSON.stringify(book));
+    host.context.chat.push({ is_user: true, mes: '第一句' }, { is_user: false, mes: '正文甲' });
+    await host.instance.data.loadChat(project.id);
+    host.click();
+    await tick(10);
+    const doc = host.win.document;
+    doc.querySelector('[data-act="tab"][data-tab="discuss"]').click();
+    await tick(30);
+    assert.match(doc.querySelector('[data-act="ref-wb"]').textContent, /世界书 12 条/);
+    assert.equal(doc.querySelectorAll('.pi-refs .pi-chip').length, 5, '顶栏不逐条列出条目');
+    doc.querySelector('[data-compose]').value = '接下来第三章怎么走';
+    doc.querySelector('[data-act="send"]').click();
+    await tick(40);
+    const system = host.llmCalls.at(-1)[0].content;
+    assert.match(system, /【手写设定】/);
+    assert.match(system, /纪要索引】/);
+    assert.match(system, /纪要-12】/);
+    assert.match(system, /纪要-3】/);
+    assert.doesNotMatch(system, /CustomExport-纪要-2】|CustomExport-人物档案-1/);
+    assert.match(system, /【参考·剧情进度/);
+    assert.match(system, /【参考·最近 10 楼正文】[\s\S]*正文甲/);
     assert.equal(host.win.__errors.length, 0, host.win.__errors.join('\n'));
     await host.instance.destroy();
 });
@@ -430,6 +457,65 @@ test('讨论页清空讨论：可先导出，设定和大纲不受影响', async
     assert.equal(chat.refs.setting, true);
     assert.equal(host.instance.data.project(project.id).setting.text, '世界观声明:\n基于: 测试');
     assert.equal(doc.querySelector('[data-act="clear-talk"]'), null);
+    await host.instance.destroy();
+});
+
+test('设定页：分块标签上的删除键删掉整个分块，删前版本进历史', async () => {
+    const host = await boot();
+    const project = await withProject(host);
+    host.instance.data.updateProject(project.id, current => ({ ...current, setting: { ...current.setting, text: '世界观声明:\n基于: 测试\n\n铁则:\n- 甲\n\n人物档案:\n白墨' } }));
+    host.click();
+    await tick(10);
+    const doc = host.win.document;
+    doc.querySelector('[data-act="tab"][data-tab="setting"]').click();
+    await tick(10);
+    doc.querySelector('[data-act="block-del"][data-key="铁则"]').click();
+    await tick(10);
+    doc.querySelector('.pi-dialog .pi-dlg-acts .is-danger').click();
+    await tick(10);
+    const setting = host.instance.data.project(project.id).setting;
+    assert.equal(setting.text, '世界观声明:\n基于: 测试\n\n人物档案:\n白墨');
+    assert.ok(setting.history.some(item => item.text.includes('铁则')));
+    assert.equal(doc.querySelector('[data-act="block-del"][data-key="铁则"]'), null);
+    await host.instance.destroy();
+});
+
+test('执行页切换推进速度：存进聊天进度，注入的详细条目立即换说明', async () => {
+    const host = await boot();
+    await withProject(host);
+    host.click();
+    await tick(10);
+    const doc = host.win.document;
+    doc.querySelector('[data-act="tab"][data-tab="run"]').click();
+    await tick(10);
+    doc.querySelector('[data-act="pace"][data-pace="fast"]').click();
+    await tick(10);
+    const lore = await entriesNow(host.eventSource);
+    assert.match(lore[1].content, /节奏加快/);
+    const meta = host.context.chatMetadata.plotInjector;
+    assert.equal(meta.byProject[meta.projectId].pace, 'fast');
+    assert.ok(doc.querySelector('[data-act="pace"][data-pace="fast"]').classList.contains('is-sel'));
+    await host.instance.destroy();
+});
+
+test('关掉再打开时回到上次的页面或页签', async () => {
+    const host = await boot();
+    await withProject(host);
+    host.click();
+    await tick(10);
+    const doc = host.win.document;
+    doc.querySelector('.pi-side [data-act="page"][data-page="books"]').click();
+    host.instance.open && doc.querySelector('[data-act="close"]').click();
+    host.click();
+    await tick(20);
+    assert.equal(doc.querySelector('.pi-top-title').textContent, '世界书管理');
+    doc.querySelector('.pi-side [data-act="project"]').click();
+    await tick(10);
+    doc.querySelector('[data-act="tab"][data-tab="outline"]').click();
+    doc.querySelector('[data-act="close"]').click();
+    host.click();
+    await tick(20);
+    assert.ok(doc.querySelector('[data-act="tab"][data-tab="outline"]').classList.contains('is-sel'));
     await host.instance.destroy();
 });
 

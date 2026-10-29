@@ -17,7 +17,7 @@ const TABS = [
     { key: 'run', label: '执行', mod: run },
 ];
 const PAGES = {
-    books: { label: '世界书条目', icon: 'book', mod: books },
+    books: { label: '世界书管理', icon: 'book', mod: books },
     data: { label: '数据管理', icon: 'box', mod: dataPage },
     settings: { label: '设置', icon: 'gear', mod: settings },
 };
@@ -175,7 +175,7 @@ export function createApp({ data, runtime, version }) {
         view.page = '';
         setDrawer(false);
         view.projectId = id;
-        writeUi({ projectId: id });
+        writeUi({ projectId: id, page: '' });
         render();
         if (!id) return;
         try {
@@ -196,7 +196,7 @@ export function createApp({ data, runtime, version }) {
     function go(tab) {
         view.page = '';
         view.tab = tab;
-        writeUi({ tab });
+        writeUi({ tab, page: '' });
         render();
     }
 
@@ -255,7 +255,7 @@ export function createApp({ data, runtime, version }) {
         if (act === 'project') return selectProject(target.dataset.id);
         if (act === 'new-project') return newProject();
         if (act === 'tab') return go(target.dataset.tab);
-        if (act === 'page') { view.page = target.dataset.page; setDrawer(false); return render(); }
+        if (act === 'page') { view.page = target.dataset.page; writeUi({ page: view.page }); setDrawer(false); return render(); }
         if (act === 'drawer') return setDrawer(!view.drawer);
         if (act === 'theme') {
             setNight(!isNight());
@@ -330,7 +330,14 @@ export function createApp({ data, runtime, version }) {
         const remembered = data.index().projects.some(item => item.id === ui.projectId) ? ui.projectId : '';
         const id = activeId || remembered || (data.index().projects[0] && data.index().projects[0].id) || '';
         render();
-        if (id) selectProject(id, id === remembered && ui.tab ? ui.tab : undefined);
+        // 记住上次所在的位置：设置等页面，或项目的哪个页签。
+        const page = PAGES[ui.page] ? ui.page : '';
+        if (id) selectProject(id, TABS.some(tab => tab.key === ui.tab) ? ui.tab : undefined);
+        if (page) {
+            view.page = page;
+            writeUi({ page });
+            render();
+        }
     }
 
     function close() {

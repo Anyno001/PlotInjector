@@ -1,4 +1,4 @@
-import { DEFAULT_PARAMS, POSITIONS, ROLES, buildIndexText, positionLabel } from '../core/inject.js';
+import { DEFAULT_PARAMS, PACES, POSITIONS, ROLES, buildIndexText, carriedNodes, positionLabel } from '../core/inject.js';
 import { flattenUnits, stageLabel, stageNodes, volumeLabel } from '../core/outline.js';
 import { STATE_LABELS, goTo, offNodes, patchSlot, setNodeChecked, unitStates } from '../core/progress.js';
 import { estimateTokens } from '../core/tokens.js';
@@ -32,16 +32,20 @@ function entryRow(entry, expanded) {
         </div>${body}</div>`;
 }
 
-function nodeList(unit, progress) {
+const nodeCheck = (unitId, node, off, from = '') => `<label class="pi-check${off ? ' is-off' : ''}">
+        <input type="checkbox" data-node="${esc(node.id)}" data-unit="${esc(unitId)}"${off ? '' : ' checked'}>
+        <span><span class="pi-badge">${esc(node.label)}</span> ${esc(node.name)}${from ? ` <span class="pi-hint">来自${esc(from)}</span>` : ''}</span></label>`;
+
+// carried：已过阶段里没演的支线与世界动态，取消勾选即不再延续。
+function nodeList(unit, progress, carried) {
     const off = new Set(offNodes(progress, unit.id));
     const nodes = stageNodes(unit.stage.data);
-    if (!nodes.length) return '';
-    return `<div class="pi-card-sub">${nodes.map(node => `<label class="pi-check${off.has(node.id) ? ' is-off' : ''}">
-        <input type="checkbox" data-node="${esc(node.id)}" data-unit="${esc(unit.id)}"${off.has(node.id) ? '' : ' checked'}>
-        <span><span class="pi-badge">${esc(node.label)}</span> ${esc(node.name)}</span></label>`).join('')}</div>`;
+    if (!nodes.length && !carried.length) return '';
+    return `<div class="pi-card-sub">${nodes.map(node => nodeCheck(unit.id, node, off.has(node.id))).join('')}
+        ${carried.length ? `<p class="pi-hint">延续自前面阶段</p>${carried.map(item => nodeCheck(item.unit.id, item.node, false, stageLabel(item.unit.stage.key))).join('')}` : ''}</div>`;
 }
 
-function unitList(units, states, progress) {
+function unitList(units, states, progress, carried) {
     let lastVol = null;
     const stateOpts = [{ value: '', label: '自动' }, ...Object.entries(STATE_LABELS).map(([value, label]) => ({ value, label }))];
     return units.map(unit => {
@@ -56,7 +60,7 @@ function unitList(units, states, progress) {
             <span class="pi-uname" title="${esc(range || '')}">${esc(stageLabel(unit.stage.key))}${muted ? ` <button type="button" class="pi-badge is-warn pi-unmute" data-act="unmute" data-unit="${esc(unit.id)}" title="点击恢复提醒">不再提醒</button>` : ''}</span>
             <select class="pi-sel" data-unit-state="${esc(unit.id)}" title="手动改状态">${options(stateOpts, manual)}</select>
             <span class="pi-unit-act">${state === 'active' ? '' : `<button type="button" class="pi-btn is-sm" data-act="goto" data-unit="${esc(unit.id)}">设为当前</button>`}</span>
-        </div>${state === 'active' ? nodeList(unit, progress) : ''}`;
+        </div>${state === 'active' ? nodeList(unit, progress, carried) : ''}`;
     }).join('');
 }
 
@@ -87,13 +91,14 @@ export function render(view) {
         </div>
         ${units.length ? `<div class="pi-card"><h3>剧情索引<span class="pi-badge">不注入正文</span><span class="pi-spacer"></span>
             <button type="button" class="pi-btn is-sm is-ghost" data-act="index-toggle">${st.indexOpen ? '收起' : '查看'}</button></h3>
-            ${st.indexOpen ? `<pre class="pi-pre">${esc(buildIndexText(units, states, progress))}</pre>` : ''}</div>` : ''}
+            ${st.indexOpen ? `<pre class="pi-pre">${esc(buildIndexText(units, states, progress, { carryOver: settings.carryOver }))}</pre>` : ''}</div>` : ''}
         <div class="pi-card"><h3>阶段<span class="pi-spacer"></span><span class="pi-hint">${esc(checkInfo)}</span></h3>
-        ${units.length ? `<div class="pi-tools is-c3">
+        ${units.length ? `<div class="pi-pace"><span class="pi-pace-label">推进速度</span><div class="pi-seg">${PACES.map(pace => `<button type="button" class="pi-seg-btn${pace.value === progress.pace ? ' is-sel' : ''}" data-act="pace" data-pace="${pace.value}">${pace.label}</button>`).join('')}</div></div>
+        <div class="pi-tools is-c3">
             <button type="button" class="pi-btn is-primary is-sm" data-act="next">打开下一段</button>
             <button type="button" class="pi-btn is-sm" data-act="check"${checking ? ' disabled' : ''}>${checking ? '<span class="pi-spin"></span>检测中' : '立即检测'}</button>
             <button type="button" class="pi-btn is-sm" data-act="rewrite">让 AI 改写后续阶段</button></div>
-            <div class="pi-units">${unitList(units, states, progress)}</div>` : '<p class="pi-hint">大纲为空。到「大纲」页导入剧情 YAML，或让 AI 写一卷。</p>'}
+            <div class="pi-units">${unitList(units, states, progress, settings.carryOver ? carriedNodes(units, states, progress) : [])}</div>` : '<p class="pi-hint">大纲为空。到「大纲」页导入剧情 YAML，或让 AI 写一卷。</p>'}
         </div>`;
 }
 
@@ -104,6 +109,11 @@ function setSlot(view, slotId, patch) {
 
 export const actions = {
     activate: view => view.runtime.switchProject(view.projectId),
+    // 推进速度随聊天保存，改完立即换掉详细条目开头的说明。
+    pace(view, target) {
+        view.runtime.setProgress({ ...view.runtime.progress(), pace: target.dataset.pace });
+        view.renderBody();
+    },
     'index-toggle'(view) {
         const st = view.tabState('run');
         st.indexOpen = !st.indexOpen;

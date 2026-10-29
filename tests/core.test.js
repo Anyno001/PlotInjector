@@ -8,7 +8,9 @@ import { flattenUnits, outlineToText, parseOutlineText, stageNodes, volumeLabel 
 import { advance, emptyProgress, setNodeChecked, uncheckByNames, unitStates, patchSlot } from '../src/core/progress.js';
 import { buildEntries, buildIndexText, toWorldInfoEntry } from '../src/core/inject.js';
 import { buildCheckMessages, cleanFloorText, parseCheckReply } from '../src/core/check.js';
-import { acuBlocked, acuField, filterAcuLore, normalizeAcu, setAcuEntry, setAcuField } from '../src/core/acu.js';
+import { acuField, groupByField } from '../src/core/acu.js';
+import { checkedSet, entryRefId, migrateOc, normalizeWbRule, ruleFromSelection } from '../src/core/refs.js';
+import { normalizeChat } from '../src/core/store.js';
 import { mergeBlocks, parseSettingReply, splitBlocks } from '../src/core/setting.js';
 import { parseOutlineReply } from '../src/core/prompts.js';
 import { normalizeSettings, newProject, resolveLlm } from '../src/core/store.js';
@@ -223,28 +225,72 @@ test('接口设置：v0.1.5 引用预设的用途展开回独立接口；预设�
     assert.deepEqual(old.presets, []);
 });
 
-test('数据库条目屏蔽：按字段分组 + 单条覆盖，同字段新条目跟随；扫描前从候选里去掉', () => {
-    assert.equal(acuField('TavernDB-ACU-CustomExport-人物档案-1'), '人物档案');
+test('数据库条目按字段分组：去掉前缀与末尾编号得字段名', () => {
     assert.equal(acuField('TavernDB-ACU-CustomExport-人物档案-12'), '人物档案');
     assert.equal(acuField('TavernDB-ACU-CustomExport-物品栏-包裹'), '物品栏');
     assert.equal(acuField('TavernDB-ACU-CustomExport-剧情纪要-上'), '剧情纪要');
-    assert.equal(acuField('TavernDB-ACU-CustomExport-剧情纪要-下'), '剧情纪要');
-    assert.equal(acuField('TavernDB-ACU-CustomExport-世界观'), '世界观');
+    assert.equal(acuField('TavernDB-ACU-CustomExport-纪要索引'), '纪要索引');
     assert.equal(acuField('TavernDB-ACU-ImportantPersonsIndex'), '英文字段');
-    assert.equal(acuField('TavernDB-ACU-CustomExport-Summary'), '英文字段');
     assert.equal(acuField('手写剧情'), '');
-    let acu = setAcuField(normalizeAcu({}), '剧情纪要', true);
-    assert.ok(acuBlocked(acu, 'TavernDB-ACU-CustomExport-剧情纪要-上'));
-    assert.ok(acuBlocked(acu, 'TavernDB-ACU-CustomExport-剧情纪要-9'), '同字段新增条目跟随');
-    assert.ok(!acuBlocked(acu, 'TavernDB-ACU-CustomExport-人物档案-1'), '其他字段不受影响');
-    acu = setAcuEntry(acu, 'TavernDB-ACU-CustomExport-剧情纪要-上', false);
-    assert.ok(!acuBlocked(acu, 'TavernDB-ACU-CustomExport-剧情纪要-上'));
-    acu = setAcuEntry(acu, 'TavernDB-ACU-CustomExport-剧情纪要-上', true);
-    assert.deepEqual(acu.overrides, {});
-    acu = setAcuEntry(setAcuField(acu, '剧情纪要', false), 'TavernDB-ACU-CustomExport-人物档案-1', true);
-    assert.deepEqual(acu.fields, {});
-    const payload = { globalLore: [{ comment: '手写剧情' }], characterLore: [{ comment: 'TavernDB-ACU-CustomExport-人物档案-1' }, { comment: 'TavernDB-ACU-CustomExport-人物档案-2' }], chatLore: [], personaLore: [] };
-    assert.equal(filterAcuLore(acu, payload), 1);
-    assert.deepEqual(payload.characterLore.map(item => item.comment), ['TavernDB-ACU-CustomExport-人物档案-2']);
-    assert.deepEqual(normalizeAcu(JSON.parse(JSON.stringify(acu))), acu);
+    const fields = groupByField([{ title: 'TavernDB-ACU-OutlineTable' }, { title: 'TavernDB-ACU-CustomExport-纪要-1' }, { title: '手写' }]);
+    assert.deepEqual(fields.map(([name, list]) => [name, list.length]), [['纪要', 1], ['英文字段', 1]]);
+});
+
+test('讨论参考默认：手写条目全选（世界书里关闭的除外）、纪要索引 + 最新 N 条纪要，其他数据库字段不选；新条目按规则自动套用', () => {
+    const e = (key, title, disabled = false) => ({ key, title, disabled, content: 'x' });
+    const entries = [e('0', '手写剧情'), e('1', '已关闭的手写', true), e('2', 'TavernDB-ACU-CustomExport-纪要索引'), e('3', 'TavernDB-ACU-CustomExport-人物档案-1')];
+    for (let n = 1; n <= 20; n += 1) entries.push(e(`m${n}`, `TavernDB-ACU-CustomExport-纪要-${n}`));
+    const books = [{ name: '书', entries }];
+    const ids = set => [...set].map(id => id.replace('书|', '')).sort();
+    let chosen = checkedSet(normalizeWbRule({}), books, 10);
+    const memoIds = [...chosen].filter(id => id.includes('纪要-')).map(id => Number(id.split('-').pop())).sort((x, y) => x - y);
+    assert.deepEqual(memoIds, [11, 12, 13, 14, 15, 16, 17, 18, 19, 20]);
+    assert.ok(chosen.has('书|k:0') && !chosen.has('书|k:1'));
+    assert.ok(chosen.has('书|t:TavernDB-ACU-CustomExport-纪要索引'));
+    assert.ok(!chosen.has('书|t:TavernDB-ACU-CustomExport-人物档案-1'));
+    const picked = new Set(chosen);
+    picked.delete('书|k:0');
+    picked.add('书|t:TavernDB-ACU-CustomExport-人物档案-1');
+    const rule = ruleFromSelection(books, { 人物档案: true }, picked, 10);
+    assert.deepEqual(rule, { fields: { 人物档案: true }, picks: { '书|k:0': false } });
+    entries.push(e('4', 'TavernDB-ACU-CustomExport-人物档案-2'), e('5', '新手写条目'), e('m21', 'TavernDB-ACU-CustomExport-纪要-21'));
+    chosen = checkedSet(rule, books, 10);
+    assert.ok(chosen.has('书|t:TavernDB-ACU-CustomExport-人物档案-2'), '字段勾选后新条目跟随');
+    assert.ok(chosen.has('书|k:5'), '新手写条目默认附带');
+    assert.ok(chosen.has('书|t:TavernDB-ACU-CustomExport-纪要-21') && !chosen.has('书|t:TavernDB-ACU-CustomExport-纪要-11'), '纪要始终取最新 N 条');
+    assert.equal(entryRefId('书', entries[0]), '书|k:0');
+    assert.deepEqual(ids(checkedSet(normalizeWbRule({}), [{ name: '书', entries: [] }], 10)), []);
+    assert.deepEqual(migrateOc([{ book: '书', key: '9', title: 'TavernDB-ACU-OutlineTable' }, { book: '书', key: '0', title: '手写' }]), { fields: {}, picks: { '书|t:TavernDB-ACU-OutlineTable': true } });
+    const chat = normalizeChat({ refs: { oc: [], setting: false } });
+    assert.deepEqual([chat.refs.setting, chat.refs.progress, chat.refs.floors, chat.refs.memo], [false, true, 10, 10]);
+});
+
+
+test('推进速度：慢速/正常/快速换详细条目开头的说明，快速附下一阶段，自定义文字优先', () => {
+    const project = projectWith(MINI);
+    const detail = (progress, settings = {}) => buildEntries(project, progress, normalizeSettings(settings)).find(entry => entry.kind === 'detail').content;
+    const base = emptyProgress(project.id);
+    assert.equal(base.pace, 'normal');
+    assert.match(detail(base), /按正文进展自然推进/);
+    assert.match(detail({ ...base, pace: 'slow' }), /节奏放慢/);
+    const fast = detail({ ...base, pace: 'fast' });
+    assert.match(fast, /节奏加快/);
+    assert.match(fast, /下一阶段：卷一·测试·阶段二 发展（开端之后）/);
+    assert.doesNotMatch(detail(base), /下一阶段：/);
+    assert.match(detail({ ...base, pace: 'slow' }, { paceText: { slow: '自定义慢速' } }), /^<剧情参考[^>]*>\n自定义慢速\n/);
+});
+
+test('没演的支线与世界动态延续到后面的阶段；取消勾选或关闭开关后不再延续', () => {
+    const text = '剧情_卷一_测试:\n  阶段一_开端:\n    时间范围: 开始时\n    主线节点:\n      - 名称: 甲事件\n    支线事件:\n      - 名称: 丙支线\n        事件: 丙发生。\n    世界动态:\n      - 类型: 丁传闻\n        内容: 丁流传。\n  阶段二_发展:\n    时间范围: 开端之后\n    主线节点:\n      - 名称: 乙事件\n';
+    const project = projectWith(text);
+    const units = flattenUnits(project.outline.volumes);
+    const progress = advance(emptyProgress(project.id), units).progress;
+    const detail = settings => buildEntries(project, progress, normalizeSettings(settings)).find(entry => entry.kind === 'detail').content;
+    assert.match(detail({}), /延续自前面阶段[\s\S]*支线｜丙支线（来自阶段一）：丙发生。[\s\S]*世界动态｜丁传闻/);
+    assert.match(buildIndexText(units, unitStates(units, progress), progress), /\[未演·延续\] 支线｜丙支线/);
+    assert.doesNotMatch(detail({ carryOver: false }), /延续自前面阶段/);
+    const played = setNodeChecked(progress, units[0].id, 's0', false);
+    const after = buildEntries(project, played, normalizeSettings({})).find(entry => entry.kind === 'detail').content;
+    assert.doesNotMatch(after, /丙支线/);
+    assert.match(after, /丁传闻/);
 });

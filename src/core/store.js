@@ -1,6 +1,6 @@
 import { DEFAULT_PARAMS } from './inject.js';
 import { makeId } from './outline.js';
-import { DEFAULT_ACU, normalizeAcu } from './acu.js';
+import { DEFAULT_MEMO, DEFAULT_WB_RULE, migrateOc, normalizeWbRule } from './refs.js';
 
 export const INDEX_FILE = 'pi-index.json';
 export const projectFile = id => `pi-p-${id}.json`;
@@ -51,14 +51,15 @@ export function resolveLlm(settings, role) {
 export const DEFAULT_SETTINGS = {
     tagName: '剧情参考',
     offTrackMode: 'ask',
+    carryOver: true,
     handleMode: 'ask',
     checkEvery: 3,
     checkFloors: 3,
     guide: '',
+    paceText: { slow: '', normal: '', fast: '' },
     loaderRef: '',
     llm: { discuss: { ...DEFAULT_LLM }, outline: { ...DEFAULT_LLM }, check: { ...DEFAULT_LLM } },
     presets: [],
-    acu: DEFAULT_ACU,
 };
 
 const HANDLE_MODES = ['ask', 'auto', 'nodes'];
@@ -71,12 +72,13 @@ export function normalizeSettings(value) {
         ...DEFAULT_SETTINGS,
         ...src,
         offTrackMode: OFF_MODES.includes(src.offTrackMode) ? src.offTrackMode : DEFAULT_SETTINGS.offTrackMode,
+        carryOver: src.carryOver !== false,
         handleMode: HANDLE_MODES.includes(src.handleMode) ? src.handleMode : DEFAULT_SETTINGS.handleMode,
         checkEvery: Math.max(1, Math.min(50, Number(src.checkEvery) || DEFAULT_SETTINGS.checkEvery)),
         checkFloors: Math.max(1, Math.min(20, Number(src.checkFloors) || DEFAULT_SETTINGS.checkFloors)),
+        paceText: Object.fromEntries(['slow', 'normal', 'fast'].map(key => [key, String((src.paceText && src.paceText[key]) || '')])),
         llm,
         presets,
-        acu: normalizeAcu(src.acu),
     };
 }
 
@@ -135,7 +137,22 @@ export function normalizeProject(value, id) {
 }
 
 export function emptyChat() {
-    return { version: 1, summary: '', messages: [], refs: { oc: [], setting: true, outline: false } };
+    return { version: 1, summary: '', messages: [], refs: { setting: true, outline: false, progress: true, floors: 10, memo: DEFAULT_MEMO, wb: DEFAULT_WB_RULE } };
+}
+
+// 讨论页附带参考：设定、大纲、剧情进度三个开关，正文楼数，世界书条目选择规则。
+function normalizeRefs(value) {
+    const src = value && typeof value === 'object' ? value : {};
+    const floors = Number(src.floors);
+    const memo = Number(src.memo);
+    return {
+        setting: src.setting !== false,
+        outline: Boolean(src.outline),
+        progress: src.progress !== false,
+        floors: Number.isFinite(floors) ? Math.max(0, Math.min(50, Math.round(floors))) : 10,
+        memo: Number.isFinite(memo) ? Math.max(0, Math.min(100, Math.round(memo))) : DEFAULT_MEMO,
+        wb: src.wb ? normalizeWbRule(src.wb) : migrateOc(src.oc),
+    };
 }
 
 export function normalizeChat(value) {
@@ -144,7 +161,7 @@ export function normalizeChat(value) {
         version: 1,
         summary: String(src.summary || ''),
         messages: Array.isArray(src.messages) ? src.messages.filter(msg => msg && typeof msg.content === 'string').map(msg => ({ id: msg.id || makeId('m'), role: msg.role === 'user' ? 'user' : 'assistant', content: msg.content, at: Number(msg.at) || 0, folded: Boolean(msg.folded) })) : [],
-        refs: { oc: [], setting: true, outline: false, ...(src.refs || {}) },
+        refs: normalizeRefs(src.refs),
     };
 }
 

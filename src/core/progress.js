@@ -5,7 +5,7 @@ export const STATES = ['done', 'active', 'next', 'todo'];
 export const STATE_LABELS = { done: '已过', active: '进行中', next: '下一段', todo: '未到' };
 
 export function emptyProgress(projectId) {
-    return { projectId, current: null, slots: {}, lastCheckFloor: 0, muted: [], offMuted: [] };
+    return { projectId, current: null, slots: {}, lastCheckFloor: 0, muted: [], offMuted: [], pace: 'normal' };
 }
 
 export function normalizeProgress(value, projectId) {
@@ -18,6 +18,7 @@ export function normalizeProgress(value, projectId) {
         muted: Array.isArray(value.muted) ? value.muted : [],
         offMuted: Array.isArray(value.offMuted) ? value.offMuted : [],
         lastCheckFloor: Number(value.lastCheckFloor) || 0,
+        pace: ['slow', 'normal', 'fast'].includes(value.pace) ? value.pace : 'normal',
     };
 }
 

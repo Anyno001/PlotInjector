@@ -48,6 +48,7 @@ export const CSS = `
 .pi-card h3{margin:0 0 8px;font-size:12px;font-weight:700;color:var(--pi-dark);display:flex;align-items:center;gap:8px}
 .pi-card h3 .pi-spacer{flex:1}
 .pi-hint{font-size:12px;color:var(--pi-txt2);margin:4px 0}
+.pi-hint.is-warn{color:var(--pi-warn);font-weight:600}
 .pi-empty{text-align:center;color:var(--pi-txt2);padding:40px 10px;font-size:13px}
 .pi-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .pi-row>.pi-grow{flex:1;min-width:0}
@@ -87,6 +88,20 @@ export const CSS = `
 .pi-wb-sub-hd{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--pi-txt2);padding:4px 0 2px}
 .pi-wb-sub-hd small{font-weight:400}
 .pi-wb-sub-hd.is-fold{cursor:pointer}
+.pi-wb-item{min-width:0}
+.pi-wb-name{flex:1;min-width:0;display:flex;align-items:center;gap:4px;padding:0;border:0;background:none;color:inherit;font:inherit;cursor:pointer;text-align:left}
+.pi-wb-name .pi-wb-title{flex:1}
+.pi-wb-edit{margin:4px 0 10px 23px;padding:10px;border:1.5px solid var(--pi-line);border-radius:var(--pi-r-in)}
+.pi-wb-memo{display:inline-flex;align-items:center;gap:4px;font-weight:500;flex-shrink:0}
+.pi-wb-memo{margin-left:auto;font-size:12px;color:var(--pi-txt2)}
+.pi-wb-memo .pi-inp.is-num{width:52px;height:26px;padding:2px 6px;font-size:12px;text-align:center}
+.pi-wb-sub-hd>input[type=checkbox],.pi-wb-sub-hd>.pi-wb-pad{width:15px;height:15px;margin:0;flex-shrink:0;accent-color:var(--pi-accent)}
+.pi-fix{display:flex;align-items:flex-start;gap:8px;padding:4px 0;font-size:13px}
+.pi-fix-text{flex:1;min-width:0}
+.pi-fix-acts{display:grid;grid-template-columns:repeat(3,56px);gap:4px;flex-shrink:0}
+.pi-fix-acts>.pi-btn{width:100%;padding:0}
+.pi-ref-book+.pi-ref-book{margin-top:12px;padding-top:8px;border-top:1px solid var(--pi-line)}
+.pi-chip:disabled{opacity:.45;cursor:not-allowed}
 .pi-wb-field{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pi-wb-row{display:flex;align-items:center;gap:8px;padding:3px 0;min-width:0}
 .pi-wb-row input{width:15px;height:15px;margin:0;accent-color:var(--pi-accent);flex-shrink:0;cursor:pointer}
@@ -154,6 +169,9 @@ export const CSS = `
 .pi-titem.is-stage{padding-left:18px}
 .pi-titem .pi-pname{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pi-node{border:1.5px solid var(--pi-line);border-radius:var(--pi-r-in);padding:8px 10px;margin-bottom:8px}
+.pi-pace{display:flex;align-items:center;gap:10px;margin:0 0 10px}
+.pi-pace-label{font-size:12px;color:var(--pi-txt2);font-weight:500;flex-shrink:0}
+.pi-pace .pi-seg{flex:1;margin:0}
 .pi-node-seg{margin:0 0 10px}
 .pi-node-hd{display:flex;align-items:center;gap:6px;margin-bottom:6px}
 .pi-node-hd .pi-grow{flex:1}
@@ -194,7 +212,13 @@ export const CSS = `
 .pi-send:disabled{opacity:.45;cursor:not-allowed;transform:none}
 .pi-refs{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
 .pi-chip{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border:1.5px solid var(--pi-line);border-radius:20px;font-size:12px;cursor:pointer;background:var(--pi-bg);color:var(--pi-txt2);font-family:inherit}
-.pi-chip-end{margin-left:auto}
+.pi-compose-side{width:40px;height:40px;border:1.5px solid var(--pi-line);border-radius:50%;background:var(--pi-bg);color:var(--pi-txt2);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0}
+.pi-compose-side:hover{color:var(--pi-danger);border-color:var(--pi-danger)}
+.pi-block-chip{padding:0 4px 0 0;gap:0}
+.pi-block-chip>button{border:0;background:none;color:inherit;font:inherit;cursor:pointer;padding:3px 4px 3px 10px}
+.pi-block-chip>.pi-block-del{padding:3px 4px;display:inline-flex;align-items:center;opacity:.6}
+.pi-block-chip>.pi-block-del svg{width:10px;height:10px}
+.pi-block-chip>.pi-block-del:hover{opacity:1;color:var(--pi-danger)}
 .pi-chip.is-on{border-color:var(--pi-accent);color:var(--pi-accent);background:var(--pi-accent-soft)}
 .pi-diff{font-family:var(--pi-mono);font-size:12px;line-height:1.5;white-space:pre-wrap;word-break:break-word;background:var(--pi-surf);border-radius:var(--pi-r-in);padding:6px 0;max-height:360px;overflow:auto}
 .pi-diff div{padding:0 10px}
