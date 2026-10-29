@@ -6,6 +6,7 @@ import { ask, guideText } from './ai.js';
 import { confirmDialog, esc, openDialog, promptDialog } from './dom.js';
 import { ICONS } from './styles.js';
 import { pickWorldbookEntries } from './wb-import.js';
+import { renderMarkdown } from './markdown.js';
 import * as outlineTab from './tab-outline.js';
 import * as settingTab from './tab-setting.js';
 
@@ -36,14 +37,14 @@ export function render(view) {
             ${!isUser ? `<button type="button" class="pi-btn is-sm is-ghost" data-act="to-setting">整理成设定</button>
             <button type="button" class="pi-btn is-sm is-ghost" data-act="to-outline">据此写大纲</button>
             ${hasYamlBlock(msg.content) ? `<button type="button" class="pi-btn is-sm is-ghost" data-act="use-yaml" data-id="${esc(msg.id)}">把 YAML 送到大纲</button>` : ''}` : ''}</div>`;
-        return `<div class="pi-msg ${isUser ? 'is-user' : 'is-ai'}">${esc(msg.content)}${tools}</div>`;
+        return `<div class="pi-msg ${isUser ? 'is-user' : 'is-ai'}"><div class="pi-md">${renderMarkdown(msg.content)}</div>${tools}</div>`;
     }).join('');
     const empty = !chat.messages.length ? `<div class="pi-empty">说说这条 if 线的想法：原作、角色、类型、基调，一句话也行。<br>AI 按「同人世界观速成」帮你把设定想清楚。</div>` : '';
     return `${chips}<div class="pi-chat">
         ${folded ? `<button type="button" class="pi-msg-fold" data-act="summary">更早的 ${folded} 条已折成摘要 · 查看</button>` : ''}
         ${empty}${messages}${busy ? '<div class="pi-msg is-ai"><span class="pi-spin"></span></div>' : ''}</div>
         <div class="pi-compose"><textarea class="pi-ta" data-compose placeholder="Ctrl+Enter 发送">${esc(st(view).draft || '')}</textarea>
-        <button type="button" class="pi-btn is-primary" data-act="send"${busy ? ' disabled' : ''}>${ICONS.send}发送</button></div>`;
+        <button type="button" class="pi-send" data-act="send" title="发送（Ctrl+Enter）"${busy ? ' disabled' : ''}>${ICONS.send}</button></div>`;
 }
 
 async function resolveRefs(view, chat, project) {

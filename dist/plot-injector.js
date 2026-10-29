@@ -1,4 +1,4 @@
-// PlotInjector v0.1.3
+// PlotInjector v0.1.4
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -476,12 +476,12 @@ ${body}
     return hostWindow().document;
   }
   function ctx() {
-    let st6 = hostWindow().SillyTavern;
-    return st6 && typeof st6.getContext == "function" ? st6.getContext() : st6 || null;
+    let st7 = hostWindow().SillyTavern;
+    return st7 && typeof st7.getContext == "function" ? st7.getContext() : st7 || null;
   }
   function libs() {
-    let st6 = hostWindow().SillyTavern;
-    return st6 && st6.libs || {};
+    let st7 = hostWindow().SillyTavern;
+    return st7 && st7.libs || {};
   }
   function helper() {
     let w = hostWindow();
@@ -1227,18 +1227,26 @@ ${floor.text}`)
 
   // src/ui/styles.js
   var CSS = `
-.pi-root{--pi-accent:#E8507B;--pi-accent-soft:#FEF0F3;--pi-dark:#1E1E2E;--pi-bg:#FFFFFF;--pi-surf:#F8F9FB;--pi-line:#E8E8EE;--pi-txt:#1E1E2E;--pi-txt2:#7C7C8A;--pi-ok:#2E9E6A;--pi-ok-soft:#E9F7F0;--pi-warn:#C98A12;--pi-warn-soft:#FDF5E4;--pi-danger:#D64545;--pi-danger-soft:#FDEDED;--pi-add:#E9F7F0;--pi-del:#FDEDED;--pi-r:14px;--pi-r-in:10px;--pi-shadow:0 8px 32px rgba(0,0,0,.15);--pi-font:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei","PingFang SC",sans-serif;--pi-mono:Consolas,"JetBrains Mono",monospace;font-family:var(--pi-font);color:var(--pi-txt);font-size:14px;line-height:1.55}
+.pi-root{--pi-accent:#E8507B;--pi-accent-soft:#FEF0F3;--pi-dark:#1E1E2E;--pi-bg:#FFFFFF;--pi-surf:#F8F9FB;--pi-line:#E8E8EE;--pi-txt:#1E1E2E;--pi-txt2:#7C7C8A;--pi-ok:#2E9E6A;--pi-ok-soft:#E9F7F0;--pi-warn:#C98A12;--pi-warn-soft:#FDF5E4;--pi-danger:#D64545;--pi-danger-soft:#FDEDED;--pi-add:#E9F7F0;--pi-del:#FDEDED;--pi-on-dark:#FFFFFF;--pi-user-bg:#1E1E2E;--pi-user-txt:#FFFFFF;--pi-user-txt2:#B4B4C0;--pi-user-hover:#34344A;--pi-r:14px;--pi-r-in:10px;--pi-shadow:0 8px 32px rgba(0,0,0,.15);--pi-font:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei","PingFang SC",sans-serif;--pi-mono:Consolas,"JetBrains Mono",monospace;font-family:var(--pi-font);color:var(--pi-txt);font-size:14px;line-height:1.55}
+.pi-root.is-night{--pi-accent:#F0688F;--pi-accent-soft:#3A2230;--pi-dark:#E6E6EE;--pi-bg:#1F1F2A;--pi-surf:#16161F;--pi-line:#33333F;--pi-txt:#E6E6EE;--pi-txt2:#9A9AA8;--pi-ok:#4CC08A;--pi-ok-soft:#1C3329;--pi-warn:#E0A63A;--pi-warn-soft:#3A3020;--pi-danger:#EF6B6B;--pi-danger-soft:#3D2224;--pi-add:#1C3329;--pi-del:#3D2224;--pi-on-dark:#16161F;--pi-user-bg:#3A3A4C;--pi-user-txt:#E6E6EE;--pi-user-txt2:#A8A8B6;--pi-user-hover:#4A4A5E;--pi-shadow:0 8px 32px rgba(0,0,0,.5);color-scheme:dark}
 .pi-root *,.pi-root *::before,.pi-root *::after{box-sizing:border-box}
 .pi-root ::-webkit-scrollbar{display:none}
 .pi-root [hidden]{display:none!important}
 .pi-overlay{position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;z-index:10050;display:flex;align-items:center;justify-content:center;background:rgba(20,20,30,.28)}
-.pi-panel{width:880px;max-width:96vw;height:88vh;max-height:88vh;background:var(--pi-surf);border-radius:var(--pi-r);box-shadow:var(--pi-shadow);display:grid;grid-template-columns:220px 1fr;overflow:hidden}
+.pi-panel{position:relative;width:880px;max-width:96vw;height:88vh;max-height:88vh;background:var(--pi-surf);border-radius:var(--pi-r);box-shadow:var(--pi-shadow);display:grid;grid-template-columns:220px 1fr;overflow:hidden}
+.pi-scrim{display:none}
 .pi-side{background:var(--pi-bg);border-right:1px solid var(--pi-line);display:flex;flex-direction:column;min-height:0}
 .pi-side-hd{padding:14px 14px 8px;font-weight:700;font-size:15px;color:var(--pi-dark);display:flex;align-items:center;gap:6px}
 .pi-side-hd small{font-weight:400;color:var(--pi-txt2);font-size:11px}
 .pi-plist{flex:1;overflow-y:auto;padding:0 8px;scrollbar-width:none}
 .pi-group{margin:6px 0}
 .pi-group-hd{display:flex;align-items:center;gap:4px;width:100%;padding:4px 6px;border:0;background:none;color:var(--pi-txt2);font-size:12px;cursor:pointer;font-family:inherit}
+.pi-group-hd small{margin-left:auto;font-size:11px}
+.pi-group.is-collapsed .pi-pitem{display:none}
+.pi-plist.is-searching .pi-group.is-collapsed .pi-pitem{display:flex}
+.pi-psearch{position:relative;margin:0 8px 6px}
+.pi-psearch svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--pi-txt2);pointer-events:none}
+.pi-psearch .pi-inp{padding-left:30px}
 .pi-pitem{display:flex;align-items:center;gap:6px;width:100%;padding:7px 10px;border:0;border-radius:var(--pi-r-in);background:none;color:var(--pi-txt);font-size:13px;text-align:left;cursor:pointer;font-family:inherit}
 .pi-pitem:hover{background:var(--pi-surf)}
 .pi-pitem.is-sel{background:var(--pi-accent-soft);color:var(--pi-accent);font-weight:600}
@@ -1246,15 +1254,19 @@ ${floor.text}`)
 .pi-pitem .pi-pname{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pi-side-ft{padding:8px;border-top:1px solid var(--pi-line);display:flex;flex-direction:column;gap:4px}
 .pi-main{display:flex;flex-direction:column;min-width:0;min-height:0}
-.pi-top{display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--pi-bg);border-bottom:1px solid var(--pi-line)}
-.pi-top-title{font-weight:700;color:var(--pi-dark);flex-shrink:0;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pi-tabs{display:flex;gap:4px;flex:1;min-width:0;overflow-x:auto;scrollbar-width:none}
-.pi-tab{padding:6px 14px;border:0;border-radius:20px;background:none;color:var(--pi-txt2);font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:inherit}
+.pi-top{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:8px;padding:10px 14px;background:var(--pi-bg);border-bottom:1px solid var(--pi-line)}
+.pi-top-lead{grid-column:1;display:flex;align-items:center;gap:4px;min-width:0}
+.pi-top-title{font-weight:700;color:var(--pi-dark);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pi-top-end{grid-column:3;justify-self:end;display:flex;align-items:center;gap:6px}
+.pi-icon-btn{width:28px;height:28px;border:0;border-radius:8px;background:none;color:var(--pi-txt2);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;padding:0}
+.pi-icon-btn:hover{color:var(--pi-dark);background:var(--pi-surf)}
+.pi-menu{display:none}
+.pi-tabs{grid-column:2;display:grid;grid-auto-flow:column;grid-auto-columns:76px;gap:4px}
+.pi-tab{text-align:center;padding:6px 0;border:0;border-radius:20px;background:none;color:var(--pi-txt2);font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:inherit}
 .pi-tab:hover{color:var(--pi-dark)}
-.pi-tab.is-sel{background:var(--pi-dark);color:#fff}
+.pi-tab.is-sel{background:var(--pi-dark);color:var(--pi-on-dark)}
 .pi-close{width:30px;height:30px;border:0;border-radius:50%;background:var(--pi-surf);color:var(--pi-txt2);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .pi-close:hover{color:var(--pi-dark)}
-.pi-picker{display:none}
 .pi-body{flex:1;overflow-y:auto;padding:14px;scrollbar-width:none;min-height:0}
 .pi-body.is-chat{display:flex;flex-direction:column;overflow:hidden}
 .pi-card{background:var(--pi-bg);border-radius:var(--pi-r);padding:12px 14px;margin-bottom:10px}
@@ -1266,6 +1278,15 @@ ${floor.text}`)
 .pi-row>.pi-grow{flex:1;min-width:0}
 .pi-field{display:flex;flex-direction:column;gap:3px;margin-bottom:8px;min-width:0}
 .pi-field>span{font-size:12px;color:var(--pi-txt2);font-weight:500}
+.pi-row.is-top{align-items:flex-start}
+.pi-inline{display:flex;gap:8px;align-items:stretch}
+.pi-inline>.pi-inp,.pi-inline>.pi-sel{flex:1;min-width:0}
+.pi-inline>.pi-btn{min-height:0;flex-shrink:0}
+.pi-acts{margin-top:12px}
+.pi-acts-top{margin-bottom:8px}
+.pi-seg{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:2px;padding:3px;background:var(--pi-surf);border-radius:20px;margin-bottom:6px}
+.pi-seg-btn{padding:5px 6px;border:0;border-radius:16px;background:none;color:var(--pi-txt2);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pi-seg-btn.is-sel{background:var(--pi-bg);color:var(--pi-dark);box-shadow:0 1px 3px rgba(0,0,0,.12)}
 .pi-inp,.pi-sel,.pi-ta{width:100%;padding:7px 11px;border:1.5px solid var(--pi-line);border-radius:var(--pi-r-in);font-size:13px;color:var(--pi-txt);background:var(--pi-bg);outline:none;font-family:inherit}
 .pi-inp:focus,.pi-sel:focus,.pi-ta:focus{border-color:var(--pi-accent)}
 .pi-inp.is-num{width:74px}
@@ -1276,9 +1297,9 @@ ${floor.text}`)
 .pi-btn:hover{border-color:var(--pi-dark)}
 .pi-btn:active{transform:scale(.97)}
 .pi-btn:disabled{opacity:.45;cursor:not-allowed;transform:none}
-.pi-btn.is-primary{background:var(--pi-dark);border-color:var(--pi-dark);color:#fff}
+.pi-btn.is-primary{background:var(--pi-dark);border-color:var(--pi-dark);color:var(--pi-on-dark)}
 .pi-btn.is-primary:hover{opacity:.86}
-.pi-btn.is-accent{background:var(--pi-accent);border-color:var(--pi-accent);color:#fff}
+.pi-btn.is-accent{background:var(--pi-accent);border-color:var(--pi-accent);color:var(--pi-bg)}
 .pi-btn.is-danger{color:var(--pi-danger);border-color:var(--pi-danger-soft)}
 .pi-btn.is-danger:hover{border-color:var(--pi-danger)}
 .pi-btn.is-ghost{border-color:transparent;background:none;color:var(--pi-txt2)}
@@ -1291,7 +1312,7 @@ ${floor.text}`)
 .pi-badge.is-ok{background:var(--pi-ok-soft);color:var(--pi-ok)}
 .pi-badge.is-warn{background:var(--pi-warn-soft);color:var(--pi-warn)}
 .pi-badge.is-danger{background:var(--pi-danger-soft);color:var(--pi-danger)}
-.pi-badge.is-dark{background:var(--pi-dark);color:#fff}
+.pi-badge.is-dark{background:var(--pi-dark);color:var(--pi-on-dark)}
 .pi-check{display:flex;align-items:flex-start;gap:8px;padding:4px 0;font-size:13px;cursor:pointer}
 .pi-check input{width:15px;height:15px;margin-top:3px;accent-color:var(--pi-accent);flex-shrink:0;cursor:pointer}
 .pi-check.is-off{color:var(--pi-txt2);text-decoration:line-through}
@@ -1321,15 +1342,39 @@ ${floor.text}`)
 .pi-node-hd{display:flex;align-items:center;gap:6px;margin-bottom:6px}
 .pi-node-hd .pi-grow{flex:1}
 .pi-chat{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding:4px 2px 10px;scrollbar-width:none;min-height:0}
-.pi-msg{max-width:86%;padding:9px 12px;border-radius:var(--pi-r);background:var(--pi-bg);font-size:13px;line-height:1.65;white-space:pre-wrap;word-break:break-word}
-.pi-msg.is-user{align-self:flex-end;background:var(--pi-dark);color:#fff}
+.pi-msg{max-width:86%;padding:9px 12px;border-radius:var(--pi-r);background:var(--pi-bg);font-size:13px;line-height:1.65;word-break:break-word}
+.pi-md>:first-child{margin-top:0}
+.pi-md>:last-child{margin-bottom:0}
+.pi-md p{margin:0 0 8px}
+.pi-md-h{font-weight:700;margin:12px 0 6px;line-height:1.4}
+.pi-md-h.is-h1{font-size:16px}
+.pi-md-h.is-h2{font-size:15px}
+.pi-md-h.is-h3,.pi-md-h.is-h4{font-size:14px}
+.pi-md ul,.pi-md ol{margin:0 0 8px;padding-left:20px}
+.pi-md li.is-sub{margin-left:16px}
+.pi-md blockquote{margin:0 0 8px;padding:2px 0 2px 10px;border-left:3px solid var(--pi-line);color:var(--pi-txt2)}
+.pi-md hr{border:0;border-top:1px solid var(--pi-line);margin:10px 0}
+.pi-md code{font-family:var(--pi-mono);font-size:12px;background:var(--pi-surf);border-radius:4px;padding:1px 4px}
+.pi-md .pi-pre{margin:0 0 8px}
+.pi-md-table{overflow-x:auto;margin:0 0 8px}
+.pi-md table{border-collapse:collapse;font-size:12px}
+.pi-md th,.pi-md td{border:1px solid var(--pi-line);padding:4px 8px;text-align:left}
+.pi-md th{background:var(--pi-surf)}
+.pi-msg.is-user .pi-md code,.pi-msg.is-user .pi-md th,.pi-msg.is-user .pi-md .pi-pre{background:var(--pi-user-hover);color:var(--pi-user-txt)}
+.pi-msg.is-user .pi-md blockquote{color:var(--pi-user-txt2);border-color:var(--pi-user-hover)}
+.pi-msg.is-user .pi-md th,.pi-msg.is-user .pi-md td{border-color:var(--pi-user-hover)}
+.pi-msg.is-user{align-self:flex-end;background:var(--pi-user-bg);color:var(--pi-user-txt)}
 .pi-msg.is-ai{align-self:flex-start}
 .pi-msg-tools{display:flex;gap:2px;margin-top:6px;flex-wrap:wrap}
-.pi-msg.is-user .pi-btn.is-ghost{color:rgba(255,255,255,.7)}
-.pi-msg.is-user .pi-btn.is-ghost:hover{color:#fff;background:rgba(255,255,255,.12)}
+.pi-msg.is-user .pi-btn.is-ghost{color:var(--pi-user-txt2)}
+.pi-msg.is-user .pi-btn.is-ghost:hover{color:var(--pi-user-txt);background:var(--pi-user-hover)}
 .pi-msg-fold{align-self:center;font-size:12px;color:var(--pi-txt2);background:var(--pi-bg);border-radius:20px;padding:4px 12px}
-.pi-compose{display:flex;gap:8px;align-items:flex-end;padding-top:8px}
-.pi-compose .pi-ta{min-height:44px;max-height:180px;resize:none}
+.pi-compose{display:flex;gap:8px;align-items:center;padding-top:8px}
+.pi-compose .pi-ta{flex:1;height:44px;min-height:44px;resize:none;padding:10px 12px;line-height:1.5}
+.pi-send{width:40px;height:40px;border:0;border-radius:50%;background:var(--pi-dark);color:var(--pi-on-dark);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0}
+.pi-send:hover{opacity:.86}
+.pi-send:active{transform:scale(.95)}
+.pi-send:disabled{opacity:.45;cursor:not-allowed;transform:none}
 .pi-refs{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
 .pi-chip{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border:1.5px solid var(--pi-line);border-radius:20px;font-size:12px;cursor:pointer;background:var(--pi-bg);color:var(--pi-txt2);font-family:inherit}
 .pi-chip.is-on{border-color:var(--pi-accent);color:var(--pi-accent);background:var(--pi-accent-soft)}
@@ -1360,12 +1405,13 @@ ${floor.text}`)
 @media (max-width:720px){
 .pi-overlay{align-items:stretch}
 .pi-panel{grid-template-columns:minmax(0,1fr);width:100vw;max-width:100vw;height:100vh;height:100dvh;max-height:none;border-radius:0}
-.pi-side{display:none}
-.pi-picker{display:block;width:auto;max-width:42vw;padding:4px 8px}
-.pi-top{flex-wrap:wrap}
-.pi-top-title{display:none}
-.pi-close{margin-left:auto}
-.pi-tabs{order:3;flex-basis:100%}
+.pi-side{position:absolute;top:0;left:0;bottom:0;width:min(280px,82vw);z-index:2;transform:translateX(-100%);transition:transform .2s ease;box-shadow:var(--pi-shadow)}
+.pi-panel.is-drawer .pi-side{transform:none}
+.pi-panel.is-drawer .pi-scrim{display:block;position:absolute;top:0;left:0;width:100%;height:100%;z-index:1;background:rgba(20,20,30,.28)}
+.pi-menu{display:inline-flex}
+.pi-top{grid-template-columns:minmax(0,1fr) auto;row-gap:8px}
+.pi-top-end{grid-column:2}
+.pi-tabs{grid-column:1/-1;grid-row:2;grid-auto-columns:1fr}
 .pi-tree,.pi-split{grid-template-columns:minmax(0,1fr)}
 .pi-entry-hd{flex-wrap:wrap}
 .pi-card h3{flex-wrap:wrap}
@@ -1381,7 +1427,13 @@ ${floor.text}`)
     box: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M2 4.5L8 2l6 2.5v7L8 14l-6-2.5v-7z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M2 4.5L8 7l6-2.5M8 7v7" stroke="currentColor" stroke-width="1.3"/></svg>',
     caret: '<svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M3 2l4 3-4 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     caretDown: '<svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 3l3 4 3-4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    send: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M2 8l11-5-4 11-2-4.5L2 8z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>',
+    send: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 13V3M3.5 7.5L8 3l4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    menu: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2.5 4h11M2.5 8h11M2.5 12h11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
+    pencil: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M10.5 2.5l3 3-8 8h-3v-3l8-8z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M9 4l3 3" stroke="currentColor" stroke-width="1.3"/></svg>',
+    search: '<svg width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.4"/><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
+    book: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 2.5h7.5a2 2 0 012 2v9H5a2 2 0 01-2-2v-9z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M3 11.5a2 2 0 012-2h7.5M6 5.5h4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>',
+    moon: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M13.5 9.8A5.8 5.8 0 016.2 2.5a5.8 5.8 0 107.3 7.3z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>',
+    sun: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.4"/><path d="M8 1.5v1.6M8 12.9v1.6M1.5 8h1.6M12.9 8h1.6M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M3.4 12.6l1.1-1.1M11.5 4.5l1.1-1.1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
     file: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M4 1h5.5L13 4.5V14a1 1 0 01-1 1H4a1 1 0 01-1-1V2a1 1 0 011-1z" stroke="currentColor" stroke-width="1.2"/><path d="M9 1v4h4" stroke="currentColor" stroke-width="1.2"/></svg>'
   };
 
@@ -1399,19 +1451,27 @@ ${floor.text}`)
   function removeStyle() {
     hostDocument().getElementById(STYLE_ID)?.remove();
   }
+  var night = !1;
+  function setNight(value) {
+    night = !!value;
+    for (let node of hostDocument().querySelectorAll(".pi-root")) node.classList.toggle("is-night", night);
+  }
+  var isNight = () => night;
   function el(html) {
     let box = hostDocument().createElement("div");
-    return box.innerHTML = html.trim(), box.firstElementChild;
+    box.innerHTML = html.trim();
+    let node = box.firstElementChild;
+    return node && node.classList.contains("pi-root") && node.classList.toggle("is-night", night), node;
   }
   function options(list, value) {
     return list.map((item) => `<option value="${esc(item.value)}"${String(item.value) === String(value) ? " selected" : ""}>${esc(item.label)}</option>`).join("");
   }
-  function openDialog({ title, html = "", actions: actions7 = [{ label: "确定", value: !0, primary: !0 }], onMount } = {}) {
+  function openDialog({ title, html = "", actions: actions8 = [{ label: "确定", value: !0, primary: !0 }], onMount } = {}) {
     let doc = hostDocument();
     return new Promise((resolve) => {
       let root = el(`<div class="pi-root pi-dialog"><div class="pi-dialog-box" role="dialog">
             ${title ? `<h4>${esc(title)}</h4>` : ""}<div class="pi-dlg-body">${html}</div>
-            <div class="pi-dlg-acts">${actions7.map((action, index) => `<button type="button" class="pi-btn${action.primary ? " is-primary" : ""}${action.danger ? " is-danger" : ""}" data-dlg="${index}">${esc(action.label)}</button>`).join("")}</div>
+            <div class="pi-dlg-acts">${actions8.map((action, index) => `<button type="button" class="pi-btn${action.primary ? " is-primary" : ""}${action.danger ? " is-danger" : ""}" data-dlg="${index}">${esc(action.label)}</button>`).join("")}</div>
         </div></div>`), finish = (value) => {
         doc.removeEventListener("keydown", onKey, !0), root.remove(), resolve(value);
       }, onKey = (event) => {
@@ -1421,7 +1481,7 @@ ${floor.text}`)
         if (event.target === root) return finish(null);
         let button = event.target.closest("[data-dlg]");
         if (!button) return;
-        let action = actions7[Number(button.dataset.dlg)], value = typeof action.value == "function" ? action.value(root) : action.value;
+        let action = actions8[Number(button.dataset.dlg)], value = typeof action.value == "function" ? action.value(root) : action.value;
         value !== void 0 && finish(value);
       }), doc.addEventListener("keydown", onKey, !0), doc.body.appendChild(root), onMount && onMount(root), root.querySelector("input,textarea,select")?.focus();
     });
@@ -1852,6 +1912,79 @@ NSFW指引（涉及成人内容时）:
     } catch (error) {
       toast("error", error.message);
     }
+  }
+
+  // src/ui/markdown.js
+  function inline(text) {
+    let codes = [], out = esc(text).replace(/`([^`]+)`/g, (_, code) => `\0${codes.push(code) - 1}\0`);
+    return out = out.replace(/\*\*(.+?)\*\*|__(.+?)__/g, (_, a, b) => `<strong>${a ?? b}</strong>`).replace(/(^|[^*])\*(?!\s)(.+?)\*(?!\*)/g, "$1<em>$2</em>").replace(/~~(.+?)~~/g, "<del>$1</del>"), out.replace(/\u0000(\d+)\u0000/g, (_, i) => `<code>${codes[i]}</code>`);
+  }
+  var RE = {
+    fence: /^\s*(```|~~~)/,
+    heading: /^(#{1,6})\s+(.*?)\s*#*\s*$/,
+    hr: /^\s*([-*_])(\s*\1){2,}\s*$/,
+    quote: /^\s*>\s?/,
+    ul: /^(\s*)[-*+]\s+(.*)$/,
+    ol: /^(\s*)\d+[.)]\s+(.*)$/,
+    tableSep: /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/
+  }, cells = (line) => line.trim().replace(/^\||\|$/g, "").split("|").map((cell) => inline(cell.trim()));
+  function renderMarkdown(src) {
+    let lines = String(src ?? "").replace(/\r\n?/g, `
+`).split(`
+`), out = [], i = 0;
+    for (; i < lines.length; ) {
+      let line = lines[i];
+      if (!line.trim()) {
+        i += 1;
+        continue;
+      }
+      if (RE.fence.test(line)) {
+        let mark = line.trim().slice(0, 3), body = [];
+        for (i += 1; i < lines.length && !lines[i].trim().startsWith(mark); ) body.push(lines[i++]);
+        i += 1, out.push(`<pre class="pi-pre">${esc(body.join(`
+`))}</pre>`);
+        continue;
+      }
+      let heading = RE.heading.exec(line);
+      if (heading) {
+        out.push(`<div class="pi-md-h is-h${Math.min(heading[1].length, 4)}">${inline(heading[2])}</div>`), i += 1;
+        continue;
+      }
+      if (RE.hr.test(line)) {
+        out.push("<hr>"), i += 1;
+        continue;
+      }
+      if (line.includes("|") && i + 1 < lines.length && RE.tableSep.test(lines[i + 1])) {
+        let head = cells(line);
+        i += 2;
+        let rows = [];
+        for (; i < lines.length && lines[i].includes("|") && lines[i].trim(); ) rows.push(cells(lines[i++]));
+        out.push(`<div class="pi-md-table"><table><thead><tr>${head.map((cell) => `<th>${cell}</th>`).join("")}</tr></thead>
+                <tbody>${rows.map((row) => `<tr>${row.map((cell) => `<td>${cell}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`);
+        continue;
+      }
+      if (RE.quote.test(line)) {
+        let body = [];
+        for (; i < lines.length && RE.quote.test(lines[i]); ) body.push(lines[i++].replace(RE.quote, ""));
+        out.push(`<blockquote>${renderMarkdown(body.join(`
+`))}</blockquote>`);
+        continue;
+      }
+      let list = RE.ul.test(line) ? "ul" : RE.ol.test(line) ? "ol" : "";
+      if (list) {
+        let items = [];
+        for (; i < lines.length && RE[list].test(lines[i]); ) {
+          let [, indent, text] = RE[list].exec(lines[i++]);
+          items.push(`<li${indent.length >= 2 ? ' class="is-sub"' : ""}>${inline(text)}</li>`);
+        }
+        out.push(`<${list}>${items.join("")}</${list}>`);
+        continue;
+      }
+      let para = [];
+      for (; i < lines.length && lines[i].trim() && !RE.fence.test(lines[i]) && !RE.heading.test(lines[i]) && !RE.hr.test(lines[i]) && !RE.quote.test(lines[i]) && !RE.ul.test(lines[i]) && !RE.ol.test(lines[i]); ) para.push(inline(lines[i++]));
+      out.push(`<p>${para.join("<br>")}</p>`);
+    }
+    return out.join("");
   }
 
   // src/ui/tab-outline.js
@@ -2451,13 +2584,13 @@ ${parsed.body}` : parsed.body;
             ${isUser ? "" : `<button type="button" class="pi-btn is-sm is-ghost" data-act="to-setting">整理成设定</button>
             <button type="button" class="pi-btn is-sm is-ghost" data-act="to-outline">据此写大纲</button>
             ${hasYamlBlock(msg.content) ? `<button type="button" class="pi-btn is-sm is-ghost" data-act="use-yaml" data-id="${esc(msg.id)}">把 YAML 送到大纲</button>` : ""}`}</div>`;
-      return `<div class="pi-msg ${isUser ? "is-user" : "is-ai"}">${esc(msg.content)}${tools}</div>`;
+      return `<div class="pi-msg ${isUser ? "is-user" : "is-ai"}"><div class="pi-md">${renderMarkdown(msg.content)}</div>${tools}</div>`;
     }).join(""), empty = chat.messages.length ? "" : '<div class="pi-empty">说说这条 if 线的想法：原作、角色、类型、基调，一句话也行。<br>AI 按「同人世界观速成」帮你把设定想清楚。</div>';
     return `${chips}<div class="pi-chat">
         ${folded ? `<button type="button" class="pi-msg-fold" data-act="summary">更早的 ${folded} 条已折成摘要 · 查看</button>` : ""}
         ${empty}${messages}${busy ? '<div class="pi-msg is-ai"><span class="pi-spin"></span></div>' : ""}</div>
         <div class="pi-compose"><textarea class="pi-ta" data-compose placeholder="Ctrl+Enter 发送">${esc(st3(view).draft || "")}</textarea>
-        <button type="button" class="pi-btn is-primary" data-act="send"${busy ? " disabled" : ""}>${ICONS.send}发送</button></div>`;
+        <button type="button" class="pi-send" data-act="send" title="发送（Ctrl+Enter）"${busy ? " disabled" : ""}>${ICONS.send}</button></div>`;
   }
   async function resolveRefs(view, chat, project) {
     let refs = [];
@@ -2610,7 +2743,7 @@ ${parsed.body}` : parsed.body;
     }).join("");
   }
   function render4(view) {
-    let { data, runtime } = view, project = view.project(), st6 = view.tabState("run");
+    let { data, runtime } = view, project = view.project(), st7 = view.tabState("run");
     if (!cardKey()) return '<div class="pi-empty">先打开一张角色卡的聊天，再启用项目。</div>';
     let activeId = runtime.activeId();
     if (activeId !== project.id) {
@@ -2622,7 +2755,7 @@ ${parsed.body}` : parsed.body;
     let progress = runtime.progress(), entries = runtime.entries(), units = flattenUnits(project.outline.volumes), states = unitStates(units, progress), total = entries.filter((entry) => entry.enabled).reduce((sum, entry) => sum + estimateTokens(entry.content), 0), mode = runtime.injectMode() === "virtual" ? '<span class="pi-badge is-ok">虚拟条目</span>' : '<span class="pi-badge is-warn">专用世界书</span>', settings = data.settings(), checking = runtime.isChecking(), checkInfo = settings.switchSource === "signal" ? "只用 AI 报信" : `每 ${settings.checkEvery} 楼检测 · 上次第 ${progress.lastCheckFloor} 楼 · 当前 ${runtime.floorCount()} 楼`;
     return `<div class="pi-card"><h3>注入条目 ${mode}<span class="pi-spacer"></span><span class="pi-badge">共 ≈${total} token</span>
             <button type="button" class="pi-btn is-sm" data-act="preview">预览最终注入</button></h3>
-        ${entries.length ? entries.map((entry) => entryRow(entry, st6.open === entry.slotId)).join("") : '<p class="pi-hint">设定和大纲都为空，没有可注入的内容。</p>'}
+        ${entries.length ? entries.map((entry) => entryRow(entry, st7.open === entry.slotId)).join("") : '<p class="pi-hint">设定和大纲都为空，没有可注入的内容。</p>'}
         </div>
         <div class="pi-card"><h3>阶段<span class="pi-spacer"></span><span class="pi-hint">${esc(checkInfo)}</span></h3>
         ${units.length ? `<div class="pi-row">
@@ -2640,8 +2773,8 @@ ${parsed.body}` : parsed.body;
     activate: (view) => view.runtime.switchProject(view.projectId),
     "toggle-entry"(view, target, event) {
       if (event.target.closest("input,select")) return;
-      let st6 = view.tabState("run");
-      st6.open = st6.open === target.dataset.slot ? "" : target.dataset.slot, view.renderBody();
+      let st7 = view.tabState("run");
+      st7.open = st7.open === target.dataset.slot ? "" : target.dataset.slot, view.renderBody();
     },
     "save-default"(view, target) {
       let entry = view.runtime.entries().find((item) => item.slotId === target.dataset.slot);
@@ -2695,42 +2828,59 @@ ${parsed.body}` : parsed.body;
     refreshOn: () => refreshOn4,
     render: () => render5
   });
-  var st4 = (view) => view.tabState("settings");
-  function llmCard(view, role, llm) {
-    let models = st4(view).models?.[role.key] || [], custom = llm.source === "custom";
-    return `<div class="pi-card"><h3>接口 · ${esc(role.label)}</h3>
-        <label class="pi-field"><span>来源</span><select class="pi-sel" data-llm="${role.key}" data-k="source">${options([{ value: "tavern", label: "酒馆当前 API" }, { value: "custom", label: "独立 OpenAI 兼容接口" }], llm.source)}</select></label>
-        ${custom ? `<label class="pi-field"><span>地址</span><input class="pi-inp" data-llm="${role.key}" data-k="endpoint" value="${esc(llm.endpoint)}" placeholder="https://api.example.com/v1"></label>
-        <label class="pi-field"><span>密钥（存在酒馆本地 pi-index.json）</span><input class="pi-inp" type="password" autocomplete="off" data-llm="${role.key}" data-k="apiKey" value="${esc(llm.apiKey)}"></label>
-        <div class="pi-row"><label class="pi-field pi-grow"><span>模型</span><input class="pi-inp" data-llm="${role.key}" data-k="model" value="${esc(llm.model)}" list="pi-models-${role.key}"></label>
-            <button type="button" class="pi-btn is-sm" data-act="models" data-role="${role.key}">拉取模型</button>
-            <label class="pi-field"><span>温度</span><input class="pi-inp is-num" data-llm="${role.key}" data-k="temperature" value="${esc(llm.temperature)}" placeholder="默认"></label></div>
-        <datalist id="pi-models-${role.key}">${models.map((model) => `<option value="${esc(model)}">`).join("")}</datalist>` : `<p class="pi-hint">${role.key === "check" ? "酒馆 API 会和主聊天抢队列，检测建议用独立接口的便宜模型。" : "使用酒馆当前连接的模型。"}</p>`}
+  var st4 = (view) => view.tabState("settings"), ROLE_HINT = {
+    discuss: "讨论页的对话。",
+    outline: "整理设定、编写大纲时的生成。",
+    check: "每隔数楼判断当前阶段是否已演完。"
+  };
+  function modelField(view, role, llm) {
+    let s = st4(view), models = s.models?.[role] || [];
+    return `<div class="pi-field"><span>模型</span><div class="pi-inline">${!models.length || s.manual?.[role] ? `<input class="pi-inp" data-llm="${role}" data-k="model" value="${esc(llm.model)}" placeholder="模型名称">` : `<select class="pi-sel" data-llm="${role}" data-k="model">${llm.model && !models.includes(llm.model) ? `<option value="${esc(llm.model)}" selected>${esc(llm.model)}</option>` : ""}
+            ${llm.model ? "" : '<option value="" selected disabled>选择模型</option>'}${options(models.map((model) => ({ value: model, label: model })), llm.model)}
+            <option value="__manual">手动输入…</option></select>`}
+        <button type="button" class="pi-btn" data-act="models" data-role="${role}">${s.loading === role ? '<span class="pi-spin"></span>' : ""}获取列表</button></div></div>`;
+  }
+  function llmCard(view, s) {
+    let role = LLM_ROLES.some((item) => item.key === st4(view).role) ? st4(view).role : LLM_ROLES[0].key, llm = s.llm[role], custom = llm.source === "custom";
+    return `<div class="pi-card"><h3>模型接口</h3>
+        <div class="pi-seg">${LLM_ROLES.map((item) => `<button type="button" class="pi-seg-btn${item.key === role ? " is-sel" : ""}" data-act="llm-role" data-role="${item.key}">${esc(item.label)}</button>`).join("")}</div>
+        <p class="pi-hint">${ROLE_HINT[role]}</p>
+        <label class="pi-field"><span>接口来源</span><select class="pi-sel" data-llm="${role}" data-k="source">${options([{ value: "tavern", label: "酒馆当前连接" }, { value: "custom", label: "独立接口（OpenAI兼容）" }], llm.source)}</select></label>
+        ${custom ? `<label class="pi-field"><span>接口地址</span><input class="pi-inp" data-llm="${role}" data-k="endpoint" value="${esc(llm.endpoint)}" placeholder="https://api.example.com/v1"></label>
+        <label class="pi-field"><span>API密钥</span><input class="pi-inp" type="password" autocomplete="off" data-llm="${role}" data-k="apiKey" value="${esc(llm.apiKey)}"></label>
+        ${modelField(view, role, llm)}
+        <label class="pi-field"><span>温度</span><input class="pi-inp is-num" data-llm="${role}" data-k="temperature" value="${esc(llm.temperature)}" placeholder="默认"></label>
+        <p class="pi-hint">密钥保存在酒馆服务器的 pi-index.json 中。</p>` : `<p class="pi-hint">${role === "check" ? "与主聊天共用酒馆连接时需要排队，建议为进度检测单独配置一个低价模型。" : "使用酒馆当前连接的模型。"}</p>`}
         </div>`;
   }
+  function guideCard(view, s) {
+    let open = st4(view).guideOpen, status = s.guide ? `自定义文本，${s.guide.length}字` : "内置版本";
+    return `<div class="pi-card"><h3>写作基准<span class="pi-spacer"></span>
+            <button type="button" class="pi-btn is-sm is-ghost" data-act="guide-toggle">${open ? "收起" : "编辑"}</button></h3>
+        <p class="pi-hint">讨论与整理设定时参照的《同人世界观速成》。当前使用：${status}。</p>
+        ${open ? `<div class="pi-row pi-acts-top"><button type="button" class="pi-btn is-sm" data-act="guide-show">载入内置文本</button>
+            <button type="button" class="pi-btn is-sm is-ghost" data-act="guide-reset"${s.guide ? "" : " disabled"}>恢复内置版本</button></div>
+        <textarea class="pi-ta is-mono is-tall" data-set="guide" placeholder="留空则使用内置版本">${esc(s.guide)}</textarea>` : ""}</div>`;
+  }
   function render5(view) {
-    let s = view.data.settings(), visibility = [{ value: "name", label: "只名称" }, { value: "range", label: "名称 + 时间范围" }, { value: "instr", label: "名称 + 时间范围 + AI指令" }], sources = [{ value: "both", label: "AI 报信 + 定期检测" }, { value: "signal", label: "只用 AI 报信" }, { value: "check", label: "只用定期检测" }], modes = [{ value: "ask", label: "询问" }, { value: "auto", label: "自动切换（可撤销）" }, { value: "nodes", label: "只勾节点，不切阶段" }];
-    return `<div class="pi-card"><h3>注入</h3>
-        <div class="pi-row">
-            <label class="pi-field pi-grow"><span>详细条目标签名</span><input class="pi-inp" data-set="tagName" value="${esc(s.tagName)}"></label>
-            <label class="pi-field"><span>「已过」保留阶段数</span><input class="pi-inp is-num" type="number" min="0" data-set="keepDone" value="${s.keepDone}"></label></div>
-        <label class="pi-field"><span>索引里「下一段」露出</span><select class="pi-sel" data-set="nextVisibility">${options(visibility, s.nextVisibility)}</select></label>
-        <label class="pi-check"><input type="checkbox" data-set="hideSignal"${s.hideSignal ? " checked" : ""}><span>聊天里隐藏 &lt;剧情推进/&gt;（只隐藏显示，楼层原文不改）</span></label></div>
-        <div class="pi-card"><h3>切换判定</h3>
-        <label class="pi-field"><span>切换来源</span><select class="pi-sel" data-set="switchSource">${options(sources, s.switchSource)}</select></label>
-        <label class="pi-field"><span>判定为演完时</span><select class="pi-sel" data-set="handleMode">${options(modes, s.handleMode)}</select></label>
-        <div class="pi-row"><label class="pi-field"><span>每几楼检测一次</span><input class="pi-inp is-num" type="number" min="1" data-set="checkEvery" value="${s.checkEvery}"></label>
-            <label class="pi-field"><span>检测读最近几楼</span><input class="pi-inp is-num" type="number" min="1" data-set="checkFloors" value="${s.checkFloors}"></label></div></div>
-        ${LLM_ROLES.map((role) => llmCard(view, role, s.llm[role.key])).join("")}
-        <div class="pi-card"><h3>写作基准<span class="pi-spacer"></span>
-            <button type="button" class="pi-btn is-sm" data-act="guide-show">填入内置版本</button>
-            <button type="button" class="pi-btn is-sm is-ghost" data-act="guide-reset"${s.guide ? "" : " disabled"}>恢复内置</button></h3>
-        <p class="pi-hint">讨论和整理设定时用的《同人世界观速成》。留空使用内置版本。</p>
-        <textarea class="pi-ta is-mono is-tall" data-set="guide" placeholder="（使用内置版本）">${esc(s.guide)}</textarea></div>
-        <div class="pi-card"><h3>版本</h3>
-        <p class="pi-hint">当前运行 v${esc(view.version)}。加载器默认读取仓库最新版本标签。</p>
-        <label class="pi-field"><span>锁定版本（填 v0.1.0 这类标签；填 main 用最新提交；留空跟随最新标签）</span><input class="pi-inp" data-set="loaderRef" value="${esc(s.loaderRef)}"></label>
-        <p class="pi-hint">修改后刷新酒馆页面生效。</p></div>`;
+    let s = view.data.settings(), visibility = [{ value: "name", label: "仅名称" }, { value: "range", label: "名称与时间范围" }, { value: "instr", label: "名称、时间范围与AI指令" }], sources = [{ value: "both", label: "AI标记与定期检测" }, { value: "signal", label: "仅AI标记" }, { value: "check", label: "仅定期检测" }], modes = [{ value: "ask", label: "弹出确认" }, { value: "auto", label: "自动推进（可撤销）" }, { value: "nodes", label: "仅勾选节点，不推进阶段" }], checking = s.switchSource !== "signal";
+    return `<div class="pi-card"><h3>注入内容</h3>
+        <div class="pi-row is-top">
+            <label class="pi-field pi-grow"><span>详细条目的标签名</span><input class="pi-inp" data-set="tagName" value="${esc(s.tagName)}"></label>
+            <label class="pi-field"><span>保留已完成阶段数</span><input class="pi-inp is-num" type="number" min="0" data-set="keepDone" value="${s.keepDone}"></label></div>
+        <label class="pi-field"><span>索引中下一阶段的显示内容</span><select class="pi-sel" data-set="nextVisibility">${options(visibility, s.nextVisibility)}</select></label>
+        <label class="pi-check"><input type="checkbox" data-set="hideSignal"${s.hideSignal ? " checked" : ""}><span>在聊天中隐藏 &lt;剧情推进/&gt; 标记（仅隐藏显示，不修改楼层原文）</span></label></div>
+        <div class="pi-card"><h3>阶段推进</h3>
+        <label class="pi-field"><span>判断方式</span><select class="pi-sel" data-set="switchSource">${options(sources, s.switchSource)}</select></label>
+        <label class="pi-field"><span>判定阶段已演完后</span><select class="pi-sel" data-set="handleMode">${options(modes, s.handleMode)}</select></label>
+        ${checking ? `<div class="pi-row is-top"><label class="pi-field"><span>检测间隔（楼）</span><input class="pi-inp is-num" type="number" min="1" data-set="checkEvery" value="${s.checkEvery}"></label>
+            <label class="pi-field"><span>每次读取楼数</span><input class="pi-inp is-num" type="number" min="1" data-set="checkFloors" value="${s.checkFloors}"></label></div>` : ""}</div>
+        ${llmCard(view, s)}
+        ${guideCard(view, s)}
+        <div class="pi-card"><h3>版本更新</h3>
+        <p class="pi-hint">当前版本 v${esc(view.version)}。默认自动使用最新发布版本。</p>
+        <label class="pi-field"><span>指定版本</span><input class="pi-inp" data-set="loaderRef" value="${esc(s.loaderRef)}" placeholder="留空跟随最新版本"></label>
+        <p class="pi-hint">填写 v0.1.0 等版本号可固定版本，填写 main 使用开发中的最新代码。修改后刷新酒馆页面生效。</p></div>`;
   }
   var NUMERIC = /* @__PURE__ */ new Set(["keepDone", "checkEvery", "checkFloors"]);
   function readValue(target) {
@@ -2744,18 +2894,26 @@ ${parsed.body}` : parsed.body;
     target.dataset.set && target.type !== "checkbox" && target.tagName !== "SELECT" && view.data.updateSettings({ [target.dataset.set]: readValue(target) }), target.dataset.llm && target.tagName === "INPUT" && applyLlm(view, target);
   }
   function onChange3(view, target) {
-    target.dataset.set && (target.type === "checkbox" || target.tagName === "SELECT") && (view.data.updateSettings({ [target.dataset.set]: readValue(target) }), view.runtime.refresh(), view.renderBody()), target.dataset.llm && target.tagName === "SELECT" && (applyLlm(view, target), view.renderBody()), target.dataset.set && target.tagName !== "SELECT" && target.type !== "checkbox" && view.runtime.refresh();
+    target.dataset.set && (target.type === "checkbox" || target.tagName === "SELECT") && (view.data.updateSettings({ [target.dataset.set]: readValue(target) }), view.runtime.refresh(), view.renderBody()), target.dataset.llm && target.tagName === "SELECT" && (target.value === "__manual" ? st4(view).manual = { ...st4(view).manual, [target.dataset.llm]: !0 } : applyLlm(view, target), view.renderBody()), target.dataset.set && target.tagName !== "SELECT" && target.type !== "checkbox" && view.runtime.refresh();
   }
   var actions5 = {
     async models(view, target) {
-      let role = target.dataset.role;
-      target.disabled = !0;
-      try {
-        let models = await fetchModels(view.data.settings().llm[role]);
-        st4(view).models = { ...st4(view).models, [role]: models }, toast("success", `拉到 ${models.length} 个模型。`), view.renderBody();
-      } finally {
-        target.disabled = !1;
+      let role = target.dataset.role, s = st4(view);
+      if (!s.loading) {
+        s.loading = role, view.renderBody();
+        try {
+          let models = await fetchModels(view.data.settings().llm[role]);
+          s.models = { ...s.models, [role]: models }, s.manual = { ...s.manual, [role]: !1 }, toast("success", `获取到${models.length}个模型，可在下拉框中选择。`);
+        } finally {
+          s.loading = "", view.renderBody();
+        }
       }
+    },
+    "llm-role"(view, target) {
+      st4(view).role = target.dataset.role, view.renderBody();
+    },
+    "guide-toggle"(view) {
+      st4(view).guideOpen = !st4(view).guideOpen, view.renderBody();
     },
     "guide-show"(view) {
       view.data.updateSettings({ guide: BUILTIN_GUIDE }), view.renderBody();
@@ -2822,33 +2980,16 @@ ${parsed.body}` : parsed.body;
     return `<table class="pi-files"><thead><tr><th>项目</th><th>设定+大纲</th><th>讨论记录</th></tr></thead><tbody>${view.data.index().projects.map((item) => `<tr><td>${esc(item.group ? `${item.group}／` : "")}${esc(item.name)}</td>
         ${fileCell(view, projectFile(item.id), item.bytes.project)}${fileCell(view, chatFile(item.id), item.bytes.chat)}</tr>`).join("") || '<tr><td colspan="3" class="pi-hint">没有项目</td></tr>'}</tbody></table>`;
   }
-  function bookCard(view) {
-    let s = st5(view), fallback = allBookNames().filter((name) => name.startsWith("剧情注入器·")), list = [...boundBookNames(), ...fallback.filter((name) => !boundBookNames().some((item) => item.name === name)).map((name) => ({ name, source: "专用" }))].map((book) => {
-      let entries = s.book === book.name && s.entries ? s.entries : null;
-      return `<div class="pi-entry"><div class="pi-entry-hd" data-act="open-book" data-book="${esc(book.name)}">
-            <span class="pi-etitle">${esc(book.name)}</span><span class="pi-badge">${esc(book.source)}</span>
-            ${book.source === "专用" ? `<button type="button" class="pi-btn is-sm is-danger" data-act="delete-book" data-book="${esc(book.name)}">整本删除</button>` : ""}</div>
-            ${entries ? `<div class="pi-entry-bd">${entries.map((entry) => `<label class="pi-check${entry.disabled ? " is-off" : ""}"><input type="checkbox" data-wb-pick="${esc(entry.key)}">
-                <span>${esc(entry.title)} ${entry.constant ? '<span class="pi-badge">常驻</span>' : ""}${entry.disabled ? '<span class="pi-badge">已关闭</span>' : ""}</span></label>`).join("") || '<p class="pi-hint">没有条目</p>'}
-                <div class="pi-row"><button type="button" class="pi-btn is-sm" data-act="wb-disable">关闭勾选</button>
-                <button type="button" class="pi-btn is-sm" data-act="wb-enable">重新打开勾选</button>
-                <button type="button" class="pi-btn is-sm is-danger" data-act="wb-delete">删除勾选</button></div></div>` : ""}</div>`;
-    }).join("");
-    return `<div class="pi-card"><h3>世界书条目</h3>
-        <p class="pi-hint">「${esc(cardName() || "未打开角色卡")}」关联的世界书。原来手改的剧情设定条目可在这里关闭或删除；删除前自动下载备份。</p>
-        ${list || '<p class="pi-hint">没有关联的世界书。</p>'}</div>`;
-  }
   function render6(view) {
     let s = st5(view);
     !s.verified && !s.verifying && verify(view);
     let orphans = s.verified ? Object.keys(s.verified).filter((name) => !referenced(view.data.index()).has(name)) : [];
     return `<div class="pi-card"><h3>本地文件<span class="pi-spacer"></span>
             <button type="button" class="pi-btn is-sm" data-act="verify">${s.verifying ? '<span class="pi-spin"></span>' : ""}重新核对</button></h3>
-        <p class="pi-hint">全部存在酒馆服务器 user/files/pi-*；浏览器只记界面状态（pi-ui）。</p>
+        <p class="pi-hint">项目数据保存在酒馆服务器的 user/files/pi-* 文件中，浏览器仅保存界面状态。</p>
         ${filesTable(view)}
-        <div class="pi-row"><button type="button" class="pi-btn is-sm" data-act="orphans"${orphans.length ? "" : " disabled"}>清理孤立文件${orphans.length ? `（${orphans.length}）` : ""}</button>
+        <div class="pi-row pi-acts"><button type="button" class="pi-btn is-sm" data-act="orphans"${orphans.length ? "" : " disabled"}>清理孤立文件${orphans.length ? `（${orphans.length}）` : ""}</button>
             <button type="button" class="pi-btn is-sm" data-act="clear-chats">清空所有讨论记录</button></div></div>
-        ${bookCard(view)}
         <div class="pi-card"><h3>全部清除</h3>
         <p class="pi-hint">先下载一份 zip 备份，再删除全部 pi-* 文件和当前聊天里的进度。其他聊天里的进度不动。</p>
         <button type="button" class="pi-btn is-sm is-danger" data-act="wipe">全部清除</button></div>`;
@@ -2864,12 +3005,6 @@ ${parsed.body}` : parsed.body;
     } finally {
       s.verifying = !1, view.renderBody();
     }
-  }
-  async function selectedKeys(target) {
-    return [...target.closest(".pi-entry").querySelectorAll("[data-wb-pick]:checked")].map((input) => input.dataset.wbPick);
-  }
-  async function reloadBook(view) {
-    st5(view).entries = bookEntries(await loadBook(st5(view).book)), view.renderBody();
   }
   var actions6 = {
     verify(view) {
@@ -2902,33 +3037,6 @@ ${parsed.body}` : parsed.body;
         st5(view).verified = null, view.renderBody();
       }
     },
-    async "open-book"(view, target, event) {
-      if (event.target.closest("button,input")) return;
-      let s = st5(view);
-      if (s.book === target.dataset.book)
-        return s.book = "", s.entries = null, view.renderBody();
-      s.book = target.dataset.book, s.entries = null, await reloadBook(view);
-    },
-    async "wb-disable"(view, target) {
-      let keys = await selectedKeys(target);
-      keys.length && (await setEntriesDisabled(st5(view).book, keys, !0), await reloadBook(view));
-    },
-    async "wb-enable"(view, target) {
-      let keys = await selectedKeys(target);
-      keys.length && (await setEntriesDisabled(st5(view).book, keys, !1), await reloadBook(view));
-    },
-    async "wb-delete"(view, target) {
-      let keys = await selectedKeys(target);
-      if (!keys.length) return;
-      let titles = st5(view).entries.filter((entry) => keys.includes(entry.key)).map((entry) => entry.title);
-      if (!await confirmDialog({ title: `从「${st5(view).book}」删除条目`, body: "删除前会下载这些条目的备份。", list: titles, okLabel: "删除", danger: !0 })) return;
-      let backup = await deleteEntries(st5(view).book, keys);
-      downloadBlob(`${st5(view).book}-已删条目备份.json`, JSON.stringify(backup, null, 2)), await reloadBook(view);
-    },
-    async "delete-book"(view, target) {
-      let name = target.dataset.book;
-      await confirmDialog({ title: "删除专用世界书", list: [name], body: "先下载整本备份再删除。", okLabel: "删除", danger: !0 }) && (downloadBlob(`${name}-备份.json`, JSON.stringify(await loadBook(name), null, 2)), await deleteBook(name), st5(view).book = "", view.renderBody());
-    },
     async wipe(view) {
       let index = view.data.index(), names = [.../* @__PURE__ */ new Set([...index.files, ...referenced(index)])], files = [];
       for (let name of names) {
@@ -2943,13 +3051,77 @@ ${parsed.body}` : parsed.body;
     }
   }, refreshOn5 = ["index"];
 
+  // src/ui/page-books.js
+  var page_books_exports = {};
+  __export(page_books_exports, {
+    actions: () => actions7,
+    refreshOn: () => refreshOn6,
+    render: () => render7
+  });
+  var st6 = (view) => view.tabState("books");
+  function render7(view) {
+    let s = st6(view), fallback = allBookNames().filter((name) => name.startsWith("剧情注入器·")), list = [...boundBookNames(), ...fallback.filter((name) => !boundBookNames().some((item) => item.name === name)).map((name) => ({ name, source: "专用" }))].map((book) => {
+      let entries = s.book === book.name && s.entries ? s.entries : null;
+      return `<div class="pi-entry"><div class="pi-entry-hd" data-act="open-book" data-book="${esc(book.name)}">
+            <span class="pi-etitle">${esc(book.name)}</span><span class="pi-badge">${esc(book.source)}</span>
+            ${book.source === "专用" ? `<button type="button" class="pi-btn is-sm is-danger" data-act="delete-book" data-book="${esc(book.name)}">整本删除</button>` : ""}</div>
+            ${entries ? `<div class="pi-entry-bd">${entries.map((entry) => `<label class="pi-check${entry.disabled ? " is-off" : ""}"><input type="checkbox" data-wb-pick="${esc(entry.key)}">
+                <span>${esc(entry.title)} ${entry.constant ? '<span class="pi-badge">常驻</span>' : ""}${entry.disabled ? '<span class="pi-badge">已关闭</span>' : ""}</span></label>`).join("") || '<p class="pi-hint">没有条目</p>'}
+                <div class="pi-row pi-acts"><button type="button" class="pi-btn is-sm" data-act="wb-disable">关闭所选</button>
+                <button type="button" class="pi-btn is-sm" data-act="wb-enable">开启所选</button>
+                <button type="button" class="pi-btn is-sm is-danger" data-act="wb-delete">删除所选</button></div></div>` : ""}</div>`;
+    }).join("");
+    return `<div class="pi-card"><h3>当前角色卡的世界书</h3>
+        <p class="pi-hint">「${esc(cardName() || "未打开角色卡")}」关联的世界书。原先手写的剧情条目与注入内容重复时，可在此关闭或删除；删除前自动下载备份。</p>
+        ${list || '<p class="pi-hint">没有关联的世界书。</p>'}</div>`;
+  }
+  async function selectedKeys(target) {
+    return [...target.closest(".pi-entry").querySelectorAll("[data-wb-pick]:checked")].map((input) => input.dataset.wbPick);
+  }
+  async function reloadBook(view) {
+    st6(view).entries = bookEntries(await loadBook(st6(view).book)), view.renderBody();
+  }
+  var actions7 = {
+    async "open-book"(view, target, event) {
+      if (event.target.closest("button,input")) return;
+      let s = st6(view);
+      if (s.book === target.dataset.book)
+        return s.book = "", s.entries = null, view.renderBody();
+      s.book = target.dataset.book, s.entries = null, await reloadBook(view);
+    },
+    async "wb-disable"(view, target) {
+      let keys = await selectedKeys(target);
+      keys.length && (await setEntriesDisabled(st6(view).book, keys, !0), await reloadBook(view));
+    },
+    async "wb-enable"(view, target) {
+      let keys = await selectedKeys(target);
+      keys.length && (await setEntriesDisabled(st6(view).book, keys, !1), await reloadBook(view));
+    },
+    async "wb-delete"(view, target) {
+      let keys = await selectedKeys(target);
+      if (!keys.length) return;
+      let titles = st6(view).entries.filter((entry) => keys.includes(entry.key)).map((entry) => entry.title);
+      if (!await confirmDialog({ title: `从「${st6(view).book}」删除条目`, body: "删除前会下载这些条目的备份。", list: titles, okLabel: "删除", danger: !0 })) return;
+      let backup = await deleteEntries(st6(view).book, keys);
+      downloadBlob(`${st6(view).book}-已删条目备份.json`, JSON.stringify(backup, null, 2)), await reloadBook(view);
+    },
+    async "delete-book"(view, target) {
+      let name = target.dataset.book;
+      await confirmDialog({ title: "删除专用世界书", list: [name], body: "先下载整本备份再删除。", okLabel: "删除", danger: !0 }) && (downloadBlob(`${name}-备份.json`, JSON.stringify(await loadBook(name), null, 2)), await deleteBook(name), st6(view).book = "", view.renderBody());
+    }
+  }, refreshOn6 = ["chat"];
+
   // src/ui/app.js
   var TABS = [
     { key: "discuss", label: "讨论", mod: tab_discuss_exports },
     { key: "setting", label: "设定", mod: tab_setting_exports },
     { key: "outline", label: "大纲", mod: tab_outline_exports },
     { key: "run", label: "执行", mod: tab_run_exports }
-  ], PAGES = { settings: { label: "设置", mod: page_settings_exports }, data: { label: "数据管理", mod: page_data_exports } }, UI_KEY = "pi-ui";
+  ], PAGES = {
+    books: { label: "世界书条目", icon: "book", mod: page_books_exports },
+    data: { label: "数据管理", icon: "box", mod: page_data_exports },
+    settings: { label: "设置", icon: "gear", mod: page_settings_exports }
+  }, UI_KEY = "pi-ui", SEARCH_FROM = 6;
   function readUi() {
     try {
       return JSON.parse(hostWindow().localStorage.getItem(UI_KEY) || "{}") || {};
@@ -2964,17 +3136,21 @@ ${parsed.body}` : parsed.body;
     }
   }
   function createApp({ data, runtime, version }) {
-    let doc = hostDocument(), root = null, busyTimer = 0, view = {
+    let doc = hostDocument(), root = null, busyTimer = 0;
+    setNight(readUi().night);
+    let view = {
       data,
       runtime,
       version,
       projectId: "",
       tab: "run",
       page: "",
+      drawer: !1,
+      search: "",
       collapsed: new Set(readUi().collapsed || []),
       state: {},
       busy: {},
-      render: render7,
+      render: render8,
       renderBody,
       renderSide,
       project: () => view.projectId ? data.project(view.projectId) : null,
@@ -2993,40 +3169,51 @@ ${parsed.body}` : parsed.body;
     }
     function sideHtml() {
       let index = data.index(), activeId = data.activeIdFor(cardKey()), list = groupProjects(index.projects).map((group) => {
-        let collapsed = view.collapsed.has(group.name), items = collapsed ? "" : group.items.map((item) => `<button type="button" class="pi-pitem${item.id === view.projectId && !view.page ? " is-sel" : ""}" data-act="project" data-id="${esc(item.id)}" title="右键改名、分组或删除">
-                <span class="pi-pname">${esc(item.name)}</span>${item.id === activeId ? '<span class="pi-dot" title="本卡当前项目"></span>' : ""}</button>`).join("");
-        return `<div class="pi-group">${group.name ? `<button type="button" class="pi-group-hd" data-act="group" data-group="${esc(group.name)}">${collapsed ? ICONS.caret : ICONS.caretDown}${esc(group.name)}</button>` : ""}${items}</div>`;
-      }).join("");
+        let collapsed = view.collapsed.has(group.name), items = group.items.map((item) => `<button type="button" class="pi-pitem${item.id === view.projectId && !view.page ? " is-sel" : ""}" data-act="project" data-id="${esc(item.id)}" data-name="${esc(`${item.group} ${item.name}`.toLowerCase())}" title="右键编辑名称、分组">
+                <span class="pi-pname">${esc(item.name)}</span>${item.id === activeId ? '<span class="pi-dot" title="本卡当前项目"></span>' : ""}</button>`).join(""), head = group.name ? `<button type="button" class="pi-group-hd" data-act="group" data-group="${esc(group.name)}">${collapsed ? ICONS.caret : ICONS.caretDown}${esc(group.name)}<small>${group.items.length}</small></button>` : "";
+        return `<div class="pi-group${collapsed ? " is-collapsed" : ""}">${head}${items}</div>`;
+      }).join(""), page = (key) => `<button type="button" class="pi-btn is-ghost is-block${view.page === key ? " is-sel" : ""}" data-act="page" data-page="${key}">${ICONS[PAGES[key].icon]}${PAGES[key].label}</button>`;
       return `<div class="pi-side-hd">剧情注入器 <small>v${esc(version)}</small></div>
+            ${index.projects.length > SEARCH_FROM ? `<div class="pi-psearch">${ICONS.search}<input class="pi-inp" data-psearch placeholder="搜索项目" value="${esc(view.search)}"></div>` : ""}
             <div class="pi-plist">${list || '<p class="pi-hint">还没有项目</p>'}</div>
             <div class="pi-side-ft">
                 <button type="button" class="pi-btn is-ghost is-block" data-act="new-project">${ICONS.plus}新项目</button>
-                <button type="button" class="pi-btn is-ghost is-block${view.page === "settings" ? " is-sel" : ""}" data-act="page" data-page="settings">${ICONS.gear}设置</button>
-                <button type="button" class="pi-btn is-ghost is-block${view.page === "data" ? " is-sel" : ""}" data-act="page" data-page="data">${ICONS.box}数据管理</button>
+                ${page("books")}${page("data")}${page("settings")}
             </div>`;
     }
-    function pickerHtml() {
-      let opts = data.index().projects.map((item) => `<option value="p:${esc(item.id)}"${!view.page && item.id === view.projectId ? " selected" : ""}>${esc(item.group ? `${item.group}／` : "")}${esc(item.name)}</option>`).join("");
-      return `<select class="pi-sel pi-picker" data-act-change="picker">
-            <option value="" disabled${!view.projectId && !view.page ? " selected" : ""}>选择项目</option>${opts}
-            <option value="new">＋新项目</option>
-            <option value="page:settings"${view.page === "settings" ? " selected" : ""}>设置</option>
-            <option value="page:data"${view.page === "data" ? " selected" : ""}>数据管理</option></select>`;
+    function applySearch() {
+      let listBox = root && root.querySelector(".pi-plist");
+      if (!listBox) return;
+      let q = view.search.trim().toLowerCase();
+      listBox.classList.toggle("is-searching", !!q);
+      for (let group of listBox.querySelectorAll(".pi-group")) {
+        let shown = 0;
+        for (let item of group.querySelectorAll(".pi-pitem")) {
+          let hit = !q || item.dataset.name.includes(q);
+          item.hidden = !hit, hit && (shown += 1);
+        }
+        group.hidden = !!q && !shown;
+      }
     }
     function topHtml() {
-      let project = view.project(), title = view.page ? PAGES[view.page].label : project ? project.name : "剧情注入器", tabs = view.page || !project ? "" : TABS.map((tab) => `<button type="button" class="pi-tab${tab.key === view.tab ? " is-sel" : ""}" data-act="tab" data-tab="${tab.key}">${tab.label}</button>`).join("");
-      return `${pickerHtml()}<div class="pi-top-title">${esc(title)}</div><div class="pi-tabs">${tabs}</div>
-            <button type="button" class="pi-close" data-act="close" title="关闭">${ICONS.close}</button>`;
+      let project = view.project(), title = view.page ? PAGES[view.page].label : project ? project.name : "剧情注入器", tabs = view.page || !project ? "" : `<div class="pi-tabs">${TABS.map((tab) => `<button type="button" class="pi-tab${tab.key === view.tab ? " is-sel" : ""}" data-act="tab" data-tab="${tab.key}">${tab.label}</button>`).join("")}</div>`, rename = !view.page && project ? `<button type="button" class="pi-icon-btn" data-act="rename" title="编辑项目名称">${ICONS.pencil}</button>` : "";
+      return `<div class="pi-top-lead"><button type="button" class="pi-icon-btn pi-menu" data-act="drawer" title="项目列表">${ICONS.menu}</button>
+                <span class="pi-top-title">${esc(title)}</span>${rename}</div>${tabs}
+            <div class="pi-top-end"><button type="button" class="pi-icon-btn" data-act="theme" title="${isNight() ? "日间配色" : "夜间配色"}">${isNight() ? ICONS.sun : ICONS.moon}</button>
+            <button type="button" class="pi-close" data-act="close" title="关闭">${ICONS.close}</button></div>`;
+    }
+    function setDrawer(open2) {
+      view.drawer = open2, root?.querySelector(".pi-panel").classList.toggle("is-drawer", open2);
     }
     function bodyHtml() {
       if (!data.isReady()) return '<div class="pi-empty"><span class="pi-spin"></span> 正在读取酒馆本地数据…</div>';
       if (view.page) return current().render(view);
       let project = view.project();
-      return view.projectId ? project ? current().render(view) : '<div class="pi-empty"><span class="pi-spin"></span> 正在读取项目…</div>' : `<div class="pi-empty">${data.index().projects.length ? "从左侧选择一个项目。" : "一个项目就是一条 if 线：讨论 → 设定 → 大纲 → 执行。"}<br><br>
+      return view.projectId ? project ? current().render(view) : '<div class="pi-empty"><span class="pi-spin"></span> 正在读取项目…</div>' : `<div class="pi-empty">${data.index().projects.length ? "从项目列表选择一个项目。" : "一个项目就是一条 if 线：讨论 → 设定 → 大纲 → 执行。"}<br><br>
                 <button type="button" class="pi-btn is-primary" data-act="new-project">${ICONS.plus}新项目</button></div>`;
     }
     function renderSide() {
-      root && (root.querySelector(".pi-side").innerHTML = sideHtml(), root.querySelector(".pi-top").innerHTML = topHtml());
+      root && (root.querySelector(".pi-side").innerHTML = sideHtml(), root.querySelector(".pi-top").innerHTML = topHtml(), applySearch());
     }
     function renderBody() {
       if (!root) return;
@@ -3038,11 +3225,11 @@ ${parsed.body}` : parsed.body;
         box && (box.focus(), box.setSelectionRange(compose.start, compose.end));
       }
     }
-    function render7() {
+    function render8() {
       renderSide(), renderBody();
     }
     async function selectProject(id, tab) {
-      if (view.page = "", view.projectId = id, writeUi({ projectId: id }), render7(), !!id)
+      if (view.page = "", setDrawer(!1), view.projectId = id, writeUi({ projectId: id }), render8(), !!id)
         try {
           let project = await data.loadProject(id);
           if (!project) {
@@ -3050,15 +3237,16 @@ ${parsed.body}` : parsed.body;
             return;
           }
           if (view.projectId !== id) return;
-          view.tab = tab || (project.outline.volumes.length ? "run" : "discuss"), writeUi({ tab: view.tab }), render7();
+          view.tab = tab || (project.outline.volumes.length ? "run" : "discuss"), writeUi({ tab: view.tab }), render8();
         } catch (error) {
           toast("error", `读取项目失败：${error.message}`);
         }
     }
     function go(tab) {
-      view.page = "", view.tab = tab, writeUi({ tab }), render7();
+      view.page = "", view.tab = tab, writeUi({ tab }), render8();
     }
     async function newProject2() {
+      setDrawer(!1);
       let name = await promptDialog({ title: "新项目", label: "项目名（一条 if 线）", placeholder: "如：龙宫温养" });
       if (name != null)
         try {
@@ -3072,7 +3260,7 @@ ${parsed.body}` : parsed.body;
       let meta2 = data.index().projects.find((item) => item.id === id);
       if (!meta2) return;
       let groups = [...new Set(data.index().projects.map((item) => item.group).filter(Boolean))], result = await openDialog({
-        title: "项目",
+        title: "编辑项目",
         html: `<label class="pi-field"><span>名称</span><input class="pi-inp" data-f="name" value="${esc(meta2.name)}"></label>
                 <label class="pi-field"><span>分组（留空不分组）</span><input class="pi-inp" data-f="group" value="${esc(meta2.group)}" list="pi-groups"></label>
                 <datalist id="pi-groups">${groups.map((name) => `<option value="${esc(name)}">`).join("")}</datalist>`,
@@ -3086,13 +3274,13 @@ ${parsed.body}` : parsed.body;
         if (result === "delete") {
           if (!await confirmDialog({ title: `删除「${meta2.name}」`, body: "将删除以下文件，聊天里记录的该项目进度保留。", list: [`pi-p-${id}.json`, `pi-c-${id}.json`], okLabel: "删除", danger: !0 })) return;
           try {
-            await data.deleteProject(id), view.projectId === id && (view.projectId = ""), runtime.refresh(), render7();
+            await data.deleteProject(id), view.projectId === id && (view.projectId = ""), runtime.refresh(), render8();
           } catch (error) {
             toast("error", `删除失败：${error.message}`);
           }
           return;
         }
-        data.project(id) || await data.loadProject(id), data.renameProject(id, result.name, result.group), render7();
+        data.project(id) || await data.loadProject(id), data.renameProject(id, result.name, result.group), render8();
       }
     }
     function onClick(event) {
@@ -3104,7 +3292,11 @@ ${parsed.body}` : parsed.body;
       if (act === "new-project") return newProject2();
       if (act === "tab") return go(target.dataset.tab);
       if (act === "page")
-        return view.page = target.dataset.page, render7();
+        return view.page = target.dataset.page, setDrawer(!1), render8();
+      if (act === "drawer") return setDrawer(!view.drawer);
+      if (act === "theme")
+        return setNight(!isNight()), writeUi({ night: isNight() }), renderSide();
+      if (act === "rename") return projectMenu(view.projectId);
       if (act === "group") {
         let name = target.dataset.group;
         return view.collapsed.has(name) ? view.collapsed.delete(name) : view.collapsed.add(name), writeUi({ collapsed: [...view.collapsed] }), renderSide();
@@ -3118,31 +3310,31 @@ ${parsed.body}` : parsed.body;
     }
     function onChange4(event) {
       let target = event.target;
-      if (target.dataset.actChange === "picker") {
-        let value = target.value;
-        return value === "new" ? newProject2() : value.startsWith("page:") ? (view.page = value.slice(5), render7()) : selectProject(value.slice(2));
-      }
+      if (target.dataset.psearch !== void 0) return;
       let handler = current().onChange;
       handler && Promise.resolve(handler(view, target, event)).catch((error) => toast("error", error.message || String(error)));
     }
     function onInput5(event) {
+      if (event.target.dataset.psearch !== void 0)
+        return view.search = event.target.value, applySearch();
       let handler = current().onInput;
       handler && handler(view, event.target, event);
     }
     function onKey(event) {
-      event.key === "Escape" && root && !doc.querySelector(".pi-dialog") && (event.stopPropagation(), close()), event.key === "Enter" && (event.ctrlKey || event.metaKey) && current().onSubmit?.(view, event.target, event);
+      event.key === "Escape" && root && !doc.querySelector(".pi-dialog") && (event.stopPropagation(), view.drawer ? setDrawer(!1) : close()), event.key === "Enter" && (event.ctrlKey || event.metaKey) && current().onSubmit?.(view, event.target, event);
     }
     function open() {
       if (ensureStyle(), root) return;
       let ui = readUi();
-      root = el(`<div class="pi-root pi-overlay"><div class="pi-panel"><aside class="pi-side"></aside>
+      view.drawer = !1, root = el(`<div class="pi-root pi-overlay"><div class="pi-panel"><aside class="pi-side"></aside>
+            <div class="pi-scrim" data-act="drawer"></div>
             <section class="pi-main"><header class="pi-top"></header><div class="pi-body"></div></section></div></div>`), root.addEventListener("click", onClick), root.addEventListener("contextmenu", onContext), root.addEventListener("change", onChange4), root.addEventListener("input", onInput5), root.addEventListener("focusout", (event) => current().onBlur?.(view, event.target, event)), root.addEventListener("mousedown", (event) => {
         event.target === root && (root.dataset.down = "1");
       }), root.addEventListener("mouseup", (event) => {
         event.target === root && root.dataset.down && close(), delete root.dataset.down;
       }), doc.addEventListener("keydown", onKey, !0), doc.body.appendChild(root);
       let activeId = data.activeIdFor(cardKey()), remembered = data.index().projects.some((item) => item.id === ui.projectId) ? ui.projectId : "", id = activeId || remembered || data.index().projects[0] && data.index().projects[0].id || "";
-      render7(), id && selectProject(id, id === remembered && ui.tab ? ui.tab : void 0);
+      render8(), id && selectProject(id, id === remembered && ui.tab ? ui.tab : void 0);
     }
     function close() {
       root && (current().unmount?.(view), doc.removeEventListener("keydown", onKey, !0), root.remove(), root = null, data.flush().catch(() => {
@@ -3168,16 +3360,16 @@ ${parsed.body}` : parsed.body;
     function hide(id) {
       view.clearTimeout(timers.get(id)), timers.delete(id), box?.querySelector(`[data-notice="${id}"]`)?.remove();
     }
-    function show({ id, title, body = "", actions: actions7 = [], timeout = 0 }) {
+    function show({ id, title, body = "", actions: actions8 = [], timeout = 0 }) {
       hide(id);
       let card = el(`<div class="pi-notice" data-notice="${esc(id)}"><b>${esc(title)}</b>${body ? `<p>${esc(body)}</p>` : ""}
-            <div class="pi-row">${actions7.map((action, index) => `<button type="button" class="pi-btn is-sm${action.primary ? " is-primary" : ""}" data-act="${index}">${esc(action.label)}</button>`).join("")}</div></div>`);
+            <div class="pi-row">${actions8.map((action, index) => `<button type="button" class="pi-btn is-sm${action.primary ? " is-primary" : ""}" data-act="${index}">${esc(action.label)}</button>`).join("")}</div></div>`);
       card.addEventListener("click", (event) => {
         let button = event.target.closest("[data-act]");
         if (button) {
           hide(id);
           try {
-            actions7[Number(button.dataset.act)].run();
+            actions8[Number(button.dataset.act)].run();
           } catch (error) {
             console.error("[剧情注入器]", error);
           }
@@ -3223,7 +3415,7 @@ ${parsed.body}` : parsed.body;
   }
 
   // src/index.js
-  var VERSION = "0.1.3", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.1.4", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")

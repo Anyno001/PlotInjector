@@ -20,10 +20,22 @@ export function removeStyle() {
     hostDocument().getElementById(STYLE_ID)?.remove();
 }
 
+let night = false;
+
+// 夜间配色挂在每个 .pi-root 上：主面板、对话框、提示卡各自是独立的根节点。
+export function setNight(value) {
+    night = Boolean(value);
+    for (const node of hostDocument().querySelectorAll('.pi-root')) node.classList.toggle('is-night', night);
+}
+
+export const isNight = () => night;
+
 export function el(html) {
     const box = hostDocument().createElement('div');
     box.innerHTML = html.trim();
-    return box.firstElementChild;
+    const node = box.firstElementChild;
+    if (node && node.classList.contains('pi-root')) node.classList.toggle('is-night', night);
+    return node;
 }
 
 export function options(list, value) {

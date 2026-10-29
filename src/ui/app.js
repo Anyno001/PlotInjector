@@ -1,6 +1,6 @@
 import { groupProjects } from '../core/store.js';
 import { cardKey, cardName, hostDocument, hostWindow, toast } from '../host/st.js';
-import { confirmDialog, el, ensureStyle, esc, openDialog, promptDialog } from './dom.js';
+import { confirmDialog, el, ensureStyle, esc, isNight, openDialog, promptDialog, setNight } from './dom.js';
 import { ICONS } from './styles.js';
 import * as discuss from './tab-discuss.js';
 import * as setting from './tab-setting.js';
@@ -8,6 +8,7 @@ import * as outline from './tab-outline.js';
 import * as run from './tab-run.js';
 import * as settings from './page-settings.js';
 import * as dataPage from './page-data.js';
+import * as books from './page-books.js';
 
 const TABS = [
     { key: 'discuss', label: '讨论', mod: discuss },
@@ -15,8 +16,13 @@ const TABS = [
     { key: 'outline', label: '大纲', mod: outline },
     { key: 'run', label: '执行', mod: run },
 ];
-const PAGES = { settings: { label: '设置', mod: settings }, data: { label: '数据管理', mod: dataPage } };
+const PAGES = {
+    books: { label: '世界书条目', icon: 'book', mod: books },
+    data: { label: '数据管理', icon: 'box', mod: dataPage },
+    settings: { label: '设置', icon: 'gear', mod: settings },
+};
 const UI_KEY = 'pi-ui';
+const SEARCH_FROM = 6;
 
 function readUi() {
     try { return JSON.parse(hostWindow().localStorage.getItem(UI_KEY) || '{}') || {}; } catch { return {}; }
@@ -30,6 +36,7 @@ export function createApp({ data, runtime, version }) {
     const doc = hostDocument();
     let root = null;
     let busyTimer = 0;
+    setNight(readUi().night);
     const view = {
         data,
         runtime,
@@ -37,6 +44,8 @@ export function createApp({ data, runtime, version }) {
         projectId: '',
         tab: 'run',
         page: '',
+        drawer: false,
+        search: '',
         collapsed: new Set(readUi().collapsed || []),
         state: {},
         busy: {},
@@ -70,36 +79,52 @@ export function createApp({ data, runtime, version }) {
         const groups = groupProjects(index.projects);
         const list = groups.map(group => {
             const collapsed = view.collapsed.has(group.name);
-            const items = collapsed ? '' : group.items.map(item => `<button type="button" class="pi-pitem${item.id === view.projectId && !view.page ? ' is-sel' : ''}" data-act="project" data-id="${esc(item.id)}" title="右键改名、分组或删除">
+            const items = group.items.map(item => `<button type="button" class="pi-pitem${item.id === view.projectId && !view.page ? ' is-sel' : ''}" data-act="project" data-id="${esc(item.id)}" data-name="${esc(`${item.group} ${item.name}`.toLowerCase())}" title="右键编辑名称、分组">
                 <span class="pi-pname">${esc(item.name)}</span>${item.id === activeId ? '<span class="pi-dot" title="本卡当前项目"></span>' : ''}</button>`).join('');
-            const head = group.name ? `<button type="button" class="pi-group-hd" data-act="group" data-group="${esc(group.name)}">${collapsed ? ICONS.caret : ICONS.caretDown}${esc(group.name)}</button>` : '';
-            return `<div class="pi-group">${head}${items}</div>`;
+            const head = group.name ? `<button type="button" class="pi-group-hd" data-act="group" data-group="${esc(group.name)}">${collapsed ? ICONS.caret : ICONS.caretDown}${esc(group.name)}<small>${group.items.length}</small></button>` : '';
+            return `<div class="pi-group${collapsed ? ' is-collapsed' : ''}">${head}${items}</div>`;
         }).join('');
+        const page = key => `<button type="button" class="pi-btn is-ghost is-block${view.page === key ? ' is-sel' : ''}" data-act="page" data-page="${key}">${ICONS[PAGES[key].icon]}${PAGES[key].label}</button>`;
         return `<div class="pi-side-hd">剧情注入器 <small>v${esc(version)}</small></div>
+            ${index.projects.length > SEARCH_FROM ? `<div class="pi-psearch">${ICONS.search}<input class="pi-inp" data-psearch placeholder="搜索项目" value="${esc(view.search)}"></div>` : ''}
             <div class="pi-plist">${list || '<p class="pi-hint">还没有项目</p>'}</div>
             <div class="pi-side-ft">
                 <button type="button" class="pi-btn is-ghost is-block" data-act="new-project">${ICONS.plus}新项目</button>
-                <button type="button" class="pi-btn is-ghost is-block${view.page === 'settings' ? ' is-sel' : ''}" data-act="page" data-page="settings">${ICONS.gear}设置</button>
-                <button type="button" class="pi-btn is-ghost is-block${view.page === 'data' ? ' is-sel' : ''}" data-act="page" data-page="data">${ICONS.box}数据管理</button>
+                ${page('books')}${page('data')}${page('settings')}
             </div>`;
     }
 
-    function pickerHtml() {
-        const index = data.index();
-        const opts = index.projects.map(item => `<option value="p:${esc(item.id)}"${!view.page && item.id === view.projectId ? ' selected' : ''}>${esc(item.group ? `${item.group}／` : '')}${esc(item.name)}</option>`).join('');
-        return `<select class="pi-sel pi-picker" data-act-change="picker">
-            <option value="" disabled${!view.projectId && !view.page ? ' selected' : ''}>选择项目</option>${opts}
-            <option value="new">＋新项目</option>
-            <option value="page:settings"${view.page === 'settings' ? ' selected' : ''}>设置</option>
-            <option value="page:data"${view.page === 'data' ? ' selected' : ''}>数据管理</option></select>`;
+    // 搜索时无视分组折叠，只留名称或分组名匹配的项目。
+    function applySearch() {
+        const listBox = root && root.querySelector('.pi-plist');
+        if (!listBox) return;
+        const q = view.search.trim().toLowerCase();
+        listBox.classList.toggle('is-searching', Boolean(q));
+        for (const group of listBox.querySelectorAll('.pi-group')) {
+            let shown = 0;
+            for (const item of group.querySelectorAll('.pi-pitem')) {
+                const hit = !q || item.dataset.name.includes(q);
+                item.hidden = !hit;
+                if (hit) shown += 1;
+            }
+            group.hidden = Boolean(q) && !shown;
+        }
     }
 
     function topHtml() {
         const project = view.project();
         const title = view.page ? PAGES[view.page].label : project ? project.name : '剧情注入器';
-        const tabs = view.page || !project ? '' : TABS.map(tab => `<button type="button" class="pi-tab${tab.key === view.tab ? ' is-sel' : ''}" data-act="tab" data-tab="${tab.key}">${tab.label}</button>`).join('');
-        return `${pickerHtml()}<div class="pi-top-title">${esc(title)}</div><div class="pi-tabs">${tabs}</div>
-            <button type="button" class="pi-close" data-act="close" title="关闭">${ICONS.close}</button>`;
+        const tabs = view.page || !project ? '' : `<div class="pi-tabs">${TABS.map(tab => `<button type="button" class="pi-tab${tab.key === view.tab ? ' is-sel' : ''}" data-act="tab" data-tab="${tab.key}">${tab.label}</button>`).join('')}</div>`;
+        const rename = !view.page && project ? `<button type="button" class="pi-icon-btn" data-act="rename" title="编辑项目名称">${ICONS.pencil}</button>` : '';
+        return `<div class="pi-top-lead"><button type="button" class="pi-icon-btn pi-menu" data-act="drawer" title="项目列表">${ICONS.menu}</button>
+                <span class="pi-top-title">${esc(title)}</span>${rename}</div>${tabs}
+            <div class="pi-top-end"><button type="button" class="pi-icon-btn" data-act="theme" title="${isNight() ? '日间配色' : '夜间配色'}">${isNight() ? ICONS.sun : ICONS.moon}</button>
+            <button type="button" class="pi-close" data-act="close" title="关闭">${ICONS.close}</button></div>`;
+    }
+
+    function setDrawer(open) {
+        view.drawer = open;
+        root?.querySelector('.pi-panel').classList.toggle('is-drawer', open);
     }
 
     function bodyHtml() {
@@ -107,7 +132,7 @@ export function createApp({ data, runtime, version }) {
         if (view.page) return current().render(view);
         const project = view.project();
         if (!view.projectId) {
-            return `<div class="pi-empty">${data.index().projects.length ? '从左侧选择一个项目。' : '一个项目就是一条 if 线：讨论 → 设定 → 大纲 → 执行。'}<br><br>
+            return `<div class="pi-empty">${data.index().projects.length ? '从项目列表选择一个项目。' : '一个项目就是一条 if 线：讨论 → 设定 → 大纲 → 执行。'}<br><br>
                 <button type="button" class="pi-btn is-primary" data-act="new-project">${ICONS.plus}新项目</button></div>`;
         }
         if (!project) return '<div class="pi-empty"><span class="pi-spin"></span> 正在读取项目…</div>';
@@ -118,6 +143,7 @@ export function createApp({ data, runtime, version }) {
         if (!root) return;
         root.querySelector('.pi-side').innerHTML = sideHtml();
         root.querySelector('.pi-top').innerHTML = topHtml();
+        applySearch();
     }
 
     function renderBody() {
@@ -147,6 +173,7 @@ export function createApp({ data, runtime, version }) {
 
     async function selectProject(id, tab) {
         view.page = '';
+        setDrawer(false);
         view.projectId = id;
         writeUi({ projectId: id });
         render();
@@ -174,6 +201,7 @@ export function createApp({ data, runtime, version }) {
     }
 
     async function newProject() {
+        setDrawer(false);
         const name = await promptDialog({ title: '新项目', label: '项目名（一条 if 线）', placeholder: '如：龙宫温养' });
         if (name == null) return;
         try {
@@ -190,7 +218,7 @@ export function createApp({ data, runtime, version }) {
         if (!meta) return;
         const groups = [...new Set(data.index().projects.map(item => item.group).filter(Boolean))];
         const result = await openDialog({
-            title: '项目',
+            title: '编辑项目',
             html: `<label class="pi-field"><span>名称</span><input class="pi-inp" data-f="name" value="${esc(meta.name)}"></label>
                 <label class="pi-field"><span>分组（留空不分组）</span><input class="pi-inp" data-f="group" value="${esc(meta.group)}" list="pi-groups"></label>
                 <datalist id="pi-groups">${groups.map(name => `<option value="${esc(name)}">`).join('')}</datalist>`,
@@ -227,7 +255,14 @@ export function createApp({ data, runtime, version }) {
         if (act === 'project') return selectProject(target.dataset.id);
         if (act === 'new-project') return newProject();
         if (act === 'tab') return go(target.dataset.tab);
-        if (act === 'page') { view.page = target.dataset.page; return render(); }
+        if (act === 'page') { view.page = target.dataset.page; setDrawer(false); return render(); }
+        if (act === 'drawer') return setDrawer(!view.drawer);
+        if (act === 'theme') {
+            setNight(!isNight());
+            writeUi({ night: isNight() });
+            return renderSide();
+        }
+        if (act === 'rename') return projectMenu(view.projectId);
         if (act === 'group') {
             const name = target.dataset.group;
             if (view.collapsed.has(name)) view.collapsed.delete(name);
@@ -251,17 +286,16 @@ export function createApp({ data, runtime, version }) {
 
     function onChange(event) {
         const target = event.target;
-        if (target.dataset.actChange === 'picker') {
-            const value = target.value;
-            if (value === 'new') return newProject();
-            if (value.startsWith('page:')) { view.page = value.slice(5); return render(); }
-            return selectProject(value.slice(2));
-        }
+        if (target.dataset.psearch !== undefined) return;
         const handler = current().onChange;
         if (handler) Promise.resolve(handler(view, target, event)).catch(error => toast('error', error.message || String(error)));
     }
 
     function onInput(event) {
+        if (event.target.dataset.psearch !== undefined) {
+            view.search = event.target.value;
+            return applySearch();
+        }
         const handler = current().onInput;
         if (handler) handler(view, event.target, event);
     }
@@ -269,7 +303,8 @@ export function createApp({ data, runtime, version }) {
     function onKey(event) {
         if (event.key === 'Escape' && root && !doc.querySelector('.pi-dialog')) {
             event.stopPropagation();
-            close();
+            if (view.drawer) setDrawer(false);
+            else close();
         }
         if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) current().onSubmit?.(view, event.target, event);
     }
@@ -278,7 +313,9 @@ export function createApp({ data, runtime, version }) {
         ensureStyle();
         if (root) return;
         const ui = readUi();
+        view.drawer = false;
         root = el(`<div class="pi-root pi-overlay"><div class="pi-panel"><aside class="pi-side"></aside>
+            <div class="pi-scrim" data-act="drawer"></div>
             <section class="pi-main"><header class="pi-top"></header><div class="pi-body"></div></section></div></div>`);
         root.addEventListener('click', onClick);
         root.addEventListener('contextmenu', onContext);

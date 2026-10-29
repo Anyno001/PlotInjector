@@ -76,6 +76,7 @@ function makeHost() {
         if (u === '/api/files/upload') { files.set(body.name, decode(body.data)); return respond(200, '{}'); }
         if (u === '/api/files/delete') { const name = body.path.replace('user/files/', ''); const had = files.delete(name); return respond(had ? 200 : 404, ''); }
         if (u === '/api/files/verify') return respond(200, JSON.stringify(Object.fromEntries(body.urls.map(item => [item, files.has(item.replace('user/files/', ''))]))));
+        if (u === '/api/backends/chat-completions/status') return respond(200, JSON.stringify({ data: [{ id: 'model-b' }, { id: 'model-a' }] }));
         return respond(404, '');
     };
     return { win, context, files, eventSource, llmCalls, click: () => buttonHandler() };
@@ -172,7 +173,7 @@ test('打开界面后四个页签、设置页、数据管理页都能渲染', as
         assert.ok(doc.querySelector('.pi-body').textContent.trim().length > 0, tab);
     }
     assert.match(doc.querySelector('.pi-body').textContent, /剧情索引/);
-    for (const page of ['settings', 'data']) {
+    for (const page of ['settings', 'data', 'books']) {
         doc.querySelector(`.pi-side [data-act="page"][data-page="${page}"]`).click();
         await tick(20);
         assert.ok(doc.querySelector('.pi-body').textContent.length > 20, page);
@@ -181,6 +182,60 @@ test('打开界面后四个页签、设置页、数据管理页都能渲染', as
     await host.instance.destroy();
     assert.equal(doc.querySelector('.pi-overlay'), null);
     assert.equal(doc.getElementById('pi-style'), null);
+});
+
+test('设置页获取模型列表后可在下拉框中选择，也可切回手动输入', async () => {
+    const host = await boot();
+    await withProject(host);
+    host.click();
+    await tick(10);
+    const doc = host.win.document;
+    const fire = (node, type) => node.dispatchEvent(new host.win.Event(type, { bubbles: true }));
+    doc.querySelector('.pi-side [data-act="page"][data-page="settings"]').click();
+    await tick(10);
+    const source = doc.querySelector('select[data-llm="discuss"][data-k="source"]');
+    source.value = 'custom';
+    fire(source, 'change');
+    await tick(10);
+    const endpoint = doc.querySelector('input[data-llm="discuss"][data-k="endpoint"]');
+    endpoint.value = 'https://api.example.com/v1';
+    fire(endpoint, 'input');
+    doc.querySelector('[data-act="models"][data-role="discuss"]').click();
+    await tick(30);
+    const pick = doc.querySelector('select[data-llm="discuss"][data-k="model"]');
+    assert.ok(pick, '获取后应出现模型下拉框');
+    assert.deepEqual([...pick.options].filter(option => !option.disabled).map(option => option.value), ['model-a', 'model-b', '__manual']);
+    pick.value = 'model-b';
+    fire(pick, 'change');
+    assert.equal(host.instance.data.settings().llm.discuss.model, 'model-b');
+    const again = doc.querySelector('select[data-llm="discuss"][data-k="model"]');
+    again.value = '__manual';
+    fire(again, 'change');
+    const manual = doc.querySelector('input[data-llm="discuss"][data-k="model"]');
+    assert.equal(manual.value, 'model-b');
+    assert.equal(host.instance.data.settings().llm.discuss.model, 'model-b');
+    assert.equal(host.win.__errors.length, 0, host.win.__errors.join('\n'));
+    await host.instance.destroy();
+});
+
+test('讨论消息渲染 Markdown 且不放行 HTML', async () => {
+    const host = await boot();
+    const project = await withProject(host);
+    await host.instance.data.loadChat(project.id);
+    host.instance.data.saveChat(project.id, { ...host.instance.data.chat(project.id), messages: [{ id: 'm1', role: 'assistant', content: '## 标题\n**粗体** 与 `代码`\n- 条目\n<img src=x onerror=alert(1)>', at: 1 }] });
+    host.click();
+    await tick(10);
+    const doc = host.win.document;
+    doc.querySelector('[data-act="tab"][data-tab="discuss"]').click();
+    await tick(10);
+    const md = doc.querySelector('.pi-msg .pi-md');
+    assert.equal(md.querySelector('.pi-md-h').textContent, '标题');
+    assert.equal(md.querySelector('strong').textContent, '粗体');
+    assert.equal(md.querySelector('code').textContent, '代码');
+    assert.equal(md.querySelector('li').textContent, '条目');
+    assert.equal(md.querySelector('img'), null);
+    assert.match(md.textContent, /<img src=x/);
+    await host.instance.destroy();
 });
 
 test('界面操作改动立即反映到注入内容与本地文件', async () => {
