@@ -36,7 +36,9 @@ function scriptJson(name, content, info) {
     }, null, 2)}\n`;
 }
 
-const loader = fs.readFileSync(path.join(root, 'loader/plot-injector.js'), 'utf8').replace(/\r\n/g, '\n');
+const loaderSource = fs.readFileSync(path.join(root, 'loader/plot-injector.js'), 'utf8').replace(/\r\n/g, '\n');
+if (!loaderSource.includes("const MIN_TAG = 'v0.0.0';")) throw new Error('加载器缺少 MIN_TAG 占位');
+const loader = loaderSource.replace("const MIN_TAG = 'v0.0.0';", `const MIN_TAG = 'v${version}';`);
 fs.writeFileSync(path.join(root, 'loader/plot-injector.json'), scriptJson('剧情注入器（自动更新）', loader, '从 GitHub 加载最新版剧情注入器。'));
 fs.writeFileSync(path.join(root, 'dist/plot-injector-standalone.json'), scriptJson(`剧情注入器 v${version}（单文件）`, bundle, '内嵌完整程序，不联网更新，用于离线或测试。'));
 

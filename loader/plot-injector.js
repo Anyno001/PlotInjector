@@ -7,6 +7,8 @@
     const BUNDLE = 'dist/plot-injector.js';
     const BUTTON = '剧情注入';
     const TAG_TTL = 30 * 60 * 1000;
+    // 构建时替换为当时的版本：jsDelivr 的「最新版本」可能滞后半天，不能比它更旧。
+    const MIN_TAG = 'v0.0.0';
     const UI_KEY = 'pi-ui';
 
     const host = (() => {
@@ -153,12 +155,13 @@
     }
 
     async function latestTag() {
+        const atLeast = tag => (tag && tag !== 'main' && compareVersions(tag, MIN_TAG) >= 0 ? tag : MIN_TAG === 'v0.0.0' ? tag || 'main' : MIN_TAG);
         const cached = readUi().loader;
-        if (cached && cached.tag && cached.by === LOADER_VERSION && Date.now() - cached.at < TAG_TTL) return cached.tag;
+        if (cached && cached.tag && cached.by === LOADER_VERSION && Date.now() - cached.at < TAG_TTL) return atLeast(cached.tag);
         for (const source of [fromGithub, fromJsdelivr]) {
             try {
-                const tag = await source();
-                if (tag) {
+                const tag = atLeast(await source());
+                if (tag && tag !== 'main') {
                     writeUi({ loader: { tag, at: Date.now(), by: LOADER_VERSION } });
                     return tag;
                 }
@@ -167,7 +170,7 @@
                 console.warn('[剧情注入器] 读取最新版本失败', source.name, error);
             }
         }
-        return cached && cached.tag ? cached.tag : 'main';
+        return atLeast(cached && cached.tag ? cached.tag : '');
     }
 
     async function fetchBundle(url) {
