@@ -1,4 +1,4 @@
-// PlotInjector v0.1.2
+// PlotInjector v0.1.3
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -1231,7 +1231,7 @@ ${floor.text}`)
 .pi-root *,.pi-root *::before,.pi-root *::after{box-sizing:border-box}
 .pi-root ::-webkit-scrollbar{display:none}
 .pi-root [hidden]{display:none!important}
-.pi-overlay{position:fixed;inset:0;z-index:10050;display:flex;align-items:center;justify-content:center;background:rgba(20,20,30,.28)}
+.pi-overlay{position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;z-index:10050;display:flex;align-items:center;justify-content:center;background:rgba(20,20,30,.28)}
 .pi-panel{width:880px;max-width:96vw;height:88vh;max-height:88vh;background:var(--pi-surf);border-radius:var(--pi-r);box-shadow:var(--pi-shadow);display:grid;grid-template-columns:220px 1fr;overflow:hidden}
 .pi-side{background:var(--pi-bg);border-right:1px solid var(--pi-line);display:flex;flex-direction:column;min-height:0}
 .pi-side-hd{padding:14px 14px 8px;font-weight:700;font-size:15px;color:var(--pi-dark);display:flex;align-items:center;gap:6px}
@@ -1347,19 +1347,19 @@ ${floor.text}`)
 .pi-status.is-err{color:var(--pi-danger)}
 .pi-spin{display:inline-block;width:12px;height:12px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:pi-spin .8s linear infinite}
 @keyframes pi-spin{to{transform:rotate(360deg)}}
-.pi-dialog{position:fixed;inset:0;z-index:10060;display:flex;align-items:center;justify-content:center;background:rgba(20,20,30,.28)}
+.pi-dialog{position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;z-index:10060;display:flex;align-items:center;justify-content:center;background:rgba(20,20,30,.28)}
 .pi-dialog-box{width:440px;max-width:92vw;max-height:80vh;overflow-y:auto;background:var(--pi-bg);border-radius:var(--pi-r);box-shadow:var(--pi-shadow);padding:16px;scrollbar-width:none}
 .pi-dialog-box h4{margin:0 0 8px;font-size:15px;color:var(--pi-dark)}
 .pi-dialog-box .pi-dlg-acts{display:flex;gap:8px;justify-content:flex-end;margin-top:12px;flex-wrap:wrap}
 .pi-dialog-box ul{margin:6px 0;padding-left:18px;font-size:12px;color:var(--pi-txt2);max-height:200px;overflow-y:auto}
-.pi-notices{position:fixed;right:16px;bottom:16px;z-index:10040;display:flex;flex-direction:column;gap:8px;max-width:340px;width:calc(100vw - 32px)}
-.pi-notice{background:var(--pi-bg);border-radius:var(--pi-r);box-shadow:var(--pi-shadow);padding:12px 14px;border-left:4px solid var(--pi-accent)}
+.pi-notices{position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;z-index:10040;display:flex;flex-direction:column;justify-content:flex-end;align-items:flex-end;gap:8px;padding:16px;box-sizing:border-box;pointer-events:none}
+.pi-notice{pointer-events:auto;width:340px;max-width:100%;background:var(--pi-bg);border-radius:var(--pi-r);box-shadow:var(--pi-shadow);padding:12px 14px;border-left:4px solid var(--pi-accent)}
 .pi-notice b{display:block;font-size:13px;color:var(--pi-dark);margin-bottom:3px}
 .pi-notice p{margin:0 0 8px;font-size:12px;color:var(--pi-txt2)}
 .pi-notice .pi-row{gap:6px}
 @media (max-width:720px){
 .pi-overlay{align-items:stretch}
-.pi-panel{grid-template-columns:minmax(0,1fr);width:100vw;max-width:100vw;height:100%;max-height:none;border-radius:0}
+.pi-panel{grid-template-columns:minmax(0,1fr);width:100vw;max-width:100vw;height:100vh;height:100dvh;max-height:none;border-radius:0}
 .pi-side{display:none}
 .pi-picker{display:block;width:auto;max-width:42vw;padding:4px 8px}
 .pi-top{flex-wrap:wrap}
@@ -3223,7 +3223,7 @@ ${parsed.body}` : parsed.body;
   }
 
   // src/index.js
-  var VERSION = "0.1.2", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.1.3", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")

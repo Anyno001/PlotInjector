@@ -6,14 +6,14 @@
     const REPOSITORY = 'Anyno001/PlotInjector';
     const BUNDLE = 'dist/plot-injector.js';
     const BUTTON = '剧情注入';
-    const TAG_TTL = 6 * 60 * 60 * 1000;
+    const TAG_TTL = 30 * 60 * 1000;
     const UI_KEY = 'pi-ui';
 
     const host = (() => {
         try { if (window.parent && window.parent !== window && window.parent.document) return window.parent; } catch (error) { /* 跨域 */ }
         return window;
     })();
-    const LOADER_VERSION = '0.1.2';
+    const LOADER_VERSION = '0.1.3';
     const status = { loader: LOADER_VERSION, stage: '正在读取版本', error: '', bound: [], attempts: [] };
     window.__plotInjectorLoader = status;
     const doc = host.document;
@@ -154,12 +154,12 @@
 
     async function latestTag() {
         const cached = readUi().loader;
-        if (cached && cached.tag && Date.now() - cached.at < TAG_TTL) return cached.tag;
+        if (cached && cached.tag && cached.by === LOADER_VERSION && Date.now() - cached.at < TAG_TTL) return cached.tag;
         for (const source of [fromGithub, fromJsdelivr]) {
             try {
                 const tag = await source();
                 if (tag) {
-                    writeUi({ loader: { tag, at: Date.now() } });
+                    writeUi({ loader: { tag, at: Date.now(), by: LOADER_VERSION } });
                     return tag;
                 }
             } catch (error) {
