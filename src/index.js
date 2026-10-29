@@ -16,9 +16,11 @@ function boot() {
     if (host[KEY] && typeof host[KEY].destroy === 'function') {
         try { host[KEY].destroy(); } catch (error) { console.warn('[剧情注入器] 旧实例销毁失败', error); }
     }
+    host.__plotInjectorBootError = '';
     const yaml = libs().yaml;
     if (!yaml) {
-        toast('error', '当前酒馆没有提供 YAML 解析库（SillyTavern.libs.yaml），需要 1.13 以上版本。');
+        host.__plotInjectorBootError = '当前酒馆没有提供 YAML 解析库（SillyTavern.libs.yaml），需要更新酒馆。';
+        toast('error', host.__plotInjectorBootError);
         return;
     }
     setYamlLib(yaml);
@@ -78,5 +80,6 @@ try {
     boot();
 } catch (error) {
     console.error('[剧情注入器] 启动失败', error);
+    try { hostWindow().__plotInjectorBootError = `启动失败：${error && error.message}`; } catch { /* 父窗口不可写 */ }
     toast('error', `启动失败：${error.message}`);
 }

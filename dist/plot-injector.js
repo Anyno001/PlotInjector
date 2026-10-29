@@ -1,4 +1,4 @@
-// PlotInjector v0.1.1
+// PlotInjector v0.1.2
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -3223,7 +3223,7 @@ ${parsed.body}` : parsed.body;
   }
 
   // src/index.js
-  var VERSION = "0.1.1", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.1.2", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")
@@ -3232,9 +3232,10 @@ ${parsed.body}` : parsed.body;
       } catch (error) {
         console.warn("[剧情注入器] 旧实例销毁失败", error);
       }
+    host.__plotInjectorBootError = "";
     let yaml = libs().yaml;
     if (!yaml) {
-      toast("error", "当前酒馆没有提供 YAML 解析库（SillyTavern.libs.yaml），需要 1.13 以上版本。");
+      host.__plotInjectorBootError = "当前酒馆没有提供 YAML 解析库（SillyTavern.libs.yaml），需要更新酒馆。", toast("error", host.__plotInjectorBootError);
       return;
     }
     setYamlLib(yaml), ensureStyle();
@@ -3270,6 +3271,11 @@ ${parsed.body}` : parsed.body;
   try {
     boot();
   } catch (error) {
-    console.error("[剧情注入器] 启动失败", error), toast("error", `启动失败：${error.message}`);
+    console.error("[剧情注入器] 启动失败", error);
+    try {
+      hostWindow().__plotInjectorBootError = `启动失败：${error && error.message}`;
+    } catch {
+    }
+    toast("error", `启动失败：${error.message}`);
   }
 })();
