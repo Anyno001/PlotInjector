@@ -22,7 +22,7 @@ export function render(view) {
     const folded = chat.messages.filter(msg => msg.folded).length;
     const live = chat.messages.filter(msg => !msg.folded);
     const lastAi = [...live].reverse().find(msg => msg.role !== 'user');
-    const wb = wbSummary(view, chat, () => view.renderBody());
+    const wb = wbSummary(view, chat.refs, () => view.renderBody());
     const canProgress = Boolean(progressText(view));
     const chips = `<div class="pi-refs"><span class="pi-hint">附带参考：</span>
         <button type="button" class="pi-chip${refs.setting ? ' is-on' : ''}" data-act="ref" data-ref="setting">设定</button>
@@ -161,7 +161,7 @@ export const actions = {
         view.renderBody();
     },
     async 'ref-wb'(view) {
-        const result = await pickRefs(view.data.chat(view.projectId));
+        const result = await pickRefs(view.data.chat(view.projectId).refs);
         if (!result) return;
         if (result.none) return toast('info', '当前卡没有关联的世界书。');
         updateChat(view, current => ({ ...current, refs: { ...current.refs, memo: result.memo, wb: result.wb } }));

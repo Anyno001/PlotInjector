@@ -107,6 +107,7 @@ export function newProject(name, now = Date.now()) {
         setting: { text: '', history: [], check: '', fixes: [] },
         outline: { volumes: [] },
         defaults: JSON.parse(JSON.stringify(DEFAULT_PARAMS)),
+        genRefs: normalizeGenRefs(),
     };
 }
 
@@ -133,6 +134,18 @@ export function normalizeProject(value, id) {
             })),
         },
         defaults: normalizeDefaults(src.defaults),
+        genRefs: normalizeGenRefs(src.genRefs),
+    };
+}
+
+// 设定、大纲页让 AI 写作时带的参考：讨论记录开关 + 世界书条目（规则与讨论页相同，见 core/refs.js）。
+export function normalizeGenRefs(value) {
+    const src = value && typeof value === 'object' ? value : {};
+    const memo = Number(src.memo);
+    return {
+        talk: src.talk !== false,
+        memo: Number.isFinite(memo) ? Math.max(0, Math.min(100, Math.round(memo))) : DEFAULT_MEMO,
+        wb: src.wb ? normalizeWbRule(src.wb) : { ...DEFAULT_WB_RULE, fields: {}, picks: {} },
     };
 }
 

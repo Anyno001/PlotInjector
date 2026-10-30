@@ -66,12 +66,15 @@ export function transcript(summary, messages, limit = 30000) {
     return joined.length > limit ? joined.slice(-limit) : joined;
 }
 
-export function settingMessages({ guide, talk, current, append }) {
+const refBlock = refs => (refs && refs.length ? `【世界书参考】\n${refs.map(ref => `〔${ref.title}〕\n${ref.text}`).join('\n\n')}` : '');
+
+export function settingMessages({ guide, talk, current, append, refs = [] }) {
     const system = `${guide}\n\n按上面的规则产出，只回「世界观正文」「补定」「速查」三段。`;
     const user = [
         current ? `【已有世界观正文】\n${current}` : '',
         append ? '已有正文不改动，只把新增事实写成一段 [追加]。' : '',
-        `【讨论记录】\n${talk}`,
+        talk ? `【讨论记录】\n${talk}` : '',
+        refBlock(refs),
     ].filter(Boolean).join('\n\n');
     return [{ role: 'system', content: system }, { role: 'user', content: user }];
 }
@@ -99,12 +102,13 @@ const OUTLINE_RULES = [
     '时间范围写清本阶段从什么时候到什么时候，用来判断何时切到下一段。',
 ].join('\n');
 
-export function outlineMessages({ setting, talk, volumes, volumeNo, request }) {
+export function outlineMessages({ setting, talk, volumes, volumeNo, request, refs = [] }) {
     const known = (volumes || []).map(volume => `${volumeLabel(volume.key)}：${volume.stages.map(stage => stageLabel(stage.key)).join('、')}`);
     const system = `你按用户的设定写剧情大纲，格式必须与样例一致。\n${OUTLINE_RULES}\n\n【格式样例】\n${formatSample(volumes)}`;
     const user = [
         setting ? `【设定】\n${setting}` : '',
         talk ? `【讨论摘要】\n${talk}` : '',
+        refBlock(refs),
         known.length ? `【已有的卷】\n${known.join('\n')}` : '',
         `只写第 ${volumeNo} 卷。${request || ''}`,
     ].filter(Boolean).join('\n\n');

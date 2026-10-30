@@ -105,6 +105,8 @@ export const CSS = `
 .pi-fix-acts{display:grid;grid-template-columns:repeat(3,56px);gap:4px;flex-shrink:0}
 .pi-fix-acts>.pi-btn{width:100%;padding:0}
 .pi-ref-book+.pi-ref-book{margin-top:12px;padding-top:8px;border-top:1px solid var(--pi-line)}
+.pi-ref-top{display:flex;align-items:center;gap:4px;margin:0 0 6px}
+.pi-ref-top .pi-spacer{flex:1}
 .pi-chip:disabled{opacity:.45;cursor:not-allowed}
 .pi-wb-field{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pi-wb-row{display:flex;align-items:center;gap:8px;padding:3px 0;min-width:0}

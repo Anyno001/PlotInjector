@@ -1,9 +1,10 @@
 import { settingMessages, rewriteBlockMessages } from '../core/prompts.js';
 import { diffLines, joinBlocks, mergeBlocks, parseSettingReply, pushHistory, splitBlocks } from '../core/setting.js';
 import { estimateTokens } from '../core/tokens.js';
-import { ask, guideText, runTask, talkText } from './ai.js';
+import { ask, guideText, runTask } from './ai.js';
 import { confirmDialog, esc, openDialog, options } from './dom.js';
 import { ICONS } from './styles.js';
+import { genActions, genRefTexts, genRefsBar } from './gen-refs.js';
 import { afterImport, pickWorldbookEntries } from './wb-import.js';
 
 const st = view => view.tabState('setting');
@@ -65,10 +66,11 @@ export function render(view) {
     return `${s.draft ? draftHtml(view, project, s.draft) : ''}
         <div class="pi-card"><h3>设定 ${checkBadge(project.setting.check)}</h3>
         <div class="pi-tools is-c3">
-            <button type="button" class="pi-btn is-sm is-primary" data-act="from-talk"${busy ? ' disabled' : ''}>${busy ? '<span class="pi-spin"></span>整理中' : '从讨论整理'}</button>
+            <button type="button" class="pi-btn is-sm is-primary" data-act="from-talk"${busy ? ' disabled' : ''}>${busy ? '<span class="pi-spin"></span>整理中' : 'AI 整理'}</button>
             <button type="button" class="pi-btn is-sm" data-act="import-wb">从世界书导入</button>
             <button type="button" class="pi-btn is-sm${s.history ? ' is-primary' : ''}" data-act="history">历史版本 ${project.setting.history.length}</button>
             <label class="pi-check"><input type="checkbox" data-append${s.append ? ' checked' : ''}><span>只追加，不改动已有分块</span></label></div>
+        ${genRefsBar(view, 'setting')}
         ${blocks.length ? `<div class="pi-toc">${blocks.map(block => `<span class="pi-chip pi-block-chip"><button type="button" data-act="jump" data-key="${esc(block.key)}" title="跳到这一块">${esc(block.title)}</button><button type="button" class="pi-block-del" data-act="block-del" data-key="${esc(block.key)}" title="删除整个分块">${ICONS.close}</button></span>`).join('')}</div>` : ''}
         <textarea class="pi-ta is-tall" data-setting placeholder="世界观正文。执行时作为常驻条目注入（角色定义后），取代世界书里手改的剧情设定条目。">${esc(text)}</textarea>
         <div class="pi-row"><span class="pi-hint pi-grow">≈<span data-tokens>${estimateTokens(text)}</span> token</span><span class="pi-status" data-save-status></span></div>
@@ -141,12 +143,13 @@ async function editFix(view, where, index, drop = false) {
 }
 
 export const actions = {
+    ...genActions,
     async 'from-talk'(view) {
         const project = view.project();
-        const talk = await talkText(view);
-        if (!talk.trim()) throw new Error('讨论记录是空的，先在「讨论」页聊一聊。');
+        const { talk, wb } = await genRefTexts(view);
+        if (!talk.trim() && !wb.length) throw new Error('没有可参考的内容：在讨论页聊一聊，或点「世界书」选择条目。');
         const append = Boolean(st(view).append && project.setting.text.trim());
-        const reply = await runTask(view, 'setting', () => ask(view, 'outline', settingMessages({ guide: guideText(view), talk, current: project.setting.text, append })));
+        const reply = await runTask(view, 'setting', () => ask(view, 'outline', settingMessages({ guide: guideText(view), talk, current: project.setting.text, append, refs: wb })));
         if (!reply) return;
         const parsed = parseSettingReply(reply);
         if (!parsed.body) throw new Error('AI 回复里没有世界观正文');

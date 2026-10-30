@@ -2,8 +2,9 @@ import { NODE_FIELDS, flattenUnits, makeId, outlineToText, parseOutlineText, rep
 import { currentIndex, goTo } from '../core/progress.js';
 import { fixYamlMessages, outlineMessages, parseOutlineReply, rewriteRestMessages } from '../core/prompts.js';
 import { downloadBlob, toast } from '../host/st.js';
-import { ask, runTask, talkText } from './ai.js';
+import { ask, runTask } from './ai.js';
 import { choiceDialog, confirmDialog, esc, pickFiles, promptDialog } from './dom.js';
+import { genActions, genRefTexts, genRefsBar } from './gen-refs.js';
 import { afterImport, classifyEntries, pickWorldbookEntries } from './wb-import.js';
 
 const NODE_KEYS = {
@@ -117,6 +118,7 @@ export function render(view) {
             <button type="button" class="pi-btn is-sm" data-act="import-paste">粘贴</button>
             <button type="button" class="pi-btn is-sm" data-act="import-wb">从世界书</button>
             <button type="button" class="pi-btn is-sm" data-act="export"${project.outline.volumes.length ? '' : ' disabled'}>导出</button></div>
+        ${genRefsBar(view, 'outline')}
         <div class="pi-inline"><input class="pi-inp" data-ai-request placeholder="给 AI 的额外要求（可空）" value="${esc(s.request || '')}">
             <button type="button" class="pi-btn is-primary is-sm is-wide" data-act="ai-volume"${busy ? ' disabled' : ''}>${busy ? '<span class="pi-spin"></span>写作中' : `AI 写第 ${project.outline.volumes.length + 1} 卷`}</button></div>
         </div>
@@ -209,6 +211,7 @@ function applyRest(view, draft) {
 }
 
 export const actions = {
+    ...genActions,
     'node-kind'(view, target) {
         st(view).nodeKind = target.dataset.kind;
         view.renderBody();
@@ -347,9 +350,10 @@ export const actions = {
     },
     async 'ai-volume'(view) {
         const project = view.project();
-        const talk = await talkText(view, 12000);
+        const { talk, wb } = await genRefTexts(view, 12000);
+        if (!project.setting.text.trim() && !talk.trim() && !wb.length) throw new Error('没有可参考的内容：在讨论页聊一聊，或点「世界书」选择条目。');
         const reply = await runTask(view, 'outline', () => ask(view, 'outline', outlineMessages({
-            setting: project.setting.text, talk, volumes: project.outline.volumes, volumeNo: project.outline.volumes.length + 1, request: st(view).request,
+            setting: project.setting.text, talk, refs: wb, volumes: project.outline.volumes, volumeNo: project.outline.volumes.length + 1, request: st(view).request,
         })));
         if (reply) setDraft(view, 'volume', reply);
     },

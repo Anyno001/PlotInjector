@@ -15,8 +15,8 @@
         try { if (window.parent && window.parent !== window && window.parent.document) return window.parent; } catch (error) { /* 跨域 */ }
         return window;
     })();
-    const LOADER_VERSION = '0.1.4';
-    const status = { loader: LOADER_VERSION, stage: '正在读取版本', error: '', bound: [], attempts: [] };
+    const LOADER_VERSION = '0.1.5';
+    const status = { loader: LOADER_VERSION, stage: '正在读取版本', error: '', reason: '', pinned: '', ref: '', bound: [], attempts: [] };
     window.__plotInjectorLoader = status;
     const doc = host.document;
 
@@ -27,7 +27,8 @@
     }
 
     async function diagnose() {
-        const lines = [`加载器 v${LOADER_VERSION}`, `阶段：${status.stage}`];
+        const lines = [`加载器 v${LOADER_VERSION}`, `阶段：${status.stage}`, `指定版本：${status.pinned || '无（跟随最新）'}`, `使用版本：${status.ref || '—'}`];
+        if (status.reason) lines.push(`问题：${status.reason}`);
         if (status.error) lines.push(`错误：${status.error}`);
         if (host.__plotInjectorBootError) lines.push(`程序启动失败：${host.__plotInjectorBootError}`);
         lines.push(`按钮绑定：${status.bound.join('、') || '无'}`);
@@ -46,8 +47,26 @@
         return lines.join('\n');
     }
 
-    // 程序没就绪时点按钮：弹出诊断面板，可复制给开发者。
-    async function showDiagnosis() {
+    // 把 pi-index.json 里的「指定版本」清空后刷新：指定了打不开的旧版本时，用户进不了界面，只能在这里改回来。
+    async function clearPin() {
+        const c = host.SillyTavern && host.SillyTavern.getContext ? host.SillyTavern.getContext() : null;
+        const res = await host.fetch(`/user/files/pi-index.json?t=${Date.now()}`, { cache: 'no-store' });
+        if (!res.ok) throw new Error(`读取设置失败（HTTP ${res.status}）`);
+        const index = await res.json();
+        index.settings = { ...(index.settings || {}), loaderRef: '' };
+        const bytes = new TextEncoder().encode(JSON.stringify(index));
+        let binary = '';
+        for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+        const save = await host.fetch('/api/files/upload', {
+            method: 'POST',
+            headers: { ...(c && c.getRequestHeaders ? c.getRequestHeaders() : {}), 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: 'pi-index.json', data: host.btoa(binary) }),
+        });
+        if (!save.ok) throw new Error(`保存设置失败（HTTP ${save.status}）`);
+    }
+
+    // 程序没就绪或打开后看不见时点按钮：弹出诊断面板，可复制给开发者；指定了版本时可一键清空。
+    async function showDiagnosis(title = '剧情注入器还没启动') {
         let panel = doc.getElementById('pi-loader-diag');
         if (!panel) {
             if (!doc.getElementById('pi-loader-diag-style')) {
@@ -58,10 +77,22 @@
             }
             panel = doc.createElement('section');
             panel.id = 'pi-loader-diag';
-            panel.innerHTML = '<b>剧情注入器还没启动</b><span>把下面的文字复制给开发者。</span><textarea readonly></textarea><div><button data-a="copy">复制</button><button data-a="close">关闭</button></div>';
+            panel.innerHTML = '<b></b><span>把下面的文字复制给开发者。</span><textarea readonly></textarea><div><button data-a="copy">复制</button><button data-a="unpin" hidden>清空指定版本并刷新</button><button data-a="close">关闭</button></div>';
             panel.addEventListener('click', async event => {
                 const action = event.target.dataset && event.target.dataset.a;
                 if (action === 'close') panel.remove();
+                if (action === 'unpin') {
+                    event.target.disabled = true;
+                    try {
+                        await clearPin();
+                        notify('success', '已清空指定版本，正在刷新页面。');
+                        host.setTimeout(() => host.location.reload(), 600);
+                    } catch (error) {
+                        event.target.disabled = false;
+                        notify('error', `清空失败：${error.message}`);
+                    }
+                    return;
+                }
                 if (action !== 'copy') return;
                 const box = panel.querySelector('textarea');
                 try {
@@ -77,14 +108,29 @@
             });
             doc.body.appendChild(panel);
         }
+        panel.querySelector('b').textContent = title;
+        panel.querySelector('[data-a="unpin"]').hidden = !status.pinned;
         panel.querySelector('textarea').value = '读取中…';
         panel.querySelector('textarea').value = await diagnose();
     }
 
+    // 打开后检查面板是否真的看得见：旧版本在手机上会塌成 0 高，看起来就是「点了没反应」。
     function onButton() {
         const app = host.__plotInjector;
-        if (app && typeof app.open === 'function') return app.open();
-        showDiagnosis();
+        if (!app || typeof app.open !== 'function') return showDiagnosis();
+        try {
+            app.open();
+        } catch (error) {
+            status.reason = `打开时出错：${error && error.message}`;
+            return showDiagnosis('剧情注入器打开失败');
+        }
+        host.setTimeout(() => {
+            const panel = doc.querySelector('.pi-overlay .pi-panel');
+            const box = panel && panel.getBoundingClientRect();
+            if (box && box.height > 40 && box.width > 40) return;
+            status.reason = panel ? `面板高度 ${Math.round(box.height)}px，在这台设备上显示不出来` : '点了按钮但没有出现面板';
+            showDiagnosis('剧情注入器没有正常显示');
+        }, 400);
     }
 
     if (typeof eventOn === 'function' && typeof getButtonEvent === 'function') {
@@ -222,15 +268,21 @@
     // 「指定版本」写错（版本不存在、只填了半截）时退回最新版，避免插件再也打不开、也就没法改回来。
     async function main() {
         const pinned = await pinnedRef();
+        status.pinned = pinned;
         const valid = pinned === 'main' || /^v\d+\.\d+\.\d+$/.test(pinned);
         if (pinned && valid) {
+            status.ref = pinned;
             const failed = await loadRef(pinned);
-            if (!failed) return;
+            if (!failed) {
+                notify('info', `正在使用指定版本 ${pinned}。要跟随最新版本，到「数据管理 → 版本更新」清空。`);
+                return;
+            }
             notify('warning', `指定版本「${pinned}」加载失败，已改用最新版本。可在「数据管理 → 版本更新」清空或改正。`);
         } else if (pinned) {
             notify('warning', `指定版本「${pinned}」格式不对，已改用最新版本。可在「数据管理 → 版本更新」清空或改正。`);
         }
         const ref = await latestTag();
+        status.ref = ref;
         const failed = await loadRef(ref);
         if (!failed) return;
         status.stage = '失败';

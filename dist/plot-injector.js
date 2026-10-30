@@ -1,4 +1,4 @@
-// PlotInjector v0.1.12
+// PlotInjector v0.1.13
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -563,7 +563,8 @@ ${body}${carriedText(carried)}
       createdAt: now,
       setting: { text: "", history: [], check: "", fixes: [] },
       outline: { volumes: [] },
-      defaults: JSON.parse(JSON.stringify(DEFAULT_PARAMS))
+      defaults: JSON.parse(JSON.stringify(DEFAULT_PARAMS)),
+      genRefs: normalizeGenRefs()
     };
   }
   function normalizeProject(value, id) {
@@ -586,7 +587,16 @@ ${body}${carriedText(carried)}
           stages: vol.stages.filter((stage) => stage && stage.data && typeof stage.data == "object").map((stage) => ({ id: stage.id || makeId("s"), key: String(stage.key || "阶段"), data: stage.data }))
         }))
       },
-      defaults: normalizeDefaults(src.defaults)
+      defaults: normalizeDefaults(src.defaults),
+      genRefs: normalizeGenRefs(src.genRefs)
+    };
+  }
+  function normalizeGenRefs(value) {
+    let src = value && typeof value == "object" ? value : {}, memo = Number(src.memo);
+    return {
+      talk: src.talk !== !1,
+      memo: Number.isFinite(memo) ? Math.max(0, Math.min(100, Math.round(memo))) : DEFAULT_MEMO,
+      wb: src.wb ? normalizeWbRule(src.wb) : { ...DEFAULT_WB_RULE, fields: {}, picks: {} }
     };
   }
   function normalizeDefaults(value) {
@@ -1034,15 +1044,21 @@ ${summary}
 ` : ""}${text}`;
     return joined.length > limit ? joined.slice(-limit) : joined;
   }
-  function settingMessages({ guide, talk, current, append }) {
+  var refBlock = (refs) => refs && refs.length ? `【世界书参考】
+${refs.map((ref) => `〔${ref.title}〕
+${ref.text}`).join(`
+
+`)}` : "";
+  function settingMessages({ guide, talk, current, append, refs = [] }) {
     let system = `${guide}
 
 按上面的规则产出，只回「世界观正文」「补定」「速查」三段。`, user = [
       current ? `【已有世界观正文】
 ${current}` : "",
       append ? "已有正文不改动，只把新增事实写成一段 [追加]。" : "",
-      `【讨论记录】
-${talk}`
+      talk ? `【讨论记录】
+${talk}` : "",
+      refBlock(refs)
     ].filter(Boolean).join(`
 
 `);
@@ -1080,7 +1096,7 @@ ${stageToText(stage).replace(/^/gm, "  ").trimEnd()}
     "时间范围写清本阶段从什么时候到什么时候，用来判断何时切到下一段。"
   ].join(`
 `);
-  function outlineMessages({ setting, talk, volumes, volumeNo, request }) {
+  function outlineMessages({ setting, talk, volumes, volumeNo, request, refs = [] }) {
     let known = (volumes || []).map((volume) => `${volumeLabel(volume.key)}：${volume.stages.map((stage) => stageLabel(stage.key)).join("、")}`), system = `你按用户的设定写剧情大纲，格式必须与样例一致。
 ${OUTLINE_RULES}
 
@@ -1090,6 +1106,7 @@ ${formatSample(volumes)}`, user = [
 ${setting}` : "",
       talk ? `【讨论摘要】
 ${talk}` : "",
+      refBlock(refs),
       known.length ? `【已有的卷】
 ${known.join(`
 `)}` : "",
@@ -1932,6 +1949,8 @@ ${text}` }
 .pi-fix-acts{display:grid;grid-template-columns:repeat(3,56px);gap:4px;flex-shrink:0}
 .pi-fix-acts>.pi-btn{width:100%;padding:0}
 .pi-ref-book+.pi-ref-book{margin-top:12px;padding-top:8px;border-top:1px solid var(--pi-line)}
+.pi-ref-top{display:flex;align-items:center;gap:4px;margin:0 0 6px}
+.pi-ref-top .pi-spacer{flex:1}
 .pi-chip:disabled{opacity:.45;cursor:not-allowed}
 .pi-wb-field{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pi-wb-row{display:flex;align-items:center;gap:8px;padding:3px 0;min-width:0}
@@ -2468,14 +2487,16 @@ ${floor.text}`).join(`
       text && refs.push({ title: "剧情进度（已演、进行中与之后的阶段）", text });
     }
     let floors = floorsText(view, r.floors);
-    floors && refs.push({ title: `最近 ${r.floors} 楼正文`, text: floors });
-    let books = await loadBoundBooks(), checked = checkedSet(r.wb, books, r.memo);
-    for (let book of books)
-      for (let entry of book.entries) checked.has(entryRefId(book.name, entry)) && entry.content.trim() && refs.push({ title: entry.title, text: entry.content });
-    return refs;
+    return floors && refs.push({ title: `最近 ${r.floors} 楼正文`, text: floors }), [...refs, ...await wbRefTexts(r.wb, r.memo)];
   }
-  function wbSummary(view, chat, rerender) {
-    let s = view.tabState("discuss"), sig = JSON.stringify([view.projectId, chat.refs.wb, chat.refs.memo]);
+  async function wbRefTexts(rule, memo) {
+    let books = await loadBoundBooks(), checked = checkedSet(rule, books, memo), out = [];
+    for (let book of books)
+      for (let entry of book.entries) checked.has(entryRefId(book.name, entry)) && entry.content.trim() && out.push({ title: entry.title, text: entry.content });
+    return out;
+  }
+  function wbSummary(view, refs, rerender, scope = "discuss") {
+    let s = view.tabState(scope), chat = { refs }, sig = JSON.stringify([view.projectId, chat.refs.wb, chat.refs.memo]);
     return s.wbSig === sig ? s.wbSum : (s.wbPending !== sig && (s.wbPending = sig, loadBoundBooks().then((books) => {
       let checked = checkedSet(chat.refs.wb, books, chat.refs.memo), count = 0, tokens = 0;
       for (let book of books) for (let entry of book.entries) checked.has(entryRefId(book.name, entry)) && (count += 1, tokens += estimateTokens(entry.content));
@@ -2500,13 +2521,15 @@ ${floor.text}`).join(`
       return `<div class="pi-ref-book"><p class="pi-hint"><b>${esc(book.name)}</b> <span class="pi-badge">${esc(book.source)}</span></p>${handHtml}${acuHtml || ""}${!hand.length && !fields.length ? '<p class="pi-hint">没有条目</p>' : ""}</div>`;
     }).join("");
   }
-  async function pickRefs(chat) {
-    let books = await loadBoundBooks();
+  async function pickRefs(refs, title2 = "附带的世界书条目") {
+    let chat = { refs }, books = await loadBoundBooks();
     if (!books.length) return { none: !0 };
     let memoRows = (box) => [...box.querySelectorAll("[data-ref-memo-row]")], rowNo2 = (input) => Number((/-(\d+)$/.exec(input.closest("label").querySelector(".pi-wb-title").textContent) || [])[1] ?? -1);
     return await openDialog({
-      title: "附带的世界书条目",
-      html: `<p class="pi-hint" data-ref-sum></p><div class="pi-ref-list">${pickerHtml(books, chat.refs.wb, chat.refs.memo)}</div>`,
+      title: title2,
+      html: `<div class="pi-ref-top"><span class="pi-hint" data-ref-sum></span><span class="pi-spacer"></span>
+            <button type="button" class="pi-btn is-sm is-ghost" data-ref-every="1">全选</button><button type="button" class="pi-btn is-sm is-ghost" data-ref-every="0">全不选</button></div>
+            <div class="pi-ref-list">${pickerHtml(books, chat.refs.wb, chat.refs.memo)}</div>`,
       actions: [{ label: "取消", value: null }, {
         label: "确定",
         primary: !0,
@@ -2536,6 +2559,16 @@ ${floor.text}`).join(`
           if (fold) {
             let body = fold.closest(".pi-wb-sub").querySelector(".pi-wb-fold");
             body.hidden = !body.hidden, fold.querySelector("svg").outerHTML = body.hidden ? ICONS.caret : ICONS.caretDown;
+            return;
+          }
+          let every = event.target.closest("[data-ref-every]");
+          if (every) {
+            let on = every.dataset.refEvery === "1";
+            box.querySelectorAll("[data-ref-id], [data-ref-field]").forEach((input) => {
+              input.checked = on;
+            });
+            let memoInput = box.querySelector("[data-ref-memo]");
+            memoInput && (memoInput.value = on ? String(Math.max(...[...box.querySelectorAll(".pi-ref-book")].map((book) => memoRows(book).length), 0)) : "0"), sum();
             return;
           }
           let all = event.target.closest("[data-ref-all]");
@@ -2639,6 +2672,37 @@ ${floor.text}`).join(`
     startRewrite: () => startRewrite
   });
 
+  // src/ui/gen-refs.js
+  var refsOf = (project) => normalizeGenRefs(project.genRefs);
+  function genRefsBar(view, scope) {
+    let project = view.project(), refs = refsOf(project), chat = view.data.chat(view.projectId);
+    chat || view.data.loadChat(view.projectId).then(() => view.renderBody()).catch(() => {
+    });
+    let talks = chat ? chat.messages.length + (chat.summary ? 1 : 0) : 0, wb = wbSummary(view, refs, () => view.renderBody(), `gen-${scope}`);
+    return `<div class="pi-refs"><span class="pi-hint">参考：</span>
+        <button type="button" class="pi-chip${refs.talk && talks ? " is-on" : ""}" data-act="gen-talk"${talks ? "" : ' disabled title="讨论页还没有记录"'}>讨论记录</button>
+        <button type="button" class="pi-chip${wb && wb.count ? " is-on" : ""}" data-act="gen-wb">世界书 ${wb ? `${wb.count} 条` : "…"}</button></div>`;
+  }
+  async function genRefTexts(view, limit) {
+    let refs = refsOf(view.project());
+    return { talk: refs.talk ? await talkText(view, limit) : "", wb: await wbRefTexts(refs.wb, refs.memo) };
+  }
+  function update(view, patch) {
+    view.data.updateProject(view.projectId, (project) => ({ ...project, genRefs: { ...refsOf(project), ...patch } }));
+  }
+  var genActions = {
+    "gen-talk"(view) {
+      update(view, { talk: !refsOf(view.project()).talk }), view.renderBody();
+    },
+    async "gen-wb"(view) {
+      let result = await pickRefs(refsOf(view.project()), "AI 写作参考的世界书条目");
+      if (result) {
+        if (result.none) return toast("info", "当前卡没有关联的世界书。");
+        update(view, { wb: result.wb, memo: result.memo }), view.renderBody();
+      }
+    }
+  };
+
   // src/ui/wb-import.js
   async function pickWorldbookEntries(title2 = "从世界书导入") {
     let books = boundBookNames();
@@ -2655,8 +2719,16 @@ ${floor.text}`).join(`
         ${book.entries.map((entry, e) => `<label class="pi-check${entry.disabled ? " is-off" : ""}"><input type="checkbox" data-pick="${b}:${e}">
         <span>${esc(entry.title)} <span class="pi-badge">≈${entry.content.length} 字</span></span></label>`).join("")}`).join(""), picked = await openDialog({
       title: title2,
-      html,
-      actions: [{ label: "取消", value: null }, { label: "导入选中", primary: !0, value: (root) => [...root.querySelectorAll("[data-pick]:checked")].map((input) => input.dataset.pick) }]
+      html: `<div class="pi-ref-top"><span class="pi-spacer"></span><button type="button" class="pi-btn is-sm is-ghost" data-pick-every="1">全选</button><button type="button" class="pi-btn is-sm is-ghost" data-pick-every="0">全不选</button></div>${html}`,
+      actions: [{ label: "取消", value: null }, { label: "导入选中", primary: !0, value: (root) => [...root.querySelectorAll("[data-pick]:checked")].map((input) => input.dataset.pick) }],
+      onMount(box) {
+        box.addEventListener("click", (event) => {
+          let every = event.target.closest("[data-pick-every]");
+          every && box.querySelectorAll("[data-pick]").forEach((input) => {
+            input.checked = every.dataset.pickEvery === "1";
+          });
+        });
+      }
     });
     return !picked || !picked.length ? [] : picked.map((code) => {
       let [b, e] = code.split(":").map(Number);
@@ -2773,6 +2845,7 @@ ${floor.text}`).join(`
             <button type="button" class="pi-btn is-sm" data-act="import-paste">粘贴</button>
             <button type="button" class="pi-btn is-sm" data-act="import-wb">从世界书</button>
             <button type="button" class="pi-btn is-sm" data-act="export"${project.outline.volumes.length ? "" : " disabled"}>导出</button></div>
+        ${genRefsBar(view, "outline")}
         <div class="pi-inline"><input class="pi-inp" data-ai-request placeholder="给 AI 的额外要求（可空）" value="${esc(s.request || "")}">
             <button type="button" class="pi-btn is-primary is-sm is-wide" data-act="ai-volume"${busy ? " disabled" : ""}>${busy ? '<span class="pi-spin"></span>写作中' : `AI 写第 ${project.outline.volumes.length + 1} 卷`}</button></div>
         </div>
@@ -2781,14 +2854,14 @@ ${floor.text}`).join(`
             <button type="button" class="pi-btn is-sm is-ghost is-block" data-act="vol-add">＋新卷</button></div>
             <div>${editor2}</div></div>`;
   }
-  function update(view, fn) {
+  function update2(view, fn) {
     return view.data.updateProject(view.projectId, (project) => ({ ...project, outline: { ...project.outline, volumes: fn(project.outline.volumes) } }));
   }
   function updateStage(view, stageId, fn) {
-    update(view, (volumes) => volumes.map((volume) => volume.stages.some((stage) => stage.id === stageId) ? { ...volume, stages: volume.stages.map((stage) => stage.id === stageId ? fn(stage) : stage) } : volume));
+    update2(view, (volumes) => volumes.map((volume) => volume.stages.some((stage) => stage.id === stageId) ? { ...volume, stages: volume.stages.map((stage) => stage.id === stageId ? fn(stage) : stage) } : volume));
   }
   function updateVolume(view, volumeId, fn) {
-    update(view, (volumes) => volumes.map((volume) => volume.id === volumeId ? fn(volume) : volume));
+    update2(view, (volumes) => volumes.map((volume) => volume.id === volumeId ? fn(volume) : volume));
   }
   function moveUp(list, index) {
     if (index <= 0) return list;
@@ -2797,7 +2870,7 @@ ${floor.text}`).join(`
   }
   function addVolumes(view, incoming) {
     let project = view.project(), existing = new Set(project.outline.volumes.map((volume) => volume.key)), fresh = incoming.map((volume) => existing.has(volume.key) ? { ...volume, key: `${volume.key}_导入${Date.now().toString(36).slice(-3)}` } : volume);
-    return update(view, (volumes) => [...volumes, ...fresh]), st(view).sel = fresh[0] && fresh[0].id, view.runtime.refresh(), fresh;
+    return update2(view, (volumes) => [...volumes, ...fresh]), st(view).sel = fresh[0] && fresh[0].id, view.runtime.refresh(), fresh;
   }
   async function importTexts(view, texts) {
     let added = [], failed = [];
@@ -2838,11 +2911,12 @@ ${floor.text}`).join(`
     let project = view.project(), unit = flattenUnits(project.outline.volumes).find((item) => item.id === draft.fromUnitId);
     if (!unit) throw new Error("原来的阶段已不存在，改用「存为新卷」。");
     let volumes = replaceRest(project.outline.volumes, unit.stage.id, draft.volumes);
-    update(view, () => volumes);
+    update2(view, () => volumes);
     let first = draft.volumes[0] && draft.volumes[0].stages[0];
     first && view.runtime.activeId() === view.projectId && view.runtime.setProgress(goTo(view.runtime.progress(), flattenUnits(volumes), first.id));
   }
   var actions = {
+    ...genActions,
     "node-kind"(view, target) {
       st(view).nodeKind = target.dataset.kind, view.renderBody();
     },
@@ -2851,10 +2925,10 @@ ${floor.text}`).join(`
     },
     "vol-add"(view) {
       let project = view.project(), volume = { id: makeId("v"), key: `剧情_卷${project.outline.volumes.length + 1}_新卷`, stages: [{ id: makeId("s"), key: "阶段一_新阶段", data: { 时间范围: "", AI指令: "", 主线节点: [] } }] };
-      update(view, (volumes) => [...volumes, volume]), st(view).sel = volume.id, view.renderBody();
+      update2(view, (volumes) => [...volumes, volume]), st(view).sel = volume.id, view.renderBody();
     },
     "vol-up"(view) {
-      update(view, (volumes) => moveUp(volumes, volumes.findIndex((volume) => volume.id === st(view).sel))), view.runtime.refresh(), view.renderBody();
+      update2(view, (volumes) => moveUp(volumes, volumes.findIndex((volume) => volume.id === st(view).sel))), view.runtime.refresh(), view.renderBody();
     },
     "vol-export"(view) {
       let { volume } = findSel(view.project(), st(view).sel);
@@ -2862,7 +2936,7 @@ ${floor.text}`).join(`
     },
     async "vol-del"(view) {
       let { volume } = findSel(view.project(), st(view).sel);
-      !volume || !await confirmDialog({ title: `删除「${volumeLabel(volume.key)}」`, body: `连同 ${volume.stages.length} 个阶段一起删除。`, okLabel: "删除", danger: !0 }) || (update(view, (volumes) => volumes.filter((item) => item.id !== volume.id)), st(view).sel = "", view.runtime.refresh(), view.renderBody());
+      !volume || !await confirmDialog({ title: `删除「${volumeLabel(volume.key)}」`, body: `连同 ${volume.stages.length} 个阶段一起删除。`, okLabel: "删除", danger: !0 }) || (update2(view, (volumes) => volumes.filter((item) => item.id !== volume.id)), st(view).sel = "", view.runtime.refresh(), view.renderBody());
     },
     "stage-add"(view) {
       let { volume } = findSel(view.project(), st(view).sel);
@@ -2932,9 +3006,12 @@ ${floor.text}`).join(`
       choice === "one" && downloadBlob(`${project.name}-大纲.yaml`, outlineToText(project.outline.volumes), "text/yaml"), choice === "each" && project.outline.volumes.forEach((volume, i) => downloadBlob(`${String(i + 1).padStart(2, "0")}-${volume.key}.yaml`, volumeToText(volume), "text/yaml"));
     },
     async "ai-volume"(view) {
-      let project = view.project(), talk = await talkText(view, 12e3), reply2 = await runTask(view, "outline", () => ask(view, "outline", outlineMessages({
+      let project = view.project(), { talk, wb } = await genRefTexts(view, 12e3);
+      if (!project.setting.text.trim() && !talk.trim() && !wb.length) throw new Error("没有可参考的内容：在讨论页聊一聊，或点「世界书」选择条目。");
+      let reply2 = await runTask(view, "outline", () => ask(view, "outline", outlineMessages({
         setting: project.setting.text,
         talk,
+        refs: wb,
         volumes: project.outline.volumes,
         volumeNo: project.outline.volumes.length + 1,
         request: st(view).request
@@ -2962,7 +3039,7 @@ ${yaml}
       if (!volume) throw new Error("先在左边选中要替换的卷");
       if (!await confirmDialog({ title: `替换「${volumeLabel(volume.key)}」`, body: "该卷原有阶段全部换成 AI 写的内容。", okLabel: "替换", danger: !0 })) return;
       let incoming = st(view).draft.volumes;
-      update(view, (volumes) => volumes.flatMap((item) => item.id === volume.id ? incoming : [item])), st(view).draft = null, st(view).sel = incoming[0].id, view.runtime.refresh(), view.renderBody();
+      update2(view, (volumes) => volumes.flatMap((item) => item.id === volume.id ? incoming : [item])), st(view).draft = null, st(view).sel = incoming[0].id, view.runtime.refresh(), view.renderBody();
     },
     "draft-append"(view) {
       let { volume } = findSel(view.project(), st(view).sel);
@@ -3141,10 +3218,11 @@ ${yaml}
     return `${s.draft ? draftHtml2(view, project, s.draft) : ""}
         <div class="pi-card"><h3>设定 ${checkBadge(project.setting.check)}</h3>
         <div class="pi-tools is-c3">
-            <button type="button" class="pi-btn is-sm is-primary" data-act="from-talk"${busy ? " disabled" : ""}>${busy ? '<span class="pi-spin"></span>整理中' : "从讨论整理"}</button>
+            <button type="button" class="pi-btn is-sm is-primary" data-act="from-talk"${busy ? " disabled" : ""}>${busy ? '<span class="pi-spin"></span>整理中' : "AI 整理"}</button>
             <button type="button" class="pi-btn is-sm" data-act="import-wb">从世界书导入</button>
             <button type="button" class="pi-btn is-sm${s.history ? " is-primary" : ""}" data-act="history">历史版本 ${project.setting.history.length}</button>
             <label class="pi-check"><input type="checkbox" data-append${s.append ? " checked" : ""}><span>只追加，不改动已有分块</span></label></div>
+        ${genRefsBar(view, "setting")}
         ${blocks.length ? `<div class="pi-toc">${blocks.map((block) => `<span class="pi-chip pi-block-chip"><button type="button" data-act="jump" data-key="${esc(block.key)}" title="跳到这一块">${esc(block.title)}</button><button type="button" class="pi-block-del" data-act="block-del" data-key="${esc(block.key)}" title="删除整个分块">${ICONS.close}</button></span>`).join("")}</div>` : ""}
         <textarea class="pi-ta is-tall" data-setting placeholder="世界观正文。执行时作为常驻条目注入（角色定义后），取代世界书里手改的剧情设定条目。">${esc(text)}</textarea>
         <div class="pi-row"><span class="pi-hint pi-grow">≈<span data-tokens>${estimateTokens(text)}</span> token</span><span class="pi-status" data-save-status></span></div>
@@ -3190,10 +3268,11 @@ ${yaml}
     where === "draft" ? s.draft = { ...s.draft, body: merged, fixes: rest } : commit(view, merged, { fixes: rest }), view.renderBody();
   }
   var actions2 = {
+    ...genActions,
     async "from-talk"(view) {
-      let project = view.project(), talk = await talkText(view);
-      if (!talk.trim()) throw new Error("讨论记录是空的，先在「讨论」页聊一聊。");
-      let append = !!(st2(view).append && project.setting.text.trim()), reply2 = await runTask(view, "setting", () => ask(view, "outline", settingMessages({ guide: guideText(view), talk, current: project.setting.text, append })));
+      let project = view.project(), { talk, wb } = await genRefTexts(view);
+      if (!talk.trim() && !wb.length) throw new Error("没有可参考的内容：在讨论页聊一聊，或点「世界书」选择条目。");
+      let append = !!(st2(view).append && project.setting.text.trim()), reply2 = await runTask(view, "setting", () => ask(view, "outline", settingMessages({ guide: guideText(view), talk, current: project.setting.text, append, refs: wb })));
       if (!reply2) return;
       let parsed = parseSettingReply(reply2);
       if (!parsed.body) throw new Error("AI 回复里没有世界观正文");
@@ -3288,7 +3367,7 @@ ${parsed.body}` : parsed.body;
     let chat = view.data.chat(view.projectId);
     if (!chat)
       return view.data.loadChat(view.projectId).then(() => view.renderBody()).catch((error) => toast("error", `读取讨论记录失败：${error.message}`)), '<div class="pi-empty"><span class="pi-spin"></span> 正在读取讨论记录…</div>';
-    let busy = view.busy[`discuss:${view.projectId}`], refs = chat.refs, folded = chat.messages.filter((msg) => msg.folded).length, live = chat.messages.filter((msg) => !msg.folded), lastAi = [...live].reverse().find((msg) => msg.role !== "user"), wb = wbSummary(view, chat, () => view.renderBody()), canProgress = !!progressText(view), chips = `<div class="pi-refs"><span class="pi-hint">附带参考：</span>
+    let busy = view.busy[`discuss:${view.projectId}`], refs = chat.refs, folded = chat.messages.filter((msg) => msg.folded).length, live = chat.messages.filter((msg) => !msg.folded), lastAi = [...live].reverse().find((msg) => msg.role !== "user"), wb = wbSummary(view, chat.refs, () => view.renderBody()), canProgress = !!progressText(view), chips = `<div class="pi-refs"><span class="pi-hint">附带参考：</span>
         <button type="button" class="pi-chip${refs.setting ? " is-on" : ""}" data-act="ref" data-ref="setting">设定</button>
         <button type="button" class="pi-chip${refs.outline ? " is-on" : ""}" data-act="ref" data-ref="outline">大纲</button>
         <button type="button" class="pi-chip${refs.progress && canProgress ? " is-on" : ""}" data-act="ref" data-ref="progress"${canProgress ? "" : ' disabled title="本项目不是当前聊天启用的项目"'}>剧情进度</button>
@@ -3388,7 +3467,7 @@ ${parsed.body}` : parsed.body;
       updateChat(view, (current) => ({ ...current, refs: { ...current.refs, floors } })), view.renderBody();
     },
     async "ref-wb"(view) {
-      let result = await pickRefs(view.data.chat(view.projectId));
+      let result = await pickRefs(view.data.chat(view.projectId).refs);
       if (result) {
         if (result.none) return toast("info", "当前卡没有关联的世界书。");
         updateChat(view, (current) => ({ ...current, refs: { ...current.refs, memo: result.memo, wb: result.wb } })), view.renderBody();
@@ -4650,7 +4729,7 @@ ${parsed.body}` : parsed.body;
   }
 
   // src/index.js
-  var VERSION = "0.1.12", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.1.13", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")

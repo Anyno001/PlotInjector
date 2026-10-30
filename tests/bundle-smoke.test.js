@@ -643,6 +643,41 @@ test('讨论页附带参考：世界书只显示条数；默认带手写条目�
     await host.instance.destroy();
 });
 
+test('不走讨论直接写大纲：大纲页选世界书「全选」后，全部条目（含纪要和其他数据库字段）发给写大纲的 AI', async () => {
+    const host = await boot();
+    const project = await withProject(host);
+    const book = { entries: {} };
+    const add = comment => { const uid = Object.keys(book.entries).length; book.entries[uid] = { uid, comment, content: `【${comment}】`, disable: false }; };
+    add('手写设定');
+    for (let n = 1; n <= 12; n += 1) add(`TavernDB-ACU-CustomExport-纪要-${n}`);
+    add('TavernDB-ACU-CustomExport-人物档案-1');
+    host.context.chatMetadata.world_info = '测试书';
+    host.context.loadWorldInfo = async () => JSON.parse(JSON.stringify(book));
+    host.win.__reply = () => '```yaml\n剧情_卷二_新:\n  阶段一_起:\n    时间范围: 之后\n    主线节点:\n      - 名称: 丙\n        事件: 丙发生。\n```';
+    await host.instance.data.loadChat(project.id);
+    host.click();
+    await tick(10);
+    const doc = host.win.document;
+    doc.querySelector('[data-act="tab"][data-tab="outline"]').click();
+    await tick(30);
+    assert.ok(doc.querySelector('[data-act="gen-talk"]').disabled, '没有讨论记录时讨论参考不可点');
+    doc.querySelector('[data-act="gen-wb"]').click();
+    await tick(30);
+    doc.querySelector('.pi-dialog [data-ref-every="1"]').click();
+    doc.querySelector('.pi-dialog .pi-dlg-acts .is-primary').click();
+    await tick(30);
+    assert.match(doc.querySelector('[data-act="gen-wb"]').textContent, /世界书 14 条/);
+    doc.querySelector('[data-act="ai-volume"]').click();
+    await tick(40);
+    const user = host.llmCalls.at(-1)[1].content;
+    assert.match(user, /【世界书参考】/);
+    for (const name of ['手写设定', '纪要-1】', '纪要-12】', '人物档案-1】']) assert.match(user, new RegExp(name));
+    assert.doesNotMatch(user, /【讨论摘要】/);
+    assert.ok(doc.querySelector('.pi-body').textContent.includes('卷二'), '写好的大纲进入待采用');
+    assert.equal(host.win.__errors.length, 0, host.win.__errors.join('\n'));
+    await host.instance.destroy();
+});
+
 test('大纲页：阶段节点按主线/支线/世界动态切换显示', async () => {
     const host = await boot();
     await withProject(host);

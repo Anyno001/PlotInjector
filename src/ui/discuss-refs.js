@@ -52,17 +52,25 @@ export async function resolveRefs(view, chat, project) {
     }
     const floors = floorsText(view, r.floors);
     if (floors) refs.push({ title: `最近 ${r.floors} 楼正文`, text: floors });
+    return [...refs, ...await wbRefTexts(r.wb, r.memo)];
+}
+
+// 按规则取世界书条目正文：[{ title, text }]。讨论页与设定、大纲页的 AI 写作共用。
+export async function wbRefTexts(rule, memo) {
     const books = await loadBoundBooks();
-    const checked = checkedSet(r.wb, books, r.memo);
+    const checked = checkedSet(rule, books, memo);
+    const out = [];
     for (const book of books) {
-        for (const entry of book.entries) if (checked.has(entryRefId(book.name, entry)) && entry.content.trim()) refs.push({ title: entry.title, text: entry.content });
+        for (const entry of book.entries) if (checked.has(entryRefId(book.name, entry)) && entry.content.trim()) out.push({ title: entry.title, text: entry.content });
     }
-    return refs;
+    return out;
 }
 
 // 顶栏显示的世界书条数与 token，异步算好后缓存，规则变了才重算。
-export function wbSummary(view, chat, rerender) {
-    const s = view.tabState('discuss');
+// refs 为 { wb, memo }；scope 区分讨论页和设定、大纲页各自的缓存。
+export function wbSummary(view, refs, rerender, scope = 'discuss') {
+    const s = view.tabState(scope);
+    const chat = { refs };
     const sig = JSON.stringify([view.projectId, chat.refs.wb, chat.refs.memo]);
     if (s.wbSig === sig) return s.wbSum;
     if (s.wbPending !== sig) {
@@ -105,14 +113,18 @@ function pickerHtml(books, rule, memo) {
 }
 
 // 弹窗：手写条目默认全选、可逐条去掉；数据库条目默认收起，纪要按「最近 N 条」，其他字段整体勾选。
-export async function pickRefs(chat) {
+// refs 为 { wb, memo }，返回 { wb, memo }；顶部「全选 / 全不选」一次勾上或去掉所有世界书的全部条目。
+export async function pickRefs(refs, title = '附带的世界书条目') {
+    const chat = { refs };
     const books = await loadBoundBooks();
     if (!books.length) return { none: true };
     const memoRows = box => [...box.querySelectorAll('[data-ref-memo-row]')];
     const rowNo = input => Number((/-(\d+)$/.exec(input.closest('label').querySelector('.pi-wb-title').textContent) || [])[1] ?? -1);
     const result = await openDialog({
-        title: '附带的世界书条目',
-        html: `<p class="pi-hint" data-ref-sum></p><div class="pi-ref-list">${pickerHtml(books, chat.refs.wb, chat.refs.memo)}</div>`,
+        title,
+        html: `<div class="pi-ref-top"><span class="pi-hint" data-ref-sum></span><span class="pi-spacer"></span>
+            <button type="button" class="pi-btn is-sm is-ghost" data-ref-every="1">全选</button><button type="button" class="pi-btn is-sm is-ghost" data-ref-every="0">全不选</button></div>
+            <div class="pi-ref-list">${pickerHtml(books, chat.refs.wb, chat.refs.memo)}</div>`,
         actions: [{ label: '取消', value: null }, {
             label: '确定', primary: true, value: box => {
                 const fields = {};
@@ -142,6 +154,15 @@ export async function pickRefs(chat) {
                     const body = fold.closest('.pi-wb-sub').querySelector('.pi-wb-fold');
                     body.hidden = !body.hidden;
                     fold.querySelector('svg').outerHTML = body.hidden ? ICONS.caret : ICONS.caretDown;
+                    return;
+                }
+                const every = event.target.closest('[data-ref-every]');
+                if (every) {
+                    const on = every.dataset.refEvery === '1';
+                    box.querySelectorAll('[data-ref-id], [data-ref-field]').forEach(input => { input.checked = on; });
+                    const memoInput = box.querySelector('[data-ref-memo]');
+                    if (memoInput) memoInput.value = on ? String(Math.max(...[...box.querySelectorAll('.pi-ref-book')].map(book => memoRows(book).length), 0)) : '0';
+                    sum();
                     return;
                 }
                 const all = event.target.closest('[data-ref-all]');

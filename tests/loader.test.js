@@ -19,7 +19,7 @@ function makeHost(pinned) {
     win.fetch = async url => {
         const u = String(url);
         requested.push(u);
-        if (u.startsWith('/user/files/pi-index.json')) return respond(200, JSON.stringify({ settings: { loaderRef: pinned } }));
+        if (u.startsWith('/user/files/pi-index.json')) return respond(200, JSON.stringify({ projects: [], settings: { loaderRef: pinned, checkEvery: 3 } }));
         if (u.startsWith('https://api.github.com/')) return respond(200, JSON.stringify([{ name: 'v0.1.0' }, { name: LATEST }]));
         const ref = /@([^/]+)\/dist|PlotInjector\/([^/]+)\/dist/.exec(u);
         const name = ref && (ref[1] || ref[2]);
@@ -65,4 +65,37 @@ test('加载器：指定版本格式不对（只填了半截）时直接用最�
     assert.equal(host.win.__plotInjector.version, LATEST);
     assert.ok(!host.requested.some(url => url.includes('@v0.1/')), '不去下载半截版本');
     assert.ok(host.toasts.some(msg => /格式不对/.test(msg)));
+});
+
+test('加载器：指定了能下载但打开后看不见的旧版本时，点按钮弹出诊断框，可一键清空指定版本', async () => {
+    const host = makeHost('v0.1.0');
+    const uploads = [];
+    const fetch = host.win.fetch;
+    host.win.fetch = async (url, init = {}) => {
+        if (String(url) === '/api/files/upload') {
+            const body = JSON.parse(init.body);
+            uploads.push(JSON.parse(Buffer.from(body.data, 'base64').toString('utf8')));
+            return { ok: true, status: 200, text: async () => '{}' };
+        }
+        return fetch(url, init);
+    };
+    host.win.SillyTavern = { getContext: () => ({ getRequestHeaders: () => ({ 'X-CSRF-Token': 't' }) }) };
+    let click = null;
+    host.win.eventOn = (name, fn) => { click = fn; return { stop() {} }; };
+    host.win.getButtonEvent = name => name;
+    host.win.eval(loader);
+    for (let i = 0; i < 50 && !host.win.__plotInjector; i += 1) await new Promise(resolve => setTimeout(resolve, 10));
+    assert.ok(host.toasts.some(msg => /正在使用指定版本 v0.1.0/.test(msg)));
+    click();
+    await new Promise(resolve => setTimeout(resolve, 500));
+    const panel = host.win.document.getElementById('pi-loader-diag');
+    assert.ok(panel, 'jsdom 里面板没有尺寸，按看不见处理，应弹出诊断框');
+    assert.match(panel.querySelector('b').textContent, /没有正常显示/);
+    const unpin = panel.querySelector('[data-a="unpin"]');
+    assert.equal(unpin.hidden, false);
+    unpin.click();
+    await new Promise(resolve => setTimeout(resolve, 50));
+    assert.equal(uploads.length, 1);
+    assert.equal(uploads[0].settings.loaderRef, '');
+    assert.equal(uploads[0].settings.checkEvery, 3, '其他设置原样保留');
 });

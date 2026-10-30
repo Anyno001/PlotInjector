@@ -23,8 +23,14 @@ export async function pickWorldbookEntries(title = '从世界书导入') {
         <span>${esc(entry.title)} <span class="pi-badge">≈${entry.content.length} 字</span></span></label>`).join('')}`).join('');
     const picked = await openDialog({
         title,
-        html,
+        html: `<div class="pi-ref-top"><span class="pi-spacer"></span><button type="button" class="pi-btn is-sm is-ghost" data-pick-every="1">全选</button><button type="button" class="pi-btn is-sm is-ghost" data-pick-every="0">全不选</button></div>${html}`,
         actions: [{ label: '取消', value: null }, { label: '导入选中', primary: true, value: root => [...root.querySelectorAll('[data-pick]:checked')].map(input => input.dataset.pick) }],
+        onMount(box) {
+            box.addEventListener('click', event => {
+                const every = event.target.closest('[data-pick-every]');
+                if (every) box.querySelectorAll('[data-pick]').forEach(input => { input.checked = every.dataset.pickEvery === '1'; });
+            });
+        },
     });
     if (!picked || !picked.length) return [];
     return picked.map(code => {
