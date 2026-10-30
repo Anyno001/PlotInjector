@@ -9,6 +9,7 @@ import * as run from './tab-run.js';
 import * as settings from './page-settings.js';
 import * as dataPage from './page-data.js';
 import * as books from './page-books.js';
+import * as diag from './page-diag.js';
 
 const TABS = [
     { key: 'discuss', label: '讨论', mod: discuss },
@@ -19,6 +20,7 @@ const TABS = [
 const PAGES = {
     books: { label: '世界书管理', icon: 'book', mod: books },
     data: { label: '数据管理', icon: 'box', mod: dataPage },
+    diag: { label: '诊断', icon: 'pulse', mod: diag },
     settings: { label: '设置', icon: 'gear', mod: settings },
 };
 const UI_KEY = 'pi-ui';
@@ -90,7 +92,7 @@ export function createApp({ data, runtime, version }) {
             <div class="pi-plist">${list || '<p class="pi-hint">还没有项目</p>'}</div>
             <div class="pi-side-ft">
                 <button type="button" class="pi-btn is-ghost is-block" data-act="new-project">${ICONS.plus}新项目</button>
-                ${page('books')}${page('data')}${page('settings')}
+                ${page('books')}${page('data')}${page('diag')}${page('settings')}
             </div>`;
     }
 

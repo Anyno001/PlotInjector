@@ -45,7 +45,7 @@ function makeHost() {
         chatId: 'chat-1',
         chatMetadata: {},
         eventSource,
-        eventTypes: { WORLDINFO_ENTRIES_LOADED: 'worldinfo_entries_loaded', CHAT_CHANGED: 'chat_id_changed', MESSAGE_RECEIVED: 'message_received', MESSAGE_SWIPED: 'message_swiped', MESSAGE_UPDATED: 'message_updated', MESSAGE_DELETED: 'message_deleted' },
+        eventTypes: { WORLDINFO_ENTRIES_LOADED: 'worldinfo_entries_loaded', CHAT_CHANGED: 'chat_id_changed', MESSAGE_RECEIVED: 'message_received', MESSAGE_SWIPED: 'message_swiped', MESSAGE_UPDATED: 'message_updated', MESSAGE_DELETED: 'message_deleted', GENERATION_STARTED: 'generation_started', GENERATION_ENDED: 'generation_ended', GENERATION_STOPPED: 'generation_stopped' },
         getRequestHeaders: () => ({ 'X-CSRF-Token': 't' }),
         getCurrentChatId: () => 'chat-1',
         saveMetadataDebounced() {},
@@ -240,7 +240,7 @@ test('打开界面后四个页签、设置页、数据管理页都能渲染', as
         assert.ok(doc.querySelector('.pi-body').textContent.trim().length > 0, tab);
     }
     assert.match(doc.querySelector('.pi-body').textContent, /剧情索引/);
-    for (const page of ['settings', 'data', 'books']) {
+    for (const page of ['settings', 'data', 'books', 'diag']) {
         doc.querySelector(`.pi-side [data-act="page"][data-page="${page}"]`).click();
         await tick(20);
         assert.ok(doc.querySelector('.pi-body').textContent.length > 20, page);
@@ -249,6 +249,57 @@ test('打开界面后四个页签、设置页、数据管理页都能渲染', as
     await host.instance.destroy();
     assert.equal(doc.querySelector('.pi-overlay'), null);
     assert.equal(doc.getElementById('pi-style'), null);
+});
+
+test('隐藏楼也计入楼数；主回复生成中先挂起检测，生成结束再检测', async () => {
+    const host = await boot();
+    await withProject(host);
+    host.instance.data.updateSettings({ checkEvery: 3 });
+    host.context.chat.push({ is_user: true, mes: '一', is_system: true }, { is_user: false, mes: '甲', is_system: true }, { is_user: false, mes: '甲发生了。' });
+    await host.eventSource.emit('generation_started', 'normal', {}, false);
+    await host.eventSource.emit('message_received', 2, 'normal');
+    await tick(10);
+    assert.equal(host.llmCalls.length, 0, '生成结束前不检测');
+    await host.eventSource.emit('generation_ended', 3);
+    await tick(10);
+    assert.equal(host.llmCalls.length, 1);
+    assert.equal(host.instance.runtime.progress().lastCheckFloor, 3);
+    await host.instance.destroy();
+});
+
+test('上次检测楼层大于现有楼数时自动回到现有楼数；诊断页能渲染并给出修复', async () => {
+    const host = await boot();
+    await withProject(host);
+    const runtime = host.instance.runtime;
+    runtime.setProgress({ ...runtime.progress(), lastCheckFloor: 50 });
+    host.instance.data.updateSettings({ checkEvery: 1 });
+    host.context.chat.push({ is_user: true, mes: '一' }, { is_user: false, mes: '甲发生了。' });
+    await host.eventSource.emit('message_received', 1, 'normal');
+    await tick(10);
+    assert.equal(host.llmCalls.length, 0, '刚回到现有楼数，本次差 0 楼');
+    assert.equal(runtime.progress().lastCheckFloor, 2);
+    host.context.chat.push({ is_user: false, mes: '乙' });
+    await host.eventSource.emit('message_received', 2, 'normal');
+    await tick(10);
+    assert.equal(host.llmCalls.length, 1);
+    runtime.setProgress({ ...runtime.progress(), lastCheckFloor: 50 });
+    host.click();
+    await tick(10);
+    const doc = host.win.document;
+    doc.querySelector('.pi-side [data-act="page"][data-page="diag"]').click();
+    await tick(10);
+    const body = doc.querySelector('.pi-body');
+    assert.match(body.textContent, /当前只有 3 楼/);
+    assert.match(body.textContent, /收到回复/);
+    body.querySelector('.pi-diag-row [data-act="reset-base"]').click();
+    await tick(10);
+    assert.equal(runtime.progress().lastCheckFloor, 3);
+    assert.doesNotMatch(doc.querySelector('.pi-body').textContent, /当前只有/);
+    doc.querySelector('.pi-body [data-act="rebind"]').click();
+    await tick(10);
+    assert.equal(runtime.diagnose().events.find(item => item.key === 'MESSAGE_RECEIVED').bound, true);
+    assert.equal(host.win.__errors.length, 0, host.win.__errors.join('\n'));
+    await host.instance.destroy();
 });
 
 test('模型接口：获取列表后下拉选择；保存为预设后另一个用途一键载入', async () => {

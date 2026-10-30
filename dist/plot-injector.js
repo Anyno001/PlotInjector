@@ -1,4 +1,4 @@
-// PlotInjector v0.1.7
+// PlotInjector v0.1.8
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -1340,9 +1340,12 @@ ${text}` }
   }
 
   // src/app/runtime.js
-  var VIRTUAL_WORLD = "剧情注入器", placeOf = (unit) => `${volumeLabel(unit.volume.key)}·${stageLabel(unit.stage.key)}`;
+  var VIRTUAL_WORLD = "剧情注入器", LOG_MAX = 40, PENDING_MAX_MS = 3e4, placeOf = (unit) => `${volumeLabel(unit.volume.key)}·${stageLabel(unit.stage.key)}`;
   function createRuntime({ data, notice, emit, askReason = async () => "" }) {
-    let view = hostWindow(), progress = null, progressFor = "", checking = !1, mismatchShownFor = "", fallbackTimer = 0, listeners = [];
+    let view = hostWindow(), progress = null, progressFor = "", checking = !1, mismatchShownFor = "", fallbackTimer = 0, generating = !1, pendingCheck = !1, pendingTimer = 0, listeners = [], stats = {}, logs = [];
+    function log(text) {
+      logs.push({ at: Date.now(), text }), logs.length > LOG_MAX && logs.shift();
+    }
     function activeId() {
       return data.activeIdFor(cardKey());
     }
@@ -1394,8 +1397,9 @@ ${text}` }
         }
       }, 1e3));
     }
+    let isNote = (msg) => !msg || msg.is_system && msg.extra && msg.extra.type;
     function floorCount() {
-      return chatMessages().filter((msg) => msg && !msg.is_system).length;
+      return chatMessages().length;
     }
     function activeUnit() {
       let list = units(), prog = currentProgress();
@@ -1495,46 +1499,80 @@ ${text}` }
       let out = [], chat = chatMessages();
       for (let i = chat.length - 1; i >= 0 && out.length < count; i -= 1) {
         let msg = chat[i];
-        if (!msg || msg.is_system) continue;
+        if (isNote(msg)) continue;
         let text = cleanFloorText(msg.mes);
         text && out.unshift({ index: i, text: `${msg.is_user ? "（用户）" : ""}${text}` });
       }
       return out;
     }
     async function checkNow({ manual = !1 } = {}) {
-      if (checking) return null;
+      if (checking)
+        return log("跳过检测：上一次检测还没结束"), null;
       let project = activeProject(), prog = currentProgress(), settings = data.settings();
       if (!project || !prog)
-        return manual && toast("info", "当前卡没有启用的项目。"), null;
+        return log("跳过检测：当前卡没有启用的项目"), manual && toast("info", "当前卡没有启用的项目。"), null;
       let unit = activeUnit();
-      if (!unit) return null;
+      if (!unit)
+        return log("跳过检测：大纲为空"), null;
       let floors = recentFloors(settings.checkFloors);
       if (!floors.length)
-        return manual && toast("info", "还没有可检测的正文。"), null;
-      checking = !0, emit("checking");
+        return log("跳过检测：没有可检测的正文"), manual && toast("info", "还没有可检测的正文。"), null;
+      checking = !0, log(`开始检测：${placeOf(unit)}，读最近 ${floors.length} 楼${manual ? "（手动）" : ""}`), emit("checking");
       try {
         let list = units(), states = unitStates(list, prog), index = buildIndexText(list, states, prog, { carryOver: settings.carryOver }), reply2 = await requestLlm(buildCheckMessages(unit, index, floors), resolveLlm(settings, "check"), { timeoutMs: 12e4 }), result = parseCheckReply(reply2), next = currentProgress();
         if (next = uncheckByNames(next, unit.id, stageNodes(unit.stage.data), result.done), settings.carryOver) for (let item of carriedNodes(list, states, prog)) next = uncheckByNames(next, item.unit.id, [item.node], result.done);
-        return next = { ...next, lastCheckFloor: floorCount() }, setProgress(next), result.offTrack && settings.offTrackMode !== "off" && !next.offMuted.includes(unit.id) ? handleOffTrack(unit, result.offReason || result.reason) : result.stageDone ? proposeAdvance({ unit, reason: result.reason }) : manual && toast("info", result.reason || "本阶段尚未演完。"), result;
+        return next = { ...next, lastCheckFloor: floorCount() }, setProgress(next), log(`检测完成：已演 ${result.done.length} 个节点${result.stageDone ? "，本阶段已演完" : ""}${result.offTrack ? "，偏离大纲" : ""}`), result.offTrack && settings.offTrackMode !== "off" && !next.offMuted.includes(unit.id) ? handleOffTrack(unit, result.offReason || result.reason) : result.stageDone ? proposeAdvance({ unit, reason: result.reason }) : manual && toast("info", result.reason || "本阶段尚未演完。"), result;
       } catch (error) {
-        return setProgress({ ...currentProgress(), lastCheckFloor: floorCount() }), toast(manual ? "error" : "warning", `进度检测失败：${error.message}`), null;
+        return setProgress({ ...currentProgress(), lastCheckFloor: floorCount() }), log(`检测失败：${error.message}`), toast(manual ? "error" : "warning", `进度检测失败：${error.message}`), null;
       } finally {
         checking = !1, emit("checked");
       }
     }
+    function clampBase() {
+      let prog = currentProgress();
+      if (!prog) return null;
+      let floors = floorCount();
+      if (prog.lastCheckFloor <= floors) return prog;
+      log(`上次检测楼层 ${prog.lastCheckFloor} 大于当前楼数 ${floors}，已改为 ${floors}`);
+      let next = { ...prog, lastCheckFloor: floors };
+      return setProgress(next, "floor"), next;
+    }
+    function resetBase() {
+      let prog = currentProgress();
+      prog && (log(`手动重设检测起点为第 ${floorCount()} 楼`), setProgress({ ...prog, lastCheckFloor: floorCount() }, "floor"));
+    }
+    function runPending() {
+      view.clearTimeout(pendingTimer), pendingCheck && (pendingCheck = !1, checkNow());
+    }
+    function queueCheck() {
+      if (!generating) {
+        view.setTimeout(() => checkNow(), 0);
+        return;
+      }
+      pendingCheck || (pendingCheck = !0, log("主回复仍在生成，生成结束后检测"), view.clearTimeout(pendingTimer), pendingTimer = view.setTimeout(() => {
+        pendingCheck && (log("等待生成结束超时，直接检测"), generating = !1, runPending());
+      }, PENDING_MAX_MS));
+    }
+    function onGenerationStarted(type, options2, dryRun) {
+      dryRun || (generating = !0);
+    }
+    function onGenerationEnded() {
+      generating = !1, runPending();
+    }
     function onMessageReceived(messageId) {
-      if (!activeProject()) return;
-      let settings = data.settings(), prog = currentProgress();
-      floorCount() - prog.lastCheckFloor >= settings.checkEvery && view.setTimeout(() => checkNow(), 0);
+      let floors = floorCount();
+      if (!activeProject()) {
+        log(`收到第 ${messageId} 楼：当前卡没有启用的项目，不检测`), emit("floor");
+        return;
+      }
+      let settings = data.settings(), prog = clampBase() || currentProgress(), gap = floors - prog.lastCheckFloor;
+      gap >= settings.checkEvery ? (log(`收到第 ${messageId} 楼：距上次检测 ${gap} 楼，触发检测`), queueCheck()) : log(`收到第 ${messageId} 楼：距上次检测 ${gap} 楼，还差 ${settings.checkEvery - gap} 楼`), emit("floor");
     }
     function onMessageChanged() {
-      let prog = currentProgress();
-      if (!prog) return;
-      let floors = floorCount();
-      prog.lastCheckFloor > floors && setProgress({ ...prog, lastCheckFloor: floors });
+      clampBase() && emit("floor");
     }
     async function onChatChanged() {
-      progress = null, progressFor = "", notice.hide("advance"), notice.hide("offtrack");
+      progress = null, progressFor = "", pendingCheck = !1, view.clearTimeout(pendingTimer), notice.hide("advance"), notice.hide("offtrack");
       let id = activeId();
       if (id)
         try {
@@ -1542,7 +1580,7 @@ ${text}` }
         } catch (error) {
           toast("error", `读取项目失败：${error.message}`);
         }
-      checkMismatch(), scheduleFallback(), emit("chat");
+      log(`切换聊天：${floorCount()} 楼，${id ? `启用项目「${(data.index().projects.find((item) => item.id === id) || {}).name || id}」` : "本卡没有启用项目"}`), id && clampBase(), checkMismatch(), scheduleFallback(), emit("chat");
     }
     function checkMismatch() {
       let id = activeId(), state = readChatState(), key = `${cardKey()}|${ctx() && ctx().chatId}`;
@@ -1563,22 +1601,58 @@ ${text}` }
     async function switchProject(id) {
       id && await data.loadProject(id), data.setActive(id), progress = null, progressFor = "", scheduleFallback(), emit("switch");
     }
-    function on(eventName, handler) {
-      let c = ctx();
-      !c || !c.eventSource || !eventName || (c.eventSource.on(eventName, handler), listeners.push([eventName, handler]));
+    let BINDINGS = [
+      ["WORLDINFO_ENTRIES_LOADED", onEntriesLoaded],
+      ["CHAT_CHANGED", onChatChanged],
+      ["MESSAGE_RECEIVED", onMessageReceived],
+      ["MESSAGE_UPDATED", onMessageChanged],
+      ["MESSAGE_DELETED", onMessageChanged],
+      ["MESSAGE_SWIPED", onMessageChanged],
+      ["GENERATION_STARTED", onGenerationStarted],
+      ["GENERATION_ENDED", onGenerationEnded],
+      ["GENERATION_STOPPED", onGenerationEnded]
+    ];
+    function bind() {
+      let c = ctx(), types = eventTypes();
+      if (!(!c || !c.eventSource))
+        for (let [key, handler] of BINDINGS) {
+          let name = types[key];
+          if (!name) continue;
+          let wrapped = (...args) => {
+            let stat = stats[key] || (stats[key] = { count: 0, at: 0 });
+            return stat.count += 1, stat.at = Date.now(), handler(...args);
+          };
+          c.eventSource.on(name, wrapped), listeners.push([key, name, wrapped]);
+        }
     }
-    function start() {
-      let types = eventTypes();
-      types.WORLDINFO_ENTRIES_LOADED && on(types.WORLDINFO_ENTRIES_LOADED, onEntriesLoaded), on(types.CHAT_CHANGED, onChatChanged), on(types.MESSAGE_RECEIVED, onMessageReceived), on(types.MESSAGE_UPDATED, onMessageChanged), on(types.MESSAGE_DELETED, onMessageChanged), onChatChanged();
-    }
-    function stop() {
+    function unbind() {
       let c = ctx();
-      for (let [name, handler] of listeners.splice(0))
+      for (let [, name, handler] of listeners.splice(0))
         try {
           c.eventSource.removeListener(name, handler);
         } catch {
         }
-      view.clearTimeout(fallbackTimer);
+    }
+    function start() {
+      unbind(), bind(), log(`已绑定 ${listeners.length} 个酒馆事件`), onChatChanged();
+    }
+    function stop() {
+      unbind(), view.clearTimeout(fallbackTimer), view.clearTimeout(pendingTimer);
+    }
+    function diagnose() {
+      let types = eventTypes(), bound = new Set(listeners.map((item) => item[0]));
+      return {
+        hasContext: !!ctx(),
+        hasEventSource: !!(ctx() && ctx().eventSource),
+        events: BINDINGS.map(([key]) => ({ key, name: types[key] || "", bound: bound.has(key), count: (stats[key] || {}).count || 0, at: (stats[key] || {}).at || 0 })),
+        cardKey: cardKey(),
+        chatLength: chatMessages().length,
+        floors: floorCount(),
+        generating,
+        pending: pendingCheck,
+        checking,
+        logs: logs.slice()
+      };
     }
     return {
       start,
@@ -1597,6 +1671,9 @@ ${text}` }
       floorCount,
       recentFloors,
       rewriteRest,
+      diagnose,
+      resetBase,
+      rebind: start,
       injectMode: () => hasEntriesEvent() ? "virtual" : "book",
       refresh: () => {
         scheduleFallback(), emit("progress");
@@ -1835,6 +1912,10 @@ ${text}` }
 .pi-files td,.pi-files th{padding:6px 4px;border-bottom:1px solid var(--pi-line);text-align:left}
 .pi-files th{color:var(--pi-txt2);font-weight:600}
 .pi-files .is-missing{color:var(--pi-danger)}
+.pi-diag-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--pi-line);font-size:12px}
+.pi-diag-row:last-child{border-bottom:0}
+.pi-diag-text{flex:1;min-width:0}
+.pi-copy-box{position:fixed;left:0;top:0;width:1px;height:1px;opacity:0}
 .pi-status{font-size:12px;color:var(--pi-txt2);min-height:1em}
 .pi-status.is-err{color:var(--pi-danger)}
 .pi-spin{display:inline-block;width:12px;height:12px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:pi-spin .8s linear infinite}
@@ -1886,6 +1967,7 @@ ${text}` }
     book: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 2.5h7.5a2 2 0 012 2v9H5a2 2 0 01-2-2v-9z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M3 11.5a2 2 0 012-2h7.5M6 5.5h4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>',
     moon: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M13.5 9.8A5.8 5.8 0 016.2 2.5a5.8 5.8 0 107.3 7.3z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>',
     sun: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.4"/><path d="M8 1.5v1.6M8 12.9v1.6M1.5 8h1.6M12.9 8h1.6M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M3.4 12.6l1.1-1.1M11.5 4.5l1.1-1.1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
+    pulse: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M1.5 8.5h3l1.8-4 3 8 1.9-4h3.3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     file: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M4 1h5.5L13 4.5V14a1 1 0 01-1 1H4a1 1 0 01-1-1V2a1 1 0 011-1z" stroke="currentColor" stroke-width="1.2"/><path d="M9 1v4h4" stroke="currentColor" stroke-width="1.2"/></svg>'
   };
 
@@ -1918,12 +2000,12 @@ ${text}` }
   function options(list, value) {
     return list.map((item) => `<option value="${esc(item.value)}"${String(item.value) === String(value) ? " selected" : ""}>${esc(item.label)}</option>`).join("");
   }
-  function openDialog({ title: title2, html = "", actions: actions8 = [{ label: "确定", value: !0, primary: !0 }], onMount } = {}) {
+  function openDialog({ title: title2, html = "", actions: actions9 = [{ label: "确定", value: !0, primary: !0 }], onMount } = {}) {
     let doc = hostDocument();
     return new Promise((resolve) => {
       let root = el(`<div class="pi-root pi-dialog"><div class="pi-dialog-box" role="dialog">
             ${title2 ? `<h4>${esc(title2)}</h4>` : ""}<div class="pi-dlg-body">${html}</div>
-            <div class="pi-dlg-acts">${actions8.map((action, index) => `<button type="button" class="pi-btn${action.primary ? " is-primary" : ""}${action.danger ? " is-danger" : ""}" data-dlg="${index}">${esc(action.label)}</button>`).join("")}</div>
+            <div class="pi-dlg-acts">${actions9.map((action, index) => `<button type="button" class="pi-btn${action.primary ? " is-primary" : ""}${action.danger ? " is-danger" : ""}" data-dlg="${index}">${esc(action.label)}</button>`).join("")}</div>
         </div></div>`), finish = (value) => {
         doc.removeEventListener("keydown", onKey, !0), root.remove(), resolve(value);
       }, onKey = (event) => {
@@ -1935,7 +2017,7 @@ ${text}` }
         if (pick) return finish(pick.dataset.dlgValue);
         let button = event.target.closest("[data-dlg]");
         if (!button) return;
-        let action = actions8[Number(button.dataset.dlg)], value = typeof action.value == "function" ? action.value(root) : action.value;
+        let action = actions9[Number(button.dataset.dlg)], value = typeof action.value == "function" ? action.value(root) : action.value;
         value !== void 0 && finish(value);
       }), doc.addEventListener("keydown", onKey, !0), doc.body.appendChild(root), onMount && onMount(root), root.querySelector("input,textarea,select")?.focus();
     });
@@ -2303,10 +2385,10 @@ ${floor.text}`).join(`
       if (line.includes("|") && i + 1 < lines.length && RE.tableSep.test(lines[i + 1])) {
         let head = cells(line);
         i += 2;
-        let rows = [];
-        for (; i < lines.length && lines[i].includes("|") && lines[i].trim(); ) rows.push(cells(lines[i++]));
+        let rows2 = [];
+        for (; i < lines.length && lines[i].includes("|") && lines[i].trim(); ) rows2.push(cells(lines[i++]));
         out.push(`<div class="pi-md-table"><table><thead><tr>${head.map((cell) => `<th>${cell}</th>`).join("")}</tr></thead>
-                <tbody>${rows.map((row2) => `<tr>${row2.map((cell) => `<td>${cell}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`);
+                <tbody>${rows2.map((row2) => `<tr>${row2.map((cell) => `<td>${cell}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`);
         continue;
       }
       if (RE.quote.test(line)) {
@@ -2818,7 +2900,7 @@ ${yaml}
         <button type="button" class="pi-btn is-sm is-danger" data-act="fix-drop" data-where="${where}" data-i="${i}">丢弃</button></span></div>`).join("")}` : "";
   }
   function draftHtml2(view, project, draft) {
-    let oldBlocks = new Map(splitBlocks(project.setting.text).map((block) => [block.key, block])), rows = splitBlocks(draft.body).map((block) => {
+    let oldBlocks = new Map(splitBlocks(project.setting.text).map((block) => [block.key, block])), rows2 = splitBlocks(draft.body).map((block) => {
       let old = oldBlocks.get(block.key), status = old ? old.text === block.text ? '<span class="pi-badge">未变</span>' : '<span class="pi-badge is-warn">改动</span>' : '<span class="pi-badge is-ok">新增</span>', open = st2(view).openBlock === block.key;
       return `<div class="pi-entry"><div class="pi-entry-hd" data-act="draft-block" data-key="${esc(block.key)}">
             <input type="checkbox" data-pick-block="${esc(block.key)}"${draft.keys.includes(block.key) ? " checked" : ""}>
@@ -2826,7 +2908,7 @@ ${yaml}
             ${open ? `<div class="pi-entry-bd">${diffHtml(old ? old.text : "", block.text)}</div>` : ""}</div>`;
     }).join("");
     return `<div class="pi-card"><h3>新稿对比 ${checkBadge(draft.check)}</h3>
-        <p class="pi-hint">勾选的分块替换旧稿，新分块追加到末尾。</p>${rows}
+        <p class="pi-hint">勾选的分块替换旧稿，新分块追加到末尾。</p>${rows2}
         ${fixesHtml(draft.fixes, "draft")}
         <div class="pi-tools is-c3 is-end"><button type="button" class="pi-btn is-sm is-primary" data-act="draft-all">全部采用</button>
         <button type="button" class="pi-btn is-sm" data-act="draft-pick">采用勾选的分块</button>
@@ -2835,7 +2917,7 @@ ${yaml}
   function historyHtml(project, at) {
     let list = project.setting.history;
     if (!list.length) return '<div class="pi-card"><h3>历史版本</h3><p class="pi-hint">还没有历史版本。</p></div>';
-    let fmt = (time) => new Date(time).toLocaleString(), chosen = list[at];
+    let fmt = (time2) => new Date(time2).toLocaleString(), chosen = list[at];
     return `<div class="pi-card"><h3>历史版本</h3>
         ${list.map((item, i) => `<div class="pi-row"><span class="pi-grow">${esc(fmt(item.at))} · ${item.text.length} 字</span>
             <button type="button" class="pi-btn is-sm" data-act="hist-diff" data-i="${i}">对比当前</button>
@@ -3656,6 +3738,106 @@ ${parsed.body}` : parsed.body;
     }
   }, refreshOn6 = ["chat"];
 
+  // src/ui/page-diag.js
+  var page_diag_exports = {};
+  __export(page_diag_exports, {
+    actions: () => actions8,
+    render: () => render8
+  });
+  var NEED = ["CHAT_CHANGED", "MESSAGE_RECEIVED"], EVENT_LABELS = {
+    WORLDINFO_ENTRIES_LOADED: "条目加载（注入）",
+    CHAT_CHANGED: "切换聊天",
+    MESSAGE_RECEIVED: "收到回复（触发检测）",
+    MESSAGE_UPDATED: "编辑楼层",
+    MESSAGE_DELETED: "删除楼层",
+    MESSAGE_SWIPED: "切换回复",
+    GENERATION_STARTED: "开始生成",
+    GENERATION_ENDED: "生成结束",
+    GENERATION_STOPPED: "停止生成"
+  }, time = (at) => at ? new Date(at).toLocaleTimeString("zh-CN", { hour12: !1 }) : "—";
+  function collect(view) {
+    let { data, runtime } = view, d = runtime.diagnose(), settings = data.settings(), id = runtime.activeId(), meta2 = data.index().projects.find((item) => item.id === id), progress = id ? runtime.progress() : null, llm = resolveLlm(settings, "check"), c = ctx();
+    return { ...d, settings, id, name: meta2 ? meta2.name : "", progress, llm, units: id ? runtime.units().length : 0, card: cardName(), chatId: c && typeof c.getCurrentChatId == "function" && c.getCurrentChatId() || "", version: view.version };
+  }
+  function problems(info) {
+    let out = [];
+    (!info.hasContext || !info.hasEventSource) && out.push({ text: "读不到酒馆的事件接口，酒馆版本可能过旧。", fix: "" });
+    let missing = info.events.filter((item) => NEED.includes(item.key) && !item.name);
+    missing.length && out.push({ text: `酒馆没有提供事件：${missing.map((item) => item.key).join("、")}。`, fix: "" }), info.events.filter((item) => NEED.includes(item.key) && item.name && !item.bound).length && out.push({ text: "检测所需的事件没有绑定。", fix: "rebind" }), info.cardKey ? info.id ? info.units || out.push({ text: "启用项目的大纲为空，没有可检测的阶段。", fix: "" }) : out.push({ text: `「${info.card}」没有启用项目，自动检测不会运行。`, fix: "" }) : out.push({ text: "当前没有打开角色卡聊天。", fix: "" }), info.progress && info.progress.lastCheckFloor > info.floors && out.push({ text: `上次检测记在第 ${info.progress.lastCheckFloor} 楼，当前只有 ${info.floors} 楼。`, fix: "reset-base" }), info.llm.source === "custom" && !String(info.llm.model || "").trim() && out.push({ text: "进度检测用独立接口，但没有选择模型。", fix: "" });
+    let received = info.events.find((item) => item.key === "MESSAGE_RECEIVED");
+    return received && received.bound && !received.count && info.floors > 1 && out.push({ text: "本次加载后还没收到过「收到回复」事件。发一条消息后再看，仍为 0 次可点「重新绑定事件」。", fix: "rebind" }), out;
+  }
+  function nextText(info) {
+    if (!info.progress) return "—";
+    let gap = info.floors - info.progress.lastCheckFloor, left = info.settings.checkEvery - gap;
+    return left > 0 ? `还差 ${left} 楼` : "下一条回复后检测";
+  }
+  function rows(info) {
+    let state = info.checking ? "检测中" : info.pending ? "等待主回复生成结束" : info.generating ? "主回复生成中" : "空闲", llm = info.llm.source === "custom" ? `独立接口 ${info.llm.model || "（未选模型）"}` : "酒馆当前接口";
+    return [
+      ["版本", `v${info.version}`],
+      ["角色卡", info.card || "—"],
+      ["聊天", info.chatId || "—"],
+      ["启用项目", info.name || "—"],
+      ["当前楼数", String(info.floors)],
+      ["上次检测楼层", info.progress ? String(info.progress.lastCheckFloor) : "—"],
+      ["检测间隔", `每 ${info.settings.checkEvery} 楼`],
+      ["下次检测", nextText(info)],
+      ["检测接口", llm],
+      ["状态", state]
+    ];
+  }
+  function plainText(info) {
+    let lines = ["【剧情注入器诊断】", ...rows(info).map(([k, v]) => `${k}：${v}`), "", "【事件】"];
+    for (let item of info.events) lines.push(`${item.key}（${item.name || "酒馆未提供"}）：${item.bound ? `已绑定，收到 ${item.count} 次，最近 ${time(item.at)}` : "未绑定"}`);
+    let list = problems(info);
+    return lines.push("", "【问题】", ...list.length ? list.map((item) => `- ${item.text}`) : ["无"]), lines.push("", "【最近记录】", ...info.logs.length ? info.logs.map((item) => `${time(item.at)} ${item.text}`) : ["无"]), lines.join(`
+`);
+  }
+  function render8(view) {
+    let info = collect(view), list = problems(info), fixes = { rebind: "重新绑定事件", "reset-base": "从当前楼重新计数" }, problemHtml = list.length ? list.map((item) => `<div class="pi-diag-row"><span class="pi-badge is-warn">问题</span><span class="pi-diag-text">${esc(item.text)}</span>${item.fix ? `<button type="button" class="pi-btn is-sm" data-act="${item.fix}">${fixes[item.fix]}</button>` : ""}</div>`).join("") : '<p class="pi-hint">没有发现问题。</p>', events = info.events.map((item) => `<tr><td>${esc(EVENT_LABELS[item.key] || item.key)}</td>
+        <td>${item.name ? item.bound ? '<span class="pi-badge is-ok">已绑定</span>' : '<span class="pi-badge is-warn">未绑定</span>' : '<span class="pi-badge is-danger">酒馆未提供</span>'}</td>
+        <td>${item.count} 次</td><td>${time(item.at)}</td></tr>`).join(""), logs = info.logs.length ? info.logs.slice().reverse().map((item) => `${time(item.at)}  ${item.text}`).join(`
+`) : "暂无记录";
+    return `<div class="pi-card"><h3>自动检测${list.length ? `<span class="pi-badge is-warn">${list.length} 个问题</span>` : '<span class="pi-badge is-ok">正常</span>'}</h3>
+        <table class="pi-files"><tbody>${rows(info).map(([k, v]) => `<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`).join("")}</tbody></table>
+        <div class="pi-tools is-c4 is-end">
+            <button type="button" class="pi-btn is-sm is-primary" data-act="check"${info.checking ? " disabled" : ""}>立即检测</button>
+            <button type="button" class="pi-btn is-sm" data-act="reset-base"${info.progress ? "" : " disabled"}>从当前楼重新计数</button>
+            <button type="button" class="pi-btn is-sm" data-act="rebind">重新绑定事件</button>
+            <button type="button" class="pi-btn is-sm" data-act="copy">复制诊断</button></div></div>
+        <div class="pi-card"><h3>问题</h3>${problemHtml}</div>
+        <div class="pi-card"><h3>酒馆事件</h3>
+        <table class="pi-files"><thead><tr><th>事件</th><th>状态</th><th>收到</th><th>最近</th></tr></thead><tbody>${events}</tbody></table></div>
+        <div class="pi-card"><h3>最近记录</h3><pre class="pi-pre">${esc(logs)}</pre></div>`;
+  }
+  async function copyText(text) {
+    let doc = hostDocument();
+    try {
+      return await hostWindow().navigator.clipboard.writeText(text), !0;
+    } catch {
+      let box = doc.createElement("textarea");
+      box.value = text, box.className = "pi-copy-box", doc.body.appendChild(box), box.select();
+      let ok = !!(doc.execCommand && doc.execCommand("copy"));
+      return box.remove(), ok;
+    }
+  }
+  var actions8 = {
+    async check(view) {
+      await view.runtime.checkNow({ manual: !0 }), view.renderBody();
+    },
+    "reset-base"(view) {
+      view.runtime.resetBase(), toast("success", "已从当前楼重新计数。"), view.renderBody();
+    },
+    rebind(view) {
+      view.runtime.rebind(), toast("success", "已重新绑定酒馆事件。"), view.renderBody();
+    },
+    async copy(view) {
+      let ok = await copyText(plainText(collect(view)));
+      toast(ok ? "success" : "warning", ok ? "已复制诊断" : "复制失败，请手动选择文字复制");
+    }
+  };
+
   // src/ui/app.js
   var TABS = [
     { key: "discuss", label: "讨论", mod: tab_discuss_exports },
@@ -3665,6 +3847,7 @@ ${parsed.body}` : parsed.body;
   ], PAGES = {
     books: { label: "世界书管理", icon: "book", mod: page_books_exports },
     data: { label: "数据管理", icon: "box", mod: page_data_exports },
+    diag: { label: "诊断", icon: "pulse", mod: page_diag_exports },
     settings: { label: "设置", icon: "gear", mod: page_settings_exports }
   }, UI_KEY = "pi-ui", SEARCH_FROM = 6;
   function readUi() {
@@ -3695,7 +3878,7 @@ ${parsed.body}` : parsed.body;
       collapsed: new Set(readUi().collapsed || []),
       state: {},
       busy: {},
-      render: render8,
+      render: render9,
       renderBody,
       renderSide,
       project: () => view.projectId ? data.project(view.projectId) : null,
@@ -3723,7 +3906,7 @@ ${parsed.body}` : parsed.body;
             <div class="pi-plist">${list || '<p class="pi-hint">还没有项目</p>'}</div>
             <div class="pi-side-ft">
                 <button type="button" class="pi-btn is-ghost is-block" data-act="new-project">${ICONS.plus}新项目</button>
-                ${page("books")}${page("data")}${page("settings")}
+                ${page("books")}${page("data")}${page("diag")}${page("settings")}
             </div>`;
     }
     function applySearch() {
@@ -3770,11 +3953,11 @@ ${parsed.body}` : parsed.body;
         box && (box.focus(), box.setSelectionRange(compose.start, compose.end));
       }
     }
-    function render8() {
+    function render9() {
       renderSide(), renderBody();
     }
     async function selectProject(id, tab) {
-      if (view.page = "", setDrawer(!1), view.projectId = id, writeUi({ projectId: id, page: "" }), render8(), !!id)
+      if (view.page = "", setDrawer(!1), view.projectId = id, writeUi({ projectId: id, page: "" }), render9(), !!id)
         try {
           let project = await data.loadProject(id);
           if (!project) {
@@ -3782,13 +3965,13 @@ ${parsed.body}` : parsed.body;
             return;
           }
           if (view.projectId !== id) return;
-          view.tab = tab || (project.outline.volumes.length ? "run" : "discuss"), writeUi({ tab: view.tab }), render8();
+          view.tab = tab || (project.outline.volumes.length ? "run" : "discuss"), writeUi({ tab: view.tab }), render9();
         } catch (error) {
           toast("error", `读取项目失败：${error.message}`);
         }
     }
     function go(tab) {
-      view.page = "", view.tab = tab, writeUi({ tab, page: "" }), render8();
+      view.page = "", view.tab = tab, writeUi({ tab, page: "" }), render9();
     }
     async function newProject2() {
       setDrawer(!1);
@@ -3819,13 +4002,13 @@ ${parsed.body}` : parsed.body;
         if (result === "delete") {
           if (!await confirmDialog({ title: `删除「${meta2.name}」`, body: "将删除以下文件，聊天里记录的该项目进度保留。", list: [`pi-p-${id}.json`, `pi-c-${id}.json`], okLabel: "删除", danger: !0 })) return;
           try {
-            await data.deleteProject(id), view.projectId === id && (view.projectId = ""), runtime.refresh(), render8();
+            await data.deleteProject(id), view.projectId === id && (view.projectId = ""), runtime.refresh(), render9();
           } catch (error) {
             toast("error", `删除失败：${error.message}`);
           }
           return;
         }
-        data.project(id) || await data.loadProject(id), data.renameProject(id, result.name, result.group), render8();
+        data.project(id) || await data.loadProject(id), data.renameProject(id, result.name, result.group), render9();
       }
     }
     function onClick(event) {
@@ -3837,7 +4020,7 @@ ${parsed.body}` : parsed.body;
       if (act === "new-project") return newProject2();
       if (act === "tab") return go(target.dataset.tab);
       if (act === "page")
-        return view.page = target.dataset.page, writeUi({ page: view.page }), setDrawer(!1), render8();
+        return view.page = target.dataset.page, writeUi({ page: view.page }), setDrawer(!1), render9();
       if (act === "drawer") return setDrawer(!view.drawer);
       if (act === "theme")
         return setNight(!isNight()), writeUi({ night: isNight() }), renderSide();
@@ -3879,9 +4062,9 @@ ${parsed.body}` : parsed.body;
         event.target === root && root.dataset.down && close(), delete root.dataset.down;
       }), doc.addEventListener("keydown", onKey, !0), doc.body.appendChild(root);
       let activeId = data.activeIdFor(cardKey()), remembered = data.index().projects.some((item) => item.id === ui.projectId) ? ui.projectId : "", id = activeId || remembered || data.index().projects[0] && data.index().projects[0].id || "";
-      render8();
+      render9();
       let page = PAGES[ui.page] ? ui.page : "";
-      id && selectProject(id, TABS.some((tab) => tab.key === ui.tab) ? ui.tab : void 0), page && (view.page = page, writeUi({ page }), render8());
+      id && selectProject(id, TABS.some((tab) => tab.key === ui.tab) ? ui.tab : void 0), page && (view.page = page, writeUi({ page }), render9());
     }
     function close() {
       root && (current().unmount?.(view), doc.removeEventListener("keydown", onKey, !0), root.remove(), root = null, data.flush().catch(() => {
@@ -3907,16 +4090,16 @@ ${parsed.body}` : parsed.body;
     function hide(id) {
       view.clearTimeout(timers.get(id)), timers.delete(id), box?.querySelector(`[data-notice="${id}"]`)?.remove();
     }
-    function show({ id, title: title2, body = "", actions: actions8 = [], timeout = 0 }) {
+    function show({ id, title: title2, body = "", actions: actions9 = [], timeout = 0 }) {
       hide(id);
       let card = el(`<div class="pi-notice" data-notice="${esc(id)}"><b>${esc(title2)}</b>${body ? `<p>${esc(body)}</p>` : ""}
-            <div class="pi-row">${actions8.map((action, index) => `<button type="button" class="pi-btn is-sm${action.primary ? " is-primary" : ""}" data-act="${index}">${esc(action.label)}</button>`).join("")}</div></div>`);
+            <div class="pi-row">${actions9.map((action, index) => `<button type="button" class="pi-btn is-sm${action.primary ? " is-primary" : ""}" data-act="${index}">${esc(action.label)}</button>`).join("")}</div></div>`);
       card.addEventListener("click", (event) => {
         let button = event.target.closest("[data-act]");
         if (button) {
           hide(id);
           try {
-            actions8[Number(button.dataset.act)].run();
+            actions9[Number(button.dataset.act)].run();
           } catch (error) {
             console.error("[剧情注入器]", error);
           }
@@ -3931,7 +4114,7 @@ ${parsed.body}` : parsed.body;
   }
 
   // src/index.js
-  var VERSION = "0.1.7", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.1.8", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")
