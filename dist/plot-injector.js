@@ -1,4 +1,4 @@
-// PlotInjector v0.1.9
+// PlotInjector v0.1.10
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -1280,7 +1280,7 @@ ${text}` }
       await saveBook(name, data);
     });
   }
-  var ENTRY_FIELDS = ["constant", "key", "keysecondary", "position", "depth", "role", "order", "content"];
+  var ENTRY_FIELDS = ["comment", "constant", "key", "keysecondary", "position", "depth", "role", "order", "content"];
   function updateEntry(name, key, patch) {
     return queued(name, async () => {
       let data = clone(await loadBook(name)), entry = data.entries[key];
@@ -1296,7 +1296,7 @@ ${text}` }
         let entry = data.entries[key];
         if (entry) {
           backup.entries[key] = clone(entry);
-          for (let field of [...ENTRY_FIELDS, "comment"]) Object.prototype.hasOwnProperty.call(patch, field) && (entry[field] = patch[field]);
+          for (let field of ENTRY_FIELDS) Object.prototype.hasOwnProperty.call(patch, field) && (entry[field] = patch[field]);
           Object.prototype.hasOwnProperty.call(patch, "keysecondary") && (entry.selective = patch.keysecondary.length > 0);
         }
       }
@@ -1335,6 +1335,89 @@ ${text}` }
     if (!res.ok) throw new Error(`删除世界书失败（HTTP ${res.status}）`);
     let c = ctx();
     c && typeof c.updateWorldInfoList == "function" && await c.updateWorldInfoList();
+  }
+  var BLANK_ENTRY = {
+    key: [],
+    keysecondary: [],
+    comment: "新条目",
+    content: "",
+    constant: !1,
+    selective: !0,
+    selectiveLogic: 0,
+    addMemo: !0,
+    order: 100,
+    position: 1,
+    disable: !1,
+    excludeRecursion: !1,
+    preventRecursion: !1,
+    probability: 100,
+    useProbability: !0,
+    depth: 4,
+    group: "",
+    groupOverride: !1,
+    groupWeight: 100,
+    scanDepth: null,
+    caseSensitive: null,
+    matchWholeWords: null,
+    useGroupScoring: null,
+    automationId: "",
+    role: null
+  }, nextUid = (data) => Object.values(data.entries).reduce((max, entry) => Math.max(max, Number(entry.uid) || 0), -1) + 1;
+  function addEntries(name, sources = []) {
+    return queued(name, async () => {
+      let data = clone(await loadBook(name)), list = sources.length ? sources.map((key) => data.entries[key]).filter(Boolean) : [BLANK_ENTRY], keys = [];
+      for (let entry of list) {
+        let uid = nextUid(data);
+        data.entries[uid] = { ...clone(entry), uid, displayIndex: uid, ...sources.length ? { comment: `${entry.comment || ""}（副本）` } : {} }, keys.push(String(uid));
+      }
+      return await saveBook(name, data), keys;
+    });
+  }
+  async function createBook(name, data = { entries: {} }) {
+    let value = String(name || "").trim();
+    if (!value) throw new Error("请填写世界书名称");
+    if (allBookNames().includes(value)) throw new Error(`已有名为「${value}」的世界书`);
+    await saveBook(value, data);
+    let c = ctx();
+    return c && typeof c.updateWorldInfoList == "function" && await c.updateWorldInfoList(), value;
+  }
+  async function rebind(from, to) {
+    let c = ctx(), h = helper(), failed = [], meta2 = c && c.chatMetadata;
+    meta2 && meta2.world_info === from && (to ? meta2.world_info = to : delete meta2.world_info, typeof c.saveMetadata == "function" && await c.saveMetadata());
+    try {
+      let bound = h && typeof h.getCharWorldbookNames == "function" ? h.getCharWorldbookNames("current") : null, additional = bound && Array.isArray(bound.additional) ? bound.additional : [];
+      if (bound && (bound.primary === from || additional.includes(from))) {
+        if (typeof h.rebindCharWorldbooks != "function") throw new Error("no rebind");
+        await h.rebindCharWorldbooks("current", {
+          primary: bound.primary === from ? to || null : bound.primary,
+          additional: additional.map((item) => item === from ? to : item).filter(Boolean)
+        });
+      }
+    } catch {
+      failed.push("角色卡");
+    }
+    try {
+      let global = h && typeof h.getGlobalWorldbookNames == "function" ? h.getGlobalWorldbookNames() : null;
+      Array.isArray(global) && global.includes(from) && typeof h.rebindGlobalWorldbooks == "function" && await h.rebindGlobalWorldbooks(global.map((item) => item === from ? to : item).filter(Boolean));
+    } catch {
+      failed.push("全局");
+    }
+    return failed;
+  }
+  async function renameBook(from, to) {
+    let name = String(to || "").trim();
+    if (!name || name === from) throw new Error("请填写新的名称");
+    let data = await queued(from, () => loadBook(from));
+    await createBook(name, clone(data));
+    let failed = await rebind(from, name);
+    return failed.length || await deleteBook(from), { name, failed };
+  }
+  async function duplicateBook(from, to) {
+    return createBook(to, clone(await queued(from, () => loadBook(from))));
+  }
+  async function removeBook(name) {
+    let failed = await rebind(name, "");
+    return await deleteBook(name), { failed };
   }
   async function writeFallbackBook(name, wiEntries) {
     let c = ctx(), data = { entries: {} };
@@ -1830,6 +1913,20 @@ ${text}` }
 .pi-wb-info{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:6px;margin:4px 0 10px}
 .pi-wb-tokens{display:contents}
 .pi-wb-count{font-size:12px;color:var(--pi-txt2);padding-left:4px}
+.pi-set-row{display:flex;align-items:center;gap:8px;margin-top:6px;padding-top:8px;border-top:1px solid var(--pi-line);font-size:12px;color:var(--pi-txt2);font-weight:500}
+.pi-set-row .pi-spacer{flex:1}
+.pi-set-sub{margin-top:6px}
+.pi-pick-list{display:flex;flex-direction:column;gap:6px;max-height:320px;overflow-y:auto}
+.pi-tbar{display:grid;grid-template-columns:repeat(var(--pi-cols,4),minmax(0,1fr));gap:4px;padding:6px;margin:0 0 10px;border:1.5px solid var(--pi-line);border-radius:var(--pi-r-in);background:var(--pi-surf)}
+.pi-tbar.is-c3{--pi-cols:3}
+.pi-tbar.is-flat{background:none;border-style:dashed}
+.pi-tbtn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-width:0;min-height:48px;padding:6px 2px;border:0;border-radius:8px;background:none;color:var(--pi-dark);font:inherit;font-size:11px;font-weight:600;line-height:1.2;cursor:pointer;text-align:center}
+.pi-tbtn svg{width:18px;height:18px;flex-shrink:0}
+.pi-tbtn>span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pi-tbtn:hover:not(:disabled){background:var(--pi-bg)}
+.pi-tbtn.is-on{background:var(--pi-bg);color:var(--pi-accent)}
+.pi-tbtn.is-danger{color:var(--pi-danger)}
+.pi-tbtn:disabled{opacity:.4;cursor:not-allowed}
 label.pi-wb-row{cursor:pointer}
 .pi-acts{margin-top:12px}
 .pi-acts-top{margin-bottom:8px}
@@ -2009,6 +2106,21 @@ label.pi-wb-row{cursor:pointer}
     book: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 2.5h7.5a2 2 0 012 2v9H5a2 2 0 01-2-2v-9z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M3 11.5a2 2 0 012-2h7.5M6 5.5h4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>',
     moon: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M13.5 9.8A5.8 5.8 0 016.2 2.5a5.8 5.8 0 107.3 7.3z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>',
     sun: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.4"/><path d="M8 1.5v1.6M8 12.9v1.6M1.5 8h1.6M12.9 8h1.6M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M3.4 12.6l1.1-1.1M11.5 4.5l1.1-1.1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
+    // 世界书工具栏：统一 16 格、1.4 线宽、圆角端点。
+    copy: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.4"/><path d="M10.5 5.5V3.8A1.3 1.3 0 009.2 2.5H3.8a1.3 1.3 0 00-1.3 1.3v5.4a1.3 1.3 0 001.3 1.3h1.7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
+    download: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 2.5v7.5M4.8 7L8 10.2 11.2 7M2.5 12.5v1h11v-1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    upload: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 10.5V3M4.8 6.2L8 3l3.2 3.2M2.5 12.5v1h11v-1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    folder: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 4.3c0-.7.6-1.3 1.3-1.3h2.9l1.5 1.6h5c.7 0 1.3.6 1.3 1.3v6.8c0 .7-.6 1.3-1.3 1.3H3.3c-.7 0-1.3-.6-1.3-1.3V4.3z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>',
+    bookPlus: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 2.5h7.5a2 2 0 012 2v4M3 2.5v9a2 2 0 002 2h4M3 11.5a2 2 0 012-2h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M12.5 10.5v4M10.5 12.5h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
+    entryPlus: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M9.5 13.5H4a1.5 1.5 0 01-1.5-1.5V4A1.5 1.5 0 014 2.5h8A1.5 1.5 0 0113.5 4v5.5M5.5 6h5M5.5 9h3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M12.5 11v4M10.5 13h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
+    checks: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2.5" y="2.5" width="4" height="4" rx="1" stroke="currentColor" stroke-width="1.4"/><rect x="2.5" y="9.5" width="4" height="4" rx="1" stroke="currentColor" stroke-width="1.4"/><path d="M9 4.5h4.5M9 11.5h4.5M3.6 11.5l.9.9 1.4-1.6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    checkAll: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2.5" y="2.5" width="11" height="11" rx="2" stroke="currentColor" stroke-width="1.4"/><path d="M5.3 8.2l1.9 1.9 3.6-4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    wand: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 13l7.5-7.5M9 4l3 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M12 1.8v2M11 2.8h2M13.8 6.2v1.4M13.1 6.9h1.4M5.5 2v1.4M4.8 2.7h1.4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>',
+    replace: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2.5 5.5h9l-2.2-2.2M13.5 10.5h-9l2.2 2.2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    move: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 4.3c0-.7.6-1.3 1.3-1.3h2.9l1.5 1.6h5c.7 0 1.3.6 1.3 1.3v6.8c0 .7-.6 1.3-1.3 1.3H3.3c-.7 0-1.3-.6-1.3-1.3V4.3z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M5.5 9h5M8.8 7.2L10.6 9 8.8 10.8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    sort: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4.5 2.5v11M2.5 11.5l2 2 2-2M9 4h4.5M9 8h3.5M9 12h2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    eye: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.4"/></svg>',
+    eyeOff: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6.2 3.8A6.6 6.6 0 018 3.5c4 0 6.5 4.5 6.5 4.5a11.6 11.6 0 01-1.7 2.2M10.4 11.9A6.3 6.3 0 018 12.5C4 12.5 1.5 8 1.5 8a11.4 11.4 0 012.6-3M2.5 2.5l11 11" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     pulse: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M1.5 8.5h3l1.8-4 3 8 1.9-4h3.3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     file: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M4 1h5.5L13 4.5V14a1 1 0 01-1 1H4a1 1 0 01-1-1V2a1 1 0 011-1z" stroke="currentColor" stroke-width="1.2"/><path d="M9 1v4h4" stroke="currentColor" stroke-width="1.2"/></svg>'
   };
@@ -3428,25 +3540,25 @@ ${parsed.body}` : parsed.body;
         ${open ? `<div class="pi-row pi-acts-top"><button type="button" class="pi-btn is-sm is-ghost" data-act="guide-reset"${s.guide ? "" : " disabled"}>恢复内置版本</button></div>
         <textarea class="pi-ta is-mono is-tall" data-guide>${esc(s.guide || BUILTIN_GUIDE)}</textarea>` : ""}</div>`;
   }
-  function paceCard(view, s) {
+  function paceRow(view, s) {
     let open = st4(view).paceOpen, changed = PACES.filter((item) => s.paceText[item.value]).map((item) => item.label), current = view.runtime.activeId() ? view.runtime.progress().pace : "", pace = PACES.some((item) => item.value === st4(view).pace) ? st4(view).pace : current || "normal", pick = PACES.map((item) => ({ value: item.value, label: `${item.label}${item.value === current ? "（当前聊天使用）" : ""}${s.paceText[item.value] ? "·已改" : ""}` }));
-    return `<div class="pi-card"><h3>推进速度说明${changed.length ? `<span class="pi-badge">已修改 ${changed.join("、")}</span>` : ""}<span class="pi-spacer"></span>
-            <button type="button" class="pi-btn is-sm is-ghost" data-act="pace-toggle">${open ? "收起" : "编辑"}</button></h3>
-        ${open ? `<label class="pi-field"><span>编辑哪一档的说明</span><select class="pi-sel" data-pace-pick>${options(pick, pace)}</select></label>
+    return `<div class="pi-set-row"><span>推进速度说明</span>${changed.length ? `<span class="pi-badge">已修改 ${changed.join("、")}</span>` : ""}<span class="pi-spacer"></span>
+            <button type="button" class="pi-btn is-sm is-ghost" data-act="pace-toggle">${open ? "收起" : "编辑"}</button></div>
+        ${open ? `<div class="pi-set-sub"><label class="pi-field"><span>编辑哪一档的说明</span><select class="pi-sel" data-pace-pick>${options(pick, pace)}</select></label>
         <textarea class="pi-ta" rows="3" data-pace-text="${pace}">${esc(paceText(s, pace))}</textarea>
-        <div class="pi-tools is-c1 is-end"><button type="button" class="pi-btn is-sm" data-act="pace-reset" data-pace="${pace}"${s.paceText[pace] ? "" : " disabled"}>恢复默认</button></div>` : ""}</div>`;
+        <div class="pi-tools is-c1 is-end"><button type="button" class="pi-btn is-sm" data-act="pace-reset" data-pace="${pace}"${s.paceText[pace] ? "" : " disabled"}>恢复默认</button></div></div>` : ""}`;
   }
   function render5(view) {
     let s = view.data.settings(), modes = [{ value: "ask", label: "弹出确认" }, { value: "auto", label: "自动推进（可撤销）" }, { value: "nodes", label: "仅勾选节点，不推进阶段" }], offModes = [{ value: "ask", label: "弹出提醒" }, { value: "auto", label: "自动改写后续阶段（可撤销）" }, { value: "off", label: "不检查偏离" }];
     return `<div class="pi-card"><h3>注入内容</h3>
         <label class="pi-field"><span>详细条目的标签名</span><input class="pi-inp" data-set="tagName" value="${esc(s.tagName)}"></label></div>
-        ${paceCard(view, s)}
         <div class="pi-card"><h3>阶段推进</h3>
         <div class="pi-pair"><label class="pi-field"><span>检测间隔（楼）</span><input class="pi-inp" type="number" min="1" data-set="checkEvery" value="${s.checkEvery}"></label>
             <label class="pi-field"><span>每次读取楼数</span><input class="pi-inp" type="number" min="1" data-set="checkFloors" value="${s.checkFloors}"></label></div>
         <label class="pi-field"><span>判定阶段已演完后</span><select class="pi-sel" data-set="handleMode">${options(modes, s.handleMode)}</select></label>
         <label class="pi-field"><span>偏离大纲时</span><select class="pi-sel" data-set="offTrackMode">${options(offModes, s.offTrackMode)}</select></label>
-        <label class="pi-check"><input type="checkbox" data-set="carryOver"${s.carryOver ? " checked" : ""}><span>没演的支线与世界动态延续到后面的阶段</span></label></div>
+        <label class="pi-check"><input type="checkbox" data-set="carryOver"${s.carryOver ? " checked" : ""}><span>没演的支线与世界动态延续到后面的阶段</span></label>
+        ${paceRow(view, s)}</div>
         ${llmCard(view, s)}
         ${guideCard(view, s)}`;
   }
@@ -3733,6 +3845,7 @@ ${parsed.body}` : parsed.body;
   function editor(entry) {
     let atDepth = entry.position === 4, key = esc(entry.key);
     return `<div class="pi-wb-edit">
+        <label class="pi-field"><span>标题</span><input class="pi-inp" data-wb-edit="${key}" data-f="comment" value="${esc(entry.comment)}"></label>
         <div class="pi-pair ${atDepth ? "is-c4" : ""}">
             <label class="pi-field"><span>位置</span><select class="pi-sel" data-wb-edit="${key}" data-f="position">${options(POSITIONS, entry.position)}</select></label>
             ${atDepth ? `<label class="pi-field"><span>深度</span><input class="pi-inp" type="number" min="0" data-wb-edit="${key}" data-f="depth" value="${entry.depth}"></label>
@@ -3749,6 +3862,7 @@ ${parsed.body}` : parsed.body;
     return `<div class="pi-wb-item"><div class="pi-wb-row${entry.disabled ? " is-off" : ""}">${toggle(entry)}
         <button type="button" class="pi-wb-name" data-act="wb-open" data-key="${esc(entry.key)}">${open ? ICONS.caretDown : ICONS.caret}${title(entry)}</button>
         ${entry.constant ? '<span class="pi-badge">常驻</span>' : ""}
+        <button type="button" class="pi-icon-btn" data-act="wb-dup" data-key="${esc(entry.key)}" title="复制条目">${ICONS.copy}</button>
         <button type="button" class="pi-icon-btn is-danger" data-act="wb-delete" data-key="${esc(entry.key)}" title="删除">${ICONS.trash}</button></div>
         ${open ? editor(entry) : ""}</div>`;
   }
@@ -3762,27 +3876,32 @@ ${parsed.body}` : parsed.body;
     return `<div class="pi-wb-sec"><div class="pi-wb-sec-hd">${name}<small>${entries.length}</small>${entries.length ? `<span class="pi-wb-bulk">${bulk}</span>` : ""}</div>
         ${rows2 || `<p class="pi-hint">${empty}</p>`}</div>`;
   }
-  function pickBulk(group, entries, picked) {
-    let all = entries.length && entries.every((entry) => picked.has(entry.key));
-    return bulkBtn(`data-act="wb-pick-all" data-group="${group}" data-on="${all ? "0" : "1"}"`, all ? "取消全选" : "全选");
-  }
   function tokenText(s) {
     if (!s.tokens) return '<span class="pi-badge">统计中…</span>';
     let mark = s.tokens.exact ? "" : "≈";
     return `<span class="pi-badge is-accent">开启 ${mark}${s.tokens.on} token</span><span class="pi-badge">全部 ${mark}${s.tokens.all} token</span>`;
   }
+  var tbtn = (act, icon, label, { on = !1, danger = !1, disabled = !1 } = {}) => `<button type="button" class="pi-tbtn${on ? " is-on" : ""}${danger ? " is-danger" : ""}" data-act="${act}" title="${label}"${disabled ? " disabled" : ""}>${ICONS[icon]}<span>${label}</span></button>`;
+  function bookBar(s, entries) {
+    if (!s.picking) {
+      let none2 = !handwritten(entries).length;
+      return `<div class="pi-tbar">${tbtn("wb-add", "entryPlus", "新建条目")}${tbtn("wb-picking", "checks", "批量选择", { disabled: none2 })}
+            ${tbtn("wb-punct", "wand", "修复标点", { disabled: none2 })}${tbtn("wb-regex", "replace", "正则替换", { disabled: none2 })}
+            ${tbtn("book-rename", "pencil", "重命名")}${tbtn("book-copy", "copy", "另存副本")}
+            ${tbtn("book-export", "download", "导出")}${tbtn("book-delete", "trash", "删除本书", { danger: !0 })}</div>`;
+    }
+    let none = !s.picked.size, all = handwritten(entries).every((entry) => s.picked.has(entry.key));
+    return `<div class="pi-tbar">${tbtn("wb-pick-all", "checkAll", all ? "取消全选" : "全选", { on: all })}${tbtn("wb-move", "move", "迁移", { disabled: none })}
+        ${tbtn("wb-order", "sort", "顺序重排", { disabled: none })}${tbtn("wb-regex", "replace", "正则替换", { disabled: none })}
+        ${tbtn("wb-pick-on", "eye", "开启", { disabled: none })}${tbtn("wb-pick-off", "eyeOff", "关闭", { disabled: none })}
+        ${tbtn("wb-pick-delete", "trash", "删除", { danger: !0, disabled: none })}${tbtn("wb-picking", "close", "退出")}</div>`;
+  }
   function bookBody(s, entries) {
-    if (!entries.length) return '<p class="pi-hint">没有条目</p>';
-    let picked = s.picking ? s.picked : null, on = GROUPS.on(entries), off = GROUPS.off(entries), none = picked && !picked.size ? " disabled" : "", buttons = picked ? `<div class="pi-tools is-c4"><button type="button" class="pi-btn is-sm is-primary" data-act="wb-move"${none}>迁移到其他世界书</button>
-            <button type="button" class="pi-btn is-sm" data-act="wb-order"${none}>顺序重排</button>
-            <button type="button" class="pi-btn is-sm" data-act="wb-regex"${none}>正则替换</button>
-            <button type="button" class="pi-btn is-sm" data-act="wb-picking">退出批量选择</button></div>` : `<div class="pi-tools is-c3"><button type="button" class="pi-btn is-sm" data-act="wb-picking">批量选择</button>
-            <button type="button" class="pi-btn is-sm" data-act="wb-punct">修复关键词标点</button>
-            <button type="button" class="pi-btn is-sm" data-act="wb-regex">正则替换</button></div>`, tools = `<div class="pi-wb-info"><span class="pi-wb-tokens">${tokenText(s)}</span>${picked ? `<span class="pi-wb-count">已选 ${picked.size} 条</span>` : ""}</div>${buttons}`;
-    return picked ? `${tools}${section("已开启", on, "没有开启的条目", pickBulk("on", on, picked), "", picked)}
-            ${section("已关闭", off, "没有关闭的条目", pickBulk("off", off, picked), "", picked)}` : `${tools}${section("已开启", on, "没有开启的条目", bulkBtn('data-act="wb-bulk" data-group="on"', "全部关闭"), s.openKey)}
+    let picked = s.picking ? s.picked : null, on = GROUPS.on(entries), off = GROUPS.off(entries), head = `<div class="pi-wb-info"><span class="pi-wb-tokens">${tokenText(s)}</span>${picked ? `<span class="pi-wb-count">已选 ${picked.size} 条</span>` : ""}</div>${bookBar(s, entries)}`;
+    return entries.length ? picked ? `${head}${section("已开启", on, "没有开启的条目", "", "", picked)}
+            ${section("已关闭", off, "没有关闭的条目", "", "", picked)}` : `${head}${section("已开启", on, "没有开启的条目", bulkBtn('data-act="wb-bulk" data-group="on"', "全部关闭"), s.openKey)}
         ${section("已关闭", off, "没有关闭的条目", bulkBtn('data-act="wb-bulk" data-group="off"', "全部开启"), s.openKey)}
-        ${acuSection(entries, s.openFields || /* @__PURE__ */ new Set())}`;
+        ${acuSection(entries, s.openFields || /* @__PURE__ */ new Set())}` : `${head}<p class="pi-hint">没有条目</p>`;
   }
   function acuSection(entries, openFields) {
     let fields = groupByField(entries);
@@ -3794,27 +3913,34 @@ ${parsed.body}` : parsed.body;
     };
     return `<div class="pi-wb-sec"><div class="pi-wb-sec-hd">数据库条目<small>${total}</small></div>${fields.map(sub).join("")}</div>`;
   }
+  function listedBooks(s) {
+    let books = [...boundBookNames()], add = (name, source) => {
+      books.some((item) => item.name === name) || books.push({ name, source });
+    }, names = allBookNames();
+    for (let name of names) name.startsWith("剧情注入器·") && add(name, "专用");
+    for (let name of s.extra || []) names.includes(name) && add(name, "其他");
+    return books;
+  }
   function render7(view) {
-    let s = st6(view), fallback = allBookNames().filter((name) => name.startsWith("剧情注入器·")), list = [...boundBookNames(), ...fallback.filter((name) => !boundBookNames().some((item) => item.name === name)).map((name) => ({ name, source: "专用" }))].map((book) => {
+    let s = st6(view), list = listedBooks(s).map((book) => {
       let open = s.book === book.name, entries = open && s.entries ? s.entries : null;
       return `<div class="pi-entry"><div class="pi-entry-hd" data-act="open-book" data-book="${esc(book.name)}">
-            ${open ? ICONS.caretDown : ICONS.caret}<span class="pi-etitle" title="${esc(book.name)}">${esc(book.name)}</span><span class="pi-badge">${esc(book.source)}</span>
-            ${book.source === "专用" ? `<button type="button" class="pi-btn is-sm is-danger" data-act="delete-book" data-book="${esc(book.name)}">整本删除</button>` : ""}</div>
+            ${open ? ICONS.caretDown : ICONS.caret}<span class="pi-etitle" title="${esc(book.name)}">${esc(book.name)}</span><span class="pi-badge">${esc(book.source)}</span></div>
             ${entries ? `<div class="pi-entry-bd">${bookBody(s, entries)}</div>` : ""}</div>`;
     }).join("");
-    return `<div class="pi-card pi-wb"><h3>当前角色卡的世界书</h3>
-        <p class="pi-hint">「${esc(cardName() || "未打开角色卡")}」关联的世界书。</p>
+    return `<div class="pi-card pi-wb"><h3>「${esc(cardName() || "未打开角色卡")}」的世界书</h3>
         <p class="pi-hint is-warn">注意：这里的操作真的会修改你的世界书！</p>
+        <div class="pi-tbar is-c3 is-flat">${tbtn("book-new", "bookPlus", "新建世界书")}${tbtn("book-import", "upload", "导入")}${tbtn("book-open", "folder", "打开其他")}</div>
         ${list || '<p class="pi-hint">没有关联的世界书。</p>'}</div>`;
   }
   var splitKeys = (text) => String(text || "").split(/[,，、\n]/).map((item) => item.trim()).filter(Boolean);
   function editPatch(target) {
     let field = target.dataset.f, value = target.value;
-    return field === "constant" ? { constant: value === "1" } : field === "key" || field === "keysecondary" ? { [field]: splitKeys(value) } : field === "position" || field === "role" ? { [field]: Number(value) } : field === "depth" || field === "order" ? { [field]: Math.max(0, Math.round(Number(value) || 0)) } : field === "content" ? { content: value } : null;
+    return field === "constant" ? { constant: value === "1" } : field === "key" || field === "keysecondary" ? { [field]: splitKeys(value) } : field === "position" || field === "role" ? { [field]: Number(value) } : field === "depth" || field === "order" ? { [field]: Math.max(0, Math.round(Number(value) || 0)) } : field === "content" || field === "comment" ? { [field]: value } : null;
   }
   async function saveEdit(view, target) {
     let key = target.dataset.wbEdit, patch = editPatch(target);
-    !patch || !(st6(view).entries || []).some((item) => item.key === key) || (await updateEntry(st6(view).book, key, patch), st6(view).entries = bookEntries(await loadBook(st6(view).book)), target.tagName === "SELECT" && view.renderBody());
+    !patch || !(st6(view).entries || []).some((item) => item.key === key) || (await updateEntry(st6(view).book, key, patch), st6(view).entries = bookEntries(await loadBook(st6(view).book)), (target.tagName === "SELECT" || target.dataset.f === "comment") && view.renderBody());
   }
   async function onChange4(view, target) {
     if (target.dataset.wbPick) {
@@ -3907,17 +4033,81 @@ ${parsed.body}` : parsed.body;
       let s = st6(view);
       if (s.book === target.dataset.book)
         return s.book = "", s.entries = null, view.renderBody();
-      s.book = target.dataset.book, s.entries = null, s.openKey = "", s.tokens = null, s.picking = !1, s.picked = /* @__PURE__ */ new Set(), await reloadBook(view);
+      await openBook(view, target.dataset.book);
+    },
+    async "book-new"(view) {
+      let name = await promptDialog({ title: "新建世界书", label: "名称" });
+      name != null && (await openBook(view, await createBook(name)), toast("success", `已新建「${name.trim()}」。`));
+    },
+    // 导入酒馆导出的世界书 json（{ entries: {...} }），名字默认取文件名，重名时另起名字。
+    async "book-import"(view) {
+      let [file] = await pickFiles({ accept: ".json,application/json" });
+      if (!file) return;
+      let data;
+      try {
+        data = JSON.parse(await file.text());
+      } catch {
+        throw new Error("文件不是有效的 JSON");
+      }
+      if (!data || typeof data.entries != "object" || Array.isArray(data.entries)) throw new Error("文件里没有世界书条目（entries）");
+      let name = file.name.replace(/\.json$/i, "");
+      allBookNames().includes(name) && (name = await promptDialog({ title: "导入世界书", label: `已有「${name}」，请换一个名字`, value: `${name}-导入` }), name == null) || (await openBook(view, await createBook(name, data)), toast("success", `已导入「${name.trim()}」，${Object.keys(data.entries).length} 条。`));
+    },
+    async "book-open"(view) {
+      let shown = new Set(listedBooks(st6(view)).map((book) => book.name)), names = allBookNames().filter((name2) => !shown.has(name2));
+      if (!names.length) return toast("info", "没有其他世界书。");
+      let name = await openDialog({
+        title: "打开其他世界书",
+        html: `<div class="pi-pick-list">${names.map((item) => `<button type="button" class="pi-btn is-block" data-dlg-value="${esc(item)}">${esc(item)}</button>`).join("")}</div>`,
+        actions: [{ label: "取消", value: null }]
+      });
+      name && await openBook(view, name);
+    },
+    async "book-rename"(view) {
+      let from = st6(view).book, to = await promptDialog({ title: "重命名世界书", label: "新名称", value: from });
+      if (to == null || to.trim() === from) return;
+      let result = await renameBook(from, to);
+      result.failed.length ? toast("warning", `已另存为「${result.name}」，但${result.failed.join("、")}的绑定没能改过去，旧书「${from}」保留，请在酒馆里手动改绑定后删除。`) : toast("success", `已重命名为「${result.name}」。`), await openBook(view, result.name);
+    },
+    async "book-copy"(view) {
+      let s = st6(view), to = await promptDialog({ title: "另存副本", label: "副本名称", value: `${s.book}-副本` });
+      if (to == null) return;
+      let name = await duplicateBook(s.book, to);
+      s.extra = [.../* @__PURE__ */ new Set([...s.extra || [], name])], toast("success", `已另存为「${name}」。`), view.renderBody();
+    },
+    async "book-export"(view) {
+      let s = st6(view);
+      downloadBlob(`${s.book}.json`, JSON.stringify(await loadBook(s.book), null, 2));
+    },
+    async "book-delete"(view) {
+      let s = st6(view), name = s.book;
+      if (!await confirmDialog({ title: `删除世界书「${name}」`, body: "先下载整本备份，再删除并解除聊天、角色卡和全局的绑定，无法撤销。", list: [`${s.entries.length} 条条目`], okLabel: "删除", danger: !0 })) return;
+      downloadBlob(`${name}-备份.json`, JSON.stringify(await loadBook(name), null, 2));
+      let result = await removeBook(name);
+      result.failed.length ? toast("warning", `已删除，但${result.failed.join("、")}的绑定没能解除，请在酒馆里检查。`) : toast("success", `已删除「${name}」。`), s.book = "", s.entries = null, s.extra = (s.extra || []).filter((item) => item !== name), view.renderBody();
+    },
+    async "wb-add"(view) {
+      let s = st6(view), [key] = await addEntries(s.book);
+      await reloadBook(view), s.openKey = key, view.renderBody();
+    },
+    async "wb-dup"(view, target) {
+      await addEntries(st6(view).book, [target.dataset.key]), await reloadBook(view);
+    },
+    "wb-pick-on": (view) => setPicked(view, !1),
+    "wb-pick-off": (view) => setPicked(view, !0),
+    async "wb-pick-delete"(view) {
+      let s = st6(view), entries = pickedEntries(s);
+      if (!await confirmDialog({ title: `从「${s.book}」删除 ${entries.length} 条`, body: "删除前会下载这些条目的备份。", list: previewList(entries.map((entry) => entry.title)), okLabel: "删除", danger: !0 })) return;
+      let backup = await deleteEntries(s.book, entries.map((entry) => entry.key));
+      downloadBlob(`${s.book}-已删条目备份.json`, JSON.stringify(backup, null, 2)), s.picked = /* @__PURE__ */ new Set(), await reloadBook(view);
     },
     "wb-picking"(view) {
       let s = st6(view);
       s.picking = !s.picking, s.picked = /* @__PURE__ */ new Set(), s.openKey = "", view.renderBody();
     },
-    "wb-pick-all"(view, target) {
-      let s = st6(view), list = GROUPS[target.dataset.group](s.entries || []);
-      for (let entry of list)
-        target.dataset.on === "1" ? s.picked.add(entry.key) : s.picked.delete(entry.key);
-      view.renderBody();
+    "wb-pick-all"(view) {
+      let s = st6(view), list = handwritten(s.entries || []), all = list.every((entry) => s.picked.has(entry.key));
+      s.picked = all ? /* @__PURE__ */ new Set() : new Set(list.map((entry) => entry.key)), view.renderBody();
     },
     // 关键词里写成「甲，乙、丙」的一整条拆成三个，去掉首尾标点与空格、重复项；/正则/ 形式的关键词不动。
     async "wb-punct"(view) {
@@ -3964,12 +4154,17 @@ ${parsed.body}` : parsed.body;
       if (!await confirmDialog({ title: `从「${st6(view).book}」删除条目`, body: "删除前会下载这个条目的备份。", list: titles, okLabel: "删除", danger: !0 })) return;
       let backup = await deleteEntries(st6(view).book, keys);
       downloadBlob(`${st6(view).book}-已删条目备份.json`, JSON.stringify(backup, null, 2)), await reloadBook(view);
-    },
-    async "delete-book"(view, target) {
-      let name = target.dataset.book;
-      await confirmDialog({ title: "删除专用世界书", list: [name], body: "先下载整本备份再删除。", okLabel: "删除", danger: !0 }) && (downloadBlob(`${name}-备份.json`, JSON.stringify(await loadBook(name), null, 2)), await deleteBook(name), st6(view).book = "", view.renderBody());
     }
-  }, refreshOn6 = ["chat"];
+  };
+  async function setPicked(view, disabled) {
+    let s = st6(view);
+    await setEntriesDisabled(s.book, [...s.picked], disabled), await reloadBook(view);
+  }
+  async function openBook(view, name) {
+    let s = st6(view);
+    listedBooks(s).some((book) => book.name === name) || (s.extra = [.../* @__PURE__ */ new Set([...s.extra || [], name])]), s.book = name, s.entries = null, s.openKey = "", s.tokens = null, s.picking = !1, s.picked = /* @__PURE__ */ new Set(), await reloadBook(view);
+  }
+  var refreshOn6 = ["chat"];
 
   // src/ui/page-diag.js
   var page_diag_exports = {};
@@ -4347,7 +4542,7 @@ ${parsed.body}` : parsed.body;
   }
 
   // src/index.js
-  var VERSION = "0.1.9", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.1.10", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")

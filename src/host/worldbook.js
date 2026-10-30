@@ -80,7 +80,7 @@ export function setEntriesDisabled(name, keys, disabled) {
 }
 
 // 改一条的触发与位置：constant 常驻 / 关键词触发，key 主要关键词，keysecondary 次要关键词，position/depth/role/order 与酒馆一致。
-const ENTRY_FIELDS = ['constant', 'key', 'keysecondary', 'position', 'depth', 'role', 'order', 'content'];
+const ENTRY_FIELDS = ['comment', 'constant', 'key', 'keysecondary', 'position', 'depth', 'role', 'order', 'content'];
 
 export function updateEntry(name, key, patch) {
     return queued(name, async () => {
@@ -102,7 +102,7 @@ export function patchEntries(name, patches) {
             const entry = data.entries[key];
             if (!entry) continue;
             backup.entries[key] = clone(entry);
-            for (const field of [...ENTRY_FIELDS, 'comment']) if (Object.prototype.hasOwnProperty.call(patch, field)) entry[field] = patch[field];
+            for (const field of ENTRY_FIELDS) if (Object.prototype.hasOwnProperty.call(patch, field)) entry[field] = patch[field];
             if (Object.prototype.hasOwnProperty.call(patch, 'keysecondary')) entry.selective = patch.keysecondary.length > 0;
         }
         await saveBook(name, data);
@@ -161,6 +161,99 @@ export async function deleteBook(name) {
     if (!res.ok) throw new Error(`删除世界书失败（HTTP ${res.status}）`);
     const c = ctx();
     if (c && typeof c.updateWorldInfoList === 'function') await c.updateWorldInfoList();
+}
+
+// 新条目的默认字段与酒馆新建条目一致：关键词触发、角色定义之后、顺序 100。
+const BLANK_ENTRY = {
+    key: [], keysecondary: [], comment: '新条目', content: '', constant: false, selective: true, selectiveLogic: 0,
+    addMemo: true, order: 100, position: 1, disable: false, excludeRecursion: false, preventRecursion: false,
+    probability: 100, useProbability: true, depth: 4, group: '', groupOverride: false, groupWeight: 100,
+    scanDepth: null, caseSensitive: null, matchWholeWords: null, useGroupScoring: null, automationId: '', role: null,
+};
+
+const nextUid = data => Object.values(data.entries).reduce((max, entry) => Math.max(max, Number(entry.uid) || 0), -1) + 1;
+
+// 新建或复制条目：sources 为空时新建一条空白条目，否则逐条复制（标题加「副本」）。返回新条目的 key。
+export function addEntries(name, sources = []) {
+    return queued(name, async () => {
+        const data = clone(await loadBook(name));
+        const list = sources.length ? sources.map(key => data.entries[key]).filter(Boolean) : [BLANK_ENTRY];
+        const keys = [];
+        for (const entry of list) {
+            const uid = nextUid(data);
+            data.entries[uid] = { ...clone(entry), uid, displayIndex: uid, ...(sources.length ? { comment: `${entry.comment || ''}（副本）` } : {}) };
+            keys.push(String(uid));
+        }
+        await saveBook(name, data);
+        return keys;
+    });
+}
+
+export async function createBook(name, data = { entries: {} }) {
+    const value = String(name || '').trim();
+    if (!value) throw new Error('请填写世界书名称');
+    if (allBookNames().includes(value)) throw new Error(`已有名为「${value}」的世界书`);
+    await saveBook(value, data);
+    const c = ctx();
+    if (c && typeof c.updateWorldInfoList === 'function') await c.updateWorldInfoList();
+    return value;
+}
+
+// 把绑定从旧名字换到新名字：聊天世界书、当前角色的主/附加世界书、全局启用列表。返回没能改过去的位置。
+async function rebind(from, to) {
+    const c = ctx();
+    const h = helper();
+    const failed = [];
+    const meta = c && c.chatMetadata;
+    if (meta && meta.world_info === from) {
+        if (to) meta.world_info = to;
+        else delete meta.world_info;
+        if (typeof c.saveMetadata === 'function') await c.saveMetadata();
+    }
+    try {
+        const bound = h && typeof h.getCharWorldbookNames === 'function' ? h.getCharWorldbookNames('current') : null;
+        const additional = bound && Array.isArray(bound.additional) ? bound.additional : [];
+        if (bound && (bound.primary === from || additional.includes(from))) {
+            if (typeof h.rebindCharWorldbooks !== 'function') throw new Error('no rebind');
+            await h.rebindCharWorldbooks('current', {
+                primary: bound.primary === from ? to || null : bound.primary,
+                additional: additional.map(item => (item === from ? to : item)).filter(Boolean),
+            });
+        }
+    } catch {
+        failed.push('角色卡');
+    }
+    try {
+        const global = h && typeof h.getGlobalWorldbookNames === 'function' ? h.getGlobalWorldbookNames() : null;
+        if (Array.isArray(global) && global.includes(from) && typeof h.rebindGlobalWorldbooks === 'function') {
+            await h.rebindGlobalWorldbooks(global.map(item => (item === from ? to : item)).filter(Boolean));
+        }
+    } catch {
+        failed.push('全局');
+    }
+    return failed;
+}
+
+// 改名 = 另存为新名字 + 改绑定 + 删除旧书。绑定没改成功时保留旧书，避免角色卡指向不存在的世界书。
+export async function renameBook(from, to) {
+    const name = String(to || '').trim();
+    if (!name || name === from) throw new Error('请填写新的名称');
+    const data = await queued(from, () => loadBook(from));
+    await createBook(name, clone(data));
+    const failed = await rebind(from, name);
+    if (!failed.length) await deleteBook(from);
+    return { name, failed };
+}
+
+export async function duplicateBook(from, to) {
+    return createBook(to, clone(await queued(from, () => loadBook(from))));
+}
+
+// 删除整本并解除聊天、角色卡、全局里对它的绑定。
+export async function removeBook(name) {
+    const failed = await rebind(name, '');
+    await deleteBook(name);
+    return { failed };
 }
 
 // 回退方案 D：专用世界书，条目全部常驻；只在聊天未绑世界书时自动绑定。

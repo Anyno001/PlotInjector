@@ -63,18 +63,18 @@ function guideCard(view, s) {
         <textarea class="pi-ta is-mono is-tall" data-guide>${esc(s.guide || BUILTIN_GUIDE)}</textarea>` : ''}</div>`;
 }
 
-// 这里只改三档速度各自的说明文字；用哪一档在执行页按聊天选，所以默认收起，展开后用下拉框选要编辑的档，不做成选择器的样子。
-function paceCard(view, s) {
+// 推进速度说明并在「阶段推进」里：平时只占一行，展开后用下拉框选要编辑的档。用哪一档在执行页按聊天选。
+function paceRow(view, s) {
     const open = st(view).paceOpen;
     const changed = PACES.filter(item => s.paceText[item.value]).map(item => item.label);
     const current = view.runtime.activeId() ? view.runtime.progress().pace : '';
     const pace = PACES.some(item => item.value === st(view).pace) ? st(view).pace : current || 'normal';
     const pick = PACES.map(item => ({ value: item.value, label: `${item.label}${item.value === current ? '（当前聊天使用）' : ''}${s.paceText[item.value] ? '·已改' : ''}` }));
-    return `<div class="pi-card"><h3>推进速度说明${changed.length ? `<span class="pi-badge">已修改 ${changed.join("、")}</span>` : ""}<span class="pi-spacer"></span>
-            <button type="button" class="pi-btn is-sm is-ghost" data-act="pace-toggle">${open ? '收起' : '编辑'}</button></h3>
-        ${open ? `<label class="pi-field"><span>编辑哪一档的说明</span><select class="pi-sel" data-pace-pick>${options(pick, pace)}</select></label>
+    return `<div class="pi-set-row"><span>推进速度说明</span>${changed.length ? `<span class="pi-badge">已修改 ${changed.join('、')}</span>` : ''}<span class="pi-spacer"></span>
+            <button type="button" class="pi-btn is-sm is-ghost" data-act="pace-toggle">${open ? '收起' : '编辑'}</button></div>
+        ${open ? `<div class="pi-set-sub"><label class="pi-field"><span>编辑哪一档的说明</span><select class="pi-sel" data-pace-pick>${options(pick, pace)}</select></label>
         <textarea class="pi-ta" rows="3" data-pace-text="${pace}">${esc(paceText(s, pace))}</textarea>
-        <div class="pi-tools is-c1 is-end"><button type="button" class="pi-btn is-sm" data-act="pace-reset" data-pace="${pace}"${s.paceText[pace] ? '' : ' disabled'}>恢复默认</button></div>` : ''}</div>`;
+        <div class="pi-tools is-c1 is-end"><button type="button" class="pi-btn is-sm" data-act="pace-reset" data-pace="${pace}"${s.paceText[pace] ? '' : ' disabled'}>恢复默认</button></div></div>` : ''}`;
 }
 
 export function render(view) {
@@ -83,13 +83,13 @@ export function render(view) {
     const offModes = [{ value: 'ask', label: '弹出提醒' }, { value: 'auto', label: '自动改写后续阶段（可撤销）' }, { value: 'off', label: '不检查偏离' }];
     return `<div class="pi-card"><h3>注入内容</h3>
         <label class="pi-field"><span>详细条目的标签名</span><input class="pi-inp" data-set="tagName" value="${esc(s.tagName)}"></label></div>
-        ${paceCard(view, s)}
         <div class="pi-card"><h3>阶段推进</h3>
         <div class="pi-pair"><label class="pi-field"><span>检测间隔（楼）</span><input class="pi-inp" type="number" min="1" data-set="checkEvery" value="${s.checkEvery}"></label>
             <label class="pi-field"><span>每次读取楼数</span><input class="pi-inp" type="number" min="1" data-set="checkFloors" value="${s.checkFloors}"></label></div>
         <label class="pi-field"><span>判定阶段已演完后</span><select class="pi-sel" data-set="handleMode">${options(modes, s.handleMode)}</select></label>
         <label class="pi-field"><span>偏离大纲时</span><select class="pi-sel" data-set="offTrackMode">${options(offModes, s.offTrackMode)}</select></label>
-        <label class="pi-check"><input type="checkbox" data-set="carryOver"${s.carryOver ? ' checked' : ''}><span>没演的支线与世界动态延续到后面的阶段</span></label></div>
+        <label class="pi-check"><input type="checkbox" data-set="carryOver"${s.carryOver ? ' checked' : ''}><span>没演的支线与世界动态延续到后面的阶段</span></label>
+        ${paceRow(view, s)}</div>
         ${llmCard(view, s)}
         ${guideCard(view, s)}`;
 }

@@ -413,7 +413,7 @@ test('世界书管理：token 统计、修复关键词标点、批量选择后�
 
     doc.querySelector('[data-act="wb-picking"]').click();
     await tick(10);
-    doc.querySelector('[data-act="wb-pick-all"][data-group="on"]').click();
+    doc.querySelector('[data-act="wb-pick-all"]').click();
     await tick(10);
     doc.querySelector('[data-act="wb-order"]').click();
     await tick(10);
@@ -435,6 +435,74 @@ test('世界书管理：token 统计、修复关键词标点、批量选择后�
     await okDialog();
     assert.deepEqual(Object.values(books.新书.entries).map(entry => `${entry.uid}:${entry.comment}`), ['0:甲']);
     assert.deepEqual(Object.keys(books.测试书.entries), ['1']);
+    assert.equal(host.win.__errors.length, 0, host.win.__errors.join('\n'));
+    await host.instance.destroy();
+});
+
+test('世界书工具栏：新建条目改标题、复制条目、批量关闭与删除、重命名改聊天绑定、删除本书解除绑定', async () => {
+    const host = await boot();
+    await withProject(host);
+    const books = { 测试书: { entries: { 0: { uid: 0, comment: '甲', content: '甲内容', key: ['甲'], keysecondary: [], disable: false, order: 100 } } } };
+    host.context.chatMetadata.world_info = '测试书';
+    host.context.getWorldInfoNames = () => Object.keys(books);
+    host.context.loadWorldInfo = async name => (books[name] ? JSON.parse(JSON.stringify(books[name])) : null);
+    host.context.saveWorldInfo = async (name, data) => { books[name] = JSON.parse(JSON.stringify(data)); };
+    const fetch = host.win.fetch;
+    host.win.fetch = async (url, init = {}) => {
+        if (String(url) === '/api/worldinfo/delete') { delete books[JSON.parse(init.body).name]; return { ok: true, status: 200, text: async () => '' }; }
+        return fetch(url, init);
+    };
+    host.click();
+    await tick(10);
+    const doc = host.win.document;
+    const fire = (node, type) => node.dispatchEvent(new host.win.Event(type, { bubbles: true }));
+    const ok = async () => { await tick(10); doc.querySelector('.pi-dialog .pi-dlg-acts .is-primary, .pi-dialog .pi-dlg-acts .is-danger').click(); await tick(30); };
+    doc.querySelector('.pi-side [data-act="page"][data-page="books"]').click();
+    await tick(10);
+    doc.querySelector('[data-act="open-book"]').click();
+    await tick(30);
+
+    doc.querySelector('[data-act="wb-add"]').click();
+    await tick(30);
+    const title = doc.querySelector('[data-wb-edit="1"][data-f="comment"]');
+    assert.ok(title, '新建后展开新条目');
+    title.value = '乙';
+    fire(title, 'change');
+    await tick(30);
+    assert.equal(books.测试书.entries[1].comment, '乙');
+    doc.querySelector('[data-act="wb-dup"][data-key="0"]').click();
+    await tick(30);
+    assert.equal(books.测试书.entries[2].comment, '甲（副本）');
+
+    doc.querySelector('[data-act="wb-picking"]').click();
+    await tick(10);
+    doc.querySelector('[data-act="wb-pick-all"]').click();
+    await tick(10);
+    doc.querySelector('[data-act="wb-pick-off"]').click();
+    await tick(30);
+    assert.ok([0, 1, 2].every(i => books.测试书.entries[i].disable));
+    const pick = doc.querySelector('[data-wb-pick="0"]');
+    pick.checked = false;
+    fire(pick, 'change');
+    await tick(10);
+    doc.querySelector('[data-act="wb-pick-delete"]').click();
+    await ok();
+    assert.deepEqual(Object.keys(books.测试书.entries), ['0']);
+
+    doc.querySelector('[data-act="wb-picking"]').click();
+    await tick(10);
+    doc.querySelector('[data-act="book-rename"]').click();
+    await tick(10);
+    doc.querySelector('.pi-dialog [data-dlg-input]').value = '改名书';
+    await ok();
+    assert.equal(books.测试书, undefined);
+    assert.ok(books.改名书);
+    assert.equal(host.context.chatMetadata.world_info, '改名书');
+
+    doc.querySelector('[data-act="book-delete"]').click();
+    await ok();
+    assert.equal(books.改名书, undefined);
+    assert.equal(host.context.chatMetadata.world_info, undefined);
     assert.equal(host.win.__errors.length, 0, host.win.__errors.join('\n'));
     await host.instance.destroy();
 });

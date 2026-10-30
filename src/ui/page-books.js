@@ -3,8 +3,8 @@ import { acuField, groupByField } from '../core/acu.js';
 import { estimateTokens } from '../core/tokens.js';
 import { buildPattern, orderPlan, punctPlan, regexPlan } from '../core/wbtools.js';
 import { cardName, countTokens, downloadBlob, hostDocument, toast } from '../host/st.js';
-import { allBookNames, bookEntries, boundBookNames, deleteBook, deleteEntries, loadBook, patchEntries, setEntriesDisabled, transferEntries, updateEntry } from '../host/worldbook.js';
-import { confirmDialog, esc, openDialog, options } from './dom.js';
+import { addEntries, allBookNames, bookEntries, boundBookNames, createBook, deleteEntries, duplicateBook, loadBook, patchEntries, removeBook, renameBook, setEntriesDisabled, transferEntries, updateEntry } from '../host/worldbook.js';
+import { confirmDialog, esc, openDialog, options, pickFiles, promptDialog } from './dom.js';
 import { ICONS } from './styles.js';
 
 const st = view => view.tabState('books');
@@ -24,6 +24,7 @@ function editor(entry) {
     const atDepth = entry.position === 4;
     const key = esc(entry.key);
     return `<div class="pi-wb-edit">
+        <label class="pi-field"><span>标题</span><input class="pi-inp" data-wb-edit="${key}" data-f="comment" value="${esc(entry.comment)}"></label>
         <div class="pi-pair ${atDepth ? 'is-c4' : ''}">
             <label class="pi-field"><span>位置</span><select class="pi-sel" data-wb-edit="${key}" data-f="position">${options(POSITIONS, entry.position)}</select></label>
             ${atDepth ? `<label class="pi-field"><span>深度</span><input class="pi-inp" type="number" min="0" data-wb-edit="${key}" data-f="depth" value="${entry.depth}"></label>
@@ -41,6 +42,7 @@ function entryRow(entry, open) {
     return `<div class="pi-wb-item"><div class="pi-wb-row${entry.disabled ? ' is-off' : ''}">${toggle(entry)}
         <button type="button" class="pi-wb-name" data-act="wb-open" data-key="${esc(entry.key)}">${open ? ICONS.caretDown : ICONS.caret}${title(entry)}</button>
         ${entry.constant ? '<span class="pi-badge">常驻</span>' : ''}
+        <button type="button" class="pi-icon-btn" data-act="wb-dup" data-key="${esc(entry.key)}" title="复制条目">${ICONS.copy}</button>
         <button type="button" class="pi-icon-btn is-danger" data-act="wb-delete" data-key="${esc(entry.key)}" title="删除">${ICONS.trash}</button></div>
         ${open ? editor(entry) : ''}</div>`;
 }
@@ -59,38 +61,43 @@ function section(name, entries, empty, bulk, openKey, picked) {
         ${rows || `<p class="pi-hint">${empty}</p>`}</div>`;
 }
 
-function pickBulk(group, entries, picked) {
-    const all = entries.length && entries.every(entry => picked.has(entry.key));
-    return bulkBtn(`data-act="wb-pick-all" data-group="${group}" data-on="${all ? '0' : '1'}"`, all ? '取消全选' : '全选');
-}
-
 function tokenText(s) {
     if (!s.tokens) return '<span class="pi-badge">统计中…</span>';
     const mark = s.tokens.exact ? '' : '≈';
     return `<span class="pi-badge is-accent">开启 ${mark}${s.tokens.on} token</span><span class="pi-badge">全部 ${mark}${s.tokens.all} token</span>`;
 }
 
+// 工具栏按钮：图标在上、短名在下，一行等宽。
+const tbtn = (act, icon, label, { on = false, danger = false, disabled = false } = {}) => `<button type="button" class="pi-tbtn${on ? ' is-on' : ''}${danger ? ' is-danger' : ''}" data-act="${act}" title="${label}"${disabled ? ' disabled' : ''}>${ICONS[icon]}<span>${label}</span></button>`;
+
+// 平时是整本世界书的操作；批量选择时整栏换成针对选中条目的操作。
+function bookBar(s, entries) {
+    if (!s.picking) {
+        const none = !handwritten(entries).length;
+        return `<div class="pi-tbar">${tbtn('wb-add', 'entryPlus', '新建条目')}${tbtn('wb-picking', 'checks', '批量选择', { disabled: none })}
+            ${tbtn('wb-punct', 'wand', '修复标点', { disabled: none })}${tbtn('wb-regex', 'replace', '正则替换', { disabled: none })}
+            ${tbtn('book-rename', 'pencil', '重命名')}${tbtn('book-copy', 'copy', '另存副本')}
+            ${tbtn('book-export', 'download', '导出')}${tbtn('book-delete', 'trash', '删除本书', { danger: true })}</div>`;
+    }
+    const none = !s.picked.size;
+    const all = handwritten(entries).every(entry => s.picked.has(entry.key));
+    return `<div class="pi-tbar">${tbtn('wb-pick-all', 'checkAll', all ? '取消全选' : '全选', { on: all })}${tbtn('wb-move', 'move', '迁移', { disabled: none })}
+        ${tbtn('wb-order', 'sort', '顺序重排', { disabled: none })}${tbtn('wb-regex', 'replace', '正则替换', { disabled: none })}
+        ${tbtn('wb-pick-on', 'eye', '开启', { disabled: none })}${tbtn('wb-pick-off', 'eyeOff', '关闭', { disabled: none })}
+        ${tbtn('wb-pick-delete', 'trash', '删除', { danger: true, disabled: none })}${tbtn('wb-picking', 'close', '退出')}</div>`;
+}
+
 function bookBody(s, entries) {
-    if (!entries.length) return '<p class="pi-hint">没有条目</p>';
     const picked = s.picking ? s.picked : null;
     const on = GROUPS.on(entries);
     const off = GROUPS.off(entries);
-    // 统计与已选数放同一行；按钮一行等宽，批量选择时整行换成针对选中条目的操作。
-    const none = picked && !picked.size ? ' disabled' : '';
-    const buttons = picked
-        ? `<div class="pi-tools is-c4"><button type="button" class="pi-btn is-sm is-primary" data-act="wb-move"${none}>迁移到其他世界书</button>
-            <button type="button" class="pi-btn is-sm" data-act="wb-order"${none}>顺序重排</button>
-            <button type="button" class="pi-btn is-sm" data-act="wb-regex"${none}>正则替换</button>
-            <button type="button" class="pi-btn is-sm" data-act="wb-picking">退出批量选择</button></div>`
-        : `<div class="pi-tools is-c3"><button type="button" class="pi-btn is-sm" data-act="wb-picking">批量选择</button>
-            <button type="button" class="pi-btn is-sm" data-act="wb-punct">修复关键词标点</button>
-            <button type="button" class="pi-btn is-sm" data-act="wb-regex">正则替换</button></div>`;
-    const tools = `<div class="pi-wb-info"><span class="pi-wb-tokens">${tokenText(s)}</span>${picked ? `<span class="pi-wb-count">已选 ${picked.size} 条</span>` : ''}</div>${buttons}`;
+    const head = `<div class="pi-wb-info"><span class="pi-wb-tokens">${tokenText(s)}</span>${picked ? `<span class="pi-wb-count">已选 ${picked.size} 条</span>` : ''}</div>${bookBar(s, entries)}`;
+    if (!entries.length) return `${head}<p class="pi-hint">没有条目</p>`;
     if (picked) {
-        return `${tools}${section('已开启', on, '没有开启的条目', pickBulk('on', on, picked), '', picked)}
-            ${section('已关闭', off, '没有关闭的条目', pickBulk('off', off, picked), '', picked)}`;
+        return `${head}${section('已开启', on, '没有开启的条目', '', '', picked)}
+            ${section('已关闭', off, '没有关闭的条目', '', '', picked)}`;
     }
-    return `${tools}${section('已开启', on, '没有开启的条目', bulkBtn('data-act="wb-bulk" data-group="on"', '全部关闭'), s.openKey)}
+    return `${head}${section('已开启', on, '没有开启的条目', bulkBtn('data-act="wb-bulk" data-group="on"', '全部关闭'), s.openKey)}
         ${section('已关闭', off, '没有关闭的条目', bulkBtn('data-act="wb-bulk" data-group="off"', '全部开启'), s.openKey)}
         ${acuSection(entries, s.openFields || new Set())}`;
 }
@@ -111,21 +118,28 @@ function acuSection(entries, openFields) {
     return `<div class="pi-wb-sec"><div class="pi-wb-sec-hd">数据库条目<small>${total}</small></div>${fields.map(sub).join('')}</div>`;
 }
 
+// 列出：当前卡绑定的、剧情注入器专用的、本次打开过的其他世界书（只在本次会话里记住）。
+function listedBooks(s) {
+    const books = [...boundBookNames()];
+    const add = (name, source) => { if (!books.some(item => item.name === name)) books.push({ name, source }); };
+    const names = allBookNames();
+    for (const name of names) if (name.startsWith('剧情注入器·')) add(name, '专用');
+    for (const name of s.extra || []) if (names.includes(name)) add(name, '其他');
+    return books;
+}
+
 export function render(view) {
     const s = st(view);
-    const fallback = allBookNames().filter(name => name.startsWith('剧情注入器·'));
-    const books = [...boundBookNames(), ...fallback.filter(name => !boundBookNames().some(item => item.name === name)).map(name => ({ name, source: '专用' }))];
-    const list = books.map(book => {
+    const list = listedBooks(s).map(book => {
         const open = s.book === book.name;
         const entries = open && s.entries ? s.entries : null;
         return `<div class="pi-entry"><div class="pi-entry-hd" data-act="open-book" data-book="${esc(book.name)}">
-            ${open ? ICONS.caretDown : ICONS.caret}<span class="pi-etitle" title="${esc(book.name)}">${esc(book.name)}</span><span class="pi-badge">${esc(book.source)}</span>
-            ${book.source === '专用' ? `<button type="button" class="pi-btn is-sm is-danger" data-act="delete-book" data-book="${esc(book.name)}">整本删除</button>` : ''}</div>
+            ${open ? ICONS.caretDown : ICONS.caret}<span class="pi-etitle" title="${esc(book.name)}">${esc(book.name)}</span><span class="pi-badge">${esc(book.source)}</span></div>
             ${entries ? `<div class="pi-entry-bd">${bookBody(s, entries)}</div>` : ''}</div>`;
     }).join('');
-    return `<div class="pi-card pi-wb"><h3>当前角色卡的世界书</h3>
-        <p class="pi-hint">「${esc(cardName() || '未打开角色卡')}」关联的世界书。</p>
+    return `<div class="pi-card pi-wb"><h3>「${esc(cardName() || '未打开角色卡')}」的世界书</h3>
         <p class="pi-hint is-warn">注意：这里的操作真的会修改你的世界书！</p>
+        <div class="pi-tbar is-c3 is-flat">${tbtn('book-new', 'bookPlus', '新建世界书')}${tbtn('book-import', 'upload', '导入')}${tbtn('book-open', 'folder', '打开其他')}</div>
         ${list || '<p class="pi-hint">没有关联的世界书。</p>'}</div>`;
 }
 
@@ -138,7 +152,7 @@ function editPatch(target) {
     if (field === 'key' || field === 'keysecondary') return { [field]: splitKeys(value) };
     if (field === 'position' || field === 'role') return { [field]: Number(value) };
     if (field === 'depth' || field === 'order') return { [field]: Math.max(0, Math.round(Number(value) || 0)) };
-    if (field === 'content') return { content: value };
+    if (field === 'content' || field === 'comment') return { [field]: value };
     return null;
 }
 
@@ -150,7 +164,7 @@ async function saveEdit(view, target) {
     if (!patch || !(st(view).entries || []).some(item => item.key === key)) return;
     await updateEntry(st(view).book, key, patch);
     st(view).entries = bookEntries(await loadBook(st(view).book));
-    if (target.tagName === 'SELECT') view.renderBody();
+    if (target.tagName === 'SELECT' || target.dataset.f === 'comment') view.renderBody();
 }
 
 export async function onChange(view, target) {
@@ -285,11 +299,96 @@ export const actions = {
         if (event.target.closest('button,input')) return;
         const s = st(view);
         if (s.book === target.dataset.book) { s.book = ''; s.entries = null; return view.renderBody(); }
-        s.book = target.dataset.book;
+        await openBook(view, target.dataset.book);
+    },
+    async 'book-new'(view) {
+        const name = await promptDialog({ title: '新建世界书', label: '名称' });
+        if (name == null) return;
+        await openBook(view, await createBook(name));
+        toast('success', `已新建「${name.trim()}」。`);
+    },
+    // 导入酒馆导出的世界书 json（{ entries: {...} }），名字默认取文件名，重名时另起名字。
+    async 'book-import'(view) {
+        const [file] = await pickFiles({ accept: '.json,application/json' });
+        if (!file) return;
+        let data;
+        try { data = JSON.parse(await file.text()); } catch { throw new Error('文件不是有效的 JSON'); }
+        if (!data || typeof data.entries !== 'object' || Array.isArray(data.entries)) throw new Error('文件里没有世界书条目（entries）');
+        let name = file.name.replace(/\.json$/i, '');
+        if (allBookNames().includes(name)) {
+            name = await promptDialog({ title: '导入世界书', label: `已有「${name}」，请换一个名字`, value: `${name}-导入` });
+            if (name == null) return;
+        }
+        await openBook(view, await createBook(name, data));
+        toast('success', `已导入「${name.trim()}」，${Object.keys(data.entries).length} 条。`);
+    },
+    async 'book-open'(view) {
+        const shown = new Set(listedBooks(st(view)).map(book => book.name));
+        const names = allBookNames().filter(name => !shown.has(name));
+        if (!names.length) return toast('info', '没有其他世界书。');
+        const name = await openDialog({
+            title: '打开其他世界书',
+            html: `<div class="pi-pick-list">${names.map(item => `<button type="button" class="pi-btn is-block" data-dlg-value="${esc(item)}">${esc(item)}</button>`).join('')}</div>`,
+            actions: [{ label: '取消', value: null }],
+        });
+        if (name) await openBook(view, name);
+    },
+    async 'book-rename'(view) {
+        const s = st(view);
+        const from = s.book;
+        const to = await promptDialog({ title: '重命名世界书', label: '新名称', value: from });
+        if (to == null || to.trim() === from) return;
+        const result = await renameBook(from, to);
+        if (result.failed.length) toast('warning', `已另存为「${result.name}」，但${result.failed.join('、')}的绑定没能改过去，旧书「${from}」保留，请在酒馆里手动改绑定后删除。`);
+        else toast('success', `已重命名为「${result.name}」。`);
+        await openBook(view, result.name);
+    },
+    async 'book-copy'(view) {
+        const s = st(view);
+        const to = await promptDialog({ title: '另存副本', label: '副本名称', value: `${s.book}-副本` });
+        if (to == null) return;
+        const name = await duplicateBook(s.book, to);
+        s.extra = [...new Set([...(s.extra || []), name])];
+        toast('success', `已另存为「${name}」。`);
+        view.renderBody();
+    },
+    async 'book-export'(view) {
+        const s = st(view);
+        downloadBlob(`${s.book}.json`, JSON.stringify(await loadBook(s.book), null, 2));
+    },
+    async 'book-delete'(view) {
+        const s = st(view);
+        const name = s.book;
+        const ok = await confirmDialog({ title: `删除世界书「${name}」`, body: '先下载整本备份，再删除并解除聊天、角色卡和全局的绑定，无法撤销。', list: [`${s.entries.length} 条条目`], okLabel: '删除', danger: true });
+        if (!ok) return;
+        downloadBlob(`${name}-备份.json`, JSON.stringify(await loadBook(name), null, 2));
+        const result = await removeBook(name);
+        if (result.failed.length) toast('warning', `已删除，但${result.failed.join('、')}的绑定没能解除，请在酒馆里检查。`);
+        else toast('success', `已删除「${name}」。`);
+        s.book = '';
         s.entries = null;
-        s.openKey = '';
-        s.tokens = null;
-        s.picking = false;
+        s.extra = (s.extra || []).filter(item => item !== name);
+        view.renderBody();
+    },
+    async 'wb-add'(view) {
+        const s = st(view);
+        const [key] = await addEntries(s.book);
+        await reloadBook(view);
+        s.openKey = key;
+        view.renderBody();
+    },
+    async 'wb-dup'(view, target) {
+        await addEntries(st(view).book, [target.dataset.key]);
+        await reloadBook(view);
+    },
+    'wb-pick-on': view => setPicked(view, false),
+    'wb-pick-off': view => setPicked(view, true),
+    async 'wb-pick-delete'(view) {
+        const s = st(view);
+        const entries = pickedEntries(s);
+        if (!(await confirmDialog({ title: `从「${s.book}」删除 ${entries.length} 条`, body: '删除前会下载这些条目的备份。', list: previewList(entries.map(entry => entry.title)), okLabel: '删除', danger: true }))) return;
+        const backup = await deleteEntries(s.book, entries.map(entry => entry.key));
+        downloadBlob(`${s.book}-已删条目备份.json`, JSON.stringify(backup, null, 2));
         s.picked = new Set();
         await reloadBook(view);
     },
@@ -300,13 +399,11 @@ export const actions = {
         s.openKey = '';
         view.renderBody();
     },
-    'wb-pick-all'(view, target) {
+    'wb-pick-all'(view) {
         const s = st(view);
-        const list = GROUPS[target.dataset.group](s.entries || []);
-        for (const entry of list) {
-            if (target.dataset.on === '1') s.picked.add(entry.key);
-            else s.picked.delete(entry.key);
-        }
+        const list = handwritten(s.entries || []);
+        const all = list.every(entry => s.picked.has(entry.key));
+        s.picked = all ? new Set() : new Set(list.map(entry => entry.key));
         view.renderBody();
     },
     // 关键词里写成「甲，乙、丙」的一整条拆成三个，去掉首尾标点与空格、重复项；/正则/ 形式的关键词不动。
@@ -370,14 +467,25 @@ export const actions = {
         downloadBlob(`${st(view).book}-已删条目备份.json`, JSON.stringify(backup, null, 2));
         await reloadBook(view);
     },
-    async 'delete-book'(view, target) {
-        const name = target.dataset.book;
-        if (!(await confirmDialog({ title: '删除专用世界书', list: [name], body: '先下载整本备份再删除。', okLabel: '删除', danger: true }))) return;
-        downloadBlob(`${name}-备份.json`, JSON.stringify(await loadBook(name), null, 2));
-        await deleteBook(name);
-        st(view).book = '';
-        view.renderBody();
-    },
 };
+
+async function setPicked(view, disabled) {
+    const s = st(view);
+    await setEntriesDisabled(s.book, [...s.picked], disabled);
+    await reloadBook(view);
+}
+
+// 打开一本书并记进本次会话的列表（非当前卡绑定的书也能留在列表里）。
+async function openBook(view, name) {
+    const s = st(view);
+    if (!listedBooks(s).some(book => book.name === name)) s.extra = [...new Set([...(s.extra || []), name])];
+    s.book = name;
+    s.entries = null;
+    s.openKey = '';
+    s.tokens = null;
+    s.picking = false;
+    s.picked = new Set();
+    await reloadBook(view);
+}
 
 export const refreshOn = ['chat'];
