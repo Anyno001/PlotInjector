@@ -14,6 +14,9 @@ export const VIRTUAL_WORLD = '剧情注入器';
 const LOG_MAX = 40;
 // 主回复没结束时先挂起检测，最多等这么久。
 const PENDING_MAX_MS = 30000;
+// 检测请求失败后自动重试的次数与间隔，全部失败才弹提示。
+const CHECK_RETRIES = 3;
+const RETRY_GAP_MS = 2000;
 
 const placeOf = unit => `${volumeLabel(unit.volume.key)}·${stageLabel(unit.stage.key)}`;
 
@@ -289,8 +292,19 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
             const list = units();
             const states = unitStates(list, prog);
             const index = buildIndexText(list, states, prog, { carryOver: settings.carryOver });
-            const reply = await requestLlm(buildCheckMessages(unit, index, floors), resolveLlm(settings, 'check'), { timeoutMs: 120000 });
-            const result = parseCheckReply(reply);
+            const messages = buildCheckMessages(unit, index, floors);
+            let result = null;
+            for (let attempt = 0; ; attempt += 1) {
+                try {
+                    result = parseCheckReply(await requestLlm(messages, resolveLlm(settings, 'check'), { timeoutMs: 120000 }));
+                    break;
+                } catch (error) {
+                    if (attempt >= CHECK_RETRIES) throw error;
+                    log(`检测请求失败：${error.message}，${RETRY_GAP_MS / 1000} 秒后第 ${attempt + 1} 次重试`);
+                    await new Promise(resolve => view.setTimeout(resolve, RETRY_GAP_MS));
+                }
+            }
+            notice.hide('checkfail');
             let next = currentProgress();
             next = uncheckByNames(next, unit.id, stageNodes(unit.stage.data), result.done);
             if (settings.carryOver) for (const item of carriedNodes(list, states, prog)) next = uncheckByNames(next, item.unit.id, [item.node], result.done);
@@ -308,7 +322,15 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
         } catch (error) {
             setProgress({ ...currentProgress(), lastCheckFloor: floorCount() });
             log(`检测失败：${error.message}`);
-            toast(manual ? 'error' : 'warning', `进度检测失败：${error.message}`);
+            notice.show({
+                id: 'checkfail',
+                title: '进度检测失败',
+                body: `已自动重试 ${CHECK_RETRIES} 次：${error.message}`,
+                actions: [
+                    { label: '重试', primary: true, run: () => checkNow({ manual }) },
+                    { label: '关闭', run: () => {} },
+                ],
+            });
             return null;
         } finally {
             checking = false;

@@ -318,6 +318,10 @@ label.pi-wb-row{cursor:pointer}
 .pi-tree-list{max-height:220px}
 .pi-msg{max-width:94%}
 .pi-body{padding:10px}
+.pi-notices{justify-content:flex-start;align-items:stretch;padding:calc(10px + env(safe-area-inset-top,0px)) 10px 10px}
+.pi-notice{width:auto}
+.pi-dialog{align-items:flex-start;box-sizing:border-box;padding-top:calc(56px + env(safe-area-inset-top,0px))}
+.pi-dialog-box{max-height:calc(100dvh - 80px)}
 }
 `;
 

@@ -1,4 +1,4 @@
-// PlotInjector v0.1.13
+// PlotInjector v0.1.14
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -1500,7 +1500,7 @@ ${text}` }
   }
 
   // src/app/runtime.js
-  var VIRTUAL_WORLD = "剧情注入器", LOG_MAX = 40, PENDING_MAX_MS = 3e4, placeOf = (unit) => `${volumeLabel(unit.volume.key)}·${stageLabel(unit.stage.key)}`;
+  var VIRTUAL_WORLD = "剧情注入器", LOG_MAX = 40, PENDING_MAX_MS = 3e4, CHECK_RETRIES = 3, RETRY_GAP_MS = 2e3, placeOf = (unit) => `${volumeLabel(unit.volume.key)}·${stageLabel(unit.stage.key)}`;
   function createRuntime({ data, notice, emit, askReason = async () => "" }) {
     let view = hostWindow(), progress = null, progressFor = "", checking = !1, mismatchShownFor = "", fallbackTimer = 0, generating = !1, chatStartFloors = 0, pendingCheck = !1, pendingTimer = 0, listeners = [], stats = {}, logs = [];
     function log(text) {
@@ -1679,11 +1679,30 @@ ${text}` }
         return log("跳过检测：没有可检测的正文"), manual && toast("info", "还没有可检测的正文。"), null;
       checking = !0, log(`开始检测：${placeOf(unit)}，读最近 ${floors.length} 楼${manual ? "（手动）" : ""}`), emit("checking");
       try {
-        let list = units(), states = unitStates(list, prog), index = buildIndexText(list, states, prog, { carryOver: settings.carryOver }), reply2 = await requestLlm(buildCheckMessages(unit, index, floors), resolveLlm(settings, "check"), { timeoutMs: 12e4 }), result = parseCheckReply(reply2), next = currentProgress();
+        let list = units(), states = unitStates(list, prog), index = buildIndexText(list, states, prog, { carryOver: settings.carryOver }), messages = buildCheckMessages(unit, index, floors), result = null;
+        for (let attempt = 0; ; attempt += 1)
+          try {
+            result = parseCheckReply(await requestLlm(messages, resolveLlm(settings, "check"), { timeoutMs: 12e4 }));
+            break;
+          } catch (error) {
+            if (attempt >= CHECK_RETRIES) throw error;
+            log(`检测请求失败：${error.message}，${RETRY_GAP_MS / 1e3} 秒后第 ${attempt + 1} 次重试`), await new Promise((resolve) => view.setTimeout(resolve, RETRY_GAP_MS));
+          }
+        notice.hide("checkfail");
+        let next = currentProgress();
         if (next = uncheckByNames(next, unit.id, stageNodes(unit.stage.data), result.done), settings.carryOver) for (let item of carriedNodes(list, states, prog)) next = uncheckByNames(next, item.unit.id, [item.node], result.done);
         return next = { ...next, lastCheckFloor: floorCount() }, setProgress(next), log(`检测完成：已演 ${result.done.length} 个节点${result.stageDone ? "，本阶段已演完" : ""}${result.offTrack ? "，偏离大纲" : ""}`), result.offTrack && settings.offTrackMode !== "off" && !next.offMuted.includes(unit.id) ? handleOffTrack(unit, result.offReason || result.reason) : result.stageDone ? proposeAdvance({ unit, reason: result.reason }) : manual && toast("info", result.reason || "本阶段尚未演完。"), result;
       } catch (error) {
-        return setProgress({ ...currentProgress(), lastCheckFloor: floorCount() }), log(`检测失败：${error.message}`), toast(manual ? "error" : "warning", `进度检测失败：${error.message}`), null;
+        return setProgress({ ...currentProgress(), lastCheckFloor: floorCount() }), log(`检测失败：${error.message}`), notice.show({
+          id: "checkfail",
+          title: "进度检测失败",
+          body: `已自动重试 ${CHECK_RETRIES} 次：${error.message}`,
+          actions: [
+            { label: "重试", primary: !0, run: () => checkNow({ manual }) },
+            { label: "关闭", run: () => {
+            } }
+          ]
+        }), null;
       } finally {
         checking = !1, emit("checked");
       }
@@ -2162,6 +2181,10 @@ label.pi-wb-row{cursor:pointer}
 .pi-tree-list{max-height:220px}
 .pi-msg{max-width:94%}
 .pi-body{padding:10px}
+.pi-notices{justify-content:flex-start;align-items:stretch;padding:calc(10px + env(safe-area-inset-top,0px)) 10px 10px}
+.pi-notice{width:auto}
+.pi-dialog{align-items:flex-start;box-sizing:border-box;padding-top:calc(56px + env(safe-area-inset-top,0px))}
+.pi-dialog-box{max-height:calc(100dvh - 80px)}
 }
 `, ICONS = {
     close: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
@@ -4729,7 +4752,7 @@ ${parsed.body}` : parsed.body;
   }
 
   // src/index.js
-  var VERSION = "0.1.13", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.1.14", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")

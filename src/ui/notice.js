@@ -1,7 +1,7 @@
 import { hostDocument, hostWindow } from '../host/st.js';
 import { el, esc } from './dom.js';
 
-// 右下角小卡片：同 id 只留一张，新的替换旧的。
+// 右下角小卡片（手机在顶部）：同 id 只留一张，新的替换旧的。
 export function createNotices() {
     const doc = hostDocument();
     const view = hostWindow();
