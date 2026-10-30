@@ -1,4 +1,4 @@
-// PlotInjector v0.1.10
+// PlotInjector v0.1.11
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -232,8 +232,11 @@
     { value: 1, label: "用户" },
     { value: 2, label: "AI" }
   ], DEFAULT_PARAMS = {
-    setting: { position: 1, depth: 4, role: 0, order: 80, enabled: !0 },
-    detail: { position: 4, depth: 4, role: 0, order: 100, enabled: !0 }
+    setting: { position: 0, depth: 4, role: 0, order: 80, enabled: !0 },
+    detail: { position: 0, depth: 4, role: 0, order: 100, enabled: !0 }
+  }, OLD_DEFAULT_PARAMS = {
+    setting: { position: 1, depth: 4, role: 0, order: 80 },
+    detail: { position: 4, depth: 4, role: 0, order: 100 }
   };
   function positionLabel(entry) {
     let pos = POSITIONS.find((item) => item.value === Number(entry.position));
@@ -244,7 +247,7 @@
   }
   function pickParams(base, slot) {
     let out = { ...base };
-    for (let key of ["position", "depth", "role", "order", "enabled"])
+    for (let key of ["enabled"])
       slot && slot[key] !== void 0 && slot[key] !== null && slot[key] !== "" && (out[key] = slot[key]);
     return out.position = Number(out.position), out.depth = Math.max(0, Number(out.depth) || 0), out.role = Number(out.role) || 0, out.order = Number(out.order) || 0, out.enabled = out.enabled !== !1, out;
   }
@@ -583,8 +586,18 @@ ${body}${carriedText(carried)}
           stages: vol.stages.filter((stage) => stage && stage.data && typeof stage.data == "object").map((stage) => ({ id: stage.id || makeId("s"), key: String(stage.key || "阶段"), data: stage.data }))
         }))
       },
-      defaults: { ...JSON.parse(JSON.stringify(DEFAULT_PARAMS)), ...src.defaults || {} }
+      defaults: normalizeDefaults(src.defaults)
     };
+  }
+  function normalizeDefaults(value) {
+    let out = JSON.parse(JSON.stringify(DEFAULT_PARAMS));
+    for (let kind of Object.keys(out)) {
+      let saved = value && value[kind];
+      if (!saved || typeof saved != "object") continue;
+      let old = OLD_DEFAULT_PARAMS[kind], untouched = Object.keys(old).every((key) => Number(saved[key]) === old[key]);
+      out[kind] = untouched ? { ...out[kind], enabled: saved.enabled !== !1 } : { ...out[kind], ...saved };
+    }
+    return out;
   }
   function emptyChat() {
     return { version: 1, summary: "", messages: [], refs: { setting: !0, outline: !1, progress: !0, floors: 10, memo: DEFAULT_MEMO, wb: DEFAULT_WB_RULE } };
@@ -695,9 +708,19 @@ ${body}${carriedText(carried)}
     for (let i = 0; i < bytes.length; i += 32768) binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 32768));
     return hostWindow().btoa(binary);
   }
-  var filePath = (name) => `user/files/${name}`;
+  var filePath = (name) => `user/files/${name}`, READ_TIMEOUT_MS = 2e4;
+  async function fetchWithTimeout(url, init) {
+    let view = hostWindow(), controller = new view.AbortController(), timer = view.setTimeout(() => controller.abort(), READ_TIMEOUT_MS);
+    try {
+      return await fetchFn()(url, { ...init, signal: controller.signal });
+    } catch (error) {
+      throw error && error.name === "AbortError" ? new Error("读取超时，请检查网络") : error;
+    } finally {
+      view.clearTimeout(timer);
+    }
+  }
   async function readJsonFile(name) {
-    let res = await fetchFn()(`/${filePath(name)}?t=${Date.now()}`, { cache: "no-store" });
+    let res = await fetchWithTimeout(`/${filePath(name)}?t=${Date.now()}`, { cache: "no-store" });
     if (res.status === 404) return null;
     if (!res.ok) throw new Error(`读取 ${name} 失败（HTTP ${res.status}）`);
     let text = await res.text();
@@ -1793,6 +1816,7 @@ ${text}` }
       recentFloors,
       rewriteRest,
       diagnose,
+      note: log,
       resetBase,
       rebind: start,
       injectMode: () => hasEntriesEvent() ? "virtual" : "book",
@@ -1804,17 +1828,20 @@ ${text}` }
 
   // src/ui/styles.js
   var CSS = `
-.pi-root{--pi-accent:#E8507B;--pi-accent-soft:#FEF0F3;--pi-dark:#1E1E2E;--pi-bg:#FFFFFF;--pi-surf:#F8F9FB;--pi-line:#E8E8EE;--pi-txt:#1E1E2E;--pi-txt2:#7C7C8A;--pi-ok:#2E9E6A;--pi-ok-soft:#E9F7F0;--pi-warn:#C98A12;--pi-warn-soft:#FDF5E4;--pi-danger:#D64545;--pi-danger-soft:#FDEDED;--pi-add:#E9F7F0;--pi-del:#FDEDED;--pi-on-dark:#FFFFFF;--pi-user-bg:#1E1E2E;--pi-user-txt:#FFFFFF;--pi-user-txt2:#B4B4C0;--pi-user-hover:#34344A;--pi-r:14px;--pi-r-in:10px;--pi-shadow:0 8px 32px rgba(0,0,0,.15);--pi-font:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei","PingFang SC",sans-serif;--pi-mono:Consolas,"JetBrains Mono",monospace;font-family:var(--pi-font);color:var(--pi-txt);font-size:14px;line-height:1.55}
-.pi-root.is-night{--pi-accent:#F0688F;--pi-accent-soft:#3A2230;--pi-dark:#E6E6EE;--pi-bg:#1F1F2A;--pi-surf:#16161F;--pi-line:#33333F;--pi-txt:#E6E6EE;--pi-txt2:#9A9AA8;--pi-ok:#4CC08A;--pi-ok-soft:#1C3329;--pi-warn:#E0A63A;--pi-warn-soft:#3A3020;--pi-danger:#EF6B6B;--pi-danger-soft:#3D2224;--pi-add:#1C3329;--pi-del:#3D2224;--pi-on-dark:#16161F;--pi-user-bg:#3A3A4C;--pi-user-txt:#E6E6EE;--pi-user-txt2:#A8A8B6;--pi-user-hover:#4A4A5E;--pi-shadow:0 8px 32px rgba(0,0,0,.5);color-scheme:dark}
+.pi-root{--pi-accent:#E8507B;--pi-accent-soft:#FEF0F3;--pi-dark:#1E1E2E;--pi-bg:#FFFFFF;--pi-surf:#F3F4F7;--pi-fill:#F5F6F8;--pi-fill2:#ECEDF1;--pi-line:#ECECF1;--pi-rule:#C9CAD3;--pi-txt:#1E1E2E;--pi-txt2:#7C7C8A;--pi-ok:#2E9E6A;--pi-ok-soft:#E9F7F0;--pi-warn:#C98A12;--pi-warn-soft:#FDF5E4;--pi-danger:#D64545;--pi-danger-soft:#FDEDED;--pi-add:#E9F7F0;--pi-del:#FDEDED;--pi-on-dark:#FFFFFF;--pi-user-bg:#1E1E2E;--pi-user-txt:#FFFFFF;--pi-user-txt2:#B4B4C0;--pi-user-hover:#34344A;--pi-r:14px;--pi-r-in:10px;--pi-shadow:0 8px 32px rgba(0,0,0,.15);--pi-font:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei","PingFang SC",sans-serif;--pi-mono:Consolas,"JetBrains Mono",monospace;font-family:var(--pi-font);color:var(--pi-txt);font-size:14px;line-height:1.55}
+.pi-root.is-night{--pi-accent:#F0688F;--pi-accent-soft:#3A2230;--pi-dark:#E6E6EE;--pi-bg:#1F1F2A;--pi-surf:#16161F;--pi-fill:#282835;--pi-fill2:#313140;--pi-line:#2C2C38;--pi-rule:#4A4A5A;--pi-txt:#E6E6EE;--pi-txt2:#9A9AA8;--pi-ok:#4CC08A;--pi-ok-soft:#1C3329;--pi-warn:#E0A63A;--pi-warn-soft:#3A3020;--pi-danger:#EF6B6B;--pi-danger-soft:#3D2224;--pi-add:#1C3329;--pi-del:#3D2224;--pi-on-dark:#16161F;--pi-user-bg:#3A3A4C;--pi-user-txt:#E6E6EE;--pi-user-txt2:#A8A8B6;--pi-user-hover:#4A4A5E;--pi-shadow:0 8px 32px rgba(0,0,0,.5);color-scheme:dark}
 .pi-root *,.pi-root *::before,.pi-root *::after{box-sizing:border-box}
 .pi-root ::-webkit-scrollbar{display:none}
 .pi-root [hidden]{display:none!important}
+.pi-root input[type=checkbox]{accent-color:var(--pi-accent)}
 .pi-overlay{position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;z-index:10050;display:flex;align-items:center;justify-content:center;background:rgba(20,20,30,.28)}
 .pi-panel{position:relative;width:880px;max-width:96vw;height:88vh;max-height:88vh;background:var(--pi-surf);border-radius:var(--pi-r);box-shadow:var(--pi-shadow);display:grid;grid-template-columns:220px 1fr;overflow:hidden}
 .pi-scrim{display:none}
-.pi-side{background:var(--pi-bg);border-right:1px solid var(--pi-line);display:flex;flex-direction:column;min-height:0}
+.pi-side{background:var(--pi-bg);display:flex;flex-direction:column;min-height:0}
 .pi-side-hd{padding:14px 14px 8px;font-weight:700;font-size:15px;color:var(--pi-dark);display:flex;align-items:center;gap:6px}
 .pi-side-hd small{font-weight:400;color:var(--pi-txt2);font-size:11px}
+.pi-side-hd .pi-spacer{flex:1}
+.pi-icon-btn.is-on{color:var(--pi-accent);background:var(--pi-accent-soft)}
 .pi-plist{flex:1;overflow-y:auto;padding:0 8px;scrollbar-width:none}
 .pi-group{margin:6px 0}
 .pi-group-hd{display:flex;align-items:center;gap:4px;width:100%;padding:4px 6px;border:0;background:none;color:var(--pi-txt2);font-size:12px;cursor:pointer;font-family:inherit}
@@ -1829,9 +1856,9 @@ ${text}` }
 .pi-pitem.is-sel{background:var(--pi-accent-soft);color:var(--pi-accent);font-weight:600}
 .pi-pitem .pi-dot{width:7px;height:7px;border-radius:50%;background:var(--pi-accent);flex-shrink:0}
 .pi-pitem .pi-pname{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pi-side-ft{padding:8px;border-top:1px solid var(--pi-line);display:flex;flex-direction:column;gap:4px}
+.pi-side-ft{padding:8px;display:flex;flex-direction:column;gap:4px}
 .pi-main{display:flex;flex-direction:column;min-width:0;min-height:0}
-.pi-top{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:8px;padding:10px 14px;background:var(--pi-bg);border-bottom:1px solid var(--pi-line)}
+.pi-top{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:8px;padding:10px 14px;background:var(--pi-bg)}
 .pi-top-lead{grid-column:1;display:flex;align-items:center;gap:4px;min-width:0}
 .pi-top-title{font-weight:700;color:var(--pi-dark);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pi-top-end{grid-column:3;justify-self:end;display:flex;align-items:center;gap:6px}
@@ -1847,8 +1874,9 @@ ${text}` }
 .pi-close:hover{color:var(--pi-dark)}
 .pi-body{flex:1;overflow-y:auto;padding:14px;scrollbar-width:none;min-height:0}
 .pi-body.is-chat{display:flex;flex-direction:column;overflow:hidden}
-.pi-card{background:var(--pi-bg);border-radius:var(--pi-r);padding:12px 14px;margin-bottom:10px}
-.pi-card h3{margin:0 0 8px;font-size:12px;font-weight:700;color:var(--pi-dark);display:flex;align-items:center;gap:8px}
+.pi-card{background:var(--pi-bg);border-radius:var(--pi-r);padding:14px 16px;margin-bottom:10px}
+.pi-card h3{margin:0 0 10px;font-size:14px;font-weight:600;color:var(--pi-dark);display:flex;align-items:center;gap:8px;min-height:26px}
+.pi-card h3 .pi-meta{font-size:12px;font-weight:400;color:var(--pi-txt2)}
 .pi-card h3 .pi-spacer{flex:1}
 .pi-hint{font-size:12px;color:var(--pi-txt2);margin:4px 0}
 .pi-hint.is-warn{color:var(--pi-warn);font-weight:600}
@@ -1863,7 +1891,7 @@ ${text}` }
 .pi-inline>.pi-btn{min-height:0;flex-shrink:0;width:96px}
 .pi-inline>.pi-grow{flex:1;min-width:0;display:flex}
 .pi-inline>.pi-grow>.pi-inp,.pi-inline>.pi-grow>.pi-sel{flex:1;min-width:0}
-.pi-equal,.pi-tools{display:grid;grid-template-columns:repeat(var(--pi-cols,3),minmax(0,150px));gap:8px;justify-content:center;align-items:stretch}
+.pi-equal,.pi-tools{display:grid;grid-template-columns:repeat(var(--pi-cols,3),minmax(0,1fr));gap:8px;align-items:stretch}
 .pi-equal>.pi-btn,.pi-tools>.pi-btn{width:100%;padding:0 6px;white-space:normal;line-height:1.3}
 .pi-equal.is-one,.pi-tools.is-c1{--pi-cols:1}
 .pi-tools.is-c2{--pi-cols:2}
@@ -1871,19 +1899,19 @@ ${text}` }
 .pi-tools.is-c4{--pi-cols:4}
 .pi-tools{margin:2px 0 10px}
 .pi-tools.is-end{margin:10px 0 0}
-.pi-tools>.pi-check{grid-column:1/-1;justify-content:center;padding:0}
+.pi-tools>.pi-check{grid-column:1/-1;padding:0}
 .pi-pair{display:grid;grid-template-columns:repeat(var(--pi-cols,2),minmax(0,1fr));gap:0 10px}
 .pi-pair.is-c3{--pi-cols:3}
 .pi-pair.is-c4{--pi-cols:4}
 .pi-pair .pi-inp,.pi-pair .pi-sel{width:100%}
 .pi-presets{display:flex;flex-direction:column;gap:6px;margin-bottom:8px}
 .pi-preset-pick{flex:1;min-width:0;display:flex;align-items:center;gap:8px;padding:4px 0;border:0;background:none;color:inherit;cursor:pointer;text-align:left;font-family:inherit}
-.pi-preset:hover{border-color:var(--pi-accent)}
-.pi-preset{display:flex;align-items:center;gap:8px;padding:4px 6px 4px 12px;border:1.5px solid var(--pi-line);border-radius:var(--pi-r-in);min-width:0}
+.pi-preset:hover{background:var(--pi-fill2)}
+.pi-preset{display:flex;align-items:center;gap:8px;padding:4px 6px 4px 12px;background:var(--pi-fill);border-radius:var(--pi-r-in);min-width:0}
 .pi-preset-name{font-weight:600;font-size:13px;flex-shrink:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pi-preset-model{flex:1;min-width:0;font-size:12px;color:var(--pi-txt2);font-family:var(--pi-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pi-wb-sec{margin-top:8px}
-.pi-wb-sec-hd{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--pi-txt2);padding:2px 0 4px;border-bottom:1px solid var(--pi-line);margin-bottom:2px}
+.pi-wb-sec-hd{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--pi-txt2);padding:4px 0;margin-bottom:2px}
 .pi-wb-sec-hd small{font-weight:400}
 .pi-wb-bulk{margin-left:auto;display:flex;gap:4px}
 .pi-wb-bulk>.pi-btn{min-width:96px}
@@ -1894,7 +1922,7 @@ ${text}` }
 .pi-wb-item{min-width:0}
 .pi-wb-name{flex:1;min-width:0;display:flex;align-items:center;gap:4px;padding:0;border:0;background:none;color:inherit;font:inherit;cursor:pointer;text-align:left}
 .pi-wb-name .pi-wb-title{flex:1}
-.pi-wb-edit{margin:4px 0 10px 23px;padding:10px;border:1.5px solid var(--pi-line);border-radius:var(--pi-r-in)}
+.pi-wb-edit{margin:4px 0 10px 23px;padding:12px;background:var(--pi-fill);border-radius:var(--pi-r-in)}
 .pi-wb-memo{display:inline-flex;align-items:center;gap:4px;font-weight:500;flex-shrink:0}
 .pi-wb-memo{margin-left:auto;font-size:12px;color:var(--pi-txt2)}
 .pi-wb-memo .pi-inp.is-num{width:52px;height:26px;padding:2px 6px;font-size:12px;text-align:center}
@@ -1910,23 +1938,35 @@ ${text}` }
 .pi-wb-row input{width:15px;height:15px;margin:0;accent-color:var(--pi-accent);flex-shrink:0;cursor:pointer}
 .pi-wb-title{flex:1;min-width:0;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pi-wb-row.is-off .pi-wb-title{color:var(--pi-txt2)}
-.pi-wb-info{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:6px;margin:4px 0 10px}
-.pi-wb-tokens{display:contents}
-.pi-wb-count{font-size:12px;color:var(--pi-txt2);padding-left:4px}
 .pi-set-row{display:flex;align-items:center;gap:8px;margin-top:6px;padding-top:8px;border-top:1px solid var(--pi-line);font-size:12px;color:var(--pi-txt2);font-weight:500}
 .pi-set-row .pi-spacer{flex:1}
 .pi-set-sub{margin-top:6px}
-.pi-pick-list{display:flex;flex-direction:column;gap:6px;max-height:320px;overflow-y:auto}
-.pi-tbar{display:grid;grid-template-columns:repeat(var(--pi-cols,4),minmax(0,1fr));gap:4px;padding:6px;margin:0 0 10px;border:1.5px solid var(--pi-line);border-radius:var(--pi-r-in);background:var(--pi-surf)}
-.pi-tbar.is-c3{--pi-cols:3}
-.pi-tbar.is-flat{background:none;border-style:dashed}
-.pi-tbtn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-width:0;min-height:48px;padding:6px 2px;border:0;border-radius:8px;background:none;color:var(--pi-dark);font:inherit;font-size:11px;font-weight:600;line-height:1.2;cursor:pointer;text-align:center}
-.pi-tbtn svg{width:18px;height:18px;flex-shrink:0}
-.pi-tbtn>span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pi-tbtn:hover:not(:disabled){background:var(--pi-bg)}
-.pi-tbtn.is-on{background:var(--pi-bg);color:var(--pi-accent)}
-.pi-tbtn.is-danger{color:var(--pi-danger)}
+.pi-book{border-radius:var(--pi-r-in);margin:0 -6px}
+.pi-book+.pi-book{margin-top:2px}
+.pi-book-hd{display:flex;align-items:center;gap:8px;padding:9px 8px;border-radius:var(--pi-r-in);cursor:pointer}
+.pi-book-hd:hover{background:var(--pi-fill)}
+.pi-book-hd .pi-etitle{flex:1;min-width:0;font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pi-book.is-open>.pi-book-hd{background:var(--pi-fill)}
+.pi-book-bd{padding:6px 8px 10px}
+.pi-meta{font-size:12px;color:var(--pi-txt2);white-space:nowrap}
+.pi-tbar{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
+.pi-tbtn{display:inline-flex;align-items:center;gap:5px;height:30px;padding:0 11px 0 9px;border:0;border-radius:16px;background:var(--pi-fill);color:var(--pi-dark);font:inherit;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap}
+.pi-tbtn svg{width:14px;height:14px;flex-shrink:0;color:var(--pi-txt2)}
+.pi-tbtn:hover:not(:disabled){background:var(--pi-fill2)}
+.pi-tbtn.is-danger,.pi-tbtn.is-danger svg{color:var(--pi-danger)}
+.pi-tbtn.is-more{padding:0 9px;margin-left:auto}
 .pi-tbtn:disabled{opacity:.4;cursor:not-allowed}
+.pi-wb-info{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:2px 0 8px}
+.pi-wb-info.is-pick{gap:2px}
+.pi-wb-info .pi-spacer{flex:1}
+.pi-wb-tokens{display:contents}
+.pi-wb-count{font-size:12px;font-weight:600;color:var(--pi-dark)}
+.pi-menu-list{display:flex;flex-direction:column;gap:2px;max-height:360px;overflow-y:auto;margin:0 -6px}
+.pi-menu-item{display:flex;align-items:center;gap:10px;width:100%;padding:10px 10px;border:0;border-radius:var(--pi-r-in);background:none;color:var(--pi-dark);font:inherit;font-size:13px;text-align:left;cursor:pointer}
+.pi-menu-item:hover{background:var(--pi-fill)}
+.pi-menu-item svg{width:16px;height:16px;color:var(--pi-txt2);flex-shrink:0}
+.pi-menu-item.is-danger,.pi-menu-item.is-danger svg{color:var(--pi-danger)}
+.pi-menu-item>span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 label.pi-wb-row{cursor:pointer}
 .pi-acts{margin-top:12px}
 .pi-acts-top{margin-bottom:8px}
@@ -1934,27 +1974,26 @@ label.pi-wb-row{cursor:pointer}
 .pi-seg-btn{padding:5px 6px;border:0;border-radius:16px;background:none;color:var(--pi-txt2);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pi-seg-btn.is-sel{background:var(--pi-bg);color:var(--pi-dark);box-shadow:0 1px 3px rgba(0,0,0,.12)}
 .pi-inp,.pi-sel{height:36px}
-.pi-inp,.pi-sel,.pi-ta{width:100%;padding:7px 11px;border:1.5px solid var(--pi-line);border-radius:var(--pi-r-in);font-size:13px;color:var(--pi-txt);background:var(--pi-bg);outline:none;font-family:inherit}
-.pi-inp:focus,.pi-sel:focus,.pi-ta:focus{border-color:var(--pi-accent)}
+.pi-inp,.pi-sel,.pi-ta{width:100%;padding:7px 11px;border:1.5px solid transparent;border-radius:var(--pi-r-in);font-size:13px;color:var(--pi-txt);background:var(--pi-fill);outline:none;font-family:inherit}
+.pi-inp:focus,.pi-sel:focus,.pi-ta:focus{border-color:var(--pi-accent);background:var(--pi-bg)}
 .pi-inp.is-num{width:84px}
 .pi-ta{resize:vertical;min-height:80px;line-height:1.6}
 .pi-ta.is-mono{font-family:var(--pi-mono);font-size:12px;line-height:1.5}
 .pi-ta.is-tall{min-height:360px}
-.pi-btn{min-height:32px;padding:0 14px;border:1.5px solid var(--pi-line);border-radius:20px;background:var(--pi-bg);color:var(--pi-dark);font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:5px;white-space:nowrap;font-family:inherit}
-.pi-btn:hover{border-color:var(--pi-dark)}
+.pi-btn{min-height:32px;padding:0 14px;border:0;border-radius:20px;background:var(--pi-fill);color:var(--pi-dark);font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:5px;white-space:nowrap;font-family:inherit}
+.pi-btn:hover{background:var(--pi-fill2)}
 .pi-btn:active{transform:scale(.97)}
 .pi-btn:disabled{opacity:.45;cursor:not-allowed;transform:none}
-.pi-btn.is-primary{background:var(--pi-dark);border-color:var(--pi-dark);color:var(--pi-on-dark)}
+.pi-btn.is-primary{background:var(--pi-dark);color:var(--pi-on-dark)}
 .pi-btn.is-primary:hover{opacity:.86}
-.pi-btn.is-accent{background:var(--pi-accent);border-color:var(--pi-accent);color:var(--pi-bg)}
-.pi-btn.is-danger{color:var(--pi-danger);border-color:var(--pi-danger-soft)}
-.pi-btn.is-danger:hover{border-color:var(--pi-danger)}
-.pi-btn.is-ghost{border-color:transparent;background:none;color:var(--pi-txt2)}
-.pi-btn.is-ghost:hover{color:var(--pi-dark);background:var(--pi-surf)}
+.pi-btn.is-danger{color:var(--pi-danger);background:var(--pi-danger-soft)}
+.pi-btn.is-danger:hover{background:var(--pi-danger-soft);opacity:.8}
+.pi-btn.is-ghost{background:none;color:var(--pi-txt2)}
+.pi-btn.is-ghost:hover{color:var(--pi-dark);background:var(--pi-fill)}
 .pi-btn.is-ghost.is-danger{color:var(--pi-danger)}
 .pi-btn.is-sm{min-height:26px;padding:0 10px;font-size:12px}
 .pi-btn.is-block{width:100%;justify-content:flex-start}
-.pi-badge{display:inline-flex;align-items:center;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:600;background:var(--pi-surf);color:var(--pi-txt2);white-space:nowrap}
+.pi-badge{display:inline-flex;align-items:center;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:600;background:var(--pi-fill);color:var(--pi-txt2);white-space:nowrap}
 .pi-badge.is-accent{background:var(--pi-accent-soft);color:var(--pi-accent)}
 .pi-badge.is-ok{background:var(--pi-ok-soft);color:var(--pi-ok)}
 .pi-badge.is-warn{background:var(--pi-warn-soft);color:var(--pi-warn)}
@@ -1963,24 +2002,38 @@ label.pi-wb-row{cursor:pointer}
 .pi-check{display:flex;align-items:flex-start;gap:8px;padding:4px 0;font-size:13px;cursor:pointer}
 .pi-check input{width:15px;height:15px;margin-top:3px;accent-color:var(--pi-accent);flex-shrink:0;cursor:pointer}
 .pi-check.is-off{color:var(--pi-txt2);text-decoration:line-through}
-.pi-entry{border:1.5px solid var(--pi-line);border-radius:var(--pi-r-in);margin-bottom:8px;background:var(--pi-bg)}
+.pi-entry{border-radius:var(--pi-r-in);margin-bottom:6px;background:var(--pi-fill)}
+:is(.pi-entry,.pi-node,.pi-wb-edit) :is(.pi-inp,.pi-sel,.pi-ta,.pi-pre,.pi-badge,.pi-btn:not(.is-primary):not(.is-ghost):not(.is-danger)){background:var(--pi-bg)}
+:is(.pi-entry,.pi-node,.pi-wb-edit) .pi-btn:not(.is-primary):not(.is-ghost):not(.is-danger):hover{background:var(--pi-fill2)}
 .pi-entry.is-off{opacity:.55}
-.pi-entry-hd{display:flex;align-items:center;gap:8px;padding:8px 10px;cursor:pointer}
+.pi-entry-hd{display:flex;align-items:center;gap:8px;padding:9px 12px;cursor:pointer}
+.pi-entry-hd .pi-meta{font-size:12px;color:var(--pi-txt2);white-space:nowrap}
+.pi-entry-hd .pi-pos{font-size:11px;font-weight:600;color:var(--pi-txt2);background:var(--pi-bg);border-radius:6px;padding:1px 6px;white-space:nowrap}
 .pi-entry-hd .pi-etitle{flex:1;min-width:0;font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pi-entry-bd{padding:4px 10px 10px;border-top:1px dashed var(--pi-line)}
+.pi-entry-bd{padding:2px 12px 12px}
 .pi-pre{white-space:pre-wrap;word-break:break-word;font-family:var(--pi-mono);font-size:12px;line-height:1.5;background:var(--pi-surf);border-radius:var(--pi-r-in);padding:8px 10px;max-height:320px;overflow:auto;margin:6px 0 0}
-.pi-units{display:flex;flex-direction:column;gap:2px}
-.pi-unit{display:grid;grid-template-columns:52px minmax(0,1fr) 84px 76px;align-items:center;gap:8px;padding:6px 8px;border-radius:var(--pi-r-in);font-size:13px}
-.pi-unit>.pi-badge{justify-self:start}
-.pi-unit .pi-unit-act{justify-self:stretch}
-.pi-unit .pi-unit-act .pi-btn{width:100%;padding:0 4px}
-.pi-unit:hover{background:var(--pi-surf)}
-.pi-unit .pi-uname{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pi-unit.is-active{background:var(--pi-accent-soft)}
-.pi-unit .pi-sel{width:100%;height:28px;padding:2px 6px;font-size:12px;text-align:center;text-align-last:center}
-.pi-unmute{border:0;cursor:pointer;font-family:inherit;margin-left:4px}
-.pi-card-sub{padding:2px 8px 8px 30px}
-.pi-vol-hd{font-size:12px;font-weight:700;color:var(--pi-txt2);margin:8px 0 2px;padding:0 8px}
+.pi-tl-vol{font-size:12px;font-weight:600;color:var(--pi-txt2);margin:12px 0 4px}
+.pi-tl-vol:first-child{margin-top:4px}
+.pi-tl{position:relative}
+.pi-tl-item{position:relative;padding:0 0 4px 26px}
+.pi-tl-item::before{content:"";position:absolute;left:8px;top:22px;bottom:-4px;border-left:2px dashed var(--pi-rule)}
+.pi-tl-item:last-child::before{display:none}
+.pi-tl-item.is-done::before{border-left-style:solid;border-left-color:var(--pi-txt2)}
+.pi-tl-dot{position:absolute;left:1px;top:9px;width:16px;height:16px;border-radius:50%;border:3px solid var(--pi-rule);background:var(--pi-bg)}
+.pi-tl-item.is-done .pi-tl-dot{border-color:var(--pi-txt2);background:var(--pi-txt2)}
+.pi-tl-item.is-next .pi-tl-dot{border-color:var(--pi-dark)}
+.pi-tl-item.is-active .pi-tl-dot{border-color:var(--pi-accent);box-shadow:0 0 0 4px var(--pi-accent-soft)}
+.pi-tl-box{border-radius:var(--pi-r-in);padding:0 4px 0 10px}
+.pi-tl-item.is-active .pi-tl-box{background:var(--pi-fill);padding-bottom:8px}
+.pi-tl-hd{display:flex;align-items:center;gap:8px;min-height:34px}
+.pi-tl-name{flex:1;min-width:0;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pi-tl-item.is-done .pi-tl-name{color:var(--pi-txt2)}
+.pi-tl-item.is-active .pi-tl-name{font-weight:600}
+.pi-tl-state{font-size:12px;color:var(--pi-txt2);white-space:nowrap}
+.pi-tl-item.is-active .pi-tl-state{color:var(--pi-accent);font-weight:600}
+.pi-tl-nodes{padding:0 4px 0 2px}
+.pi-tl-nodes .pi-badge{background:var(--pi-bg)}
+.pi-tl-nodes .pi-hint{margin:6px 0 2px}
 .pi-tree{display:grid;grid-template-columns:220px 1fr;gap:10px;align-items:start}
 .pi-tree-list{background:var(--pi-bg);border-radius:var(--pi-r);padding:8px;max-height:calc(88vh - 140px);overflow-y:auto;scrollbar-width:none}
 .pi-titem{display:flex;align-items:center;gap:6px;width:100%;padding:5px 8px;border:0;border-radius:8px;background:none;text-align:left;font-size:13px;color:var(--pi-txt);cursor:pointer;font-family:inherit}
@@ -1989,7 +2042,7 @@ label.pi-wb-row{cursor:pointer}
 .pi-titem.is-vol{font-weight:700;color:var(--pi-dark)}
 .pi-titem.is-stage{padding-left:18px}
 .pi-titem .pi-pname{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pi-node{border:1.5px solid var(--pi-line);border-radius:var(--pi-r-in);padding:8px 10px;margin-bottom:8px}
+.pi-node{background:var(--pi-fill);border-radius:var(--pi-r-in);padding:10px 12px;margin-bottom:8px}
 .pi-pace{display:flex;align-items:center;gap:10px;margin:0 0 10px}
 .pi-pace-label{font-size:12px;color:var(--pi-txt2);font-weight:500;flex-shrink:0}
 .pi-pace .pi-seg{flex:1;margin:0}
@@ -2026,21 +2079,22 @@ label.pi-wb-row{cursor:pointer}
 .pi-msg.is-user .pi-btn.is-ghost:hover{color:var(--pi-user-txt);background:var(--pi-user-hover)}
 .pi-msg-fold{align-self:center;font-size:12px;color:var(--pi-txt2);background:var(--pi-bg);border-radius:20px;padding:4px 12px}
 .pi-compose{display:flex;gap:8px;align-items:center;padding-top:8px}
-.pi-compose .pi-ta{flex:1;height:44px;min-height:44px;resize:none;padding:10px 12px;line-height:1.5}
+.pi-compose .pi-ta{flex:1;height:44px;min-height:44px;resize:none;padding:10px 12px;line-height:1.5;background:var(--pi-bg)}
 .pi-send{width:40px;height:40px;border:0;border-radius:50%;background:var(--pi-dark);color:var(--pi-on-dark);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0}
 .pi-send:hover{opacity:.86}
 .pi-send:active{transform:scale(.95)}
 .pi-send:disabled{opacity:.45;cursor:not-allowed;transform:none}
 .pi-refs{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
-.pi-chip{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border:1.5px solid var(--pi-line);border-radius:20px;font-size:12px;cursor:pointer;background:var(--pi-bg);color:var(--pi-txt2);font-family:inherit}
-.pi-compose-side{width:40px;height:40px;border:1.5px solid var(--pi-line);border-radius:50%;background:var(--pi-bg);color:var(--pi-txt2);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0}
-.pi-compose-side:hover{color:var(--pi-danger);border-color:var(--pi-danger)}
+.pi-chip{display:inline-flex;align-items:center;gap:4px;padding:4px 11px;border:0;border-radius:20px;font-size:12px;cursor:pointer;background:var(--pi-bg);color:var(--pi-txt2);font-family:inherit}
+.pi-card .pi-chip{background:var(--pi-fill)}
+.pi-compose-side{width:40px;height:40px;border:0;border-radius:50%;background:var(--pi-bg);color:var(--pi-txt2);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0}
+.pi-compose-side:hover{color:var(--pi-danger);background:var(--pi-danger-soft)}
 .pi-block-chip{padding:0 4px 0 0;gap:0}
 .pi-block-chip>button{border:0;background:none;color:inherit;font:inherit;cursor:pointer;padding:3px 4px 3px 10px}
 .pi-block-chip>.pi-block-del{padding:3px 4px;display:inline-flex;align-items:center;opacity:.6}
 .pi-block-chip>.pi-block-del svg{width:10px;height:10px}
 .pi-block-chip>.pi-block-del:hover{opacity:1;color:var(--pi-danger)}
-.pi-chip.is-on{border-color:var(--pi-accent);color:var(--pi-accent);background:var(--pi-accent-soft)}
+.pi-chip.is-on{color:var(--pi-accent);background:var(--pi-accent-soft)}
 .pi-diff{font-family:var(--pi-mono);font-size:12px;line-height:1.5;white-space:pre-wrap;word-break:break-word;background:var(--pi-surf);border-radius:var(--pi-r-in);padding:6px 0;max-height:360px;overflow:auto}
 .pi-diff div{padding:0 10px}
 .pi-diff .is-add{background:var(--pi-add)}
@@ -2086,7 +2140,6 @@ label.pi-wb-row{cursor:pointer}
 .pi-wb .pi-entry-hd{flex-wrap:nowrap}
 .pi-card h3{flex-wrap:wrap}
 .pi-tools.is-c4{--pi-cols:2}
-.pi-unit{grid-template-columns:48px minmax(0,1fr) 72px 68px;gap:6px;padding:6px}
 .pi-tree-list{max-height:220px}
 .pi-msg{max-width:94%}
 .pi-body{padding:10px}
@@ -2094,7 +2147,7 @@ label.pi-wb-row{cursor:pointer}
 `, ICONS = {
     close: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
     plus: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
-    gear: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="2.2" stroke="currentColor" stroke-width="1.3"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>',
+    gear: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M6.9 1.8h2.2l.4 1.7 1.2.5 1.5-.9 1.6 1.6-.9 1.5.5 1.2 1.7.4v2.2l-1.7.4-.5 1.2.9 1.5-1.6 1.6-1.5-.9-1.2.5-.4 1.7H6.9l-.4-1.7-1.2-.5-1.5.9-1.6-1.6.9-1.5-.5-1.2-1.7-.4V6.9l1.7-.4.5-1.2-.9-1.5 1.6-1.6 1.5.9 1.2-.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><circle cx="8" cy="8" r="2.1" stroke="currentColor" stroke-width="1.3"/></svg>',
     box: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M2 4.5L8 2l6 2.5v7L8 14l-6-2.5v-7z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M2 4.5L8 7l6-2.5M8 7v7" stroke="currentColor" stroke-width="1.3"/></svg>',
     caret: '<svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M3 2l4 3-4 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     caretDown: '<svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 3l3 4 3-4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -2121,6 +2174,7 @@ label.pi-wb-row{cursor:pointer}
     sort: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4.5 2.5v11M2.5 11.5l2 2 2-2M9 4h4.5M9 8h3.5M9 12h2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     eye: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.4"/></svg>',
     eyeOff: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6.2 3.8A6.6 6.6 0 018 3.5c4 0 6.5 4.5 6.5 4.5a11.6 11.6 0 01-1.7 2.2M10.4 11.9A6.3 6.3 0 018 12.5C4 12.5 1.5 8 1.5 8a11.4 11.4 0 012.6-3M2.5 2.5l11 11" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    more: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="3.5" cy="8" r="1.3"/><circle cx="8" cy="8" r="1.3"/><circle cx="12.5" cy="8" r="1.3"/></svg>',
     pulse: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M1.5 8.5h3l1.8-4 3 8 1.9-4h3.3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     file: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M4 1h5.5L13 4.5V14a1 1 0 01-1 1H4a1 1 0 01-1-1V2a1 1 0 011-1z" stroke="currentColor" stroke-width="1.2"/><path d="M9 1v4h4" stroke="currentColor" stroke-width="1.2"/></svg>'
   };
@@ -2187,6 +2241,10 @@ label.pi-wb-row{cursor:pointer}
       html: `<label class="pi-field">${label ? `<span>${esc(label)}</span>` : ""}${input}</label>`,
       actions: [{ label: "取消", value: null }, { label: "确定", primary: !0, value: (root) => root.querySelector("[data-dlg-input]").value }]
     });
+  }
+  function menuDialog({ title: title2, items }) {
+    let html = `<div class="pi-menu-list">${items.map((item) => `<button type="button" class="pi-menu-item${item.danger ? " is-danger" : ""}" data-dlg-value="${esc(item.value)}">${item.icon || ""}<span>${esc(item.label)}</span></button>`).join("")}</div>`;
+    return openDialog({ title: title2, html, actions: [{ label: "取消", value: null }] });
   }
   function choiceDialog({ title: title2, body = "", choices }) {
     return openDialog({ title: title2, html: body ? `<p class="pi-hint">${esc(body)}</p>` : "", actions: choices });
@@ -2716,7 +2774,7 @@ ${floor.text}`).join(`
             <button type="button" class="pi-btn is-sm" data-act="import-wb">从世界书</button>
             <button type="button" class="pi-btn is-sm" data-act="export"${project.outline.volumes.length ? "" : " disabled"}>导出</button></div>
         <div class="pi-inline"><input class="pi-inp" data-ai-request placeholder="给 AI 的额外要求（可空）" value="${esc(s.request || "")}">
-            <button type="button" class="pi-btn is-accent is-sm is-wide" data-act="ai-volume"${busy ? " disabled" : ""}>${busy ? '<span class="pi-spin"></span>写作中' : `AI 写第 ${project.outline.volumes.length + 1} 卷`}</button></div>
+            <button type="button" class="pi-btn is-primary is-sm is-wide" data-act="ai-volume"${busy ? " disabled" : ""}>${busy ? '<span class="pi-spin"></span>写作中' : `AI 写第 ${project.outline.volumes.length + 1} 卷`}</button></div>
         </div>
         ${draftHtml(view, s.draft)}
         <div class="pi-tree"><div class="pi-tree-list">${treeHtml(project, s.sel)}
@@ -3083,7 +3141,7 @@ ${yaml}
     return `${s.draft ? draftHtml2(view, project, s.draft) : ""}
         <div class="pi-card"><h3>设定 ${checkBadge(project.setting.check)}</h3>
         <div class="pi-tools is-c3">
-            <button type="button" class="pi-btn is-sm is-accent" data-act="from-talk"${busy ? " disabled" : ""}>${busy ? '<span class="pi-spin"></span>整理中' : "从讨论整理"}</button>
+            <button type="button" class="pi-btn is-sm is-primary" data-act="from-talk"${busy ? " disabled" : ""}>${busy ? '<span class="pi-spin"></span>整理中' : "从讨论整理"}</button>
             <button type="button" class="pi-btn is-sm" data-act="import-wb">从世界书导入</button>
             <button type="button" class="pi-btn is-sm${s.history ? " is-primary" : ""}" data-act="history">历史版本 ${project.setting.history.length}</button>
             <label class="pi-check"><input type="checkbox" data-append${s.append ? " checked" : ""}><span>只追加，不改动已有分块</span></label></div>
@@ -3362,25 +3420,20 @@ ${parsed.body}` : parsed.body;
     onChange: () => onChange2,
     render: () => render4
   });
-  var STATE_BADGE = { done: "", active: "is-accent", next: "is-warn", todo: "" };
   function entryRow(entry, expanded) {
-    let tokens = estimateTokens(entry.content), atDepth = entry.position === 4, body = expanded ? `<div class="pi-entry-bd">
+    let atDepth = entry.position === 4, field = (name) => `data-kind="${entry.kind}" data-param="${name}"`, body = expanded ? `<div class="pi-entry-bd">
         <div class="pi-pair ${atDepth ? "is-c4" : ""}">
-            <label class="pi-field"><span>位置</span><select class="pi-sel" data-slot="${esc(entry.slotId)}" data-slot-field="position">${options(POSITIONS, entry.position)}</select></label>
-            ${atDepth ? `<label class="pi-field"><span>深度</span><input class="pi-inp" type="number" min="0" data-slot="${esc(entry.slotId)}" data-slot-field="depth" value="${entry.depth}"></label>
-            <label class="pi-field"><span>角色</span><select class="pi-sel" data-slot="${esc(entry.slotId)}" data-slot-field="role">${options(ROLES, entry.role)}</select></label>` : ""}
-            <label class="pi-field"><span>顺序</span><input class="pi-inp" type="number" data-slot="${esc(entry.slotId)}" data-slot-field="order" value="${entry.order}"></label>
-        </div>
-        <div class="pi-tools is-c2">
-            <button type="button" class="pi-btn is-sm" data-act="save-default" data-slot="${esc(entry.slotId)}" data-kind="${entry.kind}">设为本项目默认</button>
-            <button type="button" class="pi-btn is-sm" data-act="reset-slot" data-slot="${esc(entry.slotId)}">恢复默认</button>
+            <label class="pi-field"><span>位置</span><select class="pi-sel" ${field("position")}>${options(POSITIONS, entry.position)}</select></label>
+            ${atDepth ? `<label class="pi-field"><span>深度</span><input class="pi-inp" type="number" min="0" ${field("depth")} value="${entry.depth}"></label>
+            <label class="pi-field"><span>角色</span><select class="pi-sel" ${field("role")}>${options(ROLES, entry.role)}</select></label>` : ""}
+            <label class="pi-field"><span>顺序</span><input class="pi-inp" type="number" ${field("order")} value="${entry.order}"></label>
         </div>
         <pre class="pi-pre">${esc(entry.content)}</pre></div>` : "";
     return `<div class="pi-entry${entry.enabled ? "" : " is-off"}">
         <div class="pi-entry-hd" data-act="toggle-entry" data-slot="${esc(entry.slotId)}">
-            <span class="pi-badge is-dark">${esc(positionLabel(entry))}</span>
+            <span class="pi-pos">${esc(positionLabel(entry))}</span>
             <span class="pi-etitle">${esc(entry.title)}</span>
-            <span class="pi-badge">顺序 ${entry.order}</span><span class="pi-badge">≈${tokens}</span>
+            <span class="pi-meta">≈${estimateTokens(entry.content)}</span>
             <input type="checkbox" title="启用" data-slot="${esc(entry.slotId)}" data-slot-field="enabled"${entry.enabled ? " checked" : ""}>
         </div>${body}</div>`;
   }
@@ -3389,22 +3442,24 @@ ${parsed.body}` : parsed.body;
         <span><span class="pi-badge">${esc(node.label)}</span> ${esc(node.name)}${from ? ` <span class="pi-hint">来自${esc(from)}</span>` : ""}</span></label>`;
   function nodeList(unit, progress, carried) {
     let off = new Set(offNodes(progress, unit.id)), nodes = stageNodes(unit.stage.data);
-    return !nodes.length && !carried.length ? "" : `<div class="pi-card-sub">${nodes.map((node) => nodeCheck(unit.id, node, off.has(node.id))).join("")}
+    return !nodes.length && !carried.length ? "" : `<div class="pi-tl-nodes">${nodes.map((node) => nodeCheck(unit.id, node, off.has(node.id))).join("")}
         ${carried.length ? `<p class="pi-hint">延续自前面阶段</p>${carried.map((item) => nodeCheck(item.unit.id, item.node, !1, stageLabel(item.unit.stage.key))).join("")}` : ""}</div>`;
   }
-  function unitList(units, states, progress, carried) {
-    let lastVol = null, stateOpts = [{ value: "", label: "自动" }, ...Object.entries(STATE_LABELS).map(([value, label]) => ({ value, label }))];
-    return units.map((unit) => {
-      let head = unit.volume !== lastVol ? `<div class="pi-vol-hd">${esc(volumeLabel(unit.volume.key))}</div>` : "";
-      lastVol = unit.volume;
-      let state = states[unit.id], manual = progress.slots[unit.id] && progress.slots[unit.id].state || "", muted = progress.muted.includes(unit.id), range = unit.stage.data && unit.stage.data.时间范围;
-      return `${head}<div class="pi-unit${state === "active" ? " is-active" : ""}">
-            <span class="pi-badge ${STATE_BADGE[state]}">${STATE_LABELS[state]}</span>
-            <span class="pi-uname" title="${esc(range || "")}">${esc(stageLabel(unit.stage.key))}${muted ? ` <button type="button" class="pi-badge is-warn pi-unmute" data-act="unmute" data-unit="${esc(unit.id)}" title="点击恢复提醒">不再提醒</button>` : ""}</span>
-            <select class="pi-sel" data-unit-state="${esc(unit.id)}" title="手动改状态">${options(stateOpts, manual)}</select>
-            <span class="pi-unit-act">${state === "active" ? "" : `<button type="button" class="pi-btn is-sm" data-act="goto" data-unit="${esc(unit.id)}">设为当前</button>`}</span>
-        </div>${state === "active" ? nodeList(unit, progress, carried) : ""}`;
-    }).join("");
+  function timeline(units, states, progress, carried) {
+    let groups = [];
+    for (let unit of units) {
+      let last = groups[groups.length - 1];
+      last && last.volume === unit.volume ? last.units.push(unit) : groups.push({ volume: unit.volume, units: [unit] });
+    }
+    let item = (unit) => {
+      let state = states[unit.id], manual = progress.slots[unit.id] && progress.slots[unit.id].state, muted = progress.muted.includes(unit.id), range = unit.stage.data && unit.stage.data.时间范围, notes = [state === "done" || state === "todo" ? "" : STATE_LABELS[state], manual ? "手动" : "", muted ? "不提醒" : ""].filter(Boolean).join(" · ");
+      return `<div class="pi-tl-item is-${state}"><span class="pi-tl-dot"></span><div class="pi-tl-box">
+            <div class="pi-tl-hd"><span class="pi-tl-name" title="${esc(range || "")}">${esc(stageLabel(unit.stage.key))}</span>
+                ${notes ? `<span class="pi-tl-state">${esc(notes)}</span>` : ""}
+                <button type="button" class="pi-icon-btn" data-act="unit-menu" data-unit="${esc(unit.id)}" title="更多">${ICONS.more}</button></div>
+            ${state === "active" ? nodeList(unit, progress, carried) : ""}</div></div>`;
+    };
+    return groups.map((group) => `<div class="pi-tl-vol">${esc(volumeLabel(group.volume.key))}</div><div class="pi-tl">${group.units.map(item).join("")}</div>`).join("");
   }
   function render4(view) {
     let { data, runtime } = view, project = view.project(), st7 = view.tabState("run");
@@ -3416,21 +3471,20 @@ ${parsed.body}` : parsed.body;
             <p class="pi-hint">「${esc(cardName())}」${other ? `当前启用的是「${esc(other.name)}」` : "还没有启用项目"}。</p>
             <button type="button" class="pi-btn is-primary" data-act="activate">设为本卡当前项目</button></div>`;
     }
-    let progress = runtime.progress(), entries = runtime.entries(), units = flattenUnits(project.outline.volumes), states = unitStates(units, progress), total = entries.filter((entry) => entry.enabled).reduce((sum, entry) => sum + estimateTokens(entry.content), 0), mode = runtime.injectMode() === "virtual" ? '<span class="pi-badge is-ok">虚拟条目</span>' : '<span class="pi-badge is-warn">专用世界书</span>', settings = data.settings(), checking = runtime.isChecking(), checkInfo = `每 ${settings.checkEvery} 楼检测 · 上次第 ${progress.lastCheckFloor} 楼 · 当前 ${runtime.floorCount()} 楼`;
-    return `<div class="pi-card"><h3>注入条目 ${mode}<span class="pi-spacer"></span><span class="pi-badge">共 ≈${total} token</span></h3>
-        <div class="pi-tools is-c1"><button type="button" class="pi-btn is-sm" data-act="preview">预览最终注入</button></div>
+    let progress = runtime.progress(), entries = runtime.entries(), units = flattenUnits(project.outline.volumes), states = unitStates(units, progress), total = entries.filter((entry) => entry.enabled).reduce((sum, entry) => sum + estimateTokens(entry.content), 0), settings = data.settings(), checking = runtime.isChecking(), book = runtime.injectMode() === "virtual" ? "" : '<span class="pi-badge is-warn">专用世界书</span>', gap = settings.checkEvery - (runtime.floorCount() - progress.lastCheckFloor);
+    return `<div class="pi-card"><h3>注入条目${book}<span class="pi-meta">≈${total} token</span><span class="pi-spacer"></span>
+            <button type="button" class="pi-btn is-sm is-ghost" data-act="preview">预览</button></h3>
         ${entries.length ? entries.map((entry) => entryRow(entry, st7.open === entry.slotId)).join("") : '<p class="pi-hint">设定和大纲都为空，没有可注入的内容。</p>'}
         </div>
-        ${units.length ? `<div class="pi-card"><h3>剧情索引<span class="pi-badge">不注入正文</span><span class="pi-spacer"></span>
-            <button type="button" class="pi-btn is-sm is-ghost" data-act="index-toggle">${st7.indexOpen ? "收起" : "查看"}</button></h3>
-            ${st7.indexOpen ? `<pre class="pi-pre">${esc(buildIndexText(units, states, progress, { carryOver: settings.carryOver }))}</pre>` : ""}</div>` : ""}
-        <div class="pi-card"><h3>阶段<span class="pi-spacer"></span><span class="pi-hint">${esc(checkInfo)}</span></h3>
-        ${units.length ? `<div class="pi-pace"><span class="pi-pace-label">推进速度</span><div class="pi-seg">${PACES.map((pace) => `<button type="button" class="pi-seg-btn${pace.value === progress.pace ? " is-sel" : ""}" data-act="pace" data-pace="${pace.value}">${pace.label}</button>`).join("")}</div></div>
+        <div class="pi-card"><h3>阶段<span class="pi-meta">${gap > 0 ? `${gap} 楼后检测` : "下一楼检测"}</span><span class="pi-spacer"></span>
+            ${units.length ? `<button type="button" class="pi-btn is-sm is-ghost" data-act="index-toggle">${st7.indexOpen ? "收起索引" : "剧情索引"}</button>` : ""}</h3>
+        ${units.length ? `${st7.indexOpen ? `<pre class="pi-pre pi-index">${esc(buildIndexText(units, states, progress, { carryOver: settings.carryOver }))}</pre>` : ""}
+        <div class="pi-pace"><span class="pi-pace-label">推进速度</span><div class="pi-seg">${PACES.map((pace) => `<button type="button" class="pi-seg-btn${pace.value === progress.pace ? " is-sel" : ""}" data-act="pace" data-pace="${pace.value}">${pace.label}</button>`).join("")}</div></div>
         <div class="pi-tools is-c3">
             <button type="button" class="pi-btn is-primary is-sm" data-act="next">打开下一段</button>
             <button type="button" class="pi-btn is-sm" data-act="check"${checking ? " disabled" : ""}>${checking ? '<span class="pi-spin"></span>检测中' : "立即检测"}</button>
-            <button type="button" class="pi-btn is-sm" data-act="rewrite">让 AI 改写后续阶段</button></div>
-            <div class="pi-units">${unitList(units, states, progress, settings.carryOver ? carriedNodes(units, states, progress) : [])}</div>` : '<p class="pi-hint">大纲为空。到「大纲」页导入剧情 YAML，或让 AI 写一卷。</p>'}
+            <button type="button" class="pi-btn is-sm" data-act="rewrite">改写后续</button></div>
+        ${timeline(units, states, progress, settings.carryOver ? carriedNodes(units, states, progress) : [])}` : '<p class="pi-hint">大纲为空。到「大纲」页导入剧情 YAML，或让 AI 写一卷。</p>'}
         </div>`;
   }
   function setSlot(view, slotId, patch) {
@@ -3452,47 +3506,47 @@ ${parsed.body}` : parsed.body;
       let st7 = view.tabState("run");
       st7.open = st7.open === target.dataset.slot ? "" : target.dataset.slot, view.renderBody();
     },
-    "save-default"(view, target) {
-      let entry = view.runtime.entries().find((item) => item.slotId === target.dataset.slot);
-      if (!entry) return;
-      let kind = target.dataset.kind, params = { position: entry.position, depth: entry.depth, role: entry.role, order: entry.order, enabled: entry.enabled };
-      view.data.updateProject(view.projectId, (project) => ({ ...project, defaults: { ...DEFAULT_PARAMS, ...project.defaults, [kind]: params } })), actions4["reset-slot"](view, target);
-    },
-    "reset-slot"(view, target) {
-      setSlot(view, target.dataset.slot, { position: void 0, depth: void 0, role: void 0, order: void 0, enabled: void 0 });
-    },
     next: (view) => view.runtime.openNext(),
     check: (view) => view.runtime.checkNow({ manual: !0 }),
-    goto(view, target) {
-      let { runtime } = view;
-      runtime.setProgress(goTo(runtime.progress(), runtime.units(), target.dataset.unit));
-    },
-    unmute(view, target) {
-      let progress = view.runtime.progress();
-      view.runtime.setProgress({ ...progress, muted: progress.muted.filter((id) => id !== target.dataset.unit) });
+    // 行尾「⋯」：设为当前、手动改状态、恢复提醒。
+    async "unit-menu"(view, target) {
+      let { runtime } = view, id = target.dataset.unit, unit = runtime.units().find((item) => item.id === id);
+      if (!unit) return;
+      let progress = runtime.progress(), state = unitStates(runtime.units(), progress)[id], manual = progress.slots[id] && progress.slots[id].state, items = [
+        ...state === "active" ? [] : [{ label: "设为当前", value: "goto" }],
+        ...Object.entries(STATE_LABELS).filter(([value]) => value !== manual).map(([value, label]) => ({ label: `标为${label}`, value: `state:${value}` })),
+        ...manual ? [{ label: "恢复自动判断", value: "state:" }] : [],
+        ...progress.muted.includes(id) ? [{ label: "恢复提醒", value: "unmute" }] : []
+      ], pick = await menuDialog({ title: stageLabel(unit.stage.key), items });
+      if (pick) {
+        if (pick === "goto") return runtime.setProgress(goTo(progress, runtime.units(), id));
+        if (pick === "unmute") return runtime.setProgress({ ...progress, muted: progress.muted.filter((item) => item !== id) });
+        setSlot(view, id, { state: pick.slice(6) || void 0 });
+      }
     },
     rewrite: (view) => startRewrite(view),
     preview(view) {
       let entries = view.runtime.entries().filter((entry) => entry.enabled), html = entries.length ? POSITIONS.map((pos) => {
         let list = entries.filter((entry) => entry.position === pos.value).sort((a, b) => a.order - b.order);
-        return list.length ? list.map((entry) => `<p class="pi-hint"><span class="pi-badge is-dark">${esc(positionLabel(entry))}</span> ${esc(entry.title)} · 顺序 ${entry.order}</p><pre class="pi-pre">${esc(entry.content)}</pre>`).join("") : "";
+        return list.length ? list.map((entry) => `<p class="pi-hint">${esc(positionLabel(entry))} · ${esc(entry.title)} · 顺序 ${entry.order}</p><pre class="pi-pre">${esc(entry.content)}</pre>`).join("") : "";
       }).join("") : '<p class="pi-hint">没有启用的条目。</p>';
       return openDialog({ title: "最终注入预览", html: `${html}`, actions: [{ label: "关闭", value: !0, primary: !0 }] });
     }
   };
   function onChange2(view, target) {
     let { runtime } = view;
-    if (target.dataset.slotField) {
-      let field = target.dataset.slotField, value = field === "enabled" ? target.checked : Number(target.value);
-      if (field !== "enabled" && !Number.isFinite(value)) return;
-      setSlot(view, target.dataset.slot, { [field]: value }), view.renderBody();
+    if (target.dataset.param) {
+      let value = Math.round(Number(target.value));
+      if (!Number.isFinite(value)) return;
+      let { kind, param } = target.dataset;
+      view.data.updateProject(view.projectId, (project) => ({ ...project, defaults: { ...DEFAULT_PARAMS, ...project.defaults, [kind]: { ...DEFAULT_PARAMS[kind], ...project.defaults[kind], [param]: param === "depth" || param === "order" ? Math.max(0, value) : value } } })), runtime.refresh(), view.renderBody();
       return;
     }
-    if (target.dataset.node) {
-      runtime.setProgress(setNodeChecked(runtime.progress(), target.dataset.unit, target.dataset.node, target.checked));
+    if (target.dataset.slotField === "enabled") {
+      setSlot(view, target.dataset.slot, { enabled: target.checked }), view.renderBody();
       return;
     }
-    target.dataset.unitState !== void 0 && setSlot(view, target.dataset.unitState, { state: target.value || void 0 });
+    target.dataset.node && runtime.setProgress(setNodeChecked(runtime.progress(), target.dataset.unit, target.dataset.node, target.checked));
   }
 
   // src/ui/page-settings.js
@@ -3877,27 +3931,25 @@ ${parsed.body}` : parsed.body;
         ${rows2 || `<p class="pi-hint">${empty}</p>`}</div>`;
   }
   function tokenText(s) {
-    if (!s.tokens) return '<span class="pi-badge">统计中…</span>';
+    if (!s.tokens) return '<span class="pi-meta">统计中…</span>';
     let mark = s.tokens.exact ? "" : "≈";
-    return `<span class="pi-badge is-accent">开启 ${mark}${s.tokens.on} token</span><span class="pi-badge">全部 ${mark}${s.tokens.all} token</span>`;
+    return `<span class="pi-meta">开启 ${mark}${s.tokens.on} · 全部 ${mark}${s.tokens.all} token</span>`;
   }
-  var tbtn = (act, icon, label, { on = !1, danger = !1, disabled = !1 } = {}) => `<button type="button" class="pi-tbtn${on ? " is-on" : ""}${danger ? " is-danger" : ""}" data-act="${act}" title="${label}"${disabled ? " disabled" : ""}>${ICONS[icon]}<span>${label}</span></button>`;
+  var tbtn = (act, icon, label, { danger = !1, disabled = !1 } = {}) => `<button type="button" class="pi-tbtn${danger ? " is-danger" : ""}" data-act="${act}"${disabled ? " disabled" : ""}>${ICONS[icon]}<span>${label}</span></button>`, moreBtn = (act) => `<button type="button" class="pi-tbtn is-more" data-act="${act}" title="更多">${ICONS.more}</button>`;
   function bookBar(s, entries) {
     if (!s.picking) {
       let none2 = !handwritten(entries).length;
-      return `<div class="pi-tbar">${tbtn("wb-add", "entryPlus", "新建条目")}${tbtn("wb-picking", "checks", "批量选择", { disabled: none2 })}
-            ${tbtn("wb-punct", "wand", "修复标点", { disabled: none2 })}${tbtn("wb-regex", "replace", "正则替换", { disabled: none2 })}
-            ${tbtn("book-rename", "pencil", "重命名")}${tbtn("book-copy", "copy", "另存副本")}
-            ${tbtn("book-export", "download", "导出")}${tbtn("book-delete", "trash", "删除本书", { danger: !0 })}</div>`;
+      return `<div class="pi-tbar">${tbtn("wb-add", "entryPlus", "新建条目")}${tbtn("wb-picking", "checks", "批量", { disabled: none2 })}
+            ${tbtn("wb-punct", "wand", "修复标点", { disabled: none2 })}${tbtn("wb-regex", "replace", "替换", { disabled: none2 })}${moreBtn("book-more")}</div>`;
     }
-    let none = !s.picked.size, all = handwritten(entries).every((entry) => s.picked.has(entry.key));
-    return `<div class="pi-tbar">${tbtn("wb-pick-all", "checkAll", all ? "取消全选" : "全选", { on: all })}${tbtn("wb-move", "move", "迁移", { disabled: none })}
-        ${tbtn("wb-order", "sort", "顺序重排", { disabled: none })}${tbtn("wb-regex", "replace", "正则替换", { disabled: none })}
-        ${tbtn("wb-pick-on", "eye", "开启", { disabled: none })}${tbtn("wb-pick-off", "eyeOff", "关闭", { disabled: none })}
-        ${tbtn("wb-pick-delete", "trash", "删除", { danger: !0, disabled: none })}${tbtn("wb-picking", "close", "退出")}</div>`;
+    let none = !s.picked.size;
+    return `<div class="pi-tbar">${tbtn("wb-move", "move", "迁移", { disabled: none })}${tbtn("wb-order", "sort", "重排", { disabled: none })}
+        ${tbtn("wb-regex", "replace", "替换", { disabled: none })}${tbtn("wb-pick-delete", "trash", "删除", { danger: !0, disabled: none })}${moreBtn("pick-more")}</div>`;
   }
   function bookBody(s, entries) {
-    let picked = s.picking ? s.picked : null, on = GROUPS.on(entries), off = GROUPS.off(entries), head = `<div class="pi-wb-info"><span class="pi-wb-tokens">${tokenText(s)}</span>${picked ? `<span class="pi-wb-count">已选 ${picked.size} 条</span>` : ""}</div>${bookBar(s, entries)}`;
+    let picked = s.picking ? s.picked : null, on = GROUPS.on(entries), off = GROUPS.off(entries), all = picked && handwritten(entries).length && handwritten(entries).every((entry) => picked.has(entry.key)), head = `${picked ? `<div class="pi-wb-info is-pick"><span class="pi-wb-count">已选 ${picked.size} 条</span><span class="pi-spacer"></span>
+            <button type="button" class="pi-btn is-sm is-ghost" data-act="wb-pick-all">${all ? "取消全选" : "全选"}</button>
+            <button type="button" class="pi-btn is-sm is-ghost" data-act="wb-picking">完成</button></div>` : `<div class="pi-wb-info"><span class="pi-wb-tokens">${tokenText(s)}</span></div>`}${bookBar(s, entries)}`;
     return entries.length ? picked ? `${head}${section("已开启", on, "没有开启的条目", "", "", picked)}
             ${section("已关闭", off, "没有关闭的条目", "", "", picked)}` : `${head}${section("已开启", on, "没有开启的条目", bulkBtn('data-act="wb-bulk" data-group="on"', "全部关闭"), s.openKey)}
         ${section("已关闭", off, "没有关闭的条目", bulkBtn('data-act="wb-bulk" data-group="off"', "全部开启"), s.openKey)}
@@ -3924,13 +3976,14 @@ ${parsed.body}` : parsed.body;
   function render7(view) {
     let s = st6(view), list = listedBooks(s).map((book) => {
       let open = s.book === book.name, entries = open && s.entries ? s.entries : null;
-      return `<div class="pi-entry"><div class="pi-entry-hd" data-act="open-book" data-book="${esc(book.name)}">
-            ${open ? ICONS.caretDown : ICONS.caret}<span class="pi-etitle" title="${esc(book.name)}">${esc(book.name)}</span><span class="pi-badge">${esc(book.source)}</span></div>
-            ${entries ? `<div class="pi-entry-bd">${bookBody(s, entries)}</div>` : ""}</div>`;
+      return `<div class="pi-book${open ? " is-open" : ""}"><div class="pi-book-hd" data-act="open-book" data-book="${esc(book.name)}">
+            ${open ? ICONS.caretDown : ICONS.caret}<span class="pi-etitle" title="${esc(book.name)}">${esc(book.name)}</span><span class="pi-meta">${esc(book.source)}</span></div>
+            ${entries ? `<div class="pi-book-bd">${bookBody(s, entries)}</div>` : ""}</div>`;
     }).join("");
-    return `<div class="pi-card pi-wb"><h3>「${esc(cardName() || "未打开角色卡")}」的世界书</h3>
+    return `<div class="pi-card pi-wb"><h3>「${esc(cardName() || "未打开角色卡")}」的世界书<span class="pi-spacer"></span>
+            <button type="button" class="pi-btn is-sm is-ghost" data-act="book-new">${ICONS.plus}新建</button>
+            <button type="button" class="pi-icon-btn" data-act="page-more" title="更多">${ICONS.more}</button></h3>
         <p class="pi-hint is-warn">注意：这里的操作真的会修改你的世界书！</p>
-        <div class="pi-tbar is-c3 is-flat">${tbtn("book-new", "bookPlus", "新建世界书")}${tbtn("book-import", "upload", "导入")}${tbtn("book-open", "folder", "打开其他")}</div>
         ${list || '<p class="pi-hint">没有关联的世界书。</p>'}</div>`;
   }
   var splitKeys = (text) => String(text || "").split(/[,，、\n]/).map((item) => item.trim()).filter(Boolean);
@@ -3957,13 +4010,21 @@ ${parsed.body}` : parsed.body;
     let keys = new Set(s.entries.map((entry) => entry.key));
     s.picked = new Set([...s.picked || []].filter((key) => keys.has(key))), view.renderBody(), countBook(view);
   }
+  var tokenCache = /* @__PURE__ */ new Map(), TOKEN_CACHE_MAX = 3e3, TOKEN_BATCH = 8;
+  async function entryTokens(text) {
+    if (tokenCache.has(text)) return tokenCache.get(text);
+    let count = await countTokens(text);
+    return count == null ? null : (tokenCache.size >= TOKEN_CACHE_MAX && tokenCache.delete(tokenCache.keys().next().value), tokenCache.set(text, count), count);
+  }
   async function countBook(view) {
-    let s = st6(view), book = s.book, entries = s.entries || [], on = entries.filter((entry) => !entry.disabled).map((entry) => entry.content).join(`
-`), all = entries.map((entry) => entry.content).join(`
-`), [onCount, allCount] = await Promise.all([countTokens(on), countTokens(all)]);
-    if (s.book !== book || s.entries !== entries) return;
-    let exact = onCount != null && allCount != null;
-    s.tokens = exact ? { on: onCount, all: allCount, exact } : { on: estimateTokens(on), all: estimateTokens(all), exact };
+    let s = st6(view), book = s.book, entries = s.entries || [], counts = [];
+    for (let i = 0; i < entries.length; i += TOKEN_BATCH)
+      if (counts.push(...await Promise.all(entries.slice(i, i + TOKEN_BATCH).map((entry) => entry.content ? entryTokens(entry.content) : 0))), s.book !== book || s.entries !== entries) return;
+    let exact = counts.every((count) => count != null), on = 0, all = 0;
+    entries.forEach((entry, index) => {
+      let n = exact ? counts[index] : estimateTokens(entry.content);
+      all += n, entry.disabled || (on += n);
+    }), s.tokens = { on, all, exact };
     let box = hostDocument().querySelector(".pi-wb-tokens");
     box && (box.innerHTML = tokenText(s));
   }
@@ -4056,11 +4117,7 @@ ${parsed.body}` : parsed.body;
     async "book-open"(view) {
       let shown = new Set(listedBooks(st6(view)).map((book) => book.name)), names = allBookNames().filter((name2) => !shown.has(name2));
       if (!names.length) return toast("info", "没有其他世界书。");
-      let name = await openDialog({
-        title: "打开其他世界书",
-        html: `<div class="pi-pick-list">${names.map((item) => `<button type="button" class="pi-btn is-block" data-dlg-value="${esc(item)}">${esc(item)}</button>`).join("")}</div>`,
-        actions: [{ label: "取消", value: null }]
-      });
+      let name = await menuDialog({ title: "打开其他世界书", items: names.map((item) => ({ label: item, value: item, icon: ICONS.book })) });
       name && await openBook(view, name);
     },
     async "book-rename"(view) {
@@ -4092,6 +4149,30 @@ ${parsed.body}` : parsed.body;
     },
     async "wb-dup"(view, target) {
       await addEntries(st6(view).book, [target.dataset.key]), await reloadBook(view);
+    },
+    // 「更多」菜单：页面级、整本书级、选中条目级各一份，选中后转给对应的操作。
+    async "page-more"(view, target, event) {
+      let pick = await menuDialog({ title: "世界书", items: [
+        { label: "导入世界书", value: "book-import", icon: ICONS.upload },
+        { label: "打开其他世界书", value: "book-open", icon: ICONS.folder }
+      ] });
+      if (pick) return actions7[pick](view, target, event);
+    },
+    async "book-more"(view, target, event) {
+      let pick = await menuDialog({ title: st6(view).book, items: [
+        { label: "重命名", value: "book-rename", icon: ICONS.pencil },
+        { label: "另存副本", value: "book-copy", icon: ICONS.copy },
+        { label: "导出", value: "book-export", icon: ICONS.download },
+        { label: "删除本书", value: "book-delete", icon: ICONS.trash, danger: !0 }
+      ] });
+      if (pick) return actions7[pick](view, target, event);
+    },
+    async "pick-more"(view, target, event) {
+      let pick = await menuDialog({ title: `已选 ${st6(view).picked.size} 条`, items: [
+        { label: "开启", value: "wb-pick-on", icon: ICONS.eye },
+        { label: "关闭", value: "wb-pick-off", icon: ICONS.eyeOff }
+      ] });
+      if (pick) return actions7[pick](view, target, event);
     },
     "wb-pick-on": (view) => setPicked(view, !1),
     "wb-pick-off": (view) => setPicked(view, !0),
@@ -4306,6 +4387,8 @@ ${parsed.body}` : parsed.body;
       collapsed: new Set(readUi().collapsed || []),
       state: {},
       busy: {},
+      loadError: {},
+      restored: !1,
       render: render9,
       renderBody,
       renderSide,
@@ -4329,12 +4412,11 @@ ${parsed.body}` : parsed.body;
                 <span class="pi-pname">${esc(item.name)}</span>${item.id === activeId ? '<span class="pi-dot" title="本卡当前项目"></span>' : ""}</button>`).join(""), head = group.name ? `<button type="button" class="pi-group-hd" data-act="group" data-group="${esc(group.name)}">${collapsed ? ICONS.caret : ICONS.caretDown}${esc(group.name)}<small>${group.items.length}</small></button>` : "";
         return `<div class="pi-group${collapsed ? " is-collapsed" : ""}">${head}${items}</div>`;
       }).join(""), page = (key) => `<button type="button" class="pi-btn is-ghost is-block${view.page === key ? " is-sel" : ""}" data-act="page" data-page="${key}">${ICONS[PAGES[key].icon]}${PAGES[key].label}</button>`;
-      return `<div class="pi-side-hd">剧情注入器 <small>v${esc(version)}</small></div>
+      return `<div class="pi-side-hd">剧情注入器 <small>v${esc(version)}</small><span class="pi-spacer"></span><button type="button" class="pi-icon-btn" data-act="new-project" title="新项目">${ICONS.plus}</button></div>
             ${index.projects.length > SEARCH_FROM ? `<div class="pi-psearch">${ICONS.search}<input class="pi-inp" data-psearch placeholder="搜索项目" value="${esc(view.search)}"></div>` : ""}
             <div class="pi-plist">${list || '<p class="pi-hint">还没有项目</p>'}</div>
             <div class="pi-side-ft">
-                <button type="button" class="pi-btn is-ghost is-block" data-act="new-project">${ICONS.plus}新项目</button>
-                ${page("books")}${page("data")}${page("diag")}${page("settings")}
+                ${page("books")}${page("data")}${page("diag")}
             </div>`;
     }
     function applySearch() {
@@ -4355,7 +4437,7 @@ ${parsed.body}` : parsed.body;
       let project = view.project(), title2 = view.page ? PAGES[view.page].label : project ? project.name : "剧情注入器", tabs = view.page || !project ? "" : `<div class="pi-tabs">${TABS.map((tab) => `<button type="button" class="pi-tab${tab.key === view.tab ? " is-sel" : ""}" data-act="tab" data-tab="${tab.key}">${tab.label}</button>`).join("")}</div>`, rename = !view.page && project ? `<button type="button" class="pi-icon-btn" data-act="rename" title="编辑项目名称">${ICONS.pencil}</button>` : "";
       return `<div class="pi-top-lead"><button type="button" class="pi-icon-btn pi-menu" data-act="drawer" title="项目列表">${ICONS.menu}</button>
                 <span class="pi-top-title">${esc(title2)}</span>${rename}</div>${tabs}
-            <div class="pi-top-end"><button type="button" class="pi-icon-btn" data-act="theme" title="${isNight() ? "日间配色" : "夜间配色"}">${isNight() ? ICONS.sun : ICONS.moon}</button>
+            <div class="pi-top-end"><button type="button" class="pi-icon-btn${view.page === "settings" ? " is-on" : ""}" data-act="page" data-page="settings" title="设置">${ICONS.gear}</button><button type="button" class="pi-icon-btn" data-act="theme" title="${isNight() ? "日间配色" : "夜间配色"}">${isNight() ? ICONS.sun : ICONS.moon}</button>
             <button type="button" class="pi-close" data-act="close" title="关闭">${ICONS.close}</button></div>`;
     }
     function setDrawer(open2) {
@@ -4365,16 +4447,32 @@ ${parsed.body}` : parsed.body;
       if (!data.isReady()) return '<div class="pi-empty"><span class="pi-spin"></span> 正在读取酒馆本地数据…</div>';
       if (view.page) return current().render(view);
       let project = view.project();
-      return view.projectId ? project ? current().render(view) : '<div class="pi-empty"><span class="pi-spin"></span> 正在读取项目…</div>' : `<div class="pi-empty">${data.index().projects.length ? "从项目列表选择一个项目。" : "一个项目就是一条 if 线：讨论 → 设定 → 大纲 → 执行。"}<br><br>
+      if (!view.projectId)
+        return `<div class="pi-empty">${data.index().projects.length ? "从项目列表选择一个项目。" : "一个项目就是一条 if 线：讨论 → 设定 → 大纲 → 执行。"}<br><br>
                 <button type="button" class="pi-btn is-primary" data-act="new-project">${ICONS.plus}新项目</button></div>`;
+      if (!project) {
+        let failed = view.loadError[view.projectId];
+        return failed ? `<div class="pi-empty">读取项目失败：${esc(failed)}<br><br><button type="button" class="pi-btn is-primary" data-act="retry-project">重试</button></div>` : '<div class="pi-empty"><span class="pi-spin"></span> 正在读取项目…</div>';
+      }
+      return current().render(view);
     }
+    function safeBodyHtml() {
+      try {
+        return bodyHtml();
+      } catch (error) {
+        return console.error("[剧情注入器] 页面渲染失败", error), runtime.note(`页面渲染失败（${view.page || view.tab}）：${error.message}`), `<div class="pi-empty">这一页显示出错：${esc(error.message)}<br><br><button type="button" class="pi-btn is-primary" data-act="retry-render">重试</button></div>`;
+      }
+    }
+    let lastSide = "", lastTop = "";
     function renderSide() {
-      root && (root.querySelector(".pi-side").innerHTML = sideHtml(), root.querySelector(".pi-top").innerHTML = topHtml(), applySearch());
+      if (!root) return;
+      let side = sideHtml(), top = topHtml();
+      side !== lastSide && (root.querySelector(".pi-side").innerHTML = side, lastSide = side, applySearch()), top !== lastTop && (root.querySelector(".pi-top").innerHTML = top, lastTop = top);
     }
     function renderBody() {
       if (!root) return;
       let body = root.querySelector(".pi-body"), keepScroll = body.scrollTop, chat = body.querySelector(".pi-chat"), chatScroll = chat ? chat.scrollTop : null, chatAtEnd = chat ? chat.scrollHeight - chat.scrollTop - chat.clientHeight < 30 : !0, focused = doc.activeElement && body.contains(doc.activeElement) ? doc.activeElement : null, compose = focused && focused.matches("[data-compose],[data-setting]") ? { sel: focused.matches("[data-compose]") ? "[data-compose]" : "[data-setting]", start: focused.selectionStart, end: focused.selectionEnd } : null;
-      body.className = `pi-body${!view.page && view.tab === "discuss" && view.project() ? " is-chat" : ""}`, body.innerHTML = bodyHtml(), body.scrollTop = keepScroll;
+      body.className = `pi-body${!view.page && view.tab === "discuss" && view.project() ? " is-chat" : ""}`, body.innerHTML = safeBodyHtml(), body.scrollTop = keepScroll;
       let nextChat = body.querySelector(".pi-chat");
       if (nextChat && (nextChat.scrollTop = chatAtEnd || chatScroll == null ? nextChat.scrollHeight : chatScroll), compose) {
         let box = body.querySelector(compose.sel);
@@ -4385,18 +4483,25 @@ ${parsed.body}` : parsed.body;
       renderSide(), renderBody();
     }
     async function selectProject(id, tab) {
-      if (view.page = "", setDrawer(!1), view.projectId = id, writeUi({ projectId: id, page: "" }), render9(), !!id)
+      if (view.page = "", setDrawer(!1), view.projectId = id, delete view.loadError[id], writeUi({ projectId: id, page: "" }), render9(), !!id)
         try {
           let project = await data.loadProject(id);
+          if (view.projectId !== id) return;
           if (!project) {
-            toast("error", "项目文件丢失，可在数据管理里查看。");
+            view.loadError[id] = "项目文件丢失，可在数据管理里查看", render9();
             return;
           }
-          if (view.projectId !== id) return;
           view.tab = tab || (project.outline.volumes.length ? "run" : "discuss"), writeUi({ tab: view.tab }), render9();
         } catch (error) {
-          toast("error", `读取项目失败：${error.message}`);
+          if (view.projectId !== id) return;
+          view.loadError[id] = error.message, render9();
         }
+    }
+    function restore() {
+      let ui = readUi(), activeId = data.activeIdFor(cardKey()), remembered = data.index().projects.some((item) => item.id === ui.projectId) ? ui.projectId : "", id = activeId || remembered || data.index().projects[0] && data.index().projects[0].id || "";
+      view.restored = !0, render9();
+      let page = PAGES[ui.page] ? ui.page : "";
+      id && selectProject(id, TABS.some((tab) => tab.key === ui.tab) ? ui.tab : void 0), page && (view.page = page, writeUi({ page }), render9());
     }
     function go(tab) {
       view.page = "", view.tab = tab, writeUi({ tab, page: "" }), render9();
@@ -4453,6 +4558,8 @@ ${parsed.body}` : parsed.body;
       if (act === "theme")
         return setNight(!isNight()), writeUi({ night: isNight() }), renderSide();
       if (act === "rename") return projectMenu(view.projectId);
+      if (act === "retry-project") return selectProject(view.projectId, view.tab);
+      if (act === "retry-render") return render9();
       if (act === "group") {
         let name = target.dataset.group;
         return view.collapsed.has(name) ? view.collapsed.delete(name) : view.collapsed.add(name), writeUi({ collapsed: [...view.collapsed] }), renderSide();
@@ -4480,19 +4587,13 @@ ${parsed.body}` : parsed.body;
       event.key === "Escape" && root && !doc.querySelector(".pi-dialog") && (event.stopPropagation(), view.drawer ? setDrawer(!1) : close()), event.key === "Enter" && (event.ctrlKey || event.metaKey) && current().onSubmit?.(view, event.target, event);
     }
     function open() {
-      if (ensureStyle(), root) return;
-      let ui = readUi();
-      view.drawer = !1, root = el(`<div class="pi-root pi-overlay"><div class="pi-panel"><aside class="pi-side"></aside>
+      ensureStyle(), !root && (view.drawer = !1, lastSide = "", lastTop = "", root = el(`<div class="pi-root pi-overlay"><div class="pi-panel"><aside class="pi-side"></aside>
             <div class="pi-scrim" data-act="drawer"></div>
             <section class="pi-main"><header class="pi-top"></header><div class="pi-body"></div></section></div></div>`), root.addEventListener("click", onClick), root.addEventListener("contextmenu", onContext), root.addEventListener("change", onChange5), root.addEventListener("input", onInput6), root.addEventListener("focusout", (event) => current().onBlur?.(view, event.target, event)), root.addEventListener("mousedown", (event) => {
         event.target === root && (root.dataset.down = "1");
       }), root.addEventListener("mouseup", (event) => {
         event.target === root && root.dataset.down && close(), delete root.dataset.down;
-      }), doc.addEventListener("keydown", onKey, !0), doc.body.appendChild(root);
-      let activeId = data.activeIdFor(cardKey()), remembered = data.index().projects.some((item) => item.id === ui.projectId) ? ui.projectId : "", id = activeId || remembered || data.index().projects[0] && data.index().projects[0].id || "";
-      render9();
-      let page = PAGES[ui.page] ? ui.page : "";
-      id && selectProject(id, TABS.some((tab) => tab.key === ui.tab) ? ui.tab : void 0), page && (view.page = page, writeUi({ page }), render9());
+      }), doc.addEventListener("keydown", onKey, !0), doc.body.appendChild(root), view.restored = !1, data.isReady() ? restore() : render9());
     }
     function close() {
       root && (current().unmount?.(view), doc.removeEventListener("keydown", onKey, !0), root.remove(), root = null, data.flush().catch(() => {
@@ -4500,6 +4601,7 @@ ${parsed.body}` : parsed.body;
     }
     function refresh(reason) {
       if (!root) return;
+      if (!view.restored && data.isReady()) return restore();
       (reason === "index" || reason === "switch" || reason === "chat") && renderSide();
       let focused = doc.activeElement, typing = focused && root.contains(focused) && (focused.tagName === "TEXTAREA" || focused.tagName === "INPUT" && !["checkbox", "radio", "button"].includes(focused.type));
       if (reason === "saved" || reason === "save-failed") return current().onStatus?.(view, root);
@@ -4542,7 +4644,7 @@ ${parsed.body}` : parsed.body;
   }
 
   // src/index.js
-  var VERSION = "0.1.10", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.1.11", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")
@@ -4561,10 +4663,16 @@ ${parsed.body}` : parsed.body;
     let app = null, notice = createNotices(), data = createDataStore({
       onChange: (reason) => app && app.refresh(reason),
       onError: (error) => toast("error", `保存失败，内容仍在内存里：${error.message}`)
-    }), runtime = createRuntime({ data, notice, emit: (reason) => app && app.refresh(reason), askReason: (reason) => promptDialog({ title: "改写后续阶段", label: "偏离说明（可修改或留空）", value: reason, multiline: !0 }) });
+    }), askReason = (reason) => promptDialog({ title: "改写后续阶段", label: "偏离说明（可修改或留空）", value: reason, multiline: !0 }), emit = (reason) => {
+      try {
+        app && app.refresh(reason);
+      } catch (error) {
+        console.error("[剧情注入器] 界面刷新失败", error);
+      }
+    }, runtime = createRuntime({ data, notice, emit, askReason });
     app = createApp({ data, runtime, version: VERSION });
     let started = !1, ready = data.init().then(() => {
-      runtime.start(), started = !0, app.refresh("index");
+      runtime.start(), started = !0, emit("index");
     }).catch((error) => {
       toast("error", `读取本地数据失败：${error.message}`);
     }), subscription = null;

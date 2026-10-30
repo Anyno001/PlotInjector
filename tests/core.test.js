@@ -14,7 +14,7 @@ import { checkedSet, entryRefId, migrateOc, normalizeWbRule, ruleFromSelection }
 import { normalizeChat } from '../src/core/store.js';
 import { mergeBlocks, parseSettingReply, splitBlocks } from '../src/core/setting.js';
 import { parseOutlineReply } from '../src/core/prompts.js';
-import { normalizeSettings, newProject, resolveLlm } from '../src/core/store.js';
+import { normalizeProject, normalizeSettings, newProject, resolveLlm } from '../src/core/store.js';
 import { buildZip, crc32 } from '../src/core/zip.js';
 
 setYamlLib(YAML);
@@ -97,7 +97,7 @@ test('正文只注入设定与当前阶段详细；详细标明是尚未发生�
     const entries = buildEntries(project, progress, normalizeSettings({}));
     assert.deepEqual(entries.map(entry => entry.kind), ['detail']);
     assert.match(entries[0].content, /^<剧情参考 卷="卷一" 阶段="阶段一_开端">\n以下是当前正在进行、尚未演完的剧情规划/);
-    assert.equal(entries[0].position, 4);
+    assert.equal(entries[0].position, 0);
     const units = flattenUnits(project.outline.volumes);
     const index = buildIndexText(units, unitStates(units, progress), progress);
     assert.match(index, /【当前】\n- 卷一·测试·阶段一 开端｜时间范围：开始时/);
@@ -136,13 +136,20 @@ test('取消勾选的节点不进详细；按检测结果的节点名取消勾�
     assert.doesNotMatch(detail.content, /乙事件/);
 });
 
-test('详细条目可改位置与深度', () => {
+test('注入位置只认项目默认：两条默认都在角色定义前，改一次所有阶段都生效；旧项目未改过的默认自动换新', () => {
     const project = projectWith(MINI);
     const units = flattenUnits(project.outline.volumes);
-    const progress = patchSlot(emptyProgress(project.id), units[0].id, { position: 1, depth: 2, role: 1 });
-    const detail = buildEntries(project, progress, normalizeSettings({})).find(entry => entry.kind === 'detail');
-    const wi = toWorldInfoEntry(detail, 0, 'PlotInjector');
-    assert.deepEqual([wi.position, wi.depth, wi.role, wi.constant, wi.ignoreBudget], [1, 2, 1, true, true]);
+    const stale = patchSlot(emptyProgress(project.id), units[0].id, { position: 4, depth: 2, enabled: false });
+    const detail = buildEntries(project, stale, normalizeSettings({})).find(entry => entry.kind === 'detail');
+    assert.deepEqual([detail.position, detail.enabled], [0, false], '单段旧的位置覆盖不再生效，启用开关仍按段记');
+    project.defaults = { ...project.defaults, detail: { ...project.defaults.detail, position: 4, depth: 2, role: 1 } };
+    const next = advance(emptyProgress(project.id), units).progress;
+    const wi = toWorldInfoEntry(buildEntries(project, next, normalizeSettings({})).find(entry => entry.kind === 'detail'), 0, 'PlotInjector');
+    assert.deepEqual([wi.position, wi.depth, wi.role, wi.constant, wi.ignoreBudget], [4, 2, 1, true, true], '下一段沿用项目默认');
+    const migrated = normalizeProject({ ...project, defaults: { setting: { position: 1, depth: 4, role: 0, order: 80, enabled: true }, detail: { position: 4, depth: 4, role: 0, order: 100, enabled: false } } }, project.id);
+    assert.deepEqual([migrated.defaults.setting.position, migrated.defaults.detail.position, migrated.defaults.detail.enabled], [0, 0, false]);
+    const kept = normalizeProject({ ...project, defaults: { detail: { position: 2, depth: 4, role: 0, order: 100 } } }, project.id);
+    assert.equal(kept.defaults.detail.position, 2, '改过的保留');
 });
 
 test('检测提示带剧情索引，回复里的偏离判断能读出来', () => {

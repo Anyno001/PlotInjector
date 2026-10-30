@@ -1,4 +1,4 @@
-import { DEFAULT_PARAMS } from './inject.js';
+import { DEFAULT_PARAMS, OLD_DEFAULT_PARAMS } from './inject.js';
 import { makeId } from './outline.js';
 import { DEFAULT_MEMO, DEFAULT_WB_RULE, migrateOc, normalizeWbRule } from './refs.js';
 
@@ -132,8 +132,21 @@ export function normalizeProject(value, id) {
                 stages: vol.stages.filter(stage => stage && stage.data && typeof stage.data === 'object').map(stage => ({ id: stage.id || makeId('s'), key: String(stage.key || '阶段'), data: stage.data })),
             })),
         },
-        defaults: { ...JSON.parse(JSON.stringify(DEFAULT_PARAMS)), ...(src.defaults || {}) },
+        defaults: normalizeDefaults(src.defaults),
     };
+}
+
+// 旧项目文件里存着当时的默认位置；没改过的换成现在的默认，改过的保留。
+function normalizeDefaults(value) {
+    const out = JSON.parse(JSON.stringify(DEFAULT_PARAMS));
+    for (const kind of Object.keys(out)) {
+        const saved = value && value[kind];
+        if (!saved || typeof saved !== 'object') continue;
+        const old = OLD_DEFAULT_PARAMS[kind];
+        const untouched = Object.keys(old).every(key => Number(saved[key]) === old[key]);
+        out[kind] = untouched ? { ...out[kind], enabled: saved.enabled !== false } : { ...out[kind], ...saved };
+    }
+    return out;
 }
 
 export function emptyChat() {

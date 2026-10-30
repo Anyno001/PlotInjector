@@ -4,7 +4,7 @@ import { estimateTokens } from '../core/tokens.js';
 import { buildPattern, orderPlan, punctPlan, regexPlan } from '../core/wbtools.js';
 import { cardName, countTokens, downloadBlob, hostDocument, toast } from '../host/st.js';
 import { addEntries, allBookNames, bookEntries, boundBookNames, createBook, deleteEntries, duplicateBook, loadBook, patchEntries, removeBook, renameBook, setEntriesDisabled, transferEntries, updateEntry } from '../host/worldbook.js';
-import { confirmDialog, esc, openDialog, options, pickFiles, promptDialog } from './dom.js';
+import { confirmDialog, esc, menuDialog, openDialog, options, pickFiles, promptDialog } from './dom.js';
 import { ICONS } from './styles.js';
 
 const st = view => view.tabState('books');
@@ -62,36 +62,38 @@ function section(name, entries, empty, bulk, openKey, picked) {
 }
 
 function tokenText(s) {
-    if (!s.tokens) return '<span class="pi-badge">统计中…</span>';
+    if (!s.tokens) return '<span class="pi-meta">统计中…</span>';
     const mark = s.tokens.exact ? '' : '≈';
-    return `<span class="pi-badge is-accent">开启 ${mark}${s.tokens.on} token</span><span class="pi-badge">全部 ${mark}${s.tokens.all} token</span>`;
+    return `<span class="pi-meta">开启 ${mark}${s.tokens.on} · 全部 ${mark}${s.tokens.all} token</span>`;
 }
 
-// 工具栏按钮：图标在上、短名在下，一行等宽。
-const tbtn = (act, icon, label, { on = false, danger = false, disabled = false } = {}) => `<button type="button" class="pi-tbtn${on ? ' is-on' : ''}${danger ? ' is-danger' : ''}" data-act="${act}" title="${label}"${disabled ? ' disabled' : ''}>${ICONS[icon]}<span>${label}</span></button>`;
+// 工具条：小图标 + 短名横排成一行色块，次要操作收进「更多」。
+const tbtn = (act, icon, label, { danger = false, disabled = false } = {}) => `<button type="button" class="pi-tbtn${danger ? ' is-danger' : ''}" data-act="${act}"${disabled ? ' disabled' : ''}>${ICONS[icon]}<span>${label}</span></button>`;
+const moreBtn = act => `<button type="button" class="pi-tbtn is-more" data-act="${act}" title="更多">${ICONS.more}</button>`;
 
-// 平时是整本世界书的操作；批量选择时整栏换成针对选中条目的操作。
+// 平时是整本世界书的操作；批量选择时换成针对选中条目的操作。
 function bookBar(s, entries) {
     if (!s.picking) {
         const none = !handwritten(entries).length;
-        return `<div class="pi-tbar">${tbtn('wb-add', 'entryPlus', '新建条目')}${tbtn('wb-picking', 'checks', '批量选择', { disabled: none })}
-            ${tbtn('wb-punct', 'wand', '修复标点', { disabled: none })}${tbtn('wb-regex', 'replace', '正则替换', { disabled: none })}
-            ${tbtn('book-rename', 'pencil', '重命名')}${tbtn('book-copy', 'copy', '另存副本')}
-            ${tbtn('book-export', 'download', '导出')}${tbtn('book-delete', 'trash', '删除本书', { danger: true })}</div>`;
+        return `<div class="pi-tbar">${tbtn('wb-add', 'entryPlus', '新建条目')}${tbtn('wb-picking', 'checks', '批量', { disabled: none })}
+            ${tbtn('wb-punct', 'wand', '修复标点', { disabled: none })}${tbtn('wb-regex', 'replace', '替换', { disabled: none })}${moreBtn('book-more')}</div>`;
     }
     const none = !s.picked.size;
-    const all = handwritten(entries).every(entry => s.picked.has(entry.key));
-    return `<div class="pi-tbar">${tbtn('wb-pick-all', 'checkAll', all ? '取消全选' : '全选', { on: all })}${tbtn('wb-move', 'move', '迁移', { disabled: none })}
-        ${tbtn('wb-order', 'sort', '顺序重排', { disabled: none })}${tbtn('wb-regex', 'replace', '正则替换', { disabled: none })}
-        ${tbtn('wb-pick-on', 'eye', '开启', { disabled: none })}${tbtn('wb-pick-off', 'eyeOff', '关闭', { disabled: none })}
-        ${tbtn('wb-pick-delete', 'trash', '删除', { danger: true, disabled: none })}${tbtn('wb-picking', 'close', '退出')}</div>`;
+    return `<div class="pi-tbar">${tbtn('wb-move', 'move', '迁移', { disabled: none })}${tbtn('wb-order', 'sort', '重排', { disabled: none })}
+        ${tbtn('wb-regex', 'replace', '替换', { disabled: none })}${tbtn('wb-pick-delete', 'trash', '删除', { danger: true, disabled: none })}${moreBtn('pick-more')}</div>`;
 }
 
 function bookBody(s, entries) {
     const picked = s.picking ? s.picked : null;
     const on = GROUPS.on(entries);
     const off = GROUPS.off(entries);
-    const head = `<div class="pi-wb-info"><span class="pi-wb-tokens">${tokenText(s)}</span>${picked ? `<span class="pi-wb-count">已选 ${picked.size} 条</span>` : ''}</div>${bookBar(s, entries)}`;
+    const all = picked && handwritten(entries).length && handwritten(entries).every(entry => picked.has(entry.key));
+    const info = picked
+        ? `<div class="pi-wb-info is-pick"><span class="pi-wb-count">已选 ${picked.size} 条</span><span class="pi-spacer"></span>
+            <button type="button" class="pi-btn is-sm is-ghost" data-act="wb-pick-all">${all ? '取消全选' : '全选'}</button>
+            <button type="button" class="pi-btn is-sm is-ghost" data-act="wb-picking">完成</button></div>`
+        : `<div class="pi-wb-info"><span class="pi-wb-tokens">${tokenText(s)}</span></div>`;
+    const head = `${info}${bookBar(s, entries)}`;
     if (!entries.length) return `${head}<p class="pi-hint">没有条目</p>`;
     if (picked) {
         return `${head}${section('已开启', on, '没有开启的条目', '', '', picked)}
@@ -133,13 +135,14 @@ export function render(view) {
     const list = listedBooks(s).map(book => {
         const open = s.book === book.name;
         const entries = open && s.entries ? s.entries : null;
-        return `<div class="pi-entry"><div class="pi-entry-hd" data-act="open-book" data-book="${esc(book.name)}">
-            ${open ? ICONS.caretDown : ICONS.caret}<span class="pi-etitle" title="${esc(book.name)}">${esc(book.name)}</span><span class="pi-badge">${esc(book.source)}</span></div>
-            ${entries ? `<div class="pi-entry-bd">${bookBody(s, entries)}</div>` : ''}</div>`;
+        return `<div class="pi-book${open ? ' is-open' : ''}"><div class="pi-book-hd" data-act="open-book" data-book="${esc(book.name)}">
+            ${open ? ICONS.caretDown : ICONS.caret}<span class="pi-etitle" title="${esc(book.name)}">${esc(book.name)}</span><span class="pi-meta">${esc(book.source)}</span></div>
+            ${entries ? `<div class="pi-book-bd">${bookBody(s, entries)}</div>` : ''}</div>`;
     }).join('');
-    return `<div class="pi-card pi-wb"><h3>「${esc(cardName() || '未打开角色卡')}」的世界书</h3>
+    return `<div class="pi-card pi-wb"><h3>「${esc(cardName() || '未打开角色卡')}」的世界书<span class="pi-spacer"></span>
+            <button type="button" class="pi-btn is-sm is-ghost" data-act="book-new">${ICONS.plus}新建</button>
+            <button type="button" class="pi-icon-btn" data-act="page-more" title="更多">${ICONS.more}</button></h3>
         <p class="pi-hint is-warn">注意：这里的操作真的会修改你的世界书！</p>
-        <div class="pi-tbar is-c3 is-flat">${tbtn('book-new', 'bookPlus', '新建世界书')}${tbtn('book-import', 'upload', '导入')}${tbtn('book-open', 'folder', '打开其他')}</div>
         ${list || '<p class="pi-hint">没有关联的世界书。</p>'}</div>`;
 }
 
@@ -191,17 +194,40 @@ async function reloadBook(view) {
     countBook(view);
 }
 
+// 每条内容的 token 数按文字缓存：开关、编辑一条后只重算变了的那条，不必把整本书再送一遍分词器。
+const tokenCache = new Map();
+const TOKEN_CACHE_MAX = 3000;
+// 同时最多发这么多个分词请求，大书第一次统计时不把酒馆后端一下子压满。
+const TOKEN_BATCH = 8;
+
+async function entryTokens(text) {
+    if (tokenCache.has(text)) return tokenCache.get(text);
+    const count = await countTokens(text);
+    if (count == null) return null;
+    if (tokenCache.size >= TOKEN_CACHE_MAX) tokenCache.delete(tokenCache.keys().next().value);
+    tokenCache.set(text, count);
+    return count;
+}
+
 // 用酒馆的分词器统计；酒馆不支持时按字数粗估。只换掉 token 那一行，不打断正在编辑的输入框。
 async function countBook(view) {
     const s = st(view);
     const book = s.book;
     const entries = s.entries || [];
-    const on = entries.filter(entry => !entry.disabled).map(entry => entry.content).join('\n');
-    const all = entries.map(entry => entry.content).join('\n');
-    const [onCount, allCount] = await Promise.all([countTokens(on), countTokens(all)]);
-    if (s.book !== book || s.entries !== entries) return;
-    const exact = onCount != null && allCount != null;
-    s.tokens = exact ? { on: onCount, all: allCount, exact } : { on: estimateTokens(on), all: estimateTokens(all), exact };
+    const counts = [];
+    for (let i = 0; i < entries.length; i += TOKEN_BATCH) {
+        counts.push(...await Promise.all(entries.slice(i, i + TOKEN_BATCH).map(entry => (entry.content ? entryTokens(entry.content) : 0))));
+        if (s.book !== book || s.entries !== entries) return;
+    }
+    const exact = counts.every(count => count != null);
+    let on = 0;
+    let all = 0;
+    entries.forEach((entry, index) => {
+        const n = exact ? counts[index] : estimateTokens(entry.content);
+        all += n;
+        if (!entry.disabled) on += n;
+    });
+    s.tokens = { on, all, exact };
     const box = hostDocument().querySelector('.pi-wb-tokens');
     if (box) box.innerHTML = tokenText(s);
 }
@@ -326,11 +352,7 @@ export const actions = {
         const shown = new Set(listedBooks(st(view)).map(book => book.name));
         const names = allBookNames().filter(name => !shown.has(name));
         if (!names.length) return toast('info', '没有其他世界书。');
-        const name = await openDialog({
-            title: '打开其他世界书',
-            html: `<div class="pi-pick-list">${names.map(item => `<button type="button" class="pi-btn is-block" data-dlg-value="${esc(item)}">${esc(item)}</button>`).join('')}</div>`,
-            actions: [{ label: '取消', value: null }],
-        });
+        const name = await menuDialog({ title: '打开其他世界书', items: names.map(item => ({ label: item, value: item, icon: ICONS.book })) });
         if (name) await openBook(view, name);
     },
     async 'book-rename'(view) {
@@ -380,6 +402,30 @@ export const actions = {
     async 'wb-dup'(view, target) {
         await addEntries(st(view).book, [target.dataset.key]);
         await reloadBook(view);
+    },
+    // 「更多」菜单：页面级、整本书级、选中条目级各一份，选中后转给对应的操作。
+    async 'page-more'(view, target, event) {
+        const pick = await menuDialog({ title: '世界书', items: [
+            { label: '导入世界书', value: 'book-import', icon: ICONS.upload },
+            { label: '打开其他世界书', value: 'book-open', icon: ICONS.folder },
+        ] });
+        if (pick) return actions[pick](view, target, event);
+    },
+    async 'book-more'(view, target, event) {
+        const pick = await menuDialog({ title: st(view).book, items: [
+            { label: '重命名', value: 'book-rename', icon: ICONS.pencil },
+            { label: '另存副本', value: 'book-copy', icon: ICONS.copy },
+            { label: '导出', value: 'book-export', icon: ICONS.download },
+            { label: '删除本书', value: 'book-delete', icon: ICONS.trash, danger: true },
+        ] });
+        if (pick) return actions[pick](view, target, event);
+    },
+    async 'pick-more'(view, target, event) {
+        const pick = await menuDialog({ title: `已选 ${st(view).picked.size} 条`, items: [
+            { label: '开启', value: 'wb-pick-on', icon: ICONS.eye },
+            { label: '关闭', value: 'wb-pick-off', icon: ICONS.eyeOff },
+        ] });
+        if (pick) return actions[pick](view, target, event);
     },
     'wb-pick-on': view => setPicked(view, false),
     'wb-pick-off': view => setPicked(view, true),

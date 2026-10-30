@@ -533,6 +533,7 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
         recentFloors,
         rewriteRest,
         diagnose,
+        note: log,
         resetBase,
         rebind: start,
         injectMode: () => (hasEntriesEvent() ? 'virtual' : 'book'),

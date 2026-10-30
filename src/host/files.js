@@ -12,8 +12,25 @@ function utf8Base64(text) {
 
 export const filePath = name => `user/files/${name}`;
 
+// 手机网络卡住时请求可能一直不返回，读文件最多等这么久，超时报错让界面给出重试。
+const READ_TIMEOUT_MS = 20000;
+
+async function fetchWithTimeout(url, init) {
+    const view = hostWindow();
+    const controller = new view.AbortController();
+    const timer = view.setTimeout(() => controller.abort(), READ_TIMEOUT_MS);
+    try {
+        return await fetchFn()(url, { ...init, signal: controller.signal });
+    } catch (error) {
+        if (error && error.name === 'AbortError') throw new Error('读取超时，请检查网络');
+        throw error;
+    } finally {
+        view.clearTimeout(timer);
+    }
+}
+
 export async function readJsonFile(name) {
-    const res = await fetchFn()(`/${filePath(name)}?t=${Date.now()}`, { cache: 'no-store' });
+    const res = await fetchWithTimeout(`/${filePath(name)}?t=${Date.now()}`, { cache: 'no-store' });
     if (res.status === 404) return null;
     if (!res.ok) throw new Error(`读取 ${name} 失败（HTTP ${res.status}）`);
     const text = await res.text();

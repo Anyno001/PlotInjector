@@ -33,14 +33,18 @@ function boot() {
         onError: error => toast('error', `保存失败，内容仍在内存里：${error.message}`),
     });
     const askReason = reason => promptDialog({ title: '改写后续阶段', label: '偏离说明（可修改或留空）', value: reason, multiline: true });
-    const runtime = createRuntime({ data, notice, emit: reason => app && app.refresh(reason), askReason });
+    // 界面刷新出错只记日志，不能打断检测、存进度这些后台流程。
+    const emit = reason => {
+        try { if (app) app.refresh(reason); } catch (error) { console.error('[剧情注入器] 界面刷新失败', error); }
+    };
+    const runtime = createRuntime({ data, notice, emit, askReason });
     app = createApp({ data, runtime, version: VERSION });
 
     let started = false;
     const ready = data.init().then(() => {
         runtime.start();
         started = true;
-        app.refresh('index');
+        emit('index');
     }).catch(error => {
         toast('error', `读取本地数据失败：${error.message}`);
     });

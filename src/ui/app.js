@@ -51,6 +51,8 @@ export function createApp({ data, runtime, version }) {
         collapsed: new Set(readUi().collapsed || []),
         state: {},
         busy: {},
+        loadError: {},
+        restored: false,
         render,
         renderBody,
         renderSide,
@@ -87,12 +89,11 @@ export function createApp({ data, runtime, version }) {
             return `<div class="pi-group${collapsed ? ' is-collapsed' : ''}">${head}${items}</div>`;
         }).join('');
         const page = key => `<button type="button" class="pi-btn is-ghost is-block${view.page === key ? ' is-sel' : ''}" data-act="page" data-page="${key}">${ICONS[PAGES[key].icon]}${PAGES[key].label}</button>`;
-        return `<div class="pi-side-hd">剧情注入器 <small>v${esc(version)}</small></div>
+        return `<div class="pi-side-hd">剧情注入器 <small>v${esc(version)}</small><span class="pi-spacer"></span><button type="button" class="pi-icon-btn" data-act="new-project" title="新项目">${ICONS.plus}</button></div>
             ${index.projects.length > SEARCH_FROM ? `<div class="pi-psearch">${ICONS.search}<input class="pi-inp" data-psearch placeholder="搜索项目" value="${esc(view.search)}"></div>` : ''}
             <div class="pi-plist">${list || '<p class="pi-hint">还没有项目</p>'}</div>
             <div class="pi-side-ft">
-                <button type="button" class="pi-btn is-ghost is-block" data-act="new-project">${ICONS.plus}新项目</button>
-                ${page('books')}${page('data')}${page('diag')}${page('settings')}
+                ${page('books')}${page('data')}${page('diag')}
             </div>`;
     }
 
@@ -120,7 +121,7 @@ export function createApp({ data, runtime, version }) {
         const rename = !view.page && project ? `<button type="button" class="pi-icon-btn" data-act="rename" title="编辑项目名称">${ICONS.pencil}</button>` : '';
         return `<div class="pi-top-lead"><button type="button" class="pi-icon-btn pi-menu" data-act="drawer" title="项目列表">${ICONS.menu}</button>
                 <span class="pi-top-title">${esc(title)}</span>${rename}</div>${tabs}
-            <div class="pi-top-end"><button type="button" class="pi-icon-btn" data-act="theme" title="${isNight() ? '日间配色' : '夜间配色'}">${isNight() ? ICONS.sun : ICONS.moon}</button>
+            <div class="pi-top-end"><button type="button" class="pi-icon-btn${view.page === 'settings' ? ' is-on' : ''}" data-act="page" data-page="settings" title="设置">${ICONS.gear}</button><button type="button" class="pi-icon-btn" data-act="theme" title="${isNight() ? '日间配色' : '夜间配色'}">${isNight() ? ICONS.sun : ICONS.moon}</button>
             <button type="button" class="pi-close" data-act="close" title="关闭">${ICONS.close}</button></div>`;
     }
 
@@ -137,15 +138,41 @@ export function createApp({ data, runtime, version }) {
             return `<div class="pi-empty">${data.index().projects.length ? '从项目列表选择一个项目。' : '一个项目就是一条 if 线：讨论 → 设定 → 大纲 → 执行。'}<br><br>
                 <button type="button" class="pi-btn is-primary" data-act="new-project">${ICONS.plus}新项目</button></div>`;
         }
-        if (!project) return '<div class="pi-empty"><span class="pi-spin"></span> 正在读取项目…</div>';
+        if (!project) {
+            const failed = view.loadError[view.projectId];
+            if (failed) return `<div class="pi-empty">读取项目失败：${esc(failed)}<br><br><button type="button" class="pi-btn is-primary" data-act="retry-project">重试</button></div>`;
+            return '<div class="pi-empty"><span class="pi-spin"></span> 正在读取项目…</div>';
+        }
         return current().render(view);
     }
 
+    // 某一页渲染出错时显示原因和重试，不留一片空白；错误同时记进诊断页。
+    function safeBodyHtml() {
+        try {
+            return bodyHtml();
+        } catch (error) {
+            console.error('[剧情注入器] 页面渲染失败', error);
+            runtime.note(`页面渲染失败（${view.page || view.tab}）：${error.message}`);
+            return `<div class="pi-empty">这一页显示出错：${esc(error.message)}<br><br><button type="button" class="pi-btn is-primary" data-act="retry-render">重试</button></div>`;
+        }
+    }
+
+    // 每次改设定、大纲都会更新索引并调到这里；内容没变就不重建侧栏和顶栏的节点。
+    let lastSide = '';
+    let lastTop = '';
     function renderSide() {
         if (!root) return;
-        root.querySelector('.pi-side').innerHTML = sideHtml();
-        root.querySelector('.pi-top').innerHTML = topHtml();
-        applySearch();
+        const side = sideHtml();
+        const top = topHtml();
+        if (side !== lastSide) {
+            root.querySelector('.pi-side').innerHTML = side;
+            lastSide = side;
+            applySearch();
+        }
+        if (top !== lastTop) {
+            root.querySelector('.pi-top').innerHTML = top;
+            lastTop = top;
+        }
     }
 
     function renderBody() {
@@ -158,7 +185,7 @@ export function createApp({ data, runtime, version }) {
         const focused = doc.activeElement && body.contains(doc.activeElement) ? doc.activeElement : null;
         const compose = focused && focused.matches('[data-compose],[data-setting]') ? { sel: focused.matches('[data-compose]') ? '[data-compose]' : '[data-setting]', start: focused.selectionStart, end: focused.selectionEnd } : null;
         body.className = `pi-body${!view.page && view.tab === 'discuss' && view.project() ? ' is-chat' : ''}`;
-        body.innerHTML = bodyHtml();
+        body.innerHTML = safeBodyHtml();
         body.scrollTop = keepScroll;
         const nextChat = body.querySelector('.pi-chat');
         if (nextChat) nextChat.scrollTop = chatAtEnd || chatScroll == null ? nextChat.scrollHeight : chatScroll;
@@ -173,25 +200,48 @@ export function createApp({ data, runtime, version }) {
         renderBody();
     }
 
+    // 读取失败时正文显示原因和重试按钮，不再一直转圈。
     async function selectProject(id, tab) {
         view.page = '';
         setDrawer(false);
         view.projectId = id;
+        delete view.loadError[id];
         writeUi({ projectId: id, page: '' });
         render();
         if (!id) return;
         try {
             const project = await data.loadProject(id);
+            if (view.projectId !== id) return;
             if (!project) {
-                toast('error', '项目文件丢失，可在数据管理里查看。');
+                view.loadError[id] = '项目文件丢失，可在数据管理里查看';
+                render();
                 return;
             }
-            if (view.projectId !== id) return;
             view.tab = tab || (project.outline.volumes.length ? 'run' : 'discuss');
             writeUi({ tab: view.tab });
             render();
         } catch (error) {
-            toast('error', `读取项目失败：${error.message}`);
+            if (view.projectId !== id) return;
+            view.loadError[id] = error.message;
+            render();
+        }
+    }
+
+    // 打开面板时定位到上次的位置：本卡当前项目优先，其次上次看的项目；设置等页面也记住。
+    // 数据还没读完时先显示读取中，读完由 refresh('index') 再调一次。
+    function restore() {
+        const ui = readUi();
+        const activeId = data.activeIdFor(cardKey());
+        const remembered = data.index().projects.some(item => item.id === ui.projectId) ? ui.projectId : '';
+        const id = activeId || remembered || (data.index().projects[0] && data.index().projects[0].id) || '';
+        view.restored = true;
+        render();
+        const page = PAGES[ui.page] ? ui.page : '';
+        if (id) selectProject(id, TABS.some(tab => tab.key === ui.tab) ? ui.tab : undefined);
+        if (page) {
+            view.page = page;
+            writeUi({ page });
+            render();
         }
     }
 
@@ -265,6 +315,8 @@ export function createApp({ data, runtime, version }) {
             return renderSide();
         }
         if (act === 'rename') return projectMenu(view.projectId);
+        if (act === 'retry-project') return selectProject(view.projectId, view.tab);
+        if (act === 'retry-render') return render();
         if (act === 'group') {
             const name = target.dataset.group;
             if (view.collapsed.has(name)) view.collapsed.delete(name);
@@ -314,8 +366,9 @@ export function createApp({ data, runtime, version }) {
     function open() {
         ensureStyle();
         if (root) return;
-        const ui = readUi();
         view.drawer = false;
+        lastSide = '';
+        lastTop = '';
         root = el(`<div class="pi-root pi-overlay"><div class="pi-panel"><aside class="pi-side"></aside>
             <div class="pi-scrim" data-act="drawer"></div>
             <section class="pi-main"><header class="pi-top"></header><div class="pi-body"></div></section></div></div>`);
@@ -328,18 +381,9 @@ export function createApp({ data, runtime, version }) {
         root.addEventListener('mouseup', event => { if (event.target === root && root.dataset.down) close(); delete root.dataset.down; });
         doc.addEventListener('keydown', onKey, true);
         doc.body.appendChild(root);
-        const activeId = data.activeIdFor(cardKey());
-        const remembered = data.index().projects.some(item => item.id === ui.projectId) ? ui.projectId : '';
-        const id = activeId || remembered || (data.index().projects[0] && data.index().projects[0].id) || '';
-        render();
-        // 记住上次所在的位置：设置等页面，或项目的哪个页签。
-        const page = PAGES[ui.page] ? ui.page : '';
-        if (id) selectProject(id, TABS.some(tab => tab.key === ui.tab) ? ui.tab : undefined);
-        if (page) {
-            view.page = page;
-            writeUi({ page });
-            render();
-        }
+        view.restored = false;
+        if (data.isReady()) restore();
+        else render();
     }
 
     function close() {
@@ -354,6 +398,7 @@ export function createApp({ data, runtime, version }) {
     // 外部变化（存盘、检测、换聊天）只在没有正在输入时重画正文，避免打断输入。
     function refresh(reason) {
         if (!root) return;
+        if (!view.restored && data.isReady()) return restore();
         if (reason === 'index' || reason === 'switch' || reason === 'chat') renderSide();
         const focused = doc.activeElement;
         const typing = focused && root.contains(focused) && (focused.tagName === 'TEXTAREA' || (focused.tagName === 'INPUT' && !['checkbox', 'radio', 'button'].includes(focused.type)));

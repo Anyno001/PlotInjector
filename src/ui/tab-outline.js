@@ -118,7 +118,7 @@ export function render(view) {
             <button type="button" class="pi-btn is-sm" data-act="import-wb">从世界书</button>
             <button type="button" class="pi-btn is-sm" data-act="export"${project.outline.volumes.length ? '' : ' disabled'}>导出</button></div>
         <div class="pi-inline"><input class="pi-inp" data-ai-request placeholder="给 AI 的额外要求（可空）" value="${esc(s.request || '')}">
-            <button type="button" class="pi-btn is-accent is-sm is-wide" data-act="ai-volume"${busy ? ' disabled' : ''}>${busy ? '<span class="pi-spin"></span>写作中' : `AI 写第 ${project.outline.volumes.length + 1} 卷`}</button></div>
+            <button type="button" class="pi-btn is-primary is-sm is-wide" data-act="ai-volume"${busy ? ' disabled' : ''}>${busy ? '<span class="pi-spin"></span>写作中' : `AI 写第 ${project.outline.volumes.length + 1} 卷`}</button></div>
         </div>
         ${draftHtml(view, s.draft)}
         <div class="pi-tree"><div class="pi-tree-list">${treeHtml(project, s.sel)}

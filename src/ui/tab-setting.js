@@ -65,7 +65,7 @@ export function render(view) {
     return `${s.draft ? draftHtml(view, project, s.draft) : ''}
         <div class="pi-card"><h3>设定 ${checkBadge(project.setting.check)}</h3>
         <div class="pi-tools is-c3">
-            <button type="button" class="pi-btn is-sm is-accent" data-act="from-talk"${busy ? ' disabled' : ''}>${busy ? '<span class="pi-spin"></span>整理中' : '从讨论整理'}</button>
+            <button type="button" class="pi-btn is-sm is-primary" data-act="from-talk"${busy ? ' disabled' : ''}>${busy ? '<span class="pi-spin"></span>整理中' : '从讨论整理'}</button>
             <button type="button" class="pi-btn is-sm" data-act="import-wb">从世界书导入</button>
             <button type="button" class="pi-btn is-sm${s.history ? ' is-primary' : ''}" data-act="history">历史版本 ${project.setting.history.length}</button>
             <label class="pi-check"><input type="checkbox" data-append${s.append ? ' checked' : ''}><span>只追加，不改动已有分块</span></label></div>

@@ -119,7 +119,7 @@ test('发布文件启动后，本卡项目的设定和当前阶段详细作为�
     const lore = await entriesNow(host.eventSource);
     assert.deepEqual(lore.map(entry => entry.comment), ['剧情注入器·设定', '剧情注入器·卷一·测试·阶段一']);
     assert.ok(lore.every(entry => entry.constant && entry.ignoreBudget && !entry.disable && entry.world === '剧情注入器'));
-    assert.deepEqual(lore.map(entry => entry.position), [1, 4]);
+    assert.deepEqual(lore.map(entry => entry.position), [0, 0], '两条默认都在角色定义前');
     assert.doesNotMatch(lore[1].content, /undefined/);
     assert.match(lore[1].content, /尚未演完的剧情规划/);
     await host.instance.data.flush();
@@ -229,6 +229,57 @@ test('偏离设为自动改写时不询问直接改写；设为不检查时不�
     await host.instance.destroy();
 });
 
+// 刷新后再启动一份实例：模拟用户刷新酒馆页面。
+async function reboot(host, { patchFetch } = {}) {
+    await host.instance.data.flush();
+    await host.instance.destroy();
+    const realFetch = host.win.fetch;
+    if (patchFetch) host.win.fetch = (url, init) => patchFetch(url, init, realFetch);
+    let click = null;
+    host.win.eventOn = (name, fn) => { click = fn; return { stop() {} }; };
+    host.win.eval(bundle);
+    return { instance: host.win.__plotInjector, click: () => click() };
+}
+
+test('数据还没读完就打开面板：读完后自动打开本卡的当前项目，不停在空白的选择页', async () => {
+    const host = await boot();
+    await withProject(host);
+    let release;
+    const gate = new Promise(resolve => { release = resolve; });
+    const next = await reboot(host, { patchFetch: async (url, init, real) => { if (String(url).includes('pi-index.json')) await gate; return real(url, init); } });
+    next.click();
+    await tick(10);
+    const body = () => host.win.document.querySelector('.pi-body').textContent;
+    assert.match(body(), /正在读取酒馆本地数据/);
+    release();
+    await next.instance.ready;
+    await tick(40);
+    assert.match(body(), /注入条目/);
+    await next.instance.destroy();
+});
+
+test('项目文件读取失败时显示原因和重试；页面渲染出错时显示错误而不是空白', async () => {
+    const host = await boot();
+    const project = await withProject(host);
+    let fail = true;
+    const next = await reboot(host, { patchFetch: (url, init, real) => (fail && String(url).includes(`pi-p-${project.id}`) ? Promise.resolve({ ok: false, status: 502, text: async () => '' }) : real(url, init)) });
+    await next.instance.ready;
+    next.click();
+    await tick(40);
+    const doc = host.win.document;
+    assert.match(doc.querySelector('.pi-body').textContent, /读取项目失败.*HTTP 502/);
+    fail = false;
+    doc.querySelector('[data-act="retry-project"]').click();
+    await tick(40);
+    assert.match(doc.querySelector('.pi-body').textContent, /注入条目/);
+    const runtime = next.instance.runtime;
+    runtime.setProgress({ ...runtime.progress(), muted: null });
+    await tick(10);
+    assert.match(doc.querySelector('.pi-body').textContent, /这一页显示出错/);
+    assert.ok(runtime.diagnose().logs.some(item => /页面渲染失败/.test(item.text)));
+    await next.instance.destroy();
+});
+
 test('打开界面后四个页签、设置页、数据管理页都能渲染', async () => {
     const host = await boot();
     await withProject(host);
@@ -243,7 +294,7 @@ test('打开界面后四个页签、设置页、数据管理页都能渲染', as
     }
     assert.match(doc.querySelector('.pi-body').textContent, /剧情索引/);
     for (const page of ['settings', 'data', 'books', 'diag']) {
-        doc.querySelector(`.pi-side [data-act="page"][data-page="${page}"]`).click();
+        doc.querySelector(`[data-act="page"][data-page="${page}"]`).click();
         await tick(20);
         assert.ok(doc.querySelector('.pi-body').textContent.length > 20, page);
     }
@@ -312,7 +363,7 @@ test('模型接口：获取列表后下拉选择；保存为预设后另一个�
     const doc = host.win.document;
     const fire = (node, type) => node.dispatchEvent(new host.win.Event(type, { bubbles: true }));
     const settings = () => host.instance.data.settings();
-    doc.querySelector('.pi-side [data-act="page"][data-page="settings"]').click();
+    doc.querySelector('.pi-top [data-act="page"][data-page="settings"]').click();
     await tick(10);
     const source = doc.querySelector('select[data-llm="discuss"][data-k="source"]');
     source.value = 'custom';
@@ -405,7 +456,7 @@ test('世界书管理：token 统计、修复关键词标点、批量选择后�
     await tick(10);
     doc.querySelector('[data-act="open-book"]').click();
     await tick(30);
-    assert.match(doc.querySelector('.pi-wb-tokens').textContent, /开启 7 token/);
+    assert.match(doc.querySelector('.pi-wb-tokens').textContent, /开启 6 · 全部/);
 
     doc.querySelector('[data-act="wb-punct"]').click();
     await okDialog();
@@ -457,6 +508,7 @@ test('世界书工具栏：新建条目改标题、复制条目、批量关闭�
     const doc = host.win.document;
     const fire = (node, type) => node.dispatchEvent(new host.win.Event(type, { bubbles: true }));
     const ok = async () => { await tick(10); doc.querySelector('.pi-dialog .pi-dlg-acts .is-primary, .pi-dialog .pi-dlg-acts .is-danger').click(); await tick(30); };
+    const menu = async (more, value) => { doc.querySelector(`[data-act="${more}"]`).click(); await tick(10); doc.querySelector(`.pi-dialog [data-dlg-value="${value}"]`).click(); await tick(10); };
     doc.querySelector('.pi-side [data-act="page"][data-page="books"]').click();
     await tick(10);
     doc.querySelector('[data-act="open-book"]').click();
@@ -478,7 +530,7 @@ test('世界书工具栏：新建条目改标题、复制条目、批量关闭�
     await tick(10);
     doc.querySelector('[data-act="wb-pick-all"]').click();
     await tick(10);
-    doc.querySelector('[data-act="wb-pick-off"]').click();
+    await menu('pick-more', 'wb-pick-off');
     await tick(30);
     assert.ok([0, 1, 2].every(i => books.测试书.entries[i].disable));
     const pick = doc.querySelector('[data-wb-pick="0"]');
@@ -491,7 +543,7 @@ test('世界书工具栏：新建条目改标题、复制条目、批量关闭�
 
     doc.querySelector('[data-act="wb-picking"]').click();
     await tick(10);
-    doc.querySelector('[data-act="book-rename"]').click();
+    await menu('book-more', 'book-rename');
     await tick(10);
     doc.querySelector('.pi-dialog [data-dlg-input]').value = '改名书';
     await ok();
@@ -499,7 +551,7 @@ test('世界书工具栏：新建条目改标题、复制条目、批量关闭�
     assert.ok(books.改名书);
     assert.equal(host.context.chatMetadata.world_info, '改名书');
 
-    doc.querySelector('[data-act="book-delete"]').click();
+    await menu('book-more', 'book-delete');
     await ok();
     assert.equal(books.改名书, undefined);
     assert.equal(host.context.chatMetadata.world_info, undefined);

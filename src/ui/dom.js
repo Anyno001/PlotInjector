@@ -91,6 +91,12 @@ export function promptDialog({ title, label = '', value = '', multiline = false,
     });
 }
 
+// 竖排选项菜单：点一项即返回它的 value，点外面或「取消」返回 null。danger 项用红字。
+export function menuDialog({ title, items }) {
+    const html = `<div class="pi-menu-list">${items.map(item => `<button type="button" class="pi-menu-item${item.danger ? ' is-danger' : ''}" data-dlg-value="${esc(item.value)}">${item.icon || ''}<span>${esc(item.label)}</span></button>`).join('')}</div>`;
+    return openDialog({ title, html, actions: [{ label: '取消', value: null }] });
+}
+
 export function choiceDialog({ title, body = '', choices }) {
     return openDialog({ title, html: body ? `<p class="pi-hint">${esc(body)}</p>` : '', actions: choices });
 }

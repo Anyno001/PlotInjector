@@ -19,8 +19,14 @@ export const ROLES = [
 ];
 
 export const DEFAULT_PARAMS = {
-    setting: { position: 1, depth: 4, role: 0, order: 80, enabled: true },
-    detail: { position: 4, depth: 4, role: 0, order: 100, enabled: true },
+    setting: { position: 0, depth: 4, role: 0, order: 80, enabled: true },
+    detail: { position: 0, depth: 4, role: 0, order: 100, enabled: true },
+};
+
+// v0.1.11 及以前新建项目时写进项目文件的默认值；读到原样未改的就换成现在的默认。
+export const OLD_DEFAULT_PARAMS = {
+    setting: { position: 1, depth: 4, role: 0, order: 80 },
+    detail: { position: 4, depth: 4, role: 0, order: 100 },
 };
 
 export function positionLabel(entry) {
@@ -31,9 +37,10 @@ export function positionLabel(entry) {
     return `@D${Number(entry.depth) || 0}${role && role.value ? `·${role.label}` : ''}`;
 }
 
+// 位置、深度、角色、顺序只认项目默认：每段都一样，切到下一段不用再改。单段只记是否启用。
 function pickParams(base, slot) {
     const out = { ...base };
-    for (const key of ['position', 'depth', 'role', 'order', 'enabled']) {
+    for (const key of ['enabled']) {
         if (slot && slot[key] !== undefined && slot[key] !== null && slot[key] !== '') out[key] = slot[key];
     }
     out.position = Number(out.position);
