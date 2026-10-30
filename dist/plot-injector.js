@@ -1,4 +1,4 @@
-// PlotInjector v0.1.11
+// PlotInjector v0.1.12
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -797,25 +797,25 @@ ${body}${carriedText(carried)}
   }
 
   // src/app/data.js
-  function createDataStore({ onChange: onChange5 = () => {
+  function createDataStore({ onChange: onChange6 = () => {
   }, onError = () => {
   } } = {}) {
     let index = emptyIndex(), ready = !1, projects = /* @__PURE__ */ new Map(), chats = /* @__PURE__ */ new Map(), loading = /* @__PURE__ */ new Map(), failed = /* @__PURE__ */ new Set(), writer = createWriter({
       onSaved(name, bytes) {
         if (failed.delete(name), name === INDEX_FILE) return;
         let id = /^pi-[pc]-(.+)\.json$/.exec(name)?.[1], meta2 = index.projects.find((item) => item.id === id), kind = name.startsWith("pi-p-") ? "project" : "chat", knownFile = index.files.includes(name);
-        meta2 && meta2.bytes[kind] !== bytes && (index = { ...index, projects: index.projects.map((item) => item === meta2 ? { ...item, bytes: { ...item.bytes, [kind]: bytes } } : item) }), knownFile || (index = { ...index, files: [...index.files, name] }), (!knownFile || meta2 && meta2.bytes[kind] !== bytes) && writer.schedule(INDEX_FILE, index), onChange5("saved");
+        meta2 && meta2.bytes[kind] !== bytes && (index = { ...index, projects: index.projects.map((item) => item === meta2 ? { ...item, bytes: { ...item.bytes, [kind]: bytes } } : item) }), knownFile || (index = { ...index, files: [...index.files, name] }), (!knownFile || meta2 && meta2.bytes[kind] !== bytes) && writer.schedule(INDEX_FILE, index), onChange6("saved");
       },
       onError(name, error) {
-        failed.add(name), onError(error), onChange5("save-failed");
+        failed.add(name), onError(error), onChange6("save-failed");
       }
     });
     function setIndex(next) {
-      index = next, writer.schedule(INDEX_FILE, index), onChange5("index");
+      index = next, writer.schedule(INDEX_FILE, index), onChange6("index");
     }
     async function init() {
       let file = await readJsonFile(INDEX_FILE);
-      index = normalizeIndex(file && file.value), index.files.includes(INDEX_FILE) || (index = { ...index, files: [INDEX_FILE, ...index.files] }), ready = !0, onChange5("index");
+      index = normalizeIndex(file && file.value), index.files.includes(INDEX_FILE) || (index = { ...index, files: [INDEX_FILE, ...index.files] }), ready = !0, onChange6("index");
     }
     async function loadProject(id) {
       if (projects.has(id)) return projects.get(id);
@@ -830,7 +830,7 @@ ${body}${carriedText(carried)}
       setIndex({ ...index, projects: index.projects.map((item) => item.id === id ? { ...item, ...patch, updatedAt: Date.now() } : item) });
     }
     function saveProject(project) {
-      projects.set(project.id, project), writer.schedule(projectFile(project.id), project), touch(project.id, { name: project.name }), onChange5("project", project.id);
+      projects.set(project.id, project), writer.schedule(projectFile(project.id), project), touch(project.id, { name: project.name }), onChange6("project", project.id);
     }
     function updateProject(id, fn) {
       let current = projects.get(id);
@@ -846,7 +846,7 @@ ${body}${carriedText(carried)}
         ...index,
         projects: [...index.projects, { id: project.id, name: project.name, group, updatedAt: Date.now(), bytes: { project: bytes } }],
         files: index.files.includes(projectFile(project.id)) ? index.files : [...index.files, projectFile(project.id)]
-      }, writer.schedule(INDEX_FILE, index), onChange5("index"), project;
+      }, writer.schedule(INDEX_FILE, index), onChange6("index"), project;
     }
     async function deleteProject(id) {
       writer.cancel(projectFile(id)), writer.cancel(chatFile(id)), await deleteFile(projectFile(id)), await deleteFile(chatFile(id)), projects.delete(id), chats.delete(id);
@@ -865,7 +865,7 @@ ${body}${carriedText(carried)}
       return chats.set(id, chat), chat;
     }
     function saveChat(id, chat) {
-      chats.set(id, chat), writer.schedule(chatFile(id), chat), onChange5("chat", id);
+      chats.set(id, chat), writer.schedule(chatFile(id), chat), onChange6("chat", id);
     }
     async function clearChat(id) {
       writer.cancel(chatFile(id)), await deleteFile(chatFile(id)), chats.set(id, emptyChat());
@@ -894,7 +894,7 @@ ${body}${carriedText(carried)}
     }
     function resetAll() {
       for (let name of [...index.files]) writer.cancel(name);
-      projects.clear(), chats.clear(), index = emptyIndex(), onChange5("index");
+      projects.clear(), chats.clear(), index = emptyIndex(), onChange6("index");
     }
     return {
       init,
@@ -3703,7 +3703,7 @@ ${parsed.body}` : parsed.body;
   var page_data_exports = {};
   __export(page_data_exports, {
     actions: () => actions6,
-    onInput: () => onInput5,
+    onChange: () => onChange4,
     refreshOn: () => refreshOn5,
     render: () => render6
   });
@@ -3773,8 +3773,14 @@ ${parsed.body}` : parsed.body;
         <p class="pi-hint">删除所有项目、讨论记录和当前聊天的进度，执行前自动下载备份。</p>
         <div class="pi-equal is-one pi-acts"><button type="button" class="pi-btn is-sm is-danger" data-act="wipe">备份并删除</button></div></div>`;
   }
-  function onInput5(view, target) {
-    target.dataset.set === "loaderRef" && view.data.updateSettings({ loaderRef: target.value.trim() });
+  function onChange4(view, target) {
+    if (target.dataset.set !== "loaderRef") return;
+    let ref = target.value.trim();
+    if (/^\d+\.\d+\.\d+$/.test(ref) && (ref = `v${ref}`), ref && ref !== "main" && !/^v\d+\.\d+\.\d+$/.test(ref)) {
+      toast("warning", "版本号格式应为 v0.1.0 这样的三段数字，或填 main；未保存。"), target.value = view.data.settings().loaderRef;
+      return;
+    }
+    target.value = ref, view.data.updateSettings({ loaderRef: ref }), toast("success", ref ? `已指定 ${ref}，刷新酒馆页面生效。` : "已改为跟随最新版本，刷新酒馆页面生效。");
   }
   async function verify(view) {
     let s = st5(view);
@@ -3837,7 +3843,7 @@ ${parsed.body}` : parsed.body;
   var page_books_exports = {};
   __export(page_books_exports, {
     actions: () => actions7,
-    onChange: () => onChange4,
+    onChange: () => onChange5,
     refreshOn: () => refreshOn6,
     render: () => render7
   });
@@ -3995,7 +4001,7 @@ ${parsed.body}` : parsed.body;
     let key = target.dataset.wbEdit, patch = editPatch(target);
     !patch || !(st6(view).entries || []).some((item) => item.key === key) || (await updateEntry(st6(view).book, key, patch), st6(view).entries = bookEntries(await loadBook(st6(view).book)), (target.tagName === "SELECT" || target.dataset.f === "comment") && view.renderBody());
   }
-  async function onChange4(view, target) {
+  async function onChange5(view, target) {
     if (target.dataset.wbPick) {
       let picked = st6(view).picked;
       return target.checked ? picked.add(target.dataset.wbPick) : picked.delete(target.dataset.wbPick), view.renderBody();
@@ -4571,13 +4577,13 @@ ${parsed.body}` : parsed.body;
       let item = event.target.closest(".pi-pitem");
       !item || !root.contains(item) || (event.preventDefault(), projectMenu(item.dataset.id));
     }
-    function onChange5(event) {
+    function onChange6(event) {
       let target = event.target;
       if (target.dataset.psearch !== void 0) return;
       let handler = current().onChange;
       handler && Promise.resolve(handler(view, target, event)).catch((error) => toast("error", error.message || String(error)));
     }
-    function onInput6(event) {
+    function onInput5(event) {
       if (event.target.dataset.psearch !== void 0)
         return view.search = event.target.value, applySearch();
       let handler = current().onInput;
@@ -4589,7 +4595,7 @@ ${parsed.body}` : parsed.body;
     function open() {
       ensureStyle(), !root && (view.drawer = !1, lastSide = "", lastTop = "", root = el(`<div class="pi-root pi-overlay"><div class="pi-panel"><aside class="pi-side"></aside>
             <div class="pi-scrim" data-act="drawer"></div>
-            <section class="pi-main"><header class="pi-top"></header><div class="pi-body"></div></section></div></div>`), root.addEventListener("click", onClick), root.addEventListener("contextmenu", onContext), root.addEventListener("change", onChange5), root.addEventListener("input", onInput6), root.addEventListener("focusout", (event) => current().onBlur?.(view, event.target, event)), root.addEventListener("mousedown", (event) => {
+            <section class="pi-main"><header class="pi-top"></header><div class="pi-body"></div></section></div></div>`), root.addEventListener("click", onClick), root.addEventListener("contextmenu", onContext), root.addEventListener("change", onChange6), root.addEventListener("input", onInput5), root.addEventListener("focusout", (event) => current().onBlur?.(view, event.target, event)), root.addEventListener("mousedown", (event) => {
         event.target === root && (root.dataset.down = "1");
       }), root.addEventListener("mouseup", (event) => {
         event.target === root && root.dataset.down && close(), delete root.dataset.down;
@@ -4644,7 +4650,7 @@ ${parsed.body}` : parsed.body;
   }
 
   // src/index.js
-  var VERSION = "0.1.11", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.1.12", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")

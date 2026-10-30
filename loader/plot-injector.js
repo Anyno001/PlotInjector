@@ -15,7 +15,7 @@
         try { if (window.parent && window.parent !== window && window.parent.document) return window.parent; } catch (error) { /* 跨域 */ }
         return window;
     })();
-    const LOADER_VERSION = '0.1.3';
+    const LOADER_VERSION = '0.1.4';
     const status = { loader: LOADER_VERSION, stage: '正在读取版本', error: '', bound: [], attempts: [] };
     window.__plotInjectorLoader = status;
     const doc = host.document;
@@ -191,8 +191,8 @@
         });
     }
 
-    async function main() {
-        const ref = (await pinnedRef()) || (await latestTag());
+    // 按一个版本依次试三个地址；全部失败返回错误说明，成功返回空串。
+    async function loadRef(ref) {
         status.stage = `正在下载 ${ref}`;
         const bust = ref === 'main' ? `?pi_t=${Math.floor(Date.now() / 60000)}` : '';
         const urls = [
@@ -208,16 +208,33 @@
                 await run(code, url);
                 if (!host.__plotInjector) throw new Error(host.__plotInjectorBootError || '程序已下载但没有启动');
                 status.stage = '已就绪';
-                status.attempts.push(`${new URL(url).host}：成功`);
-                return;
+                status.attempts.push(`${ref} ${new URL(url).host}：成功`);
+                return '';
             } catch (error) {
                 errors.push(`${new URL(url).host}：${error.message}`);
-                status.attempts.push(`${new URL(url).host}：${error.message}`);
+                status.attempts.push(`${ref} ${new URL(url).host}：${error.message}`);
                 console.warn('[剧情注入器] 加载失败，换备用地址。', url, error);
             }
         }
+        return errors.join('；');
+    }
+
+    // 「指定版本」写错（版本不存在、只填了半截）时退回最新版，避免插件再也打不开、也就没法改回来。
+    async function main() {
+        const pinned = await pinnedRef();
+        const valid = pinned === 'main' || /^v\d+\.\d+\.\d+$/.test(pinned);
+        if (pinned && valid) {
+            const failed = await loadRef(pinned);
+            if (!failed) return;
+            notify('warning', `指定版本「${pinned}」加载失败，已改用最新版本。可在「数据管理 → 版本更新」清空或改正。`);
+        } else if (pinned) {
+            notify('warning', `指定版本「${pinned}」格式不对，已改用最新版本。可在「数据管理 → 版本更新」清空或改正。`);
+        }
+        const ref = await latestTag();
+        const failed = await loadRef(ref);
+        if (!failed) return;
         status.stage = '失败';
-        status.error = `剧情注入器加载失败（${ref}）。${errors.join('；')}`;
+        status.error = `剧情注入器加载失败（${ref}）。${failed}`;
         notify('error', status.error);
     }
 

@@ -48,8 +48,19 @@ export function render(view) {
         <div class="pi-equal is-one pi-acts"><button type="button" class="pi-btn is-sm is-danger" data-act="wipe">备份并删除</button></div></div>`;
 }
 
-export function onInput(view, target) {
-    if (target.dataset.set === 'loaderRef') view.data.updateSettings({ loaderRef: target.value.trim() });
+// 输完离开输入框或按回车才保存，避免存下「v0.1」这类半截版本号；只填数字时自动补 v。
+export function onChange(view, target) {
+    if (target.dataset.set !== 'loaderRef') return;
+    let ref = target.value.trim();
+    if (/^\d+\.\d+\.\d+$/.test(ref)) ref = `v${ref}`;
+    if (ref && ref !== 'main' && !/^v\d+\.\d+\.\d+$/.test(ref)) {
+        toast('warning', '版本号格式应为 v0.1.0 这样的三段数字，或填 main；未保存。');
+        target.value = view.data.settings().loaderRef;
+        return;
+    }
+    target.value = ref;
+    view.data.updateSettings({ loaderRef: ref });
+    toast('success', ref ? `已指定 ${ref}，刷新酒馆页面生效。` : '已改为跟随最新版本，刷新酒馆页面生效。');
 }
 
 async function verify(view) {
