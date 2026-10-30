@@ -41,6 +41,7 @@ export function bookEntries(data) {
         uid: String(entry.uid ?? key),
         key,
         title: String(entry.comment || '').trim() || [].concat(entry.key || []).slice(0, 3).join('、') || `条目 ${entry.uid ?? key}`,
+        comment: String(entry.comment || ''),
         content: String(entry.content || ''),
         disabled: Boolean(entry.disable),
         constant: Boolean(entry.constant),
@@ -90,6 +91,47 @@ export function updateEntry(name, key, patch) {
         if (Object.prototype.hasOwnProperty.call(patch, 'keysecondary')) entry.selective = patch.keysecondary.length > 0;
         await saveBook(name, data);
     });
+}
+
+// 批量改多条：patches = [{ key, patch }]，一次读一次写。返回改动前的条目，供调用方下载备份。
+export function patchEntries(name, patches) {
+    return queued(name, async () => {
+        const data = clone(await loadBook(name));
+        const backup = { entries: {} };
+        for (const { key, patch } of patches) {
+            const entry = data.entries[key];
+            if (!entry) continue;
+            backup.entries[key] = clone(entry);
+            for (const field of [...ENTRY_FIELDS, 'comment']) if (Object.prototype.hasOwnProperty.call(patch, field)) entry[field] = patch[field];
+            if (Object.prototype.hasOwnProperty.call(patch, 'keysecondary')) entry.selective = patch.keysecondary.length > 0;
+        }
+        await saveBook(name, data);
+        return backup;
+    });
+}
+
+// 把条目复制或移动到另一本世界书；目标不存在时新建。uid 在目标书里重新编号，其余字段原样带过去。
+export async function transferEntries(from, to, keys, { move = false } = {}) {
+    if (!to || to === from) throw new Error('目标世界书不能和当前世界书相同');
+    const source = await queued(from, () => loadBook(from));
+    const exists = allBookNames().includes(to);
+    let copied = 0;
+    await queued(to, async () => {
+        const data = exists ? clone(await loadBook(to)) : { entries: {} };
+        let uid = Object.values(data.entries).reduce((max, entry) => Math.max(max, Number(entry.uid) || 0), -1);
+        for (const key of keys) {
+            const entry = source.entries[key];
+            if (!entry) continue;
+            uid += 1;
+            data.entries[uid] = { ...clone(entry), uid, displayIndex: uid };
+            copied += 1;
+        }
+        await saveBook(to, data);
+    });
+    const c = ctx();
+    if (!exists && c && typeof c.updateWorldInfoList === 'function') await c.updateWorldInfoList();
+    if (move && copied) await deleteEntries(from, keys);
+    return { copied, created: !exists };
 }
 
 // 删除前返回被删条目组成的世界书 json，供调用方下载备份。

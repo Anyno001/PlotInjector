@@ -55,6 +55,8 @@ function makeHost() {
     win.SillyTavern = { libs: { yaml: YAML }, getContext: () => context };
     win.toastr = { info() {}, success() {}, warning() {}, error(msg) { win.__errors.push(msg); } };
     win.__errors = [];
+    win.URL.createObjectURL = () => 'blob:test';
+    win.URL.revokeObjectURL = () => {};
     win.TavernHelper = {
         async generateRaw({ ordered_prompts: prompts }) {
             llmCalls.push(prompts);
@@ -378,6 +380,61 @@ test('世界书条目页：开启与已关闭分两区，勾选框直接开关�
     doc.querySelector('[data-act="wb-bulk"][data-group="on"]').click();
     await tick(20);
     assert.deepEqual(sections(), [[], [['0', false], ['1', false]]]);
+    assert.equal(host.win.__errors.length, 0, host.win.__errors.join('\n'));
+    await host.instance.destroy();
+});
+
+test('世界书管理：token 统计、修复关键词标点、批量选择后顺序重排与迁移到新世界书', async () => {
+    const host = await boot();
+    await withProject(host);
+    const books = { 测试书: { entries: {
+        0: { uid: 0, comment: '甲', content: '甲内容', key: ['甲，甲甲、甲乙'], keysecondary: [], disable: false, order: 5 },
+        1: { uid: 1, comment: '乙', content: '乙内容', key: ['乙'], keysecondary: [], disable: false, order: 9 },
+    } } };
+    host.context.chatMetadata.world_info = '测试书';
+    host.context.getWorldInfoNames = () => Object.keys(books);
+    host.context.loadWorldInfo = async name => (books[name] ? JSON.parse(JSON.stringify(books[name])) : null);
+    host.context.saveWorldInfo = async (name, data) => { books[name] = JSON.parse(JSON.stringify(data)); };
+    host.context.getTokenCountAsync = async text => text.length;
+    host.click();
+    await tick(10);
+    const doc = host.win.document;
+    const fire = (node, type) => node.dispatchEvent(new host.win.Event(type, { bubbles: true }));
+    const okDialog = async () => { await tick(10); doc.querySelector('.pi-dialog .pi-dlg-acts .is-primary, .pi-dialog .pi-dlg-acts .is-danger').click(); await tick(20); };
+    doc.querySelector('.pi-side [data-act="page"][data-page="books"]').click();
+    await tick(10);
+    doc.querySelector('[data-act="open-book"]').click();
+    await tick(30);
+    assert.match(doc.querySelector('.pi-wb-tokens').textContent, /开启 7 token/);
+
+    doc.querySelector('[data-act="wb-punct"]').click();
+    await okDialog();
+    assert.deepEqual(books.测试书.entries[0].key, ['甲', '甲甲', '甲乙']);
+
+    doc.querySelector('[data-act="wb-picking"]').click();
+    await tick(10);
+    doc.querySelector('[data-act="wb-pick-all"][data-group="on"]').click();
+    await tick(10);
+    doc.querySelector('[data-act="wb-order"]').click();
+    await tick(10);
+    doc.querySelector('.pi-dialog [data-f="start"]').value = '200';
+    doc.querySelector('.pi-dialog [data-f="step"]').value = '10';
+    doc.querySelector('.pi-dialog .pi-dlg-acts .is-primary').click();
+    await okDialog();
+    assert.deepEqual([books.测试书.entries[0].order, books.测试书.entries[1].order], [200, 210]);
+
+    const pick = doc.querySelector('[data-wb-pick="1"]');
+    pick.checked = false;
+    fire(pick, 'change');
+    await tick(10);
+    doc.querySelector('[data-act="wb-move"]').click();
+    await tick(10);
+    doc.querySelector('.pi-dialog [data-f="name"]').value = '新书';
+    doc.querySelector('.pi-dialog [data-f="mode"]').value = 'move';
+    doc.querySelector('.pi-dialog .pi-dlg-acts .is-primary').click();
+    await okDialog();
+    assert.deepEqual(Object.values(books.新书.entries).map(entry => `${entry.uid}:${entry.comment}`), ['0:甲']);
+    assert.deepEqual(Object.keys(books.测试书.entries), ['1']);
     assert.equal(host.win.__errors.length, 0, host.win.__errors.join('\n'));
     await host.instance.destroy();
 });

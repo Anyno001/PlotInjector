@@ -27,6 +27,7 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
     let mismatchShownFor = '';
     let fallbackTimer = 0;
     let generating = false;
+    let chatStartFloors = 0;
     let pendingCheck = false;
     let pendingTimer = 0;
     const listeners = [];
@@ -399,6 +400,7 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
         progressFor = '';
         pendingCheck = false;
         view.clearTimeout(pendingTimer);
+        chatStartFloors = floorCount();
         notice.hide('advance');
         notice.hide('offtrack');
         const id = activeId();
@@ -505,6 +507,7 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
             cardKey: cardKey(),
             chatLength: chatMessages().length,
             floors: floorCount(),
+            chatStartFloors,
             generating,
             pending: pendingCheck,
             checking,

@@ -44,7 +44,8 @@ function problems(info) {
     if (info.progress && info.progress.lastCheckFloor > info.floors) out.push({ text: `上次检测记在第 ${info.progress.lastCheckFloor} 楼，当前只有 ${info.floors} 楼。`, fix: 'reset-base' });
     if (info.llm.source === 'custom' && !String(info.llm.model || '').trim()) out.push({ text: '进度检测用独立接口，但没有选择模型。', fix: '' });
     const received = info.events.find(item => item.key === 'MESSAGE_RECEIVED');
-    if (received && received.bound && !received.count && info.floors > 1) out.push({ text: '本次加载后还没收到过「收到回复」事件。发一条消息后再看，仍为 0 次可点「重新绑定事件」。', fix: 'rebind' });
+    // 打开聊天后楼数涨了两楼以上（一问一答）却一次没收到，才说明事件没传到插件。
+    if (received && received.bound && !received.count && info.floors - info.chatStartFloors >= 2) out.push({ text: '打开聊天后已有新回复，但没有收到「收到回复」事件。', fix: 'rebind' });
     return out;
 }
 

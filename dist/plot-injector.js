@@ -1,4 +1,4 @@
-// PlotInjector v0.1.8
+// PlotInjector v0.1.9
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -675,6 +675,14 @@ ${body}${carriedText(carried)}
     let c = ctx();
     return c && Array.isArray(c.chat) ? c.chat : [];
   }
+  async function countTokens(text) {
+    let c = ctx();
+    try {
+      if (c && typeof c.getTokenCountAsync == "function") return await c.getTokenCountAsync(String(text || ""));
+    } catch {
+    }
+    return null;
+  }
   function downloadBlob(name, data, type = "application/json") {
     let doc = hostDocument(), view = hostWindow(), url = view.URL.createObjectURL(new view.Blob([data], { type })), anchor = doc.createElement("a");
     anchor.href = url, anchor.download = name, doc.body.appendChild(anchor), anchor.click(), anchor.remove(), view.setTimeout(() => view.URL.revokeObjectURL(url), 2e3);
@@ -1241,6 +1249,7 @@ ${text}` }
       uid: String(entry.uid ?? key),
       key,
       title: String(entry.comment || "").trim() || [].concat(entry.key || []).slice(0, 3).join("、") || `条目 ${entry.uid ?? key}`,
+      comment: String(entry.comment || ""),
       content: String(entry.content || ""),
       disabled: !!entry.disable,
       constant: !!entry.constant,
@@ -1279,6 +1288,34 @@ ${text}` }
       for (let field of ENTRY_FIELDS) Object.prototype.hasOwnProperty.call(patch, field) && (entry[field] = patch[field]);
       Object.prototype.hasOwnProperty.call(patch, "keysecondary") && (entry.selective = patch.keysecondary.length > 0), await saveBook(name, data);
     });
+  }
+  function patchEntries(name, patches) {
+    return queued(name, async () => {
+      let data = clone(await loadBook(name)), backup = { entries: {} };
+      for (let { key, patch } of patches) {
+        let entry = data.entries[key];
+        if (entry) {
+          backup.entries[key] = clone(entry);
+          for (let field of [...ENTRY_FIELDS, "comment"]) Object.prototype.hasOwnProperty.call(patch, field) && (entry[field] = patch[field]);
+          Object.prototype.hasOwnProperty.call(patch, "keysecondary") && (entry.selective = patch.keysecondary.length > 0);
+        }
+      }
+      return await saveBook(name, data), backup;
+    });
+  }
+  async function transferEntries(from, to, keys, { move = !1 } = {}) {
+    if (!to || to === from) throw new Error("目标世界书不能和当前世界书相同");
+    let source = await queued(from, () => loadBook(from)), exists = allBookNames().includes(to), copied = 0;
+    await queued(to, async () => {
+      let data = exists ? clone(await loadBook(to)) : { entries: {} }, uid = Object.values(data.entries).reduce((max, entry) => Math.max(max, Number(entry.uid) || 0), -1);
+      for (let key of keys) {
+        let entry = source.entries[key];
+        entry && (uid += 1, data.entries[uid] = { ...clone(entry), uid, displayIndex: uid }, copied += 1);
+      }
+      await saveBook(to, data);
+    });
+    let c = ctx();
+    return !exists && c && typeof c.updateWorldInfoList == "function" && await c.updateWorldInfoList(), move && copied && await deleteEntries(from, keys), { copied, created: !exists };
   }
   function deleteEntries(name, keys) {
     return queued(name, () => deleteNow(name, keys));
@@ -1342,7 +1379,7 @@ ${text}` }
   // src/app/runtime.js
   var VIRTUAL_WORLD = "剧情注入器", LOG_MAX = 40, PENDING_MAX_MS = 3e4, placeOf = (unit) => `${volumeLabel(unit.volume.key)}·${stageLabel(unit.stage.key)}`;
   function createRuntime({ data, notice, emit, askReason = async () => "" }) {
-    let view = hostWindow(), progress = null, progressFor = "", checking = !1, mismatchShownFor = "", fallbackTimer = 0, generating = !1, pendingCheck = !1, pendingTimer = 0, listeners = [], stats = {}, logs = [];
+    let view = hostWindow(), progress = null, progressFor = "", checking = !1, mismatchShownFor = "", fallbackTimer = 0, generating = !1, chatStartFloors = 0, pendingCheck = !1, pendingTimer = 0, listeners = [], stats = {}, logs = [];
     function log(text) {
       logs.push({ at: Date.now(), text }), logs.length > LOG_MAX && logs.shift();
     }
@@ -1572,7 +1609,7 @@ ${text}` }
       clampBase() && emit("floor");
     }
     async function onChatChanged() {
-      progress = null, progressFor = "", pendingCheck = !1, view.clearTimeout(pendingTimer), notice.hide("advance"), notice.hide("offtrack");
+      progress = null, progressFor = "", pendingCheck = !1, view.clearTimeout(pendingTimer), chatStartFloors = floorCount(), notice.hide("advance"), notice.hide("offtrack");
       let id = activeId();
       if (id)
         try {
@@ -1648,6 +1685,7 @@ ${text}` }
         cardKey: cardKey(),
         chatLength: chatMessages().length,
         floors: floorCount(),
+        chatStartFloors,
         generating,
         pending: pendingCheck,
         checking,
@@ -1789,6 +1827,10 @@ ${text}` }
 .pi-wb-row input{width:15px;height:15px;margin:0;accent-color:var(--pi-accent);flex-shrink:0;cursor:pointer}
 .pi-wb-title{flex:1;min-width:0;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pi-wb-row.is-off .pi-wb-title{color:var(--pi-txt2)}
+.pi-wb-info{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:6px;margin:4px 0 10px}
+.pi-wb-tokens{display:contents}
+.pi-wb-count{font-size:12px;color:var(--pi-txt2);padding-left:4px}
+label.pi-wb-row{cursor:pointer}
 .pi-acts{margin-top:12px}
 .pi-acts-top{margin-bottom:8px}
 .pi-seg{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:2px;padding:3px;background:var(--pi-surf);border-radius:20px;margin-bottom:6px}
@@ -3386,14 +3428,19 @@ ${parsed.body}` : parsed.body;
         ${open ? `<div class="pi-row pi-acts-top"><button type="button" class="pi-btn is-sm is-ghost" data-act="guide-reset"${s.guide ? "" : " disabled"}>恢复内置版本</button></div>
         <textarea class="pi-ta is-mono is-tall" data-guide>${esc(s.guide || BUILTIN_GUIDE)}</textarea>` : ""}</div>`;
   }
+  function paceCard(view, s) {
+    let open = st4(view).paceOpen, changed = PACES.filter((item) => s.paceText[item.value]).map((item) => item.label), current = view.runtime.activeId() ? view.runtime.progress().pace : "", pace = PACES.some((item) => item.value === st4(view).pace) ? st4(view).pace : current || "normal", pick = PACES.map((item) => ({ value: item.value, label: `${item.label}${item.value === current ? "（当前聊天使用）" : ""}${s.paceText[item.value] ? "·已改" : ""}` }));
+    return `<div class="pi-card"><h3>推进速度说明${changed.length ? `<span class="pi-badge">已修改 ${changed.join("、")}</span>` : ""}<span class="pi-spacer"></span>
+            <button type="button" class="pi-btn is-sm is-ghost" data-act="pace-toggle">${open ? "收起" : "编辑"}</button></h3>
+        ${open ? `<label class="pi-field"><span>编辑哪一档的说明</span><select class="pi-sel" data-pace-pick>${options(pick, pace)}</select></label>
+        <textarea class="pi-ta" rows="3" data-pace-text="${pace}">${esc(paceText(s, pace))}</textarea>
+        <div class="pi-tools is-c1 is-end"><button type="button" class="pi-btn is-sm" data-act="pace-reset" data-pace="${pace}"${s.paceText[pace] ? "" : " disabled"}>恢复默认</button></div>` : ""}</div>`;
+  }
   function render5(view) {
-    let s = view.data.settings(), modes = [{ value: "ask", label: "弹出确认" }, { value: "auto", label: "自动推进（可撤销）" }, { value: "nodes", label: "仅勾选节点，不推进阶段" }], offModes = [{ value: "ask", label: "弹出提醒" }, { value: "auto", label: "自动改写后续阶段（可撤销）" }, { value: "off", label: "不检查偏离" }], pace = PACES.some((item) => item.value === st4(view).pace) ? st4(view).pace : "normal";
+    let s = view.data.settings(), modes = [{ value: "ask", label: "弹出确认" }, { value: "auto", label: "自动推进（可撤销）" }, { value: "nodes", label: "仅勾选节点，不推进阶段" }], offModes = [{ value: "ask", label: "弹出提醒" }, { value: "auto", label: "自动改写后续阶段（可撤销）" }, { value: "off", label: "不检查偏离" }];
     return `<div class="pi-card"><h3>注入内容</h3>
-        <label class="pi-field"><span>详细条目的标签名</span><input class="pi-inp" data-set="tagName" value="${esc(s.tagName)}"></label>
-        <div class="pi-field"><span>推进速度的提示词（执行页选择速度）</span>
-            <div class="pi-seg">${PACES.map((item) => `<button type="button" class="pi-seg-btn${item.value === pace ? " is-sel" : ""}" data-act="pace-tab" data-pace="${item.value}">${item.label}${s.paceText[item.value] ? "·已改" : ""}</button>`).join("")}</div>
-            <textarea class="pi-ta" rows="3" data-pace-text="${pace}">${esc(paceText(s, pace))}</textarea></div>
-        <div class="pi-tools is-c1"><button type="button" class="pi-btn is-sm" data-act="pace-reset" data-pace="${pace}"${s.paceText[pace] ? "" : " disabled"}>恢复默认</button></div></div>
+        <label class="pi-field"><span>详细条目的标签名</span><input class="pi-inp" data-set="tagName" value="${esc(s.tagName)}"></label></div>
+        ${paceCard(view, s)}
         <div class="pi-card"><h3>阶段推进</h3>
         <div class="pi-pair"><label class="pi-field"><span>检测间隔（楼）</span><input class="pi-inp" type="number" min="1" data-set="checkEvery" value="${s.checkEvery}"></label>
             <label class="pi-field"><span>每次读取楼数</span><input class="pi-inp" type="number" min="1" data-set="checkFloors" value="${s.checkFloors}"></label></div>
@@ -3425,6 +3472,10 @@ ${parsed.body}` : parsed.body;
     target.dataset.set && target.type !== "checkbox" && target.tagName !== "SELECT" && view.data.updateSettings({ [target.dataset.set]: readValue(target) }), target.dataset.llm && target.tagName === "INPUT" && setRole(view, target.dataset.llm, { [target.dataset.k]: target.value.trim() });
   }
   function onChange3(view, target) {
+    if (target.dataset.pacePick !== void 0) {
+      st4(view).pace = target.value, view.renderBody();
+      return;
+    }
     target.dataset.set && (target.type === "checkbox" || target.tagName === "SELECT") && (view.data.updateSettings({ [target.dataset.set]: readValue(target) }), view.runtime.refresh(), view.renderBody()), target.dataset.llm && target.tagName === "SELECT" && (target.value === "__manual" ? st4(view).manual = { ...st4(view).manual, [target.dataset.llm]: !0 } : setRole(view, target.dataset.llm, { [target.dataset.k]: target.value }), view.renderBody()), target.dataset.set && target.tagName !== "SELECT" && target.type !== "checkbox" && view.runtime.refresh();
   }
   var CONN_KEYS2 = ["endpoint", "apiKey", "model", "temperature"], actions5 = {
@@ -3468,8 +3519,8 @@ ${parsed.body}` : parsed.body;
         return setRole(view, role, { source: "custom", ...Object.fromEntries(CONN_KEYS2.map((key) => [key, preset[key]])) }), st4(view).manual = { ...st4(view).manual, [role]: !1 }, toast("success", `已为「${LLM_ROLES.find((item) => item.key === role).label}」载入预设「${preset.name}」。`), view.renderBody();
       }
     },
-    "pace-tab"(view, target) {
-      st4(view).pace = target.dataset.pace, view.renderBody();
+    "pace-toggle"(view) {
+      st4(view).paceOpen = !st4(view).paceOpen, view.renderBody();
     },
     "pace-reset"(view, target) {
       view.data.updateSettings({ paceText: { ...view.data.settings().paceText, [target.dataset.pace]: "" } }), view.runtime.refresh(), view.renderBody();
@@ -3624,6 +3675,57 @@ ${parsed.body}` : parsed.body;
     refreshOn: () => refreshOn6,
     render: () => render7
   });
+
+  // src/core/wbtools.js
+  var isRegexKey = (key) => /^\/.+\/[a-z]*$/i.test(key), SPLIT = /[,，、;；\n]/, TRIM = /^[\s　。，、；：！？,.;:!?]+|[\s　。，、；：！？,.;:!?]+$/g;
+  function fixKeys(keys) {
+    let out = [];
+    for (let raw of keys) {
+      let parts = isRegexKey(String(raw).trim()) ? [String(raw).trim()] : String(raw).split(SPLIT).map((part) => part.replace(TRIM, ""));
+      for (let part of parts) part && !out.includes(part) && out.push(part);
+    }
+    return out;
+  }
+  var sameList = (a, b) => a.length === b.length && a.every((item, index) => item === b[index]);
+  function punctPlan(entries) {
+    let out = [];
+    for (let entry of entries) {
+      let key = fixKeys(entry.keys), second = fixKeys(entry.keysSecondary), patch = {};
+      sameList(key, entry.keys) || (patch.key = key), sameList(second, entry.keysSecondary) || (patch.keysecondary = second), Object.keys(patch).length && out.push({ key: entry.key, title: entry.title, patch, before: [...entry.keys, ...entry.keysSecondary].join(" | "), after: [...key, ...second].join(" | ") });
+    }
+    return out;
+  }
+  function buildPattern(find, { regex = !1, ignoreCase = !1 } = {}) {
+    if (!find) throw new Error("请填写要查找的内容");
+    let source = regex ? find : find.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    try {
+      return new RegExp(source, ignoreCase ? "gi" : "g");
+    } catch (error) {
+      throw new Error(`正则写法有误：${error.message}`);
+    }
+  }
+  var countIn = (text, pattern) => (String(text).match(pattern) || []).length;
+  function regexPlan(entries, pattern, replace, fields) {
+    let sub = (text) => String(text).replace(pattern, replace), out = [];
+    for (let entry of entries) {
+      let patch = {}, hits = 0;
+      if (fields.content && countIn(entry.content, pattern) && (hits += countIn(entry.content, pattern), patch.content = sub(entry.content)), fields.comment && entry.comment && countIn(entry.comment, pattern) && (hits += countIn(entry.comment, pattern), patch.comment = sub(entry.comment)), fields.keys)
+        for (let [from, field] of [[entry.keys, "key"], [entry.keysSecondary, "keysecondary"]]) {
+          let n = from.reduce((sum, key) => sum + countIn(key, pattern), 0);
+          n && (hits += n, patch[field] = from.map(sub).map((key) => key.trim()).filter(Boolean));
+        }
+      hits && out.push({ key: entry.key, title: entry.title, patch, hits });
+    }
+    return out;
+  }
+  function orderPlan(entries, { start, step, by = "list" }) {
+    let begin = Math.round(Number(start)), gap = Math.round(Number(step));
+    if (!Number.isFinite(begin) || begin < 0) throw new Error("起始数字需为不小于 0 的整数");
+    if (!Number.isFinite(gap) || gap < 1) throw new Error("间隔需为不小于 1 的整数");
+    return (by === "order" ? entries.map((entry, index) => ({ entry, index })).sort((a, b) => a.entry.order - b.entry.order || a.index - b.index).map((item) => item.entry) : entries).map((entry, index) => ({ key: entry.key, title: entry.title, from: entry.order, to: begin + index * gap }));
+  }
+
+  // src/ui/page-books.js
   var st6 = (view) => view.tabState("books"), GROUPS = {
     on: (entries) => entries.filter((entry) => !acuField(entry.title) && !entry.disabled),
     off: (entries) => entries.filter((entry) => !acuField(entry.title) && entry.disabled)
@@ -3650,10 +3752,37 @@ ${parsed.body}` : parsed.body;
         <button type="button" class="pi-icon-btn is-danger" data-act="wb-delete" data-key="${esc(entry.key)}" title="删除">${ICONS.trash}</button></div>
         ${open ? editor(entry) : ""}</div>`;
   }
+  function pickRow(entry, picked) {
+    return `<label class="pi-wb-row${entry.disabled ? " is-off" : ""}"><input type="checkbox" data-wb-pick="${esc(entry.key)}"${picked.has(entry.key) ? " checked" : ""}>
+        ${title(entry)}<span class="pi-badge">顺序 ${entry.order}</span></label>`;
+  }
   var bulkBtn = (attrs, label, disabled) => `<button type="button" class="pi-btn is-sm is-ghost" ${attrs}${disabled ? " disabled" : ""}>${label}</button>`;
-  function section(name, entries, empty, bulk, openKey) {
+  function section(name, entries, empty, bulk, openKey, picked) {
+    let rows2 = entries.map((entry) => picked ? pickRow(entry, picked) : entryRow2(entry, entry.key === openKey)).join("");
     return `<div class="pi-wb-sec"><div class="pi-wb-sec-hd">${name}<small>${entries.length}</small>${entries.length ? `<span class="pi-wb-bulk">${bulk}</span>` : ""}</div>
-        ${entries.map((entry) => entryRow2(entry, entry.key === openKey)).join("") || `<p class="pi-hint">${empty}</p>`}</div>`;
+        ${rows2 || `<p class="pi-hint">${empty}</p>`}</div>`;
+  }
+  function pickBulk(group, entries, picked) {
+    let all = entries.length && entries.every((entry) => picked.has(entry.key));
+    return bulkBtn(`data-act="wb-pick-all" data-group="${group}" data-on="${all ? "0" : "1"}"`, all ? "取消全选" : "全选");
+  }
+  function tokenText(s) {
+    if (!s.tokens) return '<span class="pi-badge">统计中…</span>';
+    let mark = s.tokens.exact ? "" : "≈";
+    return `<span class="pi-badge is-accent">开启 ${mark}${s.tokens.on} token</span><span class="pi-badge">全部 ${mark}${s.tokens.all} token</span>`;
+  }
+  function bookBody(s, entries) {
+    if (!entries.length) return '<p class="pi-hint">没有条目</p>';
+    let picked = s.picking ? s.picked : null, on = GROUPS.on(entries), off = GROUPS.off(entries), none = picked && !picked.size ? " disabled" : "", buttons = picked ? `<div class="pi-tools is-c4"><button type="button" class="pi-btn is-sm is-primary" data-act="wb-move"${none}>迁移到其他世界书</button>
+            <button type="button" class="pi-btn is-sm" data-act="wb-order"${none}>顺序重排</button>
+            <button type="button" class="pi-btn is-sm" data-act="wb-regex"${none}>正则替换</button>
+            <button type="button" class="pi-btn is-sm" data-act="wb-picking">退出批量选择</button></div>` : `<div class="pi-tools is-c3"><button type="button" class="pi-btn is-sm" data-act="wb-picking">批量选择</button>
+            <button type="button" class="pi-btn is-sm" data-act="wb-punct">修复关键词标点</button>
+            <button type="button" class="pi-btn is-sm" data-act="wb-regex">正则替换</button></div>`, tools = `<div class="pi-wb-info"><span class="pi-wb-tokens">${tokenText(s)}</span>${picked ? `<span class="pi-wb-count">已选 ${picked.size} 条</span>` : ""}</div>${buttons}`;
+    return picked ? `${tools}${section("已开启", on, "没有开启的条目", pickBulk("on", on, picked), "", picked)}
+            ${section("已关闭", off, "没有关闭的条目", pickBulk("off", off, picked), "", picked)}` : `${tools}${section("已开启", on, "没有开启的条目", bulkBtn('data-act="wb-bulk" data-group="on"', "全部关闭"), s.openKey)}
+        ${section("已关闭", off, "没有关闭的条目", bulkBtn('data-act="wb-bulk" data-group="off"', "全部开启"), s.openKey)}
+        ${acuSection(entries, s.openFields || /* @__PURE__ */ new Set())}`;
   }
   function acuSection(entries, openFields) {
     let fields = groupByField(entries);
@@ -3671,9 +3800,7 @@ ${parsed.body}` : parsed.body;
       return `<div class="pi-entry"><div class="pi-entry-hd" data-act="open-book" data-book="${esc(book.name)}">
             ${open ? ICONS.caretDown : ICONS.caret}<span class="pi-etitle" title="${esc(book.name)}">${esc(book.name)}</span><span class="pi-badge">${esc(book.source)}</span>
             ${book.source === "专用" ? `<button type="button" class="pi-btn is-sm is-danger" data-act="delete-book" data-book="${esc(book.name)}">整本删除</button>` : ""}</div>
-            ${entries ? `<div class="pi-entry-bd">${entries.length ? `${section("已开启", GROUPS.on(entries), "没有开启的条目", bulkBtn('data-act="wb-bulk" data-group="on"', "全部关闭"), s.openKey)}
-                ${section("已关闭", GROUPS.off(entries), "没有关闭的条目", bulkBtn('data-act="wb-bulk" data-group="off"', "全部开启"), s.openKey)}
-                ${acuSection(entries, s.openFields || /* @__PURE__ */ new Set())}` : '<p class="pi-hint">没有条目</p>'}</div>` : ""}</div>`;
+            ${entries ? `<div class="pi-entry-bd">${bookBody(s, entries)}</div>` : ""}</div>`;
     }).join("");
     return `<div class="pi-card pi-wb"><h3>当前角色卡的世界书</h3>
         <p class="pi-hint">「${esc(cardName() || "未打开角色卡")}」关联的世界书。</p>
@@ -3690,12 +3817,68 @@ ${parsed.body}` : parsed.body;
     !patch || !(st6(view).entries || []).some((item) => item.key === key) || (await updateEntry(st6(view).book, key, patch), st6(view).entries = bookEntries(await loadBook(st6(view).book)), target.tagName === "SELECT" && view.renderBody());
   }
   async function onChange4(view, target) {
+    if (target.dataset.wbPick) {
+      let picked = st6(view).picked;
+      return target.checked ? picked.add(target.dataset.wbPick) : picked.delete(target.dataset.wbPick), view.renderBody();
+    }
     if (target.dataset.wbEdit) return saveEdit(view, target);
     let key = target.dataset.wbToggle;
     key && (target.disabled = !0, await setEntriesDisabled(st6(view).book, [key], !target.checked), await reloadBook(view));
   }
   async function reloadBook(view) {
-    st6(view).entries = bookEntries(await loadBook(st6(view).book)), view.renderBody();
+    let s = st6(view);
+    s.entries = bookEntries(await loadBook(s.book));
+    let keys = new Set(s.entries.map((entry) => entry.key));
+    s.picked = new Set([...s.picked || []].filter((key) => keys.has(key))), view.renderBody(), countBook(view);
+  }
+  async function countBook(view) {
+    let s = st6(view), book = s.book, entries = s.entries || [], on = entries.filter((entry) => !entry.disabled).map((entry) => entry.content).join(`
+`), all = entries.map((entry) => entry.content).join(`
+`), [onCount, allCount] = await Promise.all([countTokens(on), countTokens(all)]);
+    if (s.book !== book || s.entries !== entries) return;
+    let exact = onCount != null && allCount != null;
+    s.tokens = exact ? { on: onCount, all: allCount, exact } : { on: estimateTokens(on), all: estimateTokens(all), exact };
+    let box = hostDocument().querySelector(".pi-wb-tokens");
+    box && (box.innerHTML = tokenText(s));
+  }
+  var handwritten = (entries) => entries.filter((entry) => !acuField(entry.title)), pickedEntries = (s) => handwritten(s.entries || []).filter((entry) => s.picked.has(entry.key)), PREVIEW_MAX = 30, previewList = (lines) => lines.length > PREVIEW_MAX ? [...lines.slice(0, PREVIEW_MAX), `另有 ${lines.length - PREVIEW_MAX} 条`] : lines;
+  async function applyPatches(view, plan, { label, backup = !1 }) {
+    let s = st6(view), result = await patchEntries(s.book, plan.map((item) => ({ key: item.key, patch: item.patch })));
+    backup && downloadBlob(`${s.book}-${label}前备份.json`, JSON.stringify(result, null, 2)), toast("success", `${label}：已修改 ${plan.length} 条。`), await reloadBook(view);
+  }
+  async function regexDialog(scope) {
+    let check = (f, label, on = !1) => `<label class="pi-check"><input type="checkbox" data-f="${f}"${on ? " checked" : ""}><span>${label}</span></label>`, html = `<label class="pi-field"><span>查找</span><input class="pi-inp is-mono" data-f="find" placeholder="如：旧名字 或 \\d+"></label>
+        <label class="pi-field"><span>替换为</span><input class="pi-inp is-mono" data-f="replace" placeholder="留空即删除；正则可用 $1"></label>
+        <div class="pi-field"><span>查找方式</span><div class="pi-pair is-c3">${check("regex", "正则表达式", !0)}${check("ignoreCase", "忽略大小写")}</div></div>
+        <div class="pi-field"><span>替换范围</span><div class="pi-pair is-c3">${check("content", "内容", !0)}${check("comment", "标题")}${check("keys", "关键词")}</div></div>`;
+    return openDialog({
+      title: `正则替换（${scope}）`,
+      html,
+      actions: [{ label: "取消", value: null }, { label: "预览", primary: !0, value: (box) => {
+        let read = (f) => box.querySelector(`[data-f="${f}"]`);
+        return { find: read("find").value, replace: read("replace").value, regex: read("regex").checked, ignoreCase: read("ignoreCase").checked, fields: { content: read("content").checked, comment: read("comment").checked, keys: read("keys").checked } };
+      } }]
+    });
+  }
+  function moveDialog(from, count) {
+    let names = allBookNames().filter((name) => name !== from), html = `<label class="pi-field"><span>目标世界书</span><select class="pi-sel" data-f="book">${options([{ value: "", label: names.length ? "选择已有世界书" : "没有其他世界书" }, ...names.map((name) => ({ value: name, label: name }))], "")}</select></label>
+        <label class="pi-field"><span>或新建世界书</span><input class="pi-inp" data-f="name" placeholder="填写名字即新建，优先于上一项"></label>
+        <label class="pi-field"><span>方式</span><select class="pi-sel" data-f="mode">${options([{ value: "copy", label: "复制（原世界书保留）" }, { value: "move", label: "移动（从原世界书删除）" }], "copy")}</select></label>`;
+    return openDialog({
+      title: `迁移到其他世界书（已选 ${count} 条）`,
+      html,
+      actions: [{ label: "取消", value: null }, { label: "下一步", primary: !0, value: (box) => ({ to: box.querySelector('[data-f="name"]').value.trim() || box.querySelector('[data-f="book"]').value, move: box.querySelector('[data-f="mode"]').value === "move" }) }]
+    });
+  }
+  function orderDialog(count) {
+    let html = `<div class="pi-pair"><label class="pi-field"><span>起始数字</span><input class="pi-inp" type="number" min="0" data-f="start" value="100"></label>
+            <label class="pi-field"><span>间隔</span><input class="pi-inp" type="number" min="1" data-f="step" value="1"></label></div>
+        <label class="pi-field"><span>排列依据</span><select class="pi-sel" data-f="by">${options([{ value: "list", label: "按列表中的先后" }, { value: "order", label: "按原有顺序值（保持相对先后）" }], "list")}</select></label>`;
+    return openDialog({
+      title: `顺序重排（已选 ${count} 条）`,
+      html,
+      actions: [{ label: "取消", value: null }, { label: "预览", primary: !0, value: (box) => ({ start: box.querySelector('[data-f="start"]').value, step: box.querySelector('[data-f="step"]').value, by: box.querySelector('[data-f="by"]').value }) }]
+    });
   }
   var actions7 = {
     // 整区一次改完：「全部关闭」关已开启区，「全部开启」开已关闭区；数据库条目不在其中。
@@ -3724,7 +3907,57 @@ ${parsed.body}` : parsed.body;
       let s = st6(view);
       if (s.book === target.dataset.book)
         return s.book = "", s.entries = null, view.renderBody();
-      s.book = target.dataset.book, s.entries = null, s.openKey = "", await reloadBook(view);
+      s.book = target.dataset.book, s.entries = null, s.openKey = "", s.tokens = null, s.picking = !1, s.picked = /* @__PURE__ */ new Set(), await reloadBook(view);
+    },
+    "wb-picking"(view) {
+      let s = st6(view);
+      s.picking = !s.picking, s.picked = /* @__PURE__ */ new Set(), s.openKey = "", view.renderBody();
+    },
+    "wb-pick-all"(view, target) {
+      let s = st6(view), list = GROUPS[target.dataset.group](s.entries || []);
+      for (let entry of list)
+        target.dataset.on === "1" ? s.picked.add(entry.key) : s.picked.delete(entry.key);
+      view.renderBody();
+    },
+    // 关键词里写成「甲，乙、丙」的一整条拆成三个，去掉首尾标点与空格、重复项；/正则/ 形式的关键词不动。
+    async "wb-punct"(view) {
+      let s = st6(view), plan = punctPlan(handwritten(s.entries || []));
+      if (!plan.length) return toast("info", "关键词没有需要修复的标点。");
+      await confirmDialog({ title: `修复关键词标点（${plan.length} 条）`, body: "以下条目的关键词将改为：", list: previewList(plan.map((item) => `${item.title}：${item.before} → ${item.after}`)), okLabel: "修复" }) && await applyPatches(view, plan, { label: "修复关键词标点" });
+    },
+    async "wb-regex"(view) {
+      let s = st6(view), usePicked = s.picking && s.picked.size, entries = usePicked ? pickedEntries(s) : handwritten(s.entries || []), input = await regexDialog(usePicked ? `已选 ${entries.length} 条` : `全部手写条目 ${entries.length} 条`);
+      if (!input) return;
+      if (!input.fields.content && !input.fields.comment && !input.fields.keys) throw new Error("请至少选择一个替换范围");
+      let plan = regexPlan(entries, buildPattern(input.find, input), input.replace, input.fields);
+      if (!plan.length) return toast("info", "没有匹配的内容。");
+      let total = plan.reduce((sum, item) => sum + item.hits, 0);
+      await confirmDialog({ title: `正则替换（${plan.length} 条，共 ${total} 处）`, body: "替换前会下载这些条目的备份。", list: previewList(plan.map((item) => `${item.title}：${item.hits} 处`)), okLabel: "替换", danger: !0 }) && await applyPatches(view, plan, { label: "正则替换", backup: !0 });
+    },
+    async "wb-order"(view) {
+      let s = st6(view), input = await orderDialog(s.picked.size);
+      if (!input) return;
+      let plan = orderPlan(pickedEntries(s), input);
+      await confirmDialog({ title: `顺序重排（${plan.length} 条）`, list: previewList(plan.map((item) => `${item.title}：${item.from} → ${item.to}`)), okLabel: "重排" }) && await applyPatches(view, plan.map((item) => ({ key: item.key, patch: { order: item.to } })), { label: "顺序重排" });
+    },
+    async "wb-move"(view) {
+      let s = st6(view), input = await moveDialog(s.book, s.picked.size);
+      if (!input) return;
+      if (!input.to) throw new Error("请选择或填写目标世界书");
+      let entries = pickedEntries(s), isNew = !allBookNames().includes(input.to);
+      if (!await confirmDialog({
+        title: `${input.move ? "移动" : "复制"}到「${input.to}」${isNew ? "（新建）" : ""}`,
+        body: input.move ? "移动后从当前世界书删除，删除前会下载这些条目的备份。" : "",
+        list: previewList(entries.map((entry) => entry.title)),
+        okLabel: input.move ? "移动" : "复制",
+        danger: input.move
+      })) return;
+      if (input.move) {
+        let raw = await loadBook(s.book);
+        downloadBlob(`${s.book}-迁移前备份.json`, JSON.stringify({ entries: Object.fromEntries(entries.map((entry) => [entry.key, raw.entries[entry.key]])) }, null, 2));
+      }
+      let result = await transferEntries(s.book, input.to, entries.map((entry) => entry.key), { move: input.move });
+      toast("success", `已${input.move ? "移动" : "复制"} ${result.copied} 条到「${input.to}」${result.created ? "（新建）" : ""}。`), s.picked = /* @__PURE__ */ new Set(), await reloadBook(view);
     },
     async "wb-delete"(view, target) {
       let keys = [target.dataset.key], titles = st6(view).entries.filter((entry) => keys.includes(entry.key)).map((entry) => entry.title);
@@ -3765,7 +3998,7 @@ ${parsed.body}` : parsed.body;
     let missing = info.events.filter((item) => NEED.includes(item.key) && !item.name);
     missing.length && out.push({ text: `酒馆没有提供事件：${missing.map((item) => item.key).join("、")}。`, fix: "" }), info.events.filter((item) => NEED.includes(item.key) && item.name && !item.bound).length && out.push({ text: "检测所需的事件没有绑定。", fix: "rebind" }), info.cardKey ? info.id ? info.units || out.push({ text: "启用项目的大纲为空，没有可检测的阶段。", fix: "" }) : out.push({ text: `「${info.card}」没有启用项目，自动检测不会运行。`, fix: "" }) : out.push({ text: "当前没有打开角色卡聊天。", fix: "" }), info.progress && info.progress.lastCheckFloor > info.floors && out.push({ text: `上次检测记在第 ${info.progress.lastCheckFloor} 楼，当前只有 ${info.floors} 楼。`, fix: "reset-base" }), info.llm.source === "custom" && !String(info.llm.model || "").trim() && out.push({ text: "进度检测用独立接口，但没有选择模型。", fix: "" });
     let received = info.events.find((item) => item.key === "MESSAGE_RECEIVED");
-    return received && received.bound && !received.count && info.floors > 1 && out.push({ text: "本次加载后还没收到过「收到回复」事件。发一条消息后再看，仍为 0 次可点「重新绑定事件」。", fix: "rebind" }), out;
+    return received && received.bound && !received.count && info.floors - info.chatStartFloors >= 2 && out.push({ text: "打开聊天后已有新回复，但没有收到「收到回复」事件。", fix: "rebind" }), out;
   }
   function nextText(info) {
     if (!info.progress) return "—";
@@ -4114,7 +4347,7 @@ ${parsed.body}` : parsed.body;
   }
 
   // src/index.js
-  var VERSION = "0.1.8", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.1.9", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")

@@ -107,6 +107,10 @@ export const CSS = `
 .pi-wb-row input{width:15px;height:15px;margin:0;accent-color:var(--pi-accent);flex-shrink:0;cursor:pointer}
 .pi-wb-title{flex:1;min-width:0;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pi-wb-row.is-off .pi-wb-title{color:var(--pi-txt2)}
+.pi-wb-info{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:6px;margin:4px 0 10px}
+.pi-wb-tokens{display:contents}
+.pi-wb-count{font-size:12px;color:var(--pi-txt2);padding-left:4px}
+label.pi-wb-row{cursor:pointer}
 .pi-acts{margin-top:12px}
 .pi-acts-top{margin-bottom:8px}
 .pi-seg{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:2px;padding:3px;background:var(--pi-surf);border-radius:20px;margin-bottom:6px}

@@ -9,6 +9,7 @@ import { advance, emptyProgress, setNodeChecked, uncheckByNames, unitStates, pat
 import { buildEntries, buildIndexText, toWorldInfoEntry } from '../src/core/inject.js';
 import { buildCheckMessages, cleanFloorText, parseCheckReply } from '../src/core/check.js';
 import { acuField, groupByField } from '../src/core/acu.js';
+import { buildPattern, fixKeys, orderPlan, punctPlan, regexPlan } from '../src/core/wbtools.js';
 import { checkedSet, entryRefId, migrateOc, normalizeWbRule, ruleFromSelection } from '../src/core/refs.js';
 import { normalizeChat } from '../src/core/store.js';
 import { mergeBlocks, parseSettingReply, splitBlocks } from '../src/core/setting.js';
@@ -293,4 +294,25 @@ test('没演的支线与世界动态延续到后面的阶段；取消勾选或�
     const after = buildEntries(project, played, normalizeSettings({})).find(entry => entry.kind === 'detail').content;
     assert.doesNotMatch(after, /丙支线/);
     assert.match(after, /丁传闻/);
+});
+
+test('世界书工具：关键词按中文逗号顿号拆开去重，正则关键词不拆；正则替换计数；顺序重排', () => {
+    assert.deepEqual(fixKeys(['甲，乙、丙', ' 乙。', '/a,b/i', '丁；戊']), ['甲', '乙', '丙', '/a,b/i', '丁', '戊']);
+    const entries = [
+        { key: '0', title: 'A', comment: 'A', content: '旧名来了，旧名走了', keys: ['旧名，甲'], keysSecondary: [], order: 30 },
+        { key: '1', title: 'B', comment: 'B', content: '无关', keys: ['乙'], keysSecondary: [], order: 10 },
+    ];
+    const punct = punctPlan(entries);
+    assert.equal(punct.length, 1);
+    assert.deepEqual(punct[0].patch, { key: ['旧名', '甲'] });
+    const plan = regexPlan(entries, buildPattern('旧(名)', { regex: true }), '新$1', { content: true, keys: true });
+    assert.equal(plan.length, 1);
+    assert.equal(plan[0].hits, 3);
+    assert.equal(plan[0].patch.content, '新名来了，新名走了');
+    assert.deepEqual(plan[0].patch.key, ['新名，甲']);
+    assert.equal(regexPlan(entries, buildPattern('.', { regex: false }), '', { content: true }).length, 0, '非正则模式按原文查找');
+    assert.throws(() => buildPattern('(', { regex: true }), /正则写法有误/);
+    assert.deepEqual(orderPlan(entries, { start: 100, step: 10 }).map(item => item.to), [100, 110]);
+    assert.deepEqual(orderPlan(entries, { start: 1, step: 1, by: 'order' }).map(item => `${item.key}:${item.to}`), ['1:1', '0:2']);
+    assert.throws(() => orderPlan(entries, { start: 1, step: 0 }), /间隔/);
 });
