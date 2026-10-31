@@ -816,6 +816,38 @@ test('关掉再打开时回到上次的页面或页签', async () => {
     await host.instance.destroy();
 });
 
+test('讨论页：回复中发送键变成停止键，停止后不存回复也不报错；没回复的用户消息可重新发送', async () => {
+    const host = await boot();
+    await withProject(host);
+    let release = null;
+    host.win.__reply = () => new Promise(resolve => { release = resolve; });
+    host.click();
+    await tick(20);
+    const doc = host.win.document;
+    doc.querySelector('[data-act="tab"][data-tab="discuss"]').click();
+    await tick(10);
+    doc.querySelector('[data-compose]').value = '想写一条龙宫线';
+    doc.querySelector('[data-act="send"]').click();
+    await tick(20);
+    assert.ok(doc.querySelector('[data-act="stop"]'), '回复中出现停止键');
+    assert.equal(doc.querySelector('[data-act="send"]'), null);
+    doc.querySelector('[data-act="stop"]').click();
+    await tick(20);
+    release('迟到的回复');
+    await tick(20);
+    assert.equal(doc.querySelectorAll('.pi-msg').length, 1, '停止后迟到的回复不存');
+    assert.ok(doc.querySelector('[data-act="send"]'), '停止后恢复发送键');
+    assert.equal(host.win.__errors.length, 0, '停止不算失败');
+    host.win.__reply = () => '好的，先说原作。';
+    doc.querySelector('[data-act="resend"]').click();
+    await tick(30);
+    const msgs = [...doc.querySelectorAll('.pi-msg')];
+    assert.equal(msgs.length, 2, '重新发送不重复添加用户消息');
+    assert.match(msgs[1].textContent, /先说原作/);
+    assert.equal(doc.querySelector('[data-act="resend"]'), null, '有回复后不再显示重新发送');
+    await host.instance.destroy();
+});
+
 test('讨论消息渲染 Markdown 且不放行 HTML', async () => {
     const host = await boot();
     const project = await withProject(host);

@@ -1,4 +1,4 @@
-// PlotInjector v0.1.15
+// PlotInjector v0.1.16
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -1236,18 +1236,27 @@ ${text}` }
     let data = await postBackend("generate", body, llm, signal);
     return String(data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content || "");
   }
-  async function requestLlm(messages, llm, { timeoutMs = 18e4 } = {}) {
-    let view = hostWindow(), controller = new view.AbortController(), timer, timeout = new Promise((_, reject) => {
+  async function requestLlm(messages, llm, { timeoutMs = 18e4, signal } = {}) {
+    let view = hostWindow(), controller = new view.AbortController(), timer, onAbort = null, timeout = new Promise((_, reject) => {
       timer = view.setTimeout(() => {
         controller.abort(), reject(new Error("请求超时"));
       }, timeoutMs);
+    }), stopped = new Promise((_, reject) => {
+      signal && (onAbort = () => {
+        controller.abort();
+        let error = new Error("已停止");
+        error.name = "AbortError", reject(error);
+      }, signal.aborted ? onAbort() : signal.addEventListener("abort", onAbort, { once: !0 }));
     });
     try {
-      let job = llm.source === "custom" ? viaCustom(messages, llm, controller.signal) : viaTavern(messages), text = stripThinking(await Promise.race([job, timeout]));
+      let job = llm.source === "custom" ? viaCustom(messages, llm, controller.signal) : viaTavern(messages);
+      job.catch(() => {
+      });
+      let text = stripThinking(await Promise.race([job, timeout, stopped]));
       if (!text) throw new Error("模型没有返回内容");
       return text;
     } finally {
-      view.clearTimeout(timer);
+      view.clearTimeout(timer), signal && onAbort && signal.removeEventListener("abort", onAbort);
     }
   }
   async function fetchModels(llm) {
@@ -2444,8 +2453,8 @@ NSFW指引（涉及成人内容时）:
 3. 速查：单独一行 \`速查：PASS / FAIL。\``;
 
   // src/ui/ai.js
-  function ask(view, role, messages) {
-    return requestLlm(messages, resolveLlm(view.data.settings(), role));
+  function ask(view, role, messages, { signal } = {}) {
+    return requestLlm(messages, resolveLlm(view.data.settings(), role), { signal });
   }
   function guideText(view) {
     return String(view.data.settings().guide || "").trim() || BUILTIN_GUIDE;
@@ -3388,7 +3397,7 @@ ${parsed.body}` : parsed.body;
     let chat = view.data.chat(view.projectId);
     if (!chat)
       return view.data.loadChat(view.projectId).then(() => view.renderBody()).catch((error) => toast("error", `读取讨论记录失败：${error.message}`)), '<div class="pi-empty"><span class="pi-spin"></span> 正在读取讨论记录…</div>';
-    let busy = view.busy[`discuss:${view.projectId}`], refs = chat.refs, folded = chat.messages.filter((msg) => msg.folded).length, live = chat.messages.filter((msg) => !msg.folded), lastAi = [...live].reverse().find((msg) => msg.role !== "user"), wb = wbSummary(view, chat.refs, () => view.renderBody()), canProgress = !!progressText(view), chips = `<div class="pi-refs"><span class="pi-hint">附带参考：</span>
+    let busy = view.busy[`discuss:${view.projectId}`], refs = chat.refs, folded = chat.messages.filter((msg) => msg.folded).length, live = chat.messages.filter((msg) => !msg.folded), lastAi = [...live].reverse().find((msg) => msg.role !== "user"), unanswered = live.length && live[live.length - 1].role === "user" ? live[live.length - 1] : null, wb = wbSummary(view, chat.refs, () => view.renderBody()), canProgress = !!progressText(view), chips = `<div class="pi-refs"><span class="pi-hint">附带参考：</span>
         <button type="button" class="pi-chip${refs.setting ? " is-on" : ""}" data-act="ref" data-ref="setting">设定</button>
         <button type="button" class="pi-chip${refs.outline ? " is-on" : ""}" data-act="ref" data-ref="outline">大纲</button>
         <button type="button" class="pi-chip${refs.progress && canProgress ? " is-on" : ""}" data-act="ref" data-ref="progress"${canProgress ? "" : ' disabled title="本项目不是当前聊天启用的项目"'}>剧情进度</button>
@@ -3398,6 +3407,7 @@ ${parsed.body}` : parsed.body;
             <button type="button" class="pi-btn is-sm is-ghost" data-act="msg-edit" data-id="${esc(msg.id)}">编辑</button>
             <button type="button" class="pi-btn is-sm is-ghost" data-act="msg-del" data-id="${esc(msg.id)}">删除</button>
             ${msg === lastAi && !busy ? '<button type="button" class="pi-btn is-sm is-ghost" data-act="regen">重新生成</button>' : ""}
+            ${msg === unanswered && !busy ? '<button type="button" class="pi-btn is-sm is-ghost" data-act="resend">重新发送</button>' : ""}
             ${isUser ? "" : `<button type="button" class="pi-btn is-sm is-ghost" data-act="to-setting">整理成设定</button>
             <button type="button" class="pi-btn is-sm is-ghost" data-act="to-outline">据此写大纲</button>
             ${hasYamlBlock(msg.content) ? `<button type="button" class="pi-btn is-sm is-ghost" data-act="use-yaml" data-id="${esc(msg.id)}">把 YAML 送到大纲</button>` : ""}`}</div>`;
@@ -3407,25 +3417,30 @@ ${parsed.body}` : parsed.body;
         ${folded ? `<button type="button" class="pi-msg-fold" data-act="summary">更早的 ${folded} 条已折成摘要 · 查看</button>` : ""}
         ${empty}${messages}${busy ? '<div class="pi-msg is-ai"><span class="pi-spin"></span></div>' : ""}</div>
         <div class="pi-compose">${chat.messages.length ? `<button type="button" class="pi-compose-side" data-act="clear-talk" title="清空讨论">${ICONS.trash}</button>` : ""}<textarea class="pi-ta" data-compose placeholder="Ctrl+Enter 发送">${esc(st3(view).draft || "")}</textarea>
-        <button type="button" class="pi-send" data-act="send" title="发送（Ctrl+Enter）"${busy ? " disabled" : ""}>${ICONS.send}</button></div>`;
+        ${busy ? `<button type="button" class="pi-send" data-act="stop" title="停止回复">${ICONS.close}</button>` : `<button type="button" class="pi-send" data-act="send" title="发送（Ctrl+Enter）">${ICONS.send}</button>`}</div>`;
   }
+  var controllers = /* @__PURE__ */ new Map();
   async function reply(view) {
     let projectId = view.projectId, key = `discuss:${projectId}`;
-    if (!view.busy[key]) {
-      view.setBusy(key, !0);
-      try {
-        let chat = await view.data.loadChat(projectId), project = await view.data.loadProject(projectId);
-        if (needsFold(chat.messages)) {
-          let fold = foldCandidates(chat.messages), summary = await ask(view, "discuss", foldMessages(chat.summary, fold)), ids = new Set(fold.map((msg) => msg.id));
-          chat = { ...view.data.chat(projectId), summary, messages: view.data.chat(projectId).messages.map((msg) => ids.has(msg.id) ? { ...msg, folded: !0 } : msg) }, view.data.saveChat(projectId, chat);
-        }
-        let system = discussSystemPrompt({ guide: guideText(view), refs: await resolveRefs(view, chat, project) }), text = await ask(view, "discuss", chatRequest(system, chat.summary, chat.messages)), latest = view.data.chat(projectId);
-        view.data.saveChat(projectId, { ...latest, messages: [...latest.messages, { id: makeId("m"), role: "assistant", content: text, at: Date.now() }] });
-      } catch (error) {
-        toast("error", `讨论请求失败：${error.message}`);
-      } finally {
-        view.setBusy(key, !1);
+    if (view.busy[key]) return;
+    let controller = new AbortController();
+    controllers.set(projectId, controller);
+    let { signal } = controller;
+    view.setBusy(key, !0);
+    try {
+      let chat = await view.data.loadChat(projectId), project = await view.data.loadProject(projectId);
+      if (needsFold(chat.messages)) {
+        let fold = foldCandidates(chat.messages), summary = await ask(view, "discuss", foldMessages(chat.summary, fold), { signal }), ids = new Set(fold.map((msg) => msg.id));
+        chat = { ...view.data.chat(projectId), summary, messages: view.data.chat(projectId).messages.map((msg) => ids.has(msg.id) ? { ...msg, folded: !0 } : msg) }, view.data.saveChat(projectId, chat);
       }
+      let system = discussSystemPrompt({ guide: guideText(view), refs: await resolveRefs(view, chat, project) }), text = await ask(view, "discuss", chatRequest(system, chat.summary, chat.messages), { signal });
+      if (signal.aborted) return;
+      let latest = view.data.chat(projectId);
+      view.data.saveChat(projectId, { ...latest, messages: [...latest.messages, { id: makeId("m"), role: "assistant", content: text, at: Date.now() }] });
+    } catch (error) {
+      signal.aborted || toast("error", `讨论请求失败：${error.message}`);
+    } finally {
+      controllers.get(projectId) === controller && controllers.delete(projectId), view.setBusy(key, !1);
     }
   }
   function updateChat(view, fn) {
@@ -3455,6 +3470,13 @@ ${parsed.body}` : parsed.body;
       let box = target.closest(".pi-body").querySelector("[data-compose]"), text = box.value.trim();
       if (text)
         return updateChat(view, (chat) => ({ ...chat, messages: [...chat.messages, { id: makeId("m"), role: "user", content: text, at: Date.now() }] })), st3(view).draft = "", box.value = "", view.renderBody(), reply(view);
+    },
+    stop(view) {
+      controllers.get(view.projectId)?.abort();
+    },
+    // 最后一条用户消息没有回复时，不重复添加，直接再请求一次。
+    resend(view) {
+      return reply(view);
     },
     regen(view) {
       return updateChat(view, (chat) => {
@@ -4785,7 +4807,7 @@ ${parsed.body}` : parsed.body;
   }
 
   // src/index.js
-  var VERSION = "0.1.15", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.1.16", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")

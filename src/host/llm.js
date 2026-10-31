@@ -75,20 +75,35 @@ async function viaCustom(messages, llm, signal) {
     return String(data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content || '');
 }
 
-export async function requestLlm(messages, llm, { timeoutMs = 180000 } = {}) {
+// signal 中止时立即以 AbortError 结束。走酒馆当前 API 时底层请求取消不了，迟到的结果直接丢弃。
+export async function requestLlm(messages, llm, { timeoutMs = 180000, signal } = {}) {
     const view = hostWindow();
     const controller = new view.AbortController();
     let timer;
+    let onAbort = null;
     const timeout = new Promise((_, reject) => {
         timer = view.setTimeout(() => { controller.abort(); reject(new Error('请求超时')); }, timeoutMs);
     });
+    const stopped = new Promise((_, reject) => {
+        if (!signal) return;
+        onAbort = () => {
+            controller.abort();
+            const error = new Error('已停止');
+            error.name = 'AbortError';
+            reject(error);
+        };
+        if (signal.aborted) onAbort();
+        else signal.addEventListener('abort', onAbort, { once: true });
+    });
     try {
         const job = llm.source === 'custom' ? viaCustom(messages, llm, controller.signal) : viaTavern(messages);
-        const text = stripThinking(await Promise.race([job, timeout]));
+        job.catch(() => {});
+        const text = stripThinking(await Promise.race([job, timeout, stopped]));
         if (!text) throw new Error('模型没有返回内容');
         return text;
     } finally {
         view.clearTimeout(timer);
+        if (signal && onAbort) signal.removeEventListener('abort', onAbort);
     }
 }
 

@@ -3,8 +3,8 @@ import { transcript } from '../core/prompts.js';
 import { resolveLlm } from '../core/store.js';
 import { requestLlm } from '../host/llm.js';
 
-export function ask(view, role, messages) {
-    return requestLlm(messages, resolveLlm(view.data.settings(), role));
+export function ask(view, role, messages, { signal } = {}) {
+    return requestLlm(messages, resolveLlm(view.data.settings(), role), { signal });
 }
 
 export function guideText(view) {

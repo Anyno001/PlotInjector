@@ -22,6 +22,8 @@ export function render(view) {
     const folded = chat.messages.filter(msg => msg.folded).length;
     const live = chat.messages.filter(msg => !msg.folded);
     const lastAi = [...live].reverse().find(msg => msg.role !== 'user');
+    // 最后一条是用户发的、AI 没回（请求失败、被停止）：在它下面给「重新发送」。
+    const unanswered = live.length && live[live.length - 1].role === 'user' ? live[live.length - 1] : null;
     const wb = wbSummary(view, chat.refs, () => view.renderBody());
     const canProgress = Boolean(progressText(view));
     const chips = `<div class="pi-refs"><span class="pi-hint">附带参考：</span>
@@ -36,6 +38,7 @@ export function render(view) {
             <button type="button" class="pi-btn is-sm is-ghost" data-act="msg-edit" data-id="${esc(msg.id)}">编辑</button>
             <button type="button" class="pi-btn is-sm is-ghost" data-act="msg-del" data-id="${esc(msg.id)}">删除</button>
             ${msg === lastAi && !busy ? '<button type="button" class="pi-btn is-sm is-ghost" data-act="regen">重新生成</button>' : ''}
+            ${msg === unanswered && !busy ? '<button type="button" class="pi-btn is-sm is-ghost" data-act="resend">重新发送</button>' : ''}
             ${!isUser ? `<button type="button" class="pi-btn is-sm is-ghost" data-act="to-setting">整理成设定</button>
             <button type="button" class="pi-btn is-sm is-ghost" data-act="to-outline">据此写大纲</button>
             ${hasYamlBlock(msg.content) ? `<button type="button" class="pi-btn is-sm is-ghost" data-act="use-yaml" data-id="${esc(msg.id)}">把 YAML 送到大纲</button>` : ''}` : ''}</div>`;
@@ -46,32 +49,40 @@ export function render(view) {
         ${folded ? `<button type="button" class="pi-msg-fold" data-act="summary">更早的 ${folded} 条已折成摘要 · 查看</button>` : ''}
         ${empty}${messages}${busy ? '<div class="pi-msg is-ai"><span class="pi-spin"></span></div>' : ''}</div>
         <div class="pi-compose">${chat.messages.length ? `<button type="button" class="pi-compose-side" data-act="clear-talk" title="清空讨论">${ICONS.trash}</button>` : ''}<textarea class="pi-ta" data-compose placeholder="Ctrl+Enter 发送">${esc(st(view).draft || '')}</textarea>
-        <button type="button" class="pi-send" data-act="send" title="发送（Ctrl+Enter）"${busy ? ' disabled' : ''}>${ICONS.send}</button></div>`;
+        ${busy ? `<button type="button" class="pi-send" data-act="stop" title="停止回复">${ICONS.close}</button>` : `<button type="button" class="pi-send" data-act="send" title="发送（Ctrl+Enter）">${ICONS.send}</button>`}</div>`;
 }
 
-// 讨论回复存回发起时的项目，中途切走项目也不丢。
+// 每个项目一个进行中的请求，停止键中止它。
+const controllers = new Map();
+
+// 讨论回复存回发起时的项目，中途切走项目也不丢。被停止时不存、不报错，用户消息留着可「重新发送」。
 async function reply(view) {
     const projectId = view.projectId;
     const key = `discuss:${projectId}`;
     if (view.busy[key]) return;
+    const controller = new AbortController();
+    controllers.set(projectId, controller);
+    const { signal } = controller;
     view.setBusy(key, true);
     try {
         let chat = await view.data.loadChat(projectId);
         const project = await view.data.loadProject(projectId);
         if (needsFold(chat.messages)) {
             const fold = foldCandidates(chat.messages);
-            const summary = await ask(view, 'discuss', foldMessages(chat.summary, fold));
+            const summary = await ask(view, 'discuss', foldMessages(chat.summary, fold), { signal });
             const ids = new Set(fold.map(msg => msg.id));
             chat = { ...view.data.chat(projectId), summary, messages: view.data.chat(projectId).messages.map(msg => (ids.has(msg.id) ? { ...msg, folded: true } : msg)) };
             view.data.saveChat(projectId, chat);
         }
         const system = discussSystemPrompt({ guide: guideText(view), refs: await resolveRefs(view, chat, project) });
-        const text = await ask(view, 'discuss', chatRequest(system, chat.summary, chat.messages));
+        const text = await ask(view, 'discuss', chatRequest(system, chat.summary, chat.messages), { signal });
+        if (signal.aborted) return;
         const latest = view.data.chat(projectId);
         view.data.saveChat(projectId, { ...latest, messages: [...latest.messages, { id: makeId('m'), role: 'assistant', content: text, at: Date.now() }] });
     } catch (error) {
-        toast('error', `讨论请求失败：${error.message}`);
+        if (!signal.aborted) toast('error', `讨论请求失败：${error.message}`);
     } finally {
+        if (controllers.get(projectId) === controller) controllers.delete(projectId);
         view.setBusy(key, false);
     }
 }
@@ -113,6 +124,13 @@ export const actions = {
         st(view).draft = '';
         box.value = '';
         view.renderBody();
+        return reply(view);
+    },
+    stop(view) {
+        controllers.get(view.projectId)?.abort();
+    },
+    // 最后一条用户消息没有回复时，不重复添加，直接再请求一次。
+    resend(view) {
         return reply(view);
     },
     regen(view) {
