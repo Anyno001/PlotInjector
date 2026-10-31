@@ -258,6 +258,40 @@ test('数据还没读完就打开面板：读完后自动打开本卡的当前�
     await next.instance.destroy();
 });
 
+test('项目按聊天记：长按项目名设为当前聊天使用，换聊天回到本卡默认，回来仍是自己的项目', async () => {
+    const host = await boot();
+    const a = await withProject(host);
+    const { instance, context, eventSource } = host;
+    const b = await instance.data.createProject('海岛线');
+    const chatA = context.chatMetadata;
+    host.click();
+    await tick(20);
+    const doc = host.win.document;
+    const item = doc.querySelector(`.pi-pitem[data-id="${b.id}"]`);
+    item.dispatchEvent(new host.win.MouseEvent('pointerdown', { bubbles: true, clientX: 5, clientY: 5 }));
+    await tick(600);
+    item.dispatchEvent(new host.win.MouseEvent('pointerup', { bubbles: true }));
+    item.click();
+    await tick(10);
+    const pick = [...doc.querySelectorAll('.pi-menu-item')].find(btn => /设为当前聊天使用/.test(btn.textContent));
+    assert.ok(pick, '长按弹出菜单');
+    pick.click();
+    await tick(20);
+    assert.equal(instance.runtime.activeId(), b.id);
+    assert.equal(chatA.plotInjector.projectId, b.id);
+    assert.equal(instance.data.activeIdFor('char:test.png'), a.id, '本卡默认不变');
+    context.chatMetadata = {};
+    context.chatId = 'chat-2';
+    await eventSource.emit('chat_id_changed');
+    assert.equal(instance.runtime.activeId(), a.id, '新聊天用本卡默认');
+    await instance.runtime.switchProject(b.id, 'card');
+    assert.equal(instance.data.activeIdFor('char:test.png'), b.id);
+    context.chatMetadata = { plotInjector: { projectId: a.id, byProject: {} } };
+    await eventSource.emit('chat_id_changed');
+    assert.equal(instance.runtime.activeId(), a.id, '聊天记过的项目优先于本卡默认');
+    await instance.destroy();
+});
+
 test('项目文件读取失败时显示原因和重试；页面渲染出错时显示错误而不是空白', async () => {
     const host = await boot();
     const project = await withProject(host);

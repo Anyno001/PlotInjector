@@ -1,8 +1,8 @@
 import { emptyProgress, normalizeProgress } from '../core/progress.js';
 import { ctx } from '../host/st.js';
 
-// chat_metadata.plotInjector = { projectId: 最近使用的项目, byProject: { [项目id]: 进度 } }。
-// 同一聊天切换项目不丢各自进度；切聊天时 chat_metadata 整个换掉，所以每次都从上下文现取。
+// chat_metadata.plotInjector = { projectId: 本聊天使用的项目, byProject: { [项目id]: 进度 } }。
+// projectId 优先于本卡默认项目；同一聊天切换项目不丢各自进度；切聊天时 chat_metadata 整个换掉，所以每次都从上下文现取。
 const KEY = 'plotInjector';
 
 function meta() {
@@ -23,14 +23,28 @@ export function readProgress(projectId) {
     return normalizeProgress(state.byProject[projectId], projectId) || emptyProgress(projectId);
 }
 
+function save() {
+    const c = ctx();
+    if (typeof c.saveMetadataDebounced === 'function') c.saveMetadataDebounced();
+    else if (typeof c.saveMetadata === 'function') c.saveMetadata();
+}
+
 export function writeProgress(progress) {
     const m = meta();
     if (!m) return false;
     const state = readChatState();
     m[KEY] = { projectId: progress.projectId, byProject: { ...state.byProject, [progress.projectId]: progress } };
+    save();
+    return true;
+}
+
+// 没打开聊天时返回 false，由调用方退回改本卡默认。
+export function bindChat(projectId) {
+    const m = meta();
     const c = ctx();
-    if (typeof c.saveMetadataDebounced === 'function') c.saveMetadataDebounced();
-    else if (typeof c.saveMetadata === 'function') c.saveMetadata();
+    if (!m || !c.chatId) return false;
+    m[KEY] = { ...readChatState(), projectId };
+    save();
     return true;
 }
 

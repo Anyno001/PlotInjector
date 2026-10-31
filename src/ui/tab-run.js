@@ -75,8 +75,10 @@ export function render(view) {
     if (activeId !== project.id) {
         const other = data.index().projects.find(item => item.id === activeId);
         return `<div class="pi-card"><h3>启用</h3>
-            <p class="pi-hint">「${esc(cardName())}」${other ? `当前启用的是「${esc(other.name)}」` : '还没有启用项目'}。</p>
-            <button type="button" class="pi-btn is-primary" data-act="activate">设为本卡当前项目</button></div>`;
+            <p class="pi-hint">${other ? `当前聊天使用的是「${esc(other.name)}」` : `「${esc(cardName())}」还没有启用项目`}。</p>
+            <div class="pi-tools is-c2">
+                <button type="button" class="pi-btn is-primary" data-act="activate">设为当前聊天使用</button>
+                <button type="button" class="pi-btn" data-act="activate-card">设为本卡默认</button></div></div>`;
     }
     const progress = runtime.progress();
     const entries = runtime.entries();
@@ -109,7 +111,8 @@ function setSlot(view, slotId, patch) {
 }
 
 export const actions = {
-    activate: view => view.runtime.switchProject(view.projectId),
+    activate: view => view.runtime.switchProject(view.projectId, 'chat'),
+    'activate-card': view => view.runtime.switchProject(view.projectId, 'card'),
     // 推进速度随聊天保存，改完立即换掉详细条目开头的说明。
     pace(view, target) {
         view.runtime.setProgress({ ...view.runtime.progress(), pace: target.dataset.pace });

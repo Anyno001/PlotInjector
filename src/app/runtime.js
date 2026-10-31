@@ -7,7 +7,7 @@ import { resolveLlm } from '../core/store.js';
 import { requestLlm } from '../host/llm.js';
 import { cardKey, cardName, chatMessages, ctx, hostWindow, toast } from '../host/st.js';
 import { writeFallbackBook } from '../host/worldbook.js';
-import { readChatState, readProgress, writeProgress } from './progress-store.js';
+import { bindChat, readChatState, readProgress, writeProgress } from './progress-store.js';
 
 export const VIRTUAL_WORLD = '剧情注入器';
 
@@ -27,7 +27,6 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
     let progress = null;
     let progressFor = '';
     let checking = false;
-    let mismatchShownFor = '';
     let fallbackTimer = 0;
     let generating = false;
     let chatStartFloors = 0;
@@ -43,8 +42,14 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
         if (logs.length > LOG_MAX) logs.shift();
     }
 
+    // 聊天自己记的项目优先，没有（或项目已删）再用本卡默认。
+    function chatBoundId() {
+        const id = readChatState().projectId;
+        return id && data.index().projects.some(item => item.id === id) ? id : '';
+    }
+
     function activeId() {
-        return data.activeIdFor(cardKey());
+        return chatBoundId() || data.activeIdFor(cardKey());
     }
 
     function activeProject() {
@@ -435,33 +440,16 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
         }
         log(`切换聊天：${floorCount()} 楼，${id ? `启用项目「${(data.index().projects.find(item => item.id === id) || {}).name || id}」` : '本卡没有启用项目'}`);
         if (id) clampBase();
-        checkMismatch();
         scheduleFallback();
         emit('chat');
     }
 
-    function checkMismatch() {
-        const id = activeId();
-        const state = readChatState();
-        const key = `${cardKey()}|${ctx() && ctx().chatId}`;
-        if (!state.projectId || state.projectId === id || mismatchShownFor === key) return;
-        const other = data.index().projects.find(item => item.id === state.projectId);
-        if (!other) return;
-        mismatchShownFor = key;
-        notice.show({
-            id: 'mismatch',
-            title: '此聊天属于另一条线',
-            body: `聊天记录的进度属于「${other.name}」，当前启用的是「${(data.index().projects.find(item => item.id === id) || {}).name || '无'}」。`,
-            actions: [
-                { label: '切过去', primary: true, run: () => { switchProject(other.id); notice.hide('mismatch'); } },
-                { label: '保持当前', run: () => notice.hide('mismatch') },
-            ],
-        });
-    }
-
-    async function switchProject(id) {
+    // scope='chat'：只改当前聊天，本卡还没有默认时顺带设为默认；没打开聊天时改本卡默认。
+    // scope='card'：改本卡默认（之后没记过项目的聊天都用它），当前聊天也跟着换。
+    async function switchProject(id, scope = 'chat') {
         if (id) await data.loadProject(id);
-        data.setActive(id);
+        const bound = bindChat(id);
+        if (scope === 'card' || !bound || !data.activeIdFor(cardKey())) data.setActive(id);
         progress = null;
         progressFor = '';
         scheduleFallback();

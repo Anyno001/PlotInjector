@@ -1,6 +1,6 @@
 import { groupProjects } from '../core/store.js';
 import { cardKey, cardName, hostDocument, hostWindow, toast } from '../host/st.js';
-import { confirmDialog, el, ensureStyle, esc, isNight, openDialog, promptDialog, setNight } from './dom.js';
+import { confirmDialog, el, ensureStyle, esc, isNight, menuDialog, openDialog, promptDialog, setNight } from './dom.js';
 import { ICONS } from './styles.js';
 import * as discuss from './tab-discuss.js';
 import * as setting from './tab-setting.js';
@@ -25,6 +25,7 @@ const PAGES = {
 };
 const UI_KEY = 'pi-ui';
 const SEARCH_FROM = 6;
+const LONG_PRESS_MS = 500;
 
 function readUi() {
     try { return JSON.parse(hostWindow().localStorage.getItem(UI_KEY) || '{}') || {}; } catch { return {}; }
@@ -79,12 +80,12 @@ export function createApp({ data, runtime, version }) {
 
     function sideHtml() {
         const index = data.index();
-        const activeId = data.activeIdFor(cardKey());
+        const activeId = runtime.activeId();
         const groups = groupProjects(index.projects);
         const list = groups.map(group => {
             const collapsed = view.collapsed.has(group.name);
-            const items = group.items.map(item => `<button type="button" class="pi-pitem${item.id === view.projectId && !view.page ? ' is-sel' : ''}" data-act="project" data-id="${esc(item.id)}" data-name="${esc(`${item.group} ${item.name}`.toLowerCase())}" title="右键编辑名称、分组">
-                <span class="pi-pname">${esc(item.name)}</span>${item.id === activeId ? '<span class="pi-dot" title="本卡当前项目"></span>' : ''}</button>`).join('');
+            const items = group.items.map(item => `<button type="button" class="pi-pitem${item.id === view.projectId && !view.page ? ' is-sel' : ''}" data-act="project" data-id="${esc(item.id)}" data-name="${esc(`${item.group} ${item.name}`.toLowerCase())}" title="长按或右键：设为当前、编辑">
+                <span class="pi-pname">${esc(item.name)}</span>${item.id === activeId ? '<span class="pi-dot" title="当前聊天使用"></span>' : ''}</button>`).join('');
             const head = group.name ? `<button type="button" class="pi-group-hd" data-act="group" data-group="${esc(group.name)}">${collapsed ? ICONS.caret : ICONS.caretDown}${esc(group.name)}<small>${group.items.length}</small></button>` : '';
             return `<div class="pi-group${collapsed ? ' is-collapsed' : ''}">${head}${items}</div>`;
         }).join('');
@@ -227,11 +228,11 @@ export function createApp({ data, runtime, version }) {
         }
     }
 
-    // 打开面板时定位到上次的位置：本卡当前项目优先，其次上次看的项目；设置等页面也记住。
+    // 打开面板时定位到上次的位置：当前聊天使用的项目优先，其次上次看的项目；设置等页面也记住。
     // 数据还没读完时先显示读取中，读完由 refresh('index') 再调一次。
     function restore() {
         const ui = readUi();
-        const activeId = data.activeIdFor(cardKey());
+        const activeId = runtime.activeId();
         const remembered = data.index().projects.some(item => item.id === ui.projectId) ? ui.projectId : '';
         const id = activeId || remembered || (data.index().projects[0] && data.index().projects[0].id) || '';
         view.restored = true;
@@ -258,14 +259,36 @@ export function createApp({ data, runtime, version }) {
         if (name == null) return;
         try {
             const project = await data.createProject(name);
-            if (!data.activeIdFor(cardKey()) && cardKey()) await runtime.switchProject(project.id);
+            if (!runtime.activeId() && cardKey()) await runtime.switchProject(project.id);
             await selectProject(project.id, 'discuss');
         } catch (error) {
             toast('error', `新建失败：${error.message}`);
         }
     }
 
+    // 长按/右键项目名：设为当前聊天使用、设为本卡默认、编辑。
     async function projectMenu(id) {
+        const meta = data.index().projects.find(item => item.id === id);
+        if (!meta) return;
+        const items = [];
+        if (cardKey()) {
+            if (runtime.activeId() !== id) items.push({ label: '设为当前聊天使用', value: 'chat', icon: ICONS.chat });
+            if (data.activeIdFor(cardKey()) !== id) items.push({ label: '设为本卡默认（新聊天也用）', value: 'card', icon: ICONS.card });
+        }
+        items.push({ label: '编辑名称、分组', value: 'edit', icon: ICONS.pencil });
+        const pick = await menuDialog({ title: meta.name, items });
+        if (!pick) return;
+        if (pick === 'edit') return editProject(id);
+        try {
+            await runtime.switchProject(id, pick);
+            toast('success', pick === 'card' ? `「${meta.name}」已设为本卡默认，当前聊天也已换用。` : `当前聊天改用「${meta.name}」。`);
+            render();
+        } catch (error) {
+            toast('error', `切换失败：${error.message}`);
+        }
+    }
+
+    async function editProject(id) {
         const meta = data.index().projects.find(item => item.id === id);
         if (!meta) return;
         const groups = [...new Set(data.index().projects.map(item => item.group).filter(Boolean))];
@@ -300,6 +323,7 @@ export function createApp({ data, runtime, version }) {
     }
 
     function onClick(event) {
+        if (event.target.closest('.pi-pitem') && swallowAfterPress(event)) return;
         const target = event.target.closest('[data-act]');
         if (!target || !root.contains(target)) return;
         const act = target.dataset.act;
@@ -314,7 +338,7 @@ export function createApp({ data, runtime, version }) {
             writeUi({ night: isNight() });
             return renderSide();
         }
-        if (act === 'rename') return projectMenu(view.projectId);
+        if (act === 'rename') return editProject(view.projectId);
         if (act === 'retry-project') return selectProject(view.projectId, view.tab);
         if (act === 'retry-render') return render();
         if (act === 'group') {
@@ -331,10 +355,43 @@ export function createApp({ data, runtime, version }) {
         }
     }
 
+    // 长按项目名弹菜单。安卓长按还会再发 contextmenu，iOS 不发，所以自己计时，并吞掉随后的 click/contextmenu。
+    let press = null;
+    let pressedAt = 0;
+
+    function cancelPress() {
+        if (press) hostWindow().clearTimeout(press.timer);
+        press = null;
+    }
+
+    function onPointerDown(event) {
+        const item = event.target.closest('.pi-pitem');
+        if (!item || !root.contains(item) || event.button > 0) return;
+        cancelPress();
+        press = { x: event.clientX, y: event.clientY, timer: hostWindow().setTimeout(() => {
+            press = null;
+            pressedAt = Date.now();
+            projectMenu(item.dataset.id);
+        }, LONG_PRESS_MS) };
+    }
+
+    function onPointerMove(event) {
+        if (press && Math.hypot(event.clientX - press.x, event.clientY - press.y) > 10) cancelPress();
+    }
+
+    function swallowAfterPress(event) {
+        if (Date.now() - pressedAt > 800) return false;
+        event.preventDefault();
+        event.stopPropagation();
+        return true;
+    }
+
     function onContext(event) {
         const item = event.target.closest('.pi-pitem');
         if (!item || !root.contains(item)) return;
         event.preventDefault();
+        cancelPress();
+        if (swallowAfterPress(event)) return;
         projectMenu(item.dataset.id);
     }
 
@@ -374,6 +431,11 @@ export function createApp({ data, runtime, version }) {
             <section class="pi-main"><header class="pi-top"></header><div class="pi-body"></div></section></div></div>`);
         root.addEventListener('click', onClick);
         root.addEventListener('contextmenu', onContext);
+        root.addEventListener('pointerdown', onPointerDown);
+        root.addEventListener('pointermove', onPointerMove);
+        root.addEventListener('pointerup', cancelPress);
+        root.addEventListener('pointercancel', cancelPress);
+        root.addEventListener('scroll', cancelPress, true);
         root.addEventListener('change', onChange);
         root.addEventListener('input', onInput);
         root.addEventListener('focusout', event => current().onBlur?.(view, event.target, event));

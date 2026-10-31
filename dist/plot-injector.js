@@ -1,4 +1,4 @@
-// PlotInjector v0.1.14
+// PlotInjector v0.1.15
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -1483,13 +1483,19 @@ ${text}` }
     let state = readChatState();
     return normalizeProgress(state.byProject[projectId], projectId) || emptyProgress(projectId);
   }
+  function save() {
+    let c = ctx();
+    typeof c.saveMetadataDebounced == "function" ? c.saveMetadataDebounced() : typeof c.saveMetadata == "function" && c.saveMetadata();
+  }
   function writeProgress(progress) {
     let m = meta();
     if (!m) return !1;
     let state = readChatState();
-    m[KEY] = { projectId: progress.projectId, byProject: { ...state.byProject, [progress.projectId]: progress } };
-    let c = ctx();
-    return typeof c.saveMetadataDebounced == "function" ? c.saveMetadataDebounced() : typeof c.saveMetadata == "function" && c.saveMetadata(), !0;
+    return m[KEY] = { projectId: progress.projectId, byProject: { ...state.byProject, [progress.projectId]: progress } }, save(), !0;
+  }
+  function bindChat(projectId) {
+    let m = meta(), c = ctx();
+    return !m || !c.chatId ? !1 : (m[KEY] = { ...readChatState(), projectId }, save(), !0);
   }
   function clearChatProgress() {
     let m = meta();
@@ -1502,12 +1508,16 @@ ${text}` }
   // src/app/runtime.js
   var VIRTUAL_WORLD = "剧情注入器", LOG_MAX = 40, PENDING_MAX_MS = 3e4, CHECK_RETRIES = 3, RETRY_GAP_MS = 2e3, placeOf = (unit) => `${volumeLabel(unit.volume.key)}·${stageLabel(unit.stage.key)}`;
   function createRuntime({ data, notice, emit, askReason = async () => "" }) {
-    let view = hostWindow(), progress = null, progressFor = "", checking = !1, mismatchShownFor = "", fallbackTimer = 0, generating = !1, chatStartFloors = 0, pendingCheck = !1, pendingTimer = 0, listeners = [], stats = {}, logs = [];
+    let view = hostWindow(), progress = null, progressFor = "", checking = !1, fallbackTimer = 0, generating = !1, chatStartFloors = 0, pendingCheck = !1, pendingTimer = 0, listeners = [], stats = {}, logs = [];
     function log(text) {
       logs.push({ at: Date.now(), text }), logs.length > LOG_MAX && logs.shift();
     }
+    function chatBoundId() {
+      let id = readChatState().projectId;
+      return id && data.index().projects.some((item) => item.id === id) ? id : "";
+    }
     function activeId() {
-      return data.activeIdFor(cardKey());
+      return chatBoundId() || data.activeIdFor(cardKey());
     }
     function activeProject() {
       let id = activeId();
@@ -1759,26 +1769,12 @@ ${text}` }
         } catch (error) {
           toast("error", `读取项目失败：${error.message}`);
         }
-      log(`切换聊天：${floorCount()} 楼，${id ? `启用项目「${(data.index().projects.find((item) => item.id === id) || {}).name || id}」` : "本卡没有启用项目"}`), id && clampBase(), checkMismatch(), scheduleFallback(), emit("chat");
+      log(`切换聊天：${floorCount()} 楼，${id ? `启用项目「${(data.index().projects.find((item) => item.id === id) || {}).name || id}」` : "本卡没有启用项目"}`), id && clampBase(), scheduleFallback(), emit("chat");
     }
-    function checkMismatch() {
-      let id = activeId(), state = readChatState(), key = `${cardKey()}|${ctx() && ctx().chatId}`;
-      if (!state.projectId || state.projectId === id || mismatchShownFor === key) return;
-      let other = data.index().projects.find((item) => item.id === state.projectId);
-      other && (mismatchShownFor = key, notice.show({
-        id: "mismatch",
-        title: "此聊天属于另一条线",
-        body: `聊天记录的进度属于「${other.name}」，当前启用的是「${(data.index().projects.find((item) => item.id === id) || {}).name || "无"}」。`,
-        actions: [
-          { label: "切过去", primary: !0, run: () => {
-            switchProject(other.id), notice.hide("mismatch");
-          } },
-          { label: "保持当前", run: () => notice.hide("mismatch") }
-        ]
-      }));
-    }
-    async function switchProject(id) {
-      id && await data.loadProject(id), data.setActive(id), progress = null, progressFor = "", scheduleFallback(), emit("switch");
+    async function switchProject(id, scope = "chat") {
+      id && await data.loadProject(id);
+      let bound = bindChat(id);
+      (scope === "card" || !bound || !data.activeIdFor(cardKey())) && data.setActive(id), progress = null, progressFor = "", scheduleFallback(), emit("switch");
     }
     let BINDINGS = [
       ["WORLDINFO_ENTRIES_LOADED", onEntriesLoaded],
@@ -1887,7 +1883,7 @@ ${text}` }
 .pi-psearch{position:relative;margin:0 8px 6px}
 .pi-psearch svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--pi-txt2);pointer-events:none}
 .pi-psearch .pi-inp{padding-left:30px}
-.pi-pitem{display:flex;align-items:center;gap:6px;width:100%;padding:7px 10px;border:0;border-radius:var(--pi-r-in);background:none;color:var(--pi-txt);font-size:13px;text-align:left;cursor:pointer;font-family:inherit}
+.pi-pitem{display:flex;align-items:center;gap:6px;width:100%;padding:7px 10px;border:0;border-radius:var(--pi-r-in);background:none;color:var(--pi-txt);font-size:13px;text-align:left;cursor:pointer;font-family:inherit;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 .pi-pitem:hover{background:var(--pi-surf)}
 .pi-pitem.is-sel{background:var(--pi-accent-soft);color:var(--pi-accent);font-weight:600}
 .pi-pitem .pi-dot{width:7px;height:7px;border-radius:50%;background:var(--pi-accent);flex-shrink:0}
@@ -2208,6 +2204,8 @@ label.pi-wb-row{cursor:pointer}
     folder: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 4.3c0-.7.6-1.3 1.3-1.3h2.9l1.5 1.6h5c.7 0 1.3.6 1.3 1.3v6.8c0 .7-.6 1.3-1.3 1.3H3.3c-.7 0-1.3-.6-1.3-1.3V4.3z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>',
     bookPlus: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 2.5h7.5a2 2 0 012 2v4M3 2.5v9a2 2 0 002 2h4M3 11.5a2 2 0 012-2h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M12.5 10.5v4M10.5 12.5h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
     entryPlus: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M9.5 13.5H4a1.5 1.5 0 01-1.5-1.5V4A1.5 1.5 0 014 2.5h8A1.5 1.5 0 0113.5 4v5.5M5.5 6h5M5.5 9h3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M12.5 11v4M10.5 13h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
+    chat: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3.5 2.5h9A1.5 1.5 0 0114 4v6a1.5 1.5 0 01-1.5 1.5H7l-3 2.5v-2.5h-.5A1.5 1.5 0 012 10V4a1.5 1.5 0 011.5-1.5z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>',
+    card: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="3" y="1.5" width="10" height="13" rx="1.5" stroke="currentColor" stroke-width="1.4"/><circle cx="8" cy="6.5" r="2" stroke="currentColor" stroke-width="1.4"/><path d="M5.5 11.5h5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
     checks: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2.5" y="2.5" width="4" height="4" rx="1" stroke="currentColor" stroke-width="1.4"/><rect x="2.5" y="9.5" width="4" height="4" rx="1" stroke="currentColor" stroke-width="1.4"/><path d="M9 4.5h4.5M9 11.5h4.5M3.6 11.5l.9.9 1.4-1.6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     checkAll: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2.5" y="2.5" width="11" height="11" rx="2" stroke="currentColor" stroke-width="1.4"/><path d="M5.3 8.2l1.9 1.9 3.6-4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     wand: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 13l7.5-7.5M9 4l3 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M12 1.8v2M11 2.8h2M13.8 6.2v1.4M13.1 6.9h1.4M5.5 2v1.4M4.8 2.7h1.4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>',
@@ -3570,8 +3568,10 @@ ${parsed.body}` : parsed.body;
     if (activeId !== project.id) {
       let other = data.index().projects.find((item) => item.id === activeId);
       return `<div class="pi-card"><h3>启用</h3>
-            <p class="pi-hint">「${esc(cardName())}」${other ? `当前启用的是「${esc(other.name)}」` : "还没有启用项目"}。</p>
-            <button type="button" class="pi-btn is-primary" data-act="activate">设为本卡当前项目</button></div>`;
+            <p class="pi-hint">${other ? `当前聊天使用的是「${esc(other.name)}」` : `「${esc(cardName())}」还没有启用项目`}。</p>
+            <div class="pi-tools is-c2">
+                <button type="button" class="pi-btn is-primary" data-act="activate">设为当前聊天使用</button>
+                <button type="button" class="pi-btn" data-act="activate-card">设为本卡默认</button></div></div>`;
     }
     let progress = runtime.progress(), entries = runtime.entries(), units = flattenUnits(project.outline.volumes), states = unitStates(units, progress), total = entries.filter((entry) => entry.enabled).reduce((sum, entry) => sum + estimateTokens(entry.content), 0), settings = data.settings(), checking = runtime.isChecking(), book = runtime.injectMode() === "virtual" ? "" : '<span class="pi-badge is-warn">专用世界书</span>', gap = settings.checkEvery - (runtime.floorCount() - progress.lastCheckFloor);
     return `<div class="pi-card"><h3>注入条目${book}<span class="pi-meta">≈${total} token</span><span class="pi-spacer"></span>
@@ -3594,7 +3594,8 @@ ${parsed.body}` : parsed.body;
     runtime.setProgress(patchSlot(runtime.progress(), slotId, patch));
   }
   var actions4 = {
-    activate: (view) => view.runtime.switchProject(view.projectId),
+    activate: (view) => view.runtime.switchProject(view.projectId, "chat"),
+    "activate-card": (view) => view.runtime.switchProject(view.projectId, "card"),
     // 推进速度随聊天保存，改完立即换掉详细条目开头的说明。
     pace(view, target) {
       view.runtime.setProgress({ ...view.runtime.progress(), pace: target.dataset.pace }), view.renderBody();
@@ -4466,7 +4467,7 @@ ${parsed.body}` : parsed.body;
     data: { label: "数据管理", icon: "box", mod: page_data_exports },
     diag: { label: "诊断", icon: "pulse", mod: page_diag_exports },
     settings: { label: "设置", icon: "gear", mod: page_settings_exports }
-  }, UI_KEY = "pi-ui", SEARCH_FROM = 6;
+  }, UI_KEY = "pi-ui", SEARCH_FROM = 6, LONG_PRESS_MS = 500;
   function readUi() {
     try {
       return JSON.parse(hostWindow().localStorage.getItem(UI_KEY) || "{}") || {};
@@ -4515,9 +4516,9 @@ ${parsed.body}` : parsed.body;
       return view.page ? PAGES[view.page].mod : (TABS.find((tab) => tab.key === view.tab) || TABS[3]).mod;
     }
     function sideHtml() {
-      let index = data.index(), activeId = data.activeIdFor(cardKey()), list = groupProjects(index.projects).map((group) => {
-        let collapsed = view.collapsed.has(group.name), items = group.items.map((item) => `<button type="button" class="pi-pitem${item.id === view.projectId && !view.page ? " is-sel" : ""}" data-act="project" data-id="${esc(item.id)}" data-name="${esc(`${item.group} ${item.name}`.toLowerCase())}" title="右键编辑名称、分组">
-                <span class="pi-pname">${esc(item.name)}</span>${item.id === activeId ? '<span class="pi-dot" title="本卡当前项目"></span>' : ""}</button>`).join(""), head = group.name ? `<button type="button" class="pi-group-hd" data-act="group" data-group="${esc(group.name)}">${collapsed ? ICONS.caret : ICONS.caretDown}${esc(group.name)}<small>${group.items.length}</small></button>` : "";
+      let index = data.index(), activeId = runtime.activeId(), list = groupProjects(index.projects).map((group) => {
+        let collapsed = view.collapsed.has(group.name), items = group.items.map((item) => `<button type="button" class="pi-pitem${item.id === view.projectId && !view.page ? " is-sel" : ""}" data-act="project" data-id="${esc(item.id)}" data-name="${esc(`${item.group} ${item.name}`.toLowerCase())}" title="长按或右键：设为当前、编辑">
+                <span class="pi-pname">${esc(item.name)}</span>${item.id === activeId ? '<span class="pi-dot" title="当前聊天使用"></span>' : ""}</button>`).join(""), head = group.name ? `<button type="button" class="pi-group-hd" data-act="group" data-group="${esc(group.name)}">${collapsed ? ICONS.caret : ICONS.caretDown}${esc(group.name)}<small>${group.items.length}</small></button>` : "";
         return `<div class="pi-group${collapsed ? " is-collapsed" : ""}">${head}${items}</div>`;
       }).join(""), page = (key) => `<button type="button" class="pi-btn is-ghost is-block${view.page === key ? " is-sel" : ""}" data-act="page" data-page="${key}">${ICONS[PAGES[key].icon]}${PAGES[key].label}</button>`;
       return `<div class="pi-side-hd">剧情注入器 <small>v${esc(version)}</small><span class="pi-spacer"></span><button type="button" class="pi-icon-btn" data-act="new-project" title="新项目">${ICONS.plus}</button></div>
@@ -4606,7 +4607,7 @@ ${parsed.body}` : parsed.body;
         }
     }
     function restore() {
-      let ui = readUi(), activeId = data.activeIdFor(cardKey()), remembered = data.index().projects.some((item) => item.id === ui.projectId) ? ui.projectId : "", id = activeId || remembered || data.index().projects[0] && data.index().projects[0].id || "";
+      let ui = readUi(), activeId = runtime.activeId(), remembered = data.index().projects.some((item) => item.id === ui.projectId) ? ui.projectId : "", id = activeId || remembered || data.index().projects[0] && data.index().projects[0].id || "";
       view.restored = !0, render9();
       let page = PAGES[ui.page] ? ui.page : "";
       id && selectProject(id, TABS.some((tab) => tab.key === ui.tab) ? ui.tab : void 0), page && (view.page = page, writeUi({ page }), render9());
@@ -4620,12 +4621,27 @@ ${parsed.body}` : parsed.body;
       if (name != null)
         try {
           let project = await data.createProject(name);
-          !data.activeIdFor(cardKey()) && cardKey() && await runtime.switchProject(project.id), await selectProject(project.id, "discuss");
+          !runtime.activeId() && cardKey() && await runtime.switchProject(project.id), await selectProject(project.id, "discuss");
         } catch (error) {
           toast("error", `新建失败：${error.message}`);
         }
     }
     async function projectMenu(id) {
+      let meta2 = data.index().projects.find((item) => item.id === id);
+      if (!meta2) return;
+      let items = [];
+      cardKey() && (runtime.activeId() !== id && items.push({ label: "设为当前聊天使用", value: "chat", icon: ICONS.chat }), data.activeIdFor(cardKey()) !== id && items.push({ label: "设为本卡默认（新聊天也用）", value: "card", icon: ICONS.card })), items.push({ label: "编辑名称、分组", value: "edit", icon: ICONS.pencil });
+      let pick = await menuDialog({ title: meta2.name, items });
+      if (pick) {
+        if (pick === "edit") return editProject(id);
+        try {
+          await runtime.switchProject(id, pick), toast("success", pick === "card" ? `「${meta2.name}」已设为本卡默认，当前聊天也已换用。` : `当前聊天改用「${meta2.name}」。`), render9();
+        } catch (error) {
+          toast("error", `切换失败：${error.message}`);
+        }
+      }
+    }
+    async function editProject(id) {
       let meta2 = data.index().projects.find((item) => item.id === id);
       if (!meta2) return;
       let groups = [...new Set(data.index().projects.map((item) => item.group).filter(Boolean))], result = await openDialog({
@@ -4653,6 +4669,7 @@ ${parsed.body}` : parsed.body;
       }
     }
     function onClick(event) {
+      if (event.target.closest(".pi-pitem") && swallowAfterPress(event)) return;
       let target = event.target.closest("[data-act]");
       if (!target || !root.contains(target)) return;
       let act = target.dataset.act;
@@ -4665,7 +4682,7 @@ ${parsed.body}` : parsed.body;
       if (act === "drawer") return setDrawer(!view.drawer);
       if (act === "theme")
         return setNight(!isNight()), writeUi({ night: isNight() }), renderSide();
-      if (act === "rename") return projectMenu(view.projectId);
+      if (act === "rename") return editProject(view.projectId);
       if (act === "retry-project") return selectProject(view.projectId, view.tab);
       if (act === "retry-render") return render9();
       if (act === "group") {
@@ -4675,9 +4692,25 @@ ${parsed.body}` : parsed.body;
       let handler = current().actions?.[act];
       handler && (event.preventDefault(), Promise.resolve(handler(view, target, event)).catch((error) => toast("error", error.message || String(error))));
     }
+    let press = null, pressedAt = 0;
+    function cancelPress() {
+      press && hostWindow().clearTimeout(press.timer), press = null;
+    }
+    function onPointerDown(event) {
+      let item = event.target.closest(".pi-pitem");
+      !item || !root.contains(item) || event.button > 0 || (cancelPress(), press = { x: event.clientX, y: event.clientY, timer: hostWindow().setTimeout(() => {
+        press = null, pressedAt = Date.now(), projectMenu(item.dataset.id);
+      }, LONG_PRESS_MS) });
+    }
+    function onPointerMove(event) {
+      press && Math.hypot(event.clientX - press.x, event.clientY - press.y) > 10 && cancelPress();
+    }
+    function swallowAfterPress(event) {
+      return Date.now() - pressedAt > 800 ? !1 : (event.preventDefault(), event.stopPropagation(), !0);
+    }
     function onContext(event) {
       let item = event.target.closest(".pi-pitem");
-      !item || !root.contains(item) || (event.preventDefault(), projectMenu(item.dataset.id));
+      !item || !root.contains(item) || (event.preventDefault(), cancelPress(), !swallowAfterPress(event) && projectMenu(item.dataset.id));
     }
     function onChange6(event) {
       let target = event.target;
@@ -4697,7 +4730,7 @@ ${parsed.body}` : parsed.body;
     function open() {
       ensureStyle(), !root && (view.drawer = !1, lastSide = "", lastTop = "", root = el(`<div class="pi-root pi-overlay"><div class="pi-panel"><aside class="pi-side"></aside>
             <div class="pi-scrim" data-act="drawer"></div>
-            <section class="pi-main"><header class="pi-top"></header><div class="pi-body"></div></section></div></div>`), root.addEventListener("click", onClick), root.addEventListener("contextmenu", onContext), root.addEventListener("change", onChange6), root.addEventListener("input", onInput5), root.addEventListener("focusout", (event) => current().onBlur?.(view, event.target, event)), root.addEventListener("mousedown", (event) => {
+            <section class="pi-main"><header class="pi-top"></header><div class="pi-body"></div></section></div></div>`), root.addEventListener("click", onClick), root.addEventListener("contextmenu", onContext), root.addEventListener("pointerdown", onPointerDown), root.addEventListener("pointermove", onPointerMove), root.addEventListener("pointerup", cancelPress), root.addEventListener("pointercancel", cancelPress), root.addEventListener("scroll", cancelPress, !0), root.addEventListener("change", onChange6), root.addEventListener("input", onInput5), root.addEventListener("focusout", (event) => current().onBlur?.(view, event.target, event)), root.addEventListener("mousedown", (event) => {
         event.target === root && (root.dataset.down = "1");
       }), root.addEventListener("mouseup", (event) => {
         event.target === root && root.dataset.down && close(), delete root.dataset.down;
@@ -4752,7 +4785,7 @@ ${parsed.body}` : parsed.body;
   }
 
   // src/index.js
-  var VERSION = "0.1.14", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.1.15", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")
