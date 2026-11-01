@@ -79,8 +79,8 @@ export function createDataStore({ onChange = () => {}, onError = () => {} } = {}
         return next;
     }
 
-    async function createProject(name, group = '') {
-        const project = newProject(name);
+    async function createProject(name, group = '', mode = 'normal') {
+        const project = newProject(name, Date.now(), mode);
         projects.set(project.id, project);
         const bytes = await writeJsonFile(projectFile(project.id), project);
         index = {

@@ -274,3 +274,15 @@ export async function writeFallbackBook(name, wiEntries) {
     }
     return { bound: meta && meta.world_info === name, conflict: meta && meta.world_info && meta.world_info !== name ? meta.world_info : '' };
 }
+
+// 在当前卡绑定的世界书里按标题找条目（含已关闭的），返回正文；找不到返回空串。
+// same：标题比较函数，由调用方传入（忽略 emoji 变体选择符等）。读取沿用 boundBookNames/loadBook/bookEntries，不写回。
+export async function readEntryContent(title, same) {
+    for (const { name } of boundBookNames()) {
+        try {
+            const hit = bookEntries(await loadBook(name)).find(entry => same(entry.comment, title));
+            if (hit && hit.content.trim()) return hit.content.trim();
+        } catch { /* 某本读不到就看下一本 */ }
+    }
+    return '';
+}

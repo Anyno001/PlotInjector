@@ -8,7 +8,7 @@ import { ICONS } from './styles.js';
 import { startRewrite } from './tab-outline.js';
 
 // 位置、深度、角色、顺序改的是本项目的默认，所有阶段一起生效；只有启用开关按段记。
-function entryRow(entry, expanded) {
+export function entryRow(entry, expanded) {
     const atDepth = entry.position === 4;
     const field = name => `data-kind="${entry.kind}" data-param="${name}"`;
     const body = expanded ? `<div class="pi-entry-bd">
@@ -66,20 +66,26 @@ function timeline(units, states, progress, carried) {
     return groups.map(group => `<div class="pi-tl-vol">${esc(volumeLabel(group.volume.key))}</div><div class="pi-tl">${group.units.map(item).join('')}</div>`).join('');
 }
 
-export function render(view) {
+// 当前聊天没在用这个项目时的启用卡；已在用返回空串。
+export function activateCard(view, project) {
     const { data, runtime } = view;
-    const project = view.project();
-    const st = view.tabState('run');
     if (!cardKey()) return '<div class="pi-empty">先打开一张角色卡的聊天，再启用项目。</div>';
     const activeId = runtime.activeId();
-    if (activeId !== project.id) {
-        const other = data.index().projects.find(item => item.id === activeId);
-        return `<div class="pi-card"><h3>启用</h3>
+    if (activeId === project.id) return '';
+    const other = data.index().projects.find(item => item.id === activeId);
+    return `<div class="pi-card"><h3>启用</h3>
             <p class="pi-hint">${other ? `当前聊天使用的是「${esc(other.name)}」` : `「${esc(cardName())}」还没有启用项目`}。</p>
             <div class="pi-tools is-c2">
                 <button type="button" class="pi-btn is-primary" data-act="activate">设为当前聊天使用</button>
                 <button type="button" class="pi-btn" data-act="activate-card">设为本卡默认</button></div></div>`;
-    }
+}
+
+export function render(view) {
+    const { data, runtime } = view;
+    const project = view.project();
+    const st = view.tabState('run');
+    const notActive = activateCard(view, project);
+    if (notActive) return notActive;
     const progress = runtime.progress();
     const entries = runtime.entries();
     const units = flattenUnits(project.outline.volumes);

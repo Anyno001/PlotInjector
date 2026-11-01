@@ -1,4 +1,4 @@
-// PlotInjector v0.1.16
+// PlotInjector v0.1.17
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -148,6 +148,162 @@
     return next.filter((volume) => volume.stages.length);
   }
 
+  // src/core/infinite.js
+  var INFINITE_SLOT = "@infinite";
+  var PHASE_LABELS = { train: "在列车上", world: "在世界里" }, DEFAULT_POOLS = {
+    horror: [
+      { label: "中式民俗", weight: 3 },
+      { label: "规则怪谈", weight: 3 },
+      { label: "心理恐怖", weight: 2 },
+      { label: "都市传说", weight: 2 },
+      { label: "克苏鲁式不可名状", weight: 1 },
+      { label: "诡异的温情", weight: 1 }
+    ],
+    cycle: [
+      { label: "一晚", weight: 2 },
+      { label: "三天", weight: 3 },
+      { label: "一个月", weight: 3 },
+      { label: "一年", weight: 2 },
+      { label: "超过一生", weight: 1 }
+    ],
+    client: [
+      { label: "守夜的老人", weight: 2 },
+      { label: "失约的新娘", weight: 2 },
+      { label: "迷路的孩子", weight: 2 },
+      { label: "最后一个乘客", weight: 2 },
+      { label: "看不见脸的店家", weight: 1 },
+      { label: "已经死去的同行", weight: 1 }
+    ],
+    lust: [{ label: "无", weight: 70 }, { label: "轻", weight: 25 }, { label: "重", weight: 5 }]
+  }, POOL_KEYS = ["horror", "cycle", "client", "lust"], POOL_LABELS = { horror: "恐怖类型", cycle: "重置周期", client: "委托人身份", lust: "情欲浓度" }, DEFAULT_CONFIG = { horrorPrefix: "🎭 恐怖类型：" };
+  function normalizePool(value, fallback) {
+    let out = (Array.isArray(value) ? value : fallback).filter((item) => item && String(item.label || "").trim()).map((item) => ({ label: String(item.label).trim(), weight: Math.max(0, Number(item.weight)) || 0 })).filter((item) => item.weight > 0);
+    return out.length ? out : fallback.map((item) => ({ ...item }));
+  }
+  function poolToText(pool) {
+    return pool.map((item) => `${item.label}|${item.weight}`).join(`
+`);
+  }
+  function textToPool(text) {
+    let out = [];
+    for (let raw of String(text || "").split(`
+`)) {
+      let cells2 = raw.split(/[|｜]/).map((cell) => cell.trim());
+      cells2[0] && out.push({ label: cells2[0], weight: Number(cells2[1]) || 1 });
+    }
+    return out;
+  }
+  function randomFloat() {
+    let g = globalThis.crypto;
+    if (!g || typeof g.getRandomValues != "function") throw new Error("当前环境没有 crypto 真随机");
+    let buf = new Uint32Array(1);
+    return g.getRandomValues(buf), buf[0] / 4294967296;
+  }
+  function rollPool(pool, rng = randomFloat) {
+    let total = pool.reduce((sum, item) => sum + Math.max(0, item.weight), 0);
+    if (!(total > 0)) return pool[0];
+    let hit = rng() * total;
+    for (let item of pool)
+      if (hit -= Math.max(0, item.weight), hit < 0) return item;
+    return pool[pool.length - 1];
+  }
+  function rollWorldDice(infinite, rng = randomFloat) {
+    return Object.fromEntries(POOL_KEYS.map((key) => [key, rollPool(infinite.pools[key], rng).label]));
+  }
+  function normalizeWorld(value) {
+    let src = value && typeof value == "object" ? value : {}, dice = src.dice && typeof src.dice == "object" ? src.dice : {};
+    return {
+      id: String(src.id || makeId("w")),
+      title: String(src.title || "无名之站"),
+      dice: Object.fromEntries(POOL_KEYS.map((key) => [key, String(dice[key] || "")])),
+      body: String(src.body || "")
+    };
+  }
+  function normalizeInfinite(value) {
+    let src = value && typeof value == "object" ? value : {}, cfg = src.config && typeof src.config == "object" ? src.config : {}, pools = src.pools && typeof src.pools == "object" ? src.pools : {};
+    return {
+      pools: Object.fromEntries(POOL_KEYS.map((key) => [key, normalizePool(pools[key], DEFAULT_POOLS[key])])),
+      spec: String(src.spec || ""),
+      config: { horrorPrefix: typeof cfg.horrorPrefix == "string" ? cfg.horrorPrefix : DEFAULT_CONFIG.horrorPrefix }
+    };
+  }
+  function findWorld(worlds, id) {
+    return worlds.find((world) => world.id === id) || null;
+  }
+  function putWorld(worlds, world) {
+    return worlds.some((item) => item.id === world.id) ? worlds.map((item) => item.id === world.id ? world : item) : [...worlds, world];
+  }
+  function titleKey(title2) {
+    return String(title2 || "").replace(/[\uFE0E\uFE0F\s]+/g, "").toLowerCase();
+  }
+
+  // src/core/infinite-flow.js
+  var LOG_MAX = 12;
+  function emptyInfinite() {
+    return { phase: "train", worldId: "", worlds: [], log: [] };
+  }
+  function normalizeInfiniteProgress(value) {
+    let src = value && typeof value == "object" ? value : {}, worlds = (Array.isArray(src.worlds) ? src.worlds : []).filter((item) => item && typeof item == "object").map(normalizeWorld), worldId = String(src.worldId || ""), inWorld = src.phase === "world" && !!findWorld(worlds, worldId), trig = normalizeTrigger(src.trigger, worlds);
+    return {
+      phase: inWorld ? "world" : "train",
+      worldId: inWorld ? worldId : "",
+      worlds,
+      log: (Array.isArray(src.log) ? src.log : []).map(String).slice(-LOG_MAX),
+      ...trig ? { trigger: trig } : {}
+    };
+  }
+  function normalizeTrigger(value, worlds) {
+    if (!value || typeof value != "object" || value.kind !== "enter" && value.kind !== "leave") return null;
+    let floor = Number(value.floor);
+    if (!Number.isInteger(floor) || floor < 0) return null;
+    let worldId = String(value.worldId || "");
+    return findWorld(worlds, worldId) ? { kind: value.kind, floor, hash: String(value.hash || ""), worldId } : null;
+  }
+  function withTrigger(inf, trigger) {
+    let { trigger: _old, ...rest } = inf;
+    return trigger ? { ...rest, trigger } : rest;
+  }
+  function undoEnter(inf, note = "触发楼已改动，撤销开副本") {
+    let id = inf.trigger ? inf.trigger.worldId : inf.worldId, next = withTrigger({ ...inf, worlds: inf.worlds.filter((world) => world.id !== id), phase: "train", worldId: "" }, null);
+    return addLog(next, note);
+  }
+  function undoLeave(inf, note = "触发楼已改动，撤销关副本") {
+    let world = inf.trigger ? findWorld(inf.worlds, inf.trigger.worldId) : null;
+    return world ? addLog(withTrigger({ ...inf, phase: "world", worldId: world.id }, null), note) : withTrigger(inf, null);
+  }
+  function addLog(inf, text) {
+    return { ...inf, log: [...inf.log, text].slice(-LOG_MAX) };
+  }
+  function createWorld({ id, dice, parsed }) {
+    return normalizeWorld({ id, title: parsed.title, dice, body: parsed.body });
+  }
+  function enterWorld(inf, world) {
+    return addLog(withTrigger({ ...inf, phase: "world", worldId: world.id, worlds: putWorld(inf.worlds, world) }, null), `进入世界「${world.title}」`);
+  }
+  function reenterWorld(inf, id) {
+    let world = findWorld(inf.worlds, id);
+    if (!world) throw new Error("这份档案已经不在世界库里");
+    return addLog(withTrigger({ ...inf, phase: "world", worldId: id }, null), `重新打开「${world.title}」`);
+  }
+  function leaveWorld(inf, note = "回到列车") {
+    return addLog(withTrigger({ ...inf, phase: "train", worldId: "" }, null), note);
+  }
+  function removeWorld(inf, id) {
+    let kept = { ...inf, worlds: inf.worlds.filter((world) => world.id !== id) }, next = inf.trigger && inf.trigger.worldId === id ? withTrigger(kept, null) : kept;
+    return next.worldId === id ? addLog({ ...next, phase: "train", worldId: "" }, "当前世界的档案被删除，回到列车") : next;
+  }
+  function buildInfiniteDetail(inf) {
+    let world = inf.phase === "world" ? findWorld(inf.worlds, inf.worldId) : null, blocks = [`<列车状态>
+${world ? `当前状态：${PHASE_LABELS.world}「${world.title}」。` : `当前状态：${PHASE_LABELS.train}，尚未下车。下一站由列车报站，user 指挥不了广播。`}
+</列车状态>`];
+    return world && blocks.push(`<世界档案>
+${world.body}
+
+情欲浓度：${world.dice.lust}
+</世界档案>`), blocks.join(`
+`);
+  }
+
   // src/core/progress.js
   var SETTING_SLOT = "@setting";
   var STATES = ["done", "active", "next", "todo"], STATE_LABELS = { done: "已过", active: "进行中", next: "下一段", todo: "未到" };
@@ -156,9 +312,12 @@
   }
   function normalizeProgress(value, projectId) {
     let base = emptyProgress(projectId);
-    return !value || typeof value != "object" ? base : {
+    if (!value || typeof value != "object") return base;
+    let infinite = value.infinite && typeof value.infinite == "object" ? { infinite: normalizeInfiniteProgress(value.infinite) } : {};
+    return {
       ...base,
       ...value,
+      ...infinite,
       slots: value.slots && typeof value.slots == "object" ? value.slots : {},
       muted: Array.isArray(value.muted) ? value.muted : [],
       offMuted: Array.isArray(value.offMuted) ? value.offMuted : [],
@@ -338,13 +497,22 @@ ${body}${carriedText(carried)}
     let defaults = { ...DEFAULT_PARAMS, ...project && project.defaults }, entries = [];
     if (!project) return entries;
     let settingText = String(project.setting && project.setting.text || "").trim();
-    settingText && entries.push({
+    if (settingText && entries.push({
       slotId: SETTING_SLOT,
       kind: "setting",
       title: "设定",
       content: settingText,
       ...pickParams(defaults.setting, progress.slots[SETTING_SLOT])
-    });
+    }), project.mode === "infinite") {
+      let inf = progress.infinite || emptyInfinite();
+      return entries.push({
+        slotId: INFINITE_SLOT,
+        kind: "detail",
+        title: "无限流状态",
+        content: buildInfiniteDetail(inf),
+        ...pickParams(defaults.detail, progress.slots[INFINITE_SLOT])
+      }), entries;
+    }
     let units = flattenUnits(project.outline && project.outline.volumes);
     if (units.length) {
       let states = unitStates(units, progress), next = units.find((unit) => states[unit.id] === "next") || null, carried = settings.carryOver === !1 ? [] : carriedNodes(units, states, progress);
@@ -555,7 +723,7 @@ ${body}${carriedText(carried)}
       settings: normalizeSettings(src.settings)
     };
   }
-  function newProject(name, now = Date.now()) {
+  function newProject(name, now = Date.now(), mode = "normal") {
     return {
       version: 1,
       id: makeId("p"),
@@ -564,7 +732,9 @@ ${body}${carriedText(carried)}
       setting: { text: "", history: [], check: "", fixes: [] },
       outline: { volumes: [] },
       defaults: JSON.parse(JSON.stringify(DEFAULT_PARAMS)),
-      genRefs: normalizeGenRefs()
+      genRefs: normalizeGenRefs(),
+      mode: mode === "infinite" ? "infinite" : "normal",
+      ...mode === "infinite" ? { infinite: normalizeInfinite({}) } : {}
     };
   }
   function normalizeProject(value, id) {
@@ -588,7 +758,9 @@ ${body}${carriedText(carried)}
         }))
       },
       defaults: normalizeDefaults(src.defaults),
-      genRefs: normalizeGenRefs(src.genRefs)
+      genRefs: normalizeGenRefs(src.genRefs),
+      mode: src.mode === "infinite" ? "infinite" : "normal",
+      ...src.infinite && typeof src.infinite == "object" ? { infinite: normalizeInfinite(src.infinite) } : {}
     };
   }
   function normalizeGenRefs(value) {
@@ -657,12 +829,12 @@ ${body}${carriedText(carried)}
     return hostWindow().document;
   }
   function ctx() {
-    let st7 = hostWindow().SillyTavern;
-    return st7 && typeof st7.getContext == "function" ? st7.getContext() : st7 || null;
+    let st8 = hostWindow().SillyTavern;
+    return st8 && typeof st8.getContext == "function" ? st8.getContext() : st8 || null;
   }
   function libs() {
-    let st7 = hostWindow().SillyTavern;
-    return st7 && st7.libs || {};
+    let st8 = hostWindow().SillyTavern;
+    return st8 && st8.libs || {};
   }
   function helper() {
     let w = hostWindow();
@@ -807,25 +979,25 @@ ${body}${carriedText(carried)}
   }
 
   // src/app/data.js
-  function createDataStore({ onChange: onChange6 = () => {
+  function createDataStore({ onChange: onChange7 = () => {
   }, onError = () => {
   } } = {}) {
     let index = emptyIndex(), ready = !1, projects = /* @__PURE__ */ new Map(), chats = /* @__PURE__ */ new Map(), loading = /* @__PURE__ */ new Map(), failed = /* @__PURE__ */ new Set(), writer = createWriter({
       onSaved(name, bytes) {
         if (failed.delete(name), name === INDEX_FILE) return;
         let id = /^pi-[pc]-(.+)\.json$/.exec(name)?.[1], meta2 = index.projects.find((item) => item.id === id), kind = name.startsWith("pi-p-") ? "project" : "chat", knownFile = index.files.includes(name);
-        meta2 && meta2.bytes[kind] !== bytes && (index = { ...index, projects: index.projects.map((item) => item === meta2 ? { ...item, bytes: { ...item.bytes, [kind]: bytes } } : item) }), knownFile || (index = { ...index, files: [...index.files, name] }), (!knownFile || meta2 && meta2.bytes[kind] !== bytes) && writer.schedule(INDEX_FILE, index), onChange6("saved");
+        meta2 && meta2.bytes[kind] !== bytes && (index = { ...index, projects: index.projects.map((item) => item === meta2 ? { ...item, bytes: { ...item.bytes, [kind]: bytes } } : item) }), knownFile || (index = { ...index, files: [...index.files, name] }), (!knownFile || meta2 && meta2.bytes[kind] !== bytes) && writer.schedule(INDEX_FILE, index), onChange7("saved");
       },
       onError(name, error) {
-        failed.add(name), onError(error), onChange6("save-failed");
+        failed.add(name), onError(error), onChange7("save-failed");
       }
     });
     function setIndex(next) {
-      index = next, writer.schedule(INDEX_FILE, index), onChange6("index");
+      index = next, writer.schedule(INDEX_FILE, index), onChange7("index");
     }
     async function init() {
       let file = await readJsonFile(INDEX_FILE);
-      index = normalizeIndex(file && file.value), index.files.includes(INDEX_FILE) || (index = { ...index, files: [INDEX_FILE, ...index.files] }), ready = !0, onChange6("index");
+      index = normalizeIndex(file && file.value), index.files.includes(INDEX_FILE) || (index = { ...index, files: [INDEX_FILE, ...index.files] }), ready = !0, onChange7("index");
     }
     async function loadProject(id) {
       if (projects.has(id)) return projects.get(id);
@@ -840,7 +1012,7 @@ ${body}${carriedText(carried)}
       setIndex({ ...index, projects: index.projects.map((item) => item.id === id ? { ...item, ...patch, updatedAt: Date.now() } : item) });
     }
     function saveProject(project) {
-      projects.set(project.id, project), writer.schedule(projectFile(project.id), project), touch(project.id, { name: project.name }), onChange6("project", project.id);
+      projects.set(project.id, project), writer.schedule(projectFile(project.id), project), touch(project.id, { name: project.name }), onChange7("project", project.id);
     }
     function updateProject(id, fn) {
       let current = projects.get(id);
@@ -848,15 +1020,15 @@ ${body}${carriedText(carried)}
       let next = fn(current);
       return next && next !== current && saveProject(next), next;
     }
-    async function createProject(name, group = "") {
-      let project = newProject(name);
+    async function createProject(name, group = "", mode = "normal") {
+      let project = newProject(name, Date.now(), mode);
       projects.set(project.id, project);
       let bytes = await writeJsonFile(projectFile(project.id), project);
       return index = {
         ...index,
         projects: [...index.projects, { id: project.id, name: project.name, group, updatedAt: Date.now(), bytes: { project: bytes } }],
         files: index.files.includes(projectFile(project.id)) ? index.files : [...index.files, projectFile(project.id)]
-      }, writer.schedule(INDEX_FILE, index), onChange6("index"), project;
+      }, writer.schedule(INDEX_FILE, index), onChange7("index"), project;
     }
     async function deleteProject(id) {
       writer.cancel(projectFile(id)), writer.cancel(chatFile(id)), await deleteFile(projectFile(id)), await deleteFile(chatFile(id)), projects.delete(id), chats.delete(id);
@@ -875,7 +1047,7 @@ ${body}${carriedText(carried)}
       return chats.set(id, chat), chat;
     }
     function saveChat(id, chat) {
-      chats.set(id, chat), writer.schedule(chatFile(id), chat), onChange6("chat", id);
+      chats.set(id, chat), writer.schedule(chatFile(id), chat), onChange7("chat", id);
     }
     async function clearChat(id) {
       writer.cancel(chatFile(id)), await deleteFile(chatFile(id)), chats.set(id, emptyChat());
@@ -904,7 +1076,7 @@ ${body}${carriedText(carried)}
     }
     function resetAll() {
       for (let name of [...index.files]) writer.cancel(name);
-      projects.clear(), chats.clear(), index = emptyIndex(), onChange6("index");
+      projects.clear(), chats.clear(), index = emptyIndex(), onChange7("index");
     }
     return {
       init,
@@ -1163,6 +1335,128 @@ ${text}` }
       return { ok: !1, yaml, line, error: `${line ? `第 ${line} 行：` : ""}${String(error.message || error).split(`
 `)[0]}` };
     }
+  }
+
+  // src/core/infinite-state.js
+  var OPEN_RE = /[<＜]\s*末班车状态[^>＞]*[>＞]/g, CLOSE_RE = /[<＜]\s*\/\s*末班车状态\s*[>＞]/, LINE_RE = /^[ \t　]*(?:列车|位置|状态|所在|车况)[^:：\n]{0,6}[:：](.*)$/m, POLLUTION_LINE = /^[ \t　]*污染[^\n]*$/gm, NEGATION = /(?:未|没|不|尚未|还没|还未)$/, SYNONYMS = [
+    ["回到列车", ["回到列车", "回列车", "返回列车", "回到车上", "回车上", "重新上车", "登上列车", "已上车", "上了车"]],
+    ["停站", ["停站", "到站", "进站", "靠站", "停靠", "下车"]],
+    ["世界里", ["世界里", "世界中", "在世界", "副本"]],
+    ["车上", ["列车上", "车上", "餐车", "行驶中"]]
+  ];
+  function hasWord(value, word) {
+    let at = value.indexOf(word);
+    for (; at >= 0; ) {
+      if (!NEGATION.test(value.slice(Math.max(0, at - 2), at))) return !0;
+      at = value.indexOf(word, at + 1);
+    }
+    return !1;
+  }
+  function classifyTrainValue(value) {
+    let text = String(value || ""), hits = [];
+    for (let [state, words] of SYNONYMS) {
+      let hit = !1;
+      for (let word of words)
+        hasWord(text, word) && (hit = !0), text = text.split(word).join("　");
+      hit && hits.push(state);
+    }
+    return hits.length && hits.length < 3 ? hits[0] : "";
+  }
+  function parseTrainState(text) {
+    let src = String(text || ""), opens = [...src.matchAll(OPEN_RE)];
+    if (!opens.length) return "";
+    let last = opens[opens.length - 1], body = src.slice(last.index + last[0].length), close = CLOSE_RE.exec(body);
+    close && (body = body.slice(0, close.index));
+    let line = LINE_RE.exec(body);
+    return classifyTrainValue(line ? line[1] : body.replace(POLLUTION_LINE, ""));
+  }
+  var ENTER_STATES = ["停站", "世界里"], LEAVE_STATES = ["回到列车", "车上"];
+  function hashText(text) {
+    let h = 2166136261, s = String(text || "");
+    for (let i = 0; i < s.length; i += 1)
+      h ^= s.charCodeAt(i), h = Math.imul(h, 16777619) >>> 0;
+    return h.toString(16).padStart(8, "0");
+  }
+  function decideTrigger(phase, state) {
+    return phase === "train" && ENTER_STATES.includes(state) ? "enter" : phase === "world" && LEAVE_STATES.includes(state) ? "leave" : "";
+  }
+  function makeTrigger({ kind, floor, text, worldId = "" }) {
+    return { kind, floor: Number(floor), hash: hashText(text), worldId: String(worldId || "") };
+  }
+  function judgeTrigger(trigger, text) {
+    return trigger ? text == null || !(trigger.kind === "enter" ? ENTER_STATES : LEAVE_STATES).includes(parseTrainState(text)) ? "undo" : hashText(text) === trigger.hash ? "same" : "keep" : "none";
+  }
+  function describeRead(read) {
+    return read && read.state ? `上次读到：第 ${read.floor} 楼 列车：${read.state}` : "最新一楼没有状态块";
+  }
+
+  // src/core/infinite-world.js
+  var DEFAULT_WORLD_SPEC = [
+    "你是无限流恐怖故事的世界设计师。列车在某个世界的缝隙里停站，你要为这一站写一份世界档案。",
+    "整份档案会完整注入正文，之后整个副本期间原样不动，由正文 AI 照着主持。",
+    "骰子结果已经由脚本掷定，不可更改，档案必须以它们为准。",
+    "原则：少写禁令，多写因果；违反因果不判死，只让事态变坏；线索写成实物并钉在具体地点上，到了才呈现。",
+    "按下面的小节依次写，每节用小标题：",
+    "外观：这个世界看起来、听起来、闻起来是什么样。",
+    "委托：委托人是谁，要送的餐是什么。",
+    "卡住的事：这个世界里一直解决不了的事。",
+    "因果：这个世界的运转方式，一两条固定因果。",
+    "线索：地点→实物→能证明什么，每条一行。",
+    "站台：样子、位置、出现条件、消失时机。站台是这个世界里人们等着离开的地方（渡口、站牌、驿亭等），条件要和事件绑在一起，错过就得等列车下次停靠。",
+    "周期证据：能推出重置周期的证据。",
+    "居民认知：居民知道什么、不知道什么。",
+    "真相：事件的来龙去脉。"
+  ].join(`
+`), WORLD_FORMAT = [
+    "严格按下面的格式输出，两段标题各占一行，不要加其他说明：",
+    "【标题】世界名（不超过十个字）",
+    "【档案】",
+    "（档案正文，按上面的小节依次写）"
+  ].join(`
+`);
+  function worldSpecText(infinite) {
+    return String(infinite && infinite.spec || "").trim() || DEFAULT_WORLD_SPEC;
+  }
+  function diceLines(dice) {
+    return [
+      `恐怖类型：${dice.horror}`,
+      `重置周期：${dice.cycle}`,
+      `委托人身份：${dice.client}`,
+      `情欲浓度：${dice.lust}（系统会把这一项附在档案末尾，档案正文里不用重复写；为「无」时不要安排情色内容）`
+    ];
+  }
+  function horrorTitle(prefix, horror) {
+    return `${String(prefix || "")}${horror}`;
+  }
+  function buildWorldMessages({ spec, dice, setting = "", titles = [], hint = "", horrorGuide = "" }) {
+    let system = `${spec}
+
+${WORLD_FORMAT}`, user = [
+      "【骰子结果（不可更改）】",
+      ...diceLines(dice),
+      titles.length ? `【已有世界（不要重复）】${titles.join("、")}` : "",
+      setting ? `【列车常驻规则】
+${setting}` : "",
+      horrorGuide ? `【本世界恐怖类型写法】
+${horrorGuide}` : "",
+      hint ? `【上次输出的问题】${hint}
+请按格式重写。` : ""
+    ].filter(Boolean).join(`
+`);
+    return [{ role: "system", content: system }, { role: "user", content: user }];
+  }
+  var MARK = /^[\s#*>\-]*[【\[]\s*(标题|档案)\s*[】\]][:：]?\s*(.*)$/;
+  function parseWorldReply(text) {
+    let parts = { 标题: [], 档案: [] }, key = "";
+    for (let line of String(text || "").replace(/\r/g, "").split(`
+`)) {
+      let hit = MARK.exec(line);
+      hit ? (key = hit[1], hit[2].trim() && parts[key].push(hit[2].trim())) : key && parts[key].push(line);
+    }
+    let body = parts.档案.join(`
+`).trim();
+    if (!body) throw new Error("缺少【档案】部分");
+    return { title: parts.标题.join(" ").trim().slice(0, 30) || "无名之站", body };
   }
 
   // src/host/llm.js
@@ -1477,6 +1771,15 @@ ${text}` }
     let meta2 = c.chatMetadata;
     return meta2 && !meta2.world_info ? (meta2.world_info = name, typeof c.saveMetadata == "function" && await c.saveMetadata(), { bound: !0 }) : { bound: meta2 && meta2.world_info === name, conflict: meta2 && meta2.world_info && meta2.world_info !== name ? meta2.world_info : "" };
   }
+  async function readEntryContent(title2, same) {
+    for (let { name } of boundBookNames())
+      try {
+        let hit = bookEntries(await loadBook(name)).find((entry) => same(entry.comment, title2));
+        if (hit && hit.content.trim()) return hit.content.trim();
+      } catch {
+      }
+    return "";
+  }
 
   // src/app/progress-store.js
   var KEY = "plotInjector";
@@ -1515,11 +1818,11 @@ ${text}` }
   }
 
   // src/app/runtime.js
-  var VIRTUAL_WORLD = "剧情注入器", LOG_MAX = 40, PENDING_MAX_MS = 3e4, CHECK_RETRIES = 3, RETRY_GAP_MS = 2e3, placeOf = (unit) => `${volumeLabel(unit.volume.key)}·${stageLabel(unit.stage.key)}`;
+  var VIRTUAL_WORLD = "剧情注入器", LOG_MAX2 = 40, PENDING_MAX_MS = 3e4, CHECK_RETRIES = 3, RETRY_GAP_MS = 2e3, WORLD_RETRIES = 2, WORLD_WAIT_MS = 9e4, placeOf = (unit) => `${volumeLabel(unit.volume.key)}·${stageLabel(unit.stage.key)}`;
   function createRuntime({ data, notice, emit, askReason = async () => "" }) {
-    let view = hostWindow(), progress = null, progressFor = "", checking = !1, fallbackTimer = 0, generating = !1, chatStartFloors = 0, pendingCheck = !1, pendingTimer = 0, listeners = [], stats = {}, logs = [];
+    let view = hostWindow(), progress = null, progressFor = "", checking = !1, fallbackTimer = 0, generating = !1, chatStartFloors = 0, pendingCheck = !1, pendingTimer = 0, opening = !1, openGen = 0, openPromise = Promise.resolve(null), pendingTrigger = null, lastRead = null, listeners = [], stats = {}, logs = [];
     function log(text) {
-      logs.push({ at: Date.now(), text }), logs.length > LOG_MAX && logs.shift();
+      logs.push({ at: Date.now(), text }), logs.length > LOG_MAX2 && logs.shift();
     }
     function chatBoundId() {
       let id = readChatState().projectId;
@@ -1534,8 +1837,12 @@ ${text}` }
     }
     function currentProgress() {
       let id = activeId();
-      return id ? ((!progress || progressFor !== id) && (progress = readProgress(id), progressFor = id), progress) : null;
+      if (!id) return null;
+      (!progress || progressFor !== id) && (progress = readProgress(id), progressFor = id);
+      let project = data.project(id);
+      return project && project.mode === "infinite" && !progress.infinite && (progress = { ...progress, infinite: emptyInfinite() }, writeProgress(progress)), progress;
     }
+    let isInfinite = (project) => !!(project && project.mode === "infinite");
     function units() {
       let project = activeProject();
       return project ? flattenUnits(project.outline.volumes) : [];
@@ -1557,13 +1864,15 @@ ${text}` }
     function hasEntriesEvent() {
       return !!eventTypes().WORLDINFO_ENTRIES_LOADED;
     }
-    function onEntriesLoaded(payload) {
-      if (!(!payload || !Array.isArray(payload.chatLore)))
+    async function onEntriesLoaded(payload) {
+      if (!(!payload || !Array.isArray(payload.chatLore))) {
+        opening && await waitOpening();
         try {
           payload.chatLore.push(...virtualEntries());
         } catch (error) {
           console.error("[剧情注入器] 注入失败", error);
         }
+      }
     }
     function scheduleFallback() {
       hasEntriesEvent() || (view.clearTimeout(fallbackTimer), fallbackTimer = view.setTimeout(async () => {
@@ -1684,7 +1993,144 @@ ${text}` }
       }
       return out;
     }
+    function infState() {
+      let project = activeProject(), prog = currentProgress();
+      return !isInfinite(project) || !prog || !prog.infinite ? null : { project, prog, infinite: normalizeInfinite(project.infinite), inf: prog.infinite };
+    }
+    function setInf(inf, reason = "progress") {
+      setProgress({ ...currentProgress(), infinite: inf }, reason);
+    }
+    function latestAiFloor() {
+      let chat = chatMessages();
+      for (let i = chat.length - 1; i >= 0; i -= 1) {
+        let msg = chat[i];
+        if (!(!msg || msg.is_user || msg.is_system))
+          return { floor: i, text: String(msg.mes || "") };
+      }
+      return null;
+    }
+    function refreshRead() {
+      let found = latestAiFloor();
+      return lastRead = found ? { floor: found.floor, state: parseTrainState(found.text) } : null, found;
+    }
+    function abandonOpening() {
+      opening && (openGen += 1, opening = !1, pendingTrigger = null, emit("opened"));
+    }
+    function revalidateTrigger() {
+      let state = infState();
+      if (!state) return;
+      let pending = opening && pendingTrigger ? pendingTrigger : null, trig = pending || state.inf.trigger;
+      if (!trig) return;
+      let msg = chatMessages()[trig.floor], text = msg && !msg.is_user && !msg.is_system ? String(msg.mes || "") : null;
+      if (text !== null && !text.trim()) return;
+      let verdict = judgeTrigger(trig, text);
+      if (!(verdict === "none" || verdict === "same")) {
+        if (verdict === "keep") {
+          let next = { ...trig, hash: hashText(text) };
+          pending ? pendingTrigger = next : setInf(withTrigger(state.inf, next)), log(`第 ${trig.floor} 楼文字变了，仍是「${trig.kind === "enter" ? "停站" : "回到列车"}」，不重复处理`);
+          return;
+        }
+        pending ? (log(`第 ${trig.floor} 楼不再是「停站」，取消正在生成的世界档案`), abandonOpening()) : trig.kind === "enter" ? (log(`第 ${trig.floor} 楼不再是「停站」，撤销开副本，删掉刚生成的档案`), setInf(undoEnter(state.inf, `第 ${trig.floor} 楼不再是「停站」，撤销开副本`))) : (log(`第 ${trig.floor} 楼不再是「回到列车」，撤销关副本`), setInf(undoLeave(state.inf, `第 ${trig.floor} 楼不再是「回到列车」，撤销关副本`))), notice.show({ id: "inf-undo", title: "触发楼已改动", body: trig.kind === "enter" ? "这一楼不再是「停站」，已撤销开副本并删掉刚生成的档案。" : "这一楼不再是「回到列车」，已重新打开那份档案。", timeout: 1e4 });
+      }
+    }
+    function onInfiniteReceived() {
+      let found = refreshRead();
+      revalidateTrigger();
+      let state = infState();
+      if (!state || !found) {
+        found || log("收到回复：没有 AI 楼层可读"), emit("floor");
+        return;
+      }
+      let train = lastRead.state;
+      log(`读状态块：第 ${found.floor} 楼 ${train ? `列车：${train}` : "没有状态块"}`);
+      let kind = decideTrigger(state.inf.phase, train);
+      if (kind === "enter")
+        openWorld({ floor: found.floor, text: found.text });
+      else if (kind === "leave") {
+        let trigger = makeTrigger({ kind: "leave", floor: found.floor, text: found.text, worldId: state.inf.worldId });
+        setInf(withTrigger(leaveWorld(state.inf, `第 ${found.floor} 楼读到「回到列车」，关副本`), trigger));
+      }
+      emit("floor");
+    }
+    async function waitOpening() {
+      let promise = openPromise, timer = 0, timedOut = !1, timeout = new Promise((resolve) => {
+        timer = view.setTimeout(() => {
+          timedOut = !0, resolve();
+        }, WORLD_WAIT_MS);
+      });
+      log("世界档案还在生成，先等它完成"), await Promise.race([promise.catch(() => null), timeout]), view.clearTimeout(timer), timedOut && opening && (log(`等待世界档案超过 ${WORLD_WAIT_MS / 1e3} 秒，本次回复先不带档案`), notice.show({ id: "inf-wait", title: "世界档案还没生成完", body: `已等待 ${WORLD_WAIT_MS / 1e3} 秒，本次回复先不带档案，生成完成后从下一次回复起带上。`, timeout: 12e3 }));
+    }
+    function openWorld(trigger = null) {
+      if (opening) return openPromise;
+      let state = infState();
+      if (!state) return Promise.resolve(null);
+      if (state.inf.phase !== "train")
+        return toast("info", "只有在列车上才能进入新世界。"), Promise.resolve(null);
+      opening = !0, openGen += 1;
+      let gen = openGen;
+      return pendingTrigger = trigger ? { kind: "enter", floor: trigger.floor, hash: hashText(trigger.text), worldId: "" } : null, openPromise = runOpen(state, gen).finally(() => {
+        gen === openGen && (opening = !1, pendingTrigger = null, emit("opened"));
+      }), openPromise;
+    }
+    async function runOpen(state, gen) {
+      let projectId = state.project.id;
+      emit("opening");
+      try {
+        let dice = rollWorldDice(state.infinite, randomFloat);
+        log(`开副本掷骰：${dice.horror}｜${dice.cycle}｜${dice.client}｜情欲${dice.lust}`);
+        let spec = worldSpecText(state.infinite), titles = state.inf.worlds.map((world2) => world2.title), guideTitle = horrorTitle(state.infinite.config.horrorPrefix, dice.horror), horrorGuide = "";
+        try {
+          horrorGuide = await readEntryContent(guideTitle, (a, b) => titleKey(a) === titleKey(b));
+        } catch (error) {
+          log(`读取恐怖类型写法失败：${error.message}`);
+        }
+        horrorGuide || log(`卡里没找到「${guideTitle}」，造世界时不带恐怖类型写法`);
+        let parsed = null, hint = "";
+        for (let attempt = 0; ; attempt += 1)
+          try {
+            let messages = buildWorldMessages({ spec, dice, setting: state.project.setting.text, titles, hint, horrorGuide });
+            parsed = parseWorldReply(await requestLlm(messages, resolveLlm(data.settings(), "outline"), { timeoutMs: 18e4 }));
+            break;
+          } catch (error) {
+            if (attempt >= WORLD_RETRIES) throw error;
+            hint = error.message, log(`造世界失败：${error.message}，第 ${attempt + 1} 次重试`);
+          }
+        let now = infState();
+        if (gen !== openGen || !now || now.project.id !== projectId || now.inf.phase !== "train")
+          return log("造世界结果作废：开副本期间状态已变"), null;
+        let world = createWorld({ id: makeId("w"), dice, parsed }), trig = pendingTrigger ? { ...pendingTrigger, worldId: world.id } : null;
+        return setInf(withTrigger(enterWorld(now.inf, world), trig)), notice.show({ id: "inf-stop", title: `进入新世界「${world.title}」`, body: `${dice.horror}｜${dice.client}`, timeout: 12e3 }), world;
+      } catch (error) {
+        return gen !== openGen || (log(`开副本失败：${error.message}`), notice.show({
+          id: "inf-stop",
+          title: "开副本失败",
+          body: error.message,
+          actions: [{ label: "重试", primary: !0, run: () => openWorld() }, { label: "关闭", run: () => {
+          } }]
+        })), null;
+      }
+    }
+    function returnToTrain() {
+      let state = infState();
+      !state || state.inf.phase !== "world" || setInf(leaveWorld(state.inf, "手动回到列车"));
+    }
+    function reopenWorld(worldId) {
+      let state = infState();
+      if (state) {
+        if (state.inf.phase !== "train") {
+          toast("info", "先回到列车，再重新打开档案。");
+          return;
+        }
+        setInf(reenterWorld(state.inf, worldId));
+      }
+    }
+    function deleteWorld(worldId) {
+      let state = infState();
+      state && setInf(removeWorld(state.inf, worldId));
+    }
     async function checkNow({ manual = !1 } = {}) {
+      if (isInfinite(activeProject()))
+        return log("无限流项目不使用检测模型"), null;
       if (checking)
         return log("跳过检测：上一次检测还没结束"), null;
       let project = activeProject(), prog = currentProgress(), settings = data.settings();
@@ -1758,19 +2204,27 @@ ${text}` }
       generating = !1, runPending();
     }
     function onMessageReceived(messageId) {
-      let floors = floorCount();
-      if (!activeProject()) {
+      let floors = floorCount(), project = activeProject();
+      if (!project) {
         log(`收到第 ${messageId} 楼：当前卡没有启用的项目，不检测`), emit("floor");
+        return;
+      }
+      if (isInfinite(project)) {
+        onInfiniteReceived();
         return;
       }
       let settings = data.settings(), prog = clampBase() || currentProgress(), gap = floors - prog.lastCheckFloor;
       gap >= settings.checkEvery ? (log(`收到第 ${messageId} 楼：距上次检测 ${gap} 楼，触发检测`), queueCheck()) : log(`收到第 ${messageId} 楼：距上次检测 ${gap} 楼，还差 ${settings.checkEvery - gap} 楼`), emit("floor");
     }
     function onMessageChanged() {
+      if (isInfinite(activeProject())) {
+        refreshRead(), revalidateTrigger(), emit("floor");
+        return;
+      }
       clampBase() && emit("floor");
     }
     async function onChatChanged() {
-      progress = null, progressFor = "", pendingCheck = !1, view.clearTimeout(pendingTimer), chatStartFloors = floorCount(), notice.hide("advance"), notice.hide("offtrack");
+      progress = null, progressFor = "", abandonOpening(), lastRead = null, pendingCheck = !1, view.clearTimeout(pendingTimer), chatStartFloors = floorCount(), notice.hide("advance"), notice.hide("offtrack");
       let id = activeId();
       if (id)
         try {
@@ -1778,10 +2232,10 @@ ${text}` }
         } catch (error) {
           toast("error", `读取项目失败：${error.message}`);
         }
-      log(`切换聊天：${floorCount()} 楼，${id ? `启用项目「${(data.index().projects.find((item) => item.id === id) || {}).name || id}」` : "本卡没有启用项目"}`), id && clampBase(), scheduleFallback(), emit("chat");
+      log(`切换聊天：${floorCount()} 楼，${id ? `启用项目「${(data.index().projects.find((item) => item.id === id) || {}).name || id}」` : "本卡没有启用项目"}`), id && clampBase(), refreshRead(), scheduleFallback(), emit("chat");
     }
     async function switchProject(id, scope = "chat") {
-      id && await data.loadProject(id);
+      id && await data.loadProject(id), abandonOpening();
       let bound = bindChat(id);
       (scope === "card" || !bound || !data.activeIdFor(cardKey())) && data.setActive(id), progress = null, progressFor = "", scheduleFallback(), emit("switch");
     }
@@ -1857,6 +2311,14 @@ ${text}` }
       recentFloors,
       rewriteRest,
       diagnose,
+      isInfinite: () => isInfinite(activeProject()),
+      infState,
+      openWorld,
+      isOpening: () => opening,
+      lastRead: () => lastRead,
+      returnToTrain,
+      reopenWorld,
+      deleteWorld,
       note: log,
       resetBase,
       rebind: start,
@@ -2257,12 +2719,12 @@ label.pi-wb-row{cursor:pointer}
   function options(list, value) {
     return list.map((item) => `<option value="${esc(item.value)}"${String(item.value) === String(value) ? " selected" : ""}>${esc(item.label)}</option>`).join("");
   }
-  function openDialog({ title: title2, html = "", actions: actions9 = [{ label: "确定", value: !0, primary: !0 }], onMount } = {}) {
+  function openDialog({ title: title2, html = "", actions: actions11 = [{ label: "确定", value: !0, primary: !0 }], onMount } = {}) {
     let doc = hostDocument();
     return new Promise((resolve) => {
       let root = el(`<div class="pi-root pi-dialog"><div class="pi-dialog-box" role="dialog">
             ${title2 ? `<h4>${esc(title2)}</h4>` : ""}<div class="pi-dlg-body">${html}</div>
-            <div class="pi-dlg-acts">${actions9.map((action, index) => `<button type="button" class="pi-btn${action.primary ? " is-primary" : ""}${action.danger ? " is-danger" : ""}" data-dlg="${index}">${esc(action.label)}</button>`).join("")}</div>
+            <div class="pi-dlg-acts">${actions11.map((action, index) => `<button type="button" class="pi-btn${action.primary ? " is-primary" : ""}${action.danger ? " is-danger" : ""}" data-dlg="${index}">${esc(action.label)}</button>`).join("")}</div>
         </div></div>`), finish = (value) => {
         doc.removeEventListener("keydown", onKey, !0), root.remove(), resolve(value);
       }, onKey = (event) => {
@@ -2274,7 +2736,7 @@ label.pi-wb-row{cursor:pointer}
         if (pick) return finish(pick.dataset.dlgValue);
         let button = event.target.closest("[data-dlg]");
         if (!button) return;
-        let action = actions9[Number(button.dataset.dlg)], value = typeof action.value == "function" ? action.value(root) : action.value;
+        let action = actions11[Number(button.dataset.dlg)], value = typeof action.value == "function" ? action.value(root) : action.value;
         value !== void 0 && finish(value);
       }), doc.addEventListener("keydown", onKey, !0), doc.body.appendChild(root), onMount && onMount(root), root.querySelector("input,textarea,select")?.focus();
     });
@@ -3539,6 +4001,8 @@ ${parsed.body}` : parsed.body;
   var tab_run_exports = {};
   __export(tab_run_exports, {
     actions: () => actions4,
+    activateCard: () => activateCard,
+    entryRow: () => entryRow,
     onChange: () => onChange2,
     render: () => render4
   });
@@ -3583,26 +4047,29 @@ ${parsed.body}` : parsed.body;
     };
     return groups.map((group) => `<div class="pi-tl-vol">${esc(volumeLabel(group.volume.key))}</div><div class="pi-tl">${group.units.map(item).join("")}</div>`).join("");
   }
-  function render4(view) {
-    let { data, runtime } = view, project = view.project(), st7 = view.tabState("run");
+  function activateCard(view, project) {
+    let { data, runtime } = view;
     if (!cardKey()) return '<div class="pi-empty">先打开一张角色卡的聊天，再启用项目。</div>';
     let activeId = runtime.activeId();
-    if (activeId !== project.id) {
-      let other = data.index().projects.find((item) => item.id === activeId);
-      return `<div class="pi-card"><h3>启用</h3>
+    if (activeId === project.id) return "";
+    let other = data.index().projects.find((item) => item.id === activeId);
+    return `<div class="pi-card"><h3>启用</h3>
             <p class="pi-hint">${other ? `当前聊天使用的是「${esc(other.name)}」` : `「${esc(cardName())}」还没有启用项目`}。</p>
             <div class="pi-tools is-c2">
                 <button type="button" class="pi-btn is-primary" data-act="activate">设为当前聊天使用</button>
                 <button type="button" class="pi-btn" data-act="activate-card">设为本卡默认</button></div></div>`;
-    }
+  }
+  function render4(view) {
+    let { data, runtime } = view, project = view.project(), st8 = view.tabState("run"), notActive = activateCard(view, project);
+    if (notActive) return notActive;
     let progress = runtime.progress(), entries = runtime.entries(), units = flattenUnits(project.outline.volumes), states = unitStates(units, progress), total = entries.filter((entry) => entry.enabled).reduce((sum, entry) => sum + estimateTokens(entry.content), 0), settings = data.settings(), checking = runtime.isChecking(), book = runtime.injectMode() === "virtual" ? "" : '<span class="pi-badge is-warn">专用世界书</span>', gap = settings.checkEvery - (runtime.floorCount() - progress.lastCheckFloor);
     return `<div class="pi-card"><h3>注入条目${book}<span class="pi-meta">≈${total} token</span><span class="pi-spacer"></span>
             <button type="button" class="pi-btn is-sm is-ghost" data-act="preview">预览</button></h3>
-        ${entries.length ? entries.map((entry) => entryRow(entry, st7.open === entry.slotId)).join("") : '<p class="pi-hint">设定和大纲都为空，没有可注入的内容。</p>'}
+        ${entries.length ? entries.map((entry) => entryRow(entry, st8.open === entry.slotId)).join("") : '<p class="pi-hint">设定和大纲都为空，没有可注入的内容。</p>'}
         </div>
         <div class="pi-card"><h3>阶段<span class="pi-meta">${gap > 0 ? `${gap} 楼后检测` : "下一楼检测"}</span><span class="pi-spacer"></span>
-            ${units.length ? `<button type="button" class="pi-btn is-sm is-ghost" data-act="index-toggle">${st7.indexOpen ? "收起索引" : "剧情索引"}</button>` : ""}</h3>
-        ${units.length ? `${st7.indexOpen ? `<pre class="pi-pre pi-index">${esc(buildIndexText(units, states, progress, { carryOver: settings.carryOver }))}</pre>` : ""}
+            ${units.length ? `<button type="button" class="pi-btn is-sm is-ghost" data-act="index-toggle">${st8.indexOpen ? "收起索引" : "剧情索引"}</button>` : ""}</h3>
+        ${units.length ? `${st8.indexOpen ? `<pre class="pi-pre pi-index">${esc(buildIndexText(units, states, progress, { carryOver: settings.carryOver }))}</pre>` : ""}
         <div class="pi-pace"><span class="pi-pace-label">推进速度</span><div class="pi-seg">${PACES.map((pace) => `<button type="button" class="pi-seg-btn${pace.value === progress.pace ? " is-sel" : ""}" data-act="pace" data-pace="${pace.value}">${pace.label}</button>`).join("")}</div></div>
         <div class="pi-tools is-c3">
             <button type="button" class="pi-btn is-primary is-sm" data-act="next">打开下一段</button>
@@ -3623,13 +4090,13 @@ ${parsed.body}` : parsed.body;
       view.runtime.setProgress({ ...view.runtime.progress(), pace: target.dataset.pace }), view.renderBody();
     },
     "index-toggle"(view) {
-      let st7 = view.tabState("run");
-      st7.indexOpen = !st7.indexOpen, view.renderBody();
+      let st8 = view.tabState("run");
+      st8.indexOpen = !st8.indexOpen, view.renderBody();
     },
     "toggle-entry"(view, target, event) {
       if (event.target.closest("input,select")) return;
-      let st7 = view.tabState("run");
-      st7.open = st7.open === target.dataset.slot ? "" : target.dataset.slot, view.renderBody();
+      let st8 = view.tabState("run");
+      st8.open = st8.open === target.dataset.slot ? "" : target.dataset.slot, view.renderBody();
     },
     next: (view) => view.runtime.openNext(),
     check: (view) => view.runtime.checkNow({ manual: !0 }),
@@ -3674,18 +4141,124 @@ ${parsed.body}` : parsed.body;
     target.dataset.node && runtime.setProgress(setNodeChecked(runtime.progress(), target.dataset.unit, target.dataset.node, target.checked));
   }
 
-  // src/ui/page-settings.js
-  var page_settings_exports = {};
-  __export(page_settings_exports, {
+  // src/ui/tab-worlds.js
+  var tab_worlds_exports = {};
+  __export(tab_worlds_exports, {
     actions: () => actions5,
     onChange: () => onChange3,
-    onInput: () => onInput4,
     refreshOn: () => refreshOn4,
     render: () => render5
   });
-  var st4 = (view) => view.tabState("settings"), currentRole = (view) => LLM_ROLES.some((item) => item.key === st4(view).role) ? st4(view).role : LLM_ROLES[0].key;
+  var st4 = (view) => view.tabState("worlds"), infOf = (view) => normalizeInfinite(view.project().infinite);
+  function save2(view, fn) {
+    view.data.updateProject(view.projectId, (project) => ({ ...project, infinite: fn(normalizeInfinite(project.infinite)) })), view.runtime.refresh();
+  }
+  function worldRow(world, open, currentId) {
+    let badges = world.id === currentId ? '<span class="pi-badge is-ok">当前</span>' : "", body = open ? `<div class="pi-entry-bd">
+        <p class="pi-hint">${esc(world.dice.horror)}｜周期 ${esc(world.dice.cycle)}｜${esc(world.dice.client)}｜情欲${esc(world.dice.lust)}</p>
+        <pre class="pi-pre">${esc(world.body)}</pre>
+        <div class="pi-tools is-c2">
+            <button type="button" class="pi-btn is-sm" data-act="world-reopen" data-id="${esc(world.id)}"${currentId ? " disabled" : ""}>重新打开</button>
+            <button type="button" class="pi-btn is-sm is-danger" data-act="world-del" data-id="${esc(world.id)}">删除</button></div></div>` : "";
+    return `<div class="pi-entry">
+        <div class="pi-entry-hd" data-act="world-open" data-id="${esc(world.id)}">
+            <span class="pi-etitle">${esc(world.title)}</span>${badges}</div>${body}</div>`;
+  }
+  function libraryCard(view, s) {
+    if (view.runtime.activeId() !== view.projectId)
+      return '<div class="pi-card"><h3>世界库</h3><p class="pi-hint">世界库随聊天保存。把这个项目设为当前聊天使用后，才能看到这条聊天里的世界。</p></div>';
+    let inf = view.runtime.progress().infinite, worlds = inf ? inf.worlds : [], currentId = inf && inf.phase === "world" ? inf.worldId : "";
+    return `<div class="pi-card"><h3>世界库<span class="pi-meta">${worlds.length} 份</span></h3>
+        ${worlds.length ? [...worlds].reverse().map((world) => worldRow(world, s.open === world.id, currentId)).join("") : '<p class="pi-hint">这条聊天里还没有世界。到「执行」页点「进入新世界」，或等检测到下车时自动写出档案。</p>'}</div>`;
+  }
+  function render5(view) {
+    let infinite = infOf(view), s = st4(view);
+    return `${libraryCard(view, s)}
+        <div class="pi-card"><h3>骰池</h3>
+        <p class="pi-hint">每行「名称|权重」。情欲浓度写进档案末尾，由代码决定。</p>
+        ${POOL_KEYS.map((key) => `<label class="pi-field"><span>${POOL_LABELS[key]}</span><textarea class="pi-ta is-mono" data-pool="${key}">${esc(poolToText(infinite.pools[key]))}</textarea></label>`).join("")}</div>
+        <div class="pi-card"><h3>造世界规范<span class="pi-spacer"></span><button type="button" class="pi-btn is-sm is-ghost" data-act="spec-reset">恢复默认</button></h3>
+        <textarea class="pi-ta is-mono is-tall" data-spec>${esc(worldSpecText(infinite))}</textarea></div>
+        <div class="pi-card"><h3>恐怖类型写法</h3>
+        <p class="pi-hint">开副本时按「前缀 + 恐怖类型」到角色卡世界书里找同标题的条目（关闭的也能读到），正文放进造世界提示，不进正文注入。</p>
+        <label class="pi-field"><span>条目标题前缀</span><input class="pi-inp" data-prefix value="${esc(infinite.config.horrorPrefix)}"></label></div>`;
+  }
+  var actions5 = {
+    "world-open"(view, target) {
+      let s = st4(view);
+      s.open = s.open === target.dataset.id ? "" : target.dataset.id, view.renderBody();
+    },
+    "world-reopen"(view, target) {
+      view.runtime.reopenWorld(target.dataset.id), view.renderBody();
+    },
+    async "world-del"(view, target) {
+      let id = target.dataset.id, world = findWorld(view.runtime.progress().infinite?.worlds || [], id);
+      !world || !await confirmDialog({ title: `删除「${world.title}」`, body: "档案删除后不能恢复。", okLabel: "删除", danger: !0 }) || (view.runtime.deleteWorld(id), view.renderBody());
+    },
+    "spec-reset"(view) {
+      save2(view, (infinite) => ({ ...infinite, spec: "" })), view.renderBody();
+    }
+  };
+  function onChange3(view, target) {
+    if (target.dataset.pool) {
+      let key = target.dataset.pool, rows2 = textToPool(target.value);
+      save2(view, (infinite) => ({ ...infinite, pools: { ...infinite.pools, [key]: rows2 } })), view.renderBody();
+      return;
+    }
+    if (target.dataset.spec !== void 0) {
+      let text = target.value.trim() === DEFAULT_WORLD_SPEC.trim() ? "" : target.value;
+      save2(view, (infinite) => ({ ...infinite, spec: text }));
+      return;
+    }
+    target.dataset.prefix !== void 0 && save2(view, (infinite) => ({ ...infinite, config: { ...infinite.config, horrorPrefix: target.value } }));
+  }
+  var refreshOn4 = ["progress", "project", "chat", "switch", "opened"];
+
+  // src/ui/tab-infinite-run.js
+  var tab_infinite_run_exports = {};
+  __export(tab_infinite_run_exports, {
+    actions: () => actions6,
+    onChange: () => onChange2,
+    render: () => render6
+  });
+  function render6(view) {
+    let { runtime } = view, project = view.project(), st8 = view.tabState("run"), notActive = activateCard(view, project);
+    if (notActive) return notActive;
+    let state = runtime.infState();
+    if (!state) return '<div class="pi-empty"><span class="pi-spin"></span> 正在读取进度…</div>';
+    let { inf } = state, world = inf.phase === "world" ? findWorld(inf.worlds, inf.worldId) : null, entries = runtime.entries(), total = entries.filter((entry) => entry.enabled).reduce((sum, entry) => sum + estimateTokens(entry.content), 0), opening = runtime.isOpening(), book = runtime.injectMode() === "virtual" ? "" : '<span class="pi-badge is-warn">专用世界书</span>', meta2 = describeRead(runtime.lastRead());
+    return `<div class="pi-card"><h3>当前状态<span class="pi-meta">${esc(meta2)}</span></h3>
+        <div class="pi-row"><span class="pi-badge is-accent">${PHASE_LABELS[inf.phase]}</span>${world ? `<span class="pi-badge">${esc(world.title)}</span>` : ""}
+            <span class="pi-badge">世界库 ${inf.worlds.length} 份</span></div>
+        <div class="pi-tools is-c2">
+            <button type="button" class="pi-btn is-primary is-sm" data-act="inf-enter"${inf.phase !== "train" || opening ? " disabled" : ""}>${opening ? '<span class="pi-spin"></span>造世界' : "进入新世界"}</button>
+            <button type="button" class="pi-btn is-sm" data-act="inf-return"${inf.phase !== "world" ? " disabled" : ""}>回到列车</button></div></div>
+        <div class="pi-card"><h3>注入条目${book}<span class="pi-meta">≈${total} token</span><span class="pi-spacer"></span>
+            <button type="button" class="pi-btn is-sm is-ghost" data-act="preview">预览</button></h3>
+        ${entries.length ? entries.map((entry) => entryRow(entry, st8.open === entry.slotId)).join("") : '<p class="pi-hint">设定和世界库都为空，没有可注入的内容。</p>'}</div>
+        ${inf.log.length ? `<div class="pi-card"><h3>近期记录</h3><pre class="pi-pre">${esc(inf.log.slice().reverse().join(`
+`))}</pre></div>` : ""}`;
+  }
+  var actions6 = {
+    ...actions4,
+    "inf-enter": (view) => view.runtime.openWorld(),
+    async "inf-return"(view) {
+      await confirmDialog({ title: "回到列车", body: "撤掉当前世界档案的注入，档案留在世界库里。", okLabel: "回到列车" }) && (view.runtime.returnToTrain(), view.renderBody());
+    }
+  };
+
+  // src/ui/page-settings.js
+  var page_settings_exports = {};
+  __export(page_settings_exports, {
+    actions: () => actions7,
+    onChange: () => onChange4,
+    onInput: () => onInput4,
+    refreshOn: () => refreshOn5,
+    render: () => render7
+  });
+  var st5 = (view) => view.tabState("settings"), currentRole = (view) => LLM_ROLES.some((item) => item.key === st5(view).role) ? st5(view).role : LLM_ROLES[0].key;
   function modelField(view, role, llm) {
-    let s = st4(view), models = s.models?.[role] || [];
+    let s = st5(view), models = s.models?.[role] || [];
     return `<div class="pi-field"><span>模型</span><div class="pi-inline">${!models.length || s.manual?.[role] ? `<input class="pi-inp" data-llm="${role}" data-k="model" value="${esc(llm.model)}" placeholder="模型名称">` : `<select class="pi-sel" data-llm="${role}" data-k="model">${llm.model && !models.includes(llm.model) ? `<option value="${esc(llm.model)}" selected>${esc(llm.model)}</option>` : ""}
             ${llm.model ? "" : '<option value="" selected disabled>选择模型</option>'}${options(models.map((model) => ({ value: model, label: model })), llm.model)}
             <option value="__manual">手动输入…</option></select>`}
@@ -3712,7 +4285,7 @@ ${parsed.body}` : parsed.body;
     return openDialog({ title: "载入接口预设", html: `<div class="pi-presets">${html}</div>`, actions: [{ label: "取消", value: null }] });
   }
   function guideCard(view, s) {
-    let open = st4(view).guideOpen, status = s.guide ? "自定义版本" : "内置版本";
+    let open = st5(view).guideOpen, status = s.guide ? "自定义版本" : "内置版本";
     return `<div class="pi-card"><h3>写作基准<span class="pi-spacer"></span>
             <button type="button" class="pi-btn is-sm is-ghost" data-act="guide-toggle">${open ? "收起" : "编辑"}</button></h3>
         <p class="pi-hint">当前使用：${status}</p>
@@ -3720,14 +4293,14 @@ ${parsed.body}` : parsed.body;
         <textarea class="pi-ta is-mono is-tall" data-guide>${esc(s.guide || BUILTIN_GUIDE)}</textarea>` : ""}</div>`;
   }
   function paceRow(view, s) {
-    let open = st4(view).paceOpen, changed = PACES.filter((item) => s.paceText[item.value]).map((item) => item.label), current = view.runtime.activeId() ? view.runtime.progress().pace : "", pace = PACES.some((item) => item.value === st4(view).pace) ? st4(view).pace : current || "normal", pick = PACES.map((item) => ({ value: item.value, label: `${item.label}${item.value === current ? "（当前聊天使用）" : ""}${s.paceText[item.value] ? "·已改" : ""}` }));
+    let open = st5(view).paceOpen, changed = PACES.filter((item) => s.paceText[item.value]).map((item) => item.label), current = view.runtime.activeId() ? view.runtime.progress().pace : "", pace = PACES.some((item) => item.value === st5(view).pace) ? st5(view).pace : current || "normal", pick = PACES.map((item) => ({ value: item.value, label: `${item.label}${item.value === current ? "（当前聊天使用）" : ""}${s.paceText[item.value] ? "·已改" : ""}` }));
     return `<div class="pi-set-row"><span>推进速度说明</span>${changed.length ? `<span class="pi-badge">已修改 ${changed.join("、")}</span>` : ""}<span class="pi-spacer"></span>
             <button type="button" class="pi-btn is-sm is-ghost" data-act="pace-toggle">${open ? "收起" : "编辑"}</button></div>
         ${open ? `<div class="pi-set-sub"><label class="pi-field"><span>编辑哪一档的说明</span><select class="pi-sel" data-pace-pick>${options(pick, pace)}</select></label>
         <textarea class="pi-ta" rows="3" data-pace-text="${pace}">${esc(paceText(s, pace))}</textarea>
         <div class="pi-tools is-c1 is-end"><button type="button" class="pi-btn is-sm" data-act="pace-reset" data-pace="${pace}"${s.paceText[pace] ? "" : " disabled"}>恢复默认</button></div></div>` : ""}`;
   }
-  function render5(view) {
+  function render7(view) {
     let s = view.data.settings(), modes = [{ value: "ask", label: "弹出确认" }, { value: "auto", label: "自动推进（可撤销）" }, { value: "nodes", label: "仅勾选节点，不推进阶段" }], offModes = [{ value: "ask", label: "弹出提醒" }, { value: "auto", label: "自动改写后续阶段（可撤销）" }, { value: "off", label: "不检查偏离" }];
     return `<div class="pi-card"><h3>注入内容</h3>
         <label class="pi-field"><span>详细条目的标签名</span><input class="pi-inp" data-set="tagName" value="${esc(s.tagName)}"></label></div>
@@ -3762,16 +4335,16 @@ ${parsed.body}` : parsed.body;
     }
     target.dataset.set && target.type !== "checkbox" && target.tagName !== "SELECT" && view.data.updateSettings({ [target.dataset.set]: readValue(target) }), target.dataset.llm && target.tagName === "INPUT" && setRole(view, target.dataset.llm, { [target.dataset.k]: target.value.trim() });
   }
-  function onChange3(view, target) {
+  function onChange4(view, target) {
     if (target.dataset.pacePick !== void 0) {
-      st4(view).pace = target.value, view.renderBody();
+      st5(view).pace = target.value, view.renderBody();
       return;
     }
-    target.dataset.set && (target.type === "checkbox" || target.tagName === "SELECT") && (view.data.updateSettings({ [target.dataset.set]: readValue(target) }), view.runtime.refresh(), view.renderBody()), target.dataset.llm && target.tagName === "SELECT" && (target.value === "__manual" ? st4(view).manual = { ...st4(view).manual, [target.dataset.llm]: !0 } : setRole(view, target.dataset.llm, { [target.dataset.k]: target.value }), view.renderBody()), target.dataset.set && target.tagName !== "SELECT" && target.type !== "checkbox" && view.runtime.refresh();
+    target.dataset.set && (target.type === "checkbox" || target.tagName === "SELECT") && (view.data.updateSettings({ [target.dataset.set]: readValue(target) }), view.runtime.refresh(), view.renderBody()), target.dataset.llm && target.tagName === "SELECT" && (target.value === "__manual" ? st5(view).manual = { ...st5(view).manual, [target.dataset.llm]: !0 } : setRole(view, target.dataset.llm, { [target.dataset.k]: target.value }), view.renderBody()), target.dataset.set && target.tagName !== "SELECT" && target.type !== "checkbox" && view.runtime.refresh();
   }
-  var CONN_KEYS2 = ["endpoint", "apiKey", "model", "temperature"], actions5 = {
+  var CONN_KEYS2 = ["endpoint", "apiKey", "model", "temperature"], actions7 = {
     async models(view, target) {
-      let role = target.dataset.role, s = st4(view);
+      let role = target.dataset.role, s = st5(view);
       if (!s.loading) {
         s.loading = role, view.renderBody();
         try {
@@ -3783,7 +4356,7 @@ ${parsed.body}` : parsed.body;
       }
     },
     "llm-role"(view, target) {
-      st4(view).role = target.dataset.role, view.renderBody();
+      st5(view).role = target.dataset.role, view.renderBody();
     },
     // 同名预设直接覆盖，不同名新建一份。
     async "preset-save"(view) {
@@ -3807,30 +4380,30 @@ ${parsed.body}` : parsed.body;
           await confirmDialog({ title: `删除预设「${preset.name}」`, body: "已载入这个预设的用途不受影响。", okLabel: "删除", danger: !0 }) && view.data.updateSettings({ presets: presets.filter((item) => item.id !== id) });
           continue;
         }
-        return setRole(view, role, { source: "custom", ...Object.fromEntries(CONN_KEYS2.map((key) => [key, preset[key]])) }), st4(view).manual = { ...st4(view).manual, [role]: !1 }, toast("success", `已为「${LLM_ROLES.find((item) => item.key === role).label}」载入预设「${preset.name}」。`), view.renderBody();
+        return setRole(view, role, { source: "custom", ...Object.fromEntries(CONN_KEYS2.map((key) => [key, preset[key]])) }), st5(view).manual = { ...st5(view).manual, [role]: !1 }, toast("success", `已为「${LLM_ROLES.find((item) => item.key === role).label}」载入预设「${preset.name}」。`), view.renderBody();
       }
     },
     "pace-toggle"(view) {
-      st4(view).paceOpen = !st4(view).paceOpen, view.renderBody();
+      st5(view).paceOpen = !st5(view).paceOpen, view.renderBody();
     },
     "pace-reset"(view, target) {
       view.data.updateSettings({ paceText: { ...view.data.settings().paceText, [target.dataset.pace]: "" } }), view.runtime.refresh(), view.renderBody();
     },
     "guide-toggle"(view) {
-      st4(view).guideOpen = !st4(view).guideOpen, view.renderBody();
+      st5(view).guideOpen = !st5(view).guideOpen, view.renderBody();
     },
     "guide-reset"(view) {
       view.data.updateSettings({ guide: "" }), view.renderBody();
     }
-  }, refreshOn4 = [];
+  }, refreshOn5 = [];
 
   // src/ui/page-data.js
   var page_data_exports = {};
   __export(page_data_exports, {
-    actions: () => actions6,
-    onChange: () => onChange4,
-    refreshOn: () => refreshOn5,
-    render: () => render6
+    actions: () => actions8,
+    onChange: () => onChange5,
+    refreshOn: () => refreshOn6,
+    render: () => render8
   });
 
   // src/core/zip.js
@@ -3865,7 +4438,7 @@ ${parsed.body}` : parsed.body;
   }
 
   // src/ui/page-data.js
-  var st5 = (view) => view.tabState("data");
+  var st6 = (view) => view.tabState("data");
   function referenced(index) {
     let names = /* @__PURE__ */ new Set([INDEX_FILE]);
     for (let item of index.projects)
@@ -3873,7 +4446,7 @@ ${parsed.body}` : parsed.body;
     return names;
   }
   function fileCell(view, name, bytes) {
-    let verified = st5(view).verified, missing = verified && verified[name] === !1;
+    let verified = st6(view).verified, missing = verified && verified[name] === !1;
     return !view.data.index().files.includes(name) && !bytes ? '<td class="pi-hint">—</td>' : `<td class="${missing ? "is-missing" : ""}">${missing ? "已丢失" : formatBytes(bytes)}
         ${missing ? "" : `<button type="button" class="pi-btn is-sm is-ghost" data-act="export-file" data-name="${esc(name)}">导出</button>`}
         <button type="button" class="pi-btn is-sm is-ghost is-danger" data-act="delete-file" data-name="${esc(name)}">删除</button></td>`;
@@ -3882,8 +4455,8 @@ ${parsed.body}` : parsed.body;
     return `<table class="pi-files"><thead><tr><th>项目</th><th>设定+大纲</th><th>讨论记录</th></tr></thead><tbody>${view.data.index().projects.map((item) => `<tr><td>${esc(item.group ? `${item.group}／` : "")}${esc(item.name)}</td>
         ${fileCell(view, projectFile(item.id), item.bytes.project)}${fileCell(view, chatFile(item.id), item.bytes.chat)}</tr>`).join("") || '<tr><td colspan="3" class="pi-hint">没有项目</td></tr>'}</tbody></table>`;
   }
-  function render6(view) {
-    let s = st5(view);
+  function render8(view) {
+    let s = st6(view);
     !s.verified && !s.verifying && verify(view);
     let orphans = s.verified ? Object.keys(s.verified).filter((name) => !referenced(view.data.index()).has(name)) : [], settings = view.data.settings();
     return `<div class="pi-card"><h3>本地文件</h3>
@@ -3898,7 +4471,7 @@ ${parsed.body}` : parsed.body;
         <p class="pi-hint">删除所有项目、讨论记录和当前聊天的进度，执行前自动下载备份。</p>
         <div class="pi-equal is-one pi-acts"><button type="button" class="pi-btn is-sm is-danger" data-act="wipe">备份并删除</button></div></div>`;
   }
-  function onChange4(view, target) {
+  function onChange5(view, target) {
     if (target.dataset.set !== "loaderRef") return;
     let ref = target.value.trim();
     if (/^\d+\.\d+\.\d+$/.test(ref) && (ref = `v${ref}`), ref && ref !== "main" && !/^v\d+\.\d+\.\d+$/.test(ref)) {
@@ -3908,7 +4481,7 @@ ${parsed.body}` : parsed.body;
     target.value = ref, view.data.updateSettings({ loaderRef: ref }), toast("success", ref ? `已指定 ${ref}，刷新酒馆页面生效。` : "已改为跟随最新版本，刷新酒馆页面生效。");
   }
   async function verify(view) {
-    let s = st5(view);
+    let s = st6(view);
     s.verifying = !0;
     try {
       let names = [.../* @__PURE__ */ new Set([...view.data.index().files, ...referenced(view.data.index())])];
@@ -3919,9 +4492,9 @@ ${parsed.body}` : parsed.body;
       s.verifying = !1, view.renderBody();
     }
   }
-  var actions6 = {
+  var actions8 = {
     verify(view) {
-      return st5(view).verified = null, verify(view);
+      return st6(view).verified = null, verify(view);
     },
     async "export-file"(view, target) {
       let text = await readRawFile(target.dataset.name);
@@ -3932,22 +4505,22 @@ ${parsed.body}` : parsed.body;
       let name = target.dataset.name;
       if (!await confirmDialog({ title: "删除文件", list: [name], body: name.startsWith("pi-p-") ? "这是项目的设定和大纲，删除后项目无法打开。" : "", okLabel: "删除", danger: !0 })) return;
       let id = /^pi-[pc]-(.+)\.json$/.exec(name)?.[1];
-      name.startsWith("pi-c-") ? await view.data.clearChat(id) : name.startsWith("pi-p-") && await view.data.deleteProject(id), st5(view).verified = null, view.render();
+      name.startsWith("pi-c-") ? await view.data.clearChat(id) : name.startsWith("pi-p-") && await view.data.deleteProject(id), st6(view).verified = null, view.render();
     },
     async orphans(view) {
-      let names = Object.keys(st5(view).verified || {}).filter((name) => !referenced(view.data.index()).has(name) && st5(view).verified[name]), gone = Object.keys(st5(view).verified || {}).filter((name) => !referenced(view.data.index()).has(name) && !st5(view).verified[name]);
+      let names = Object.keys(st6(view).verified || {}).filter((name) => !referenced(view.data.index()).has(name) && st6(view).verified[name]), gone = Object.keys(st6(view).verified || {}).filter((name) => !referenced(view.data.index()).has(name) && !st6(view).verified[name]);
       if (!names.length && gone.length)
-        return view.data.forgetFiles(gone), st5(view).verified = null, view.renderBody();
+        return view.data.forgetFiles(gone), st6(view).verified = null, view.renderBody();
       if (await confirmDialog({ title: "清理孤立文件", body: "这些文件不属于任何项目：", list: names, okLabel: "删除", danger: !0 })) {
         for (let name of names) await deleteFile(name);
-        view.data.forgetFiles([...names, ...gone]), st5(view).verified = null, view.renderBody();
+        view.data.forgetFiles([...names, ...gone]), st6(view).verified = null, view.renderBody();
       }
     },
     async "clear-chats"(view) {
       let ids = view.data.index().projects.map((item) => item.id);
       if (await confirmDialog({ title: "清空全部讨论记录", list: ids.map(chatFile), okLabel: "清空", danger: !0 })) {
         for (let id of ids) await view.data.clearChat(id);
-        st5(view).verified = null, view.renderBody();
+        st6(view).verified = null, view.renderBody();
       }
     },
     async wipe(view) {
@@ -3959,18 +4532,18 @@ ${parsed.body}` : parsed.body;
       if (!files.length) throw new Error("没有可清除的文件");
       if (downloadBlob(`剧情注入器备份-${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}.zip`, buildZip(files), "application/zip"), !!await confirmDialog({ title: "重置插件", body: "备份已下载。确认后删除以下文件和当前聊天的进度，无法撤销。", list: files.map((file) => file.name), okLabel: "全部删除", danger: !0 })) {
         for (let file of files) await deleteFile(file.name);
-        await clearChatProgress(), view.data.resetAll(), view.projectId = "", st5(view).verified = null, view.runtime.refresh(), view.render(), toast("success", "已全部清除。");
+        await clearChatProgress(), view.data.resetAll(), view.projectId = "", st6(view).verified = null, view.runtime.refresh(), view.render(), toast("success", "已全部清除。");
       }
     }
-  }, refreshOn5 = ["index"];
+  }, refreshOn6 = ["index"];
 
   // src/ui/page-books.js
   var page_books_exports = {};
   __export(page_books_exports, {
-    actions: () => actions7,
-    onChange: () => onChange5,
-    refreshOn: () => refreshOn6,
-    render: () => render7
+    actions: () => actions9,
+    onChange: () => onChange6,
+    refreshOn: () => refreshOn7,
+    render: () => render9
   });
 
   // src/core/wbtools.js
@@ -4023,7 +4596,7 @@ ${parsed.body}` : parsed.body;
   }
 
   // src/ui/page-books.js
-  var st6 = (view) => view.tabState("books"), GROUPS = {
+  var st7 = (view) => view.tabState("books"), GROUPS = {
     on: (entries) => entries.filter((entry) => !acuField(entry.title) && !entry.disabled),
     off: (entries) => entries.filter((entry) => !acuField(entry.title) && entry.disabled)
   }, toggle = (entry) => `<input type="checkbox" data-wb-toggle="${esc(entry.key)}" title="${entry.disabled ? "开启" : "关闭"}"${entry.disabled ? "" : " checked"}>`, title = (entry) => `<span class="pi-wb-title" title="${esc(entry.title)}">${esc(entry.title)}</span>`;
@@ -4104,8 +4677,8 @@ ${parsed.body}` : parsed.body;
     for (let name of s.extra || []) names.includes(name) && add(name, "其他");
     return books;
   }
-  function render7(view) {
-    let s = st6(view), list = listedBooks(s).map((book) => {
+  function render9(view) {
+    let s = st7(view), list = listedBooks(s).map((book) => {
       let open = s.book === book.name, entries = open && s.entries ? s.entries : null;
       return `<div class="pi-book${open ? " is-open" : ""}"><div class="pi-book-hd" data-act="open-book" data-book="${esc(book.name)}">
             ${open ? ICONS.caretDown : ICONS.caret}<span class="pi-etitle" title="${esc(book.name)}">${esc(book.name)}</span><span class="pi-meta">${esc(book.source)}</span></div>
@@ -4124,19 +4697,19 @@ ${parsed.body}` : parsed.body;
   }
   async function saveEdit(view, target) {
     let key = target.dataset.wbEdit, patch = editPatch(target);
-    !patch || !(st6(view).entries || []).some((item) => item.key === key) || (await updateEntry(st6(view).book, key, patch), st6(view).entries = bookEntries(await loadBook(st6(view).book)), (target.tagName === "SELECT" || target.dataset.f === "comment") && view.renderBody());
+    !patch || !(st7(view).entries || []).some((item) => item.key === key) || (await updateEntry(st7(view).book, key, patch), st7(view).entries = bookEntries(await loadBook(st7(view).book)), (target.tagName === "SELECT" || target.dataset.f === "comment") && view.renderBody());
   }
-  async function onChange5(view, target) {
+  async function onChange6(view, target) {
     if (target.dataset.wbPick) {
-      let picked = st6(view).picked;
+      let picked = st7(view).picked;
       return target.checked ? picked.add(target.dataset.wbPick) : picked.delete(target.dataset.wbPick), view.renderBody();
     }
     if (target.dataset.wbEdit) return saveEdit(view, target);
     let key = target.dataset.wbToggle;
-    key && (target.disabled = !0, await setEntriesDisabled(st6(view).book, [key], !target.checked), await reloadBook(view));
+    key && (target.disabled = !0, await setEntriesDisabled(st7(view).book, [key], !target.checked), await reloadBook(view));
   }
   async function reloadBook(view) {
-    let s = st6(view);
+    let s = st7(view);
     s.entries = bookEntries(await loadBook(s.book));
     let keys = new Set(s.entries.map((entry) => entry.key));
     s.picked = new Set([...s.picked || []].filter((key) => keys.has(key))), view.renderBody(), countBook(view);
@@ -4148,7 +4721,7 @@ ${parsed.body}` : parsed.body;
     return count == null ? null : (tokenCache.size >= TOKEN_CACHE_MAX && tokenCache.delete(tokenCache.keys().next().value), tokenCache.set(text, count), count);
   }
   async function countBook(view) {
-    let s = st6(view), book = s.book, entries = s.entries || [], counts = [];
+    let s = st7(view), book = s.book, entries = s.entries || [], counts = [];
     for (let i = 0; i < entries.length; i += TOKEN_BATCH)
       if (counts.push(...await Promise.all(entries.slice(i, i + TOKEN_BATCH).map((entry) => entry.content ? entryTokens(entry.content) : 0))), s.book !== book || s.entries !== entries) return;
     let exact = counts.every((count) => count != null), on = 0, all = 0;
@@ -4161,7 +4734,7 @@ ${parsed.body}` : parsed.body;
   }
   var handwritten = (entries) => entries.filter((entry) => !acuField(entry.title)), pickedEntries = (s) => handwritten(s.entries || []).filter((entry) => s.picked.has(entry.key)), PREVIEW_MAX = 30, previewList = (lines) => lines.length > PREVIEW_MAX ? [...lines.slice(0, PREVIEW_MAX), `另有 ${lines.length - PREVIEW_MAX} 条`] : lines;
   async function applyPatches(view, plan, { label, backup = !1 }) {
-    let s = st6(view), result = await patchEntries(s.book, plan.map((item) => ({ key: item.key, patch: item.patch })));
+    let s = st7(view), result = await patchEntries(s.book, plan.map((item) => ({ key: item.key, patch: item.patch })));
     backup && downloadBlob(`${s.book}-${label}前备份.json`, JSON.stringify(result, null, 2)), toast("success", `${label}：已修改 ${plan.length} 条。`), await reloadBook(view);
   }
   async function regexDialog(scope) {
@@ -4198,31 +4771,31 @@ ${parsed.body}` : parsed.body;
       actions: [{ label: "取消", value: null }, { label: "预览", primary: !0, value: (box) => ({ start: box.querySelector('[data-f="start"]').value, step: box.querySelector('[data-f="step"]').value, by: box.querySelector('[data-f="by"]').value }) }]
     });
   }
-  var actions7 = {
+  var actions9 = {
     // 整区一次改完：「全部关闭」关已开启区，「全部开启」开已关闭区；数据库条目不在其中。
     async "wb-bulk"(view, target) {
       let group = target.dataset.group, pick = GROUPS[group];
       if (!pick) return;
-      let keys = pick(st6(view).entries || []).map((entry) => entry.key);
-      keys.length && (target.disabled = !0, await setEntriesDisabled(st6(view).book, keys, group === "on"), await reloadBook(view));
+      let keys = pick(st7(view).entries || []).map((entry) => entry.key);
+      keys.length && (target.disabled = !0, await setEntriesDisabled(st7(view).book, keys, group === "on"), await reloadBook(view));
     },
     "wb-open"(view, target) {
-      let s = st6(view);
+      let s = st7(view);
       s.openKey = s.openKey === target.dataset.key ? "" : target.dataset.key, view.renderBody();
     },
     "acu-fold"(view, target, event) {
       if (event.target.closest("button")) return;
-      let s = st6(view), open = new Set(s.openFields || []);
+      let s = st7(view), open = new Set(s.openFields || []);
       open.has(target.dataset.field) ? open.delete(target.dataset.field) : open.add(target.dataset.field), s.openFields = open, view.renderBody();
     },
     // 一个字段的数据库条目整体开或关（写进世界书）。
     async "acu-field"(view, target) {
-      let on = target.dataset.on === "1", keys = (st6(view).entries || []).filter((entry) => acuField(entry.title) === target.dataset.field && entry.disabled === on).map((entry) => entry.key);
-      keys.length && (target.disabled = !0, await setEntriesDisabled(st6(view).book, keys, !on), await reloadBook(view));
+      let on = target.dataset.on === "1", keys = (st7(view).entries || []).filter((entry) => acuField(entry.title) === target.dataset.field && entry.disabled === on).map((entry) => entry.key);
+      keys.length && (target.disabled = !0, await setEntriesDisabled(st7(view).book, keys, !on), await reloadBook(view));
     },
     async "open-book"(view, target, event) {
       if (event.target.closest("button,input")) return;
-      let s = st6(view);
+      let s = st7(view);
       if (s.book === target.dataset.book)
         return s.book = "", s.entries = null, view.renderBody();
       await openBook(view, target.dataset.book);
@@ -4246,40 +4819,40 @@ ${parsed.body}` : parsed.body;
       allBookNames().includes(name) && (name = await promptDialog({ title: "导入世界书", label: `已有「${name}」，请换一个名字`, value: `${name}-导入` }), name == null) || (await openBook(view, await createBook(name, data)), toast("success", `已导入「${name.trim()}」，${Object.keys(data.entries).length} 条。`));
     },
     async "book-open"(view) {
-      let shown = new Set(listedBooks(st6(view)).map((book) => book.name)), names = allBookNames().filter((name2) => !shown.has(name2));
+      let shown = new Set(listedBooks(st7(view)).map((book) => book.name)), names = allBookNames().filter((name2) => !shown.has(name2));
       if (!names.length) return toast("info", "没有其他世界书。");
       let name = await menuDialog({ title: "打开其他世界书", items: names.map((item) => ({ label: item, value: item, icon: ICONS.book })) });
       name && await openBook(view, name);
     },
     async "book-rename"(view) {
-      let from = st6(view).book, to = await promptDialog({ title: "重命名世界书", label: "新名称", value: from });
+      let from = st7(view).book, to = await promptDialog({ title: "重命名世界书", label: "新名称", value: from });
       if (to == null || to.trim() === from) return;
       let result = await renameBook(from, to);
       result.failed.length ? toast("warning", `已另存为「${result.name}」，但${result.failed.join("、")}的绑定没能改过去，旧书「${from}」保留，请在酒馆里手动改绑定后删除。`) : toast("success", `已重命名为「${result.name}」。`), await openBook(view, result.name);
     },
     async "book-copy"(view) {
-      let s = st6(view), to = await promptDialog({ title: "另存副本", label: "副本名称", value: `${s.book}-副本` });
+      let s = st7(view), to = await promptDialog({ title: "另存副本", label: "副本名称", value: `${s.book}-副本` });
       if (to == null) return;
       let name = await duplicateBook(s.book, to);
       s.extra = [.../* @__PURE__ */ new Set([...s.extra || [], name])], toast("success", `已另存为「${name}」。`), view.renderBody();
     },
     async "book-export"(view) {
-      let s = st6(view);
+      let s = st7(view);
       downloadBlob(`${s.book}.json`, JSON.stringify(await loadBook(s.book), null, 2));
     },
     async "book-delete"(view) {
-      let s = st6(view), name = s.book;
+      let s = st7(view), name = s.book;
       if (!await confirmDialog({ title: `删除世界书「${name}」`, body: "先下载整本备份，再删除并解除聊天、角色卡和全局的绑定，无法撤销。", list: [`${s.entries.length} 条条目`], okLabel: "删除", danger: !0 })) return;
       downloadBlob(`${name}-备份.json`, JSON.stringify(await loadBook(name), null, 2));
       let result = await removeBook(name);
       result.failed.length ? toast("warning", `已删除，但${result.failed.join("、")}的绑定没能解除，请在酒馆里检查。`) : toast("success", `已删除「${name}」。`), s.book = "", s.entries = null, s.extra = (s.extra || []).filter((item) => item !== name), view.renderBody();
     },
     async "wb-add"(view) {
-      let s = st6(view), [key] = await addEntries(s.book);
+      let s = st7(view), [key] = await addEntries(s.book);
       await reloadBook(view), s.openKey = key, view.renderBody();
     },
     async "wb-dup"(view, target) {
-      await addEntries(st6(view).book, [target.dataset.key]), await reloadBook(view);
+      await addEntries(st7(view).book, [target.dataset.key]), await reloadBook(view);
     },
     // 「更多」菜单：页面级、整本书级、选中条目级各一份，选中后转给对应的操作。
     async "page-more"(view, target, event) {
@@ -4287,48 +4860,48 @@ ${parsed.body}` : parsed.body;
         { label: "导入世界书", value: "book-import", icon: ICONS.upload },
         { label: "打开其他世界书", value: "book-open", icon: ICONS.folder }
       ] });
-      if (pick) return actions7[pick](view, target, event);
+      if (pick) return actions9[pick](view, target, event);
     },
     async "book-more"(view, target, event) {
-      let pick = await menuDialog({ title: st6(view).book, items: [
+      let pick = await menuDialog({ title: st7(view).book, items: [
         { label: "重命名", value: "book-rename", icon: ICONS.pencil },
         { label: "另存副本", value: "book-copy", icon: ICONS.copy },
         { label: "导出", value: "book-export", icon: ICONS.download },
         { label: "删除本书", value: "book-delete", icon: ICONS.trash, danger: !0 }
       ] });
-      if (pick) return actions7[pick](view, target, event);
+      if (pick) return actions9[pick](view, target, event);
     },
     async "pick-more"(view, target, event) {
-      let pick = await menuDialog({ title: `已选 ${st6(view).picked.size} 条`, items: [
+      let pick = await menuDialog({ title: `已选 ${st7(view).picked.size} 条`, items: [
         { label: "开启", value: "wb-pick-on", icon: ICONS.eye },
         { label: "关闭", value: "wb-pick-off", icon: ICONS.eyeOff }
       ] });
-      if (pick) return actions7[pick](view, target, event);
+      if (pick) return actions9[pick](view, target, event);
     },
     "wb-pick-on": (view) => setPicked(view, !1),
     "wb-pick-off": (view) => setPicked(view, !0),
     async "wb-pick-delete"(view) {
-      let s = st6(view), entries = pickedEntries(s);
+      let s = st7(view), entries = pickedEntries(s);
       if (!await confirmDialog({ title: `从「${s.book}」删除 ${entries.length} 条`, body: "删除前会下载这些条目的备份。", list: previewList(entries.map((entry) => entry.title)), okLabel: "删除", danger: !0 })) return;
       let backup = await deleteEntries(s.book, entries.map((entry) => entry.key));
       downloadBlob(`${s.book}-已删条目备份.json`, JSON.stringify(backup, null, 2)), s.picked = /* @__PURE__ */ new Set(), await reloadBook(view);
     },
     "wb-picking"(view) {
-      let s = st6(view);
+      let s = st7(view);
       s.picking = !s.picking, s.picked = /* @__PURE__ */ new Set(), s.openKey = "", view.renderBody();
     },
     "wb-pick-all"(view) {
-      let s = st6(view), list = handwritten(s.entries || []), all = list.every((entry) => s.picked.has(entry.key));
+      let s = st7(view), list = handwritten(s.entries || []), all = list.every((entry) => s.picked.has(entry.key));
       s.picked = all ? /* @__PURE__ */ new Set() : new Set(list.map((entry) => entry.key)), view.renderBody();
     },
     // 关键词里写成「甲，乙、丙」的一整条拆成三个，去掉首尾标点与空格、重复项；/正则/ 形式的关键词不动。
     async "wb-punct"(view) {
-      let s = st6(view), plan = punctPlan(handwritten(s.entries || []));
+      let s = st7(view), plan = punctPlan(handwritten(s.entries || []));
       if (!plan.length) return toast("info", "关键词没有需要修复的标点。");
       await confirmDialog({ title: `修复关键词标点（${plan.length} 条）`, body: "以下条目的关键词将改为：", list: previewList(plan.map((item) => `${item.title}：${item.before} → ${item.after}`)), okLabel: "修复" }) && await applyPatches(view, plan, { label: "修复关键词标点" });
     },
     async "wb-regex"(view) {
-      let s = st6(view), usePicked = s.picking && s.picked.size, entries = usePicked ? pickedEntries(s) : handwritten(s.entries || []), input = await regexDialog(usePicked ? `已选 ${entries.length} 条` : `全部手写条目 ${entries.length} 条`);
+      let s = st7(view), usePicked = s.picking && s.picked.size, entries = usePicked ? pickedEntries(s) : handwritten(s.entries || []), input = await regexDialog(usePicked ? `已选 ${entries.length} 条` : `全部手写条目 ${entries.length} 条`);
       if (!input) return;
       if (!input.fields.content && !input.fields.comment && !input.fields.keys) throw new Error("请至少选择一个替换范围");
       let plan = regexPlan(entries, buildPattern(input.find, input), input.replace, input.fields);
@@ -4337,13 +4910,13 @@ ${parsed.body}` : parsed.body;
       await confirmDialog({ title: `正则替换（${plan.length} 条，共 ${total} 处）`, body: "替换前会下载这些条目的备份。", list: previewList(plan.map((item) => `${item.title}：${item.hits} 处`)), okLabel: "替换", danger: !0 }) && await applyPatches(view, plan, { label: "正则替换", backup: !0 });
     },
     async "wb-order"(view) {
-      let s = st6(view), input = await orderDialog(s.picked.size);
+      let s = st7(view), input = await orderDialog(s.picked.size);
       if (!input) return;
       let plan = orderPlan(pickedEntries(s), input);
       await confirmDialog({ title: `顺序重排（${plan.length} 条）`, list: previewList(plan.map((item) => `${item.title}：${item.from} → ${item.to}`)), okLabel: "重排" }) && await applyPatches(view, plan.map((item) => ({ key: item.key, patch: { order: item.to } })), { label: "顺序重排" });
     },
     async "wb-move"(view) {
-      let s = st6(view), input = await moveDialog(s.book, s.picked.size);
+      let s = st7(view), input = await moveDialog(s.book, s.picked.size);
       if (!input) return;
       if (!input.to) throw new Error("请选择或填写目标世界书");
       let entries = pickedEntries(s), isNew = !allBookNames().includes(input.to);
@@ -4362,27 +4935,27 @@ ${parsed.body}` : parsed.body;
       toast("success", `已${input.move ? "移动" : "复制"} ${result.copied} 条到「${input.to}」${result.created ? "（新建）" : ""}。`), s.picked = /* @__PURE__ */ new Set(), await reloadBook(view);
     },
     async "wb-delete"(view, target) {
-      let keys = [target.dataset.key], titles = st6(view).entries.filter((entry) => keys.includes(entry.key)).map((entry) => entry.title);
-      if (!await confirmDialog({ title: `从「${st6(view).book}」删除条目`, body: "删除前会下载这个条目的备份。", list: titles, okLabel: "删除", danger: !0 })) return;
-      let backup = await deleteEntries(st6(view).book, keys);
-      downloadBlob(`${st6(view).book}-已删条目备份.json`, JSON.stringify(backup, null, 2)), await reloadBook(view);
+      let keys = [target.dataset.key], titles = st7(view).entries.filter((entry) => keys.includes(entry.key)).map((entry) => entry.title);
+      if (!await confirmDialog({ title: `从「${st7(view).book}」删除条目`, body: "删除前会下载这个条目的备份。", list: titles, okLabel: "删除", danger: !0 })) return;
+      let backup = await deleteEntries(st7(view).book, keys);
+      downloadBlob(`${st7(view).book}-已删条目备份.json`, JSON.stringify(backup, null, 2)), await reloadBook(view);
     }
   };
   async function setPicked(view, disabled) {
-    let s = st6(view);
+    let s = st7(view);
     await setEntriesDisabled(s.book, [...s.picked], disabled), await reloadBook(view);
   }
   async function openBook(view, name) {
-    let s = st6(view);
+    let s = st7(view);
     listedBooks(s).some((book) => book.name === name) || (s.extra = [.../* @__PURE__ */ new Set([...s.extra || [], name])]), s.book = name, s.entries = null, s.openKey = "", s.tokens = null, s.picking = !1, s.picked = /* @__PURE__ */ new Set(), await reloadBook(view);
   }
-  var refreshOn6 = ["chat"];
+  var refreshOn7 = ["chat"];
 
   // src/ui/page-diag.js
   var page_diag_exports = {};
   __export(page_diag_exports, {
-    actions: () => actions8,
-    render: () => render8
+    actions: () => actions10,
+    render: () => render10
   });
   var NEED = ["CHAT_CHANGED", "MESSAGE_RECEIVED"], EVENT_LABELS = {
     WORLDINFO_ENTRIES_LOADED: "条目加载（注入）",
@@ -4434,7 +5007,7 @@ ${parsed.body}` : parsed.body;
     return lines.push("", "【问题】", ...list.length ? list.map((item) => `- ${item.text}`) : ["无"]), lines.push("", "【最近记录】", ...info.logs.length ? info.logs.map((item) => `${time(item.at)} ${item.text}`) : ["无"]), lines.join(`
 `);
   }
-  function render8(view) {
+  function render10(view) {
     let info = collect(view), list = problems(info), fixes = { rebind: "重新绑定事件", "reset-base": "从当前楼重新计数" }, problemHtml = list.length ? list.map((item) => `<div class="pi-diag-row"><span class="pi-badge is-warn">问题</span><span class="pi-diag-text">${esc(item.text)}</span>${item.fix ? `<button type="button" class="pi-btn is-sm" data-act="${item.fix}">${fixes[item.fix]}</button>` : ""}</div>`).join("") : '<p class="pi-hint">没有发现问题。</p>', events = info.events.map((item) => `<tr><td>${esc(EVENT_LABELS[item.key] || item.key)}</td>
         <td>${item.name ? item.bound ? '<span class="pi-badge is-ok">已绑定</span>' : '<span class="pi-badge is-warn">未绑定</span>' : '<span class="pi-badge is-danger">酒馆未提供</span>'}</td>
         <td>${item.count} 次</td><td>${time(item.at)}</td></tr>`).join(""), logs = info.logs.length ? info.logs.slice().reverse().map((item) => `${time(item.at)}  ${item.text}`).join(`
@@ -4462,7 +5035,7 @@ ${parsed.body}` : parsed.body;
       return box.remove(), ok;
     }
   }
-  var actions8 = {
+  var actions10 = {
     async check(view) {
       await view.runtime.checkNow({ manual: !0 }), view.renderBody();
     },
@@ -4484,7 +5057,7 @@ ${parsed.body}` : parsed.body;
     { key: "setting", label: "设定", mod: tab_setting_exports },
     { key: "outline", label: "大纲", mod: tab_outline_exports },
     { key: "run", label: "执行", mod: tab_run_exports }
-  ], PAGES = {
+  ], INFINITE_TABS = { outline: { label: "世界库", mod: tab_worlds_exports }, run: { mod: tab_infinite_run_exports } }, PAGES = {
     books: { label: "世界书管理", icon: "book", mod: page_books_exports },
     data: { label: "数据管理", icon: "box", mod: page_data_exports },
     diag: { label: "诊断", icon: "pulse", mod: page_diag_exports },
@@ -4520,7 +5093,7 @@ ${parsed.body}` : parsed.body;
       busy: {},
       loadError: {},
       restored: !1,
-      render: render9,
+      render: render11,
       renderBody,
       renderSide,
       project: () => view.projectId ? data.project(view.projectId) : null,
@@ -4534,8 +5107,9 @@ ${parsed.body}` : parsed.body;
       return view.state[key] || (view.state[key] = {}), view.state[key];
     }
     view.tabState = tabState;
+    let isInfinite = () => !!(view.project() && view.project().mode === "infinite"), tabOf = (tab) => ({ ...tab, ...isInfinite() ? INFINITE_TABS[tab.key] : null });
     function current() {
-      return view.page ? PAGES[view.page].mod : (TABS.find((tab) => tab.key === view.tab) || TABS[3]).mod;
+      return view.page ? PAGES[view.page].mod : tabOf(TABS.find((tab) => tab.key === view.tab) || TABS[3]).mod;
     }
     function sideHtml() {
       let index = data.index(), activeId = runtime.activeId(), list = groupProjects(index.projects).map((group) => {
@@ -4565,7 +5139,7 @@ ${parsed.body}` : parsed.body;
       }
     }
     function topHtml() {
-      let project = view.project(), title2 = view.page ? PAGES[view.page].label : project ? project.name : "剧情注入器", tabs = view.page || !project ? "" : `<div class="pi-tabs">${TABS.map((tab) => `<button type="button" class="pi-tab${tab.key === view.tab ? " is-sel" : ""}" data-act="tab" data-tab="${tab.key}">${tab.label}</button>`).join("")}</div>`, rename = !view.page && project ? `<button type="button" class="pi-icon-btn" data-act="rename" title="编辑项目名称">${ICONS.pencil}</button>` : "";
+      let project = view.project(), title2 = view.page ? PAGES[view.page].label : project ? project.name : "剧情注入器", tabs = view.page || !project ? "" : `<div class="pi-tabs">${TABS.map(tabOf).map((tab) => `<button type="button" class="pi-tab${tab.key === view.tab ? " is-sel" : ""}" data-act="tab" data-tab="${tab.key}">${tab.label}</button>`).join("")}</div>`, rename = !view.page && project ? `<button type="button" class="pi-icon-btn" data-act="rename" title="编辑项目名称">${ICONS.pencil}</button>` : "";
       return `<div class="pi-top-lead"><button type="button" class="pi-icon-btn pi-menu" data-act="drawer" title="项目列表">${ICONS.menu}</button>
                 <span class="pi-top-title">${esc(title2)}</span>${rename}</div>${tabs}
             <div class="pi-top-end"><button type="button" class="pi-icon-btn${view.page === "settings" ? " is-on" : ""}" data-act="page" data-page="settings" title="设置">${ICONS.gear}</button><button type="button" class="pi-icon-btn" data-act="theme" title="${isNight() ? "日间配色" : "夜间配色"}">${isNight() ? ICONS.sun : ICONS.moon}</button>
@@ -4610,43 +5184,52 @@ ${parsed.body}` : parsed.body;
         box && (box.focus(), box.setSelectionRange(compose.start, compose.end));
       }
     }
-    function render9() {
+    function render11() {
       renderSide(), renderBody();
     }
     async function selectProject(id, tab) {
-      if (view.page = "", setDrawer(!1), view.projectId = id, delete view.loadError[id], writeUi({ projectId: id, page: "" }), render9(), !!id)
+      if (view.page = "", setDrawer(!1), view.projectId = id, delete view.loadError[id], writeUi({ projectId: id, page: "" }), render11(), !!id)
         try {
           let project = await data.loadProject(id);
           if (view.projectId !== id) return;
           if (!project) {
-            view.loadError[id] = "项目文件丢失，可在数据管理里查看", render9();
+            view.loadError[id] = "项目文件丢失，可在数据管理里查看", render11();
             return;
           }
-          view.tab = tab || (project.outline.volumes.length ? "run" : "discuss"), writeUi({ tab: view.tab }), render9();
+          view.tab = tab || (project.outline.volumes.length ? "run" : "discuss"), writeUi({ tab: view.tab }), render11();
         } catch (error) {
           if (view.projectId !== id) return;
-          view.loadError[id] = error.message, render9();
+          view.loadError[id] = error.message, render11();
         }
     }
     function restore() {
       let ui = readUi(), activeId = runtime.activeId(), remembered = data.index().projects.some((item) => item.id === ui.projectId) ? ui.projectId : "", id = activeId || remembered || data.index().projects[0] && data.index().projects[0].id || "";
-      view.restored = !0, render9();
+      view.restored = !0, render11();
       let page = PAGES[ui.page] ? ui.page : "";
-      id && selectProject(id, TABS.some((tab) => tab.key === ui.tab) ? ui.tab : void 0), page && (view.page = page, writeUi({ page }), render9());
+      id && selectProject(id, TABS.some((tab) => tab.key === ui.tab) ? ui.tab : void 0), page && (view.page = page, writeUi({ page }), render11());
     }
     function go(tab) {
-      view.page = "", view.tab = tab, writeUi({ tab, page: "" }), render9();
+      view.page = "", view.tab = tab, writeUi({ tab, page: "" }), render11();
     }
     async function newProject2() {
       setDrawer(!1);
-      let name = await promptDialog({ title: "新项目", label: "项目名（一条 if 线）", placeholder: "如：龙宫温养" });
-      if (name != null)
-        try {
-          let project = await data.createProject(name);
-          !runtime.activeId() && cardKey() && await runtime.switchProject(project.id), await selectProject(project.id, "discuss");
-        } catch (error) {
-          toast("error", `新建失败：${error.message}`);
-        }
+      let result = await openDialog({
+        title: "新项目",
+        html: `<label class="pi-field"><span>项目名（一条 if 线）</span><input class="pi-inp" data-f="name" placeholder="如：龙宫温养"></label>
+                <label class="pi-check"><input type="checkbox" data-f="infinite"><span>无限流模式（列车停站、世界库、污染）</span></label>`,
+        actions: [
+          { label: "取消", value: null },
+          { label: "确定", primary: !0, value: (box) => ({ name: box.querySelector("[data-f=name]").value, mode: box.querySelector("[data-f=infinite]").checked ? "infinite" : "normal" }) }
+        ]
+      });
+      if (!result) return;
+      let name = result.name;
+      try {
+        let project = await data.createProject(name, "", result.mode);
+        !runtime.activeId() && cardKey() && await runtime.switchProject(project.id), await selectProject(project.id, "discuss");
+      } catch (error) {
+        toast("error", `新建失败：${error.message}`);
+      }
     }
     async function projectMenu(id) {
       let meta2 = data.index().projects.find((item) => item.id === id);
@@ -4657,7 +5240,7 @@ ${parsed.body}` : parsed.body;
       if (pick) {
         if (pick === "edit") return editProject(id);
         try {
-          await runtime.switchProject(id, pick), toast("success", pick === "card" ? `「${meta2.name}」已设为本卡默认，当前聊天也已换用。` : `当前聊天改用「${meta2.name}」。`), render9();
+          await runtime.switchProject(id, pick), toast("success", pick === "card" ? `「${meta2.name}」已设为本卡默认，当前聊天也已换用。` : `当前聊天改用「${meta2.name}」。`), render11();
         } catch (error) {
           toast("error", `切换失败：${error.message}`);
         }
@@ -4666,28 +5249,31 @@ ${parsed.body}` : parsed.body;
     async function editProject(id) {
       let meta2 = data.index().projects.find((item) => item.id === id);
       if (!meta2) return;
-      let groups = [...new Set(data.index().projects.map((item) => item.group).filter(Boolean))], result = await openDialog({
+      let groups = [...new Set(data.index().projects.map((item) => item.group).filter(Boolean))];
+      data.project(id) || await data.loadProject(id);
+      let mode = data.project(id) ? data.project(id).mode : "normal", result = await openDialog({
         title: "编辑项目",
         html: `<label class="pi-field"><span>名称</span><input class="pi-inp" data-f="name" value="${esc(meta2.name)}"></label>
                 <label class="pi-field"><span>分组（留空不分组）</span><input class="pi-inp" data-f="group" value="${esc(meta2.group)}" list="pi-groups"></label>
-                <datalist id="pi-groups">${groups.map((name) => `<option value="${esc(name)}">`).join("")}</datalist>`,
+                <datalist id="pi-groups">${groups.map((name) => `<option value="${esc(name)}">`).join("")}</datalist>
+                <label class="pi-check"><input type="checkbox" data-f="infinite"${mode === "infinite" ? " checked" : ""}><span>无限流模式</span></label>`,
         actions: [
           { label: "删除项目", danger: !0, value: "delete" },
           { label: "取消", value: null },
-          { label: "保存", primary: !0, value: (box) => ({ name: box.querySelector("[data-f=name]").value.trim(), group: box.querySelector("[data-f=group]").value.trim() }) }
+          { label: "保存", primary: !0, value: (box) => ({ name: box.querySelector("[data-f=name]").value.trim(), group: box.querySelector("[data-f=group]").value.trim(), mode: box.querySelector("[data-f=infinite]").checked ? "infinite" : "normal" }) }
         ]
       });
       if (result) {
         if (result === "delete") {
           if (!await confirmDialog({ title: `删除「${meta2.name}」`, body: "将删除以下文件，聊天里记录的该项目进度保留。", list: [`pi-p-${id}.json`, `pi-c-${id}.json`], okLabel: "删除", danger: !0 })) return;
           try {
-            await data.deleteProject(id), view.projectId === id && (view.projectId = ""), runtime.refresh(), render9();
+            await data.deleteProject(id), view.projectId === id && (view.projectId = ""), runtime.refresh(), render11();
           } catch (error) {
             toast("error", `删除失败：${error.message}`);
           }
           return;
         }
-        data.project(id) || await data.loadProject(id), data.renameProject(id, result.name, result.group), render9();
+        data.project(id) || await data.loadProject(id), data.renameProject(id, result.name, result.group), result.mode !== mode && data.updateProject(id, (project) => ({ ...project, mode: result.mode, infinite: normalizeInfinite(project.infinite) })), runtime.refresh(), render11();
       }
     }
     function onClick(event) {
@@ -4700,13 +5286,13 @@ ${parsed.body}` : parsed.body;
       if (act === "new-project") return newProject2();
       if (act === "tab") return go(target.dataset.tab);
       if (act === "page")
-        return view.page = target.dataset.page, writeUi({ page: view.page }), setDrawer(!1), render9();
+        return view.page = target.dataset.page, writeUi({ page: view.page }), setDrawer(!1), render11();
       if (act === "drawer") return setDrawer(!view.drawer);
       if (act === "theme")
         return setNight(!isNight()), writeUi({ night: isNight() }), renderSide();
       if (act === "rename") return editProject(view.projectId);
       if (act === "retry-project") return selectProject(view.projectId, view.tab);
-      if (act === "retry-render") return render9();
+      if (act === "retry-render") return render11();
       if (act === "group") {
         let name = target.dataset.group;
         return view.collapsed.has(name) ? view.collapsed.delete(name) : view.collapsed.add(name), writeUi({ collapsed: [...view.collapsed] }), renderSide();
@@ -4734,7 +5320,7 @@ ${parsed.body}` : parsed.body;
       let item = event.target.closest(".pi-pitem");
       !item || !root.contains(item) || (event.preventDefault(), cancelPress(), !swallowAfterPress(event) && projectMenu(item.dataset.id));
     }
-    function onChange6(event) {
+    function onChange7(event) {
       let target = event.target;
       if (target.dataset.psearch !== void 0) return;
       let handler = current().onChange;
@@ -4752,11 +5338,11 @@ ${parsed.body}` : parsed.body;
     function open() {
       ensureStyle(), !root && (view.drawer = !1, lastSide = "", lastTop = "", root = el(`<div class="pi-root pi-overlay"><div class="pi-panel"><aside class="pi-side"></aside>
             <div class="pi-scrim" data-act="drawer"></div>
-            <section class="pi-main"><header class="pi-top"></header><div class="pi-body"></div></section></div></div>`), root.addEventListener("click", onClick), root.addEventListener("contextmenu", onContext), root.addEventListener("pointerdown", onPointerDown), root.addEventListener("pointermove", onPointerMove), root.addEventListener("pointerup", cancelPress), root.addEventListener("pointercancel", cancelPress), root.addEventListener("scroll", cancelPress, !0), root.addEventListener("change", onChange6), root.addEventListener("input", onInput5), root.addEventListener("focusout", (event) => current().onBlur?.(view, event.target, event)), root.addEventListener("mousedown", (event) => {
+            <section class="pi-main"><header class="pi-top"></header><div class="pi-body"></div></section></div></div>`), root.addEventListener("click", onClick), root.addEventListener("contextmenu", onContext), root.addEventListener("pointerdown", onPointerDown), root.addEventListener("pointermove", onPointerMove), root.addEventListener("pointerup", cancelPress), root.addEventListener("pointercancel", cancelPress), root.addEventListener("scroll", cancelPress, !0), root.addEventListener("change", onChange7), root.addEventListener("input", onInput5), root.addEventListener("focusout", (event) => current().onBlur?.(view, event.target, event)), root.addEventListener("mousedown", (event) => {
         event.target === root && (root.dataset.down = "1");
       }), root.addEventListener("mouseup", (event) => {
         event.target === root && root.dataset.down && close(), delete root.dataset.down;
-      }), doc.addEventListener("keydown", onKey, !0), doc.body.appendChild(root), view.restored = !1, data.isReady() ? restore() : render9());
+      }), doc.addEventListener("keydown", onKey, !0), doc.body.appendChild(root), view.restored = !1, data.isReady() ? restore() : render11());
     }
     function close() {
       root && (current().unmount?.(view), doc.removeEventListener("keydown", onKey, !0), root.remove(), root = null, data.flush().catch(() => {
@@ -4783,16 +5369,16 @@ ${parsed.body}` : parsed.body;
     function hide(id) {
       view.clearTimeout(timers.get(id)), timers.delete(id), box?.querySelector(`[data-notice="${id}"]`)?.remove();
     }
-    function show({ id, title: title2, body = "", actions: actions9 = [], timeout = 0 }) {
+    function show({ id, title: title2, body = "", actions: actions11 = [], timeout = 0 }) {
       hide(id);
       let card = el(`<div class="pi-notice" data-notice="${esc(id)}"><b>${esc(title2)}</b>${body ? `<p>${esc(body)}</p>` : ""}
-            <div class="pi-row">${actions9.map((action, index) => `<button type="button" class="pi-btn is-sm${action.primary ? " is-primary" : ""}" data-act="${index}">${esc(action.label)}</button>`).join("")}</div></div>`);
+            <div class="pi-row">${actions11.map((action, index) => `<button type="button" class="pi-btn is-sm${action.primary ? " is-primary" : ""}" data-act="${index}">${esc(action.label)}</button>`).join("")}</div></div>`);
       card.addEventListener("click", (event) => {
         let button = event.target.closest("[data-act]");
         if (button) {
           hide(id);
           try {
-            actions9[Number(button.dataset.act)].run();
+            actions11[Number(button.dataset.act)].run();
           } catch (error) {
             console.error("[剧情注入器]", error);
           }
@@ -4807,7 +5393,7 @@ ${parsed.body}` : parsed.body;
   }
 
   // src/index.js
-  var VERSION = "0.1.16", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.1.17", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")

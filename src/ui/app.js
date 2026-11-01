@@ -1,11 +1,14 @@
+import { normalizeInfinite } from '../core/infinite.js';
 import { groupProjects } from '../core/store.js';
 import { cardKey, cardName, hostDocument, hostWindow, toast } from '../host/st.js';
-import { confirmDialog, el, ensureStyle, esc, isNight, menuDialog, openDialog, promptDialog, setNight } from './dom.js';
+import { confirmDialog, el, ensureStyle, esc, isNight, menuDialog, openDialog, setNight } from './dom.js';
 import { ICONS } from './styles.js';
 import * as discuss from './tab-discuss.js';
 import * as setting from './tab-setting.js';
 import * as outline from './tab-outline.js';
 import * as run from './tab-run.js';
+import * as worlds from './tab-worlds.js';
+import * as infiniteRun from './tab-infinite-run.js';
 import * as settings from './page-settings.js';
 import * as dataPage from './page-data.js';
 import * as books from './page-books.js';
@@ -17,6 +20,8 @@ const TABS = [
     { key: 'outline', label: '大纲', mod: outline },
     { key: 'run', label: '执行', mod: run },
 ];
+// 无限流项目：大纲页签换成世界库，执行页签换成状态页。
+const INFINITE_TABS = { outline: { label: '世界库', mod: worlds }, run: { mod: infiniteRun } };
 const PAGES = {
     books: { label: '世界书管理', icon: 'book', mod: books },
     data: { label: '数据管理', icon: 'box', mod: dataPage },
@@ -73,9 +78,12 @@ export function createApp({ data, runtime, version }) {
     }
     view.tabState = tabState;
 
+    const isInfinite = () => Boolean(view.project() && view.project().mode === 'infinite');
+    const tabOf = tab => ({ ...tab, ...(isInfinite() ? INFINITE_TABS[tab.key] : null) });
+
     function current() {
         if (view.page) return PAGES[view.page].mod;
-        return (TABS.find(tab => tab.key === view.tab) || TABS[3]).mod;
+        return tabOf(TABS.find(tab => tab.key === view.tab) || TABS[3]).mod;
     }
 
     function sideHtml() {
@@ -118,7 +126,7 @@ export function createApp({ data, runtime, version }) {
     function topHtml() {
         const project = view.project();
         const title = view.page ? PAGES[view.page].label : project ? project.name : '剧情注入器';
-        const tabs = view.page || !project ? '' : `<div class="pi-tabs">${TABS.map(tab => `<button type="button" class="pi-tab${tab.key === view.tab ? ' is-sel' : ''}" data-act="tab" data-tab="${tab.key}">${tab.label}</button>`).join('')}</div>`;
+        const tabs = view.page || !project ? '' : `<div class="pi-tabs">${TABS.map(tabOf).map(tab => `<button type="button" class="pi-tab${tab.key === view.tab ? ' is-sel' : ''}" data-act="tab" data-tab="${tab.key}">${tab.label}</button>`).join('')}</div>`;
         const rename = !view.page && project ? `<button type="button" class="pi-icon-btn" data-act="rename" title="编辑项目名称">${ICONS.pencil}</button>` : '';
         return `<div class="pi-top-lead"><button type="button" class="pi-icon-btn pi-menu" data-act="drawer" title="项目列表">${ICONS.menu}</button>
                 <span class="pi-top-title">${esc(title)}</span>${rename}</div>${tabs}
@@ -255,10 +263,19 @@ export function createApp({ data, runtime, version }) {
 
     async function newProject() {
         setDrawer(false);
-        const name = await promptDialog({ title: '新项目', label: '项目名（一条 if 线）', placeholder: '如：龙宫温养' });
-        if (name == null) return;
+        const result = await openDialog({
+            title: '新项目',
+            html: `<label class="pi-field"><span>项目名（一条 if 线）</span><input class="pi-inp" data-f="name" placeholder="如：龙宫温养"></label>
+                <label class="pi-check"><input type="checkbox" data-f="infinite"><span>无限流模式（列车停站、世界库、污染）</span></label>`,
+            actions: [
+                { label: '取消', value: null },
+                { label: '确定', primary: true, value: box => ({ name: box.querySelector('[data-f=name]').value, mode: box.querySelector('[data-f=infinite]').checked ? 'infinite' : 'normal' }) },
+            ],
+        });
+        if (!result) return;
+        const name = result.name;
         try {
-            const project = await data.createProject(name);
+            const project = await data.createProject(name, '', result.mode);
             if (!runtime.activeId() && cardKey()) await runtime.switchProject(project.id);
             await selectProject(project.id, 'discuss');
         } catch (error) {
@@ -292,15 +309,18 @@ export function createApp({ data, runtime, version }) {
         const meta = data.index().projects.find(item => item.id === id);
         if (!meta) return;
         const groups = [...new Set(data.index().projects.map(item => item.group).filter(Boolean))];
+        if (!data.project(id)) await data.loadProject(id);
+        const mode = data.project(id) ? data.project(id).mode : 'normal';
         const result = await openDialog({
             title: '编辑项目',
             html: `<label class="pi-field"><span>名称</span><input class="pi-inp" data-f="name" value="${esc(meta.name)}"></label>
                 <label class="pi-field"><span>分组（留空不分组）</span><input class="pi-inp" data-f="group" value="${esc(meta.group)}" list="pi-groups"></label>
-                <datalist id="pi-groups">${groups.map(name => `<option value="${esc(name)}">`).join('')}</datalist>`,
+                <datalist id="pi-groups">${groups.map(name => `<option value="${esc(name)}">`).join('')}</datalist>
+                <label class="pi-check"><input type="checkbox" data-f="infinite"${mode === 'infinite' ? ' checked' : ''}><span>无限流模式</span></label>`,
             actions: [
                 { label: '删除项目', danger: true, value: 'delete' },
                 { label: '取消', value: null },
-                { label: '保存', primary: true, value: box => ({ name: box.querySelector('[data-f=name]').value.trim(), group: box.querySelector('[data-f=group]').value.trim() }) },
+                { label: '保存', primary: true, value: box => ({ name: box.querySelector('[data-f=name]').value.trim(), group: box.querySelector('[data-f=group]').value.trim(), mode: box.querySelector('[data-f=infinite]').checked ? 'infinite' : 'normal' }) },
             ],
         });
         if (!result) return;
@@ -319,6 +339,8 @@ export function createApp({ data, runtime, version }) {
         }
         if (!data.project(id)) await data.loadProject(id);
         data.renameProject(id, result.name, result.group);
+        if (result.mode !== mode) data.updateProject(id, project => ({ ...project, mode: result.mode, infinite: normalizeInfinite(project.infinite) }));
+        runtime.refresh();
         render();
     }
 

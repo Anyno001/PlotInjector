@@ -915,3 +915,223 @@ test('界面操作改动立即反映到注入内容与本地文件', async () =>
     assert.equal(host.win.__errors.length, 0, host.win.__errors.join('\n'));
     await host.instance.destroy();
 });
+
+const WORLD_REPLY = '【标题】雾渡口\n【档案】\n外观：渡口起雾，船夫等人。\n站台：石阶下的灯笼，起雾时出现。\n真相：船夫是上一任店主。';
+const isWorldCall = prompts => /世界设计师/.test(prompts[0].content);
+
+const stateBlock = value => `正文。\n<末班车状态>\n列车：${value}\n污染：旧档（3）\n</末班车状态>`;
+
+test('无限流项目：AI 楼层状态块「停站」开副本注入档案，swipe 掉就撤销，「回到列车」关副本，改掉或删掉就重开，档案没好时下一条等它', async () => {
+    const host = await boot();
+    const { instance } = host;
+    const project = await instance.data.createProject('末班车', '', 'infinite');
+    await instance.runtime.switchProject(project.id);
+    instance.data.updateProject(project.id, current => ({ ...current, setting: { ...current.setting, text: '列车规则：广播只报站。' } }));
+    host.click();
+    await tick(10);
+    const doc = host.win.document;
+    doc.querySelector('[data-act="tab"][data-tab="run"]').click();
+    await tick(10);
+    const body = () => doc.querySelector('.pi-body').textContent;
+    assert.match(body(), /进入新世界/);
+    assert.match(body(), /回到列车/);
+    assert.doesNotMatch(body(), /立即检测/, '无限流不再有检测按钮');
+    assert.match(body(), /最新一楼没有状态块/);
+    const infNow = () => instance.runtime.infState().inf;
+    const lorePieces = async () => (await entriesNow(host.eventSource)).map(entry => entry.content).join('|');
+    const worldCalls = () => host.llmCalls.filter(isWorldCall).length;
+    let gate = null;
+    host.win.__reply = async prompts => {
+        if (isWorldCall(prompts)) {
+            if (gate) await gate.promise;
+            return WORLD_REPLY;
+        }
+        return '{}';
+    };
+    const settle = async cond => { for (let i = 0; i < 60 && !cond(); i += 1) await tick(10); };
+    const aiSay = async (text, event = 'message_received') => {
+        host.context.chat.push({ is_user: false, mes: text });
+        await host.eventSource.emit(event, host.context.chat.length - 1, 'normal');
+    };
+    const rewrite = async (text, event) => {
+        host.context.chat[host.context.chat.length - 1].mes = text;
+        await host.eventSource.emit(event, host.context.chat.length - 1);
+    };
+
+    // 车上、没有状态块：什么都不做，只记下来。
+    host.context.chat.push({ is_user: true, mes: '开车' });
+    await aiSay('列车进站。');
+    await tick(20);
+    assert.equal(host.llmCalls.length, 0, '没有状态块不调模型');
+    assert.equal(instance.runtime.lastRead().state, '');
+    await aiSay(stateBlock('车上'));
+    await tick(20);
+    assert.equal(host.llmCalls.length, 0, '读到车上也不动');
+    assert.equal(instance.runtime.lastRead().state, '车上');
+    assert.doesNotMatch(await lorePieces(), /世界档案/);
+
+    // 世界里的值在车上读到：也不动。
+    await aiSay(stateBlock('回到列车'));
+    await tick(20);
+    assert.equal(infNow().phase, 'train');
+    assert.equal(host.llmCalls.length, 0);
+
+    // 读到「停站」：立即开副本，注入整份档案。
+    host.context.chat.push({ is_user: true, mes: '下车' });
+    await aiSay(stateBlock('停站'));
+    await settle(() => infNow().phase === 'world');
+    assert.equal(infNow().phase, 'world');
+    assert.equal(worldCalls(), 1);
+    const triggerFloor = host.context.chat.length - 1;
+    assert.equal(infNow().trigger.floor, triggerFloor, '记下触发楼序号');
+    assert.match(await lorePieces(), /<世界档案>[\s\S]*渡口起雾[\s\S]*<\/世界档案>/);
+
+    // 世界里读到「停站」或「世界里」不重复开。
+    host.context.chat.push({ is_user: true, mes: '走' });
+    await aiSay(stateBlock('世界里'));
+    await tick(20);
+    assert.equal(worldCalls(), 1, '不重复生成');
+    assert.equal(infNow().worlds.length, 1);
+    host.context.chat.splice(triggerFloor + 1);
+
+    // 触发楼 swipe 成仍带「停站」的新文字：不重复生成，只更新哈希。
+    const oldHash = infNow().trigger.hash;
+    await rewrite(`${stateBlock('停站')}\n又一版`, 'message_swiped');
+    assert.equal(worldCalls(), 1);
+    assert.equal(infNow().phase, 'world');
+    assert.notEqual(infNow().trigger.hash, oldHash);
+
+    // swipe 成不带「停站」：撤销开副本，档案删掉，退回列车。
+    await rewrite(stateBlock('车上'), 'message_swiped');
+    assert.equal(infNow().phase, 'train');
+    assert.equal(infNow().worlds.length, 0, '刚生成的档案被删');
+    assert.doesNotMatch(await lorePieces(), /世界档案|渡口起雾/);
+    assert.ok(doc.querySelector('[data-notice="inf-undo"]'), '有撤销提示');
+
+    // 重新生成又出现「停站」：再次开副本。
+    await rewrite(stateBlock('停站'), 'message_received');
+    await settle(() => infNow().phase === 'world');
+    assert.equal(infNow().phase, 'world');
+    assert.equal(worldCalls(), 2);
+
+    // 删楼删到触发楼之前：同样撤销。
+    host.context.chat.pop();
+    await host.eventSource.emit('message_deleted', host.context.chat.length);
+    assert.equal(infNow().phase, 'train');
+    assert.equal(infNow().worlds.length, 0);
+
+    // 再开一次，然后读到「回到列车」：关副本，档案留在世界库。
+    await aiSay(stateBlock('停站'));
+    await settle(() => infNow().phase === 'world');
+    assert.equal(worldCalls(), 3);
+    host.context.chat.push({ is_user: true, mes: '继续' });
+    await aiSay(stateBlock('回到列车'));
+    assert.equal(infNow().phase, 'train', '读到回到列车关副本');
+    assert.equal(infNow().worlds.length, 1, '档案留在世界库');
+    assert.equal(infNow().trigger.kind, 'leave');
+    assert.doesNotMatch(await lorePieces(), /世界档案/);
+
+    // 回到列车那一楼被改成「世界里」：重新打开那份档案。
+    await rewrite(stateBlock('世界里'), 'message_swiped');
+    assert.equal(infNow().phase, 'world');
+    assert.match(await lorePieces(), /渡口起雾/);
+
+    // 再次关副本后，删掉那一楼：也重新打开。
+    await rewrite(stateBlock('回到列车'), 'message_received');
+    assert.equal(infNow().phase, 'train');
+    host.context.chat.pop();
+    await host.eventSource.emit('message_deleted', host.context.chat.length);
+    assert.equal(infNow().phase, 'world', '删掉触发关副本的楼，回到世界');
+    assert.equal(worldCalls(), 3, '撤销关副本不重新生成');
+
+    // 手动按钮兜底仍在：回到列车。
+    instance.runtime.returnToTrain();
+    assert.equal(infNow().phase, 'train');
+    assert.equal('trigger' in infNow(), false, '手动操作清掉触发记录');
+    assert.match(body(), /上次读到：第 \d+ 楼 列车：/);
+
+    // 档案还没生成完用户就发下一条：酒馆的加载事件等它，生成完成后档案进入本次注入。
+    let release = null;
+    gate = { promise: new Promise(resolve => { release = resolve; }) };
+    host.context.chat.push({ is_user: true, mes: '再来' });
+    await aiSay(stateBlock('停站'));
+    assert.equal(instance.runtime.isOpening(), true);
+    let loaded = null;
+    const pending = lorePieces().then(value => { loaded = value; });
+    await tick(60);
+    assert.equal(loaded, null, '生成没完，加载事件还在等');
+    release();
+    await pending;
+    assert.match(loaded, /<世界档案>[\s\S]*渡口起雾/, '档案进入本次注入');
+    assert.equal(infNow().phase, 'world');
+
+    // 生成中触发楼被 swipe 掉：取消生成，不写档案。
+    instance.runtime.returnToTrain();
+    const worldsBefore = infNow().worlds.length;
+    gate = { promise: new Promise(resolve => { release = resolve; }) };
+    await aiSay(stateBlock('停站'));
+    assert.equal(instance.runtime.isOpening(), true);
+    await rewrite(stateBlock('车上'), 'message_swiped');
+    assert.equal(instance.runtime.isOpening(), false);
+    release();
+    await tick(40);
+    assert.equal(infNow().phase, 'train', '作废的生成不写进进度');
+    assert.equal(infNow().worlds.length, worldsBefore, '作废的生成没有留下新档案');
+    assert.doesNotMatch(await lorePieces(), /世界档案/);
+    assert.equal(host.win.__errors.length, 0, host.win.__errors.join('\n'));
+    await instance.destroy();
+});
+
+test('无限流开副本：手动按钮，读取卡里（关闭的）恐怖类型写法条目放进提示，不进正文注入；找不到就跳过并记日志', async () => {
+    const host = await boot();
+    const { instance } = host;
+    const project = await instance.data.createProject('末班车', '', 'infinite');
+    await instance.runtime.switchProject(project.id);
+    instance.data.updateProject(project.id, current => ({ ...current, infinite: { ...current.infinite, pools: { ...current.infinite.pools, horror: [{ label: '中式民俗', weight: 1 }] } } }));
+    const prefix = instance.data.project(project.id).infinite.config.horrorPrefix;
+    const book = { entries: {
+        0: { uid: 0, comment: `${prefix}中式民俗`, content: '写法：不见鬼，只见规矩。', disable: true },
+        1: { uid: 1, comment: `${prefix}规则怪谈`, content: '不该读到。', disable: true },
+    } };
+    host.context.chatMetadata.world_info = '测试书';
+    host.context.loadWorldInfo = async () => JSON.parse(JSON.stringify(book));
+    host.context.saveWorldInfo = async () => { throw new Error('不应写回世界书'); };
+    host.context.chat.push({ is_user: true, mes: '开车' }, { is_user: false, mes: '列车进站。' });
+    const prompts = [];
+    let reply = WORLD_REPLY;
+    host.win.__reply = messages => { prompts.push(messages); return reply; };
+    host.click();
+    await tick(10);
+    const doc = host.win.document;
+    doc.querySelector('[data-act="tab"][data-tab="run"]').click();
+    await tick(10);
+    doc.querySelector('[data-act="inf-enter"]').click();
+    for (let i = 0; i < 40 && instance.runtime.infState().inf.phase !== 'world'; i += 1) await tick(10);
+    assert.equal(instance.runtime.infState().inf.phase, 'world', '手动按钮开副本');
+    const user = prompts[0][1].content;
+    assert.ok(user.includes('【本世界恐怖类型写法】'), '提示里带上恐怖类型写法');
+    assert.ok(user.includes('写法：不见鬼，只见规矩。'));
+    assert.ok(!user.includes('不该读到'), '只读同标题的条目');
+    const lore = await entriesNow(host.eventSource);
+    assert.ok(!lore.map(entry => entry.content).join('|').includes('不见鬼，只见规矩'), '写法条目不进正文注入');
+    const payload = { globalLore: [], characterLore: [{ uid: 0, comment: `${prefix}中式民俗`, content: 'x', disable: true }], chatLore: [], personaLore: [] };
+    await host.eventSource.emit('worldinfo_entries_loaded', payload);
+    assert.equal(payload.characterLore[0].disable, true, '加载时不放行任何条目');
+    assert.equal(payload.characterLore[0].constant, undefined);
+
+    // 解析失败：给出提示后重试；三次都失败弹出可重试的提示，不进入世界。
+    instance.runtime.returnToTrain();
+    book.entries = {};
+    prompts.length = 0;
+    reply = '乱写一通';
+    assert.equal(await instance.runtime.openWorld(), null);
+    assert.equal(prompts.length, 3, '解析失败共试 3 次');
+    assert.ok(prompts[1][1].content.includes('缺少【档案】部分'), '重试时带上失败原因');
+    assert.ok(!prompts[0][1].content.includes('本世界恐怖类型写法'), '找不到条目就不带');
+    assert.equal(instance.runtime.infState().inf.phase, 'train');
+    assert.ok(doc.querySelector('[data-notice="inf-stop"]'), '失败时有提示');
+    const log = instance.runtime.diagnose().logs.map(item => item.text).join('|');
+    assert.ok(log.includes(`卡里没找到「${prefix}中式民俗」`), '日志里记一笔');
+    assert.equal(host.win.__errors.length, 0, host.win.__errors.join('\n'));
+    await instance.destroy();
+});
