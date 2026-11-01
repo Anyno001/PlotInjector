@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { DEFAULT_CONFIG, normalizeInfinite, normalizeWorld, poolToText, putWorld, randomFloat, rollPool, rollWorldDice, textToPool, titleKey } from '../src/core/infinite.js';
+import { DEFAULT_CONFIG, DEFAULT_HUB, blankedWordKeys, normalizeInfinite, normalizeWorld, poolToText, putWorld, randomFloat, rollPool, rollWorldDice, textToPool, titleKey } from '../src/core/infinite.js';
 import { addLog, buildInfiniteDetail, createWorld, emptyInfinite, enterWorld, leaveWorld, normalizeInfiniteProgress, reenterWorld, removeWorld, undoEnter, undoLeave, withTrigger } from '../src/core/infinite-flow.js';
-import { decideTrigger, describeRead, hashText, judgeTrigger, makeTrigger, parseTrainState } from '../src/core/infinite-state.js';
+import { decideTrigger, describeRead, hashText, judgeTrigger, makeTrigger, parseTrainState, trainStates } from '../src/core/infinite-state.js';
 import { DEFAULT_WORLD_SPEC, buildWorldMessages, horrorTitle, parseWorldReply, worldSpecText } from '../src/core/infinite-world.js';
 import { buildEntries } from '../src/core/inject.js';
 import { emptyProgress, normalizeProgress } from '../src/core/progress.js';
@@ -28,7 +28,8 @@ test('无限流项目模板只剩骰池、造世界规范、写法条目前缀',
     assert.equal(project.mode, 'infinite');
     const inf = normalizeProject(project, project.id).infinite;
     assert.deepEqual(Object.keys(inf).sort(), ['config', 'pools', 'spec']);
-    assert.deepEqual(Object.keys(inf.config), ['horrorPrefix']);
+    assert.deepEqual(Object.keys(inf.config), ['horrorPrefix', 'hubName', 'blockTag', 'fieldNames', 'words']);
+    assert.deepEqual({ hubName: inf.config.hubName, blockTag: inf.config.blockTag, fieldNames: inf.config.fieldNames, words: inf.config.words }, DEFAULT_HUB, '默认主空间配置等于原来写死的末班车');
     assert.equal(inf.config.horrorPrefix, '🎭 恐怖类型：');
     assert.deepEqual(inf.pools.lust.map(item => item.weight), [70, 25, 5]);
     assert.deepEqual(inf.pools.cycle.map(item => item.label), ['一晚', '三天', '一个月', '一年', '超过一生']);
@@ -37,7 +38,7 @@ test('无限流项目模板只剩骰池、造世界规范、写法条目前缀',
     const legacy = normalizeInfinite({ pools: { horror: [] }, config: { ringSize: 0, tempRate: 1, horrorPrefix: '恐怖：' }, worlds: [mk()], milestones: [{ title: 'x' }], levelText: ['a'] });
     assert.ok(legacy.pools.horror.length > 0, '空骰池回退默认');
     assert.deepEqual(Object.keys(legacy).sort(), ['config', 'pools', 'spec'], '多余字段不保留');
-    assert.deepEqual(legacy.config, { horrorPrefix: '恐怖：' });
+    assert.deepEqual(legacy.config, { horrorPrefix: '恐怖：', ...DEFAULT_HUB });
     assert.equal(normalizeInfinite({ config: { horrorPrefix: '' } }).config.horrorPrefix, '', '允许清空前缀');
     assert.equal(DEFAULT_CONFIG.horrorPrefix, '🎭 恐怖类型：');
 });
@@ -83,7 +84,7 @@ test('删除档案：删的是当前世界就回到列车', () => {
 
 test('注入：只有 <列车状态>，在世界里才多一个 <世界档案>，整份原样不动，情欲浓度由代码附在末尾', () => {
     const train = buildInfiniteDetail(enterWorld(emptyInfinite(), mk()).phase === 'world' ? leaveWorld(enterWorld(emptyInfinite(), mk())) : emptyInfinite());
-    assert.ok(train.includes('<列车状态>') && train.includes('在列车上'));
+    assert.ok(train.includes('<列车状态>') && train.includes('在列车，尚未出发'));
     assert.ok(!train.includes('<世界档案>') && !train.includes('渡口起雾'), '在列车上不带档案');
     const inf = enterWorld(emptyInfinite(), mk());
     const text = buildInfiniteDetail(inf);
@@ -128,7 +129,7 @@ test('进度规范化：只剩 phase、worldId、worlds、log，非法值回退'
 
 test('造世界：规范不分公开隐藏，消息带骰子、写法条目和重试提示，解析【标题】【档案】', () => {
     assert.doesNotMatch(DEFAULT_WORLD_SPEC, /公开|隐藏|检测模型|检定/);
-    for (const section of ['外观', '委托', '卡住的事', '因果', '线索', '站台', '周期证据', '居民认知', '真相']) assert.ok(DEFAULT_WORLD_SPEC.includes(section), section);
+    for (const section of ['外观', '委托', '卡住的事', '因果', '线索', '离开这个世界的出口', '周期证据', '居民认知', '真相']) assert.ok(DEFAULT_WORLD_SPEC.includes(section), section);
     assert.ok(DEFAULT_WORLD_SPEC.includes('地点→实物→能证明什么'));
     assert.ok(DEFAULT_WORLD_SPEC.includes('样子、位置、出现条件、消失时机'));
     assert.equal(horrorTitle('🎭 恐怖类型：', '中式民俗'), '🎭 恐怖类型：中式民俗');
@@ -226,4 +227,66 @@ test('撤销开副本删档案退回列车，撤销关副本重开档案，都�
     assert.equal('trigger' in normalizeInfiniteProgress({ ...entered, trigger: { kind: 'x', floor: 1 } }), false);
     assert.equal('trigger' in normalizeInfiniteProgress({ ...entered, trigger: { kind: 'enter', floor: -1, worldId: 'w1' } }), false);
     assert.equal('trigger' in normalizeInfiniteProgress({ ...entered, trigger: { kind: 'enter', floor: 1, worldId: 'zz' } }), false, '档案不在则丢弃');
+});
+
+const APT = { hubName: '公寓', blockTag: '公寓状态', fieldNames: ['公寓', '位置'], words: { depart: ['出门', '下楼'], back: ['回公寓', '进门'], away: ['副本里'], hub: ['公寓里'] } };
+const aptBlock = value => `正文。\n<公寓状态>\n公寓：${value}\n污染：旧档（3）\n</公寓状态>`;
+
+test('自定义主空间配置：开、关、否定、照抄模板都按配置读', () => {
+    assert.equal(parseTrainState(aptBlock('出门'), APT), '出门');
+    assert.equal(parseTrainState(aptBlock('已经下楼了'), APT), '出门', '同组第二个词也认，显示名是第一个');
+    assert.equal(parseTrainState(aptBlock('进门'), APT), '回公寓');
+    assert.equal(parseTrainState(aptBlock('副本里'), APT), '副本里');
+    assert.equal(parseTrainState(aptBlock('公寓里'), APT), '公寓里');
+    assert.equal(parseTrainState(aptBlock('还没出门'), APT), '', '否定词不算');
+    assert.equal(parseTrainState(aptBlock('公寓里 / 出门 / 副本里 / 回公寓（四选一）'), APT), '', '照抄模板不算');
+    assert.equal(parseTrainState('<末班车状态>\n列车：停站\n</末班车状态>', APT), '', '旧标签不再认');
+    assert.equal(parseTrainState('<公寓状态>\n位置：出门\n</公寓状态>', APT), '出门', '配置里的另一个栏名');
+    assert.equal(parseTrainState('<公寓状态>\n列车：出门\n污染：无\n</公寓状态>', APT), '出门', '栏名不在配置里就读整块');
+    assert.equal(decideTrigger('train', '出门', APT), 'enter');
+    assert.equal(decideTrigger('train', '副本里', APT), 'enter', '漏写出发也认');
+    assert.equal(decideTrigger('world', '回公寓', APT), 'leave');
+    assert.equal(decideTrigger('world', '公寓里', APT), 'leave', '漏写返回也认');
+    assert.equal(decideTrigger('train', '公寓里', APT), '');
+    assert.equal(decideTrigger('train', '停站', APT), '', '默认词不再触发');
+    const enter = makeTrigger({ kind: 'enter', floor: 3, text: aptBlock('出门'), worldId: 'w1' });
+    assert.equal(judgeTrigger(enter, aptBlock('出门'), APT), 'same');
+    assert.equal(judgeTrigger(enter, aptBlock('公寓里'), APT), 'undo');
+    assert.equal(describeRead({ floor: 6, state: '出门' }, APT), '上次读到：第 6 楼 公寓：出门');
+    assert.deepEqual(trainStates(APT), ['公寓里', '出门', '副本里', '回公寓']);
+});
+
+test('自定义配置：标签和栏名里的正则特殊字符先转义', () => {
+    const cfg = { blockTag: '状态(主)+[1]', fieldNames: ['a.b', '位置*'] };
+    assert.equal(parseTrainState('<状态(主)+[1]>\na.b：停站\n</状态(主)+[1]>', cfg), '停站');
+    assert.equal(parseTrainState('<状态(主)+[1]>\n位置*：停站\n</状态(主)+[1]>', cfg), '停站');
+    assert.equal(parseTrainState('<状态主主1>\na.b：停站\n</状态主主1>', cfg), '', '特殊字符不当正则用');
+    assert.equal(parseTrainState('<状态(主)+[1]>\naxb：停站\n污染：无\n</状态(主)+[1]>', cfg), '停站', '点号不通配，退回读整块');
+    assert.doesNotThrow(() => parseTrainState('x', { blockTag: '\\', fieldNames: ['('] }));
+});
+
+test('主空间配置补全：缺字段、类型不对用默认；词组清空退回默认并可查出', () => {
+    const empty = normalizeInfinite({ config: { hubName: 5, blockTag: '  ', fieldNames: 'x', words: { back: 'x', depart: [], away: [' ', 7], hub: ['公寓里', '公寓里'] } } }).config;
+    assert.equal(empty.hubName, '列车');
+    assert.equal(empty.blockTag, '末班车状态');
+    assert.deepEqual(empty.fieldNames, DEFAULT_HUB.fieldNames);
+    assert.deepEqual(empty.words.back, DEFAULT_HUB.words.back, '类型不对退回默认');
+    assert.deepEqual(empty.words.depart, [], '清空的词组保留空，取用时才退回');
+    assert.deepEqual(empty.words.away, ['7']);
+    assert.deepEqual(empty.words.hub, ['公寓里'], '去重');
+    assert.deepEqual(blankedWordKeys(empty), ['depart']);
+    assert.equal(parseTrainState('<末班车状态>\n列车：停站\n</末班车状态>', empty), '停站', '空组按默认词读');
+    assert.equal(parseTrainState('<末班车状态>\n列车：停站\n</末班车状态>'), '停站', '不传配置用默认');
+    assert.deepEqual(blankedWordKeys(undefined), []);
+});
+
+test('自定义配置的注入：标签和状态文字用主空间名称', () => {
+    const text = buildInfiniteDetail(emptyInfinite(), APT);
+    assert.ok(text.includes('<公寓状态>') && text.includes('</公寓状态>') && text.includes('在公寓'));
+    assert.ok(!text.includes('列车'));
+    const world = buildInfiniteDetail(enterWorld(emptyInfinite(), mk()), APT);
+    assert.ok(world.includes('<世界档案>') && world.includes('<公寓状态>'));
+    assert.ok(buildWorldMessages({ spec: 's', dice: { horror: 'a', cycle: 'b', client: 'c', lust: 'd' }, setting: '规则' })[1].content.includes('【主空间常驻规则】'));
+    assert.ok(!DEFAULT_WORLD_SPEC.includes('列车'));
+    assert.ok(removeWorld(enterWorld(emptyInfinite(), mk('w1')), 'w1', APT).log.at(-1).includes('回到公寓'));
 });

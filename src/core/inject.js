@@ -180,7 +180,7 @@ export function buildEntries(project, progress, settings) {
         const inf = progress.infinite || emptyInfinite();
         entries.push({
             slotId: INFINITE_SLOT, kind: 'detail', title: '无限流状态',
-            content: buildInfiniteDetail(inf), ...pickParams(defaults.detail, progress.slots[INFINITE_SLOT]),
+            content: buildInfiniteDetail(inf, project.infinite && project.infinite.config), ...pickParams(defaults.detail, progress.slots[INFINITE_SLOT]),
         });
         return entries;
     }

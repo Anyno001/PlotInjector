@@ -1,4 +1,4 @@
-// PlotInjector v0.1.17
+// PlotInjector v0.1.18
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -150,7 +150,7 @@
 
   // src/core/infinite.js
   var INFINITE_SLOT = "@infinite";
-  var PHASE_LABELS = { train: "在列车上", world: "在世界里" }, DEFAULT_POOLS = {
+  var DEFAULT_POOLS = {
     horror: [
       { label: "中式民俗", weight: 3 },
       { label: "规则怪谈", weight: 3 },
@@ -175,7 +175,53 @@
       { label: "已经死去的同行", weight: 1 }
     ],
     lust: [{ label: "无", weight: 70 }, { label: "轻", weight: 25 }, { label: "重", weight: 5 }]
-  }, POOL_KEYS = ["horror", "cycle", "client", "lust"], POOL_LABELS = { horror: "恐怖类型", cycle: "重置周期", client: "委托人身份", lust: "情欲浓度" }, DEFAULT_CONFIG = { horrorPrefix: "🎭 恐怖类型：" };
+  }, POOL_KEYS = ["horror", "cycle", "client", "lust"], POOL_LABELS = { horror: "恐怖类型", cycle: "重置周期", client: "委托人身份", lust: "情欲浓度" }, HUB_WORD_KEYS = ["back", "depart", "away", "hub"], DEFAULT_HUB = {
+    hubName: "列车",
+    blockTag: "末班车状态",
+    fieldNames: ["列车", "位置", "状态", "所在", "车况"],
+    words: {
+      back: ["回到列车", "回列车", "返回列车", "回到车上", "回车上", "重新上车", "登上列车", "已上车", "上了车"],
+      depart: ["停站", "到站", "进站", "靠站", "停靠", "下车"],
+      away: ["世界里", "世界中", "在世界", "副本"],
+      hub: ["车上", "列车上", "餐车", "行驶中"]
+      // 第一个词是显示名，旧版本这里是「列车上」在前
+    }
+  }, DEFAULT_CONFIG = { horrorPrefix: "🎭 恐怖类型：" };
+  function cleanList(value) {
+    let out = [];
+    for (let item of Array.isArray(value) ? value : []) {
+      let text = String(item ?? "").trim();
+      text && !out.includes(text) && out.push(text);
+    }
+    return out;
+  }
+  function cleanText(value, fallback) {
+    return (typeof value == "string" ? value.trim() : "") || fallback;
+  }
+  function normalizeHub(value) {
+    let src = value && typeof value == "object" ? value : {}, words = src.words && typeof src.words == "object" ? src.words : {}, fields = cleanList(src.fieldNames);
+    return {
+      hubName: cleanText(src.hubName, DEFAULT_HUB.hubName),
+      blockTag: cleanText(src.blockTag, DEFAULT_HUB.blockTag),
+      fieldNames: fields.length ? fields : [...DEFAULT_HUB.fieldNames],
+      words: Object.fromEntries(HUB_WORD_KEYS.map((key) => [key, Array.isArray(words[key]) ? cleanList(words[key]) : [...DEFAULT_HUB.words[key]]]))
+    };
+  }
+  function resolveHub(value) {
+    let hub = normalizeHub(value);
+    return { ...hub, words: Object.fromEntries(HUB_WORD_KEYS.map((key) => [key, hub.words[key].length ? hub.words[key] : [...DEFAULT_HUB.words[key]]])) };
+  }
+  function blankedWordKeys(value) {
+    let hub = normalizeHub(value);
+    return HUB_WORD_KEYS.filter((key) => !hub.words[key].length);
+  }
+  function hubWordNames(value) {
+    let hub = resolveHub(value);
+    return Object.fromEntries(HUB_WORD_KEYS.map((key) => [key, hub.words[key][0]]));
+  }
+  function phaseLabels(value) {
+    return { train: `在${resolveHub(value).hubName}`, world: "在世界里" };
+  }
   function normalizePool(value, fallback) {
     let out = (Array.isArray(value) ? value : fallback).filter((item) => item && String(item.label || "").trim()).map((item) => ({ label: String(item.label).trim(), weight: Math.max(0, Number(item.weight)) || 0 })).filter((item) => item.weight > 0);
     return out.length ? out : fallback.map((item) => ({ ...item }));
@@ -224,7 +270,7 @@
     return {
       pools: Object.fromEntries(POOL_KEYS.map((key) => [key, normalizePool(pools[key], DEFAULT_POOLS[key])])),
       spec: String(src.spec || ""),
-      config: { horrorPrefix: typeof cfg.horrorPrefix == "string" ? cfg.horrorPrefix : DEFAULT_CONFIG.horrorPrefix }
+      config: { horrorPrefix: typeof cfg.horrorPrefix == "string" ? cfg.horrorPrefix : DEFAULT_CONFIG.horrorPrefix, ...normalizeHub(cfg) }
     };
   }
   function findWorld(worlds, id) {
@@ -285,17 +331,17 @@
     if (!world) throw new Error("这份档案已经不在世界库里");
     return addLog(withTrigger({ ...inf, phase: "world", worldId: id }, null), `重新打开「${world.title}」`);
   }
-  function leaveWorld(inf, note = "回到列车") {
+  function leaveWorld(inf, note = "回到主空间") {
     return addLog(withTrigger({ ...inf, phase: "train", worldId: "" }, null), note);
   }
-  function removeWorld(inf, id) {
+  function removeWorld(inf, id, config) {
     let kept = { ...inf, worlds: inf.worlds.filter((world) => world.id !== id) }, next = inf.trigger && inf.trigger.worldId === id ? withTrigger(kept, null) : kept;
-    return next.worldId === id ? addLog({ ...next, phase: "train", worldId: "" }, "当前世界的档案被删除，回到列车") : next;
+    return next.worldId === id ? addLog({ ...next, phase: "train", worldId: "" }, `当前世界的档案被删除，回到${resolveHub(config).hubName}`) : next;
   }
-  function buildInfiniteDetail(inf) {
-    let world = inf.phase === "world" ? findWorld(inf.worlds, inf.worldId) : null, blocks = [`<列车状态>
-${world ? `当前状态：${PHASE_LABELS.world}「${world.title}」。` : `当前状态：${PHASE_LABELS.train}，尚未下车。下一站由列车报站，user 指挥不了广播。`}
-</列车状态>`];
+  function buildInfiniteDetail(inf, config) {
+    let { hubName } = resolveHub(config), labels = phaseLabels(config), world = inf.phase === "world" ? findWorld(inf.worlds, inf.worldId) : null, status = world ? `当前状态：${labels.world}「${world.title}」。` : `当前状态：${labels.train}，尚未出发。下一次出发由${hubName}安排，user 指挥不了。`, blocks = [`<${hubName}状态>
+${status}
+</${hubName}状态>`];
     return world && blocks.push(`<世界档案>
 ${world.body}
 
@@ -423,31 +469,31 @@ ${world.body}
     return `  - ${mark ? `[${mark}] ` : ""}${node.label}｜${node.name}${event}`;
   }
   function buildIndexText(units, states, progress, { carryOver = !0 } = {}) {
-    let lines = [], done = units.filter((unit) => states[unit.id] === "done"), active = units.filter((unit) => states[unit.id] === "active"), next = units.filter((unit) => states[unit.id] === "next"), later = units.filter((unit) => states[unit.id] === "todo");
+    let lines2 = [], done = units.filter((unit) => states[unit.id] === "done"), active = units.filter((unit) => states[unit.id] === "active"), next = units.filter((unit) => states[unit.id] === "next"), later = units.filter((unit) => states[unit.id] === "todo");
     if (done.length) {
-      lines.push("【已过】");
+      lines2.push("【已过】");
       for (let unit of done) {
         let names = stageNodes(unit.stage.data).filter((node) => node.kind === "main").map((node) => node.name);
-        lines.push(`- ${stagePlace(unit)}${names.length ? `（${names.join("／")}）` : ""}`);
+        lines2.push(`- ${stagePlace(unit)}${names.length ? `（${names.join("／")}）` : ""}`);
       }
     }
     for (let unit of active) {
       let off = new Set(offNodes(progress, unit.id)), range = rangeOf(unit);
-      lines.push("【当前】", `- ${stagePlace(unit)}${range ? `｜时间范围：${range}` : ""}`);
-      for (let node of stageNodes(unit.stage.data).filter((item) => item.kind !== "world")) lines.push(nodeLine(node, off.has(node.id) ? "已演" : "未演"));
-      if (carryOver) for (let { node } of carriedNodes(units, states, progress)) node.kind !== "world" && lines.push(nodeLine(node, "未演·延续"));
+      lines2.push("【当前】", `- ${stagePlace(unit)}${range ? `｜时间范围：${range}` : ""}`);
+      for (let node of stageNodes(unit.stage.data).filter((item) => item.kind !== "world")) lines2.push(nodeLine(node, off.has(node.id) ? "已演" : "未演"));
+      if (carryOver) for (let { node } of carriedNodes(units, states, progress)) node.kind !== "world" && lines2.push(nodeLine(node, "未演·延续"));
     }
     for (let unit of next) {
       let range = rangeOf(unit), instr = unit.stage.data && unit.stage.data.AI指令;
-      lines.push("【下一段】", `- ${stagePlace(unit)}${range ? `｜时间范围：${range}` : ""}`), instr && lines.push(`  AI指令：${String(instr).trim()}`);
-      for (let node of stageNodes(unit.stage.data).filter((item) => item.kind === "main")) lines.push(nodeLine(node, ""));
+      lines2.push("【下一段】", `- ${stagePlace(unit)}${range ? `｜时间范围：${range}` : ""}`), instr && lines2.push(`  AI指令：${String(instr).trim()}`);
+      for (let node of stageNodes(unit.stage.data).filter((item) => item.kind === "main")) lines2.push(nodeLine(node, ""));
     }
     if (later.length) {
-      lines.push("【之后】");
-      for (let unit of later.slice(0, LATER_LIMIT)) lines.push(`- ${stagePlace(unit)}`);
-      later.length > LATER_LIMIT && lines.push(`- ……另有 ${later.length - LATER_LIMIT} 段`);
+      lines2.push("【之后】");
+      for (let unit of later.slice(0, LATER_LIMIT)) lines2.push(`- ${stagePlace(unit)}`);
+      later.length > LATER_LIMIT && lines2.push(`- ……另有 ${later.length - LATER_LIMIT} 段`);
     }
-    return lines.join(`
+    return lines2.join(`
 `);
   }
   var PACES = [
@@ -509,7 +555,7 @@ ${body}${carriedText(carried)}
         slotId: INFINITE_SLOT,
         kind: "detail",
         title: "无限流状态",
-        content: buildInfiniteDetail(inf),
+        content: buildInfiniteDetail(inf, project.infinite && project.infinite.config),
         ...pickParams(defaults.detail, progress.slots[INFINITE_SLOT])
       }), entries;
     }
@@ -1338,12 +1384,18 @@ ${text}` }
   }
 
   // src/core/infinite-state.js
-  var OPEN_RE = /[<＜]\s*末班车状态[^>＞]*[>＞]/g, CLOSE_RE = /[<＜]\s*\/\s*末班车状态\s*[>＞]/, LINE_RE = /^[ \t　]*(?:列车|位置|状态|所在|车况)[^:：\n]{0,6}[:：](.*)$/m, POLLUTION_LINE = /^[ \t　]*污染[^\n]*$/gm, NEGATION = /(?:未|没|不|尚未|还没|还未)$/, SYNONYMS = [
-    ["回到列车", ["回到列车", "回列车", "返回列车", "回到车上", "回车上", "重新上车", "登上列车", "已上车", "上了车"]],
-    ["停站", ["停站", "到站", "进站", "靠站", "停靠", "下车"]],
-    ["世界里", ["世界里", "世界中", "在世界", "副本"]],
-    ["车上", ["列车上", "车上", "餐车", "行驶中"]]
-  ];
+  var POLLUTION_LINE = /^[ \t　]*污染[^\n]*$/gm, NEGATION = /(?:未|没|不|尚未|还没|还未)$/;
+  function escapeRegExp(text) {
+    return String(text).replace(/[.*+?^${}()|[\]\\/-]/g, "\\$&");
+  }
+  function patterns(hub) {
+    let tag = escapeRegExp(hub.blockTag), fields = hub.fieldNames.map(escapeRegExp).join("|");
+    return {
+      open: new RegExp(`[<＜]\\s*${tag}[^>＞]*[>＞]`, "g"),
+      close: new RegExp(`[<＜]\\s*\\/\\s*${tag}\\s*[>＞]`),
+      line: new RegExp(`^[ \\t　]*(?:${fields})[^:：\\n]{0,6}[:：](.*)$`, "m")
+    };
+  }
   function hasWord(value, word) {
     let at = value.indexOf(word);
     for (; at >= 0; ) {
@@ -1352,47 +1404,54 @@ ${text}` }
     }
     return !1;
   }
-  function classifyTrainValue(value) {
-    let text = String(value || ""), hits = [];
-    for (let [state, words] of SYNONYMS) {
+  function classifyTrainValue(value, config) {
+    let hub = resolveHub(config), text = String(value || ""), hits = [];
+    for (let key of ["back", "depart", "away", "hub"]) {
       let hit = !1;
-      for (let word of words)
+      for (let word of hub.words[key])
         hasWord(text, word) && (hit = !0), text = text.split(word).join("　");
-      hit && hits.push(state);
+      hit && hits.push(hub.words[key][0]);
     }
     return hits.length && hits.length < 3 ? hits[0] : "";
   }
-  function parseTrainState(text) {
-    let src = String(text || ""), opens = [...src.matchAll(OPEN_RE)];
+  function parseTrainState(text, config) {
+    let hub = resolveHub(config), re = patterns(hub), src = String(text || ""), opens = [...src.matchAll(re.open)];
     if (!opens.length) return "";
-    let last = opens[opens.length - 1], body = src.slice(last.index + last[0].length), close = CLOSE_RE.exec(body);
+    let last = opens[opens.length - 1], body = src.slice(last.index + last[0].length), close = re.close.exec(body);
     close && (body = body.slice(0, close.index));
-    let line = LINE_RE.exec(body);
-    return classifyTrainValue(line ? line[1] : body.replace(POLLUTION_LINE, ""));
+    let line = re.line.exec(body);
+    return classifyTrainValue(line ? line[1] : body.replace(POLLUTION_LINE, ""), config);
   }
-  var ENTER_STATES = ["停站", "世界里"], LEAVE_STATES = ["回到列车", "车上"];
+  function enterStates(config) {
+    let names = hubWordNames(config);
+    return [names.depart, names.away];
+  }
+  function leaveStates(config) {
+    let names = hubWordNames(config);
+    return [names.back, names.hub];
+  }
   function hashText(text) {
     let h = 2166136261, s = String(text || "");
     for (let i = 0; i < s.length; i += 1)
       h ^= s.charCodeAt(i), h = Math.imul(h, 16777619) >>> 0;
     return h.toString(16).padStart(8, "0");
   }
-  function decideTrigger(phase, state) {
-    return phase === "train" && ENTER_STATES.includes(state) ? "enter" : phase === "world" && LEAVE_STATES.includes(state) ? "leave" : "";
+  function decideTrigger(phase, state, config) {
+    return phase === "train" && enterStates(config).includes(state) ? "enter" : phase === "world" && leaveStates(config).includes(state) ? "leave" : "";
   }
   function makeTrigger({ kind, floor, text, worldId = "" }) {
     return { kind, floor: Number(floor), hash: hashText(text), worldId: String(worldId || "") };
   }
-  function judgeTrigger(trigger, text) {
-    return trigger ? text == null || !(trigger.kind === "enter" ? ENTER_STATES : LEAVE_STATES).includes(parseTrainState(text)) ? "undo" : hashText(text) === trigger.hash ? "same" : "keep" : "none";
+  function judgeTrigger(trigger, text, config) {
+    return trigger ? text == null || !(trigger.kind === "enter" ? enterStates(config) : leaveStates(config)).includes(parseTrainState(text, config)) ? "undo" : hashText(text) === trigger.hash ? "same" : "keep" : "none";
   }
-  function describeRead(read) {
-    return read && read.state ? `上次读到：第 ${read.floor} 楼 列车：${read.state}` : "最新一楼没有状态块";
+  function describeRead(read, config) {
+    return read && read.state ? `上次读到：第 ${read.floor} 楼 ${resolveHub(config).hubName}：${read.state}` : "最新一楼没有状态块";
   }
 
   // src/core/infinite-world.js
   var DEFAULT_WORLD_SPEC = [
-    "你是无限流恐怖故事的世界设计师。列车在某个世界的缝隙里停站，你要为这一站写一份世界档案。",
+    "你是无限流恐怖故事的世界设计师。主空间把门开向某个世界，你要为这一站写一份世界档案。",
     "整份档案会完整注入正文，之后整个副本期间原样不动，由正文 AI 照着主持。",
     "骰子结果已经由脚本掷定，不可更改，档案必须以它们为准。",
     "原则：少写禁令，多写因果；违反因果不判死，只让事态变坏；线索写成实物并钉在具体地点上，到了才呈现。",
@@ -1402,7 +1461,7 @@ ${text}` }
     "卡住的事：这个世界里一直解决不了的事。",
     "因果：这个世界的运转方式，一两条固定因果。",
     "线索：地点→实物→能证明什么，每条一行。",
-    "站台：样子、位置、出现条件、消失时机。站台是这个世界里人们等着离开的地方（渡口、站牌、驿亭等），条件要和事件绑在一起，错过就得等列车下次停靠。",
+    "离开这个世界的出口：样子、位置、出现条件、消失时机。",
     "周期证据：能推出重置周期的证据。",
     "居民认知：居民知道什么、不知道什么。",
     "真相：事件的来龙去脉。"
@@ -1435,7 +1494,7 @@ ${WORLD_FORMAT}`, user = [
       "【骰子结果（不可更改）】",
       ...diceLines(dice),
       titles.length ? `【已有世界（不要重复）】${titles.join("、")}` : "",
-      setting ? `【列车常驻规则】
+      setting ? `【主空间常驻规则】
 ${setting}` : "",
       horrorGuide ? `【本世界恐怖类型写法】
 ${horrorGuide}` : "",
@@ -2009,9 +2068,13 @@ ${horrorGuide}` : "",
       }
       return null;
     }
+    function hubConfig() {
+      let project = activeProject();
+      return project && project.infinite ? normalizeInfinite(project.infinite).config : void 0;
+    }
     function refreshRead() {
       let found = latestAiFloor();
-      return lastRead = found ? { floor: found.floor, state: parseTrainState(found.text) } : null, found;
+      return lastRead = found ? { floor: found.floor, state: parseTrainState(found.text, hubConfig()) } : null, found;
     }
     function abandonOpening() {
       opening && (openGen += 1, opening = !1, pendingTrigger = null, emit("opened"));
@@ -2023,14 +2086,14 @@ ${horrorGuide}` : "",
       if (!trig) return;
       let msg = chatMessages()[trig.floor], text = msg && !msg.is_user && !msg.is_system ? String(msg.mes || "") : null;
       if (text !== null && !text.trim()) return;
-      let verdict = judgeTrigger(trig, text);
+      let cfg = state.infinite.config, names = hubWordNames(cfg), word = trig.kind === "enter" ? names.depart : names.back, verdict = judgeTrigger(trig, text, cfg);
       if (!(verdict === "none" || verdict === "same")) {
         if (verdict === "keep") {
           let next = { ...trig, hash: hashText(text) };
-          pending ? pendingTrigger = next : setInf(withTrigger(state.inf, next)), log(`第 ${trig.floor} 楼文字变了，仍是「${trig.kind === "enter" ? "停站" : "回到列车"}」，不重复处理`);
+          pending ? pendingTrigger = next : setInf(withTrigger(state.inf, next)), log(`第 ${trig.floor} 楼文字变了，仍是「${word}」，不重复处理`);
           return;
         }
-        pending ? (log(`第 ${trig.floor} 楼不再是「停站」，取消正在生成的世界档案`), abandonOpening()) : trig.kind === "enter" ? (log(`第 ${trig.floor} 楼不再是「停站」，撤销开副本，删掉刚生成的档案`), setInf(undoEnter(state.inf, `第 ${trig.floor} 楼不再是「停站」，撤销开副本`))) : (log(`第 ${trig.floor} 楼不再是「回到列车」，撤销关副本`), setInf(undoLeave(state.inf, `第 ${trig.floor} 楼不再是「回到列车」，撤销关副本`))), notice.show({ id: "inf-undo", title: "触发楼已改动", body: trig.kind === "enter" ? "这一楼不再是「停站」，已撤销开副本并删掉刚生成的档案。" : "这一楼不再是「回到列车」，已重新打开那份档案。", timeout: 1e4 });
+        pending ? (log(`第 ${trig.floor} 楼不再是「${names.depart}」，取消正在生成的世界档案`), abandonOpening()) : trig.kind === "enter" ? (log(`第 ${trig.floor} 楼不再是「${names.depart}」，撤销开副本，删掉刚生成的档案`), setInf(undoEnter(state.inf, `第 ${trig.floor} 楼不再是「${names.depart}」，撤销开副本`))) : (log(`第 ${trig.floor} 楼不再是「${names.back}」，撤销关副本`), setInf(undoLeave(state.inf, `第 ${trig.floor} 楼不再是「${names.back}」，撤销关副本`))), notice.show({ id: "inf-undo", title: "触发楼已改动", body: trig.kind === "enter" ? `这一楼不再是「${names.depart}」，已撤销开副本并删掉刚生成的档案。` : `这一楼不再是「${names.back}」，已重新打开那份档案。`, timeout: 1e4 });
       }
     }
     function onInfiniteReceived() {
@@ -2042,13 +2105,13 @@ ${horrorGuide}` : "",
         return;
       }
       let train = lastRead.state;
-      log(`读状态块：第 ${found.floor} 楼 ${train ? `列车：${train}` : "没有状态块"}`);
-      let kind = decideTrigger(state.inf.phase, train);
+      log(`读状态块：第 ${found.floor} 楼 ${train ? `${resolveHub(state.infinite.config).hubName}：${train}` : "没有状态块"}`);
+      let kind = decideTrigger(state.inf.phase, train, state.infinite.config);
       if (kind === "enter")
         openWorld({ floor: found.floor, text: found.text });
       else if (kind === "leave") {
         let trigger = makeTrigger({ kind: "leave", floor: found.floor, text: found.text, worldId: state.inf.worldId });
-        setInf(withTrigger(leaveWorld(state.inf, `第 ${found.floor} 楼读到「回到列车」，关副本`), trigger));
+        setInf(withTrigger(leaveWorld(state.inf, `第 ${found.floor} 楼读到「${hubWordNames(state.infinite.config).back}」，关副本`), trigger));
       }
       emit("floor");
     }
@@ -2065,7 +2128,7 @@ ${horrorGuide}` : "",
       let state = infState();
       if (!state) return Promise.resolve(null);
       if (state.inf.phase !== "train")
-        return toast("info", "只有在列车上才能进入新世界。"), Promise.resolve(null);
+        return toast("info", `只有在${resolveHub(state.infinite.config).hubName}时才能进入新世界。`), Promise.resolve(null);
       opening = !0, openGen += 1;
       let gen = openGen;
       return pendingTrigger = trigger ? { kind: "enter", floor: trigger.floor, hash: hashText(trigger.text), worldId: "" } : null, openPromise = runOpen(state, gen).finally(() => {
@@ -2112,13 +2175,13 @@ ${horrorGuide}` : "",
     }
     function returnToTrain() {
       let state = infState();
-      !state || state.inf.phase !== "world" || setInf(leaveWorld(state.inf, "手动回到列车"));
+      !state || state.inf.phase !== "world" || setInf(leaveWorld(state.inf, `手动回到${resolveHub(state.infinite.config).hubName}`));
     }
     function reopenWorld(worldId) {
       let state = infState();
       if (state) {
         if (state.inf.phase !== "train") {
-          toast("info", "先回到列车，再重新打开档案。");
+          toast("info", `先回到${resolveHub(state.infinite.config).hubName}，再重新打开档案。`);
           return;
         }
         setInf(reenterWorld(state.inf, worldId));
@@ -2126,7 +2189,7 @@ ${horrorGuide}` : "",
     }
     function deleteWorld(worldId) {
       let state = infState();
-      state && setInf(removeWorld(state.inf, worldId));
+      state && setInf(removeWorld(state.inf, worldId, state.infinite.config));
     }
     async function checkNow({ manual = !1 } = {}) {
       if (isInfinite(activeProject()))
@@ -3094,18 +3157,18 @@ ${floor.text}`).join(`
     tableSep: /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/
   }, cells = (line) => line.trim().replace(/^\||\|$/g, "").split("|").map((cell) => inline(cell.trim()));
   function renderMarkdown(src) {
-    let lines = String(src ?? "").replace(/\r\n?/g, `
+    let lines2 = String(src ?? "").replace(/\r\n?/g, `
 `).split(`
 `), out = [], i = 0;
-    for (; i < lines.length; ) {
-      let line = lines[i];
+    for (; i < lines2.length; ) {
+      let line = lines2[i];
       if (!line.trim()) {
         i += 1;
         continue;
       }
       if (RE.fence.test(line)) {
         let mark = line.trim().slice(0, 3), body = [];
-        for (i += 1; i < lines.length && !lines[i].trim().startsWith(mark); ) body.push(lines[i++]);
+        for (i += 1; i < lines2.length && !lines2[i].trim().startsWith(mark); ) body.push(lines2[i++]);
         i += 1, out.push(`<pre class="pi-pre">${esc(body.join(`
 `))}</pre>`);
         continue;
@@ -3119,18 +3182,18 @@ ${floor.text}`).join(`
         out.push("<hr>"), i += 1;
         continue;
       }
-      if (line.includes("|") && i + 1 < lines.length && RE.tableSep.test(lines[i + 1])) {
+      if (line.includes("|") && i + 1 < lines2.length && RE.tableSep.test(lines2[i + 1])) {
         let head = cells(line);
         i += 2;
         let rows2 = [];
-        for (; i < lines.length && lines[i].includes("|") && lines[i].trim(); ) rows2.push(cells(lines[i++]));
+        for (; i < lines2.length && lines2[i].includes("|") && lines2[i].trim(); ) rows2.push(cells(lines2[i++]));
         out.push(`<div class="pi-md-table"><table><thead><tr>${head.map((cell) => `<th>${cell}</th>`).join("")}</tr></thead>
                 <tbody>${rows2.map((row2) => `<tr>${row2.map((cell) => `<td>${cell}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`);
         continue;
       }
       if (RE.quote.test(line)) {
         let body = [];
-        for (; i < lines.length && RE.quote.test(lines[i]); ) body.push(lines[i++].replace(RE.quote, ""));
+        for (; i < lines2.length && RE.quote.test(lines2[i]); ) body.push(lines2[i++].replace(RE.quote, ""));
         out.push(`<blockquote>${renderMarkdown(body.join(`
 `))}</blockquote>`);
         continue;
@@ -3138,15 +3201,15 @@ ${floor.text}`).join(`
       let list = RE.ul.test(line) ? "ul" : RE.ol.test(line) ? "ol" : "";
       if (list) {
         let items = [];
-        for (; i < lines.length && RE[list].test(lines[i]); ) {
-          let [, indent, text] = RE[list].exec(lines[i++]);
+        for (; i < lines2.length && RE[list].test(lines2[i]); ) {
+          let [, indent, text] = RE[list].exec(lines2[i++]);
           items.push(`<li${indent.length >= 2 ? ' class="is-sub"' : ""}>${inline(text)}</li>`);
         }
         out.push(`<${list}>${items.join("")}</${list}>`);
         continue;
       }
       let para = [];
-      for (; i < lines.length && lines[i].trim() && !RE.fence.test(lines[i]) && !RE.heading.test(lines[i]) && !RE.hr.test(lines[i]) && !RE.quote.test(lines[i]) && !RE.ul.test(lines[i]) && !RE.ol.test(lines[i]); ) para.push(inline(lines[i++]));
+      for (; i < lines2.length && lines2[i].trim() && !RE.fence.test(lines2[i]) && !RE.heading.test(lines2[i]) && !RE.hr.test(lines2[i]) && !RE.quote.test(lines2[i]) && !RE.ul.test(lines2[i]) && !RE.ol.test(lines2[i]); ) para.push(inline(lines2[i++]));
       out.push(`<p>${para.join("<br>")}</p>`);
     }
     return out.join("");
@@ -3598,10 +3661,10 @@ ${yaml}
   // src/core/setting.js
   var HEADING = /^(?:#{1,4}\s*)?([^\s\-*#\[][^:：]{0,30})[:：]\s*$|^(?:#{1,4}\s+)(.{1,30})$|^(\[追加\])\s*$/;
   function splitBlocks(text) {
-    let lines = String(text || "").replace(/\r\n/g, `
+    let lines2 = String(text || "").replace(/\r\n/g, `
 `).split(`
 `), blocks = [], current = { key: "", lines: [] }, counts = {};
-    for (let line of lines) {
+    for (let line of lines2) {
       let match = HEADING.exec(line);
       if (match) {
         (current.key || current.lines.some((item) => item.trim())) && blocks.push(current);
@@ -3629,10 +3692,10 @@ ${yaml}
     return (match ? match[1] : text).trim();
   }
   function parseSettingReply(text) {
-    let lines = String(text || "").replace(/\r\n/g, `
+    let lines2 = String(text || "").replace(/\r\n/g, `
 `).split(`
 `), sections = { 世界观正文: [], 补定: [], 速查: [] }, current = "世界观正文", sawHeading = !1;
-    for (let line of lines) {
+    for (let line of lines2) {
       let match = SECTION.exec(line);
       if (match && (match[1] !== "速查" || /PASS|FAIL/i.test(line) || line.replace(SECTION, "").trim() === "")) {
         current = match[1], sawHeading = !0;
@@ -3643,7 +3706,7 @@ ${yaml}
       sections[current].push(line);
     }
     let body = stripFence(sections.世界观正文.join(`
-`)), fixes = sections.补定.map((line) => line.replace(/^\s*(?:[-*•]|\d+[.、])\s*/, "").trim()).filter(Boolean), verdict = /(PASS|FAIL)/i.exec([...sections.速查, ...sawHeading ? [] : lines.slice(-3)].join(" "));
+`)), fixes = sections.补定.map((line) => line.replace(/^\s*(?:[-*•]|\d+[.、])\s*/, "").trim()).filter(Boolean), verdict = /(PASS|FAIL)/i.exec([...sections.速查, ...sawHeading ? [] : lines2.slice(-3)].join(" "));
     return { body, fixes, check: verdict ? verdict[1].toUpperCase() : "" };
   }
   function pushHistory(history, text, limit = 10, now = Date.now()) {
@@ -3910,10 +3973,10 @@ ${parsed.body}` : parsed.body;
     view.data.saveChat(view.projectId, fn(chat));
   }
   function talkMarkdown(view, chat) {
-    let lines = [`# ${view.project().name} · 讨论记录`, ""];
-    chat.summary && lines.push("## 早期摘要", "", chat.summary, "");
-    for (let msg of chat.messages) lines.push(`## ${msg.role === "user" ? "我" : "AI"}`, "", msg.content, "");
-    return lines.join(`
+    let lines2 = [`# ${view.project().name} · 讨论记录`, ""];
+    chat.summary && lines2.push("## 早期摘要", "", chat.summary, "");
+    for (let msg of chat.messages) lines2.push(`## ${msg.role === "user" ? "我" : "AI"}`, "", msg.content, "");
+    return lines2.join(`
 `);
   }
   var actions3 = {
@@ -4153,6 +4216,22 @@ ${parsed.body}` : parsed.body;
   function save2(view, fn) {
     view.data.updateProject(view.projectId, (project) => ({ ...project, infinite: fn(normalizeInfinite(project.infinite)) })), view.runtime.refresh();
   }
+  var lines = (text) => String(text || "").split(`
+`).map((line) => line.trim()).filter(Boolean);
+  function wordTitle(key, hubName) {
+    return { back: `返回${hubName}`, depart: "出发", away: "在副本里", hub: `在${hubName}` }[key];
+  }
+  function hubCard(infinite) {
+    let cfg = infinite.config, hubName = resolveHub(cfg).hubName;
+    return `<div class="pi-card"><h3>主空间<span class="pi-spacer"></span><button type="button" class="pi-btn is-sm is-ghost" data-act="hub-reset">恢复默认</button></h3>
+        <p class="pi-hint">正文末尾状态块的写法。每组词一行一个，靠前的优先匹配，第一个词用作显示名；清空某组则按默认词读取。</p>
+        <label class="pi-field"><span>主空间名称</span><input class="pi-inp" data-hub="hubName" value="${esc(cfg.hubName)}"></label>
+        <label class="pi-field"><span>状态块标签</span><input class="pi-inp" data-hub="blockTag" value="${esc(cfg.blockTag)}"></label>
+        <label class="pi-field"><span>栏名（一行一个）</span><textarea class="pi-ta is-mono" data-hub="fieldNames">${esc(cfg.fieldNames.join(`
+`))}</textarea></label>
+        ${HUB_WORD_KEYS.map((key) => `<label class="pi-field"><span>${esc(wordTitle(key, hubName))}</span><textarea class="pi-ta is-mono" data-hub-words="${key}">${esc(cfg.words[key].join(`
+`))}</textarea></label>`).join("")}</div>`;
+  }
   function worldRow(world, open, currentId) {
     let badges = world.id === currentId ? '<span class="pi-badge is-ok">当前</span>' : "", body = open ? `<div class="pi-entry-bd">
         <p class="pi-hint">${esc(world.dice.horror)}｜周期 ${esc(world.dice.cycle)}｜${esc(world.dice.client)}｜情欲${esc(world.dice.lust)}</p>
@@ -4177,6 +4256,7 @@ ${parsed.body}` : parsed.body;
         <div class="pi-card"><h3>骰池</h3>
         <p class="pi-hint">每行「名称|权重」。情欲浓度写进档案末尾，由代码决定。</p>
         ${POOL_KEYS.map((key) => `<label class="pi-field"><span>${POOL_LABELS[key]}</span><textarea class="pi-ta is-mono" data-pool="${key}">${esc(poolToText(infinite.pools[key]))}</textarea></label>`).join("")}</div>
+        ${hubCard(infinite)}
         <div class="pi-card"><h3>造世界规范<span class="pi-spacer"></span><button type="button" class="pi-btn is-sm is-ghost" data-act="spec-reset">恢复默认</button></h3>
         <textarea class="pi-ta is-mono is-tall" data-spec>${esc(worldSpecText(infinite))}</textarea></div>
         <div class="pi-card"><h3>恐怖类型写法</h3>
@@ -4195,6 +4275,9 @@ ${parsed.body}` : parsed.body;
       let id = target.dataset.id, world = findWorld(view.runtime.progress().infinite?.worlds || [], id);
       !world || !await confirmDialog({ title: `删除「${world.title}」`, body: "档案删除后不能恢复。", okLabel: "删除", danger: !0 }) || (view.runtime.deleteWorld(id), view.renderBody());
     },
+    "hub-reset"(view) {
+      save2(view, (infinite) => ({ ...infinite, config: { ...infinite.config, hubName: DEFAULT_HUB.hubName, blockTag: DEFAULT_HUB.blockTag, fieldNames: [...DEFAULT_HUB.fieldNames], words: Object.fromEntries(HUB_WORD_KEYS.map((key) => [key, [...DEFAULT_HUB.words[key]]])) } })), view.renderBody();
+    },
     "spec-reset"(view) {
       save2(view, (infinite) => ({ ...infinite, spec: "" })), view.renderBody();
     }
@@ -4203,6 +4286,16 @@ ${parsed.body}` : parsed.body;
     if (target.dataset.pool) {
       let key = target.dataset.pool, rows2 = textToPool(target.value);
       save2(view, (infinite) => ({ ...infinite, pools: { ...infinite.pools, [key]: rows2 } })), view.renderBody();
+      return;
+    }
+    if (target.dataset.hub) {
+      let key = target.dataset.hub, value = key === "fieldNames" ? lines(target.value) : target.value.trim();
+      save2(view, (infinite) => ({ ...infinite, config: { ...infinite.config, [key]: value } })), view.renderBody();
+      return;
+    }
+    if (target.dataset.hubWords) {
+      let key = target.dataset.hubWords, rows2 = lines(target.value);
+      save2(view, (infinite) => ({ ...infinite, config: { ...infinite.config, words: { ...infinite.config.words, [key]: rows2 } } })), view.renderBody();
       return;
     }
     if (target.dataset.spec !== void 0) {
@@ -4221,18 +4314,20 @@ ${parsed.body}` : parsed.body;
     onChange: () => onChange2,
     render: () => render6
   });
+  var WORD_TITLES = { back: "返回", depart: "出发", away: "在副本里", hub: "在主空间" };
   function render6(view) {
     let { runtime } = view, project = view.project(), st8 = view.tabState("run"), notActive = activateCard(view, project);
     if (notActive) return notActive;
     let state = runtime.infState();
     if (!state) return '<div class="pi-empty"><span class="pi-spin"></span> 正在读取进度…</div>';
-    let { inf } = state, world = inf.phase === "world" ? findWorld(inf.worlds, inf.worldId) : null, entries = runtime.entries(), total = entries.filter((entry) => entry.enabled).reduce((sum, entry) => sum + estimateTokens(entry.content), 0), opening = runtime.isOpening(), book = runtime.injectMode() === "virtual" ? "" : '<span class="pi-badge is-warn">专用世界书</span>', meta2 = describeRead(runtime.lastRead());
+    let { inf, infinite } = state, cfg = infinite.config, hubName = resolveHub(cfg).hubName, labels = phaseLabels(cfg), blanked = blankedWordKeys(cfg), world = inf.phase === "world" ? findWorld(inf.worlds, inf.worldId) : null, entries = runtime.entries(), total = entries.filter((entry) => entry.enabled).reduce((sum, entry) => sum + estimateTokens(entry.content), 0), opening = runtime.isOpening(), book = runtime.injectMode() === "virtual" ? "" : '<span class="pi-badge is-warn">专用世界书</span>', meta2 = describeRead(runtime.lastRead(), cfg);
     return `<div class="pi-card"><h3>当前状态<span class="pi-meta">${esc(meta2)}</span></h3>
-        <div class="pi-row"><span class="pi-badge is-accent">${PHASE_LABELS[inf.phase]}</span>${world ? `<span class="pi-badge">${esc(world.title)}</span>` : ""}
+        <div class="pi-row"><span class="pi-badge is-accent">${esc(labels[inf.phase])}</span>${world ? `<span class="pi-badge">${esc(world.title)}</span>` : ""}
             <span class="pi-badge">世界库 ${inf.worlds.length} 份</span></div>
         <div class="pi-tools is-c2">
             <button type="button" class="pi-btn is-primary is-sm" data-act="inf-enter"${inf.phase !== "train" || opening ? " disabled" : ""}>${opening ? '<span class="pi-spin"></span>造世界' : "进入新世界"}</button>
-            <button type="button" class="pi-btn is-sm" data-act="inf-return"${inf.phase !== "world" ? " disabled" : ""}>回到列车</button></div></div>
+            <button type="button" class="pi-btn is-sm" data-act="inf-return"${inf.phase !== "world" ? " disabled" : ""}>回到${esc(hubName)}</button></div>
+        ${blanked.length ? `<p class="pi-hint">${esc(blanked.map((key) => WORD_TITLES[key]).join("、"))}的词被清空，现按默认词读取。</p>` : ""}</div>
         <div class="pi-card"><h3>注入条目${book}<span class="pi-meta">≈${total} token</span><span class="pi-spacer"></span>
             <button type="button" class="pi-btn is-sm is-ghost" data-act="preview">预览</button></h3>
         ${entries.length ? entries.map((entry) => entryRow(entry, st8.open === entry.slotId)).join("") : '<p class="pi-hint">设定和世界库都为空，没有可注入的内容。</p>'}</div>
@@ -4243,7 +4338,8 @@ ${parsed.body}` : parsed.body;
     ...actions4,
     "inf-enter": (view) => view.runtime.openWorld(),
     async "inf-return"(view) {
-      await confirmDialog({ title: "回到列车", body: "撤掉当前世界档案的注入，档案留在世界库里。", okLabel: "回到列车" }) && (view.runtime.returnToTrain(), view.renderBody());
+      let hubName = resolveHub(view.runtime.infState()?.infinite.config).hubName;
+      await confirmDialog({ title: `回到${hubName}`, body: "撤掉当前世界档案的注入，档案留在世界库里。", okLabel: `回到${hubName}` }) && (view.runtime.returnToTrain(), view.renderBody());
     }
   };
 
@@ -4732,7 +4828,7 @@ ${parsed.body}` : parsed.body;
     let box = hostDocument().querySelector(".pi-wb-tokens");
     box && (box.innerHTML = tokenText(s));
   }
-  var handwritten = (entries) => entries.filter((entry) => !acuField(entry.title)), pickedEntries = (s) => handwritten(s.entries || []).filter((entry) => s.picked.has(entry.key)), PREVIEW_MAX = 30, previewList = (lines) => lines.length > PREVIEW_MAX ? [...lines.slice(0, PREVIEW_MAX), `另有 ${lines.length - PREVIEW_MAX} 条`] : lines;
+  var handwritten = (entries) => entries.filter((entry) => !acuField(entry.title)), pickedEntries = (s) => handwritten(s.entries || []).filter((entry) => s.picked.has(entry.key)), PREVIEW_MAX = 30, previewList = (lines2) => lines2.length > PREVIEW_MAX ? [...lines2.slice(0, PREVIEW_MAX), `另有 ${lines2.length - PREVIEW_MAX} 条`] : lines2;
   async function applyPatches(view, plan, { label, backup = !1 }) {
     let s = st7(view), result = await patchEntries(s.book, plan.map((item) => ({ key: item.key, patch: item.patch })));
     backup && downloadBlob(`${s.book}-${label}前备份.json`, JSON.stringify(result, null, 2)), toast("success", `${label}：已修改 ${plan.length} 条。`), await reloadBook(view);
@@ -5001,10 +5097,10 @@ ${parsed.body}` : parsed.body;
     ];
   }
   function plainText(info) {
-    let lines = ["【剧情注入器诊断】", ...rows(info).map(([k, v]) => `${k}：${v}`), "", "【事件】"];
-    for (let item of info.events) lines.push(`${item.key}（${item.name || "酒馆未提供"}）：${item.bound ? `已绑定，收到 ${item.count} 次，最近 ${time(item.at)}` : "未绑定"}`);
+    let lines2 = ["【剧情注入器诊断】", ...rows(info).map(([k, v]) => `${k}：${v}`), "", "【事件】"];
+    for (let item of info.events) lines2.push(`${item.key}（${item.name || "酒馆未提供"}）：${item.bound ? `已绑定，收到 ${item.count} 次，最近 ${time(item.at)}` : "未绑定"}`);
     let list = problems(info);
-    return lines.push("", "【问题】", ...list.length ? list.map((item) => `- ${item.text}`) : ["无"]), lines.push("", "【最近记录】", ...info.logs.length ? info.logs.map((item) => `${time(item.at)} ${item.text}`) : ["无"]), lines.join(`
+    return lines2.push("", "【问题】", ...list.length ? list.map((item) => `- ${item.text}`) : ["无"]), lines2.push("", "【最近记录】", ...info.logs.length ? info.logs.map((item) => `${time(item.at)} ${item.text}`) : ["无"]), lines2.join(`
 `);
   }
   function render10(view) {
@@ -5216,7 +5312,7 @@ ${parsed.body}` : parsed.body;
       let result = await openDialog({
         title: "新项目",
         html: `<label class="pi-field"><span>项目名（一条 if 线）</span><input class="pi-inp" data-f="name" placeholder="如：龙宫温养"></label>
-                <label class="pi-check"><input type="checkbox" data-f="infinite"><span>无限流模式（列车停站、世界库、污染）</span></label>`,
+                <label class="pi-check"><input type="checkbox" data-f="infinite"><span>无限流模式（主空间出发、世界库、污染）</span></label>`,
         actions: [
           { label: "取消", value: null },
           { label: "确定", primary: !0, value: (box) => ({ name: box.querySelector("[data-f=name]").value, mode: box.querySelector("[data-f=infinite]").checked ? "infinite" : "normal" }) }
@@ -5393,7 +5489,7 @@ ${parsed.body}` : parsed.body;
   }
 
   // src/index.js
-  var VERSION = "0.1.17", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.1.18", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")

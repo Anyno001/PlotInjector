@@ -1,9 +1,9 @@
-import { PHASE_LABELS, findWorld, normalizeWorld, putWorld } from './infinite.js';
+import { findWorld, normalizeWorld, phaseLabels, putWorld, resolveHub } from './infinite.js';
 
 // 无限流状态机：progress.infinite（随聊天存）。纯函数，返回新对象。
 //
-//   train ──开副本（正文状态块读到「停站」，或手动「进入新世界」）──▶ world
-//   world ──关副本（正文状态块读到「回到列车」，或手动「回到列车」）──▶ train
+//   train（在主空间）──开副本（正文状态块读到「出发」词，或手动「进入新世界」）──▶ world
+//   world ──关副本（正文状态块读到「返回」词，或手动「回到主空间」）──▶ train
 //   世界库里的档案可以手动「重新打开」，直接进入那个世界。
 //
 // 副本进行中注入器什么都不管：档案原样不动。
@@ -45,7 +45,7 @@ export function withTrigger(inf, trigger) {
     return trigger ? { ...rest, trigger } : rest;
 }
 
-// 撤销开副本：删掉触发时生成的档案，退回列车。
+// 撤销开副本：删掉触发时生成的档案，退回主空间。
 export function undoEnter(inf, note = '触发楼已改动，撤销开副本') {
     const id = inf.trigger ? inf.trigger.worldId : inf.worldId;
     const next = withTrigger({ ...inf, worlds: inf.worlds.filter(world => world.id !== id), phase: 'train', worldId: '' }, null);
@@ -80,24 +80,26 @@ export function reenterWorld(inf, id) {
 }
 
 // 关副本：撤掉档案注入，档案留在世界库里。
-export function leaveWorld(inf, note = '回到列车') {
+export function leaveWorld(inf, note = '回到主空间') {
     return addLog(withTrigger({ ...inf, phase: 'train', worldId: '' }, null), note);
 }
 
-export function removeWorld(inf, id) {
+export function removeWorld(inf, id, config) {
     const kept = { ...inf, worlds: inf.worlds.filter(world => world.id !== id) };
     const next = inf.trigger && inf.trigger.worldId === id ? withTrigger(kept, null) : kept;
-    return next.worldId === id ? addLog({ ...next, phase: 'train', worldId: '' }, '当前世界的档案被删除，回到列车') : next;
+    return next.worldId === id ? addLog({ ...next, phase: 'train', worldId: '' }, `当前世界的档案被删除，回到${resolveHub(config).hubName}`) : next;
 }
 
 // ---------- 注入 ----------
 
-// 无限流项目的「详细」条目正文，只剩两个标签块：<列车状态>，以及仅在世界里出现的 <世界档案>。
+// 无限流项目的「详细」条目正文，只剩两个标签块：<{hubName}状态>，以及仅在世界里出现的 <世界档案>。
 // 档案整份原样注入，情欲浓度由代码写在末尾。
-export function buildInfiniteDetail(inf) {
+export function buildInfiniteDetail(inf, config) {
+    const { hubName } = resolveHub(config);
+    const labels = phaseLabels(config);
     const world = inf.phase === 'world' ? findWorld(inf.worlds, inf.worldId) : null;
-    const status = world ? `当前状态：${PHASE_LABELS.world}「${world.title}」。` : `当前状态：${PHASE_LABELS.train}，尚未下车。下一站由列车报站，user 指挥不了广播。`;
-    const blocks = [`<列车状态>\n${status}\n</列车状态>`];
+    const status = world ? `当前状态：${labels.world}「${world.title}」。` : `当前状态：${labels.train}，尚未出发。下一次出发由${hubName}安排，user 指挥不了。`;
+    const blocks = [`<${hubName}状态>\n${status}\n</${hubName}状态>`];
     if (world) blocks.push(`<世界档案>\n${world.body}\n\n情欲浓度：${world.dice.lust}\n</世界档案>`);
     return blocks.join('\n');
 }

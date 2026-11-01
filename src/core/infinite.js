@@ -5,7 +5,6 @@ import { makeId } from './outline.js';
 // 所有函数返回新对象，不原地改。随机数由调用方传入 rng（默认 crypto 真随机）。
 export const INFINITE_SLOT = '@infinite';
 export const PHASES = ['train', 'world'];
-export const PHASE_LABELS = { train: '在列车上', world: '在世界里' };
 
 export const DEFAULT_POOLS = {
     horror: [
@@ -26,7 +25,71 @@ export const POOL_KEYS = ['horror', 'cycle', 'client', 'lust'];
 export const POOL_LABELS = { horror: '恐怖类型', cycle: '重置周期', client: '委托人身份', lust: '情欲浓度' };
 
 // horrorPrefix：恐怖类型写法条目的标题前缀，条目标题 = 前缀 + 掷出的恐怖类型。
+// hubName 主空间名称；blockTag 状态块标签名；fieldNames 栏名；
+// words 四组词（组内顺序即匹配优先级，每组第一个词是显示名）：back 返回主空间、depart 出发、away 在副本里、hub 在主空间。
+// 默认值就是原来写死的「末班车」卡的行为。
+export const HUB_WORD_KEYS = ['back', 'depart', 'away', 'hub'];
+export const DEFAULT_HUB = {
+    hubName: '列车',
+    blockTag: '末班车状态',
+    fieldNames: ['列车', '位置', '状态', '所在', '车况'],
+    words: {
+        back: ['回到列车', '回列车', '返回列车', '回到车上', '回车上', '重新上车', '登上列车', '已上车', '上了车'],
+        depart: ['停站', '到站', '进站', '靠站', '停靠', '下车'],
+        away: ['世界里', '世界中', '在世界', '副本'],
+        hub: ['车上', '列车上', '餐车', '行驶中'], // 第一个词是显示名，旧版本这里是「列车上」在前
+    },
+};
 export const DEFAULT_CONFIG = { horrorPrefix: '🎭 恐怖类型：' };
+
+function cleanList(value) {
+    const out = [];
+    for (const item of Array.isArray(value) ? value : []) {
+        const text = String(item == null ? '' : item).trim();
+        if (text && !out.includes(text)) out.push(text);
+    }
+    return out;
+}
+
+function cleanText(value, fallback) {
+    const text = typeof value === 'string' ? value.trim() : '';
+    return text || fallback;
+}
+
+// 主空间配置补全：缺字段、类型不对、空文字都用默认值。词组被清空时保留空数组（resolveHub 取用时才退回默认，执行页据此提示）。
+export function normalizeHub(value) {
+    const src = value && typeof value === 'object' ? value : {};
+    const words = src.words && typeof src.words === 'object' ? src.words : {};
+    const fields = cleanList(src.fieldNames);
+    return {
+        hubName: cleanText(src.hubName, DEFAULT_HUB.hubName),
+        blockTag: cleanText(src.blockTag, DEFAULT_HUB.blockTag),
+        fieldNames: fields.length ? fields : [...DEFAULT_HUB.fieldNames],
+        words: Object.fromEntries(HUB_WORD_KEYS.map(key => [key, Array.isArray(words[key]) ? cleanList(words[key]) : [...DEFAULT_HUB.words[key]]])),
+    };
+}
+
+// 取用时的配置：在 normalizeHub 之上，空词组退回该组默认词。
+export function resolveHub(value) {
+    const hub = normalizeHub(value);
+    return { ...hub, words: Object.fromEntries(HUB_WORD_KEYS.map(key => [key, hub.words[key].length ? hub.words[key] : [...DEFAULT_HUB.words[key]]])) };
+}
+
+// 被清空、正在用默认词的词组。
+export function blankedWordKeys(value) {
+    const hub = normalizeHub(value);
+    return HUB_WORD_KEYS.filter(key => !hub.words[key].length);
+}
+
+// 每组第一个词是显示名。
+export function hubWordNames(value) {
+    const hub = resolveHub(value);
+    return Object.fromEntries(HUB_WORD_KEYS.map(key => [key, hub.words[key][0]]));
+}
+
+export function phaseLabels(value) {
+    return { train: `在${resolveHub(value).hubName}`, world: '在世界里' };
+}
 
 // ---------- 骰池 ----------
 
@@ -99,7 +162,7 @@ export function normalizeInfinite(value) {
     return {
         pools: Object.fromEntries(POOL_KEYS.map(key => [key, normalizePool(pools[key], DEFAULT_POOLS[key])])),
         spec: String(src.spec || ''),
-        config: { horrorPrefix: typeof cfg.horrorPrefix === 'string' ? cfg.horrorPrefix : DEFAULT_CONFIG.horrorPrefix },
+        config: { horrorPrefix: typeof cfg.horrorPrefix === 'string' ? cfg.horrorPrefix : DEFAULT_CONFIG.horrorPrefix, ...normalizeHub(cfg) },
     };
 }
 

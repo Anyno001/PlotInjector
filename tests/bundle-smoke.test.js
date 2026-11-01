@@ -1082,6 +1082,46 @@ test('无限流项目：AI 楼层状态块「停站」开副本注入档案，sw
     await instance.destroy();
 });
 
+test('无限流自定义主空间配置：状态块写「出门」开副本，注入标签是 <公寓状态>，执行页按主空间名称显示', async () => {
+    const host = await boot();
+    const { instance } = host;
+    const project = await instance.data.createProject('公寓', '', 'infinite');
+    await instance.runtime.switchProject(project.id);
+    const words = { back: ['回公寓', '进门'], depart: ['出门', '下楼'], away: ['副本里'], hub: ['公寓里'] };
+    instance.data.updateProject(project.id, current => ({ ...current, infinite: { ...current.infinite, config: { ...current.infinite.config, hubName: '公寓', blockTag: '公寓状态', fieldNames: ['公寓'], words } } }));
+    host.win.__reply = async prompts => (isWorldCall(prompts) ? WORLD_REPLY : '{}');
+    host.click();
+    await tick(10);
+    const doc = host.win.document;
+    doc.querySelector('[data-act="tab"][data-tab="run"]').click();
+    await tick(10);
+    const body = () => doc.querySelector('.pi-body').textContent;
+    assert.match(body(), /回到公寓/);
+    assert.doesNotMatch(body(), /回到列车/);
+    const infNow = () => instance.runtime.infState().inf;
+    const aiSay = async text => {
+        host.context.chat.push({ is_user: false, mes: text });
+        await host.eventSource.emit('message_received', host.context.chat.length - 1, 'normal');
+    };
+    host.context.chat.push({ is_user: true, mes: '出门' });
+    await aiSay('<末班车状态>\n列车：停站\n</末班车状态>');
+    await tick(30);
+    assert.equal(host.llmCalls.length, 0, '旧标签和旧词不再触发');
+    await aiSay('正文。\n<公寓状态>\n公寓：出门\n</公寓状态>');
+    for (let i = 0; i < 60 && infNow().phase !== 'world'; i += 1) await tick(10);
+    assert.equal(infNow().phase, 'world', '状态块写「出门」开副本');
+    assert.equal(instance.runtime.lastRead().state, '出门');
+    const pieces = (await entriesNow(host.eventSource)).map(entry => entry.content).join('|');
+    assert.match(pieces, /<公寓状态>[\s\S]*<世界档案>[\s\S]*渡口起雾/);
+    assert.doesNotMatch(pieces, /列车/);
+    await aiSay('<公寓状态>\n公寓：进门\n</公寓状态>');
+    await tick(20);
+    assert.equal(infNow().phase, 'train', '写「进门」关副本');
+    assert.match(infNow().log.at(-1), /回公寓/);
+    assert.equal(host.win.__errors.length, 0, host.win.__errors.join('\n'));
+    await instance.destroy();
+});
+
 test('无限流开副本：手动按钮，读取卡里（关闭的）恐怖类型写法条目放进提示，不进正文注入；找不到就跳过并记日志', async () => {
     const host = await boot();
     const { instance } = host;

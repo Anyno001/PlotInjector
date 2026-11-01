@@ -5,7 +5,7 @@ import { flattenUnits, replaceRest, stageLabel, stageNodes, volumeLabel } from '
 import { advance, currentIndex, emptyProgress, goTo, isMuted, mute, uncheckByNames, unitStates } from '../core/progress.js';
 import { createWorld, emptyInfinite, enterWorld, leaveWorld, reenterWorld, removeWorld, undoEnter, undoLeave, withTrigger } from '../core/infinite-flow.js';
 import { decideTrigger, hashText, judgeTrigger, makeTrigger, parseTrainState } from '../core/infinite-state.js';
-import { normalizeInfinite, randomFloat, rollWorldDice, titleKey } from '../core/infinite.js';
+import { hubWordNames, normalizeInfinite, randomFloat, resolveHub, rollWorldDice, titleKey } from '../core/infinite.js';
 import { buildWorldMessages, horrorTitle, parseWorldReply, worldSpecText } from '../core/infinite-world.js';
 import { makeId } from '../core/outline.js';
 import { resolveLlm } from '../core/store.js';
@@ -290,7 +290,7 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
     }
 
     // ---------- 无限流 ----------
-    // 注入器只在「开副本」「关副本」两个时刻动作：检测只判断是否下车/是否回到列车，副本进行中什么都不管。
+    // 注入器只在「开副本」「关副本」两个时刻动作：检测只判断是否出发/是否回到主空间，副本进行中什么都不管。
 
     function infState() {
         const project = activeProject();
@@ -314,9 +314,15 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
         return null;
     }
 
+    // 当前项目的主空间配置（标签、栏名、四组词）。
+    function hubConfig() {
+        const project = activeProject();
+        return project && project.infinite ? normalizeInfinite(project.infinite).config : undefined;
+    }
+
     function refreshRead() {
         const found = latestAiFloor();
-        lastRead = found ? { floor: found.floor, state: parseTrainState(found.text) } : null;
+        lastRead = found ? { floor: found.floor, state: parseTrainState(found.text, hubConfig()) } : null;
         return found;
     }
 
@@ -340,26 +346,29 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
         const text = msg && !msg.is_user && !msg.is_system ? String(msg.mes || '') : null;
         // swipe 重新生成时酒馆先把这一楼清空，等新文字写回再判断，免得白白撤销又重造。
         if (text !== null && !text.trim()) return;
-        const verdict = judgeTrigger(trig, text);
+        const cfg = state.infinite.config;
+        const names = hubWordNames(cfg);
+        const word = trig.kind === 'enter' ? names.depart : names.back;
+        const verdict = judgeTrigger(trig, text, cfg);
         if (verdict === 'none' || verdict === 'same') return;
         if (verdict === 'keep') {
             const next = { ...trig, hash: hashText(text) };
             if (pending) pendingTrigger = next;
             else setInf(withTrigger(state.inf, next));
-            log(`第 ${trig.floor} 楼文字变了，仍是「${trig.kind === 'enter' ? '停站' : '回到列车'}」，不重复处理`);
+            log(`第 ${trig.floor} 楼文字变了，仍是「${word}」，不重复处理`);
             return;
         }
         if (pending) {
-            log(`第 ${trig.floor} 楼不再是「停站」，取消正在生成的世界档案`);
+            log(`第 ${trig.floor} 楼不再是「${names.depart}」，取消正在生成的世界档案`);
             abandonOpening();
         } else if (trig.kind === 'enter') {
-            log(`第 ${trig.floor} 楼不再是「停站」，撤销开副本，删掉刚生成的档案`);
-            setInf(undoEnter(state.inf, `第 ${trig.floor} 楼不再是「停站」，撤销开副本`));
+            log(`第 ${trig.floor} 楼不再是「${names.depart}」，撤销开副本，删掉刚生成的档案`);
+            setInf(undoEnter(state.inf, `第 ${trig.floor} 楼不再是「${names.depart}」，撤销开副本`));
         } else {
-            log(`第 ${trig.floor} 楼不再是「回到列车」，撤销关副本`);
-            setInf(undoLeave(state.inf, `第 ${trig.floor} 楼不再是「回到列车」，撤销关副本`));
+            log(`第 ${trig.floor} 楼不再是「${names.back}」，撤销关副本`);
+            setInf(undoLeave(state.inf, `第 ${trig.floor} 楼不再是「${names.back}」，撤销关副本`));
         }
-        notice.show({ id: 'inf-undo', title: '触发楼已改动', body: trig.kind === 'enter' ? '这一楼不再是「停站」，已撤销开副本并删掉刚生成的档案。' : '这一楼不再是「回到列车」，已重新打开那份档案。', timeout: 10000 });
+        notice.show({ id: 'inf-undo', title: '触发楼已改动', body: trig.kind === 'enter' ? `这一楼不再是「${names.depart}」，已撤销开副本并删掉刚生成的档案。` : `这一楼不再是「${names.back}」，已重新打开那份档案。`, timeout: 10000 });
     }
 
     // AI 回复完成：只读最新一条 AI 楼层的状态块。
@@ -373,13 +382,13 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
             return;
         }
         const train = lastRead.state;
-        log(`读状态块：第 ${found.floor} 楼 ${train ? `列车：${train}` : '没有状态块'}`);
-        const kind = decideTrigger(state.inf.phase, train);
+        log(`读状态块：第 ${found.floor} 楼 ${train ? `${resolveHub(state.infinite.config).hubName}：${train}` : '没有状态块'}`);
+        const kind = decideTrigger(state.inf.phase, train, state.infinite.config);
         if (kind === 'enter') {
             openWorld({ floor: found.floor, text: found.text });
         } else if (kind === 'leave') {
             const trigger = makeTrigger({ kind: 'leave', floor: found.floor, text: found.text, worldId: state.inf.worldId });
-            setInf(withTrigger(leaveWorld(state.inf, `第 ${found.floor} 楼读到「回到列车」，关副本`), trigger));
+            setInf(withTrigger(leaveWorld(state.inf, `第 ${found.floor} 楼读到「${hubWordNames(state.infinite.config).back}」，关副本`), trigger));
         }
         emit('floor');
     }
@@ -407,7 +416,7 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
         const state = infState();
         if (!state) return Promise.resolve(null);
         if (state.inf.phase !== 'train') {
-            toast('info', '只有在列车上才能进入新世界。');
+            toast('info', `只有在${resolveHub(state.infinite.config).hubName}时才能进入新世界。`);
             return Promise.resolve(null);
         }
         opening = true;
@@ -476,11 +485,11 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
         }
     }
 
-    // 手动「回到列车」：关副本，档案留在世界库里。
+    // 手动「回到主空间」：关副本，档案留在世界库里。
     function returnToTrain() {
         const state = infState();
         if (!state || state.inf.phase !== 'world') return;
-        setInf(leaveWorld(state.inf, '手动回到列车'));
+        setInf(leaveWorld(state.inf, `手动回到${resolveHub(state.infinite.config).hubName}`));
     }
 
     // 世界库里手动「重新打开」某份档案，直接进入那个世界。
@@ -488,7 +497,7 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
         const state = infState();
         if (!state) return;
         if (state.inf.phase !== 'train') {
-            toast('info', '先回到列车，再重新打开档案。');
+            toast('info', `先回到${resolveHub(state.infinite.config).hubName}，再重新打开档案。`);
             return;
         }
         setInf(reenterWorld(state.inf, worldId));
@@ -496,7 +505,7 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
 
     function deleteWorld(worldId) {
         const state = infState();
-        if (state) setInf(removeWorld(state.inf, worldId));
+        if (state) setInf(removeWorld(state.inf, worldId, state.infinite.config));
     }
 
     async function checkNow({ manual = false } = {}) {

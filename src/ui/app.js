@@ -266,7 +266,7 @@ export function createApp({ data, runtime, version }) {
         const result = await openDialog({
             title: '新项目',
             html: `<label class="pi-field"><span>项目名（一条 if 线）</span><input class="pi-inp" data-f="name" placeholder="如：龙宫温养"></label>
-                <label class="pi-check"><input type="checkbox" data-f="infinite"><span>无限流模式（列车停站、世界库、污染）</span></label>`,
+                <label class="pi-check"><input type="checkbox" data-f="infinite"><span>无限流模式（主空间出发、世界库、污染）</span></label>`,
             actions: [
                 { label: '取消', value: null },
                 { label: '确定', primary: true, value: box => ({ name: box.querySelector('[data-f=name]').value, mode: box.querySelector('[data-f=infinite]').checked ? 'infinite' : 'normal' }) },
