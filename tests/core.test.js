@@ -6,7 +6,7 @@ import YAML from 'yaml';
 import { setYamlLib, parseYaml } from '../src/core/yaml.js';
 import { flattenUnits, outlineToText, parseOutlineText, stageNodes, volumeLabel } from '../src/core/outline.js';
 import { advance, emptyProgress, setNodeChecked, uncheckByNames, unitStates, patchSlot } from '../src/core/progress.js';
-import { buildEntries, buildIndexText, toWorldInfoEntry } from '../src/core/inject.js';
+import { buildEntries, buildIndexText, carriedNodes, toWorldInfoEntry } from '../src/core/inject.js';
 import { buildCheckMessages, cleanFloorText, parseCheckReply } from '../src/core/check.js';
 import { acuField, groupByField } from '../src/core/acu.js';
 import { buildPattern, fixKeys, orderPlan, punctPlan, regexPlan } from '../src/core/wbtools.js';
@@ -301,6 +301,11 @@ test('没演的支线与世界动态延续到后面的阶段；取消勾选或�
     const after = buildEntries(project, played, normalizeSettings({})).find(entry => entry.kind === 'detail').content;
     assert.doesNotMatch(after, /丙支线/);
     assert.match(after, /丁传闻/);
+    const states = unitStates(units, played);
+    assert.deepEqual(carriedNodes(units, states, played).map(item => item.node.name), ['丁传闻']);
+    assert.deepEqual(carriedNodes(units, states, played, { withOff: true }).map(item => [item.node.name, item.off]), [['丙支线', true], ['丁传闻', false]]);
+    const back = setNodeChecked(played, units[0].id, 's0', true);
+    assert.match(buildEntries(project, back, normalizeSettings({})).find(entry => entry.kind === 'detail').content, /丙支线/);
 });
 
 test('世界书工具：关键词按中文逗号顿号拆开去重，正则关键词不拆；正则替换计数；顺序重排', () => {

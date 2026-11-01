@@ -32,13 +32,13 @@ const nodeCheck = (unitId, node, off, from = '') => `<label class="pi-check${off
         <input type="checkbox" data-node="${esc(node.id)}" data-unit="${esc(unitId)}"${off ? '' : ' checked'}>
         <span><span class="pi-badge">${esc(node.label)}</span> ${esc(node.name)}${from ? ` <span class="pi-hint">来自${esc(from)}</span>` : ''}</span></label>`;
 
-// carried：已过阶段里没演的支线与世界动态，取消勾选即不再延续。
+// carried：已过阶段里没演的支线与世界动态，取消勾选即不再延续，灰色留在原处可勾回。
 function nodeList(unit, progress, carried) {
     const off = new Set(offNodes(progress, unit.id));
     const nodes = stageNodes(unit.stage.data);
     if (!nodes.length && !carried.length) return '';
     return `<div class="pi-tl-nodes">${nodes.map(node => nodeCheck(unit.id, node, off.has(node.id))).join('')}
-        ${carried.length ? `<p class="pi-hint">延续自前面阶段</p>${carried.map(item => nodeCheck(item.unit.id, item.node, false, stageLabel(item.unit.stage.key))).join('')}` : ''}</div>`;
+        ${carried.length ? `<p class="pi-hint">延续自前面阶段</p>${carried.map(item => nodeCheck(item.unit.id, item.node, item.off, stageLabel(item.unit.stage.key))).join('')}` : ''}</div>`;
 }
 
 // 阶段时间线：每卷一条，粗环为阶段，已过的实心、走过的连线为实线，之后为虚线。
@@ -107,7 +107,7 @@ export function render(view) {
             <button type="button" class="pi-btn is-primary is-sm" data-act="next">打开下一段</button>
             <button type="button" class="pi-btn is-sm" data-act="check"${checking ? ' disabled' : ''}>${checking ? '<span class="pi-spin"></span>检测中' : '立即检测'}</button>
             <button type="button" class="pi-btn is-sm" data-act="rewrite">改写后续</button></div>
-        ${timeline(units, states, progress, settings.carryOver ? carriedNodes(units, states, progress) : [])}` : '<p class="pi-hint">大纲为空。到「大纲」页导入剧情 YAML，或让 AI 写一卷。</p>'}
+        ${timeline(units, states, progress, settings.carryOver ? carriedNodes(units, states, progress, { withOff: true }) : [])}` : '<p class="pi-hint">大纲为空。到「大纲」页导入剧情 YAML，或让 AI 写一卷。</p>'}
         </div>`;
 }
 

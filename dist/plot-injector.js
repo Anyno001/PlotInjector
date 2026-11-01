@@ -1,4 +1,4 @@
-// PlotInjector v0.1.18
+// PlotInjector v0.1.19
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -509,12 +509,13 @@ ${world.body}
     let key = PACE_TEXT[pace] ? pace : "normal";
     return String(settings.paceText && settings.paceText[key] || "").trim() || PACE_TEXT[key];
   }
-  function carriedNodes(units, states, progress) {
+  function carriedNodes(units, states, progress, { withOff = !1 } = {}) {
     let out = [];
     for (let unit of units) {
       if (states[unit.id] !== "done") continue;
       let off = new Set(offNodes(progress, unit.id));
-      for (let node of stageNodes(unit.stage.data)) node.kind !== "main" && !off.has(node.id) && out.push({ unit, node });
+      for (let node of stageNodes(unit.stage.data))
+        node.kind !== "main" && (off.has(node.id) ? withOff && out.push({ unit, node, off: !0 }) : out.push({ unit, node, off: !1 }));
     }
     return out;
   }
@@ -4092,7 +4093,7 @@ ${parsed.body}` : parsed.body;
   function nodeList(unit, progress, carried) {
     let off = new Set(offNodes(progress, unit.id)), nodes = stageNodes(unit.stage.data);
     return !nodes.length && !carried.length ? "" : `<div class="pi-tl-nodes">${nodes.map((node) => nodeCheck(unit.id, node, off.has(node.id))).join("")}
-        ${carried.length ? `<p class="pi-hint">延续自前面阶段</p>${carried.map((item) => nodeCheck(item.unit.id, item.node, !1, stageLabel(item.unit.stage.key))).join("")}` : ""}</div>`;
+        ${carried.length ? `<p class="pi-hint">延续自前面阶段</p>${carried.map((item) => nodeCheck(item.unit.id, item.node, item.off, stageLabel(item.unit.stage.key))).join("")}` : ""}</div>`;
   }
   function timeline(units, states, progress, carried) {
     let groups = [];
@@ -4138,7 +4139,7 @@ ${parsed.body}` : parsed.body;
             <button type="button" class="pi-btn is-primary is-sm" data-act="next">打开下一段</button>
             <button type="button" class="pi-btn is-sm" data-act="check"${checking ? " disabled" : ""}>${checking ? '<span class="pi-spin"></span>检测中' : "立即检测"}</button>
             <button type="button" class="pi-btn is-sm" data-act="rewrite">改写后续</button></div>
-        ${timeline(units, states, progress, settings.carryOver ? carriedNodes(units, states, progress) : [])}` : '<p class="pi-hint">大纲为空。到「大纲」页导入剧情 YAML，或让 AI 写一卷。</p>'}
+        ${timeline(units, states, progress, settings.carryOver ? carriedNodes(units, states, progress, { withOff: !0 }) : [])}` : '<p class="pi-hint">大纲为空。到「大纲」页导入剧情 YAML，或让 AI 写一卷。</p>'}
         </div>`;
   }
   function setSlot(view, slotId, patch) {
@@ -5489,7 +5490,7 @@ ${parsed.body}` : parsed.body;
   }
 
   // src/index.js
-  var VERSION = "0.1.18", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.1.19", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")
