@@ -12,7 +12,7 @@ import { acuField, groupByField } from '../src/core/acu.js';
 import { buildPattern, fixKeys, orderPlan, punctPlan, regexPlan } from '../src/core/wbtools.js';
 import { checkedSet, entryRefId, migrateOc, normalizeWbRule, ruleFromSelection } from '../src/core/refs.js';
 import { normalizeChat } from '../src/core/store.js';
-import { mergeBlocks, parseSettingReply, splitBlocks } from '../src/core/setting.js';
+import { changedBlockKeys, mergeBlocks, parseSettingReply, splitBlocks } from '../src/core/setting.js';
 import { parseOutlineReply } from '../src/core/prompts.js';
 import { normalizeProject, normalizeSettings, newProject, resolveLlm } from '../src/core/store.js';
 import { buildZip, crc32 } from '../src/core/zip.js';
@@ -134,6 +134,19 @@ test('取消勾选的节点不进详细；按检测结果的节点名取消勾�
     progress = uncheckByNames(emptyProgress(project.id), units[0].id, stageNodes(units[0].stage.data), ['乙事件', '不存在']);
     detail = buildEntries(project, progress, normalizeSettings({})).find(entry => entry.kind === 'detail');
     assert.doesNotMatch(detail.content, /乙事件/);
+});
+
+test('已演完阶段的状态变化接在设定后面；设为不注入的分块不进正文', () => {
+    const project = projectWith(MINI);
+    const units = flattenUnits(project.outline.volumes);
+    units[0].stage.data.状态变化 = ['她察觉到 A 不只是兄弟'];
+    project.setting = { ...project.setting, text: '铁则:\n- 甲\n\n钩子库:\n- 乙', mute: ['钩子库'] };
+    let setting = buildEntries(project, emptyProgress(project.id), normalizeSettings({})).find(entry => entry.kind === 'setting');
+    assert.equal(setting.content, '铁则:\n- 甲', '当前段还没演完，变化不注入');
+    const progress = advance(emptyProgress(project.id), units).progress;
+    setting = buildEntries(project, progress, normalizeSettings({})).find(entry => entry.kind === 'setting');
+    assert.match(setting.content, /以这里为准）：\n- 她察觉到 A 不只是兄弟（卷一·测试·阶段一 开端）$/);
+    assert.equal(changedBlockKeys('铁则:\n- 甲\n\n钩子库:\n- 乙', '铁则:\n- 丙\n\n新块:\n- 丁').join(), '铁则');
 });
 
 test('注入位置只认项目默认：两条默认都在角色定义前，改一次所有阶段都生效；旧项目未改过的默认自动换新', () => {

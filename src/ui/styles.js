@@ -269,6 +269,11 @@ label.pi-wb-row{cursor:pointer}
 .pi-block-chip>.pi-block-del{padding:3px 4px;display:inline-flex;align-items:center;opacity:.6}
 .pi-block-chip>.pi-block-del svg{width:10px;height:10px}
 .pi-block-chip>.pi-block-del:hover{opacity:1;color:var(--pi-danger)}
+.pi-block-chip>.pi-block-eye{padding:3px 2px;display:inline-flex;align-items:center;opacity:.6}
+.pi-block-chip>.pi-block-eye svg{width:12px;height:12px}
+.pi-block-chip>.pi-block-eye:hover{opacity:1}
+.pi-block-chip.is-mute{color:var(--pi-rule)}
+.pi-block-chip.is-mute>button:first-child{text-decoration:line-through}
 .pi-chip.is-on{color:var(--pi-accent);background:var(--pi-accent-soft)}
 .pi-diff{font-family:var(--pi-mono);font-size:12px;line-height:1.5;white-space:pre-wrap;word-break:break-word;background:var(--pi-surf);border-radius:var(--pi-r-in);padding:6px 0;max-height:360px;overflow:auto}
 .pi-diff div{padding:0 10px}

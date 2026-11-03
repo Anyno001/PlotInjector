@@ -1,6 +1,9 @@
-import { settingMessages, rewriteBlockMessages } from '../core/prompts.js';
-import { diffLines, joinBlocks, mergeBlocks, parseSettingReply, pushHistory, splitBlocks } from '../core/setting.js';
+import { settingMessages, rewriteBlockMessages, syncSettingMessages } from '../core/prompts.js';
+import { changedBlockKeys, diffLines, injectedSetting, joinBlocks, mergeBlocks, parseSettingReply, pushHistory, splitBlocks } from '../core/setting.js';
+import { flattenUnits } from '../core/outline.js';
+import { currentIndex } from '../core/progress.js';
 import { estimateTokens } from '../core/tokens.js';
+import { toast } from '../host/st.js';
 import { ask, guideText, runTask } from './ai.js';
 import { confirmDialog, esc, openDialog, options } from './dom.js';
 import { ICONS } from './styles.js';
@@ -62,18 +65,23 @@ export function render(view) {
     const s = st(view);
     const text = project.setting.text;
     const blocks = splitBlocks(text).filter(block => block.title !== '开头');
+    const mute = new Set(project.setting.mute);
+    const muted = blocks.some(block => mute.has(block.key));
     const busy = view.busy.setting;
+    const hasOutline = project.outline.volumes.some(volume => volume.stages.length);
+    const chip = block => `<span class="pi-chip pi-block-chip${mute.has(block.key) ? ' is-mute' : ''}"><button type="button" data-act="jump" data-key="${esc(block.key)}" title="跳到这一块">${esc(block.title)}</button><button type="button" class="pi-block-eye" data-act="block-mute" data-key="${esc(block.key)}" title="${mute.has(block.key) ? '已设为不注入，点击恢复注入' : '注入正文，点击设为不注入'}">${mute.has(block.key) ? ICONS.eyeOff : ICONS.eye}</button><button type="button" class="pi-block-del" data-act="block-del" data-key="${esc(block.key)}" title="删除整个分块">${ICONS.close}</button></span>`;
     return `${s.draft ? draftHtml(view, project, s.draft) : ''}
         <div class="pi-card"><h3>设定 ${checkBadge(project.setting.check)}</h3>
-        <div class="pi-tools is-c3">
+        <div class="pi-tools is-c4">
             <button type="button" class="pi-btn is-sm is-primary" data-act="from-talk"${busy ? ' disabled' : ''}>${busy ? '<span class="pi-spin"></span>整理中' : 'AI 整理'}</button>
+            <button type="button" class="pi-btn is-sm" data-act="sync-outline"${busy || !hasOutline || !text.trim() ? ' disabled' : ''}>按大纲校对</button>
             <button type="button" class="pi-btn is-sm" data-act="import-wb">从世界书导入</button>
             <button type="button" class="pi-btn is-sm${s.history ? ' is-primary' : ''}" data-act="history">历史版本 ${project.setting.history.length}</button>
             <label class="pi-check"><input type="checkbox" data-append${s.append ? ' checked' : ''}><span>只追加，不改动已有分块</span></label></div>
         ${genRefsBar(view, 'setting')}
-        ${blocks.length ? `<div class="pi-toc">${blocks.map(block => `<span class="pi-chip pi-block-chip"><button type="button" data-act="jump" data-key="${esc(block.key)}" title="跳到这一块">${esc(block.title)}</button><button type="button" class="pi-block-del" data-act="block-del" data-key="${esc(block.key)}" title="删除整个分块">${ICONS.close}</button></span>`).join('')}</div>` : ''}
+        ${blocks.length ? `<div class="pi-toc">${blocks.map(chip).join('')}</div>` : ''}
         <textarea class="pi-ta is-tall" data-setting placeholder="世界观正文。执行时作为常驻条目注入（角色定义后），取代世界书里手改的剧情设定条目。">${esc(text)}</textarea>
-        <div class="pi-row"><span class="pi-hint pi-grow">≈<span data-tokens>${estimateTokens(text)}</span> token</span><span class="pi-status" data-save-status></span></div>
+        <div class="pi-row"><span class="pi-hint pi-grow">≈<span data-tokens>${estimateTokens(text)}</span> token${muted ? `，注入 ≈${estimateTokens(injectedSetting(project.setting))}` : ''}</span><span class="pi-status" data-save-status></span></div>
         ${fixesHtml(project.setting.fixes, 'saved')}</div>
         ${s.history ? historyHtml(project, s.historyAt) : ''}`;
 }
@@ -157,6 +165,31 @@ export const actions = {
         st(view).draft = { ...parsed, body, keys: splitBlocks(body).map(block => block.key) };
         view.renderBody();
     },
+    // 对照当前及之后的大纲找出冲突或写死的句子，结果进新稿对比，只勾选有改动的分块。
+    async 'sync-outline'(view) {
+        const project = view.project();
+        const units = flattenUnits(project.outline.volumes);
+        const from = view.runtime.activeId() === view.projectId ? Math.max(0, currentIndex(units, view.runtime.progress())) : 0;
+        const reply = await runTask(view, 'setting', () => ask(view, 'outline', syncSettingMessages({ guide: guideText(view), setting: project.setting.text, units, fromUnitIndex: from })));
+        if (!reply) return;
+        const parsed = parseSettingReply(reply);
+        const keys = parsed.body ? changedBlockKeys(project.setting.text, parsed.body) : [];
+        if (!keys.length) {
+            toast('info', '设定与大纲没有冲突，不需要修改。');
+            return;
+        }
+        st(view).draft = { body: mergeBlocks(project.setting.text, parsed.body, keys), check: parsed.check, fixes: [], keys, sync: true };
+        view.renderBody();
+    },
+    'block-mute'(view, target) {
+        const key = target.dataset.key;
+        const mute = new Set(view.project().setting.mute);
+        if (mute.has(key)) mute.delete(key);
+        else mute.add(key);
+        setSetting(view, { mute: [...mute] });
+        view.runtime.refresh();
+        view.renderBody();
+    },
     'draft-block'(view, target, event) {
         if (event.target.closest('input')) return;
         st(view).openBlock = st(view).openBlock === target.dataset.key ? '' : target.dataset.key;
@@ -168,14 +201,14 @@ export const actions = {
     },
     'draft-all'(view) {
         const draft = st(view).draft;
-        commit(view, draft.body, { check: draft.check, fixes: draft.fixes });
+        commit(view, draft.body, { check: draft.check, ...(draft.sync ? {} : { fixes: draft.fixes }) });
         st(view).draft = null;
         view.renderBody();
     },
     'draft-pick'(view) {
         const draft = st(view).draft;
         if (!draft.keys.length) throw new Error('没有勾选分块');
-        commit(view, mergeBlocks(view.project().setting.text, draft.body, draft.keys), { check: draft.check, fixes: draft.fixes });
+        commit(view, mergeBlocks(view.project().setting.text, draft.body, draft.keys), { check: draft.check, ...(draft.sync ? {} : { fixes: draft.fixes }) });
         st(view).draft = null;
         view.renderBody();
     },

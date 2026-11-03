@@ -1,4 +1,4 @@
-// PlotInjector v0.1.19
+// PlotInjector v0.1.20
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -33,7 +33,12 @@
     { field: "主线节点", kind: "main", prefix: "m", label: "主线" },
     { field: "支线事件", kind: "side", prefix: "s", label: "支线" },
     { field: "世界动态", kind: "world", prefix: "w", label: "世界动态" }
-  ], STAGE_HINT_KEYS = ["时间范围", "AI指令", "主线节点", "支线事件", "世界动态"];
+  ], STAGE_HINT_KEYS = ["时间范围", "AI指令", "主线节点", "支线事件", "世界动态", "状态变化"], CHANGE_FIELD = "状态变化";
+  function changeLines(data) {
+    let value = data && data[CHANGE_FIELD];
+    return (Array.isArray(value) ? value : String(value || "").split(`
+`)).map((item) => item && typeof item == "object" ? Object.values(item).join("：") : String(item || "")).map((text) => text.replace(/^\s*(?:[-*•]|\d+[.、])\s*/, "").trim()).filter(Boolean);
+  }
   function makeId(prefix = "u") {
     return `${prefix}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
   }
@@ -423,6 +428,85 @@ ${world.body}
     return isMuted(progress, unitId) ? progress : { ...progress, muted: [...progress.muted, unitId] };
   }
 
+  // src/core/setting.js
+  var HEADING = /^(?:#{1,4}\s*)?([^\s\-*#\[][^:：]{0,30})[:：]\s*$|^(?:#{1,4}\s+)(.{1,30})$|^(\[追加\])\s*$/;
+  function splitBlocks(text) {
+    let lines2 = String(text || "").replace(/\r\n/g, `
+`).split(`
+`), blocks = [], current = { key: "", lines: [] }, counts = {};
+    for (let line of lines2) {
+      let match = HEADING.exec(line);
+      if (match) {
+        (current.key || current.lines.some((item) => item.trim())) && blocks.push(current);
+        let title2 = (match[1] || match[2] || match[3]).trim();
+        counts[title2] = (counts[title2] || 0) + 1, current = { key: counts[title2] > 1 ? `${title2}#${counts[title2]}` : title2, title: title2, lines: [line] };
+      } else
+        current.lines.push(line);
+    }
+    return (current.key || current.lines.some((item) => item.trim())) && blocks.push(current), blocks.map((block) => ({ key: block.key || "开头", title: block.title || "开头", text: block.lines.join(`
+`).replace(/\n+$/, "") }));
+  }
+  function joinBlocks(blocks) {
+    return blocks.map((block) => block.text).join(`
+
+`).trim();
+  }
+  function mergeBlocks(oldText, newText, keys) {
+    let pick = new Set(keys), oldBlocks = splitBlocks(oldText), newBlocks = splitBlocks(newText), newMap = new Map(newBlocks.map((block) => [block.key, block])), out = oldBlocks.map((block) => pick.has(block.key) && newMap.has(block.key) ? newMap.get(block.key) : block), oldKeys = new Set(oldBlocks.map((block) => block.key));
+    for (let block of newBlocks) pick.has(block.key) && !oldKeys.has(block.key) && out.push(block);
+    return joinBlocks(out);
+  }
+  function injectedSetting(setting) {
+    let text = String(setting && setting.text || "").trim(), mute2 = new Set(setting && Array.isArray(setting.mute) ? setting.mute : []);
+    return mute2.size ? joinBlocks(splitBlocks(text).filter((block) => !mute2.has(block.key))) : text;
+  }
+  function changedBlockKeys(oldText, newText) {
+    let old = new Map(splitBlocks(oldText).map((block) => [block.key, block.text]));
+    return splitBlocks(newText).filter((block) => old.has(block.key) && old.get(block.key) !== block.text).map((block) => block.key);
+  }
+  var SECTION = /^\s*(?:#{1,4}\s*|\d+\s*[.、．]\s*|\*\*)*\s*(世界观正文|补定|速查)\s*(?:\*\*)?\s*[:：]?\s*(?:\*\*)?\s*/;
+  function stripFence(text) {
+    let match = /^\s*```[a-zA-Z]*\n([\s\S]*?)\n```\s*$/.exec(text);
+    return (match ? match[1] : text).trim();
+  }
+  function parseSettingReply(text) {
+    let lines2 = String(text || "").replace(/\r\n/g, `
+`).split(`
+`), sections = { 世界观正文: [], 补定: [], 速查: [] }, current = "世界观正文", sawHeading = !1;
+    for (let line of lines2) {
+      let match = SECTION.exec(line);
+      if (match && (match[1] !== "速查" || /PASS|FAIL/i.test(line) || line.replace(SECTION, "").trim() === "")) {
+        current = match[1], sawHeading = !0;
+        let rest = line.slice(match[0].length).trim();
+        rest && sections[current].push(rest);
+        continue;
+      }
+      sections[current].push(line);
+    }
+    let body = stripFence(sections.世界观正文.join(`
+`)), fixes = sections.补定.map((line) => line.replace(/^\s*(?:[-*•]|\d+[.、])\s*/, "").trim()).filter(Boolean), verdict = /(PASS|FAIL)/i.exec([...sections.速查, ...sawHeading ? [] : lines2.slice(-3)].join(" "));
+    return { body, fixes, check: verdict ? verdict[1].toUpperCase() : "" };
+  }
+  function pushHistory(history, text, limit = 10, now = Date.now()) {
+    let list = Array.isArray(history) ? history : [];
+    return list.length && list[0].text === text ? list : [{ at: now, text }, ...list].slice(0, limit);
+  }
+  function diffLines(a, b) {
+    let x = String(a || "").split(`
+`), y = String(b || "").split(`
+`);
+    if (x.length * y.length > 4e6) return [...x.map((text) => ({ op: "-", text })), ...y.map((text) => ({ op: "+", text }))];
+    let n = x.length, m = y.length, dp = Array.from({ length: n + 1 }, () => new Uint32Array(m + 1));
+    for (let i2 = n - 1; i2 >= 0; i2 -= 1)
+      for (let j2 = m - 1; j2 >= 0; j2 -= 1) dp[i2][j2] = x[i2] === y[j2] ? dp[i2 + 1][j2 + 1] + 1 : Math.max(dp[i2 + 1][j2], dp[i2][j2 + 1]);
+    let out = [], i = 0, j = 0;
+    for (; i < n && j < m; )
+      x[i] === y[j] ? (out.push({ op: "=", text: x[i] }), i += 1, j += 1) : dp[i + 1][j] >= dp[i][j + 1] ? (out.push({ op: "-", text: x[i] }), i += 1) : (out.push({ op: "+", text: y[j] }), j += 1);
+    for (; i < n; ) out.push({ op: "-", text: x[i++] });
+    for (; j < m; ) out.push({ op: "+", text: y[j++] });
+    return out;
+  }
+
   // src/core/inject.js
   var POSITIONS = [
     { value: 0, label: "角色定义前", short: "↑Char" },
@@ -540,17 +624,25 @@ ${note}
 ${body}${carriedText(carried)}
 </${tag}>`;
   }
+  function changesText(units, states) {
+    let lines2 = units.filter((unit) => states[unit.id] === "done").flatMap((unit) => changeLines(unit.stage.data).map((text) => `- ${text}（${stagePlace(unit)}）`));
+    return lines2.length ? `已演完的剧情带来的变化（设定里对应的开局状态以这里为准）：
+${lines2.join(`
+`)}` : "";
+  }
   function buildEntries(project, progress, settings) {
     let defaults = { ...DEFAULT_PARAMS, ...project && project.defaults }, entries = [];
     if (!project) return entries;
-    let settingText = String(project.setting && project.setting.text || "").trim();
+    let infinite = project.mode === "infinite", units = infinite ? [] : flattenUnits(project.outline && project.outline.volumes), states = unitStates(units, progress), settingText = [injectedSetting(project.setting), changesText(units, states)].filter(Boolean).join(`
+
+`);
     if (settingText && entries.push({
       slotId: SETTING_SLOT,
       kind: "setting",
       title: "设定",
       content: settingText,
       ...pickParams(defaults.setting, progress.slots[SETTING_SLOT])
-    }), project.mode === "infinite") {
+    }), infinite) {
       let inf = progress.infinite || emptyInfinite();
       return entries.push({
         slotId: INFINITE_SLOT,
@@ -560,9 +652,8 @@ ${body}${carriedText(carried)}
         ...pickParams(defaults.detail, progress.slots[INFINITE_SLOT])
       }), entries;
     }
-    let units = flattenUnits(project.outline && project.outline.volumes);
     if (units.length) {
-      let states = unitStates(units, progress), next = units.find((unit) => states[unit.id] === "next") || null, carried = settings.carryOver === !1 ? [] : carriedNodes(units, states, progress);
+      let next = units.find((unit) => states[unit.id] === "next") || null, carried = settings.carryOver === !1 ? [] : carriedNodes(units, states, progress);
       for (let unit of units) {
         if (states[unit.id] !== "active") continue;
         let off = offNodes(progress, unit.id);
@@ -776,7 +867,7 @@ ${body}${carriedText(carried)}
       id: makeId("p"),
       name: String(name || "").trim() || "新项目",
       createdAt: now,
-      setting: { text: "", history: [], check: "", fixes: [] },
+      setting: { text: "", history: [], check: "", fixes: [], mute: [] },
       outline: { volumes: [] },
       defaults: JSON.parse(JSON.stringify(DEFAULT_PARAMS)),
       genRefs: normalizeGenRefs(),
@@ -795,7 +886,8 @@ ${body}${carriedText(carried)}
         text: String(setting.text || ""),
         history: Array.isArray(setting.history) ? setting.history : [],
         check: String(setting.check || ""),
-        fixes: Array.isArray(setting.fixes) ? setting.fixes : []
+        fixes: Array.isArray(setting.fixes) ? setting.fixes : [],
+        mute: Array.isArray(setting.mute) ? setting.mute.map(String) : []
       },
       outline: {
         volumes: volumes.filter((vol) => vol && Array.isArray(vol.stages)).map((vol) => ({
@@ -1214,6 +1306,8 @@ ${floor.text}`)
       - 类型: 传闻
         来源: 谁传出
         内容: 外界正在发生什么。
+    状态变化:
+      - 本阶段结束时谁知道了什么、谁对谁的看法或关系变了。
 `, FOLD_KEEP = 16, FOLD_CHARS = 24e3;
   function discussSystemPrompt({ guide, refs }) {
     let parts = [
@@ -1309,12 +1403,25 @@ ${stageToText(stage).replace(/^/gm, "  ").trimEnd()}
   }
   var OUTLINE_RULES = [
     "只输出一个 ```yaml 代码块，不加说明。",
-    "顶层键是卷名，写作「剧情_卷X_标题」；卷下是阶段，写作「阶段N_标题」；阶段字段为 时间范围、AI指令、主线节点、支线事件、世界动态。",
+    "顶层键是卷名，写作「剧情_卷X_标题」；卷下是阶段，写作「阶段N_标题」；阶段字段为 时间范围、AI指令、主线节点、支线事件、世界动态、状态变化。",
     "节点字段：名称、地点、事件、偏转；支线事件多一个 触发；世界动态为 类型、来源、内容。",
     "每个阶段 2 到 4 个主线节点，事件写已经发生的事实，偏转写玩家改变选择后的调整。",
-    "时间范围写清本阶段从什么时候到什么时候，用来判断何时切到下一段。"
+    "时间范围写清本阶段从什么时候到什么时候，用来判断何时切到下一段。",
+    "设定里的人物关系、认知和信息差是开局状态，会随剧情改变。状态变化逐条写本阶段结束时比之前变了什么，没有变化就省略。"
   ].join(`
 `);
+  function changesBlock(units, title2) {
+    let lines2 = units.flatMap((unit) => changeLines(unit.stage.data).map((text) => `- ${stageLabel(unit.stage.key)}：${text}`));
+    return lines2.length ? `【${title2}】
+${lines2.join(`
+`)}` : "";
+  }
+  function restText(units, from) {
+    let byVolume = /* @__PURE__ */ new Map();
+    for (let unit of units.slice(from))
+      byVolume.has(unit.volume) || byVolume.set(unit.volume, []), byVolume.get(unit.volume).push(unit.stage);
+    return outlineToText([...byVolume.entries()].map(([volume, stages]) => ({ ...volume, stages })));
+  }
   function outlineMessages({ setting, talk, volumes, volumeNo, request, refs = [] }) {
     let known = (volumes || []).map((volume) => `${volumeLabel(volume.key)}：${volume.stages.map((stage) => stageLabel(stage.key)).join("、")}`), system = `你按用户的设定写剧情大纲，格式必须与样例一致。
 ${OUTLINE_RULES}
@@ -1329,6 +1436,7 @@ ${talk}` : "",
       known.length ? `【已有的卷】
 ${known.join(`
 `)}` : "",
+      changesBlock(flattenUnits(volumes), "已有大纲中的状态变化"),
       `只写第 ${volumeNo} 卷。${request || ""}`
     ].filter(Boolean).join(`
 
@@ -1336,22 +1444,40 @@ ${known.join(`
     return [{ role: "system", content: system }, { role: "user", content: user }];
   }
   function rewriteRestMessages({ setting, volumes, fromUnitIndex, units, recent, reason }) {
-    let rest = units.slice(fromUnitIndex), byVolume = /* @__PURE__ */ new Map();
-    for (let unit of rest)
-      byVolume.has(unit.volume) || byVolume.set(unit.volume, []), byVolume.get(unit.volume).push(unit.stage);
-    let restText = outlineToText([...byVolume.entries()].map(([volume, stages]) => ({ ...volume, stages }))), system = `剧情在执行中偏离了大纲。按已经发生的正文改写剩余阶段，保持卷名与阶段名格式。
+    let system = `剧情在执行中偏离了大纲。按已经发生的正文改写剩余阶段，保持卷名与阶段名格式。
 ${OUTLINE_RULES}
 
 【格式样例】
 ${formatSample(volumes)}`, user = [
       setting ? `【设定】
 ${setting}` : "",
+      changesBlock(units.slice(0, fromUnitIndex), "已演完阶段的状态变化"),
       `【需要改写的剩余阶段】
-${restText}`,
+${restText(units, fromUnitIndex)}`,
       reason ? `【偏转说明】
 ${reason}` : "",
       `【最近正文】
 ${recent}`
+    ].filter(Boolean).join(`
+
+`);
+    return [{ role: "system", content: system }, { role: "user", content: user }];
+  }
+  function syncSettingMessages({ guide, setting, units, fromUnitIndex = 0, reason = "" }) {
+    let system = [
+      guide,
+      "剧情大纲已经调整。对照【剧情大纲】校对【已有世界观正文】：找出与大纲冲突的句子，以及把人物关系、认知、信息差、人物走向写成永远不变的句子，只改这些句子，改写成开局状态或留白；同一件事在几个分块里重复出现时，只留在最合适的一处；其余文字逐字保留，分块标题不变。",
+      "只回「世界观正文」「速查」两段。世界观正文输出改好后的完整全文；没有需要改的句子时原样输出。"
+    ].join(`
+
+`), user = [
+      `【已有世界观正文】
+${setting}`,
+      changesBlock(units.slice(0, fromUnitIndex), "已演完阶段的状态变化"),
+      `【剧情大纲】
+${restText(units, fromUnitIndex)}`,
+      reason ? `【调整原因】
+${reason}` : ""
     ].filter(Boolean).join(`
 
 `);
@@ -1383,6 +1509,138 @@ ${text}` }
 `)[0]}` };
     }
   }
+
+  // src/core/guide.js
+  var BUILTIN_GUIDE = `# 同人世界观速成
+
+## 用途
+
+用户给出原作、角色、类型、基调中的任意几项，产出一段能直接填进世界书条目 content 的正文。
+
+## 语言基准（最高优先级）
+
+- 使用中小学生能看懂的通用规范汉语；去掉明显北方方言腔（儿、咱、甭、咋、得嘞等）。
+- 直接写事实、规则和结果：不把一步动作拆成慢镜头，不堆眉梢、嘴角、指尖这类身体零件，不写“不是X而是Y”式澄清，不把情绪和话拟物化。
+- 正文只写这个世界的既有事实与行动边界。不写“由AI把握、关系自然生成”这类生成器指令，不写“见XX条目”式交叉引用，不写作者说明。
+- 人称按设定定：性转、身份错位或性别认知有出入的题材，核心角色第一人称与旁白用“他”，其他角色口中与认知中用“她”；其余题材按用户指定。用户另有要求时一律按用户。
+
+## 适用
+
+只产出正文，不产出条目字段、条目标题、uid、触发方式或打包信息。
+
+输入可以只有一句话，也可以是完整设定。默认交付一段完整的世界观正文；人物、地点、机制需要单独成篇时，另出一段独立正文，不在同一段里堆索引。
+
+不写小说正文、不写场面描写、不写角色对白，不替用户写人设。
+
+## 输入
+
+从用户原话里取这几项，缺的按“补定”处理：
+
+- 原作与角色：基于哪部作品、哪几个人物、谁是核心。
+- 类型与基调：斜杠或顿号连写，如“现代都市AU / 性转 / 因果报应 / 荒诞喜剧”。
+- 时代与舞台：现代、古代、架空；故事主要发生在哪。
+- 特殊机制：这个AU自带的设定，如第二性别系统、种族、行业分层、契约或规则。
+- 尺度：是否涉及成人内容，允许写到什么程度。
+- 篇幅：只要声明加铁则，还是要人物档案、场景库与钩子库。
+
+## 执行步骤
+
+1. 定声明。一句话交代基于什么作品与人物、什么类型、什么时代、什么基调，缺项按“补定”填。
+2. 定铁则。写这个AU不可违背的几条：总受或总攻、欠债或因果归属、性格是否锁死、NSFW尺度、人称。每条一句，能约束角色行为，不解释理由。
+3. 定机制。每个特殊机制写四件事：是什么、作用对象、触发或运行条件、代价与后果。沿用到能直接推进剧情就停，不发明第二套系统。
+4. 定信息差。写清谁知道真相、谁不知道、各方各自不知道什么。
+5. 定人物处境。写身份、社会位置、开局状态、与核心角色的旧账。性格默认不写死。
+6. 定场景与钩子。场景写地点、用途与限制；钩子只写可观察信号与开放倾向，标明是可用素材。
+7. 定边界。写核心角色不会出现的状态与不许写成的内容；只写会改变写作走向的几条。
+8. 组装正文，过一遍出稿速查。
+
+## 正文骨架
+
+默认按下面顺序写；篇幅小时可只保留声明、铁则、机制、说明。全篇只写已发生的事实与现状，不写日后必然走向，长线悬念写成留白。
+
+\`\`\`
+世界观声明:
+基于: [原作与角色]
+类型: [类型与基调]
+时代: [时代与舞台]
+基调: [关键词，顿号连写]
+
+铁则:
+- [最硬的一条，如谁总受]
+- [欠债或因果归属]
+- [性格是否锁死]
+- [NSFW尺度]
+- [人称规则]
+
+[机制名]设定:
+- [机制是什么]
+- [作用对象]
+- [触发或运行条件]
+- [代价与后果]
+
+人物档案:
+[角色名]——[身份与在权力或关系网中的位置]
+- [开局状态]
+- [与核心角色的旧账]
+- [行为边界]
+
+信息差结构:
+- [谁知道真相]
+- [谁不知道]
+- [各方各自不知道什么]
+
+核心矛盾:
+- [身体或处境矛盾]
+- [心理矛盾]
+
+场景库:
+- [地点或场景：定位、在这里能发生什么、有什么限制]
+
+钩子库:
+- [可用素材，不是必须发生的事。只写可观察信号与开放倾向]
+
+NSFW指引（涉及成人内容时）:
+- 基调：[写到什么程度]
+- 可用方向：[哪几类场景]
+- 不允许的内容：[明确不写的几项]
+
+不会出现的状态:
+- [核心角色明确不会做的事，如不会主动示弱、不会突然接受现状]
+
+说明:
+- [未发生当作大纲，已发生当作起点与既定事实]
+- [留白与长线悬念]
+\`\`\`
+
+用户要单独成篇时，按同样写法另起一段正文。
+
+- 信息差条目多时用表格：表头列角色，单元格写各自知道与不知道什么，行写事实项。
+- 需要模型少回放的旧事，在该段后加括注，如\`（AI禁止时时刻刻回忆）\`。
+- 硬约束前可加\`⚠️\`，只标真正会让写作跑偏的几条。
+- 后补设定用一段\`[追加]\`收尾，只写新增事实，不改动前面已写内容。
+
+## 出稿速查
+
+- [ ] 全部内容只服务于“这个世界是什么、怎么运转、人物处在什么位置”，没有条目化表述。
+- [ ] 声明与铁则必写；机制、信息差、人物处境、场景库、钩子库按题材补齐，不写无关分块。
+- [ ] 铁则每条只约束一件事，不解释理由，不写“因为/所以”。
+- [ ] 机制写清是什么、作用对象、触发条件、代价与后果。
+- [ ] 信息差单独成段，写清谁知道、谁不知道、各方各自不知道什么。
+- [ ] 同一件事只写在一个分块：谁知道什么写在信息差，人物的开局状态写在人物档案，铁则不再重复。
+- [ ] 场景库写清地点与用途；钩子库标明是可用素材，不写成必将发生的事件。
+- [ ] 只写已发生事实与现状，没有必然走向；长线悬念写成留白。
+- [ ] 性格默认未锁死；用户未指定的关系结论未被坐实。
+- [ ] 人称符合设定：涉及性转或身份错位时，核心角色用“他”，其他角色口中与认知中用“她”；其余题材按用户指定。
+- [ ] 没有堆砌身体零件、动作慢镜头、抽象拟物与方言腔。
+- [ ] 核心角色不会出现的状态已写明，只写会改变写作走向的几条。
+
+## 输出
+
+只回三段，不加额外说明：
+
+1. 世界观正文：纯文本，直接可粘贴进条目 content，按正文骨架的分块与标题写。
+2. 补定：一行一条，列出替用户补齐的项，方便他改；没有补定时省略。
+3. 速查：单独一行 \`速查：PASS / FAIL。\``;
 
   // src/core/infinite-state.js
   var POLLUTION_LINE = /^[ \t　]*污染[^\n]*$/gm, NEGATION = /(?:未|没|不|尚未|还没|还未)$/;
@@ -1990,6 +2248,16 @@ ${horrorGuide}` : "",
         });
       }
     }
+    async function syncSetting(projectId, { from = 0, reason = "" } = {}) {
+      let project = data.project(projectId), text = project && project.setting.text.trim();
+      if (!text) return [];
+      let list = flattenUnits(project.outline.volumes), guide = String(data.settings().guide || "").trim() || BUILTIN_GUIDE, reply2 = await requestLlm(syncSettingMessages({ guide, setting: text, units: list, fromUnitIndex: from, reason }), resolveLlm(data.settings(), "outline")), body = parseSettingReply(reply2).body, keys = body ? changedBlockKeys(text, body) : [];
+      if (!keys.length) return [];
+      let next = mergeBlocks(text, body, keys);
+      data.updateProject(projectId, (current) => ({ ...current, setting: { ...current.setting, text: next, history: pushHistory(pushHistory(current.setting.history, current.setting.text), next) } }));
+      let titles = new Map(splitBlocks(text).map((block) => [block.key, block.title]));
+      return keys.map((key) => titles.get(key) || key);
+    }
     async function rewriteRest(reason) {
       let project = activeProject(), prog = currentProgress(), unit = activeUnit();
       if (!project || !prog || !unit) throw new Error("当前卡没有启用的项目");
@@ -1997,23 +2265,36 @@ ${horrorGuide}` : "",
 
 `), reply2 = await requestLlm(rewriteRestMessages({ setting: project.setting.text, volumes: project.outline.volumes, fromUnitIndex: from, units: list, recent, reason }), resolveLlm(data.settings(), "outline")), parsed = parseOutlineReply(reply2);
       if (!parsed.ok) throw new Error(`改写结果格式有误：${parsed.error}`);
-      let before = { volumes: project.outline.volumes, progress: prog }, volumes = replaceRest(project.outline.volumes, unit.stage.id, parsed.volumes);
+      let before = { volumes: project.outline.volumes, progress: prog, setting: project.setting.text }, volumes = replaceRest(project.outline.volumes, unit.stage.id, parsed.volumes);
       data.updateProject(project.id, (current) => ({ ...current, outline: { ...current.outline, volumes } }));
       let first = parsed.volumes[0] && parsed.volumes[0].stages[0];
       return first && setProgress(goTo(currentProgress(), flattenUnits(volumes), first.id)), before;
     }
     function undoRewrite(projectId, before) {
-      data.updateProject(projectId, (current) => ({ ...current, outline: { ...current.outline, volumes: before.volumes } })), setProgress(before.progress), toast("info", "已撤销改写，恢复原来的大纲和进度。");
+      data.updateProject(projectId, (current) => ({
+        ...current,
+        outline: { ...current.outline, volumes: before.volumes },
+        setting: { ...current.setting, text: before.setting, history: pushHistory(current.setting.history, before.setting) }
+      })), setProgress(before.progress), toast("info", "已撤销改写，恢复原来的大纲、设定和进度。");
     }
     async function runRewrite(reason, { auto = !1 } = {}) {
       let projectId = activeId();
       notice.show({ id: "offtrack", title: "正在改写后续阶段…", body: reason });
       try {
-        let before = await rewriteRest(reason);
+        let before = await rewriteRest(reason), synced = "";
+        try {
+          notice.show({ id: "offtrack", title: "正在按新大纲校对设定…", body: reason });
+          let titles = await syncSetting(projectId, { from: currentIndex(units(), currentProgress()), reason });
+          synced = titles.length ? `
+设定已同步修改：${titles.join("、")}。` : "";
+        } catch (error) {
+          synced = `
+设定校对失败：${error.message}`;
+        }
         notice.show({
           id: "offtrack",
           title: auto ? "剧情偏离大纲，已自动改写后续阶段" : "已改写后续阶段",
-          body: reason,
+          body: `${reason}${synced}`,
           actions: [{ label: "撤销", run: () => undoRewrite(projectId, before) }],
           timeout: 2e4
         });
@@ -2374,6 +2655,7 @@ ${horrorGuide}` : "",
       floorCount,
       recentFloors,
       rewriteRest,
+      syncSetting,
       diagnose,
       isInfinite: () => isInfinite(activeProject()),
       infState,
@@ -2663,6 +2945,11 @@ label.pi-wb-row{cursor:pointer}
 .pi-block-chip>.pi-block-del{padding:3px 4px;display:inline-flex;align-items:center;opacity:.6}
 .pi-block-chip>.pi-block-del svg{width:10px;height:10px}
 .pi-block-chip>.pi-block-del:hover{opacity:1;color:var(--pi-danger)}
+.pi-block-chip>.pi-block-eye{padding:3px 2px;display:inline-flex;align-items:center;opacity:.6}
+.pi-block-chip>.pi-block-eye svg{width:12px;height:12px}
+.pi-block-chip>.pi-block-eye:hover{opacity:1}
+.pi-block-chip.is-mute{color:var(--pi-rule)}
+.pi-block-chip.is-mute>button:first-child{text-decoration:line-through}
 .pi-chip.is-on{color:var(--pi-accent);background:var(--pi-accent-soft)}
 .pi-diff{font-family:var(--pi-mono);font-size:12px;line-height:1.5;white-space:pre-wrap;word-break:break-word;background:var(--pi-surf);border-radius:var(--pi-r-in);padding:6px 0;max-height:360px;overflow:auto}
 .pi-diff div{padding:0 10px}
@@ -2845,138 +3132,6 @@ label.pi-wb-row{cursor:pointer}
     refreshOn: () => refreshOn3,
     render: () => render3
   });
-
-  // src/core/guide.js
-  var BUILTIN_GUIDE = `# 同人世界观速成
-
-## 用途
-
-用户给出原作、角色、类型、基调中的任意几项，产出一段能直接填进世界书条目 content 的正文。
-
-## 语言基准（最高优先级）
-
-- 使用中小学生能看懂的通用规范汉语；去掉明显北方方言腔（儿、咱、甭、咋、得嘞等）。
-- 直接写事实、规则和结果：不把一步动作拆成慢镜头，不堆眉梢、嘴角、指尖这类身体零件，不写“不是X而是Y”式澄清，不把情绪和话拟物化。
-- 正文只写这个世界的既有事实与行动边界。不写“由AI把握、关系自然生成”这类生成器指令，不写“见XX条目”式交叉引用，不写作者说明。
-- 人称按设定定：性转、身份错位或性别认知有出入的题材，核心角色第一人称与旁白用“他”，其他角色口中与认知中用“她”；其余题材按用户指定。用户另有要求时一律按用户。
-
-## 适用
-
-只产出正文，不产出条目字段、条目标题、uid、触发方式或打包信息。
-
-输入可以只有一句话，也可以是完整设定。默认交付一段完整的世界观正文；人物、地点、机制需要单独成篇时，另出一段独立正文，不在同一段里堆索引。
-
-不写小说正文、不写场面描写、不写角色对白，不替用户写人设。
-
-## 输入
-
-从用户原话里取这几项，缺的按“补定”处理：
-
-- 原作与角色：基于哪部作品、哪几个人物、谁是核心。
-- 类型与基调：斜杠或顿号连写，如“现代都市AU / 性转 / 因果报应 / 荒诞喜剧”。
-- 时代与舞台：现代、古代、架空；故事主要发生在哪。
-- 特殊机制：这个AU自带的设定，如第二性别系统、种族、行业分层、契约或规则。
-- 尺度：是否涉及成人内容，允许写到什么程度。
-- 篇幅：只要声明加铁则，还是要人物档案、场景库与钩子库。
-
-## 执行步骤
-
-1. 定声明。一句话交代基于什么作品与人物、什么类型、什么时代、什么基调，缺项按“补定”填。
-2. 定铁则。写这个AU不可违背的几条：总受或总攻、知情圈、欠债或因果归属、性格是否锁死、NSFW尺度、人称。每条一句，能约束角色行为，不解释理由。
-3. 定机制。每个特殊机制写四件事：是什么、作用对象、触发或运行条件、代价与后果。沿用到能直接推进剧情就停，不发明第二套系统。
-4. 定信息差。写清谁知道真相、谁不知道、各方各自不知道什么。
-5. 定人物处境。写身份、社会位置、开局状态、与核心角色的旧账。性格默认不写死。
-6. 定场景与钩子。场景写地点、用途与限制；钩子只写可观察信号与开放倾向，标明是可用素材。
-7. 定边界。写核心角色不会出现的状态与不许写成的内容；只写会改变写作走向的几条。
-8. 组装正文，过一遍出稿速查。
-
-## 正文骨架
-
-默认按下面顺序写；篇幅小时可只保留声明、铁则、机制、说明。全篇只写已发生的事实与现状，不写日后必然走向，长线悬念写成留白。
-
-\`\`\`
-世界观声明:
-基于: [原作与角色]
-类型: [类型与基调]
-时代: [时代与舞台]
-基调: [关键词，顿号连写]
-
-铁则:
-- [最硬的一条，如谁总受]
-- [知情圈范围]
-- [欠债或因果归属]
-- [性格是否锁死]
-- [NSFW尺度]
-- [人称规则]
-
-[机制名]设定:
-- [机制是什么]
-- [作用对象]
-- [触发或运行条件]
-- [代价与后果]
-
-人物档案:
-[角色名]——[身份与在权力或关系网中的位置]
-- [开局状态]
-- [与核心角色的旧账]
-- [行为边界]
-
-信息差结构:
-- [谁知道真相]
-- [谁不知道]
-- [各方各自不知道什么]
-
-核心矛盾:
-- [身体或处境矛盾]
-- [心理矛盾]
-
-场景库:
-- [地点或场景：定位、在这里能发生什么、有什么限制]
-
-钩子库:
-- [可用素材，不是必须发生的事。只写可观察信号与开放倾向]
-
-NSFW指引（涉及成人内容时）:
-- 基调：[写到什么程度]
-- 可用方向：[哪几类场景]
-- 不允许的内容：[明确不写的几项]
-
-不会出现的状态:
-- [核心角色明确不会做的事，如不会主动示弱、不会突然接受现状]
-
-说明:
-- [未发生当作大纲，已发生当作起点与既定事实]
-- [留白与长线悬念]
-\`\`\`
-
-用户要单独成篇时，按同样写法另起一段正文。
-
-- 信息差条目多时用表格：表头列角色，单元格写各自知道与不知道什么，行写事实项。
-- 需要模型少回放的旧事，在该段后加括注，如\`（AI禁止时时刻刻回忆）\`。
-- 硬约束前可加\`⚠️\`，只标真正会让写作跑偏的几条。
-- 后补设定用一段\`[追加]\`收尾，只写新增事实，不改动前面已写内容。
-
-## 出稿速查
-
-- [ ] 全部内容只服务于“这个世界是什么、怎么运转、人物处在什么位置”，没有条目化表述。
-- [ ] 声明与铁则必写；机制、信息差、人物处境、场景库、钩子库按题材补齐，不写无关分块。
-- [ ] 铁则每条只约束一件事，不解释理由，不写“因为/所以”。
-- [ ] 机制写清是什么、作用对象、触发条件、代价与后果。
-- [ ] 信息差单独成段，写清谁知道、谁不知道、各方各自不知道什么。
-- [ ] 场景库写清地点与用途；钩子库标明是可用素材，不写成必将发生的事件。
-- [ ] 只写已发生事实与现状，没有必然走向；长线悬念写成留白。
-- [ ] 性格默认未锁死；用户未指定的关系结论未被坐实。
-- [ ] 人称符合设定：涉及性转或身份错位时，核心角色用“他”，其他角色口中与认知中用“她”；其余题材按用户指定。
-- [ ] 没有堆砌身体零件、动作慢镜头、抽象拟物与方言腔。
-- [ ] 核心角色不会出现的状态已写明，只写会改变写作走向的几条。
-
-## 输出
-
-只回三段，不加额外说明：
-
-1. 世界观正文：纯文本，直接可粘贴进条目 content，按正文骨架的分块与标题写。
-2. 补定：一行一条，列出替用户补齐的项，方便他改；没有补定时省略。
-3. 速查：单独一行 \`速查：PASS / FAIL。\``;
 
   // src/ui/ai.js
   function ask(view, role, messages, { signal } = {}) {
@@ -3355,7 +3510,7 @@ ${floor.text}`).join(`
     return `<div class="pi-seg pi-node-seg">${NODE_FIELDS.map((meta2) => `<button type="button" class="pi-seg-btn${meta2.kind === kind ? " is-sel" : ""}" data-act="node-kind" data-kind="${meta2.kind}">${esc(meta2.label)} ${count(meta2)}</button>`).join("")}</div>`;
   }
   function stageEditor(volume, stage, raw, kind) {
-    let known = /* @__PURE__ */ new Set(["时间范围", "AI指令", ...NODE_FIELDS.map((item) => item.field)]), extra = Object.keys(stage.data).filter((key) => !known.has(key)), head = `<div class="pi-card"><h3>阶段</h3>
+    let known = /* @__PURE__ */ new Set(["时间范围", "AI指令", CHANGE_FIELD, ...NODE_FIELDS.map((item) => item.field)]), extra = Object.keys(stage.data).filter((key) => !known.has(key)), head = `<div class="pi-card"><h3>阶段</h3>
         <p class="pi-hint">所属：${esc(volumeLabel(volume.key))}</p>
         <div class="pi-tools is-c3"><button type="button" class="pi-btn is-sm" data-act="stage-up">上移</button>
         <button type="button" class="pi-btn is-sm" data-act="raw">${raw ? "表单编辑" : "YAML 原文"}</button>
@@ -3364,6 +3519,8 @@ ${floor.text}`).join(`
             <div class="pi-tools is-c1 is-end"><button type="button" class="pi-btn is-primary is-sm" data-act="raw-apply">应用</button></div><p class="pi-status" data-raw-status></p></div>` : `${head}<label class="pi-field"><span>阶段名（阶段N_标题）</span><input class="pi-inp" data-stage-key value="${esc(stage.key)}"></label>
         <label class="pi-field"><span>时间范围（用来判断何时切到下一段）</span><input class="pi-inp" data-stage-field="时间范围" value="${esc(stage.data.时间范围 ?? "")}"></label>
         <label class="pi-field"><span>AI指令</span><textarea class="pi-ta" rows="2" data-stage-field="AI指令">${esc(stage.data.AI指令 ?? "")}</textarea></label>
+        <label class="pi-field"><span>状态变化（每行一条，本阶段演完后接在设定后面注入）</span><textarea class="pi-ta" rows="2" data-stage-list="${CHANGE_FIELD}" placeholder="例：她察觉到 A 对她不只是兄弟情">${esc(changeLines(stage.data).join(`
+`))}</textarea></label>
         ${extra.length ? `<p class="pi-hint">另有字段：${esc(extra.join("、"))}（在 YAML 原文里编辑）</p>` : ""}</div>
         ${nodeTabs(stage, kind)}${nodeEditor(stage, NODE_FIELDS.find((meta2) => meta2.kind === kind))}`;
   }
@@ -3461,7 +3618,7 @@ ${floor.text}`).join(`
       recent,
       reason
     })));
-    reply2 && setDraft(view, "rewrite", reply2, { fromUnitId: units[from].id });
+    reply2 && setDraft(view, "rewrite", reply2, { fromUnitId: units[from].id, reason });
   }
   function applyRest(view, draft) {
     let project = view.project(), unit = flattenUnits(project.outline.volumes).find((item) => item.id === draft.fromUnitId);
@@ -3469,7 +3626,7 @@ ${floor.text}`).join(`
     let volumes = replaceRest(project.outline.volumes, unit.stage.id, draft.volumes);
     update2(view, () => volumes);
     let first = draft.volumes[0] && draft.volumes[0].stages[0];
-    first && view.runtime.activeId() === view.projectId && view.runtime.setProgress(goTo(view.runtime.progress(), flattenUnits(volumes), first.id));
+    return first && view.runtime.activeId() === view.projectId && view.runtime.setProgress(goTo(view.runtime.progress(), flattenUnits(volumes), first.id)), first ? flattenUnits(volumes).findIndex((item) => item.id === first.id) : 0;
   }
   var actions = {
     ...genActions,
@@ -3576,13 +3733,13 @@ ${floor.text}`).join(`
     },
     async "draft-fix"(view, target) {
       let draft = st(view).draft, box = target.closest(".pi-card").querySelector("[data-draft-yaml]"), text = box ? box.value : draft.yaml, reply2 = await runTask(view, "outline", () => ask(view, "outline", fixYamlMessages(text, draft.error)));
-      reply2 && setDraft(view, draft.mode, reply2, { fromUnitId: draft.fromUnitId });
+      reply2 && setDraft(view, draft.mode, reply2, { fromUnitId: draft.fromUnitId, reason: draft.reason });
     },
     "draft-reparse"(view, target) {
       let draft = st(view).draft, yaml = target.closest(".pi-card").querySelector("[data-draft-yaml]").value;
       setDraft(view, draft.mode, `\`\`\`yaml
 ${yaml}
-\`\`\``, { fromUnitId: draft.fromUnitId });
+\`\`\``, { fromUnitId: draft.fromUnitId, reason: draft.reason });
     },
     "draft-drop"(view) {
       st(view).draft = null, view.renderBody();
@@ -3604,7 +3761,11 @@ ${yaml}
       updateVolume(view, volume.id, (item) => ({ ...item, stages: [...item.stages, ...stages] })), st(view).draft = null, view.runtime.refresh(), view.renderBody();
     },
     async "draft-rest"(view) {
-      await confirmDialog({ title: "替换剩余阶段", body: "当前阶段及之后的阶段会换成改写后的内容，进度跳到改写后的第一段。", okLabel: "替换", danger: !0 }) && (applyRest(view, st(view).draft), st(view).draft = null, view.renderBody());
+      if (!await confirmDialog({ title: "替换剩余阶段", body: "当前阶段及之后的阶段会换成改写后的内容，进度跳到改写后的第一段。", okLabel: "替换", danger: !0 })) return;
+      let draft = st(view).draft, from = applyRest(view, draft);
+      st(view).draft = null, view.renderBody();
+      let titles = await runTask(view, "outline", () => view.runtime.syncSetting(view.projectId, { from, reason: draft.reason }));
+      titles && titles.length && toast("success", `设定已按新大纲修改：${titles.join("、")}。可在设定页的历史版本里回退。`);
     }
   };
   function renameInTree(target, id, label) {
@@ -3633,6 +3794,15 @@ ${yaml}
         updateStage(view, stage.id, (item) => ({ ...item, data: { ...item.data, [field]: target.value } }));
         return;
       }
+      if (target.dataset.stageList) {
+        let field = target.dataset.stageList, lines2 = target.value.split(`
+`).map((line) => line.trim()).filter(Boolean);
+        updateStage(view, stage.id, (item) => {
+          let data = { ...item.data, [field]: lines2 };
+          return lines2.length || delete data[field], { ...item, data };
+        });
+        return;
+      }
       if (target.dataset.nodeField) {
         let field = target.dataset.nodeField, index = Number(target.dataset.i), key = target.dataset.k;
         updateStage(view, stage.id, (item) => {
@@ -3643,7 +3813,7 @@ ${yaml}
     }
   }
   function onBlur(view, target) {
-    target.matches("[data-stage-key],[data-vol-key],[data-stage-field],[data-node-field]") && view.runtime.refresh();
+    target.matches("[data-stage-key],[data-vol-key],[data-stage-field],[data-stage-list],[data-node-field]") && view.runtime.refresh();
   }
   var refreshOn = [];
 
@@ -3658,79 +3828,6 @@ ${yaml}
     refreshOn: () => refreshOn2,
     render: () => render2
   });
-
-  // src/core/setting.js
-  var HEADING = /^(?:#{1,4}\s*)?([^\s\-*#\[][^:：]{0,30})[:：]\s*$|^(?:#{1,4}\s+)(.{1,30})$|^(\[追加\])\s*$/;
-  function splitBlocks(text) {
-    let lines2 = String(text || "").replace(/\r\n/g, `
-`).split(`
-`), blocks = [], current = { key: "", lines: [] }, counts = {};
-    for (let line of lines2) {
-      let match = HEADING.exec(line);
-      if (match) {
-        (current.key || current.lines.some((item) => item.trim())) && blocks.push(current);
-        let title2 = (match[1] || match[2] || match[3]).trim();
-        counts[title2] = (counts[title2] || 0) + 1, current = { key: counts[title2] > 1 ? `${title2}#${counts[title2]}` : title2, title: title2, lines: [line] };
-      } else
-        current.lines.push(line);
-    }
-    return (current.key || current.lines.some((item) => item.trim())) && blocks.push(current), blocks.map((block) => ({ key: block.key || "开头", title: block.title || "开头", text: block.lines.join(`
-`).replace(/\n+$/, "") }));
-  }
-  function joinBlocks(blocks) {
-    return blocks.map((block) => block.text).join(`
-
-`).trim();
-  }
-  function mergeBlocks(oldText, newText, keys) {
-    let pick = new Set(keys), oldBlocks = splitBlocks(oldText), newBlocks = splitBlocks(newText), newMap = new Map(newBlocks.map((block) => [block.key, block])), out = oldBlocks.map((block) => pick.has(block.key) && newMap.has(block.key) ? newMap.get(block.key) : block), oldKeys = new Set(oldBlocks.map((block) => block.key));
-    for (let block of newBlocks) pick.has(block.key) && !oldKeys.has(block.key) && out.push(block);
-    return joinBlocks(out);
-  }
-  var SECTION = /^\s*(?:#{1,4}\s*|\d+\s*[.、．]\s*|\*\*)*\s*(世界观正文|补定|速查)\s*(?:\*\*)?\s*[:：]?\s*(?:\*\*)?\s*/;
-  function stripFence(text) {
-    let match = /^\s*```[a-zA-Z]*\n([\s\S]*?)\n```\s*$/.exec(text);
-    return (match ? match[1] : text).trim();
-  }
-  function parseSettingReply(text) {
-    let lines2 = String(text || "").replace(/\r\n/g, `
-`).split(`
-`), sections = { 世界观正文: [], 补定: [], 速查: [] }, current = "世界观正文", sawHeading = !1;
-    for (let line of lines2) {
-      let match = SECTION.exec(line);
-      if (match && (match[1] !== "速查" || /PASS|FAIL/i.test(line) || line.replace(SECTION, "").trim() === "")) {
-        current = match[1], sawHeading = !0;
-        let rest = line.slice(match[0].length).trim();
-        rest && sections[current].push(rest);
-        continue;
-      }
-      sections[current].push(line);
-    }
-    let body = stripFence(sections.世界观正文.join(`
-`)), fixes = sections.补定.map((line) => line.replace(/^\s*(?:[-*•]|\d+[.、])\s*/, "").trim()).filter(Boolean), verdict = /(PASS|FAIL)/i.exec([...sections.速查, ...sawHeading ? [] : lines2.slice(-3)].join(" "));
-    return { body, fixes, check: verdict ? verdict[1].toUpperCase() : "" };
-  }
-  function pushHistory(history, text, limit = 10, now = Date.now()) {
-    let list = Array.isArray(history) ? history : [];
-    return list.length && list[0].text === text ? list : [{ at: now, text }, ...list].slice(0, limit);
-  }
-  function diffLines(a, b) {
-    let x = String(a || "").split(`
-`), y = String(b || "").split(`
-`);
-    if (x.length * y.length > 4e6) return [...x.map((text) => ({ op: "-", text })), ...y.map((text) => ({ op: "+", text }))];
-    let n = x.length, m = y.length, dp = Array.from({ length: n + 1 }, () => new Uint32Array(m + 1));
-    for (let i2 = n - 1; i2 >= 0; i2 -= 1)
-      for (let j2 = m - 1; j2 >= 0; j2 -= 1) dp[i2][j2] = x[i2] === y[j2] ? dp[i2 + 1][j2 + 1] + 1 : Math.max(dp[i2 + 1][j2], dp[i2][j2 + 1]);
-    let out = [], i = 0, j = 0;
-    for (; i < n && j < m; )
-      x[i] === y[j] ? (out.push({ op: "=", text: x[i] }), i += 1, j += 1) : dp[i + 1][j] >= dp[i][j + 1] ? (out.push({ op: "-", text: x[i] }), i += 1) : (out.push({ op: "+", text: y[j] }), j += 1);
-    for (; i < n; ) out.push({ op: "-", text: x[i++] });
-    for (; j < m; ) out.push({ op: "+", text: y[j++] });
-    return out;
-  }
-
-  // src/ui/tab-setting.js
   var st2 = (view) => view.tabState("setting");
   function diffHtml(a, b) {
     return `<div class="pi-diff">${diffLines(a, b).map((line) => `<div class="${line.op === "+" ? "is-add" : line.op === "-" ? "is-del" : ""}">${esc(line.text) || " "}</div>`).join("")}</div>`;
@@ -3770,18 +3867,19 @@ ${yaml}
         ${chosen ? `<p class="pi-hint">${esc(fmt(chosen.at))} → 当前</p>${diffHtml(chosen.text, project.setting.text)}` : ""}</div>`;
   }
   function render2(view) {
-    let project = view.project(), s = st2(view), text = project.setting.text, blocks = splitBlocks(text).filter((block) => block.title !== "开头"), busy = view.busy.setting;
+    let project = view.project(), s = st2(view), text = project.setting.text, blocks = splitBlocks(text).filter((block) => block.title !== "开头"), mute2 = new Set(project.setting.mute), muted = blocks.some((block) => mute2.has(block.key)), busy = view.busy.setting, hasOutline = project.outline.volumes.some((volume) => volume.stages.length), chip = (block) => `<span class="pi-chip pi-block-chip${mute2.has(block.key) ? " is-mute" : ""}"><button type="button" data-act="jump" data-key="${esc(block.key)}" title="跳到这一块">${esc(block.title)}</button><button type="button" class="pi-block-eye" data-act="block-mute" data-key="${esc(block.key)}" title="${mute2.has(block.key) ? "已设为不注入，点击恢复注入" : "注入正文，点击设为不注入"}">${mute2.has(block.key) ? ICONS.eyeOff : ICONS.eye}</button><button type="button" class="pi-block-del" data-act="block-del" data-key="${esc(block.key)}" title="删除整个分块">${ICONS.close}</button></span>`;
     return `${s.draft ? draftHtml2(view, project, s.draft) : ""}
         <div class="pi-card"><h3>设定 ${checkBadge(project.setting.check)}</h3>
-        <div class="pi-tools is-c3">
+        <div class="pi-tools is-c4">
             <button type="button" class="pi-btn is-sm is-primary" data-act="from-talk"${busy ? " disabled" : ""}>${busy ? '<span class="pi-spin"></span>整理中' : "AI 整理"}</button>
+            <button type="button" class="pi-btn is-sm" data-act="sync-outline"${busy || !hasOutline || !text.trim() ? " disabled" : ""}>按大纲校对</button>
             <button type="button" class="pi-btn is-sm" data-act="import-wb">从世界书导入</button>
             <button type="button" class="pi-btn is-sm${s.history ? " is-primary" : ""}" data-act="history">历史版本 ${project.setting.history.length}</button>
             <label class="pi-check"><input type="checkbox" data-append${s.append ? " checked" : ""}><span>只追加，不改动已有分块</span></label></div>
         ${genRefsBar(view, "setting")}
-        ${blocks.length ? `<div class="pi-toc">${blocks.map((block) => `<span class="pi-chip pi-block-chip"><button type="button" data-act="jump" data-key="${esc(block.key)}" title="跳到这一块">${esc(block.title)}</button><button type="button" class="pi-block-del" data-act="block-del" data-key="${esc(block.key)}" title="删除整个分块">${ICONS.close}</button></span>`).join("")}</div>` : ""}
+        ${blocks.length ? `<div class="pi-toc">${blocks.map(chip).join("")}</div>` : ""}
         <textarea class="pi-ta is-tall" data-setting placeholder="世界观正文。执行时作为常驻条目注入（角色定义后），取代世界书里手改的剧情设定条目。">${esc(text)}</textarea>
-        <div class="pi-row"><span class="pi-hint pi-grow">≈<span data-tokens>${estimateTokens(text)}</span> token</span><span class="pi-status" data-save-status></span></div>
+        <div class="pi-row"><span class="pi-hint pi-grow">≈<span data-tokens>${estimateTokens(text)}</span> token${muted ? `，注入 ≈${estimateTokens(injectedSetting(project.setting))}` : ""}</span><span class="pi-status" data-save-status></span></div>
         ${fixesHtml(project.setting.fixes, "saved")}</div>
         ${s.history ? historyHtml(project, s.historyAt) : ""}`;
   }
@@ -3837,6 +3935,21 @@ ${yaml}
 ${parsed.body}` : parsed.body;
       st2(view).draft = { ...parsed, body, keys: splitBlocks(body).map((block) => block.key) }, view.renderBody();
     },
+    // 对照当前及之后的大纲找出冲突或写死的句子，结果进新稿对比，只勾选有改动的分块。
+    async "sync-outline"(view) {
+      let project = view.project(), units = flattenUnits(project.outline.volumes), from = view.runtime.activeId() === view.projectId ? Math.max(0, currentIndex(units, view.runtime.progress())) : 0, reply2 = await runTask(view, "setting", () => ask(view, "outline", syncSettingMessages({ guide: guideText(view), setting: project.setting.text, units, fromUnitIndex: from })));
+      if (!reply2) return;
+      let parsed = parseSettingReply(reply2), keys = parsed.body ? changedBlockKeys(project.setting.text, parsed.body) : [];
+      if (!keys.length) {
+        toast("info", "设定与大纲没有冲突，不需要修改。");
+        return;
+      }
+      st2(view).draft = { body: mergeBlocks(project.setting.text, parsed.body, keys), check: parsed.check, fixes: [], keys, sync: !0 }, view.renderBody();
+    },
+    "block-mute"(view, target) {
+      let key = target.dataset.key, mute2 = new Set(view.project().setting.mute);
+      mute2.has(key) ? mute2.delete(key) : mute2.add(key), setSetting(view, { mute: [...mute2] }), view.runtime.refresh(), view.renderBody();
+    },
     "draft-block"(view, target, event) {
       event.target.closest("input") || (st2(view).openBlock = st2(view).openBlock === target.dataset.key ? "" : target.dataset.key, view.renderBody());
     },
@@ -3845,12 +3958,12 @@ ${parsed.body}` : parsed.body;
     },
     "draft-all"(view) {
       let draft = st2(view).draft;
-      commit(view, draft.body, { check: draft.check, fixes: draft.fixes }), st2(view).draft = null, view.renderBody();
+      commit(view, draft.body, { check: draft.check, ...draft.sync ? {} : { fixes: draft.fixes } }), st2(view).draft = null, view.renderBody();
     },
     "draft-pick"(view) {
       let draft = st2(view).draft;
       if (!draft.keys.length) throw new Error("没有勾选分块");
-      commit(view, mergeBlocks(view.project().setting.text, draft.body, draft.keys), { check: draft.check, fixes: draft.fixes }), st2(view).draft = null, view.renderBody();
+      commit(view, mergeBlocks(view.project().setting.text, draft.body, draft.keys), { check: draft.check, ...draft.sync ? {} : { fixes: draft.fixes } }), st2(view).draft = null, view.renderBody();
     },
     "fix-ok"(view, target) {
       let index = Number(target.dataset.i);
@@ -5490,7 +5603,7 @@ ${parsed.body}` : parsed.body;
   }
 
   // src/index.js
-  var VERSION = "0.1.19", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.1.20", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")

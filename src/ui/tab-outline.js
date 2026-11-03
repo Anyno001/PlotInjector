@@ -1,4 +1,4 @@
-import { NODE_FIELDS, flattenUnits, makeId, outlineToText, parseOutlineText, replaceRest, stageLabel, stageToText, volumeLabel, volumeToText } from '../core/outline.js';
+import { CHANGE_FIELD, NODE_FIELDS, changeLines, flattenUnits, makeId, outlineToText, parseOutlineText, replaceRest, stageLabel, stageToText, volumeLabel, volumeToText } from '../core/outline.js';
 import { currentIndex, goTo } from '../core/progress.js';
 import { fixYamlMessages, outlineMessages, parseOutlineReply, rewriteRestMessages } from '../core/prompts.js';
 import { downloadBlob, toast } from '../host/st.js';
@@ -55,7 +55,7 @@ function nodeTabs(stage, kind) {
 }
 
 function stageEditor(volume, stage, raw, kind) {
-    const known = new Set(['时间范围', 'AI指令', ...NODE_FIELDS.map(item => item.field)]);
+    const known = new Set(['时间范围', 'AI指令', CHANGE_FIELD, ...NODE_FIELDS.map(item => item.field)]);
     const extra = Object.keys(stage.data).filter(key => !known.has(key));
     const head = `<div class="pi-card"><h3>阶段</h3>
         <p class="pi-hint">所属：${esc(volumeLabel(volume.key))}</p>
@@ -69,6 +69,7 @@ function stageEditor(volume, stage, raw, kind) {
     return `${head}<label class="pi-field"><span>阶段名（阶段N_标题）</span><input class="pi-inp" data-stage-key value="${esc(stage.key)}"></label>
         <label class="pi-field"><span>时间范围（用来判断何时切到下一段）</span><input class="pi-inp" data-stage-field="时间范围" value="${esc(stage.data.时间范围 ?? '')}"></label>
         <label class="pi-field"><span>AI指令</span><textarea class="pi-ta" rows="2" data-stage-field="AI指令">${esc(stage.data.AI指令 ?? '')}</textarea></label>
+        <label class="pi-field"><span>状态变化（每行一条，本阶段演完后接在设定后面注入）</span><textarea class="pi-ta" rows="2" data-stage-list="${CHANGE_FIELD}" placeholder="例：她察觉到 A 对她不只是兄弟情">${esc(changeLines(stage.data).join('\n'))}</textarea></label>
         ${extra.length ? `<p class="pi-hint">另有字段：${esc(extra.join('、'))}（在 YAML 原文里编辑）</p>` : ''}</div>
         ${nodeTabs(stage, kind)}${nodeEditor(stage, NODE_FIELDS.find(meta => meta.kind === kind))}`;
 }
@@ -197,7 +198,7 @@ export async function startRewrite(view) {
     const reply = await runTask(view, 'outline', () => ask(view, 'outline', rewriteRestMessages({
         setting: project.setting.text, volumes: project.outline.volumes, fromUnitIndex: from, units, recent, reason,
     })));
-    if (reply) setDraft(view, 'rewrite', reply, { fromUnitId: units[from].id });
+    if (reply) setDraft(view, 'rewrite', reply, { fromUnitId: units[from].id, reason });
 }
 
 function applyRest(view, draft) {
@@ -208,6 +209,7 @@ function applyRest(view, draft) {
     update(view, () => volumes);
     const first = draft.volumes[0] && draft.volumes[0].stages[0];
     if (first && view.runtime.activeId() === view.projectId) view.runtime.setProgress(goTo(view.runtime.progress(), flattenUnits(volumes), first.id));
+    return first ? flattenUnits(volumes).findIndex(item => item.id === first.id) : 0;
 }
 
 export const actions = {
@@ -362,12 +364,12 @@ export const actions = {
         const box = target.closest('.pi-card').querySelector('[data-draft-yaml]');
         const text = box ? box.value : draft.yaml;
         const reply = await runTask(view, 'outline', () => ask(view, 'outline', fixYamlMessages(text, draft.error)));
-        if (reply) setDraft(view, draft.mode, reply, { fromUnitId: draft.fromUnitId });
+        if (reply) setDraft(view, draft.mode, reply, { fromUnitId: draft.fromUnitId, reason: draft.reason });
     },
     'draft-reparse'(view, target) {
         const draft = st(view).draft;
         const yaml = target.closest('.pi-card').querySelector('[data-draft-yaml]').value;
-        setDraft(view, draft.mode, `\`\`\`yaml\n${yaml}\n\`\`\``, { fromUnitId: draft.fromUnitId });
+        setDraft(view, draft.mode, `\`\`\`yaml\n${yaml}\n\`\`\``, { fromUnitId: draft.fromUnitId, reason: draft.reason });
     },
     'draft-drop'(view) {
         st(view).draft = null;
@@ -400,9 +402,12 @@ export const actions = {
     },
     async 'draft-rest'(view) {
         if (!(await confirmDialog({ title: '替换剩余阶段', body: '当前阶段及之后的阶段会换成改写后的内容，进度跳到改写后的第一段。', okLabel: '替换', danger: true }))) return;
-        applyRest(view, st(view).draft);
+        const draft = st(view).draft;
+        const from = applyRest(view, draft);
         st(view).draft = null;
         view.renderBody();
+        const titles = await runTask(view, 'outline', () => view.runtime.syncSetting(view.projectId, { from, reason: draft.reason }));
+        if (titles && titles.length) toast('success', `设定已按新大纲修改：${titles.join('、')}。可在设定页的历史版本里回退。`);
     },
 };
 
@@ -439,6 +444,16 @@ export function onInput(view, target) {
         updateStage(view, stage.id, item => ({ ...item, data: { ...item.data, [field]: target.value } }));
         return;
     }
+    if (target.dataset.stageList) {
+        const field = target.dataset.stageList;
+        const lines = target.value.split('\n').map(line => line.trim()).filter(Boolean);
+        updateStage(view, stage.id, item => {
+            const data = { ...item.data, [field]: lines };
+            if (!lines.length) delete data[field];
+            return { ...item, data };
+        });
+        return;
+    }
     if (target.dataset.nodeField) {
         const field = target.dataset.nodeField;
         const index = Number(target.dataset.i);
@@ -454,7 +469,7 @@ export function onInput(view, target) {
 
 // 失焦时同步注入内容；名字改动直接改树上的文字，不整页重画（避免吞掉紧接着的点击）。
 export function onBlur(view, target) {
-    if (target.matches('[data-stage-key],[data-vol-key],[data-stage-field],[data-node-field]')) view.runtime.refresh();
+    if (target.matches('[data-stage-key],[data-vol-key],[data-stage-field],[data-stage-list],[data-node-field]')) view.runtime.refresh();
 }
 
 export const refreshOn = [];

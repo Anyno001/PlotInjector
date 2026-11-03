@@ -1,6 +1,8 @@
 import { buildCheckMessages, cleanFloorText, parseCheckReply } from '../core/check.js';
 import { buildEntries, buildIndexText, carriedNodes, toWorldInfoEntry } from '../core/inject.js';
-import { parseOutlineReply, rewriteRestMessages } from '../core/prompts.js';
+import { parseOutlineReply, rewriteRestMessages, syncSettingMessages } from '../core/prompts.js';
+import { changedBlockKeys, mergeBlocks, parseSettingReply, pushHistory, splitBlocks } from '../core/setting.js';
+import { BUILTIN_GUIDE } from '../core/guide.js';
 import { flattenUnits, replaceRest, stageLabel, stageNodes, volumeLabel } from '../core/outline.js';
 import { advance, currentIndex, emptyProgress, goTo, isMuted, mute, uncheckByNames, unitStates } from '../core/progress.js';
 import { createWorld, emptyInfinite, enterWorld, leaveWorld, reenterWorld, removeWorld, undoEnter, undoLeave, withTrigger } from '../core/infinite-flow.js';
@@ -209,6 +211,23 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
         });
     }
 
+    // 大纲改了以后按大纲校对设定：只替换有改动的分块，旧版进历史版本。返回改动的分块标题，没改返回空数组。
+    async function syncSetting(projectId, { from = 0, reason = '' } = {}) {
+        const project = data.project(projectId);
+        const text = project && project.setting.text.trim();
+        if (!text) return [];
+        const list = flattenUnits(project.outline.volumes);
+        const guide = String(data.settings().guide || '').trim() || BUILTIN_GUIDE;
+        const reply = await requestLlm(syncSettingMessages({ guide, setting: text, units: list, fromUnitIndex: from, reason }), resolveLlm(data.settings(), 'outline'));
+        const body = parseSettingReply(reply).body;
+        const keys = body ? changedBlockKeys(text, body) : [];
+        if (!keys.length) return [];
+        const next = mergeBlocks(text, body, keys);
+        data.updateProject(projectId, current => ({ ...current, setting: { ...current.setting, text: next, history: pushHistory(pushHistory(current.setting.history, current.setting.text), next) } }));
+        const titles = new Map(splitBlocks(text).map(block => [block.key, block.title]));
+        return keys.map(key => titles.get(key) || key);
+    }
+
     // 按最近正文改写当前段及之后的阶段，直接替换并把进度移到改写后的第一段；返回撤销用的快照。
     async function rewriteRest(reason) {
         const project = activeProject();
@@ -221,7 +240,7 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
         const reply = await requestLlm(rewriteRestMessages({ setting: project.setting.text, volumes: project.outline.volumes, fromUnitIndex: from, units: list, recent, reason }), resolveLlm(data.settings(), 'outline'));
         const parsed = parseOutlineReply(reply);
         if (!parsed.ok) throw new Error(`改写结果格式有误：${parsed.error}`);
-        const before = { volumes: project.outline.volumes, progress: prog };
+        const before = { volumes: project.outline.volumes, progress: prog, setting: project.setting.text };
         const volumes = replaceRest(project.outline.volumes, unit.stage.id, parsed.volumes);
         data.updateProject(project.id, current => ({ ...current, outline: { ...current.outline, volumes } }));
         const first = parsed.volumes[0] && parsed.volumes[0].stages[0];
@@ -230,9 +249,13 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
     }
 
     function undoRewrite(projectId, before) {
-        data.updateProject(projectId, current => ({ ...current, outline: { ...current.outline, volumes: before.volumes } }));
+        data.updateProject(projectId, current => ({
+            ...current,
+            outline: { ...current.outline, volumes: before.volumes },
+            setting: { ...current.setting, text: before.setting, history: pushHistory(current.setting.history, before.setting) },
+        }));
         setProgress(before.progress);
-        toast('info', '已撤销改写，恢复原来的大纲和进度。');
+        toast('info', '已撤销改写，恢复原来的大纲、设定和进度。');
     }
 
     async function runRewrite(reason, { auto = false } = {}) {
@@ -240,10 +263,18 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
         notice.show({ id: 'offtrack', title: '正在改写后续阶段…', body: reason });
         try {
             const before = await rewriteRest(reason);
+            let synced = '';
+            try {
+                notice.show({ id: 'offtrack', title: '正在按新大纲校对设定…', body: reason });
+                const titles = await syncSetting(projectId, { from: currentIndex(units(), currentProgress()), reason });
+                synced = titles.length ? `\n设定已同步修改：${titles.join('、')}。` : '';
+            } catch (error) {
+                synced = `\n设定校对失败：${error.message}`;
+            }
             notice.show({
                 id: 'offtrack',
                 title: auto ? '剧情偏离大纲，已自动改写后续阶段' : '已改写后续阶段',
-                body: reason,
+                body: `${reason}${synced}`,
                 actions: [{ label: '撤销', run: () => undoRewrite(projectId, before) }],
                 timeout: 20000,
             });
@@ -802,6 +833,7 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
         floorCount,
         recentFloors,
         rewriteRest,
+        syncSetting,
         diagnose,
         isInfinite: () => isInfinite(activeProject()),
         infState,

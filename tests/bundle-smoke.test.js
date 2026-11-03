@@ -176,7 +176,7 @@ test('检测发现偏离大纲时弹提醒；改写后续阶段可填说明，�
     const project = await withProject(host);
     host.win.__reply = prompts => (/剧情进度核对员/.test(prompts[0].content)
         ? '{"done":[],"stageDone":true,"offTrack":true,"offReason":"甲已死，乙事件无法发生","reason":"x"}'
-        : REWRITE);
+        : /剧情大纲已经调整/.test(prompts[0].content) ? '世界观正文：\n世界观声明:\n基于: 测试丙线\n\n速查：PASS。' : REWRITE);
     host.instance.data.updateSettings({ checkEvery: 1 });
     host.context.chat.push({ is_user: true, mes: '一' }, { is_user: false, mes: '甲死了。' });
     await host.eventSource.emit('message_received', 1, 'normal');
@@ -193,8 +193,11 @@ test('检测发现偏离大纲时弹提醒；改写后续阶段可填说明，�
     input.value = '甲死了，改成丙线';
     doc.querySelector('.pi-dialog .pi-dlg-acts .is-primary').click();
     await tick(20);
-    const rewriteCall = host.llmCalls.at(-1);
+    const rewriteCall = host.llmCalls.find(call => /偏离了大纲/.test(call[0].content));
     assert.match(rewriteCall[1].content, /【偏转说明】\n甲死了，改成丙线/);
+    const settingText = () => host.instance.data.project(project.id).setting.text;
+    assert.match(settingText(), /测试丙线/, '改写后按新大纲校对设定');
+    assert.match(doc.querySelector('[data-notice="offtrack"]').textContent, /设定已同步修改：世界观声明/);
     const stages = () => host.instance.data.project(project.id).outline.volumes[0].stages.map(stage => stage.key).join(',');
     assert.equal(stages(), '阶段一_新开端');
     let lore = await entriesNow(host.eventSource);
@@ -202,6 +205,7 @@ test('检测发现偏离大纲时弹提醒；改写后续阶段可填说明，�
     doc.querySelector('[data-notice="offtrack"] [data-act="0"]').click();
     await tick(10);
     assert.equal(stages(), '阶段一_开端,阶段二_发展');
+    assert.doesNotMatch(settingText(), /丙线/, '撤销时设定一起恢复');
     lore = await entriesNow(host.eventSource);
     assert.match(lore[1].content, /阶段一_开端/);
     assert.equal(host.win.__errors.length, 0, host.win.__errors.join('\n'));
