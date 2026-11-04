@@ -1,4 +1,4 @@
-import { ctx, helper, hostWindow, requestHeaders } from './st.js';
+import { ctx, helper, hostDocument, hostWindow, requestHeaders } from './st.js';
 
 // 当前卡关联的世界书：聊天世界书、角色主/附加世界书。读写走酒馆的 loadWorldInfo/saveWorldInfo，不直接改文件。
 export function boundBookNames() {
@@ -21,6 +21,17 @@ export function boundBookNames() {
         }
     } catch { /* 读不到附加世界书只列主书 */ }
     return names;
+}
+
+// 全局启用的世界书：优先问酒馆助手，读不到时看酒馆世界书面板里的全局多选框。
+export function globalBookNames() {
+    try {
+        const h = helper();
+        const list = h && typeof h.getGlobalWorldbookNames === 'function' ? h.getGlobalWorldbookNames() : null;
+        if (Array.isArray(list)) return list.filter(name => typeof name === 'string' && name.trim());
+    } catch { /* 改读界面 */ }
+    const select = hostDocument().querySelector('#world_info');
+    return select ? [...select.selectedOptions].map(option => option.textContent.trim()).filter(Boolean) : [];
 }
 
 export function allBookNames() {

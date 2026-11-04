@@ -2,8 +2,8 @@ import { POSITIONS, ROLES } from '../core/inject.js';
 import { acuField, groupByField } from '../core/acu.js';
 import { estimateTokens } from '../core/tokens.js';
 import { buildPattern, orderPlan, punctPlan, regexPlan } from '../core/wbtools.js';
-import { cardName, countTokens, downloadBlob, hostDocument, toast } from '../host/st.js';
-import { addEntries, allBookNames, bookEntries, boundBookNames, createBook, deleteEntries, duplicateBook, loadBook, patchEntries, removeBook, renameBook, setEntriesDisabled, transferEntries, updateEntry } from '../host/worldbook.js';
+import { countTokens, downloadBlob, hostDocument, toast } from '../host/st.js';
+import { addEntries, allBookNames, bookEntries, globalBookNames, boundBookNames, createBook, deleteEntries, duplicateBook, loadBook, patchEntries, removeBook, renameBook, setEntriesDisabled, transferEntries, updateEntry } from '../host/worldbook.js';
 import { confirmDialog, esc, menuDialog, openDialog, options, pickFiles, promptDialog } from './dom.js';
 import { ICONS } from './styles.js';
 
@@ -17,7 +17,8 @@ const GROUPS = {
     off: entries => entries.filter(entry => !acuField(entry.title) && entry.disabled),
 };
 
-const toggle = entry => `<input type="checkbox" data-wb-toggle="${esc(entry.key)}" title="${entry.disabled ? '开启' : '关闭'}"${entry.disabled ? '' : ' checked'}>`;
+// 开关做成带字的滑块，和批量选择的勾选框区分开：滑块在右、写「开」是开启，在左、写「关」是关闭。
+const toggle = entry => `<button type="button" class="pi-switch${entry.disabled ? '' : ' is-on'}" role="switch" aria-checked="${entry.disabled ? 'false' : 'true'}" data-act="wb-toggle" data-wb-toggle="${esc(entry.key)}" title="${entry.disabled ? '已关闭，点击开启' : '已开启，点击关闭'}"><span>${entry.disabled ? '关' : '开'}</span></button>`;
 const title = entry => `<span class="pi-wb-title" title="${esc(entry.title)}">${esc(entry.title)}</span>`;
 
 function editor(entry) {
@@ -120,11 +121,12 @@ function acuSection(entries, openFields) {
     return `<div class="pi-wb-sec"><div class="pi-wb-sec-hd">数据库条目<small>${total}</small></div>${fields.map(sub).join('')}</div>`;
 }
 
-// 列出：当前卡绑定的、剧情注入器专用的、本次打开过的其他世界书（只在本次会话里记住）。
+// 列出：当前卡绑定的、全局启用的、剧情注入器专用的、本次打开过的其他世界书（只在本次会话里记住）。
 function listedBooks(s) {
     const books = [...boundBookNames()];
     const add = (name, source) => { if (!books.some(item => item.name === name)) books.push({ name, source }); };
     const names = allBookNames();
+    for (const name of globalBookNames()) if (names.includes(name)) add(name, '全局');
     for (const name of names) if (name.startsWith('剧情注入器·')) add(name, '专用');
     for (const name of s.extra || []) if (names.includes(name)) add(name, '其他');
     return books;
@@ -139,11 +141,11 @@ export function render(view) {
             ${open ? ICONS.caretDown : ICONS.caret}<span class="pi-etitle" title="${esc(book.name)}">${esc(book.name)}</span><span class="pi-meta">${esc(book.source)}</span></div>
             ${entries ? `<div class="pi-book-bd">${bookBody(s, entries)}</div>` : ''}</div>`;
     }).join('');
-    return `<div class="pi-card pi-wb"><h3>「${esc(cardName() || '未打开角色卡')}」的世界书<span class="pi-spacer"></span>
+    return `<div class="pi-card pi-wb"><h3>世界书<span class="pi-spacer"></span>
             <button type="button" class="pi-btn is-sm is-ghost" data-act="book-new">${ICONS.plus}新建</button>
             <button type="button" class="pi-icon-btn" data-act="page-more" title="更多">${ICONS.more}</button></h3>
         <p class="pi-hint is-warn">注意：这里的操作真的会修改你的世界书！</p>
-        ${list || '<p class="pi-hint">没有关联的世界书。</p>'}</div>`;
+        ${list || '<p class="pi-hint">没有关联或全局启用的世界书，可从「更多」打开其他世界书。</p>'}</div>`;
 }
 
 const splitKeys = text => String(text || '').split(/[,，、\n]/).map(item => item.trim()).filter(Boolean);
@@ -178,11 +180,6 @@ export async function onChange(view, target) {
         return view.renderBody();
     }
     if (target.dataset.wbEdit) return saveEdit(view, target);
-    const key = target.dataset.wbToggle;
-    if (!key) return;
-    target.disabled = true;
-    await setEntriesDisabled(st(view).book, [key], !target.checked);
-    await reloadBook(view);
 }
 
 async function reloadBook(view) {
@@ -296,6 +293,14 @@ export const actions = {
         if (!keys.length) return;
         target.disabled = true;
         await setEntriesDisabled(st(view).book, keys, group === 'on');
+        await reloadBook(view);
+    },
+    async 'wb-toggle'(view, target) {
+        const key = target.dataset.wbToggle;
+        const entry = (st(view).entries || []).find(item => item.key === key);
+        if (!entry) return;
+        target.disabled = true;
+        await setEntriesDisabled(st(view).book, [key], !entry.disabled);
         await reloadBook(view);
     },
     'wb-open'(view, target) {

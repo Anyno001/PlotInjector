@@ -454,11 +454,9 @@ test('世界书条目页：开启与已关闭分两区，勾选框直接开关�
     await tick(10);
     doc.querySelector('[data-act="open-book"]').click();
     await tick(20);
-    const sections = () => [...doc.querySelectorAll('.pi-wb-sec')].map(sec => [...sec.querySelectorAll('[data-wb-toggle]')].map(input => [input.dataset.wbToggle, input.checked]));
+    const sections = () => [...doc.querySelectorAll('.pi-wb-sec')].map(sec => [...sec.querySelectorAll('[data-wb-toggle]')].map(node => [node.dataset.wbToggle, node.getAttribute('aria-checked') === 'true']));
     assert.deepEqual(sections(), [[['0', true]], [['1', false]]]);
-    const open = doc.querySelector('[data-wb-toggle="0"]');
-    open.checked = false;
-    fire(open, 'change');
+    doc.querySelector('[data-wb-toggle="0"]').click();
     await tick(20);
     assert.equal(book.entries[0].disable, true);
     assert.deepEqual(sections(), [[], [['0', false], ['1', false]]]);
@@ -665,7 +663,7 @@ test('讨论页附带参考：世界书只显示条数；默认带手写条目�
     doc.querySelector('[data-act="tab"][data-tab="discuss"]').click();
     await tick(30);
     assert.match(doc.querySelector('[data-act="ref-wb"]').textContent, /世界书 12 条/);
-    assert.equal(doc.querySelectorAll('.pi-refs .pi-chip').length, 5, '顶栏不逐条列出条目');
+    assert.equal(doc.querySelectorAll('.pi-refs .pi-chip').length, 6, '顶栏不逐条列出条目（人格+五项参考）');
     doc.querySelector('[data-compose]').value = '接下来第三章怎么走';
     doc.querySelector('[data-act="send"]').click();
     await tick(40);

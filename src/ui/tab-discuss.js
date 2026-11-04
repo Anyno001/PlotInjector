@@ -26,7 +26,9 @@ export function render(view) {
     const unanswered = live.length && live[live.length - 1].role === 'user' ? live[live.length - 1] : null;
     const wb = wbSummary(view, chat.refs, () => view.renderBody());
     const canProgress = Boolean(progressText(view));
-    const chips = `<div class="pi-refs"><span class="pi-hint">附带参考：</span>
+    const persona = view.data.settings().persona.trim();
+    const chips = `<div class="pi-refs"><button type="button" class="pi-chip${persona ? ' is-on' : ''}" data-act="persona" title="${esc(persona || '指定 AI 讨论时的说话人格')}">人格${persona ? '' : '：未设置'}</button>
+        <span class="pi-hint">附带参考：</span>
         <button type="button" class="pi-chip${refs.setting ? ' is-on' : ''}" data-act="ref" data-ref="setting">设定</button>
         <button type="button" class="pi-chip${refs.outline ? ' is-on' : ''}" data-act="ref" data-ref="outline">大纲</button>
         <button type="button" class="pi-chip${refs.progress && canProgress ? ' is-on' : ''}" data-act="ref" data-ref="progress"${canProgress ? '' : ' disabled title="本项目不是当前聊天启用的项目"'}>剧情进度</button>
@@ -74,7 +76,7 @@ async function reply(view) {
             chat = { ...view.data.chat(projectId), summary, messages: view.data.chat(projectId).messages.map(msg => (ids.has(msg.id) ? { ...msg, folded: true } : msg)) };
             view.data.saveChat(projectId, chat);
         }
-        const system = discussSystemPrompt({ guide: guideText(view), refs: await resolveRefs(view, chat, project) });
+        const system = discussSystemPrompt({ guide: guideText(view), refs: await resolveRefs(view, chat, project), persona: view.data.settings().persona });
         const text = await ask(view, 'discuss', chatRequest(system, chat.summary, chat.messages), { signal });
         if (signal.aborted) return;
         const latest = view.data.chat(projectId);
@@ -163,6 +165,13 @@ export const actions = {
         if (result == null) return;
         if (result === 'unfold') updateChat(view, current => ({ ...current, summary: '', messages: current.messages.map(msg => ({ ...msg, folded: false })) }));
         else updateChat(view, current => ({ ...current, summary: result }));
+        view.renderBody();
+    },
+    // 说话人格对所有项目的讨论生效，存在插件设置里；留空用默认口吻。
+    async persona(view) {
+        const value = await promptDialog({ title: '说话人格', label: '讨论时 AI 以什么身份、什么风格回复，留空为默认', value: view.data.settings().persona, multiline: true, placeholder: '例：你是一位熟悉原作的资深编辑，说话直接，敢于否定不合理的设定。' });
+        if (value == null) return;
+        view.data.updateSettings({ persona: value.trim() });
         view.renderBody();
     },
     ref(view, target) {

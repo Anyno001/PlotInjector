@@ -1,4 +1,4 @@
-// PlotInjector v0.1.20
+// PlotInjector v0.1.21
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -828,6 +828,7 @@ ${lines2.join(`
     checkEvery: 3,
     checkFloors: 3,
     guide: "",
+    persona: "",
     paceText: { slow: "", normal: "", fast: "" },
     loaderRef: "",
     llm: { discuss: { ...DEFAULT_LLM }, outline: { ...DEFAULT_LLM }, check: { ...DEFAULT_LLM } },
@@ -843,6 +844,7 @@ ${lines2.join(`
       handleMode: HANDLE_MODES.includes(src.handleMode) ? src.handleMode : DEFAULT_SETTINGS.handleMode,
       checkEvery: Math.max(1, Math.min(50, Number(src.checkEvery) || DEFAULT_SETTINGS.checkEvery)),
       checkFloors: Math.max(1, Math.min(20, Number(src.checkFloors) || DEFAULT_SETTINGS.checkFloors)),
+      persona: typeof src.persona == "string" ? src.persona : "",
       paceText: Object.fromEntries(["slow", "normal", "fast"].map((key) => [key, String(src.paceText && src.paceText[key] || "")])),
       llm,
       presets
@@ -1309,12 +1311,13 @@ ${floor.text}`)
     状态变化:
       - 本阶段结束时谁知道了什么、谁对谁的看法或关系变了。
 `, FOLD_KEEP = 16, FOLD_CHARS = 24e3;
-  function discussSystemPrompt({ guide, refs }) {
+  function discussSystemPrompt({ guide, refs, persona = "" }) {
     let parts = [
       "你在帮用户构思一条同人 if 线：一起把世界观、人物处境、信息差和大纲方向想清楚。",
       "每次回复先回应用户的想法，再指出缺口或矛盾，最后给出两三个可选方向。不写小说正文。"
     ];
-    return refs.length && parts.push(...refs.map((ref) => `【参考·${ref.title}】
+    return persona.trim() && parts.push(`【说话人格】
+${persona.trim()}`), refs.length && parts.push(...refs.map((ref) => `【参考·${ref.title}】
 ${ref.text}`)), guide && parts.push(`【写作基准：同人世界观速成】
 ${guide}`), parts.join(`
 
@@ -1893,6 +1896,15 @@ ${horrorGuide}` : "",
     } catch {
     }
     return names;
+  }
+  function globalBookNames() {
+    try {
+      let h = helper(), list = h && typeof h.getGlobalWorldbookNames == "function" ? h.getGlobalWorldbookNames() : null;
+      if (Array.isArray(list)) return list.filter((name) => typeof name == "string" && name.trim());
+    } catch {
+    }
+    let select = hostDocument().querySelector("#world_info");
+    return select ? [...select.selectedOptions].map((option) => option.textContent.trim()).filter(Boolean) : [];
   }
   function allBookNames() {
     let c = ctx();
@@ -2677,12 +2689,17 @@ ${horrorGuide}` : "",
 
   // src/ui/styles.js
   var CSS = `
-.pi-root{--pi-accent:#E8507B;--pi-accent-soft:#FEF0F3;--pi-dark:#1E1E2E;--pi-bg:#FFFFFF;--pi-surf:#F3F4F7;--pi-fill:#F5F6F8;--pi-fill2:#ECEDF1;--pi-line:#ECECF1;--pi-rule:#C9CAD3;--pi-txt:#1E1E2E;--pi-txt2:#7C7C8A;--pi-ok:#2E9E6A;--pi-ok-soft:#E9F7F0;--pi-warn:#C98A12;--pi-warn-soft:#FDF5E4;--pi-danger:#D64545;--pi-danger-soft:#FDEDED;--pi-add:#E9F7F0;--pi-del:#FDEDED;--pi-on-dark:#FFFFFF;--pi-user-bg:#1E1E2E;--pi-user-txt:#FFFFFF;--pi-user-txt2:#B4B4C0;--pi-user-hover:#34344A;--pi-r:14px;--pi-r-in:10px;--pi-shadow:0 8px 32px rgba(0,0,0,.15);--pi-font:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei","PingFang SC",sans-serif;--pi-mono:Consolas,"JetBrains Mono",monospace;font-family:var(--pi-font);color:var(--pi-txt);font-size:14px;line-height:1.55}
-.pi-root.is-night{--pi-accent:#F0688F;--pi-accent-soft:#3A2230;--pi-dark:#E6E6EE;--pi-bg:#1F1F2A;--pi-surf:#16161F;--pi-fill:#282835;--pi-fill2:#313140;--pi-line:#2C2C38;--pi-rule:#4A4A5A;--pi-txt:#E6E6EE;--pi-txt2:#9A9AA8;--pi-ok:#4CC08A;--pi-ok-soft:#1C3329;--pi-warn:#E0A63A;--pi-warn-soft:#3A3020;--pi-danger:#EF6B6B;--pi-danger-soft:#3D2224;--pi-add:#1C3329;--pi-del:#3D2224;--pi-on-dark:#16161F;--pi-user-bg:#3A3A4C;--pi-user-txt:#E6E6EE;--pi-user-txt2:#A8A8B6;--pi-user-hover:#4A4A5E;--pi-shadow:0 8px 32px rgba(0,0,0,.5);color-scheme:dark}
-.pi-root *,.pi-root *::before,.pi-root *::after{box-sizing:border-box}
+.pi-root{--pi-accent:#E8507B;--pi-accent-soft:#FEF0F3;--pi-dark:#1E1E2E;--pi-bg:#FFFFFF;--pi-surf:#F3F4F7;--pi-fill:#F5F6F8;--pi-fill2:#ECEDF1;--pi-line:#ECECF1;--pi-rule:#C9CAD3;--pi-txt:#1E1E2E;--pi-txt2:#7C7C8A;--pi-ok:#2E9E6A;--pi-ok-soft:#E9F7F0;--pi-warn:#C98A12;--pi-warn-soft:#FDF5E4;--pi-danger:#D64545;--pi-danger-soft:#FDEDED;--pi-add:#E9F7F0;--pi-del:#FDEDED;--pi-on-dark:#FFFFFF;--pi-knob:#FFFFFF;--pi-user-bg:#1E1E2E;--pi-user-txt:#FFFFFF;--pi-user-txt2:#B4B4C0;--pi-user-hover:#34344A;--pi-r:14px;--pi-r-in:10px;--pi-shadow:0 8px 32px rgba(0,0,0,.15);--pi-font:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei","PingFang SC",sans-serif;--pi-mono:Consolas,"JetBrains Mono",monospace;font-family:var(--pi-font);color:var(--pi-txt);font-size:14px;line-height:1.55}
+.pi-root.is-night{--pi-accent:#F0688F;--pi-accent-soft:#3A2230;--pi-dark:#E6E6EE;--pi-bg:#1F1F2A;--pi-surf:#16161F;--pi-fill:#282835;--pi-fill2:#313140;--pi-line:#2C2C38;--pi-rule:#4A4A5A;--pi-txt:#E6E6EE;--pi-txt2:#9A9AA8;--pi-ok:#4CC08A;--pi-ok-soft:#1C3329;--pi-warn:#E0A63A;--pi-warn-soft:#3A3020;--pi-danger:#EF6B6B;--pi-danger-soft:#3D2224;--pi-add:#1C3329;--pi-del:#3D2224;--pi-on-dark:#16161F;--pi-knob:#F4F4F8;--pi-user-bg:#3A3A4C;--pi-user-txt:#E6E6EE;--pi-user-txt2:#A8A8B6;--pi-user-hover:#4A4A5E;--pi-shadow:0 8px 32px rgba(0,0,0,.5);color-scheme:dark}
+.pi-root *,.pi-root *::before,.pi-root *::after{box-sizing:border-box;text-shadow:none}
 .pi-root ::-webkit-scrollbar{display:none}
 .pi-root [hidden]{display:none!important}
-.pi-root input[type=checkbox]{accent-color:var(--pi-accent)}
+.pi-root input[type=checkbox]{-webkit-appearance:none;appearance:none;display:inline-grid;place-content:center;width:16px;height:16px;margin:0;padding:0;border:0;outline:0;border-radius:4px;background:var(--pi-fill2);box-shadow:inset 0 0 0 1.5px var(--pi-rule);filter:none;transform:none;overflow:hidden;flex-shrink:0;cursor:pointer}
+.pi-root input[type=checkbox]::before{content:"";width:10px;height:10px;transform:scale(0);transition:transform .12s;background:var(--pi-knob);box-shadow:none;clip-path:polygon(14% 44%,0 65%,50% 100%,100% 16%,80% 0%,43% 62%)}
+.pi-root input[type=checkbox]:checked{background:var(--pi-accent);box-shadow:none}
+.pi-root input[type=checkbox]:checked::before{transform:scale(1)}
+.pi-root input[type=checkbox]:disabled{opacity:.45;cursor:not-allowed}
+.pi-root input[type=checkbox]:focus-visible{box-shadow:0 0 0 2px var(--pi-accent-soft),inset 0 0 0 1.5px var(--pi-accent)}
 .pi-overlay{position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;z-index:10050;display:flex;align-items:center;justify-content:center;background:rgba(20,20,30,.28)}
 .pi-panel{position:relative;width:880px;max-width:96vw;height:88vh;max-height:88vh;background:var(--pi-surf);border-radius:var(--pi-r);box-shadow:var(--pi-shadow);display:grid;grid-template-columns:220px 1fr;overflow:hidden}
 .pi-scrim{display:none}
@@ -2787,6 +2804,13 @@ ${horrorGuide}` : "",
 .pi-wb-field{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pi-wb-row{display:flex;align-items:center;gap:8px;padding:3px 0;min-width:0}
 .pi-wb-row input{width:15px;height:15px;margin:0;accent-color:var(--pi-accent);flex-shrink:0;cursor:pointer}
+.pi-switch{position:relative;flex-shrink:0;width:42px;height:22px;padding:0;border:0;border-radius:11px;background:var(--pi-fill2);color:var(--pi-txt2);font:inherit;font-size:11px;font-weight:600;line-height:22px;cursor:pointer;transition:background .15s}
+.pi-switch::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:var(--pi-rule);transition:left .15s}
+.pi-switch>span{position:absolute;top:0;right:7px}
+.pi-switch.is-on{background:var(--pi-accent);color:var(--pi-knob)}
+.pi-switch.is-on::after{left:23px;background:var(--pi-knob)}
+.pi-switch.is-on>span{right:auto;left:7px}
+.pi-switch:disabled{opacity:.6;cursor:wait}
 .pi-wb-title{flex:1;min-width:0;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pi-wb-row.is-off .pi-wb-title{color:var(--pi-txt2)}
 .pi-set-row{display:flex;align-items:center;gap:8px;margin-top:6px;padding-top:8px;border-top:1px solid var(--pi-line);font-size:12px;color:var(--pi-txt2);font-weight:500}
@@ -4036,7 +4060,8 @@ ${parsed.body}` : parsed.body;
     let chat = view.data.chat(view.projectId);
     if (!chat)
       return view.data.loadChat(view.projectId).then(() => view.renderBody()).catch((error) => toast("error", `读取讨论记录失败：${error.message}`)), '<div class="pi-empty"><span class="pi-spin"></span> 正在读取讨论记录…</div>';
-    let busy = view.busy[`discuss:${view.projectId}`], refs = chat.refs, folded = chat.messages.filter((msg) => msg.folded).length, live = chat.messages.filter((msg) => !msg.folded), lastAi = [...live].reverse().find((msg) => msg.role !== "user"), unanswered = live.length && live[live.length - 1].role === "user" ? live[live.length - 1] : null, wb = wbSummary(view, chat.refs, () => view.renderBody()), canProgress = !!progressText(view), chips = `<div class="pi-refs"><span class="pi-hint">附带参考：</span>
+    let busy = view.busy[`discuss:${view.projectId}`], refs = chat.refs, folded = chat.messages.filter((msg) => msg.folded).length, live = chat.messages.filter((msg) => !msg.folded), lastAi = [...live].reverse().find((msg) => msg.role !== "user"), unanswered = live.length && live[live.length - 1].role === "user" ? live[live.length - 1] : null, wb = wbSummary(view, chat.refs, () => view.renderBody()), canProgress = !!progressText(view), persona = view.data.settings().persona.trim(), chips = `<div class="pi-refs"><button type="button" class="pi-chip${persona ? " is-on" : ""}" data-act="persona" title="${esc(persona || "指定 AI 讨论时的说话人格")}">人格${persona ? "" : "：未设置"}</button>
+        <span class="pi-hint">附带参考：</span>
         <button type="button" class="pi-chip${refs.setting ? " is-on" : ""}" data-act="ref" data-ref="setting">设定</button>
         <button type="button" class="pi-chip${refs.outline ? " is-on" : ""}" data-act="ref" data-ref="outline">大纲</button>
         <button type="button" class="pi-chip${refs.progress && canProgress ? " is-on" : ""}" data-act="ref" data-ref="progress"${canProgress ? "" : ' disabled title="本项目不是当前聊天启用的项目"'}>剧情进度</button>
@@ -4072,10 +4097,10 @@ ${parsed.body}` : parsed.body;
         let fold = foldCandidates(chat.messages), summary = await ask(view, "discuss", foldMessages(chat.summary, fold), { signal }), ids = new Set(fold.map((msg) => msg.id));
         chat = { ...view.data.chat(projectId), summary, messages: view.data.chat(projectId).messages.map((msg) => ids.has(msg.id) ? { ...msg, folded: !0 } : msg) }, view.data.saveChat(projectId, chat);
       }
-      let system = discussSystemPrompt({ guide: guideText(view), refs: await resolveRefs(view, chat, project) }), text = await ask(view, "discuss", chatRequest(system, chat.summary, chat.messages), { signal });
+      let system = discussSystemPrompt({ guide: guideText(view), refs: await resolveRefs(view, chat, project), persona: view.data.settings().persona }), text = await ask(view, "discuss", chatRequest(system, chat.summary, chat.messages), { signal });
       if (signal.aborted) return;
-      let latest = view.data.chat(projectId);
-      view.data.saveChat(projectId, { ...latest, messages: [...latest.messages, { id: makeId("m"), role: "assistant", content: text, at: Date.now() }] });
+      let latest2 = view.data.chat(projectId);
+      view.data.saveChat(projectId, { ...latest2, messages: [...latest2.messages, { id: makeId("m"), role: "assistant", content: text, at: Date.now() }] });
     } catch (error) {
       signal.aborted || toast("error", `讨论请求失败：${error.message}`);
     } finally {
@@ -4137,6 +4162,11 @@ ${parsed.body}` : parsed.body;
         actions: [{ label: "展开全部原文", value: "unfold" }, { label: "取消", value: null }, { label: "保存摘要", primary: !0, value: (box) => box.querySelector("[data-f=summary]").value }]
       });
       result != null && (result === "unfold" ? updateChat(view, (current) => ({ ...current, summary: "", messages: current.messages.map((msg) => ({ ...msg, folded: !1 })) })) : updateChat(view, (current) => ({ ...current, summary: result })), view.renderBody());
+    },
+    // 说话人格对所有项目的讨论生效，存在插件设置里；留空用默认口吻。
+    async persona(view) {
+      let value = await promptDialog({ title: "说话人格", label: "讨论时 AI 以什么身份、什么风格回复，留空为默认", value: view.data.settings().persona, multiline: !0, placeholder: "例：你是一位熟悉原作的资深编辑，说话直接，敢于否定不合理的设定。" });
+      value != null && (view.data.updateSettings({ persona: value.trim() }), view.renderBody());
     },
     ref(view, target) {
       let key = target.dataset.ref;
@@ -4647,8 +4677,67 @@ ${parsed.body}` : parsed.body;
     return out;
   }
 
+  // src/host/update.js
+  var REPOSITORY = "Anyno001/PlotInjector", VERSION_RE = /^v?\d+\.\d+\.\d+$/;
+  function compareVersions(a, b) {
+    let pa = String(a).replace(/^v/, "").split(".").map(Number), pb = String(b).replace(/^v/, "").split(".").map(Number);
+    for (let i = 0; i < 3; i += 1) if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) - (pb[i] || 0);
+    return 0;
+  }
+  async function getJson(url, ms) {
+    let controller = new AbortController(), timer = setTimeout(() => controller.abort(), ms);
+    try {
+      let res = await hostWindow().fetch(url, { cache: "no-store", signal: controller.signal });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return await res.json();
+    } catch (error) {
+      throw controller.signal.aborted ? new Error(`连接超时（${ms / 1e3} 秒）`) : error;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  var highest = (names) => names.filter((name) => VERSION_RE.test(name || "")).map((name) => name.replace(/^v/, "")).sort(compareVersions).pop() || "", SOURCES = [
+    async () => highest((await getJson(`https://api.github.com/repos/${REPOSITORY}/tags?per_page=100`, 6e3)).map((item) => item && item.name)),
+    async () => highest((await getJson(`https://data.jsdelivr.com/v1/packages/gh/${REPOSITORY}`, 8e3)).versions.map((item) => typeof item == "string" ? item : item && item.version))
+  ];
+  async function fetchLatestVersion() {
+    let last = null;
+    for (let source of SOURCES)
+      try {
+        let version = await source();
+        if (version) return version;
+      } catch (error) {
+        last = error;
+      }
+    throw last || new Error("没有找到发布版本");
+  }
+
   // src/ui/page-data.js
-  var st6 = (view) => view.tabState("data");
+  var st6 = (view) => view.tabState("data"), latest = { state: "", version: "", error: "" }, viaLoader = () => !!window.__plotInjectorLoader;
+  async function checkLatest(view) {
+    latest.state = "checking", view.renderBody();
+    try {
+      latest.version = await fetchLatestVersion(), latest.state = "done";
+    } catch (error) {
+      latest.error = error.message, latest.state = "error";
+    }
+    view.renderBody();
+  }
+  function versionCard(view, settings) {
+    latest.state || checkLatest(view);
+    let newer = latest.state === "done" && compareVersions(latest.version, view.version) > 0, status = {
+      checking: '<span class="pi-spin"></span>正在检测最新版本…',
+      done: newer ? `最新版本 v${esc(latest.version)}，可以更新。` : "已是最新版本。",
+      error: `检测失败：${esc(latest.error)}`
+    }[latest.state] || "", pinned = settings.loaderRef, note = "";
+    newer && !viaLoader() ? note = "当前是单文件版，需重新导入新版 JSON 才能更新。" : newer && pinned && (note = `已指定 ${esc(pinned)}，清空指定版本后才会更新。`);
+    let updateBtn = newer && viaLoader() ? `<button type="button" class="pi-btn is-sm is-primary" data-act="update-now">更新到 v${esc(latest.version)}</button>` : "";
+    return `<div class="pi-card"><h3>版本更新</h3>
+        <p class="pi-hint">当前版本 v${esc(view.version)}。${status}</p>
+        ${note ? `<p class="pi-hint is-warn">${note}</p>` : ""}
+        <div class="pi-tools ${updateBtn ? "is-c2" : "is-c1"} pi-acts"><button type="button" class="pi-btn is-sm" data-act="check-update"${latest.state === "checking" ? " disabled" : ""}>检查更新</button>${updateBtn}</div>
+        <label class="pi-field"><span>指定版本</span><input class="pi-inp" data-set="loaderRef" value="${esc(settings.loaderRef)}" placeholder="留空跟随最新版本，可填 v0.1.0 或 main"></label></div>`;
+  }
   function referenced(index) {
     let names = /* @__PURE__ */ new Set([INDEX_FILE]);
     for (let item of index.projects)
@@ -4674,9 +4763,7 @@ ${parsed.body}` : parsed.body;
         <div class="pi-equal pi-acts"><button type="button" class="pi-btn is-sm" data-act="verify">${s.verifying ? '<span class="pi-spin"></span>' : ""}重新核对</button>
             <button type="button" class="pi-btn is-sm" data-act="orphans"${orphans.length ? "" : " disabled"}>清理孤立文件${orphans.length ? `（${orphans.length}）` : ""}</button>
             <button type="button" class="pi-btn is-sm" data-act="clear-chats">清空全部讨论记录</button></div></div>
-        <div class="pi-card"><h3>版本更新</h3>
-        <p class="pi-hint">当前版本 v${esc(view.version)}，修改后刷新酒馆页面生效。</p>
-        <label class="pi-field"><span>指定版本</span><input class="pi-inp" data-set="loaderRef" value="${esc(settings.loaderRef)}" placeholder="留空跟随最新版本，可填 v0.1.0 或 main"></label></div>
+        ${versionCard(view, settings)}
         <div class="pi-card"><h3>重置插件</h3>
         <p class="pi-hint">删除所有项目、讨论记录和当前聊天的进度，执行前自动下载备份。</p>
         <div class="pi-equal is-one pi-acts"><button type="button" class="pi-btn is-sm is-danger" data-act="wipe">备份并删除</button></div></div>`;
@@ -4703,6 +4790,14 @@ ${parsed.body}` : parsed.body;
     }
   }
   var actions8 = {
+    "check-update"(view) {
+      return checkLatest(view);
+    },
+    // 加载器把最新版本号缓存 30 分钟；清掉缓存再刷新，才会马上取到新版。
+    async "update-now"(view) {
+      let pinned = view.data.settings().loaderRef, body = pinned ? `将清空指定版本（${pinned}），改为跟随最新版本，然后刷新酒馆页面。` : "将刷新酒馆页面，载入最新版本。";
+      await confirmDialog({ title: `更新到 v${latest.version}`, body, okLabel: "更新并刷新" }) && (pinned && (view.data.updateSettings({ loaderRef: "" }), await view.data.flush()), writeUi({ loader: null }), hostWindow().location.reload());
+    },
     verify(view) {
       return st6(view).verified = null, verify(view);
     },
@@ -4809,7 +4904,7 @@ ${parsed.body}` : parsed.body;
   var st7 = (view) => view.tabState("books"), GROUPS = {
     on: (entries) => entries.filter((entry) => !acuField(entry.title) && !entry.disabled),
     off: (entries) => entries.filter((entry) => !acuField(entry.title) && entry.disabled)
-  }, toggle = (entry) => `<input type="checkbox" data-wb-toggle="${esc(entry.key)}" title="${entry.disabled ? "开启" : "关闭"}"${entry.disabled ? "" : " checked"}>`, title = (entry) => `<span class="pi-wb-title" title="${esc(entry.title)}">${esc(entry.title)}</span>`;
+  }, toggle = (entry) => `<button type="button" class="pi-switch${entry.disabled ? "" : " is-on"}" role="switch" aria-checked="${entry.disabled ? "false" : "true"}" data-act="wb-toggle" data-wb-toggle="${esc(entry.key)}" title="${entry.disabled ? "已关闭，点击开启" : "已开启，点击关闭"}"><span>${entry.disabled ? "关" : "开"}</span></button>`, title = (entry) => `<span class="pi-wb-title" title="${esc(entry.title)}">${esc(entry.title)}</span>`;
   function editor(entry) {
     let atDepth = entry.position === 4, key = esc(entry.key);
     return `<div class="pi-wb-edit">
@@ -4883,6 +4978,7 @@ ${parsed.body}` : parsed.body;
     let books = [...boundBookNames()], add = (name, source) => {
       books.some((item) => item.name === name) || books.push({ name, source });
     }, names = allBookNames();
+    for (let name of globalBookNames()) names.includes(name) && add(name, "全局");
     for (let name of names) name.startsWith("剧情注入器·") && add(name, "专用");
     for (let name of s.extra || []) names.includes(name) && add(name, "其他");
     return books;
@@ -4894,11 +4990,11 @@ ${parsed.body}` : parsed.body;
             ${open ? ICONS.caretDown : ICONS.caret}<span class="pi-etitle" title="${esc(book.name)}">${esc(book.name)}</span><span class="pi-meta">${esc(book.source)}</span></div>
             ${entries ? `<div class="pi-book-bd">${bookBody(s, entries)}</div>` : ""}</div>`;
     }).join("");
-    return `<div class="pi-card pi-wb"><h3>「${esc(cardName() || "未打开角色卡")}」的世界书<span class="pi-spacer"></span>
+    return `<div class="pi-card pi-wb"><h3>世界书<span class="pi-spacer"></span>
             <button type="button" class="pi-btn is-sm is-ghost" data-act="book-new">${ICONS.plus}新建</button>
             <button type="button" class="pi-icon-btn" data-act="page-more" title="更多">${ICONS.more}</button></h3>
         <p class="pi-hint is-warn">注意：这里的操作真的会修改你的世界书！</p>
-        ${list || '<p class="pi-hint">没有关联的世界书。</p>'}</div>`;
+        ${list || '<p class="pi-hint">没有关联或全局启用的世界书，可从「更多」打开其他世界书。</p>'}</div>`;
   }
   var splitKeys = (text) => String(text || "").split(/[,，、\n]/).map((item) => item.trim()).filter(Boolean);
   function editPatch(target) {
@@ -4915,8 +5011,6 @@ ${parsed.body}` : parsed.body;
       return target.checked ? picked.add(target.dataset.wbPick) : picked.delete(target.dataset.wbPick), view.renderBody();
     }
     if (target.dataset.wbEdit) return saveEdit(view, target);
-    let key = target.dataset.wbToggle;
-    key && (target.disabled = !0, await setEntriesDisabled(st7(view).book, [key], !target.checked), await reloadBook(view));
   }
   async function reloadBook(view) {
     let s = st7(view);
@@ -4988,6 +5082,10 @@ ${parsed.body}` : parsed.body;
       if (!pick) return;
       let keys = pick(st7(view).entries || []).map((entry) => entry.key);
       keys.length && (target.disabled = !0, await setEntriesDisabled(st7(view).book, keys, group === "on"), await reloadBook(view));
+    },
+    async "wb-toggle"(view, target) {
+      let key = target.dataset.wbToggle, entry = (st7(view).entries || []).find((item) => item.key === key);
+      entry && (target.disabled = !0, await setEntriesDisabled(st7(view).book, [key], !entry.disabled), await reloadBook(view));
     },
     "wb-open"(view, target) {
       let s = st7(view);
@@ -5603,7 +5701,7 @@ ${parsed.body}` : parsed.body;
   }
 
   // src/index.js
-  var VERSION = "0.1.20", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.1.21", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")

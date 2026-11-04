@@ -341,3 +341,12 @@ test('世界书工具：关键词按中文逗号顿号拆开去重，正则关�
     assert.deepEqual(orderPlan(entries, { start: 1, step: 1, by: 'order' }).map(item => `${item.key}:${item.to}`), ['1:1', '0:2']);
     assert.throws(() => orderPlan(entries, { start: 1, step: 0 }), /间隔/);
 });
+
+test('讨论说话人格：填了才进系统提示，任务说明保留', async () => {
+    const { discussSystemPrompt } = await import('../src/core/prompts.js');
+    const plain = discussSystemPrompt({ guide: '', refs: [] });
+    assert.ok(!plain.includes('【说话人格】'));
+    const withPersona = discussSystemPrompt({ guide: '', refs: [], persona: '  你是毒舌编辑。 ' });
+    assert.ok(withPersona.includes('【说话人格】\n你是毒舌编辑。'));
+    assert.ok(withPersona.startsWith('你在帮用户构思'));
+});

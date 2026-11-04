@@ -2,10 +2,50 @@ import { INDEX_FILE, chatFile, formatBytes, projectFile } from '../core/store.js
 import { buildZip } from '../core/zip.js';
 import { clearChatProgress } from '../app/progress-store.js';
 import { deleteFile, readRawFile, verifyFiles } from '../host/files.js';
-import { downloadBlob, toast } from '../host/st.js';
+import { downloadBlob, hostWindow, toast } from '../host/st.js';
+import { compareVersions, fetchLatestVersion } from '../host/update.js';
 import { confirmDialog, esc } from './dom.js';
+import { writeUi } from './app.js';
 
 const st = view => view.tabState('data');
+
+// 最新版本每次打开页面只查一次，结果留到刷新酒馆页面为止。
+const latest = { state: '', version: '', error: '' };
+// 自动更新版由加载器启动，会留下 __plotInjectorLoader；单文件版没有，只能重新导入。
+const viaLoader = () => Boolean(window.__plotInjectorLoader);
+
+async function checkLatest(view) {
+    latest.state = 'checking';
+    view.renderBody();
+    try {
+        latest.version = await fetchLatestVersion();
+        latest.state = 'done';
+    } catch (error) {
+        latest.error = error.message;
+        latest.state = 'error';
+    }
+    view.renderBody();
+}
+
+function versionCard(view, settings) {
+    if (!latest.state) checkLatest(view);
+    const newer = latest.state === 'done' && compareVersions(latest.version, view.version) > 0;
+    const status = {
+        checking: '<span class="pi-spin"></span>正在检测最新版本…',
+        done: newer ? `最新版本 v${esc(latest.version)}，可以更新。` : '已是最新版本。',
+        error: `检测失败：${esc(latest.error)}`,
+    }[latest.state] || '';
+    const pinned = settings.loaderRef;
+    let note = '';
+    if (newer && !viaLoader()) note = '当前是单文件版，需重新导入新版 JSON 才能更新。';
+    else if (newer && pinned) note = `已指定 ${esc(pinned)}，清空指定版本后才会更新。`;
+    const updateBtn = newer && viaLoader() ? `<button type="button" class="pi-btn is-sm is-primary" data-act="update-now">更新到 v${esc(latest.version)}</button>` : '';
+    return `<div class="pi-card"><h3>版本更新</h3>
+        <p class="pi-hint">当前版本 v${esc(view.version)}。${status}</p>
+        ${note ? `<p class="pi-hint is-warn">${note}</p>` : ''}
+        <div class="pi-tools ${updateBtn ? 'is-c2' : 'is-c1'} pi-acts"><button type="button" class="pi-btn is-sm" data-act="check-update"${latest.state === 'checking' ? ' disabled' : ''}>检查更新</button>${updateBtn}</div>
+        <label class="pi-field"><span>指定版本</span><input class="pi-inp" data-set="loaderRef" value="${esc(settings.loaderRef)}" placeholder="留空跟随最新版本，可填 v0.1.0 或 main"></label></div>`;
+}
 
 function referenced(index) {
     const names = new Set([INDEX_FILE]);
@@ -40,9 +80,7 @@ export function render(view) {
         <div class="pi-equal pi-acts"><button type="button" class="pi-btn is-sm" data-act="verify">${s.verifying ? '<span class="pi-spin"></span>' : ''}重新核对</button>
             <button type="button" class="pi-btn is-sm" data-act="orphans"${orphans.length ? '' : ' disabled'}>清理孤立文件${orphans.length ? `（${orphans.length}）` : ''}</button>
             <button type="button" class="pi-btn is-sm" data-act="clear-chats">清空全部讨论记录</button></div></div>
-        <div class="pi-card"><h3>版本更新</h3>
-        <p class="pi-hint">当前版本 v${esc(view.version)}，修改后刷新酒馆页面生效。</p>
-        <label class="pi-field"><span>指定版本</span><input class="pi-inp" data-set="loaderRef" value="${esc(settings.loaderRef)}" placeholder="留空跟随最新版本，可填 v0.1.0 或 main"></label></div>
+        ${versionCard(view, settings)}
         <div class="pi-card"><h3>重置插件</h3>
         <p class="pi-hint">删除所有项目、讨论记录和当前聊天的进度，执行前自动下载备份。</p>
         <div class="pi-equal is-one pi-acts"><button type="button" class="pi-btn is-sm is-danger" data-act="wipe">备份并删除</button></div></div>`;
@@ -79,6 +117,21 @@ async function verify(view) {
 }
 
 export const actions = {
+    'check-update'(view) {
+        return checkLatest(view);
+    },
+    // 加载器把最新版本号缓存 30 分钟；清掉缓存再刷新，才会马上取到新版。
+    async 'update-now'(view) {
+        const pinned = view.data.settings().loaderRef;
+        const body = pinned ? `将清空指定版本（${pinned}），改为跟随最新版本，然后刷新酒馆页面。` : '将刷新酒馆页面，载入最新版本。';
+        if (!(await confirmDialog({ title: `更新到 v${latest.version}`, body, okLabel: '更新并刷新' }))) return;
+        if (pinned) {
+            view.data.updateSettings({ loaderRef: '' });
+            await view.data.flush();
+        }
+        writeUi({ loader: null });
+        hostWindow().location.reload();
+    },
     verify(view) {
         st(view).verified = null;
         return verify(view);

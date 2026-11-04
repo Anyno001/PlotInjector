@@ -26,11 +26,14 @@ export const SAMPLE_STAGE = `剧情_卷一_示例:
 const FOLD_KEEP = 16;
 const FOLD_CHARS = 24000;
 
-export function discussSystemPrompt({ guide, refs }) {
+// persona：用户在讨论页填的说话人格，只决定怎么说话，任务和回复结构不变。
+export function discussSystemPrompt({ guide, refs, persona = '' }) {
     const parts = [
         '你在帮用户构思一条同人 if 线：一起把世界观、人物处境、信息差和大纲方向想清楚。',
         '每次回复先回应用户的想法，再指出缺口或矛盾，最后给出两三个可选方向。不写小说正文。',
     ];
+    if (persona.trim()) parts.push(`【说话人格】
+${persona.trim()}`);
     if (refs.length) parts.push(...refs.map(ref => `【参考·${ref.title}】\n${ref.text}`));
     if (guide) parts.push(`【写作基准：同人世界观速成】\n${guide}`);
     return parts.join('\n\n');
