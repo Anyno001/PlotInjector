@@ -192,7 +192,7 @@ export function createApp({ data, runtime, version }) {
         const chatScroll = chat ? chat.scrollTop : null;
         const chatAtEnd = chat ? chat.scrollHeight - chat.scrollTop - chat.clientHeight < 30 : true;
         const focused = doc.activeElement && body.contains(doc.activeElement) ? doc.activeElement : null;
-        const compose = focused && focused.matches('[data-compose],[data-setting]') ? { sel: focused.matches('[data-compose]') ? '[data-compose]' : '[data-setting]', start: focused.selectionStart, end: focused.selectionEnd } : null;
+        const compose = focused && focused.matches('[data-compose],[data-setting],[data-search]') ? { sel: ['[data-compose]', '[data-setting]'].find(sel => focused.matches(sel)) || `[data-search="${focused.dataset.search}"]`, start: focused.selectionStart, end: focused.selectionEnd } : null;
         body.className = `pi-body${!view.page && view.tab === 'discuss' && view.project() ? ' is-chat' : ''}`;
         body.innerHTML = safeBodyHtml();
         body.scrollTop = keepScroll;
@@ -460,6 +460,8 @@ export function createApp({ data, runtime, version }) {
         root.addEventListener('scroll', cancelPress, true);
         root.addEventListener('change', onChange);
         root.addEventListener('input', onInput);
+        // 搜索框输入法选字时不重画（会打断拼音），选完字再补一次。
+        root.addEventListener('compositionend', event => { if (event.target.dataset.search) onInput(event); });
         root.addEventListener('focusout', event => current().onBlur?.(view, event.target, event));
         root.addEventListener('mousedown', event => { if (event.target === root) root.dataset.down = '1'; });
         root.addEventListener('mouseup', event => { if (event.target === root && root.dataset.down) close(); delete root.dataset.down; });

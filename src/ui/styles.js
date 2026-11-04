@@ -27,7 +27,10 @@ export const CSS = `
 .pi-group.is-collapsed .pi-pitem{display:none}
 .pi-plist.is-searching .pi-group.is-collapsed .pi-pitem{display:flex}
 .pi-psearch{position:relative;margin:0 8px 6px}
-.pi-psearch svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--pi-txt2);pointer-events:none}
+.pi-psearch.is-wb{margin:0 0 8px}
+.pi-psearch.is-wb .pi-inp{padding-right:36px}
+.pi-psearch .pi-search-x{position:absolute;right:4px;top:50%;transform:translateY(-50%)}
+.pi-psearch>svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--pi-txt2);pointer-events:none}
 .pi-psearch .pi-inp{padding-left:30px}
 .pi-pitem{display:flex;align-items:center;gap:6px;width:100%;padding:7px 10px;border:0;border-radius:var(--pi-r-in);background:none;color:var(--pi-txt);font-size:13px;text-align:left;cursor:pointer;font-family:inherit;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 .pi-pitem:hover{background:var(--pi-surf)}
@@ -116,12 +119,10 @@ export const CSS = `
 .pi-wb-field{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pi-wb-row{display:flex;align-items:center;gap:8px;padding:3px 0;min-width:0}
 .pi-wb-row input{width:15px;height:15px;margin:0;accent-color:var(--pi-accent);flex-shrink:0;cursor:pointer}
-.pi-switch{position:relative;flex-shrink:0;width:42px;height:22px;padding:0;border:0;border-radius:11px;background:var(--pi-fill2);color:var(--pi-txt2);font:inherit;font-size:11px;font-weight:600;line-height:22px;cursor:pointer;transition:background .15s}
+.pi-switch{position:relative;flex-shrink:0;width:38px;height:22px;padding:0;border:0;border-radius:11px;background:var(--pi-fill2);cursor:pointer;transition:background .15s}
 .pi-switch::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:var(--pi-rule);transition:left .15s}
-.pi-switch>span{position:absolute;top:0;right:7px}
-.pi-switch.is-on{background:var(--pi-accent);color:var(--pi-knob)}
-.pi-switch.is-on::after{left:23px;background:var(--pi-knob)}
-.pi-switch.is-on>span{right:auto;left:7px}
+.pi-switch.is-on{background:var(--pi-accent)}
+.pi-switch.is-on::after{left:19px;background:var(--pi-knob)}
 .pi-switch:disabled{opacity:.6;cursor:wait}
 .pi-wb-title{flex:1;min-width:0;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pi-wb-row.is-off .pi-wb-title{color:var(--pi-txt2)}

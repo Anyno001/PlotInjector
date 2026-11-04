@@ -1,4 +1,4 @@
-// PlotInjector v0.1.21
+// PlotInjector v0.1.22
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -2715,7 +2715,10 @@ ${horrorGuide}` : "",
 .pi-group.is-collapsed .pi-pitem{display:none}
 .pi-plist.is-searching .pi-group.is-collapsed .pi-pitem{display:flex}
 .pi-psearch{position:relative;margin:0 8px 6px}
-.pi-psearch svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--pi-txt2);pointer-events:none}
+.pi-psearch.is-wb{margin:0 0 8px}
+.pi-psearch.is-wb .pi-inp{padding-right:36px}
+.pi-psearch .pi-search-x{position:absolute;right:4px;top:50%;transform:translateY(-50%)}
+.pi-psearch>svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--pi-txt2);pointer-events:none}
 .pi-psearch .pi-inp{padding-left:30px}
 .pi-pitem{display:flex;align-items:center;gap:6px;width:100%;padding:7px 10px;border:0;border-radius:var(--pi-r-in);background:none;color:var(--pi-txt);font-size:13px;text-align:left;cursor:pointer;font-family:inherit;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 .pi-pitem:hover{background:var(--pi-surf)}
@@ -2804,12 +2807,10 @@ ${horrorGuide}` : "",
 .pi-wb-field{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pi-wb-row{display:flex;align-items:center;gap:8px;padding:3px 0;min-width:0}
 .pi-wb-row input{width:15px;height:15px;margin:0;accent-color:var(--pi-accent);flex-shrink:0;cursor:pointer}
-.pi-switch{position:relative;flex-shrink:0;width:42px;height:22px;padding:0;border:0;border-radius:11px;background:var(--pi-fill2);color:var(--pi-txt2);font:inherit;font-size:11px;font-weight:600;line-height:22px;cursor:pointer;transition:background .15s}
+.pi-switch{position:relative;flex-shrink:0;width:38px;height:22px;padding:0;border:0;border-radius:11px;background:var(--pi-fill2);cursor:pointer;transition:background .15s}
 .pi-switch::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:var(--pi-rule);transition:left .15s}
-.pi-switch>span{position:absolute;top:0;right:7px}
-.pi-switch.is-on{background:var(--pi-accent);color:var(--pi-knob)}
-.pi-switch.is-on::after{left:23px;background:var(--pi-knob)}
-.pi-switch.is-on>span{right:auto;left:7px}
+.pi-switch.is-on{background:var(--pi-accent)}
+.pi-switch.is-on::after{left:19px;background:var(--pi-knob)}
 .pi-switch:disabled{opacity:.6;cursor:wait}
 .pi-wb-title{flex:1;min-width:0;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pi-wb-row.is-off .pi-wb-title{color:var(--pi-txt2)}
@@ -4847,6 +4848,7 @@ ${parsed.body}` : parsed.body;
   __export(page_books_exports, {
     actions: () => actions9,
     onChange: () => onChange6,
+    onInput: () => onInput5,
     refreshOn: () => refreshOn7,
     render: () => render9
   });
@@ -4904,7 +4906,8 @@ ${parsed.body}` : parsed.body;
   var st7 = (view) => view.tabState("books"), GROUPS = {
     on: (entries) => entries.filter((entry) => !acuField(entry.title) && !entry.disabled),
     off: (entries) => entries.filter((entry) => !acuField(entry.title) && entry.disabled)
-  }, toggle = (entry) => `<button type="button" class="pi-switch${entry.disabled ? "" : " is-on"}" role="switch" aria-checked="${entry.disabled ? "false" : "true"}" data-act="wb-toggle" data-wb-toggle="${esc(entry.key)}" title="${entry.disabled ? "已关闭，点击开启" : "已开启，点击关闭"}"><span>${entry.disabled ? "关" : "开"}</span></button>`, title = (entry) => `<span class="pi-wb-title" title="${esc(entry.title)}">${esc(entry.title)}</span>`;
+  }, toggle = (entry) => `<button type="button" class="pi-switch${entry.disabled ? "" : " is-on"}" role="switch" aria-checked="${entry.disabled ? "false" : "true"}" data-act="wb-toggle" data-wb-toggle="${esc(entry.key)}" title="${entry.disabled ? "已关闭，点击开启" : "已开启，点击关闭"}"></button>`, norm = (text) => String(text || "").trim().toLowerCase(), entryHit = (entry, q) => !q || [entry.title, entry.content, ...entry.keys, ...entry.keysSecondary].some((text) => String(text).toLowerCase().includes(q)), searchBox = (key, value, placeholder) => `<div class="pi-psearch is-wb">${ICONS.search}<input class="pi-inp" data-search="${key}" placeholder="${placeholder}" value="${esc(value || "")}">
+    <button type="button" class="pi-icon-btn pi-search-x" data-act="search-close" title="关闭搜索">${ICONS.close}</button></div>`, title = (entry) => `<span class="pi-wb-title" title="${esc(entry.title)}">${esc(entry.title)}</span>`;
   function editor(entry) {
     let atDepth = entry.position === 4, key = esc(entry.key);
     return `<div class="pi-wb-edit">
@@ -4949,26 +4952,27 @@ ${parsed.body}` : parsed.body;
     if (!s.picking) {
       let none2 = !handwritten(entries).length;
       return `<div class="pi-tbar">${tbtn("wb-add", "entryPlus", "新建条目")}${tbtn("wb-picking", "checks", "批量", { disabled: none2 })}
-            ${tbtn("wb-punct", "wand", "修复标点", { disabled: none2 })}${tbtn("wb-regex", "replace", "替换", { disabled: none2 })}${moreBtn("book-more")}</div>`;
+            ${tbtn("wb-regex", "replace", "替换", { disabled: none2 })}${tbtn("wb-search", "search", "搜索", { disabled: !entries.length })}${moreBtn("book-more")}</div>`;
     }
     let none = !s.picked.size;
     return `<div class="pi-tbar">${tbtn("wb-move", "move", "迁移", { disabled: none })}${tbtn("wb-order", "sort", "重排", { disabled: none })}
         ${tbtn("wb-regex", "replace", "替换", { disabled: none })}${tbtn("wb-pick-delete", "trash", "删除", { danger: !0, disabled: none })}${moreBtn("pick-more")}</div>`;
   }
-  function bookBody(s, entries) {
-    let picked = s.picking ? s.picked : null, on = GROUPS.on(entries), off = GROUPS.off(entries), all = picked && handwritten(entries).length && handwritten(entries).every((entry) => picked.has(entry.key)), head = `${picked ? `<div class="pi-wb-info is-pick"><span class="pi-wb-count">已选 ${picked.size} 条</span><span class="pi-spacer"></span>
+  var shownEntries = (s) => (s.entries || []).filter((entry) => entryHit(entry, norm(s.query)));
+  function bookBody(s, allEntries) {
+    let picked = s.picking ? s.picked : null, q = norm(s.query), entries = shownEntries(s), on = GROUPS.on(entries), off = GROUPS.off(entries), all = picked && handwritten(entries).length && handwritten(entries).every((entry) => picked.has(entry.key)), head = `${picked ? `<div class="pi-wb-info is-pick"><span class="pi-wb-count">已选 ${picked.size} 条</span><span class="pi-spacer"></span>
             <button type="button" class="pi-btn is-sm is-ghost" data-act="wb-pick-all">${all ? "取消全选" : "全选"}</button>
-            <button type="button" class="pi-btn is-sm is-ghost" data-act="wb-picking">完成</button></div>` : `<div class="pi-wb-info"><span class="pi-wb-tokens">${tokenText(s)}</span></div>`}${bookBar(s, entries)}`;
-    return entries.length ? picked ? `${head}${section("已开启", on, "没有开启的条目", "", "", picked)}
+            <button type="button" class="pi-btn is-sm is-ghost" data-act="wb-picking">完成</button></div>` : `<div class="pi-wb-info"><span class="pi-wb-tokens">${tokenText(s)}</span></div>`}${bookBar(s, allEntries)}${s.search === "entry" && allEntries.length ? searchBox("entry", s.query, "搜索条目标题、关键词、内容") : ""}`;
+    return allEntries.length ? entries.length ? picked ? `${head}${section("已开启", on, "没有开启的条目", "", "", picked)}
             ${section("已关闭", off, "没有关闭的条目", "", "", picked)}` : `${head}${section("已开启", on, "没有开启的条目", bulkBtn('data-act="wb-bulk" data-group="on"', "全部关闭"), s.openKey)}
         ${section("已关闭", off, "没有关闭的条目", bulkBtn('data-act="wb-bulk" data-group="off"', "全部开启"), s.openKey)}
-        ${acuSection(entries, s.openFields || /* @__PURE__ */ new Set())}` : `${head}<p class="pi-hint">没有条目</p>`;
+        ${acuSection(entries, s.openFields || /* @__PURE__ */ new Set(), !!q)}` : `${head}<p class="pi-hint">没有匹配的条目</p>` : `${head}<p class="pi-hint">没有条目</p>`;
   }
-  function acuSection(entries, openFields) {
+  function acuSection(entries, openFields, expandAll = !1) {
     let fields = groupByField(entries);
     if (!fields.length) return "";
     let total = fields.reduce((sum, [, list]) => sum + list.length, 0), sub = ([field, list]) => {
-      let on = list.filter((entry) => !entry.disabled).length, bulk = bulkBtn(`data-act="acu-field" data-field="${esc(field)}" data-on="1"`, "一键开启", on === list.length) + bulkBtn(`data-act="acu-field" data-field="${esc(field)}" data-on="0"`, "一键关闭", !on), open = openFields.has(field);
+      let on = list.filter((entry) => !entry.disabled).length, bulk = bulkBtn(`data-act="acu-field" data-field="${esc(field)}" data-on="1"`, "一键开启", on === list.length) + bulkBtn(`data-act="acu-field" data-field="${esc(field)}" data-on="0"`, "一键关闭", !on), open = expandAll || openFields.has(field);
       return `<div class="pi-wb-sub"><div class="pi-wb-sub-hd is-fold" data-act="acu-fold" data-field="${esc(field)}">${open ? ICONS.caretDown : ICONS.caret}<span class="pi-wb-field" title="${esc(field)}">${esc(field)}</span><small>${on}/${list.length}</small><span class="pi-wb-bulk">${bulk}</span></div>
             ${open ? list.map((entry) => `<div class="pi-wb-row${entry.disabled ? " is-off" : ""}">${toggle(entry)}${title(entry)}</div>`).join("") : ""}</div>`;
     };
@@ -4983,8 +4987,14 @@ ${parsed.body}` : parsed.body;
     for (let name of s.extra || []) names.includes(name) && add(name, "其他");
     return books;
   }
+  function shownBooks(s) {
+    let q = norm(s.bookQuery), listed = listedBooks(s);
+    if (!q) return listed;
+    let hit = (name) => name.toLowerCase().includes(q), others = allBookNames().filter((name) => hit(name) && !listed.some((book) => book.name === name)).map((name) => ({ name, source: "其他" }));
+    return [...listed.filter((book) => hit(book.name)), ...others];
+  }
   function render9(view) {
-    let s = st7(view), list = listedBooks(s).map((book) => {
+    let s = st7(view), list = shownBooks(s).map((book) => {
       let open = s.book === book.name, entries = open && s.entries ? s.entries : null;
       return `<div class="pi-book${open ? " is-open" : ""}"><div class="pi-book-hd" data-act="open-book" data-book="${esc(book.name)}">
             ${open ? ICONS.caretDown : ICONS.caret}<span class="pi-etitle" title="${esc(book.name)}">${esc(book.name)}</span><span class="pi-meta">${esc(book.source)}</span></div>
@@ -4994,7 +5004,8 @@ ${parsed.body}` : parsed.body;
             <button type="button" class="pi-btn is-sm is-ghost" data-act="book-new">${ICONS.plus}新建</button>
             <button type="button" class="pi-icon-btn" data-act="page-more" title="更多">${ICONS.more}</button></h3>
         <p class="pi-hint is-warn">注意：这里的操作真的会修改你的世界书！</p>
-        ${list || '<p class="pi-hint">没有关联或全局启用的世界书，可从「更多」打开其他世界书。</p>'}</div>`;
+        ${s.search === "book" ? searchBox("book", s.bookQuery, "搜索所有世界书") : ""}
+        ${list || `<p class="pi-hint">${norm(s.bookQuery) ? "没有匹配的世界书" : "没有关联或全局启用的世界书，可从「更多」搜索或打开其他世界书。"}</p>`}</div>`;
   }
   var splitKeys = (text) => String(text || "").split(/[,，、\n]/).map((item) => item.trim()).filter(Boolean);
   function editPatch(target) {
@@ -5004,6 +5015,9 @@ ${parsed.body}` : parsed.body;
   async function saveEdit(view, target) {
     let key = target.dataset.wbEdit, patch = editPatch(target);
     !patch || !(st7(view).entries || []).some((item) => item.key === key) || (await updateEntry(st7(view).book, key, patch), st7(view).entries = bookEntries(await loadBook(st7(view).book)), (target.tagName === "SELECT" || target.dataset.f === "comment") && view.renderBody());
+  }
+  function onInput5(view, target, event) {
+    !target.dataset.search || event.isComposing || (st7(view)[target.dataset.search === "book" ? "bookQuery" : "query"] = target.value, view.renderBody());
   }
   async function onChange6(view, target) {
     if (target.dataset.wbPick) {
@@ -5080,7 +5094,7 @@ ${parsed.body}` : parsed.body;
     async "wb-bulk"(view, target) {
       let group = target.dataset.group, pick = GROUPS[group];
       if (!pick) return;
-      let keys = pick(st7(view).entries || []).map((entry) => entry.key);
+      let keys = pick(shownEntries(st7(view))).map((entry) => entry.key);
       keys.length && (target.disabled = !0, await setEntriesDisabled(st7(view).book, keys, group === "on"), await reloadBook(view));
     },
     async "wb-toggle"(view, target) {
@@ -5098,7 +5112,7 @@ ${parsed.body}` : parsed.body;
     },
     // 一个字段的数据库条目整体开或关（写进世界书）。
     async "acu-field"(view, target) {
-      let on = target.dataset.on === "1", keys = (st7(view).entries || []).filter((entry) => acuField(entry.title) === target.dataset.field && entry.disabled === on).map((entry) => entry.key);
+      let on = target.dataset.on === "1", keys = shownEntries(st7(view)).filter((entry) => acuField(entry.title) === target.dataset.field && entry.disabled === on).map((entry) => entry.key);
       keys.length && (target.disabled = !0, await setEntriesDisabled(st7(view).book, keys, !on), await reloadBook(view));
     },
     async "open-book"(view, target, event) {
@@ -5155,6 +5169,17 @@ ${parsed.body}` : parsed.body;
       let result = await removeBook(name);
       result.failed.length ? toast("warning", `已删除，但${result.failed.join("、")}的绑定没能解除，请在酒馆里检查。`) : toast("success", `已删除「${name}」。`), s.book = "", s.entries = null, s.extra = (s.extra || []).filter((item) => item !== name), view.renderBody();
     },
+    "book-search"(view) {
+      openSearch(view, "book");
+    },
+    "wb-search"(view) {
+      if (st7(view).search === "entry") return actions9["search-close"](view);
+      openSearch(view, "entry");
+    },
+    "search-close"(view) {
+      let s = st7(view);
+      s.search = "", s.query = "", s.bookQuery = "", view.renderBody();
+    },
     async "wb-add"(view) {
       let s = st7(view), [key] = await addEntries(s.book);
       await reloadBook(view), s.openKey = key, view.renderBody();
@@ -5166,12 +5191,14 @@ ${parsed.body}` : parsed.body;
     async "page-more"(view, target, event) {
       let pick = await menuDialog({ title: "世界书", items: [
         { label: "导入世界书", value: "book-import", icon: ICONS.upload },
+        { label: "搜索世界书", value: "book-search", icon: ICONS.search },
         { label: "打开其他世界书", value: "book-open", icon: ICONS.folder }
       ] });
       if (pick) return actions9[pick](view, target, event);
     },
     async "book-more"(view, target, event) {
       let pick = await menuDialog({ title: st7(view).book, items: [
+        { label: "修复标点", value: "wb-punct", icon: ICONS.wand },
         { label: "重命名", value: "book-rename", icon: ICONS.pencil },
         { label: "另存副本", value: "book-copy", icon: ICONS.copy },
         { label: "导出", value: "book-export", icon: ICONS.download },
@@ -5199,8 +5226,9 @@ ${parsed.body}` : parsed.body;
       s.picking = !s.picking, s.picked = /* @__PURE__ */ new Set(), s.openKey = "", view.renderBody();
     },
     "wb-pick-all"(view) {
-      let s = st7(view), list = handwritten(s.entries || []), all = list.every((entry) => s.picked.has(entry.key));
-      s.picked = all ? /* @__PURE__ */ new Set() : new Set(list.map((entry) => entry.key)), view.renderBody();
+      let s = st7(view), list = handwritten(shownEntries(s)), all = list.every((entry) => s.picked.has(entry.key)), picked = new Set(s.picked);
+      for (let entry of list) all ? picked.delete(entry.key) : picked.add(entry.key);
+      s.picked = picked, view.renderBody();
     },
     // 关键词里写成「甲，乙、丙」的一整条拆成三个，去掉首尾标点与空格、重复项；/正则/ 形式的关键词不动。
     async "wb-punct"(view) {
@@ -5253,9 +5281,13 @@ ${parsed.body}` : parsed.body;
     let s = st7(view);
     await setEntriesDisabled(s.book, [...s.picked], disabled), await reloadBook(view);
   }
+  function openSearch(view, key) {
+    let s = st7(view);
+    s.search = key, key === "book" ? s.query = "" : s.bookQuery = "", view.renderBody(), hostDocument().querySelector(`.pi-root [data-search="${key}"]`)?.focus();
+  }
   async function openBook(view, name) {
     let s = st7(view);
-    listedBooks(s).some((book) => book.name === name) || (s.extra = [.../* @__PURE__ */ new Set([...s.extra || [], name])]), s.book = name, s.entries = null, s.openKey = "", s.tokens = null, s.picking = !1, s.picked = /* @__PURE__ */ new Set(), await reloadBook(view);
+    listedBooks(s).some((book) => book.name === name) || (s.extra = [.../* @__PURE__ */ new Set([...s.extra || [], name])]), s.book = name, s.entries = null, s.openKey = "", s.query = "", s.search === "entry" && (s.search = ""), s.tokens = null, s.picking = !1, s.picked = /* @__PURE__ */ new Set(), await reloadBook(view);
   }
   var refreshOn7 = ["chat"];
 
@@ -5484,7 +5516,7 @@ ${parsed.body}` : parsed.body;
     }
     function renderBody() {
       if (!root) return;
-      let body = root.querySelector(".pi-body"), keepScroll = body.scrollTop, chat = body.querySelector(".pi-chat"), chatScroll = chat ? chat.scrollTop : null, chatAtEnd = chat ? chat.scrollHeight - chat.scrollTop - chat.clientHeight < 30 : !0, focused = doc.activeElement && body.contains(doc.activeElement) ? doc.activeElement : null, compose = focused && focused.matches("[data-compose],[data-setting]") ? { sel: focused.matches("[data-compose]") ? "[data-compose]" : "[data-setting]", start: focused.selectionStart, end: focused.selectionEnd } : null;
+      let body = root.querySelector(".pi-body"), keepScroll = body.scrollTop, chat = body.querySelector(".pi-chat"), chatScroll = chat ? chat.scrollTop : null, chatAtEnd = chat ? chat.scrollHeight - chat.scrollTop - chat.clientHeight < 30 : !0, focused = doc.activeElement && body.contains(doc.activeElement) ? doc.activeElement : null, compose = focused && focused.matches("[data-compose],[data-setting],[data-search]") ? { sel: ["[data-compose]", "[data-setting]"].find((sel) => focused.matches(sel)) || `[data-search="${focused.dataset.search}"]`, start: focused.selectionStart, end: focused.selectionEnd } : null;
       body.className = `pi-body${!view.page && view.tab === "discuss" && view.project() ? " is-chat" : ""}`, body.innerHTML = safeBodyHtml(), body.scrollTop = keepScroll;
       let nextChat = body.querySelector(".pi-chat");
       if (nextChat && (nextChat.scrollTop = chatAtEnd || chatScroll == null ? nextChat.scrollHeight : chatScroll), compose) {
@@ -5634,7 +5666,7 @@ ${parsed.body}` : parsed.body;
       let handler = current().onChange;
       handler && Promise.resolve(handler(view, target, event)).catch((error) => toast("error", error.message || String(error)));
     }
-    function onInput5(event) {
+    function onInput6(event) {
       if (event.target.dataset.psearch !== void 0)
         return view.search = event.target.value, applySearch();
       let handler = current().onInput;
@@ -5646,7 +5678,9 @@ ${parsed.body}` : parsed.body;
     function open() {
       ensureStyle(), !root && (view.drawer = !1, lastSide = "", lastTop = "", root = el(`<div class="pi-root pi-overlay"><div class="pi-panel"><aside class="pi-side"></aside>
             <div class="pi-scrim" data-act="drawer"></div>
-            <section class="pi-main"><header class="pi-top"></header><div class="pi-body"></div></section></div></div>`), root.addEventListener("click", onClick), root.addEventListener("contextmenu", onContext), root.addEventListener("pointerdown", onPointerDown), root.addEventListener("pointermove", onPointerMove), root.addEventListener("pointerup", cancelPress), root.addEventListener("pointercancel", cancelPress), root.addEventListener("scroll", cancelPress, !0), root.addEventListener("change", onChange7), root.addEventListener("input", onInput5), root.addEventListener("focusout", (event) => current().onBlur?.(view, event.target, event)), root.addEventListener("mousedown", (event) => {
+            <section class="pi-main"><header class="pi-top"></header><div class="pi-body"></div></section></div></div>`), root.addEventListener("click", onClick), root.addEventListener("contextmenu", onContext), root.addEventListener("pointerdown", onPointerDown), root.addEventListener("pointermove", onPointerMove), root.addEventListener("pointerup", cancelPress), root.addEventListener("pointercancel", cancelPress), root.addEventListener("scroll", cancelPress, !0), root.addEventListener("change", onChange7), root.addEventListener("input", onInput6), root.addEventListener("compositionend", (event) => {
+        event.target.dataset.search && onInput6(event);
+      }), root.addEventListener("focusout", (event) => current().onBlur?.(view, event.target, event)), root.addEventListener("mousedown", (event) => {
         event.target === root && (root.dataset.down = "1");
       }), root.addEventListener("mouseup", (event) => {
         event.target === root && root.dataset.down && close(), delete root.dataset.down;
@@ -5701,7 +5735,7 @@ ${parsed.body}` : parsed.body;
   }
 
   // src/index.js
-  var VERSION = "0.1.21", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.1.22", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")

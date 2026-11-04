@@ -494,7 +494,9 @@ test('世界书管理：token 统计、修复关键词标点、批量选择后�
     await tick(30);
     assert.match(doc.querySelector('.pi-wb-tokens').textContent, /开启 6 · 全部/);
 
-    doc.querySelector('[data-act="wb-punct"]').click();
+    doc.querySelector('[data-act="book-more"]').click();
+    await tick(10);
+    doc.querySelector('.pi-dialog [data-dlg-value="wb-punct"]').click();
     await okDialog();
     assert.deepEqual(books.测试书.entries[0].key, ['甲', '甲甲', '甲乙']);
 

@@ -17,9 +17,16 @@ const GROUPS = {
     off: entries => entries.filter(entry => !acuField(entry.title) && entry.disabled),
 };
 
-// 开关做成带字的滑块，和批量选择的勾选框区分开：滑块在右、写「开」是开启，在左、写「关」是关闭。
-const toggle = entry => `<button type="button" class="pi-switch${entry.disabled ? '' : ' is-on'}" role="switch" aria-checked="${entry.disabled ? 'false' : 'true'}" data-act="wb-toggle" data-wb-toggle="${esc(entry.key)}" title="${entry.disabled ? '已关闭，点击开启' : '已开启，点击关闭'}"><span>${entry.disabled ? '关' : '开'}</span></button>`;
-const title = entry => `<span class="pi-wb-title" title="${esc(entry.title)}">${esc(entry.title)}</span>`;
+// 开关做成滑块，和批量选择的勾选框区分开：圆点在右是开启，在左是关闭。
+const toggle = entry => `<button type="button" class="pi-switch${entry.disabled ? '' : ' is-on'}" role="switch" aria-checked="${entry.disabled ? 'false' : 'true'}" data-act="wb-toggle" data-wb-toggle="${esc(entry.key)}" title="${entry.disabled ? '已关闭，点击开启' : '已开启，点击关闭'}"></button>`;
+// 搜索：不分大小写，条目按标题、关键词、内容找，世界书按名字找。
+const norm = text => String(text || '').trim().toLowerCase();
+const entryHit = (entry, q) => !q || [entry.title, entry.content, ...entry.keys, ...entry.keysSecondary].some(text => String(text).toLowerCase().includes(q));
+// 搜索框平时收起：世界书搜索从页面「更多」打开，条目搜索从工具条「搜索」打开，同一时间只开一个，× 关闭并清空。
+const searchBox = (key, value, placeholder) => `<div class="pi-psearch is-wb">${ICONS.search}<input class="pi-inp" data-search="${key}" placeholder="${placeholder}" value="${esc(value || '')}">
+    <button type="button" class="pi-icon-btn pi-search-x" data-act="search-close" title="关闭搜索">${ICONS.close}</button></div>`;
+
+const title = entry =>`<span class="pi-wb-title" title="${esc(entry.title)}">${esc(entry.title)}</span>`;
 
 function editor(entry) {
     const atDepth = entry.position === 4;
@@ -77,15 +84,20 @@ function bookBar(s, entries) {
     if (!s.picking) {
         const none = !handwritten(entries).length;
         return `<div class="pi-tbar">${tbtn('wb-add', 'entryPlus', '新建条目')}${tbtn('wb-picking', 'checks', '批量', { disabled: none })}
-            ${tbtn('wb-punct', 'wand', '修复标点', { disabled: none })}${tbtn('wb-regex', 'replace', '替换', { disabled: none })}${moreBtn('book-more')}</div>`;
+            ${tbtn('wb-regex', 'replace', '替换', { disabled: none })}${tbtn('wb-search', 'search', '搜索', { disabled: !entries.length })}${moreBtn('book-more')}</div>`;
     }
     const none = !s.picked.size;
     return `<div class="pi-tbar">${tbtn('wb-move', 'move', '迁移', { disabled: none })}${tbtn('wb-order', 'sort', '重排', { disabled: none })}
         ${tbtn('wb-regex', 'replace', '替换', { disabled: none })}${tbtn('wb-pick-delete', 'trash', '删除', { danger: true, disabled: none })}${moreBtn('pick-more')}</div>`;
 }
 
-function bookBody(s, entries) {
+// 搜索时只列匹配的条目；整区开关、全选也只作用在列出来的条目上。
+const shownEntries = s => (s.entries || []).filter(entry => entryHit(entry, norm(s.query)));
+
+function bookBody(s, allEntries) {
     const picked = s.picking ? s.picked : null;
+    const q = norm(s.query);
+    const entries = shownEntries(s);
     const on = GROUPS.on(entries);
     const off = GROUPS.off(entries);
     const all = picked && handwritten(entries).length && handwritten(entries).every(entry => picked.has(entry.key));
@@ -94,19 +106,20 @@ function bookBody(s, entries) {
             <button type="button" class="pi-btn is-sm is-ghost" data-act="wb-pick-all">${all ? '取消全选' : '全选'}</button>
             <button type="button" class="pi-btn is-sm is-ghost" data-act="wb-picking">完成</button></div>`
         : `<div class="pi-wb-info"><span class="pi-wb-tokens">${tokenText(s)}</span></div>`;
-    const head = `${info}${bookBar(s, entries)}`;
-    if (!entries.length) return `${head}<p class="pi-hint">没有条目</p>`;
+    const head = `${info}${bookBar(s, allEntries)}${s.search === 'entry' && allEntries.length ? searchBox('entry', s.query, '搜索条目标题、关键词、内容') : ''}`;
+    if (!allEntries.length) return `${head}<p class="pi-hint">没有条目</p>`;
+    if (!entries.length) return `${head}<p class="pi-hint">没有匹配的条目</p>`;
     if (picked) {
         return `${head}${section('已开启', on, '没有开启的条目', '', '', picked)}
             ${section('已关闭', off, '没有关闭的条目', '', '', picked)}`;
     }
     return `${head}${section('已开启', on, '没有开启的条目', bulkBtn('data-act="wb-bulk" data-group="on"', '全部关闭'), s.openKey)}
         ${section('已关闭', off, '没有关闭的条目', bulkBtn('data-act="wb-bulk" data-group="off"', '全部开启'), s.openKey)}
-        ${acuSection(entries, s.openFields || new Set())}`;
+        ${acuSection(entries, s.openFields || new Set(), Boolean(q))}`;
 }
 
 // 数据库条目：每个字段默认收起，只显示字段名、开启数和一键开关。
-function acuSection(entries, openFields) {
+function acuSection(entries, openFields, expandAll = false) {
     const fields = groupByField(entries);
     if (!fields.length) return '';
     const total = fields.reduce((sum, [, list]) => sum + list.length, 0);
@@ -114,7 +127,7 @@ function acuSection(entries, openFields) {
         const on = list.filter(entry => !entry.disabled).length;
         const bulk = bulkBtn(`data-act="acu-field" data-field="${esc(field)}" data-on="1"`, '一键开启', on === list.length)
             + bulkBtn(`data-act="acu-field" data-field="${esc(field)}" data-on="0"`, '一键关闭', !on);
-        const open = openFields.has(field);
+        const open = expandAll || openFields.has(field);
         return `<div class="pi-wb-sub"><div class="pi-wb-sub-hd is-fold" data-act="acu-fold" data-field="${esc(field)}">${open ? ICONS.caretDown : ICONS.caret}<span class="pi-wb-field" title="${esc(field)}">${esc(field)}</span><small>${on}/${list.length}</small><span class="pi-wb-bulk">${bulk}</span></div>
             ${open ? list.map(entry => `<div class="pi-wb-row${entry.disabled ? ' is-off' : ''}">${toggle(entry)}${title(entry)}</div>`).join('') : ''}</div>`;
     };
@@ -132,9 +145,19 @@ function listedBooks(s) {
     return books;
 }
 
+// 搜索世界书时，列表里的书按名字筛，再把名字匹配的其他世界书（未绑定、未全局启用的）接在后面，点开即可编辑。
+function shownBooks(s) {
+    const q = norm(s.bookQuery);
+    const listed = listedBooks(s);
+    if (!q) return listed;
+    const hit = name => name.toLowerCase().includes(q);
+    const others = allBookNames().filter(name => hit(name) && !listed.some(book => book.name === name)).map(name => ({ name, source: '其他' }));
+    return [...listed.filter(book => hit(book.name)), ...others];
+}
+
 export function render(view) {
     const s = st(view);
-    const list = listedBooks(s).map(book => {
+    const list = shownBooks(s).map(book => {
         const open = s.book === book.name;
         const entries = open && s.entries ? s.entries : null;
         return `<div class="pi-book${open ? ' is-open' : ''}"><div class="pi-book-hd" data-act="open-book" data-book="${esc(book.name)}">
@@ -145,7 +168,8 @@ export function render(view) {
             <button type="button" class="pi-btn is-sm is-ghost" data-act="book-new">${ICONS.plus}新建</button>
             <button type="button" class="pi-icon-btn" data-act="page-more" title="更多">${ICONS.more}</button></h3>
         <p class="pi-hint is-warn">注意：这里的操作真的会修改你的世界书！</p>
-        ${list || '<p class="pi-hint">没有关联或全局启用的世界书，可从「更多」打开其他世界书。</p>'}</div>`;
+        ${s.search === 'book' ? searchBox('book', s.bookQuery, '搜索所有世界书') : ''}
+        ${list || `<p class="pi-hint">${norm(s.bookQuery) ? '没有匹配的世界书' : '没有关联或全局启用的世界书，可从「更多」搜索或打开其他世界书。'}</p>`}</div>`;
 }
 
 const splitKeys = text => String(text || '').split(/[,，、\n]/).map(item => item.trim()).filter(Boolean);
@@ -170,6 +194,13 @@ async function saveEdit(view, target) {
     await updateEntry(st(view).book, key, patch);
     st(view).entries = bookEntries(await loadBook(st(view).book));
     if (target.tagName === 'SELECT' || target.dataset.f === 'comment') view.renderBody();
+}
+
+// 每输入一个字重画一次列表（焦点和光标由 renderBody 保留）；输入法选字中不重画，选完由 compositionend 补一次。
+export function onInput(view, target, event) {
+    if (!target.dataset.search || event.isComposing) return;
+    st(view)[target.dataset.search === 'book' ? 'bookQuery' : 'query'] = target.value;
+    view.renderBody();
 }
 
 export async function onChange(view, target) {
@@ -289,7 +320,7 @@ export const actions = {
         const group = target.dataset.group;
         const pick = GROUPS[group];
         if (!pick) return;
-        const keys = pick(st(view).entries || []).map(entry => entry.key);
+        const keys = pick(shownEntries(st(view))).map(entry => entry.key);
         if (!keys.length) return;
         target.disabled = true;
         await setEntriesDisabled(st(view).book, keys, group === 'on');
@@ -320,7 +351,7 @@ export const actions = {
     // 一个字段的数据库条目整体开或关（写进世界书）。
     async 'acu-field'(view, target) {
         const on = target.dataset.on === '1';
-        const keys = (st(view).entries || []).filter(entry => acuField(entry.title) === target.dataset.field && entry.disabled === on).map(entry => entry.key);
+        const keys = shownEntries(st(view)).filter(entry => acuField(entry.title) === target.dataset.field && entry.disabled === on).map(entry => entry.key);
         if (!keys.length) return;
         target.disabled = true;
         await setEntriesDisabled(st(view).book, keys, !on);
@@ -397,6 +428,18 @@ export const actions = {
         s.extra = (s.extra || []).filter(item => item !== name);
         view.renderBody();
     },
+    'book-search'(view) { openSearch(view, 'book'); },
+    'wb-search'(view) {
+        if (st(view).search === 'entry') return actions['search-close'](view);
+        openSearch(view, 'entry');
+    },
+    'search-close'(view) {
+        const s = st(view);
+        s.search = '';
+        s.query = '';
+        s.bookQuery = '';
+        view.renderBody();
+    },
     async 'wb-add'(view) {
         const s = st(view);
         const [key] = await addEntries(s.book);
@@ -412,12 +455,14 @@ export const actions = {
     async 'page-more'(view, target, event) {
         const pick = await menuDialog({ title: '世界书', items: [
             { label: '导入世界书', value: 'book-import', icon: ICONS.upload },
+            { label: '搜索世界书', value: 'book-search', icon: ICONS.search },
             { label: '打开其他世界书', value: 'book-open', icon: ICONS.folder },
         ] });
         if (pick) return actions[pick](view, target, event);
     },
     async 'book-more'(view, target, event) {
         const pick = await menuDialog({ title: st(view).book, items: [
+            { label: '修复标点', value: 'wb-punct', icon: ICONS.wand },
             { label: '重命名', value: 'book-rename', icon: ICONS.pencil },
             { label: '另存副本', value: 'book-copy', icon: ICONS.copy },
             { label: '导出', value: 'book-export', icon: ICONS.download },
@@ -452,9 +497,11 @@ export const actions = {
     },
     'wb-pick-all'(view) {
         const s = st(view);
-        const list = handwritten(s.entries || []);
+        const list = handwritten(shownEntries(s));
         const all = list.every(entry => s.picked.has(entry.key));
-        s.picked = all ? new Set() : new Set(list.map(entry => entry.key));
+        const picked = new Set(s.picked);
+        for (const entry of list) all ? picked.delete(entry.key) : picked.add(entry.key);
+        s.picked = picked;
         view.renderBody();
     },
     // 关键词里写成「甲，乙、丙」的一整条拆成三个，去掉首尾标点与空格、重复项；/正则/ 形式的关键词不动。
@@ -526,6 +573,16 @@ async function setPicked(view, disabled) {
     await reloadBook(view);
 }
 
+// 打开一个搜索框时收起另一个并清空它的关键词，然后把光标放进新框。
+function openSearch(view, key) {
+    const s = st(view);
+    s.search = key;
+    if (key === 'book') s.query = '';
+    else s.bookQuery = '';
+    view.renderBody();
+    hostDocument().querySelector(`.pi-root [data-search="${key}"]`)?.focus();
+}
+
 // 打开一本书并记进本次会话的列表（非当前卡绑定的书也能留在列表里）。
 async function openBook(view, name) {
     const s = st(view);
@@ -533,6 +590,8 @@ async function openBook(view, name) {
     s.book = name;
     s.entries = null;
     s.openKey = '';
+    s.query = '';
+    if (s.search === 'entry') s.search = '';
     s.tokens = null;
     s.picking = false;
     s.picked = new Set();
