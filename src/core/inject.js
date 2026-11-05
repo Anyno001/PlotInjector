@@ -1,6 +1,7 @@
 import { changeLines, filterStageData, flattenUnits, splitStageKey, splitVolumeKey, stageLabel, stageNodes, volumeLabel } from './outline.js';
 import { INFINITE_SLOT } from './infinite.js';
 import { buildInfiniteDetail, emptyInfinite } from './infinite-flow.js';
+import { NO_LINKS, outlineLinks } from './align.js';
 import { SETTING_SLOT, offNodes, unitStates } from './progress.js';
 import { injectedSetting } from './setting.js';
 import { isThreadNode, liveThreads, maskUnits, threadChangeLines, threadIndexLines, threadSwitches, threadsText } from './threads.js';
@@ -78,7 +79,8 @@ function nodeLine(node, mark) {
     return `  - ${mark ? `[${mark}] ` : ''}${node.label}｜${node.name}${event}`;
 }
 
-export function buildIndexText(units, states, progress, { carryOver = true, hookCap } = {}) {
+// links：大纲对照表（core/align.js），已演标记、钟、钩子按名称与改名链对回当前节点。
+export function buildIndexText(units, states, progress, { carryOver = true, hookCap, links = NO_LINKS } = {}) {
     const lines = [];
     const done = units.filter(unit => states[unit.id] === 'done');
     const active = units.filter(unit => states[unit.id] === 'active');
@@ -92,13 +94,13 @@ export function buildIndexText(units, states, progress, { carryOver = true, hook
         }
     }
     for (const unit of active) {
-        const off = new Set(offNodes(progress, unit.id));
+        const off = new Set(offNodes(progress, unit, links));
         const range = rangeOf(unit);
         lines.push('【当前】', `- ${stagePlace(unit)}${range ? `｜时间范围：${range}` : ''}`);
         for (const node of stageNodes(unit.stage.data).filter(item => item.kind !== 'world' && !isThreadNode(item))) lines.push(nodeLine(node, off.has(node.id) ? '已演' : '未演'));
-        if (carryOver) for (const { node } of carriedNodes(units, states, progress)) if (node.kind !== 'world') lines.push(nodeLine(node, '未演·延续'));
+        if (carryOver) for (const { node } of carriedNodes(units, states, progress, { links })) if (node.kind !== 'world') lines.push(nodeLine(node, '未演·延续'));
     }
-    if (active.length) lines.push(...threadIndexLines(liveThreads(units, states, progress, { carryOver, hookCap })));
+    if (active.length) lines.push(...threadIndexLines(liveThreads(units, states, progress, { carryOver, hookCap, links })));
     for (const unit of next) {
         const range = rangeOf(unit);
         const instr = unit.stage.data && unit.stage.data.AI指令;
@@ -134,11 +136,11 @@ export function paceText(settings, pace) {
 
 // 延续：已过阶段里还勾着（没演）的支线事件与世界动态，带到当前阶段继续可用。返回 [{ unit, node, off }]
 // withOff：连已取消的也返回（off 为 true），供执行页显示灰色项以便勾回。
-export function carriedNodes(units, states, progress, { withOff = false } = {}) {
+export function carriedNodes(units, states, progress, { withOff = false, links = NO_LINKS } = {}) {
     const out = [];
     for (const unit of units) {
         if (states[unit.id] !== 'done') continue;
-        const off = new Set(offNodes(progress, unit.id));
+        const off = new Set(offNodes(progress, unit, links));
         for (const node of stageNodes(unit.stage.data)) {
             if (node.kind === 'main' || isThreadNode(node)) continue;
             if (!off.has(node.id)) out.push({ unit, node, off: false });
@@ -188,8 +190,9 @@ export function buildEntries(project, progress, settings) {
     const infinite = project.mode === 'infinite';
     const allUnits = infinite ? [] : flattenUnits(project.outline && project.outline.volumes);
     const units = maskUnits(allUnits, threadSwitches(project));
-    const states = unitStates(units, progress);
-    const threadOpts = { carryOver: settings.carryOver !== false, hookCap: settings.hookCap };
+    const links = infinite ? NO_LINKS : outlineLinks(project.outline, allUnits);
+    const states = unitStates(units, progress, links);
+    const threadOpts = { carryOver: settings.carryOver !== false, hookCap: settings.hookCap, links };
     const live = infinite ? null : liveThreads(units, states, progress, threadOpts);
     // 关掉支线或世界动态后，已经发生的后果仍是既成事实，按完整大纲取。
     const done = infinite || units === allUnits ? live : liveThreads(allUnits, states, progress, threadOpts);
@@ -210,11 +213,11 @@ export function buildEntries(project, progress, settings) {
     }
     if (units.length) {
         const next = units.find(unit => states[unit.id] === 'next') || null;
-        const carried = settings.carryOver === false ? [] : carriedNodes(units, states, progress);
+        const carried = settings.carryOver === false ? [] : carriedNodes(units, states, progress, { links });
         let threads = threadsText(live);
         for (const unit of units) {
             if (states[unit.id] !== 'active') continue;
-            const off = offNodes(progress, unit.id);
+            const off = offNodes(progress, unit, links);
             const params = pickParams(defaults.detail, progress.slots[unit.id]);
             // 支线与进度钟的文字接在第一个启用的进行中阶段条目上；都停用时不注入。
             const own = params.enabled ? threads : '';
@@ -229,7 +232,7 @@ export function buildEntries(project, progress, settings) {
 }
 
 export function stageMainNames(unit, progress) {
-    return nodeNames(unit, offNodes(progress, unit.id));
+    return nodeNames(unit, offNodes(progress, unit));
 }
 
 const VIRTUAL_BASE_UID = 990000;

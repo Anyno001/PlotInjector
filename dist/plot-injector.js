@@ -1,4 +1,4 @@
-// PlotInjector v0.1.23
+// PlotInjector v0.1.24
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -246,19 +246,40 @@
       return queue && queue.length ? queue.shift() : null;
     };
   }
-  function volumesFromHistory(text, current = [], idOf = makeId) {
-    let takeVolume = queueByKey(current || []);
-    return parseOutlineText(text, idOf).map((volume) => {
-      let old = takeVolume(volume.key), takeStage = queueByKey(old ? old.stages : []);
+  function restoreOutline(text, current = [], idOf = makeId) {
+    let old = current || [], takeVolume = queueByKey(old), used = /* @__PURE__ */ new Set(), parsed = parseOutlineText(text, idOf).map((volume) => {
+      let match = takeVolume(volume.key), takeStage = queueByKey(match ? match.stages : []);
       return {
-        ...volume,
-        id: old ? old.id : volume.id,
+        volume,
+        match,
         stages: volume.stages.map((stage) => {
           let same = takeStage(stage.key);
-          return { ...stage, id: same ? same.id : stage.id };
+          return same && used.add(same.id), { stage, same };
         })
       };
-    });
+    }), leftovers = old.flatMap((volume) => volume.stages.filter((stage) => !used.has(stage.id)).map((stage) => ({ key: stage.key, stage, volume }))), takeAny = queueByKey(leftovers);
+    for (let row2 of parsed)
+      for (let item of row2.stages) {
+        if (item.same) continue;
+        let hit = takeAny(item.stage.key);
+        hit && (item.same = hit.stage, item.from = hit.volume, used.add(hit.stage.id));
+      }
+    let usedVolumes = new Set(parsed.filter((row2) => row2.match).map((row2) => row2.match.id)), alias = [];
+    return { volumes: parsed.map((row2) => {
+      let id = row2.match ? row2.match.id : row2.volume.id;
+      if (!row2.match) {
+        let votes = /* @__PURE__ */ new Map();
+        for (let item of row2.stages) item.from && !usedVolumes.has(item.from.id) && votes.set(item.from, (votes.get(item.from) || 0) + 1);
+        let best = [...votes.entries()].sort((a, b) => b[1] - a[1])[0];
+        best && (id = best[0].id, usedVolumes.add(id));
+      }
+      let source = row2.match || old.find((volume) => volume.id === id) || null, stages = row2.stages.map((item, index) => {
+        if (item.same) return { ...item.stage, id: item.same.id };
+        let spot = source && source.stages[index];
+        return spot && !used.has(spot.id) && (used.add(spot.id), alias.push([spot.id, item.stage.id])), item.stage;
+      });
+      return { ...row2.volume, id, stages };
+    }), alias };
   }
   function nearestUnitId(oldVolumes, newVolumes, currentId) {
     let before = flattenUnits(oldVolumes), after = flattenUnits(newVolumes);
@@ -531,6 +552,205 @@ ${world.body}
 `);
   }
 
+  // src/core/align.js
+  var RENAME_MAX = 200, ALIAS_MAX = 300, isObj = (value) => !!value && typeof value == "object" && !Array.isArray(value), FIELD_OF = Object.fromEntries(NODE_FIELDS.map((meta2) => [meta2.prefix, meta2.field])), FIELDS = new Set(NODE_FIELDS.map((meta2) => meta2.field)), prefixOf = (id) => String(id).replace(/~?\d+$/, ""), keyStage = (key) => key.slice(0, key.indexOf(":")), keyNode = (key) => key.slice(key.indexOf(":") + 1);
+  function normalizeRenames(value) {
+    return (Array.isArray(value) ? value : []).filter((item) => isObj(item) && typeof item.stageId == "string" && item.stageId && FIELDS.has(item.field)).map((item) => ({ stageId: item.stageId, field: item.field, from: String(item.from ?? "").trim(), to: String(item.to ?? "").trim() })).filter((item) => item.from && item.to && item.from !== item.to).slice(-RENAME_MAX);
+  }
+  function normalizeAlias(value) {
+    if (!isObj(value)) return {};
+    let entries = Object.entries(value).filter(([from, to]) => from && typeof to == "string" && to && to !== from);
+    return Object.fromEntries(entries.slice(-ALIAS_MAX));
+  }
+  function withRenames(outline, items) {
+    let add = normalizeRenames(items);
+    return add.length ? { ...outline, renames: normalizeRenames([...normalizeRenames(outline.renames), ...add]) } : outline;
+  }
+  function withAliases(outline, pairs) {
+    let list = (pairs || []).filter(([from, to]) => from && to && from !== to);
+    if (!list.length) return outline;
+    let alias = { ...normalizeAlias(outline.idAlias) };
+    for (let [from, to] of list)
+      delete alias[from], alias[to] === from && delete alias[to], alias[from] = to;
+    return { ...outline, idAlias: normalizeAlias(alias) };
+  }
+  function outlineLinks(outline, units = null) {
+    let src = isObj(outline) ? outline : {}, alias = normalizeAlias(src.idAlias), renames = normalizeRenames(src.renames), live = new Set((units || flattenUnits(src.volumes || [])).map((unit) => unit.id)), resolve = (id) => {
+      if (live.has(id) || !alias[id]) return id;
+      let seen = /* @__PURE__ */ new Set([id]), at = id;
+      for (; alias[at] && !seen.has(alias[at]); ) {
+        if (at = alias[at], live.has(at)) return at;
+        seen.add(at);
+      }
+      return id;
+    }, cache = /* @__PURE__ */ new Map();
+    return { resolve, family: (stageId, field, name) => {
+      let cacheKey = `${stageId}
+${field}
+${name}`;
+      if (cache.has(cacheKey)) return cache.get(cacheKey);
+      let edges = renames.filter((item) => item.field === field && resolve(item.stageId) === stageId), names2 = /* @__PURE__ */ new Set([name]);
+      for (let grew = !0; grew; ) {
+        grew = !1;
+        for (let item of edges)
+          names2.has(item.from) && !names2.has(item.to) && (names2.add(item.to), grew = !0), names2.has(item.to) && !names2.has(item.from) && (names2.add(item.from), grew = !0);
+      }
+      return cache.set(cacheKey, names2), names2;
+    }, empty: !renames.length && !Object.keys(alias).length };
+  }
+  var NO_LINKS = { resolve: (id) => id, family: (stageId, field, name) => /* @__PURE__ */ new Set([name]), empty: !0 };
+  function placeRecords(nodes, records, stageId, links = NO_LINKS) {
+    let placed = /* @__PURE__ */ new Map(), used = /* @__PURE__ */ new Set(), own = (node, rec) => rec.stageId === stageId && rec.nodeId === node.id, fits = (node, rec) => prefixOf(rec.nodeId) === prefixOf(node.id), take = (node, rec) => {
+      placed.set(node.id, rec), used.add(rec);
+    };
+    for (let node of nodes) {
+      let rec = records.find((item) => own(node, item) && item.name === node.name);
+      rec && take(node, rec);
+    }
+    let ordered = [...records].sort((a, b) => (a.stageId === stageId ? 0 : 1) - (b.stageId === stageId ? 0 : 1));
+    for (let node of nodes) {
+      if (placed.has(node.id)) continue;
+      let rec = ordered.find((item) => !used.has(item) && item.name && item.name === node.name && fits(node, item));
+      rec && take(node, rec);
+    }
+    for (let node of nodes) {
+      if (placed.has(node.id)) continue;
+      let names2 = links.family(stageId, node.field, node.name);
+      if (names2.size < 2) continue;
+      let taken = new Set(nodes.filter((other) => other !== node && other.field === node.field).map((other) => other.name)), rec = ordered.find((item) => !used.has(item) && item.name && names2.has(item.name) && !taken.has(item.name) && fits(node, item));
+      rec && take(node, rec);
+    }
+    for (let node of nodes) {
+      if (placed.has(node.id)) continue;
+      let rec = records.find((item) => !used.has(item) && !item.name && own(node, item));
+      rec && take(node, rec);
+    }
+    return { placed, orphans: records.filter((item) => !used.has(item)) };
+  }
+  function stageRecords(map, stageId, prefixes, links) {
+    let out = [];
+    for (let [key, value] of Object.entries(map)) {
+      if (key.indexOf(":") < 0) continue;
+      let from = keyStage(key), nodeId = keyNode(key);
+      !prefixes.has(prefixOf(nodeId)) || links.resolve(from) !== stageId || out.push({ key, stageId: from, nodeId, name: isObj(value) && value.name ? String(value.name) : "", value });
+    }
+    return out;
+  }
+  function placeStageMap(map, stageId, nodes, links = NO_LINKS) {
+    let prefixes = new Set(nodes.map((node) => prefixOf(node.id))), { placed } = placeRecords(nodes, stageRecords(map, stageId, prefixes, links), stageId, links), out = /* @__PURE__ */ new Map();
+    for (let [nodeId, rec] of placed) out.set(nodeId, { saved: isObj(rec.value) ? rec.value : {}, savedKey: rec.key });
+    return out;
+  }
+  function realignStage(map, stageId, nodes, links = NO_LINKS) {
+    let prefixes = new Set(nodes.map((node) => prefixOf(node.id)));
+    if (!prefixes.size) return map;
+    let records = stageRecords(map, stageId, prefixes, links);
+    if (!records.length) return map;
+    let { placed, orphans } = placeRecords(nodes, records, stageId, links), out = { ...map };
+    for (let rec of records) delete out[rec.key];
+    let nodeKeys = new Set(nodes.map((node) => `${stageId}:${node.id}`));
+    for (let node of nodes) {
+      let rec = placed.get(node.id);
+      rec && (out[`${stageId}:${node.id}`] = { ...isObj(rec.value) ? rec.value : {}, name: node.name });
+    }
+    for (let rec of orphans) {
+      if (!rec.name) continue;
+      let ownKey = `${stageId}:${rec.nodeId}`;
+      if (rec.stageId === stageId && !nodeKeys.has(ownKey) && !(ownKey in out)) {
+        out[ownKey] = rec.value;
+        continue;
+      }
+      let prefix = prefixOf(rec.nodeId), n = 0;
+      for (; `${stageId}:${prefix}~${n}` in out; ) n += 1;
+      out[`${stageId}:${prefix}~${n}`] = rec.value;
+    }
+    return out;
+  }
+  function offRecords(slots, stageId, links) {
+    let out = [];
+    for (let [slotId, slot] of Object.entries(slots || {})) {
+      if (!slot || !Array.isArray(slot.off) || links.resolve(slotId) !== stageId) continue;
+      let names2 = isObj(slot.offNames) ? slot.offNames : {};
+      for (let nodeId of slot.off) out.push({ key: `${slotId}:${nodeId}`, stageId: slotId, nodeId: String(nodeId), name: names2[nodeId] ? String(names2[nodeId]) : "", value: !0 });
+    }
+    return out;
+  }
+  function resolveOff(slots, unit, links = NO_LINKS) {
+    let own = slots && slots[unit.id];
+    if (own && Array.isArray(own.off) && !isObj(own.offNames) && links.empty) return own.off;
+    let nodes = stageNodes(unit.stage && unit.stage.data), records = offRecords(slots, unit.id, links);
+    if (!records.length) return [];
+    let { placed } = placeRecords(nodes, records, unit.id, links);
+    return nodes.filter((node) => placed.has(node.id)).map((node) => node.id);
+  }
+  function realignOff(slots, unit, links = NO_LINKS) {
+    let nodes = stageNodes(unit.stage && unit.stage.data), records = offRecords(slots, unit.id, links), { placed, orphans } = placeRecords(nodes, records, unit.id, links), off = [], offNames = {};
+    for (let node of nodes)
+      placed.has(node.id) && (off.push(node.id), offNames[node.id] = node.name);
+    let counts = /* @__PURE__ */ new Map();
+    for (let rec of orphans) {
+      if (!rec.name) continue;
+      let prefix = prefixOf(rec.nodeId), n = counts.get(prefix) || 0;
+      counts.set(prefix, n + 1), off.push(`${prefix}~${n}`), offNames[`${prefix}~${n}`] = rec.name;
+    }
+    return { off, offNames };
+  }
+  function stable(value) {
+    return Array.isArray(value) ? `[${value.map(stable).join(",")}]` : isObj(value) ? `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stable(value[key])}`).join(",")}}` : JSON.stringify(value ?? null);
+  }
+  var KIND_MAP = { world: "clocks", side: "hooks" };
+  function adoptAcross(map, units, kind) {
+    let byName = /* @__PURE__ */ new Map();
+    for (let unit of units)
+      for (let node of stageNodes(unit.stage.data)) {
+        if (node.kind !== kind) continue;
+        let id = `${node.field}
+${node.name}`;
+        byName.set(id, byName.has(id) ? null : { unit, node });
+      }
+    let out = map;
+    for (let [key, value] of Object.entries(map)) {
+      if (!keyNode(key).includes("~") || !isObj(value) || !value.name) continue;
+      let field = FIELD_OF[prefixOf(keyNode(key))], hit = byName.get(`${field}
+${value.name}`);
+      if (!hit) continue;
+      let target = `${hit.unit.id}:${hit.node.id}`;
+      target in out || (out === map && (out = { ...map }), delete out[key], out[target] = { ...value, name: hit.node.name });
+    }
+    return out;
+  }
+  function alignProgress(progress, outline) {
+    if (!progress || progress.infinite || !isObj(outline)) return progress;
+    let units = flattenUnits(outline.volumes || []);
+    if (!units.length) return progress;
+    let links = outlineLinks(outline, units), live = new Set(units.map((unit) => unit.id)), fix = (id) => typeof id == "string" ? links.resolve(id) : id, uniq = (list) => [...new Set(list)], next = { ...progress };
+    next.current = fix(progress.current), Array.isArray(progress.muted) && (next.muted = uniq(progress.muted.map(fix))), Array.isArray(progress.offMuted) && (next.offMuted = uniq(progress.offMuted.map(fix)));
+    let oldSlots = isObj(progress.slots) ? progress.slots : {}, slots = {};
+    for (let [id, slot] of Object.entries(oldSlots)) fix(id) === id && (slots[id] = slot);
+    for (let [id, slot] of Object.entries(oldSlots)) {
+      let to = fix(id);
+      if (to === id) continue;
+      let { off, offNames, ...rest } = isObj(slot) ? slot : {};
+      slots[to] = { ...rest, ...isObj(slots[to]) ? slots[to] : {} };
+    }
+    for (let unit of units) {
+      let orig = isObj(oldSlots[unit.id]) ? oldSlots[unit.id] : null, { off, offNames } = realignOff(oldSlots, unit, links);
+      if (!off.length && !(orig && Array.isArray(orig.off) && orig.off.length)) continue;
+      let { off: _off, offNames: _names, ...rest } = isObj(slots[unit.id]) ? slots[unit.id] : {};
+      slots[unit.id] = off.length ? { ...rest, off, offNames } : rest;
+    }
+    if (next.slots = slots, isObj(progress.threads)) {
+      let threads = { ...progress.threads };
+      for (let [kind, field] of Object.entries(KIND_MAP)) {
+        let map = isObj(threads[field]) ? threads[field] : {};
+        for (let unit of units) map = realignStage(map, unit.id, stageNodes(unit.stage.data).filter((node) => node.kind === kind), links);
+        threads[field] = adoptAcross(map, units, kind);
+      }
+      next.threads = threads;
+    }
+    return stable(next) === stable(progress) ? progress : next;
+  }
+
   // src/core/progress.js
   var SETTING_SLOT = "@setting";
   var STATES = ["done", "active", "next", "todo"], STATE_LABELS = { done: "已过", active: "进行中", next: "下一段", todo: "未到" };
@@ -540,8 +760,7 @@ ${world.body}
   function normalizeProgress(value, projectId) {
     let base = emptyProgress(projectId);
     if (!value || typeof value != "object") return base;
-    let infinite = value.infinite && typeof value.infinite == "object" ? { infinite: normalizeInfiniteProgress(value.infinite) } : {};
-    return {
+    let infinite = value.infinite && typeof value.infinite == "object" ? { infinite: normalizeInfiniteProgress(value.infinite) } : {}, out = {
       ...base,
       ...value,
       ...infinite,
@@ -551,14 +770,20 @@ ${world.body}
       lastCheckFloor: Number(value.lastCheckFloor) || 0,
       pace: ["slow", "normal", "fast"].includes(value.pace) ? value.pace : "normal"
     };
+    return Number(out.lastFailFloor) > 0 ? out.lastFailFloor = Number(out.lastFailFloor) : delete out.lastFailFloor, out;
   }
-  function currentIndex(units, progress) {
+  function checkBase(progress) {
+    return Math.max(Number(progress && progress.lastCheckFloor) || 0, Number(progress && progress.lastFailFloor) || 0);
+  }
+  function currentIndex(units, progress, links = NO_LINKS) {
     if (!units.length) return -1;
     let found = units.findIndex((unit) => unit.id === progress.current);
-    return found >= 0 ? found : 0;
+    if (found >= 0) return found;
+    let to = progress.current ? links.resolve(progress.current) : "", aliased = to ? units.findIndex((unit) => unit.id === to) : -1;
+    return aliased >= 0 ? aliased : 0;
   }
-  function unitStates(units, progress) {
-    let cur = currentIndex(units, progress), states = {};
+  function unitStates(units, progress, links = NO_LINKS) {
+    let cur = currentIndex(units, progress, links), states = {};
     return units.forEach((unit, index) => {
       let derived = index < cur ? "done" : index === cur ? "active" : index === cur + 1 ? "next" : "todo", manual = progress.slots[unit.id] && progress.slots[unit.id].state;
       states[unit.id] = STATES.includes(manual) ? manual : derived;
@@ -569,17 +794,20 @@ ${world.body}
     for (let key of Object.keys(next)) next[key] === void 0 && delete next[key];
     return { ...progress, slots: { ...progress.slots, [slotId]: next } };
   }
-  function offNodes(progress, unitId) {
-    let slot = progress.slots[unitId];
+  function offNodes(progress, unit, links = NO_LINKS) {
+    if (unit && typeof unit == "object") return resolveOff(progress.slots, unit, links);
+    let slot = progress.slots[unit];
     return slot && Array.isArray(slot.off) ? slot.off : [];
   }
-  function setNodeChecked(progress, unitId, nodeId, checked) {
-    let off = new Set(offNodes(progress, unitId));
-    return checked ? off.delete(nodeId) : off.add(nodeId), patchSlot(progress, unitId, { off: [...off] });
+  function setNodeChecked(progress, unitId, nodeId, checked, name = "") {
+    let slot = progress.slots[unitId] || {}, off = new Set(Array.isArray(slot.off) ? slot.off : []), names2 = slot.offNames && typeof slot.offNames == "object" ? { ...slot.offNames } : {};
+    checked ? (off.delete(nodeId), delete names2[nodeId]) : (off.add(nodeId), name && (names2[nodeId] = name));
+    let keepNames = Object.keys(names2).length || slot.offNames;
+    return patchSlot(progress, unitId, { off: [...off], offNames: keepNames ? names2 : void 0 });
   }
   function uncheckByNames(progress, unitId, nodes, names2) {
     let wanted = new Set((names2 || []).map((name) => String(name).trim()).filter(Boolean)), next = progress;
-    for (let node of nodes) wanted.has(node.name) && (next = setNodeChecked(next, unitId, node.id, !1));
+    for (let node of nodes) wanted.has(node.name) && (next = setNodeChecked(next, unitId, node.id, !1, node.name));
     return next;
   }
   function goTo(progress, units, unitId) {
@@ -605,23 +833,23 @@ ${world.body}
   }
 
   // src/core/threads.js
-  var isObj = (value) => !!value && typeof value == "object" && !Array.isArray(value), str = (value) => String(value ?? "").trim(), clamp = (value, min, max) => Math.max(min, Math.min(max, value)), int = (value) => Number.isFinite(Number(value)) ? Math.round(Number(value)) : 0, CLOCK_MAX_TICK = 2, DEFAULT_HOOK_CAP = 2;
+  var isObj2 = (value) => !!value && typeof value == "object" && !Array.isArray(value), str = (value) => String(value ?? "").trim(), clamp = (value, min, max) => Math.max(min, Math.min(max, value)), int = (value) => Number.isFinite(Number(value)) ? Math.round(Number(value)) : 0, CLOCK_MAX_TICK = 2, DEFAULT_HOOK_CAP = 2;
   function clockSize(item) {
-    if (!isObj(item)) return 0;
+    if (!isObj2(item)) return 0;
     let size = int(item.进度钟);
     return size >= 2 ? Math.min(12, size) : 0;
   }
   function hookCondition(item) {
-    return isObj(item) ? str(item.条件) : "";
+    return isObj2(item) ? str(item.条件) : "";
   }
   function hookSteps(item) {
-    if (!isObj(item)) return [];
+    if (!isObj2(item)) return [];
     let value = item.步骤;
     return (Array.isArray(value) ? value : String(value ?? "").split(`
-`)).map((entry) => isObj(entry) ? Object.values(entry).join("：") : String(entry ?? "")).map((text) => text.replace(/^\s*(?:[-*•]|\d+[.、])\s*/, "").trim()).filter(Boolean);
+`)).map((entry) => isObj2(entry) ? Object.values(entry).join("：") : String(entry ?? "")).map((text) => text.replace(/^\s*(?:[-*•]|\d+[.、])\s*/, "").trim()).filter(Boolean);
   }
   function hookLimit(item) {
-    if (!isObj(item)) return null;
+    if (!isObj2(item)) return null;
     let value = str(item.时限);
     return value ? /^\d+$/.test(value) && Number(value) > 0 ? { floors: Number(value) } : value === "本卷" ? { volume: !0 } : null : null;
   }
@@ -630,7 +858,7 @@ ${world.body}
   }
   var threadKey = (unit, node) => `${unit.id}:${node.id}`;
   function threadSwitches(project) {
-    let raw = project && isObj(project.threads) ? project.threads : {};
+    let raw = project && isObj2(project.threads) ? project.threads : {};
     return { sideOn: raw.sideOn !== !1, worldOn: raw.worldOn !== !1 };
   }
   function maskUnits(units, sw) {
@@ -643,35 +871,21 @@ ${world.body}
     });
   }
   function threadState(progress) {
-    let raw = progress && isObj(progress.threads) ? progress.threads : {};
+    let raw = progress && isObj2(progress.threads) ? progress.threads : {};
     return {
-      clocks: isObj(raw.clocks) ? raw.clocks : {},
-      hooks: isObj(raw.hooks) ? raw.hooks : {},
+      clocks: isObj2(raw.clocks) ? raw.clocks : {},
+      hooks: isObj2(raw.hooks) ? raw.hooks : {},
       ignored: Array.isArray(raw.ignored) ? raw.ignored : []
     };
   }
   function withState(progress, patch) {
     return { ...progress, threads: { ...threadState(progress), ...patch } };
   }
-  var mapOf = (node) => node.kind === "world" ? "clocks" : "hooks", unitOfKey = (key) => key.slice(0, key.indexOf(":")), nodeOfKey = (key) => key.slice(key.indexOf(":") + 1);
-  function savedFor(map, unit, node, nodesById) {
-    let key = threadKey(unit, node), own = map[key];
-    if (own && (!own.name || own.name === node.name)) return { saved: own, savedKey: key };
-    let prefix = node.id.replace(/\d+$/, "");
-    for (let [other, value] of Object.entries(map)) {
-      if (other === key || !value || value.name !== node.name || unitOfKey(other) !== unit.id) continue;
-      let otherId = nodeOfKey(other);
-      if (otherId.replace(/\d+$/, "") !== prefix) continue;
-      let holder = nodesById.get(otherId);
-      if (!(holder && holder.name === node.name))
-        return { saved: value, savedKey: other };
-    }
-    return { saved: {}, savedKey: key };
-  }
+  var mapOf = (node) => node.kind === "world" ? "clocks" : "hooks", unitOfKey = (key) => key.slice(0, key.indexOf(":")), nodeOfKey = (key) => key.slice(key.indexOf(":") + 1), kindNodes = (unit, field) => stageNodes(unit.stage && unit.stage.data).filter((node) => node.kind === (field === "clocks" ? "world" : "side"));
   function patchLive(progress, item, patch) {
-    let field = mapOf(item.node), map = { ...threadState(progress)[field] }, next = patch === null ? { name: item.node.name } : { ...item.saved, ...patch, name: item.node.name };
+    let field = mapOf(item.node), state = threadState(progress)[field], map = item.unit.stage ? realignStage(state, item.unit.id, kindNodes(item.unit, field), item.links || NO_LINKS) : { ...state }, next = patch === null ? { name: item.node.name } : { ...item.saved, ...patch, name: item.node.name };
     for (let name of Object.keys(next)) next[name] === void 0 && delete next[name];
-    return item.savedKey && item.savedKey !== item.key && map[item.savedKey] && map[item.savedKey].name === item.node.name && delete map[item.savedKey], map[item.key] = next, withState(progress, { [field]: map });
+    return map[item.key] = next, withState(progress, { [field]: map });
   }
   function remapNodes(progress, unitId, prefix, mapIndex) {
     let pattern = new RegExp(`^${prefix}(\\d+)$`), move = (id) => {
@@ -680,7 +894,18 @@ ${world.body}
       let to = mapIndex(Number(match[1]));
       return to == null ? null : `${prefix}${to}`;
     }, next = progress, slot = progress.slots && progress.slots[unitId];
-    if (slot && Array.isArray(slot.off) && (next = { ...next, slots: { ...next.slots, [unitId]: { ...slot, off: slot.off.map(move).filter(Boolean) } } }), !progress.threads) return next;
+    if (slot && Array.isArray(slot.off)) {
+      let moved = { ...slot, off: slot.off.map(move).filter(Boolean) };
+      if (slot.offNames && typeof slot.offNames == "object") {
+        moved.offNames = {};
+        for (let [id, name] of Object.entries(slot.offNames)) {
+          let to = move(id);
+          to && (moved.offNames[to] = name);
+        }
+      }
+      next = { ...next, slots: { ...next.slots, [unitId]: moved } };
+    }
+    if (!progress.threads) return next;
     let state = threadState(next), remap = (map) => {
       let out = {};
       for (let [key, value] of Object.entries(map)) {
@@ -696,28 +921,41 @@ ${world.body}
     return withState(next, { clocks: remap(state.clocks), hooks: remap(state.hooks) });
   }
   function renameNode(progress, unit, node) {
-    let field = mapOf(node), map = threadState(progress)[field], key = threadKey(unit, node);
-    return !map[key] || !map[key].name || map[key].name === node.name ? progress : withState(progress, { [field]: { ...map, [key]: { ...map[key], name: node.name } } });
+    let next = progress, slot = progress.slots && progress.slots[unit.id], offName = slot && slot.offNames && slot.offNames[node.id];
+    if (offName && offName !== node.name && (next = { ...next, slots: { ...next.slots, [unit.id]: { ...slot, offNames: { ...slot.offNames, [node.id]: node.name } } } }), node.kind === "main") return next;
+    let field = mapOf(node), map = threadState(next)[field], key = threadKey(unit, node);
+    return !map[key] || !map[key].name || map[key].name === node.name ? next : withState(next, { [field]: { ...map, [key]: { ...map[key], name: node.name } } });
+  }
+  function renameByPosition(progress, units, links = NO_LINKS) {
+    let next = progress;
+    for (let unit of units || []) {
+      let nodes = stageNodes(unit.stage.data);
+      for (let node of nodes) {
+        let siblings = nodes.filter((other) => other.field === node.field), known = (name) => siblings.some((other) => other.name === name || other !== node && links.family(unit.id, other.field, other.name).has(name)), slot = next.slots && next.slots[unit.id], offName = slot && slot.offNames && slot.offNames[node.id], saved = node.kind === "main" ? null : threadState(next)[mapOf(node)][threadKey(unit, node)];
+        [offName, saved && saved.name].some((name) => name && name !== node.name && !known(name)) && (next = renameNode(next, unit, node));
+      }
+    }
+    return next;
   }
   function migrateStageThreads(progress, oldStages, newStages, keepId) {
     let oldIds = new Set(oldStages.map((stage) => stage.id)), state = threadState(progress), pool = [];
     for (let stage of oldStages) {
-      let unit = { id: stage.id }, off = new Set(offNodes(progress, stage.id)), nodes = stageNodes(stage.data), byId = new Map(nodes.map((node) => [node.id, node]));
+      let unit = { id: stage.id, stage }, off = new Set(offNodes(progress, unit)), nodes = stageNodes(stage.data), placed = { clocks: placeStageMap(state.clocks, stage.id, nodes.filter((node) => node.kind === "world")), hooks: placeStageMap(state.hooks, stage.id, nodes.filter((node) => node.kind === "side")) };
       for (let node of nodes) {
-        let field = mapOf(node), hit = savedFor(state[field], unit, node, byId);
-        pool.push({ field: node.field, name: node.name, map: field, value: Object.keys(hit.saved).length ? hit.saved : null, off: off.has(node.id), used: !1 });
+        let field = mapOf(node), hit = node.kind === "main" ? null : placed[field].get(node.id);
+        pool.push({ field: node.field, name: node.name, map: field, value: hit && Object.keys(hit.saved).length ? hit.saved : null, off: off.has(node.id), used: !1 });
       }
     }
     let strip = (map) => Object.fromEntries(Object.entries(map).filter(([key]) => !oldIds.has(unitOfKey(key)))), clocks = strip(state.clocks), hooks = strip(state.hooks), slots = { ...progress.slots }, kept = slots[keepId] ? { ...slots[keepId] } : null;
     for (let id of oldIds) delete slots[id];
-    kept && (delete kept.off, slots[keepId] = kept);
+    kept && (delete kept.off, delete kept.offNames, slots[keepId] = kept);
     for (let stage of newStages) {
-      let off = [];
+      let off = [], offNames = {};
       for (let node of stageNodes(stage.data)) {
         let from = pool.find((item) => !item.used && item.field === node.field && item.name === node.name);
-        from && (from.used = !0, from.off && off.push(node.id), from.value && ((from.map === "clocks" ? clocks : hooks)[`${stage.id}:${node.id}`] = { ...from.value, name: node.name }));
+        from && (from.used = !0, from.off && (off.push(node.id), offNames[node.id] = node.name), from.value && ((from.map === "clocks" ? clocks : hooks)[`${stage.id}:${node.id}`] = { ...from.value, name: node.name }));
       }
-      off.length && (slots[stage.id] = { ...slots[stage.id] || {}, off });
+      off.length && (slots[stage.id] = { ...slots[stage.id] || {}, off, offNames });
     }
     let next = { ...progress, slots, current: oldIds.has(progress.current) ? keepId : progress.current };
     return progress.threads || Object.keys(clocks).length || Object.keys(hooks).length ? withState(next, { clocks, hooks }) : next;
@@ -746,24 +984,24 @@ ${world.body}
   function clockPhase(clock) {
     return clock.done ? "done" : clock.filled >= clock.total ? "due" : clock.total - clock.filled === 1 ? "near" : clock.filled * 2 >= clock.total ? "omen" : "hidden";
   }
-  function liveThreads(units, states, progress, { carryOver = !0, hookCap = DEFAULT_HOOK_CAP } = {}) {
+  function liveThreads(units, states, progress, { carryOver = !0, hookCap = DEFAULT_HOOK_CAP, links = NO_LINKS } = {}) {
     let { clocks: savedClocks, hooks: savedHooks } = threadState(progress), active = (units || []).find((unit) => states[unit.id] === "active"), clocks = [], hooks = [];
     for (let unit of units || []) {
       let state = states[unit.id];
       if (state !== "done" && state !== "active") continue;
-      let off = new Set(offNodes(progress, unit.id)), carried = state === "done", nodes = stageNodes(unit.stage.data), byId = new Map(nodes.map((node) => [node.id, node]));
+      let off = new Set(offNodes(progress, unit, links)), carried = state === "done", nodes = stageNodes(unit.stage.data), placed = { world: placeStageMap(savedClocks, unit.id, nodes.filter((node) => node.kind === "world"), links), side: placeStageMap(savedHooks, unit.id, nodes.filter((node) => node.kind === "side"), links) }, savedFor = (node) => placed[node.kind].get(node.id) || { saved: {}, savedKey: threadKey(unit, node) };
       for (let node of nodes) {
         if (!isThreadNode(node)) continue;
         let key = threadKey(unit, node), item = node.item;
         if (node.kind === "world") {
-          let total = clockSize(item), { saved: saved2, savedKey: savedKey2 } = savedFor(savedClocks, unit, node, byId), done = !!saved2.done;
-          clocks.push({ key, savedKey: savedKey2, saved: saved2, unit, node, carried, total, filled: done ? total : clamp(int(saved2.filled), 0, total), done, lastTick: int(saved2.lastTickFloor), omen: str(item.前兆), after: str(item.后果), event: str(item.内容 || item.事件) });
+          let total = clockSize(item), { saved: saved2, savedKey: savedKey2 } = savedFor(node), done = !!saved2.done;
+          clocks.push({ key, savedKey: savedKey2, saved: saved2, links, unit, node, carried, total, filled: done ? total : clamp(int(saved2.filled), 0, total), done, lastTick: int(saved2.lastTickFloor), omen: str(item.前兆), after: str(item.后果), event: str(item.内容 || item.事件) });
           continue;
         }
-        let { saved, savedKey } = savedFor(savedHooks, unit, node, byId), steps = hookSteps(item), step = clamp(int(saved.step), 0, steps.length), pooled = !!hookCondition(item), at = pooled ? int(saved.at) : 0, since = pooled ? 0 : int(saved.since) || int(saved.at), started = pooled && at > 0 || step > 0 || !!saved.expired;
+        let { saved, savedKey } = savedFor(node), steps = hookSteps(item), step = clamp(int(saved.step), 0, steps.length), pooled = !!hookCondition(item), at = pooled ? int(saved.at) : 0, since = pooled ? 0 : int(saved.since) || int(saved.at), started = pooled && at > 0 || step > 0 || !!saved.expired;
         if (carried && !carryOver && !started) continue;
         let status = off.has(node.id) ? "done" : saved.expired ? "expired" : pooled && !at ? "wait" : "active", keepVol = Number.isFinite(Number(saved.keepVol)) && saved.keepVol !== null && saved.keepVol !== "" ? int(saved.keepVol) : -1;
-        hooks.push({ key, savedKey, saved, unit, node, carried, status, pooled, at, since, shownAt: int(saved.shownAt), steps, step, keepVol, cond: hookCondition(item), limit: hookLimit(item), miss: str(item.错过) });
+        hooks.push({ key, savedKey, saved, links, unit, node, carried, status, pooled, at, since, shownAt: int(saved.shownAt), steps, step, keepVol, cond: hookCondition(item), limit: hookLimit(item), miss: str(item.错过) });
       }
     }
     let cap = Math.max(1, int(hookCap) || DEFAULT_HOOK_CAP);
@@ -790,7 +1028,7 @@ ${world.body}
     return hook.steps.length ? `第 ${Math.min(hook.step + 1, hook.steps.length)}/${hook.steps.length} 步` : "";
   }
   function hookLine(hook) {
-    let item = isObj(hook.node.item) ? hook.node.item : {}, body = (hook.steps.length ? [item.地点, `${stepText(hook)}：${hook.steps[hook.step] || ""}`] : [item.地点, item.事件 || item.内容, item.触发 ? `触发：${item.触发}` : ""]).map(str).filter(Boolean);
+    let item = isObj2(hook.node.item) ? hook.node.item : {}, body = (hook.steps.length ? [item.地点, `${stepText(hook)}：${hook.steps[hook.step] || ""}`] : [item.地点, item.事件 || item.内容, item.触发 ? `触发：${item.触发}` : ""]).map(str).filter(Boolean);
     return `- 支线｜${hook.node.name}${fromText(hook)}${body.length ? `：${body.join("；")}` : ""}`;
   }
   function clockLine(clock) {
@@ -814,7 +1052,7 @@ ${clocks.map(clockLine).join(`
     if (hooks.length) {
       lines2.push("【支线钩子】");
       for (let hook of hooks) {
-        let chain = hook.steps.length && hook.status !== "wait" && hook.status !== "expired", mark = chain ? `${stepText(hook)}${hook.status === "queue" ? "·排队" : ""}` : marks[hook.status], item = isObj(hook.node.item) ? hook.node.item : {}, detail = hook.status === "wait" ? `条件：${hook.cond}` : chain ? hook.steps[hook.step] : str(item.事件 || item.内容);
+        let chain = hook.steps.length && hook.status !== "wait" && hook.status !== "expired", mark = chain ? `${stepText(hook)}${hook.status === "queue" ? "·排队" : ""}` : marks[hook.status], item = isObj2(hook.node.item) ? hook.node.item : {}, detail = hook.status === "wait" ? `条件：${hook.cond}` : chain ? hook.steps[hook.step] : str(item.事件 || item.内容);
         lines2.push(`  - [${mark}] 支线｜${indexName(hook)}${detail ? `：${detail.replace(/\s+/g, " ").slice(0, 120)}` : ""}`);
       }
     }
@@ -873,7 +1111,7 @@ ${clocks.map(clockLine).join(`
         if (hook.steps.length && step + 1 < hook.steps.length)
           step += 1, write(hook, { step, expired: void 0 }), events.push({ type: "chain-step", name: hook.node.name, step, total: hook.steps.length }), expired = !1;
         else {
-          hook.steps.length && write(hook, { step: hook.steps.length }), next = setNodeChecked(next, hook.unit.id, hook.node.id, !1), events.push({ type: "hook-done", name: hook.node.name }), freed.add(hook);
+          hook.steps.length && write(hook, { step: hook.steps.length }), next = setNodeChecked(next, hook.unit.id, hook.node.id, !1, hook.node.name), events.push({ type: "hook-done", name: hook.node.name }), freed.add(hook);
           continue;
         }
       if (expired || step > 0 || !hook.limit) continue;
@@ -950,7 +1188,7 @@ ${clocks.map(clockLine).join(`
     let event = node.item && node.item.事件 ? `：${String(node.item.事件).replace(/\s+/g, " ").slice(0, 120)}` : "";
     return `  - ${mark ? `[${mark}] ` : ""}${node.label}｜${node.name}${event}`;
   }
-  function buildIndexText(units, states, progress, { carryOver = !0, hookCap } = {}) {
+  function buildIndexText(units, states, progress, { carryOver = !0, hookCap, links = NO_LINKS } = {}) {
     let lines2 = [], done = units.filter((unit) => states[unit.id] === "done"), active = units.filter((unit) => states[unit.id] === "active"), next = units.filter((unit) => states[unit.id] === "next"), later = units.filter((unit) => states[unit.id] === "todo");
     if (done.length) {
       lines2.push("【已过】");
@@ -960,12 +1198,12 @@ ${clocks.map(clockLine).join(`
       }
     }
     for (let unit of active) {
-      let off = new Set(offNodes(progress, unit.id)), range = rangeOf(unit);
+      let off = new Set(offNodes(progress, unit, links)), range = rangeOf(unit);
       lines2.push("【当前】", `- ${stagePlace(unit)}${range ? `｜时间范围：${range}` : ""}`);
       for (let node of stageNodes(unit.stage.data).filter((item) => item.kind !== "world" && !isThreadNode(item))) lines2.push(nodeLine(node, off.has(node.id) ? "已演" : "未演"));
-      if (carryOver) for (let { node } of carriedNodes(units, states, progress)) node.kind !== "world" && lines2.push(nodeLine(node, "未演·延续"));
+      if (carryOver) for (let { node } of carriedNodes(units, states, progress, { links })) node.kind !== "world" && lines2.push(nodeLine(node, "未演·延续"));
     }
-    active.length && lines2.push(...threadIndexLines(liveThreads(units, states, progress, { carryOver, hookCap })));
+    active.length && lines2.push(...threadIndexLines(liveThreads(units, states, progress, { carryOver, hookCap, links })));
     for (let unit of next) {
       let range = rangeOf(unit), instr = unit.stage.data && unit.stage.data.AI指令;
       lines2.push("【下一段】", `- ${stagePlace(unit)}${range ? `｜时间范围：${range}` : ""}`), instr && lines2.push(`  AI指令：${String(instr).trim()}`);
@@ -992,11 +1230,11 @@ ${clocks.map(clockLine).join(`
     let key = PACE_TEXT[pace] ? pace : "normal";
     return String(settings.paceText && settings.paceText[key] || "").trim() || PACE_TEXT[key];
   }
-  function carriedNodes(units, states, progress, { withOff = !1 } = {}) {
+  function carriedNodes(units, states, progress, { withOff = !1, links = NO_LINKS } = {}) {
     let out = [];
     for (let unit of units) {
       if (states[unit.id] !== "done") continue;
-      let off = new Set(offNodes(progress, unit.id));
+      let off = new Set(offNodes(progress, unit, links));
       for (let node of stageNodes(unit.stage.data))
         node.kind === "main" || isThreadNode(node) || (off.has(node.id) ? withOff && out.push({ unit, node, off: !0 }) : out.push({ unit, node, off: !1 }));
     }
@@ -1032,7 +1270,7 @@ ${lines2.join(`
   function buildEntries(project, progress, settings) {
     let defaults = { ...DEFAULT_PARAMS, ...project && project.defaults }, entries = [];
     if (!project) return entries;
-    let infinite = project.mode === "infinite", allUnits = infinite ? [] : flattenUnits(project.outline && project.outline.volumes), units = maskUnits(allUnits, threadSwitches(project)), states = unitStates(units, progress), threadOpts = { carryOver: settings.carryOver !== !1, hookCap: settings.hookCap }, live = infinite ? null : liveThreads(units, states, progress, threadOpts), done = infinite || units === allUnits ? live : liveThreads(allUnits, states, progress, threadOpts), settingText = [injectedSetting(project.setting), changesText(units, states, done)].filter(Boolean).join(`
+    let infinite = project.mode === "infinite", allUnits = infinite ? [] : flattenUnits(project.outline && project.outline.volumes), units = maskUnits(allUnits, threadSwitches(project)), links = infinite ? NO_LINKS : outlineLinks(project.outline, allUnits), states = unitStates(units, progress, links), threadOpts = { carryOver: settings.carryOver !== !1, hookCap: settings.hookCap, links }, live = infinite ? null : liveThreads(units, states, progress, threadOpts), done = infinite || units === allUnits ? live : liveThreads(allUnits, states, progress, threadOpts), settingText = [injectedSetting(project.setting), changesText(units, states, done)].filter(Boolean).join(`
 
 `);
     if (settingText && entries.push({
@@ -1052,10 +1290,10 @@ ${lines2.join(`
       }), entries;
     }
     if (units.length) {
-      let next = units.find((unit) => states[unit.id] === "next") || null, carried = settings.carryOver === !1 ? [] : carriedNodes(units, states, progress), threads = threadsText(live);
+      let next = units.find((unit) => states[unit.id] === "next") || null, carried = settings.carryOver === !1 ? [] : carriedNodes(units, states, progress, { links }), threads = threadsText(live);
       for (let unit of units) {
         if (states[unit.id] !== "active") continue;
-        let off = offNodes(progress, unit.id), params = pickParams(defaults.detail, progress.slots[unit.id]), own = params.enabled ? threads : "";
+        let off = offNodes(progress, unit, links), params = pickParams(defaults.detail, progress.slots[unit.id]), own = params.enabled ? threads : "";
         entries.push({
           slotId: unit.id,
           kind: "detail",
@@ -1273,7 +1511,7 @@ ${lines2.join(`
       name: String(name || "").trim() || "新项目",
       createdAt: now,
       setting: { text: "", history: [], check: "", fixes: [], mute: [] },
-      outline: { volumes: [], history: [] },
+      outline: { volumes: [], history: [], renames: [], idAlias: {} },
       defaults: JSON.parse(JSON.stringify(DEFAULT_PARAMS)),
       genRefs: normalizeGenRefs(),
       mode: mode === "infinite" ? "infinite" : "normal",
@@ -1296,6 +1534,9 @@ ${lines2.join(`
       },
       outline: {
         history: src.outline && Array.isArray(src.outline.history) ? src.outline.history.filter((item) => item && typeof item.text == "string") : [],
+        // 跨聊天对照表（见 core/align.js）：节点改名最多 200 条，阶段 id 别名最多 300 条。
+        renames: normalizeRenames(src.outline && src.outline.renames),
+        idAlias: normalizeAlias(src.outline && src.outline.idAlias),
         volumes: volumes.filter((vol) => vol && Array.isArray(vol.stages)).map((vol) => ({
           id: vol.id || makeId("v"),
           key: String(vol.key || "剧情_未命名"),
@@ -1671,7 +1912,7 @@ ${lines2.join(`
     }
     return clocks.length && threads.readTo > 0 && rules.push("标有「已读」的楼层上次检测已经读过，clocks 只按之后的新楼层推进；没有新楼层时省略 clocks 的推进。"), keys.length ? { keys, rules, hooks: !!threads.hooks, readTo: clocks.length && Number(threads.readTo) || 0 } : null;
   }
-  var EMPTY_NAMES = /^(?:无|没有|暂无|空|none|null|nil|n\/a|na|undefined|-|—|无新线|没有新线)$/i;
+  var EMPTY_NAMES = /^(?:无|没有|暂无|空|none|null|nil|n\/a|na|undefined|-|—|无新线|没有新线|没有新的线)$/i, isEmptyName = (name) => EMPTY_NAMES.test(String(name).trim().replace(/[。．.！!？?；;，,、\s]+$/, "").trim());
   function buildCheckMessages(unit, index, floors, threads = null) {
     let extra = threadRules(threads), format = '{"done":["节点名"],"stageDone":true或false,"offTrack":true或false,"offReason":"偏离说明，没有就留空","reason":"一句话"}', system = [
       "你是剧情进度核对员。根据最近的正文，对照剧情索引判断进度。",
@@ -1726,7 +1967,7 @@ ${floor.text}`)
     let item = typeof raw == "string" ? { name: raw } : raw;
     if (typeof item != "object") return null;
     let name = String(item.name ?? item.名称 ?? "").trim().slice(0, 40);
-    return name && !EMPTY_NAMES.test(name) ? { name, summary: String(item.summary ?? item.概括 ?? "").trim().slice(0, 200) } : null;
+    return name && !isEmptyName(name) ? { name, summary: String(item.summary ?? item.概括 ?? "").trim().slice(0, 200) } : null;
   }
 
   // src/core/prompts.js
@@ -2402,6 +2643,21 @@ ${horrorGuide}` : "",
     let select = hostDocument().querySelector("#world_info");
     return select ? [...select.selectedOptions].map((option) => option.textContent.trim()).filter(Boolean) : [];
   }
+  function worldInfoMatchSettings() {
+    let pick = (src) => src && typeof src.world_info_case_sensitive == "boolean" && typeof src.world_info_match_whole_words == "boolean" ? { caseSensitive: src.world_info_case_sensitive, matchWholeWords: src.world_info_match_whole_words, known: !0 } : null;
+    try {
+      let c = ctx(), found = c && typeof c.getWorldInfoSettings == "function" ? pick(c.getWorldInfoSettings()) : null;
+      if (found) return found;
+    } catch {
+    }
+    try {
+      let found = pick(hostWindow());
+      if (found) return found;
+    } catch {
+    }
+    let doc = hostDocument(), box = (id) => doc && doc.querySelector(`#${id}`), caseBox = box("world_info_case_sensitive"), wholeBox = box("world_info_match_whole_words");
+    return caseBox && wholeBox ? { caseSensitive: !!caseBox.checked, matchWholeWords: !!wholeBox.checked, known: !0 } : { caseSensitive: !1, matchWholeWords: !1, known: !1 };
+  }
   function allBookNames() {
     let c = ctx();
     return c && typeof c.getWorldInfoNames == "function" ? c.getWorldInfoNames() : [];
@@ -2432,7 +2688,9 @@ ${horrorGuide}` : "",
       selectiveLogic: Number(entry.selectiveLogic) || 0,
       caseSensitive: typeof entry.caseSensitive == "boolean" ? entry.caseSensitive : null,
       matchWholeWords: typeof entry.matchWholeWords == "boolean" ? entry.matchWholeWords : null,
-      probability: Number.isFinite(Number(entry.probability)) ? Number(entry.probability) : 100,
+      // 酒馆里 probability 为 null 或缺省时按 100；useProbability 关闭时概率不生效，显示为 100。
+      useProbability: entry.useProbability !== !1,
+      probability: entry.useProbability === !1 || entry.probability === null || entry.probability === void 0 || entry.probability === "" || !Number.isFinite(Number(entry.probability)) ? 100 : Math.min(100, Math.max(0, Number(entry.probability))),
       excludeRecursion: !!entry.excludeRecursion,
       preventRecursion: !!entry.preventRecursion,
       group: String(entry.group || ""),
@@ -2667,7 +2925,7 @@ ${horrorGuide}` : "",
   // src/app/runtime.js
   var VIRTUAL_WORLD = "剧情注入器", LOG_MAX2 = 40, PENDING_MAX_MS = 3e4, CHECK_RETRIES = 3, RETRY_GAP_MS = 2e3, WORLD_RETRIES = 2, WORLD_WAIT_MS = 9e4, placeOf = (unit) => `${volumeLabel(unit.volume.key)}·${stageLabel(unit.stage.key)}`;
   function createRuntime({ data, notice, emit, askReason = async () => "" }) {
-    let view = hostWindow(), progress = null, progressFor = "", checking = !1, fallbackTimer = 0, generating = !1, chatStartFloors = 0, pendingCheck = !1, pendingTimer = 0, opening = !1, openGen = 0, openPromise = Promise.resolve(null), pendingTrigger = null, lastRead = null, listeners = [], stats = {}, logs = [];
+    let view = hostWindow(), progress = null, progressFor = "", alignedFrom = null, alignedOutline = null, checking = !1, fallbackTimer = 0, generating = !1, chatStartFloors = 0, pendingCheck = !1, pendingTimer = 0, opening = !1, openGen = 0, openPromise = Promise.resolve(null), pendingTrigger = null, lastRead = null, listeners = [], stats = {}, logs = [];
     function log(text) {
       logs.push({ at: Date.now(), text }), logs.length > LOG_MAX2 && logs.shift();
     }
@@ -2687,7 +2945,15 @@ ${horrorGuide}` : "",
       if (!id) return null;
       (!progress || progressFor !== id) && (progress = readProgress(id), progressFor = id);
       let project = data.project(id);
-      return project && project.mode === "infinite" && !progress.infinite && (progress = { ...progress, infinite: emptyInfinite() }, writeProgress(progress)), progress;
+      if (project && project.mode === "infinite" && !progress.infinite && (progress = { ...progress, infinite: emptyInfinite() }, writeProgress(progress)), project && !isInfinite(project) && (progress !== alignedFrom || project.outline !== alignedOutline)) {
+        let aligned = alignProgress(progress, project.outline);
+        aligned !== progress && (progress = aligned, writeProgress(progress), log("按大纲对照表归位了本聊天的进度")), alignedFrom = progress, alignedOutline = project.outline;
+      }
+      return progress;
+    }
+    function links() {
+      let project = activeProject();
+      return project ? outlineLinks(project.outline) : void 0;
     }
     let isInfinite = (project) => !!(project && project.mode === "infinite");
     function units() {
@@ -3069,7 +3335,7 @@ ${horrorGuide}` : "",
         return log("跳过检测：没有可检测的正文"), manual && toast("info", "还没有可检测的正文。"), null;
       checking = !0, log(`开始检测：${placeOf(unit)}，读最近 ${floors.length} 楼${manual ? "（手动）" : ""}`), emit("checking");
       try {
-        let list = maskUnits(units(), sw), states = unitStates(list, prog), index = buildIndexText(list, states, prog, { carryOver: settings.carryOver, hookCap: settings.hookCap }), threadInfo = checkThreads(liveThreads(list, states, prog, { carryOver: settings.carryOver, hookCap: settings.hookCap }), {
+        let list = maskUnits(units(), sw), states = unitStates(list, prog), opts = { carryOver: settings.carryOver, hookCap: settings.hookCap, links: links() }, index = buildIndexText(list, states, prog, opts), threadInfo = checkThreads(liveThreads(list, states, prog, opts), {
           newThreadMode: sw.sideOn ? settings.newThreadMode : "off",
           ignored: threadState(prog).ignored,
           readTo: prog.lastCheckFloor
@@ -3084,13 +3350,13 @@ ${horrorGuide}` : "",
           }
         notice.hide("checkfail");
         let next = currentProgress();
-        if (next = uncheckByNames(next, unit.id, stageNodes(unit.stage.data).filter((node) => !isThreadNode(node)), result.done), settings.carryOver) for (let item of carriedNodes(list, states, prog)) next = uncheckByNames(next, item.unit.id, [item.node], result.done);
-        let merged = applyCheck(next, liveThreads(list, unitStates(list, next), next, { carryOver: settings.carryOver, hookCap: settings.hookCap }), result, { floor: floorCount() });
-        next = { ...merged.progress, lastCheckFloor: floorCount() }, setProgress(next);
+        if (next = uncheckByNames(next, unit.id, stageNodes(unit.stage.data).filter((node) => !isThreadNode(node)), result.done), settings.carryOver) for (let item of carriedNodes(list, states, prog, { links: opts.links })) next = uncheckByNames(next, item.unit.id, [item.node], result.done);
+        let merged = applyCheck(next, liveThreads(list, unitStates(list, next), next, opts), result, { floor: floorCount() });
+        next = { ...merged.progress, lastCheckFloor: floorCount() }, delete next.lastFailFloor, setProgress(next);
         for (let event of merged.events) log(threadEventText(event));
         return log(`检测完成：已演 ${result.done.length} 个节点${result.stageDone ? "，本阶段已演完" : ""}${result.offTrack ? "，偏离大纲" : ""}`), result.offTrack && settings.offTrackMode !== "off" && !next.offMuted.includes(unit.id) ? handleOffTrack(unit, result.offReason || result.reason) : result.stageDone ? proposeAdvance({ unit, reason: result.reason }) : manual && toast("info", result.reason || "本阶段尚未演完。"), result.newThread && sw.sideOn && offerThread(unit, result.newThread), result;
       } catch (error) {
-        return setProgress({ ...currentProgress(), lastCheckFloor: floorCount() }), log(`检测失败：${error.message}`), notice.show({
+        return setProgress({ ...currentProgress(), lastFailFloor: floorCount() }), log(`检测失败：${error.message}`), notice.show({
           id: "checkfail",
           title: "进度检测失败",
           body: `已自动重试 ${CHECK_RETRIES} 次：${error.message}`,
@@ -3107,15 +3373,18 @@ ${horrorGuide}` : "",
     function clampBase() {
       let prog = currentProgress();
       if (!prog) return null;
-      let floors = floorCount(), threads = clampThreads(prog, floors);
-      if (prog.lastCheckFloor <= floors && threads === prog) return prog;
-      prog.lastCheckFloor > floors && log(`上次检测楼层 ${prog.lastCheckFloor} 大于当前楼数 ${floors}，已改为 ${floors}`), threads !== prog && log(`支线与进度钟记下的楼数大于当前楼数 ${floors}，已改为 ${floors}`);
+      let floors = floorCount(), threads = clampThreads(prog, floors), failOver = Number(prog.lastFailFloor) > floors;
+      if (prog.lastCheckFloor <= floors && !failOver && threads === prog) return prog;
+      prog.lastCheckFloor > floors && log(`上次检测楼层 ${prog.lastCheckFloor} 大于当前楼数 ${floors}，已改为 ${floors}`), failOver && log(`上次检测失败时的楼层 ${prog.lastFailFloor} 大于当前楼数 ${floors}，已改为 ${floors}`), threads !== prog && log(`支线与进度钟记下的楼数大于当前楼数 ${floors}，已改为 ${floors}`);
       let next = { ...threads, lastCheckFloor: Math.min(prog.lastCheckFloor, floors) };
-      return setProgress(next, "floor"), next;
+      return failOver && (next.lastFailFloor = floors), setProgress(next, "floor"), next;
     }
     function resetBase() {
       let prog = currentProgress();
-      prog && (log(`手动重设检测起点为第 ${floorCount()} 楼`), setProgress({ ...prog, lastCheckFloor: floorCount() }, "floor"));
+      if (!prog) return;
+      log(`手动重设检测起点为第 ${floorCount()} 楼`);
+      let next = { ...prog, lastCheckFloor: floorCount() };
+      delete next.lastFailFloor, setProgress(next, "floor");
     }
     function runPending() {
       view.clearTimeout(pendingTimer), pendingCheck && (pendingCheck = !1, checkNow());
@@ -3145,7 +3414,7 @@ ${horrorGuide}` : "",
         onInfiniteReceived();
         return;
       }
-      let settings = data.settings(), prog = clampBase() || currentProgress(), gap = floors - prog.lastCheckFloor;
+      let settings = data.settings(), prog = clampBase() || currentProgress(), gap = floors - checkBase(prog);
       gap >= settings.checkEvery ? (log(`收到第 ${messageId} 楼：距上次检测 ${gap} 楼，触发检测`), queueCheck()) : log(`收到第 ${messageId} 楼：距上次检测 ${gap} 楼，还差 ${settings.checkEvery - gap} 楼`), emit("floor");
     }
     function onMessageChanged() {
@@ -4304,21 +4573,21 @@ ${floor.text}`).join(`
   function liveProgress(view) {
     return view.runtime.activeId() === view.projectId ? view.runtime.progress() : null;
   }
-  function remapProgress(view, stageId, field, mapIndex) {
-    let meta2 = NODE_FIELDS.find((item) => item.field === field), progress = liveProgress(view);
+  function remapProgress(view, progress, stageId, field, mapIndex) {
+    let meta2 = NODE_FIELDS.find((item) => item.field === field);
     if (!meta2 || !progress) return;
     let next = remapNodes(progress, stageId, meta2.prefix, mapIndex);
     next !== progress && view.runtime.setProgress(next);
   }
   var swapIndex = (a, b) => (i) => i === a ? b : i === b ? a : i;
-  function update2(view, fn, label = "") {
+  function update2(view, fn, label = "", { alias = [] } = {}) {
     return view.data.updateProject(view.projectId, (project) => ({
       ...project,
-      outline: {
+      outline: withAliases({
         ...project.outline,
         volumes: fn(project.outline.volumes),
         ...label ? { history: pushOutlineHistory(project.outline.history, project.outline.volumes, label) } : {}
-      }
+      }, alias)
     }));
   }
   function updateStage(view, stageId, fn, label = "") {
@@ -4399,11 +4668,13 @@ ${floor.text}`).join(`
     let draft = st(view).draft;
     !draft || draft.mode !== "multi" || (draft.items = draft.items.map((item, i) => i === index ? parsed : item), view.renderBody());
   }
-  async function writeVolumes(view, n, request) {
+  async function writeVolumes(view, n, request, onConfirmed = null) {
+    let id = view.projectId;
+    if ((st(view).draft && st(view).draft.projectId === id ? st(view).draft : parkedDrafts.get(id)) && !await confirmDialog({ title: "覆盖草稿", body: "草稿区还有未处理的 AI 结果，开始写作后会被新草稿替换。", okLabel: "开始写作", danger: !0 })) return;
+    onConfirmed && onConfirmed();
     let project = view.project(), { talk, wb } = await genRefTexts(view, 12e3);
     if (!project.setting.text.trim() && !talk.trim() && !wb.length) throw new Error("没有可参考的内容：在讨论页聊一聊，或点「世界书」选择条目。");
-    let base = project.outline.volumes.length + 1, pending = st(view).draft && st(view).draft.projectId === project.id ? st(view).draft : parkedDrafts.get(project.id);
-    if (n > 1 && pending && !await confirmDialog({ title: "覆盖草稿", body: "草稿区还有未处理的 AI 结果，开始写作后会被新草稿替换。", okLabel: "开始写作", danger: !0 })) return;
+    let base = project.outline.volumes.length + 1;
     if (n <= 1) {
       let reply2 = await runTask(view, "outline", () => ask(view, "outline", volumeRequest({ project, talk, wb, no: base, k: 1, n: 1, request })));
       reply2 && setDraft(view, "volume", reply2);
@@ -4532,11 +4803,15 @@ ${floor.text}`).join(`
     },
     "node-up"(view, target) {
       let { stage } = findSel(view.project(), st(view).sel), field = target.dataset.field, index = Number(target.dataset.i);
-      index <= 0 || (updateStage(view, stage.id, (item) => ({ ...item, data: { ...item.data, [field]: moveUp(item.data[field], index) } })), remapProgress(view, stage.id, field, swapIndex(index - 1, index)), view.runtime.refresh(), view.renderBody());
+      if (index <= 0) return;
+      let before = liveProgress(view);
+      updateStage(view, stage.id, (item) => ({ ...item, data: { ...item.data, [field]: moveUp(item.data[field], index) } })), remapProgress(view, before, stage.id, field, swapIndex(index - 1, index)), view.runtime.refresh(), view.renderBody();
     },
     "node-down"(view, target) {
       let { stage } = findSel(view.project(), st(view).sel), field = target.dataset.field, index = Number(target.dataset.i);
-      index >= (stage.data[field] || []).length - 1 || (updateStage(view, stage.id, (item) => ({ ...item, data: { ...item.data, [field]: moveItem(item.data[field], index, 1) } })), remapProgress(view, stage.id, field, swapIndex(index, index + 1)), view.runtime.refresh(), view.renderBody());
+      if (index >= (stage.data[field] || []).length - 1) return;
+      let before = liveProgress(view);
+      updateStage(view, stage.id, (item) => ({ ...item, data: { ...item.data, [field]: moveItem(item.data[field], index, 1) } })), remapProgress(view, before, stage.id, field, swapIndex(index, index + 1)), view.runtime.refresh(), view.renderBody();
     },
     async "node-menu"(view, target) {
       let index = Number(target.dataset.i), pick = await menuDialog({ title: `${target.dataset.field} ${index + 1}`, items: [
@@ -4548,10 +4823,12 @@ ${floor.text}`).join(`
     },
     async "node-del"(view, target) {
       let { stage } = findSel(view.project(), st(view).sel), field = target.dataset.field, index = Number(target.dataset.i), node = stage.data[field][index];
-      await confirmDialog({ title: `删除「${node && (node.名称 || node.类型) || "节点"}」`, okLabel: "删除", danger: !0 }) && (updateStage(view, stage.id, (item) => {
+      if (!await confirmDialog({ title: `删除「${node && (node.名称 || node.类型) || "节点"}」`, okLabel: "删除", danger: !0 })) return;
+      let before = liveProgress(view);
+      updateStage(view, stage.id, (item) => {
         let list = item.data[field].filter((_, i) => i !== index), data = { ...item.data, [field]: list };
         return !list.length && field !== "主线节点" && delete data[field], { ...item, data };
-      }), remapProgress(view, stage.id, field, (i) => i === index ? null : i > index ? i - 1 : i), view.runtime.refresh(), view.renderBody());
+      }), remapProgress(view, before, stage.id, field, (i) => i === index ? null : i > index ? i - 1 : i), view.runtime.refresh(), view.renderBody();
     },
     async "outline-menu"(view) {
       let pick = await menuDialog({ title: "大纲", items: [
@@ -4590,7 +4867,7 @@ ${floor.text}`).join(`
     async "ai-volume"(view, target, { withTalk = !1 } = {}) {
       if (view.busy.outline) return;
       let picked = await writeDialog(view);
-      picked && (withTalk && setTalkRef(view), await writeVolumes(view, picked.n, picked.request));
+      picked && await writeVolumes(view, picked.n, picked.request, withTalk ? () => setTalkRef(view) : null);
     },
     "multi-stop"(view) {
       let multi = st(view).multi;
@@ -4688,10 +4965,12 @@ ${yaml}
     async "hist-restore"(view, target) {
       let item = view.project().outline.history[Number(target.dataset.i)];
       if (!item || !await confirmDialog({ title: "恢复大纲", body: "当前大纲会先存进历史版本，再换成这一版。" })) return;
-      let before = view.project().outline.volumes, volumes = volumesFromHistory(item.text, before);
-      update2(view, () => volumes, "恢复历史版本");
-      let progress = liveProgress(view), to = progress && nearestUnitId(before, volumes, flattenUnits(before)[currentIndex(flattenUnits(before), progress)]?.id);
-      to && view.runtime.setProgress(goTo(progress, flattenUnits(volumes), to)), st(view).sel = "", view.runtime.refresh(), view.renderBody();
+      let before = view.project().outline.volumes, progress = liveProgress(view), { volumes, alias } = restoreOutline(item.text, before);
+      if (update2(view, () => volumes, "恢复历史版本", { alias }), progress) {
+        let units = flattenUnits(volumes), links = outlineLinks(view.project().outline, units), next = renameByPosition(progress, units, links), cur = flattenUnits(before)[currentIndex(flattenUnits(before), progress)]?.id, resolved = cur ? links.resolve(cur) : "", to = resolved && units.some((unit) => unit.id === resolved) ? resolved === cur ? null : resolved : nearestUnitId(before, volumes, cur);
+        to && (next = goTo(next, units, to)), next !== progress && view.runtime.setProgress(next);
+      }
+      st(view).sel = "", view.runtime.refresh(), view.renderBody();
     },
     "check-toggle"(view) {
       st(view).check = !st(view).check, view.renderBody();
@@ -4710,10 +4989,8 @@ ${yaml}
       if (!volume) throw new Error("原来的阶段已不存在，改用「丢弃」。");
       let incoming = draft.volumes.flatMap((item) => item.stages);
       if (!incoming.length) throw new Error("结果里没有阶段。");
-      let ids = [draft.stageId, ...draft.nextId ? [draft.nextId] : []], old = volume.stages.filter((stage) => ids.includes(stage.id)), { volumes, stages, keepId } = replaceStages(project.outline.volumes, volume.id, ids, incoming);
-      update2(view, () => volumes, STAGE_DRAFT[draft.mode]);
-      let progress = liveProgress(view);
-      if (progress) {
+      let ids = [draft.stageId, ...draft.nextId ? [draft.nextId] : []], old = volume.stages.filter((stage) => ids.includes(stage.id)), { volumes, stages, keepId } = replaceStages(project.outline.volumes, volume.id, ids, incoming), progress = liveProgress(view);
+      if (update2(view, () => volumes, STAGE_DRAFT[draft.mode], { alias: ids.filter((id) => id !== keepId).map((id) => [id, keepId]) }), progress) {
         let moved = migrateStageThreads(progress, old, stages, keepId);
         view.runtime.setProgress(ids.includes(progress.current) ? goTo(moved, flattenUnits(volumes), keepId) : moved);
       }
@@ -4772,7 +5049,11 @@ ${yaml}
         return;
       }
       if (target.dataset.nodeField) {
-        let field = target.dataset.nodeField, index = Number(target.dataset.i), key = target.dataset.k;
+        let field = target.dataset.nodeField, index = Number(target.dataset.i), key = target.dataset.k, pending = nameKey(stage.id, field, index);
+        if (["名称", "类型", "内容"].includes(key) && !pendingNames.has(pending)) {
+          let node = nodeAt(stage, field, index);
+          node && pendingNames.set(pending, node.name);
+        }
         updateStage(view, stage.id, (item) => {
           let list = [...item.data[field]], prev = list[index] && typeof list[index] == "object" ? list[index] : {};
           if (list[index] = { ...prev, [key]: target.value }, target.dataset.play !== void 0) {
@@ -4787,11 +5068,20 @@ ${yaml}
   function onBlur(view, target) {
     target.dataset.nodeField && ["名称", "类型", "内容"].includes(target.dataset.k) && syncNodeName(view, target.dataset.nodeField, Number(target.dataset.i)), target.matches("[data-stage-key],[data-vol-key],[data-stage-field],[data-stage-list],[data-node-field]") && view.runtime.refresh();
   }
+  var pendingNames = /* @__PURE__ */ new Map(), nameKey = (stageId, field, index) => [stageId, field, index].join("|");
+  function nodeAt(stage, field, index) {
+    return stage ? stageNodes(stage.data).find((item) => item.field === field && item.index === index) : null;
+  }
   function syncNodeName(view, field, index) {
-    let { stage } = findSel(view.project(), st(view).sel), progress = liveProgress(view);
-    if (!stage || !progress) return;
-    let node = stageNodes(stage.data).find((item) => item.field === field && item.index === index);
+    let { stage } = findSel(view.project(), st(view).sel);
+    if (!stage) return;
+    let key = nameKey(stage.id, field, index), from = pendingNames.get(key);
+    pendingNames.delete(key);
+    let node = nodeAt(stage, field, index);
     if (!node) return;
+    from && from !== node.name && view.data.updateProject(view.projectId, (project) => ({ ...project, outline: withRenames(project.outline, [{ stageId: stage.id, field, from, to: node.name }]) }));
+    let progress = liveProgress(view);
+    if (!progress) return;
     let next = renameNode(progress, { id: stage.id }, node);
     next !== progress && view.runtime.setProgress(next);
   }
@@ -5170,7 +5460,7 @@ ${parsed.body}` : parsed.body;
     render: () => render4
   });
   function toggleNode(view, unitId, nodeId, checked) {
-    let next = setNodeChecked(view.runtime.progress(), unitId, nodeId, checked), hook = checked && viewLive(view).hooks.find((item) => item.key === `${unitId}:${nodeId}`);
+    let unit = view.runtime.units().find((item) => item.id === unitId), node = unit && stageNodes(unit.stage.data).find((item) => item.id === nodeId), next = setNodeChecked(view.runtime.progress(), unitId, nodeId, checked, node ? node.name : ""), hook = checked && viewLive(view).hooks.find((item) => item.key === `${unitId}:${nodeId}`);
     hook && hook.steps.length && hook.step >= hook.steps.length && (next = patchLive(next, hook, { step: hook.steps.length - 1 })), view.runtime.setProgress(next);
   }
   function entryRow(entry, expanded) {
@@ -5216,7 +5506,7 @@ ${parsed.body}` : parsed.body;
     return `<div class="pi-pace"><span class="pi-pace-label">启用</span><div class="pi-pair">${switchCell("sideOn", "支线", sw.sideOn)}${switchCell("worldOn", "世界动态", sw.worldOn)}</div></div>`;
   }
   function nodeList(unit, progress, carried, live, sw, expiredOpen) {
-    let off = new Set(offNodes(progress, unit.id)), nodes = stageNodes(unit.stage.data).filter((node) => !isThreadNode(node)), alive = (hook) => hook.status !== "expired", own = live.hooks.filter((hook) => !hook.carried && alive(hook)), later = live.hooks.filter((hook) => hook.carried && alive(hook)), expired = live.hooks.filter((hook) => !alive(hook)), closed = [...sw.sideOn ? [] : ["支线"], ...sw.worldOn ? [] : ["世界动态"]];
+    let off = new Set(offNodes(progress, unit)), nodes = stageNodes(unit.stage.data).filter((node) => !isThreadNode(node)), alive = (hook) => hook.status !== "expired", own = live.hooks.filter((hook) => !hook.carried && alive(hook)), later = live.hooks.filter((hook) => hook.carried && alive(hook)), expired = live.hooks.filter((hook) => !alive(hook)), closed = [...sw.sideOn ? [] : ["支线"], ...sw.worldOn ? [] : ["世界动态"]];
     return !nodes.length && !carried.length && !live.hooks.length && !live.clocks.length && !closed.length ? "" : `<div class="pi-tl-nodes">${nodes.map((node) => nodeRow(unit.id, node, off.has(node.id))).join("")}${own.map(hookRow).join("")}
         ${carried.length || later.length ? `<p class="pi-hint">延续自前面阶段</p>${carried.map((item) => nodeRow(item.unit.id, item.node, item.off, stageLabel(item.unit.stage.key))).join("")}${later.map(hookRow).join("")}` : ""}
         ${expiredRows(expired, expiredOpen)}${worldRow(live)}${closed.map((label) => `<p class="pi-hint">${label}已关闭</p>`).join("")}</div>`;
@@ -5252,7 +5542,7 @@ ${parsed.body}` : parsed.body;
   function render4(view) {
     let { data, runtime } = view, project = view.project(), st8 = view.tabState("run"), notActive = activateCard(view, project);
     if (notActive) return notActive;
-    let progress = runtime.progress(), entries = runtime.entries(), sw = threadSwitches(project), units = maskUnits(flattenUnits(project.outline.volumes), sw), states = unitStates(units, progress), total = entries.filter((entry) => entry.enabled).reduce((sum, entry) => sum + estimateTokens(entry.content), 0), settings = data.settings(), checking = runtime.isChecking(), book = runtime.injectMode() === "virtual" ? "" : '<span class="pi-badge is-warn">专用世界书</span>', gap = settings.checkEvery - (runtime.floorCount() - progress.lastCheckFloor);
+    let progress = runtime.progress(), entries = runtime.entries(), sw = threadSwitches(project), units = maskUnits(flattenUnits(project.outline.volumes), sw), states = unitStates(units, progress), total = entries.filter((entry) => entry.enabled).reduce((sum, entry) => sum + estimateTokens(entry.content), 0), settings = data.settings(), checking = runtime.isChecking(), book = runtime.injectMode() === "virtual" ? "" : '<span class="pi-badge is-warn">专用世界书</span>', gap = settings.checkEvery - (runtime.floorCount() - checkBase(progress));
     return `<div class="pi-card"><h3>注入条目${book}<span class="pi-meta">≈${total} token</span><span class="pi-spacer"></span>
             <button type="button" class="pi-btn is-sm is-ghost" data-act="preview">预览</button></h3>
         ${entries.length ? entries.map((entry) => entryRow(entry, st8.open === entry.slotId)).join("") : '<p class="pi-hint">设定和大纲都为空，没有可注入的内容。</p>'}
@@ -5360,8 +5650,8 @@ ${parsed.body}` : parsed.body;
       view.runtime.setProgress(patchLive(view.runtime.progress(), hook, patch));
     },
     "node-toggle"(view, target) {
-      let { unit, node } = target.dataset;
-      toggleNode(view, unit, node, offNodes(view.runtime.progress(), unit).includes(node));
+      let { unit, node } = target.dataset, found = view.runtime.units().find((item) => item.id === unit);
+      toggleNode(view, unit, node, !!found && offNodes(view.runtime.progress(), found).includes(node));
     },
     "thread-switch"(view, target) {
       let key = target.dataset.key;
@@ -5949,28 +6239,31 @@ ${parsed.body}` : parsed.body;
     return (by === "order" ? entries.map((entry, index) => ({ entry, index })).sort((a, b) => a.entry.order - b.entry.order || a.index - b.index).map((item) => item.entry) : entries).map((entry, index) => ({ key: entry.key, title: entry.title, from: entry.order, to: begin + index * gap }));
   }
   var escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  function keyMatcher(key, { caseSensitive = null, matchWholeWords = null } = {}) {
-    let text = String(key).trim(), regex = text.match(/^\/(.+)\/([a-z]*)$/i);
-    if (regex)
-      try {
-        let pattern = new RegExp(regex[1], regex[2].replace(/[gy]/g, ""));
-        return (haystack) => pattern.test(haystack);
-      } catch {
-        return () => !1;
-      }
+  function parseRegexKey(text) {
+    let match = text.match(/^\/([\w\W]+?)\/([gimsuy]*)$/);
+    if (!match || /(^|[^\\])\//.test(match[1])) return null;
+    try {
+      return new RegExp(match[1].replace("\\/", "/"), match[2]);
+    } catch {
+      return null;
+    }
+  }
+  function keyMatcher(key, { caseSensitive = null, matchWholeWords = null } = {}, globals = {}) {
+    let text = String(key).trim(), regex = parseRegexKey(text);
+    if (regex) return (haystack) => regex.test(haystack);
     if (text === "") return () => !1;
-    let sensitive = caseSensitive === !0, needle = sensitive ? text : text.toLowerCase(), fold = (haystack) => sensitive ? haystack : haystack.toLowerCase(), latinWord = !/\s/.test(text) && !/[^\u0000-\u007FÀ-ɏ]/.test(text);
-    if (matchWholeWords === !0 && latinWord) {
-      let pattern = new RegExp(`(?:^|[^\\p{L}\\p{N}_])${escapeRegex(needle)}(?:$|[^\\p{L}\\p{N}_])`, "u");
+    let sensitive = caseSensitive ?? !!globals.caseSensitive, whole = matchWholeWords ?? !!globals.matchWholeWords, fold = (value) => sensitive ? value : value.toLowerCase(), needle = fold(text);
+    if (whole && needle.split(/\s+/).length === 1) {
+      let pattern = new RegExp(`(?:^|\\W)(${escapeRegex(needle)})(?:$|\\W)`);
       return (haystack) => pattern.test(fold(haystack));
     }
     return (haystack) => fold(haystack).includes(needle);
   }
-  var matchedKeys = (keys, haystack, options2) => keys.filter((key) => String(key).trim() && keyMatcher(key, options2)(haystack));
+  var matchedKeys = (keys, haystack, options2, globals) => keys.filter((key) => String(key).trim() && keyMatcher(key, options2, globals)(haystack));
   function secondaryPass(logic, hit, total) {
     return logic === 1 ? hit < total : logic === 2 ? hit === 0 : logic === 3 ? hit === total : hit > 0;
   }
-  function triggerTest(entries, text, tokenOf2 = () => 0) {
+  function triggerTest(entries, text, tokenOf2 = () => 0, globals = {}) {
     let haystack = String(text || ""), constant = [], keyword = [];
     for (let entry of entries) {
       if (entry.disabled) continue;
@@ -5979,11 +6272,11 @@ ${parsed.body}` : parsed.body;
         constant.push({ key: entry.key, title: entry.title, tokens: tokenOf2(entry) });
         continue;
       }
-      let primary = matchedKeys(entry.keys, haystack, options2);
+      let primary = matchedKeys(entry.keys, haystack, options2, globals);
       if (!primary.length) continue;
       let matched = primary, secondary = entry.selective === !1 ? [] : entry.keysSecondary.filter((key) => String(key).trim());
       if (secondary.length) {
-        let logic = Number(entry.selectiveLogic) || 0, hit = matchedKeys(secondary, haystack, options2);
+        let logic = Number(entry.selectiveLogic) || 0, hit = matchedKeys(secondary, haystack, options2, globals);
         if (!secondaryPass(logic, hit.length, secondary.length)) continue;
         (logic === 0 || logic === 3) && (matched = [...primary, ...hit]);
       }
@@ -6443,10 +6736,10 @@ ${parsed.body}` : parsed.body;
     // 触发测试：文本框可贴文字，也可取最近 N 楼；按酒馆规则模拟当前书的触发（不含递归、概率、分组）。
     async "wb-trigger"(view) {
       let s = st7(view), entries = handwritten(s.entries || []), tk = tokenOf(s), row2 = (item, extra) => `<div class="pi-wb-hit"><span class="pi-wb-title" title="${esc(item.title)}">${esc(item.title)}</span><span class="pi-meta">${extra}${item.tokens} token</span></div>`, group = (name, list, extra) => list.length ? `<div class="pi-wb-sec-hd">${name}<small>${list.length}</small></div>${list.map((item) => row2(item, extra(item))).join("")}` : "", run = (box) => {
-        let text = box.querySelector('[data-f="text"]').value, result = triggerTest(entries, text, tk), body = group("常驻", result.constant, () => "") + group("关键词命中", result.keyword, (item) => `${esc(item.matched.join("、"))} · `);
+        let text = box.querySelector('[data-f="text"]').value, globals = worldInfoMatchSettings(), result = triggerTest(entries, text, tk, globals), body = group("常驻", result.constant, () => "") + group("关键词命中", result.keyword, (item) => `${esc(item.matched.join("、"))} · `);
         box.querySelector('[data-f="result"]').innerHTML = `${body || '<p class="pi-hint">没有命中的条目</p>'}
                 <p class="pi-meta">合计 ${result.tokens.total} token（常驻 ${result.tokens.constant}，关键词 ${result.tokens.keyword}）</p>
-                <p class="pi-meta">未计算递归、概率、分组与扫描深度</p>`;
+                <p class="pi-meta">未计算递归、概率、分组与扫描深度</p>${globals.known ? "" : '<p class="pi-meta">未读到酒馆全局匹配设置，按不区分大小写、不全词匹配计算</p>'}`;
       };
       await openDialog({
         title: "触发测试",
@@ -6526,13 +6819,13 @@ ${parsed.body}` : parsed.body;
     let out = [];
     (!info.hasContext || !info.hasEventSource) && out.push({ text: "读不到酒馆的事件接口，酒馆版本可能过旧。", fix: "" });
     let missing = info.events.filter((item) => NEED.includes(item.key) && !item.name);
-    missing.length && out.push({ text: `酒馆没有提供事件：${missing.map((item) => item.key).join("、")}。`, fix: "" }), info.events.filter((item) => NEED.includes(item.key) && item.name && !item.bound).length && out.push({ text: "检测所需的事件没有绑定。", fix: "rebind" }), info.cardKey ? info.id ? info.units || out.push({ text: "启用项目的大纲为空，没有可检测的阶段。", fix: "" }) : out.push({ text: `「${info.card}」没有启用项目，自动检测不会运行。`, fix: "" }) : out.push({ text: "当前没有打开角色卡聊天。", fix: "" }), info.progress && info.progress.lastCheckFloor > info.floors && out.push({ text: `上次检测记在第 ${info.progress.lastCheckFloor} 楼，当前只有 ${info.floors} 楼。`, fix: "reset-base" }), info.llm.source === "custom" && !String(info.llm.model || "").trim() && out.push({ text: "进度检测用独立接口，但没有选择模型。", fix: "" });
+    missing.length && out.push({ text: `酒馆没有提供事件：${missing.map((item) => item.key).join("、")}。`, fix: "" }), info.events.filter((item) => NEED.includes(item.key) && item.name && !item.bound).length && out.push({ text: "检测所需的事件没有绑定。", fix: "rebind" }), info.cardKey ? info.id ? info.units || out.push({ text: "启用项目的大纲为空，没有可检测的阶段。", fix: "" }) : out.push({ text: `「${info.card}」没有启用项目，自动检测不会运行。`, fix: "" }) : out.push({ text: "当前没有打开角色卡聊天。", fix: "" }), info.progress && Number(info.progress.lastFailFloor) > info.floors && out.push({ text: `上次检测失败记在第 ${info.progress.lastFailFloor} 楼，当前只有 ${info.floors} 楼。`, fix: "reset-base" }), info.progress && info.progress.lastCheckFloor > info.floors && out.push({ text: `上次检测记在第 ${info.progress.lastCheckFloor} 楼，当前只有 ${info.floors} 楼。`, fix: "reset-base" }), info.llm.source === "custom" && !String(info.llm.model || "").trim() && out.push({ text: "进度检测用独立接口，但没有选择模型。", fix: "" });
     let received = info.events.find((item) => item.key === "MESSAGE_RECEIVED");
     return received && received.bound && !received.count && info.floors - info.chatStartFloors >= 2 && out.push({ text: "打开聊天后已有新回复，但没有收到「收到回复」事件。", fix: "rebind" }), out;
   }
   function nextText(info) {
     if (!info.progress) return "—";
-    let gap = info.floors - info.progress.lastCheckFloor, left = info.settings.checkEvery - gap;
+    let gap = info.floors - Math.max(info.progress.lastCheckFloor, Number(info.progress.lastFailFloor) || 0), left = info.settings.checkEvery - gap;
     return left > 0 ? `还差 ${left} 楼` : "下一条回复后检测";
   }
   function rows(info) {
@@ -6544,6 +6837,7 @@ ${parsed.body}` : parsed.body;
       ["启用项目", info.name || "—"],
       ["当前楼数", String(info.floors)],
       ["上次检测楼层", info.progress ? String(info.progress.lastCheckFloor) : "—"],
+      ...info.progress && info.progress.lastFailFloor ? [["上次检测失败楼层", String(info.progress.lastFailFloor)]] : [],
       ["检测间隔", `每 ${info.settings.checkEvery} 楼`],
       ["下次检测", nextText(info)],
       ["检测接口", llm],
@@ -6761,21 +7055,39 @@ ${parsed.body}` : parsed.body;
     function go(tab) {
       view.page = "", view.tab = tab, writeUi({ tab, page: "" }), render11();
     }
+    let NEW_GROUP = "::new";
+    function groupField(preset) {
+      let groups = [...new Set(data.index().projects.map((item) => item.group).filter(Boolean))], list = [{ value: "", label: "不分组" }, ...groups.map((name) => ({ value: name, label: name })), { value: NEW_GROUP, label: "新建分组" }];
+      return `<label class="pi-field"><span>分组</span><select class="pi-sel" data-f="group">${options(list, preset)}</select></label>
+                <label class="pi-field" data-f="new-group-row" hidden><span>新分组名</span><input class="pi-inp" data-f="new-group" placeholder="如：龙宫篇"></label>`;
+    }
+    function mountGroupField(box) {
+      let select = box.querySelector("[data-f=group]"), row2 = box.querySelector("[data-f=new-group-row]");
+      select.addEventListener("change", () => {
+        row2.hidden = select.value !== NEW_GROUP, row2.hidden || box.querySelector("[data-f=new-group]").focus();
+      });
+    }
+    function readGroupField(box) {
+      let picked = box.querySelector("[data-f=group]").value;
+      return picked === NEW_GROUP ? box.querySelector("[data-f=new-group]").value.trim() : picked;
+    }
     async function newProject2() {
       setDrawer(!1);
-      let result = await openDialog({
+      let current2 = data.index().projects.find((item) => item.id === view.projectId), result = await openDialog({
         title: "新项目",
         html: `<label class="pi-field"><span>项目名（一条 if 线）</span><input class="pi-inp" data-f="name" placeholder="如：龙宫温养"></label>
+                ${groupField(current2 && current2.group ? current2.group : "")}
                 <label class="pi-check"><input type="checkbox" data-f="infinite"><span>无限流模式（主空间出发、世界库、污染）</span></label>`,
+        onMount: mountGroupField,
         actions: [
           { label: "取消", value: null },
-          { label: "确定", primary: !0, value: (box) => ({ name: box.querySelector("[data-f=name]").value, mode: box.querySelector("[data-f=infinite]").checked ? "infinite" : "normal" }) }
+          { label: "确定", primary: !0, value: (box) => ({ name: box.querySelector("[data-f=name]").value, group: readGroupField(box), mode: box.querySelector("[data-f=infinite]").checked ? "infinite" : "normal" }) }
         ]
       });
       if (!result) return;
       let name = result.name;
       try {
-        let project = await data.createProject(name, "", result.mode);
+        let project = await data.createProject(name, result.group, result.mode);
         !runtime.activeId() && cardKey() && await runtime.switchProject(project.id), await selectProject(project.id, "discuss");
       } catch (error) {
         toast("error", `新建失败：${error.message}`);
@@ -6799,18 +7111,17 @@ ${parsed.body}` : parsed.body;
     async function editProject(id) {
       let meta2 = data.index().projects.find((item) => item.id === id);
       if (!meta2) return;
-      let groups = [...new Set(data.index().projects.map((item) => item.group).filter(Boolean))];
       data.project(id) || await data.loadProject(id);
       let mode = data.project(id) ? data.project(id).mode : "normal", result = await openDialog({
         title: "编辑项目",
         html: `<label class="pi-field"><span>名称</span><input class="pi-inp" data-f="name" value="${esc(meta2.name)}"></label>
-                <label class="pi-field"><span>分组（留空不分组）</span><input class="pi-inp" data-f="group" value="${esc(meta2.group)}" list="pi-groups"></label>
-                <datalist id="pi-groups">${groups.map((name) => `<option value="${esc(name)}">`).join("")}</datalist>
+                ${groupField(meta2.group || "")}
                 <label class="pi-check"><input type="checkbox" data-f="infinite"${mode === "infinite" ? " checked" : ""}><span>无限流模式</span></label>`,
+        onMount: mountGroupField,
         actions: [
           { label: "删除项目", danger: !0, value: "delete" },
           { label: "取消", value: null },
-          { label: "保存", primary: !0, value: (box) => ({ name: box.querySelector("[data-f=name]").value.trim(), group: box.querySelector("[data-f=group]").value.trim(), mode: box.querySelector("[data-f=infinite]").checked ? "infinite" : "normal" }) }
+          { label: "保存", primary: !0, value: (box) => ({ name: box.querySelector("[data-f=name]").value.trim(), group: readGroupField(box), mode: box.querySelector("[data-f=infinite]").checked ? "infinite" : "normal" }) }
         ]
       });
       if (result) {
@@ -6945,7 +7256,7 @@ ${parsed.body}` : parsed.body;
   }
 
   // src/index.js
-  var VERSION = "0.1.23", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.1.24", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")

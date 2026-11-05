@@ -196,21 +196,69 @@ function queueByKey(list) {
 }
 
 // 历史版本的文本还原成卷列表；卷名、阶段名与当前大纲相同的沿用原 id（进度靠阶段 id）。
-// 同名的卷或阶段按出现顺序配对，用过的旧 id 不再复用。
-export function volumesFromHistory(text, current = [], idOf = makeId) {
-    const takeVolume = queueByKey(current || []);
-    return parseOutlineText(text, idOf).map(volume => {
-        const old = takeVolume(volume.key);
-        const takeStage = queueByKey(old ? old.stages : []);
+// 同名的卷或阶段按出现顺序配对，用过的旧 id 不再复用。卷内配不上的阶段（例如卷改过名）再在全书范围内按阶段名排队配一次；
+// 卷没配上时，取它的阶段配到最多的那个旧卷的 id。仍配不上的给新 id，同卷同位置上也没配上的旧阶段记进 alias（[旧id, 新id]），
+// 由调用方写进大纲的阶段 id 别名表（core/align.js）。返回 { volumes, alias }。
+export function restoreOutline(text, current = [], idOf = makeId) {
+    const old = current || [];
+    const takeVolume = queueByKey(old);
+    const used = new Set();
+    const parsed = parseOutlineText(text, idOf).map(volume => {
+        const match = takeVolume(volume.key);
+        const takeStage = queueByKey(match ? match.stages : []);
         return {
-            ...volume,
-            id: old ? old.id : volume.id,
+            volume,
+            match,
             stages: volume.stages.map(stage => {
                 const same = takeStage(stage.key);
-                return { ...stage, id: same ? same.id : stage.id };
+                if (same) used.add(same.id);
+                return { stage, same };
             }),
         };
     });
+    const leftovers = old.flatMap(volume => volume.stages.filter(stage => !used.has(stage.id)).map(stage => ({ key: stage.key, stage, volume })));
+    const takeAny = queueByKey(leftovers);
+    for (const row of parsed) {
+        for (const item of row.stages) {
+            if (item.same) continue;
+            const hit = takeAny(item.stage.key);
+            if (hit) {
+                item.same = hit.stage;
+                item.from = hit.volume;
+                used.add(hit.stage.id);
+            }
+        }
+    }
+    const usedVolumes = new Set(parsed.filter(row => row.match).map(row => row.match.id));
+    const alias = [];
+    const volumes = parsed.map(row => {
+        let id = row.match ? row.match.id : row.volume.id;
+        if (!row.match) {
+            const votes = new Map();
+            for (const item of row.stages) if (item.from && !usedVolumes.has(item.from.id)) votes.set(item.from, (votes.get(item.from) || 0) + 1);
+            const best = [...votes.entries()].sort((a, b) => b[1] - a[1])[0];
+            if (best) {
+                id = best[0].id;
+                usedVolumes.add(id);
+            }
+        }
+        const source = row.match || old.find(volume => volume.id === id) || null;
+        const stages = row.stages.map((item, index) => {
+            if (item.same) return { ...item.stage, id: item.same.id };
+            const spot = source && source.stages[index];
+            if (spot && !used.has(spot.id)) {
+                used.add(spot.id);
+                alias.push([spot.id, item.stage.id]);
+            }
+            return item.stage;
+        });
+        return { ...row.volume, id, stages };
+    });
+    return { volumes, alias };
+}
+
+export function volumesFromHistory(text, current = [], idOf = makeId) {
+    return restoreOutline(text, current, idOf).volumes;
 }
 
 // 大纲换过以后当前阶段不在了：取原来位置上（按全书顺序）最接近的阶段；原阶段还在或无从判断时返回 null。

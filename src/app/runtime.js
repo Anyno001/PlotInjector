@@ -4,7 +4,8 @@ import { parseOutlineReply, rewriteRestMessages, syncSettingMessages } from '../
 import { changedBlockKeys, mergeBlocks, parseSettingReply, pushHistory, splitBlocks } from '../core/setting.js';
 import { BUILTIN_GUIDE } from '../core/guide.js';
 import { flattenUnits, replaceRest, stageLabel, stageNodes, volumeLabel } from '../core/outline.js';
-import { advance, currentIndex, emptyProgress, goTo, isMuted, mute, patchSlot, uncheckByNames, unitStates } from '../core/progress.js';
+import { advance, checkBase, currentIndex, emptyProgress, goTo, isMuted, mute, patchSlot, uncheckByNames, unitStates } from '../core/progress.js';
+import { alignProgress, outlineLinks } from '../core/align.js';
 import { createWorld, emptyInfinite, enterWorld, leaveWorld, reenterWorld, removeWorld, undoEnter, undoLeave, withTrigger } from '../core/infinite-flow.js';
 import { decideTrigger, hashText, judgeTrigger, makeTrigger, parseTrainState } from '../core/infinite-state.js';
 import { hubWordNames, normalizeInfinite, randomFloat, resolveHub, rollWorldDice, titleKey } from '../core/infinite.js';
@@ -38,6 +39,9 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
     const view = hostWindow();
     let progress = null;
     let progressFor = '';
+    // 最近一次按大纲对照表归位时的输入（进度对象、大纲对象），两者都没变就不再算。
+    let alignedFrom = null;
+    let alignedOutline = null;
     let checking = false;
     let fallbackTimer = 0;
     let generating = false;
@@ -86,7 +90,23 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
             progress = { ...progress, infinite: emptyInfinite() };
             writeProgress(progress);
         }
+        // 大纲在别的聊天里改过（改名、挪动、合并、恢复历史）：按项目里的对照表把本聊天的进度对回当前大纲，有变化就写回。
+        if (project && !isInfinite(project) && (progress !== alignedFrom || project.outline !== alignedOutline)) {
+            const aligned = alignProgress(progress, project.outline);
+            if (aligned !== progress) {
+                progress = aligned;
+                writeProgress(progress);
+                log('按大纲对照表归位了本聊天的进度');
+            }
+            alignedFrom = progress;
+            alignedOutline = project.outline;
+        }
         return progress;
+    }
+
+    function links() {
+        const project = activeProject();
+        return project ? outlineLinks(project.outline) : undefined;
     }
 
     const isInfinite = project => Boolean(project && project.mode === 'infinite');
@@ -645,8 +665,10 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
         try {
             const list = maskUnits(units(), sw);
             const states = unitStates(list, prog);
-            const index = buildIndexText(list, states, prog, { carryOver: settings.carryOver, hookCap: settings.hookCap });
-            const threadInfo = checkThreads(liveThreads(list, states, prog, { carryOver: settings.carryOver, hookCap: settings.hookCap }), {
+            const opts = { carryOver: settings.carryOver, hookCap: settings.hookCap, links: links() };
+            const index = buildIndexText(list, states, prog, opts);
+            // readTo 只用成功检测时的楼数：检测失败的那批楼并没有读过。
+            const threadInfo = checkThreads(liveThreads(list, states, prog, opts), {
                 newThreadMode: sw.sideOn ? settings.newThreadMode : 'off', ignored: threadState(prog).ignored, readTo: prog.lastCheckFloor,
             });
             const messages = buildCheckMessages(unit, index, floors, threadInfo);
@@ -665,9 +687,10 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
             let next = currentProgress();
             // 钩子与支线链由 applyCheck 处理（链要走完最后一步才算演完）。
             next = uncheckByNames(next, unit.id, stageNodes(unit.stage.data).filter(node => !isThreadNode(node)), result.done);
-            if (settings.carryOver) for (const item of carriedNodes(list, states, prog)) next = uncheckByNames(next, item.unit.id, [item.node], result.done);
-            const merged = applyCheck(next, liveThreads(list, unitStates(list, next), next, { carryOver: settings.carryOver, hookCap: settings.hookCap }), result, { floor: floorCount() });
+            if (settings.carryOver) for (const item of carriedNodes(list, states, prog, { links: opts.links })) next = uncheckByNames(next, item.unit.id, [item.node], result.done);
+            const merged = applyCheck(next, liveThreads(list, unitStates(list, next), next, opts), result, { floor: floorCount() });
             next = { ...merged.progress, lastCheckFloor: floorCount() };
+            delete next.lastFailFloor;
             setProgress(next);
             for (const event of merged.events) log(threadEventText(event));
             log(`检测完成：已演 ${result.done.length} 个节点${result.stageDone ? '，本阶段已演完' : ''}${result.offTrack ? '，偏离大纲' : ''}`);
@@ -681,7 +704,8 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
             if (result.newThread && sw.sideOn) offerThread(unit, result.newThread);
             return result;
         } catch (error) {
-            setProgress({ ...currentProgress(), lastCheckFloor: floorCount() });
+            // 失败只记 lastFailFloor 控制重试间隔，lastCheckFloor（readTo、「·已读」）不动。
+            setProgress({ ...currentProgress(), lastFailFloor: floorCount() });
             log(`检测失败：${error.message}`);
             notice.show({
                 id: 'checkfail',
@@ -706,10 +730,13 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
         const floors = floorCount();
         // 支线钩子、进度钟记下的楼数也一并夹到现有楼数。
         const threads = clampThreads(prog, floors);
-        if (prog.lastCheckFloor <= floors && threads === prog) return prog;
+        const failOver = Number(prog.lastFailFloor) > floors;
+        if (prog.lastCheckFloor <= floors && !failOver && threads === prog) return prog;
         if (prog.lastCheckFloor > floors) log(`上次检测楼层 ${prog.lastCheckFloor} 大于当前楼数 ${floors}，已改为 ${floors}`);
+        if (failOver) log(`上次检测失败时的楼层 ${prog.lastFailFloor} 大于当前楼数 ${floors}，已改为 ${floors}`);
         if (threads !== prog) log(`支线与进度钟记下的楼数大于当前楼数 ${floors}，已改为 ${floors}`);
         const next = { ...threads, lastCheckFloor: Math.min(prog.lastCheckFloor, floors) };
+        if (failOver) next.lastFailFloor = floors;
         setProgress(next, 'floor');
         return next;
     }
@@ -718,7 +745,9 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
         const prog = currentProgress();
         if (!prog) return;
         log(`手动重设检测起点为第 ${floorCount()} 楼`);
-        setProgress({ ...prog, lastCheckFloor: floorCount() }, 'floor');
+        const next = { ...prog, lastCheckFloor: floorCount() };
+        delete next.lastFailFloor;
+        setProgress(next, 'floor');
     }
 
     function runPending() {
@@ -770,7 +799,7 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
         }
         const settings = data.settings();
         const prog = clampBase() || currentProgress();
-        const gap = floors - prog.lastCheckFloor;
+        const gap = floors - checkBase(prog);
         if (gap >= settings.checkEvery) {
             log(`收到第 ${messageId} 楼：距上次检测 ${gap} 楼，触发检测`);
             queueCheck();

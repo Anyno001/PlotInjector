@@ -1,3 +1,4 @@
+import { NO_LINKS, placeStageMap, realignStage } from './align.js';
 import { splitStageKey, stageNodes } from './outline.js';
 import { offNodes, setNodeChecked } from './progress.js';
 
@@ -5,7 +6,8 @@ import { offNodes, setNodeChecked } from './progress.js';
 // 世界动态：进度钟（总格数）、前兆（过半时的风声）、后果（发生后接进状态变化）。
 // 支线事件：条件（进钩子池，条件满足才激活）、时限（楼数或「本卷」）、错过（过期后的后果）、步骤（支线链）。
 // 进度存在 progress.threads = { clocks: { [阶段id:节点id]: { name, filled, done, lastTickFloor } }, hooks: { [key]: { name, at, since, shownAt, step, expired, keepVol } }, ignored: [名称] }。
-// 键里的节点 id 按位置编号；name 记写入时的节点名，节点挪动后位置对不上时按名称在同阶段同字段里找回。
+// 键里的节点 id 按位置编号；name 记写入时的节点名，节点挪动后位置对不上时按名称在同阶段同字段里找回（规则见 core/align.js placeRecords）。
+// 名称对不上又占着节点位置的记录挂到 阶段id:前缀~序号，不算任何节点的进度，之后名称对上了再归位。
 // at：条件钩子激活的楼数；since：没写条件的钩子开始计时的楼数；shownAt：第一次进入注入名额的楼数；keepVol：「本卷」钩子恢复时所在的卷。
 
 const isObj = value => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -105,31 +107,16 @@ const mapOf = node => (node.kind === 'world' ? 'clocks' : 'hooks');
 const unitOfKey = key => key.slice(0, key.indexOf(':'));
 const nodeOfKey = key => key.slice(key.indexOf(':') + 1);
 
-// 取一个节点存下的进度。键上的记录名称对得上（或旧数据没记名称）就用它；
-// 否则在同阶段、同字段里找名称相同、且没被当前同名节点占着的记录；都找不到视为孤儿，返回空记录。
-function savedFor(map, unit, node, nodesById) {
-    const key = threadKey(unit, node);
-    const own = map[key];
-    if (own && (!own.name || own.name === node.name)) return { saved: own, savedKey: key };
-    const prefix = node.id.replace(/\d+$/, '');
-    for (const [other, value] of Object.entries(map)) {
-        if (other === key || !value || value.name !== node.name || unitOfKey(other) !== unit.id) continue;
-        const otherId = nodeOfKey(other);
-        if (otherId.replace(/\d+$/, '') !== prefix) continue;
-        const holder = nodesById.get(otherId);
-        if (holder && holder.name === node.name) continue;
-        return { saved: value, savedKey: other };
-    }
-    return { saved: {}, savedKey: key };
-}
+const kindNodes = (unit, field) => stageNodes(unit.stage && unit.stage.data).filter(node => node.kind === (field === 'clocks' ? 'world' : 'side'));
 
-// 按 liveThreads 给出的条目写进度：以解析到的记录为底，写回当前键并记上节点名；记录原在别的键上时搬过来。patch 为 null 时重置。
+// 按 liveThreads 给出的条目写进度：先把这一阶段的记录整体按名称归位（别的节点的记录占着目标键时搬回它按名称应在的位置，
+// 对不上的挂起），再以解析到的记录为底写回当前键并记上节点名。patch 为 null 时重置。
 export function patchLive(progress, item, patch) {
     const field = mapOf(item.node);
-    const map = { ...threadState(progress)[field] };
+    const state = threadState(progress)[field];
+    const map = item.unit.stage ? realignStage(state, item.unit.id, kindNodes(item.unit, field), item.links || NO_LINKS) : { ...state };
     const next = patch === null ? { name: item.node.name } : { ...item.saved, ...patch, name: item.node.name };
     for (const name of Object.keys(next)) if (next[name] === undefined) delete next[name];
-    if (item.savedKey && item.savedKey !== item.key && map[item.savedKey] && map[item.savedKey].name === item.node.name) delete map[item.savedKey];
     map[item.key] = next;
     return withState(progress, { [field]: map });
 }
@@ -147,7 +134,15 @@ export function remapNodes(progress, unitId, prefix, mapIndex) {
     let next = progress;
     const slot = progress.slots && progress.slots[unitId];
     if (slot && Array.isArray(slot.off)) {
-        next = { ...next, slots: { ...next.slots, [unitId]: { ...slot, off: slot.off.map(move).filter(Boolean) } } };
+        const moved = { ...slot, off: slot.off.map(move).filter(Boolean) };
+        if (slot.offNames && typeof slot.offNames === 'object') {
+            moved.offNames = {};
+            for (const [id, name] of Object.entries(slot.offNames)) {
+                const to = move(id);
+                if (to) moved.offNames[to] = name;
+            }
+        }
+        next = { ...next, slots: { ...next.slots, [unitId]: moved } };
     }
     if (!progress.threads) return next;
     const state = threadState(next);
@@ -166,13 +161,35 @@ export function remapNodes(progress, unitId, prefix, mapIndex) {
     return withState(next, { clocks: remap(state.clocks), hooks: remap(state.hooks) });
 }
 
-// 编辑器里改了节点名：同一位置上的记录跟着改名，免得之后按名称对不上。
+// 编辑器里改了节点名、当前聊天恢复历史后：同一位置上的记录（钟、钩子、已演标记）跟着改名，免得之后按名称对不上。
 export function renameNode(progress, unit, node) {
+    let next = progress;
+    const slot = progress.slots && progress.slots[unit.id];
+    const offName = slot && slot.offNames && slot.offNames[node.id];
+    if (offName && offName !== node.name) next = { ...next, slots: { ...next.slots, [unit.id]: { ...slot, offNames: { ...slot.offNames, [node.id]: node.name } } } };
+    if (node.kind === 'main') return next;
     const field = mapOf(node);
-    const map = threadState(progress)[field];
+    const map = threadState(next)[field];
     const key = threadKey(unit, node);
-    if (!map[key] || !map[key].name || map[key].name === node.name) return progress;
-    return withState(progress, { [field]: { ...map, [key]: { ...map[key], name: node.name } } });
+    if (!map[key] || !map[key].name || map[key].name === node.name) return next;
+    return withState(next, { [field]: { ...map, [key]: { ...map[key], name: node.name } } });
+}
+
+// 当前聊天恢复历史版本后按位置补一次改名：位置上的记录名在同阶段同字段里没有同名节点、也不是其他节点的曾用名时，改成这个位置的节点名。
+export function renameByPosition(progress, units, links = NO_LINKS) {
+    let next = progress;
+    for (const unit of units || []) {
+        const nodes = stageNodes(unit.stage.data);
+        for (const node of nodes) {
+            const siblings = nodes.filter(other => other.field === node.field);
+            const known = name => siblings.some(other => other.name === name || (other !== node && links.family(unit.id, other.field, other.name).has(name)));
+            const slot = next.slots && next.slots[unit.id];
+            const offName = slot && slot.offNames && slot.offNames[node.id];
+            const saved = node.kind === 'main' ? null : threadState(next)[mapOf(node)][threadKey(unit, node)];
+            if ([offName, saved && saved.name].some(name => name && name !== node.name && !known(name))) next = renameNode(next, unit, node);
+        }
+    }
+    return next;
 }
 
 // 单阶段细化、拆分、合并后：被替换阶段的钟、钩子、已取消勾选的节点按「字段+节点名」迁到新阶段的同名节点，找不到的删掉。
@@ -182,14 +199,14 @@ export function migrateStageThreads(progress, oldStages, newStages, keepId) {
     const state = threadState(progress);
     const pool = [];
     for (const stage of oldStages) {
-        const unit = { id: stage.id };
-        const off = new Set(offNodes(progress, stage.id));
+        const unit = { id: stage.id, stage };
+        const off = new Set(offNodes(progress, unit));
         const nodes = stageNodes(stage.data);
-        const byId = new Map(nodes.map(node => [node.id, node]));
+        const placed = { clocks: placeStageMap(state.clocks, stage.id, nodes.filter(node => node.kind === 'world')), hooks: placeStageMap(state.hooks, stage.id, nodes.filter(node => node.kind === 'side')) };
         for (const node of nodes) {
             const field = mapOf(node);
-            const hit = savedFor(state[field], unit, node, byId);
-            pool.push({ field: node.field, name: node.name, map: field, value: Object.keys(hit.saved).length ? hit.saved : null, off: off.has(node.id), used: false });
+            const hit = node.kind === 'main' ? null : placed[field].get(node.id);
+            pool.push({ field: node.field, name: node.name, map: field, value: hit && Object.keys(hit.saved).length ? hit.saved : null, off: off.has(node.id), used: false });
         }
     }
     const strip = map => Object.fromEntries(Object.entries(map).filter(([key]) => !oldIds.has(unitOfKey(key))));
@@ -200,18 +217,23 @@ export function migrateStageThreads(progress, oldStages, newStages, keepId) {
     for (const id of oldIds) delete slots[id];
     if (kept) {
         delete kept.off;
+        delete kept.offNames;
         slots[keepId] = kept;
     }
     for (const stage of newStages) {
         const off = [];
+        const offNames = {};
         for (const node of stageNodes(stage.data)) {
             const from = pool.find(item => !item.used && item.field === node.field && item.name === node.name);
             if (!from) continue;
             from.used = true;
-            if (from.off) off.push(node.id);
+            if (from.off) {
+                off.push(node.id);
+                offNames[node.id] = node.name;
+            }
             if (from.value) (from.map === 'clocks' ? clocks : hooks)[`${stage.id}:${node.id}`] = { ...from.value, name: node.name };
         }
-        if (off.length) slots[stage.id] = { ...(slots[stage.id] || {}), off };
+        if (off.length) slots[stage.id] = { ...(slots[stage.id] || {}), off, offNames };
     }
     const next = { ...progress, slots, current: oldIds.has(progress.current) ? keepId : progress.current };
     return progress.threads || Object.keys(clocks).length || Object.keys(hooks).length ? withState(next, { clocks, hooks }) : next;
@@ -265,7 +287,8 @@ export function clockPhase(clock) {
 // 钩子在 carryOver 关闭时只保留真正激活过的：条件钩子已激活，或已经走到后面的步骤、已过期。
 // 钩子 status：done / expired / wait（待触发）/ active（注入）/ queue（激活但超出上限，排队）。
 // label：给检测模型看的名称，钟或钩子重名时加来源后缀「名称（阶段二）」。
-export function liveThreads(units, states, progress, { carryOver = true, hookCap = DEFAULT_HOOK_CAP } = {}) {
+// links：大纲对照表（core/align.js outlineLinks），不传时只按当前名称找回。
+export function liveThreads(units, states, progress, { carryOver = true, hookCap = DEFAULT_HOOK_CAP, links = NO_LINKS } = {}) {
     const { clocks: savedClocks, hooks: savedHooks } = threadState(progress);
     const active = (units || []).find(unit => states[unit.id] === 'active');
     const clocks = [];
@@ -273,22 +296,23 @@ export function liveThreads(units, states, progress, { carryOver = true, hookCap
     for (const unit of units || []) {
         const state = states[unit.id];
         if (state !== 'done' && state !== 'active') continue;
-        const off = new Set(offNodes(progress, unit.id));
+        const off = new Set(offNodes(progress, unit, links));
         const carried = state === 'done';
         const nodes = stageNodes(unit.stage.data);
-        const byId = new Map(nodes.map(node => [node.id, node]));
+        const placed = { world: placeStageMap(savedClocks, unit.id, nodes.filter(node => node.kind === 'world'), links), side: placeStageMap(savedHooks, unit.id, nodes.filter(node => node.kind === 'side'), links) };
+        const savedFor = node => placed[node.kind].get(node.id) || { saved: {}, savedKey: threadKey(unit, node) };
         for (const node of nodes) {
             if (!isThreadNode(node)) continue;
             const key = threadKey(unit, node);
             const item = node.item;
             if (node.kind === 'world') {
                 const total = clockSize(item);
-                const { saved, savedKey } = savedFor(savedClocks, unit, node, byId);
+                const { saved, savedKey } = savedFor(node);
                 const done = Boolean(saved.done);
-                clocks.push({ key, savedKey, saved, unit, node, carried, total, filled: done ? total : clamp(int(saved.filled), 0, total), done, lastTick: int(saved.lastTickFloor), omen: str(item.前兆), after: str(item.后果), event: str(item.内容 || item.事件) });
+                clocks.push({ key, savedKey, saved, links, unit, node, carried, total, filled: done ? total : clamp(int(saved.filled), 0, total), done, lastTick: int(saved.lastTickFloor), omen: str(item.前兆), after: str(item.后果), event: str(item.内容 || item.事件) });
                 continue;
             }
-            const { saved, savedKey } = savedFor(savedHooks, unit, node, byId);
+            const { saved, savedKey } = savedFor(node);
             const steps = hookSteps(item);
             const step = clamp(int(saved.step), 0, steps.length);
             const pooled = Boolean(hookCondition(item));
@@ -299,7 +323,7 @@ export function liveThreads(units, states, progress, { carryOver = true, hookCap
             if (carried && !carryOver && !started) continue;
             const status = off.has(node.id) ? 'done' : saved.expired ? 'expired' : pooled && !at ? 'wait' : 'active';
             const keepVol = Number.isFinite(Number(saved.keepVol)) && saved.keepVol !== null && saved.keepVol !== '' ? int(saved.keepVol) : -1;
-            hooks.push({ key, savedKey, saved, unit, node, carried, status, pooled, at, since, shownAt: int(saved.shownAt), steps, step, keepVol, cond: hookCondition(item), limit: hookLimit(item), miss: str(item.错过) });
+            hooks.push({ key, savedKey, saved, links, unit, node, carried, status, pooled, at, since, shownAt: int(saved.shownAt), steps, step, keepVol, cond: hookCondition(item), limit: hookLimit(item), miss: str(item.错过) });
         }
     }
     const cap = Math.max(1, int(hookCap) || DEFAULT_HOOK_CAP);
@@ -467,7 +491,7 @@ export function applyCheck(progress, live, result, { floor = 0 } = {}) {
                 expired = false;
             } else {
                 if (hook.steps.length) write(hook, { step: hook.steps.length });
-                next = setNodeChecked(next, hook.unit.id, hook.node.id, false);
+                next = setNodeChecked(next, hook.unit.id, hook.node.id, false, hook.node.name);
                 events.push({ type: 'hook-done', name: hook.node.name });
                 freed.add(hook);
                 continue;

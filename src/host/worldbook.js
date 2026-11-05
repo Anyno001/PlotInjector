@@ -34,6 +34,28 @@ export function globalBookNames() {
     return select ? [...select.selectedOptions].map(option => option.textContent.trim()).filter(Boolean) : [];
 }
 
+// 酒馆全局的关键词匹配设置（world_info_case_sensitive / world_info_match_whole_words），条目上为 null 时跟随。
+// 上下文里没有直接给出：依次试 getContext().getWorldInfoSettings、父窗口同名全局变量、世界书面板里的两个勾选框。都读不到时 known 为 false，按 false 计算。
+export function worldInfoMatchSettings() {
+    const pick = src => (src && typeof src.world_info_case_sensitive === 'boolean' && typeof src.world_info_match_whole_words === 'boolean'
+        ? { caseSensitive: src.world_info_case_sensitive, matchWholeWords: src.world_info_match_whole_words, known: true } : null);
+    try {
+        const c = ctx();
+        const found = c && typeof c.getWorldInfoSettings === 'function' ? pick(c.getWorldInfoSettings()) : null;
+        if (found) return found;
+    } catch { /* 改试其他来源 */ }
+    try {
+        const found = pick(hostWindow());
+        if (found) return found;
+    } catch { /* 改读界面 */ }
+    const doc = hostDocument();
+    const box = id => doc && doc.querySelector(`#${id}`);
+    const caseBox = box('world_info_case_sensitive');
+    const wholeBox = box('world_info_match_whole_words');
+    if (caseBox && wholeBox) return { caseSensitive: Boolean(caseBox.checked), matchWholeWords: Boolean(wholeBox.checked), known: true };
+    return { caseSensitive: false, matchWholeWords: false, known: false };
+}
+
 export function allBookNames() {
     const c = ctx();
     return c && typeof c.getWorldInfoNames === 'function' ? c.getWorldInfoNames() : [];
@@ -66,7 +88,9 @@ export function bookEntries(data) {
         selectiveLogic: Number(entry.selectiveLogic) || 0,
         caseSensitive: typeof entry.caseSensitive === 'boolean' ? entry.caseSensitive : null,
         matchWholeWords: typeof entry.matchWholeWords === 'boolean' ? entry.matchWholeWords : null,
-        probability: Number.isFinite(Number(entry.probability)) ? Number(entry.probability) : 100,
+        // 酒馆里 probability 为 null 或缺省时按 100；useProbability 关闭时概率不生效，显示为 100。
+        useProbability: entry.useProbability !== false,
+        probability: entry.useProbability === false || entry.probability === null || entry.probability === undefined || entry.probability === '' || !Number.isFinite(Number(entry.probability)) ? 100 : Math.min(100, Math.max(0, Number(entry.probability))),
         excludeRecursion: Boolean(entry.excludeRecursion),
         preventRecursion: Boolean(entry.preventRecursion),
         group: String(entry.group || ''),

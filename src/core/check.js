@@ -36,8 +36,9 @@ function threadRules(threads) {
     return keys.length ? { keys, rules, hooks: Boolean(threads.hooks), readTo: clocks.length ? Number(threads.readTo) || 0 : 0 } : null;
 }
 
-// newThread 的占位值：AI 没有新线时常写成这些。
-const EMPTY_NAMES = /^(?:无|没有|暂无|空|none|null|nil|n\/a|na|undefined|-|—|无新线|没有新线)$/i;
+// newThread 的占位值：AI 没有新线时常写成这些。比对前去掉首尾空白与末尾标点。
+const EMPTY_NAMES = /^(?:无|没有|暂无|空|none|null|nil|n\/a|na|undefined|-|—|无新线|没有新线|没有新的线)$/i;
+const isEmptyName = name => EMPTY_NAMES.test(String(name).trim().replace(/[。．.！!？?；;，,、\s]+$/, '').trim());
 
 // index 是 buildIndexText 生成的剧情索引，里面已有当前段各节点的已演/未演。threads 见 threadRules。
 export function buildCheckMessages(unit, index, floors, threads = null) {
@@ -101,6 +102,6 @@ function parseThread(raw) {
     const item = typeof raw === 'string' ? { name: raw } : raw;
     if (typeof item !== 'object') return null;
     const name = String(item.name ?? item.名称 ?? '').trim().slice(0, 40);
-    return name && !EMPTY_NAMES.test(name) ?{ name, summary: String(item.summary ?? item.概括 ?? '').trim().slice(0, 200) } : null;
+    return name && !isEmptyName(name) ? { name, summary: String(item.summary ?? item.概括 ?? '').trim().slice(0, 200) } : null;
 }
 

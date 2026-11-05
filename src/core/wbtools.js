@@ -82,34 +82,39 @@ export function orderPlan(entries, { start, step, by = 'list' }) {
 }
 
 // 触发测试：按酒馆规则模拟一段文字会命中哪些条目。不计递归、概率、分组、扫描深度。
-// /正则/flags 形式按正则（沿用所写 flags）。普通关键词默认不分大小写；条目 caseSensitive 为 true 时区分，null 跟随全局，按不区分处理。
-// matchWholeWords 为 true 时，单个英文词按单词边界匹配；含非拉丁字符或含空格的关键词仍按包含匹配，与酒馆一致。
+// 照抄酒馆 public/scripts/world-info.js 的 matchKeys 与 parseRegexFromString（release 分支）：
+// - /正则/flags（flags 限 gimsuy，正文里不能有未转义的 /）按正则，忽略其他选项；写法不合法时当普通文字。
+// - 普通关键词：caseSensitive、matchWholeWords 为 null 时跟随酒馆全局设置（world_info_case_sensitive / world_info_match_whole_words）。
+// - 全词匹配：关键词按空白拆开多于一个词时按包含匹配；单个词用 (?:^|\W)(词)(?:$|\W)，\W 只把 ASCII 字母、数字、下划线当单词字符，中文算边界。
 const escapeRegex = text => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-function keyMatcher(key, { caseSensitive = null, matchWholeWords = null } = {}) {
-    const text = String(key).trim();
-    const regex = text.match(/^\/(.+)\/([a-z]*)$/i);
-    if (regex) {
-        try {
-            const pattern = new RegExp(regex[1], regex[2].replace(/[gy]/g, ''));
-            return haystack => pattern.test(haystack);
-        } catch {
-            return () => false;
-        }
+function parseRegexKey(text) {
+    const match = text.match(/^\/([\w\W]+?)\/([gimsuy]*)$/);
+    if (!match || /(^|[^\\])\//.test(match[1])) return null;
+    try {
+        return new RegExp(match[1].replace('\\/', '/'), match[2]);
+    } catch {
+        return null;
     }
+}
+
+function keyMatcher(key, { caseSensitive = null, matchWholeWords = null } = {}, globals = {}) {
+    const text = String(key).trim();
+    const regex = parseRegexKey(text);
+    if (regex) return haystack => regex.test(haystack);
     if (text === '') return () => false;
-    const sensitive = caseSensitive === true;
-    const needle = sensitive ? text : text.toLowerCase();
-    const fold = haystack => (sensitive ? haystack : haystack.toLowerCase());
-    const latinWord = !/\s/.test(text) && !/[^\u0000-\u007FÀ-ɏ]/.test(text);
-    if (matchWholeWords === true && latinWord) {
-        const pattern = new RegExp(`(?:^|[^\\p{L}\\p{N}_])${escapeRegex(needle)}(?:$|[^\\p{L}\\p{N}_])`, 'u');
+    const sensitive = caseSensitive ?? Boolean(globals.caseSensitive);
+    const whole = matchWholeWords ?? Boolean(globals.matchWholeWords);
+    const fold = value => (sensitive ? value : value.toLowerCase());
+    const needle = fold(text);
+    if (whole && needle.split(/\s+/).length === 1) {
+        const pattern = new RegExp(`(?:^|\\W)(${escapeRegex(needle)})(?:$|\\W)`);
         return haystack => pattern.test(fold(haystack));
     }
     return haystack => fold(haystack).includes(needle);
 }
 
-const matchedKeys = (keys, haystack, options) => keys.filter(key => String(key).trim() && keyMatcher(key, options)(haystack));
+const matchedKeys = (keys, haystack, options, globals) => keys.filter(key => String(key).trim() && keyMatcher(key, options, globals)(haystack));
 
 // 次要关键词逻辑：0 AND_ANY，1 NOT_ALL，2 NOT_ANY，3 AND_ALL。
 function secondaryPass(logic, hit, total) {
@@ -119,7 +124,8 @@ function secondaryPass(logic, hit, total) {
     return hit > 0;
 }
 
-export function triggerTest(entries, text, tokenOf = () => 0) {
+// globals：酒馆全局的 { caseSensitive, matchWholeWords }，条目上为 null 时用；读不到时按 false。
+export function triggerTest(entries, text, tokenOf = () => 0, globals = {}) {
     const haystack = String(text || '');
     const constant = [];
     const keyword = [];
@@ -130,13 +136,13 @@ export function triggerTest(entries, text, tokenOf = () => 0) {
             constant.push({ key: entry.key, title: entry.title, tokens: tokenOf(entry) });
             continue;
         }
-        const primary = matchedKeys(entry.keys, haystack, options);
+        const primary = matchedKeys(entry.keys, haystack, options, globals);
         if (!primary.length) continue;
         let matched = primary;
         const secondary = entry.selective === false ? [] : entry.keysSecondary.filter(key => String(key).trim());
         if (secondary.length) {
             const logic = Number(entry.selectiveLogic) || 0;
-            const hit = matchedKeys(secondary, haystack, options);
+            const hit = matchedKeys(secondary, haystack, options, globals);
             if (!secondaryPass(logic, hit.length, secondary.length)) continue;
             if (logic === 0 || logic === 3) matched = [...primary, ...hit];
         }

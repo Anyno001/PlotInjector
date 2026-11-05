@@ -1,6 +1,6 @@
 import { DEFAULT_PARAMS, PACES, POSITIONS, ROLES, buildIndexText, carriedNodes, positionLabel } from '../core/inject.js';
 import { flattenUnits, stageLabel, stageNodes, volumeLabel } from '../core/outline.js';
-import { STATE_LABELS, goTo, offNodes, patchSlot, setNodeChecked, unitStates } from '../core/progress.js';
+import { STATE_LABELS, checkBase, goTo, offNodes, patchSlot, setNodeChecked, unitStates } from '../core/progress.js';
 import { clockPhase, isThreadNode, liveThreads, maskUnits, patchLive, threadSwitches } from '../core/threads.js';
 import { estimateTokens } from '../core/tokens.js';
 import { cardKey, cardName } from '../host/st.js';
@@ -11,7 +11,9 @@ import { startRewrite } from './tab-outline.js';
 // 位置、深度、角色、顺序改的是本项目的默认，所有阶段一起生效；只有启用开关按段记。
 // checked=true 为恢复未演；勾回走完的支线链时停在最后一步，免得显示空步骤。
 function toggleNode(view, unitId, nodeId, checked) {
-    let next = setNodeChecked(view.runtime.progress(), unitId, nodeId, checked);
+    const unit = view.runtime.units().find(item => item.id === unitId);
+    const node = unit && stageNodes(unit.stage.data).find(item => item.id === nodeId);
+    let next = setNodeChecked(view.runtime.progress(), unitId, nodeId, checked, node ? node.name : '');
     const hook = checked && viewLive(view).hooks.find(item => item.key === `${unitId}:${nodeId}`);
     if (hook && hook.steps.length && hook.step >= hook.steps.length) next = patchLive(next, hook, { step: hook.steps.length - 1 });
     view.runtime.setProgress(next);
@@ -80,7 +82,7 @@ function switchRow(sw) {
 // carried：已过阶段里没演的支线与世界动态，标为已演即不再延续，灰色留在原处可恢复。
 // units 已按开关遮罩，关掉的一类不会出现在这里，只留一行「已关闭」。
 function nodeList(unit, progress, carried, live, sw, expiredOpen) {
-    const off = new Set(offNodes(progress, unit.id));
+    const off = new Set(offNodes(progress, unit));
     const nodes = stageNodes(unit.stage.data).filter(node => !isThreadNode(node));
     const alive = hook => hook.status !== 'expired';
     const own = live.hooks.filter(hook => !hook.carried && alive(hook));
@@ -147,7 +149,7 @@ export function render(view) {
     const settings = data.settings();
     const checking = runtime.isChecking();
     const book = runtime.injectMode() === 'virtual' ? '' : '<span class="pi-badge is-warn">专用世界书</span>';
-    const gap = settings.checkEvery - (runtime.floorCount() - progress.lastCheckFloor);
+    const gap = settings.checkEvery - (runtime.floorCount() - checkBase(progress));
     return `<div class="pi-card"><h3>注入条目${book}<span class="pi-meta">≈${total} token</span><span class="pi-spacer"></span>
             <button type="button" class="pi-btn is-sm is-ghost" data-act="preview">预览</button></h3>
         ${entries.length ? entries.map(entry => entryRow(entry, st.open === entry.slotId)).join('') : '<p class="pi-hint">设定和大纲都为空，没有可注入的内容。</p>'}
@@ -277,7 +279,8 @@ export const actions = {
     },
     'node-toggle'(view, target) {
         const { unit, node } = target.dataset;
-        toggleNode(view, unit, node, offNodes(view.runtime.progress(), unit).includes(node));
+        const found = view.runtime.units().find(item => item.id === unit);
+        toggleNode(view, unit, node, Boolean(found) && offNodes(view.runtime.progress(), found).includes(node));
     },
     'thread-switch'(view, target) {
         const key = target.dataset.key;

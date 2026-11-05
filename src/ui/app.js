@@ -1,7 +1,7 @@
 import { normalizeInfinite } from '../core/infinite.js';
 import { groupProjects } from '../core/store.js';
 import { cardKey, cardName, hostDocument, hostWindow, toast } from '../host/st.js';
-import { confirmDialog, el, ensureStyle, esc, isNight, menuDialog, openDialog, setNight } from './dom.js';
+import { confirmDialog, el, ensureStyle, esc, isNight, menuDialog, openDialog, options, setNight } from './dom.js';
 import { ICONS } from './styles.js';
 import * as discuss from './tab-discuss.js';
 import * as setting from './tab-setting.js';
@@ -261,21 +261,46 @@ export function createApp({ data, runtime, version }) {
         render();
     }
 
+    // 分组下拉：不分组、已有分组、新建分组（选中后出现分组名输入框）。新项目和编辑项目共用。
+    const NEW_GROUP = '::new';
+    function groupField(preset) {
+        const groups = [...new Set(data.index().projects.map(item => item.group).filter(Boolean))];
+        const list = [{ value: '', label: '不分组' }, ...groups.map(name => ({ value: name, label: name })), { value: NEW_GROUP, label: '新建分组' }];
+        return `<label class="pi-field"><span>分组</span><select class="pi-sel" data-f="group">${options(list, preset)}</select></label>
+                <label class="pi-field" data-f="new-group-row" hidden><span>新分组名</span><input class="pi-inp" data-f="new-group" placeholder="如：龙宫篇"></label>`;
+    }
+    function mountGroupField(box) {
+        const select = box.querySelector('[data-f=group]');
+        const row = box.querySelector('[data-f=new-group-row]');
+        select.addEventListener('change', () => {
+            row.hidden = select.value !== NEW_GROUP;
+            if (!row.hidden) box.querySelector('[data-f=new-group]').focus();
+        });
+    }
+    function readGroupField(box) {
+        const picked = box.querySelector('[data-f=group]').value;
+        return picked === NEW_GROUP ? box.querySelector('[data-f=new-group]').value.trim() : picked;
+    }
+
     async function newProject() {
         setDrawer(false);
+        // 默认沿用当前项目的分组，方便在同一组里连续新建。
+        const current = data.index().projects.find(item => item.id === view.projectId);
         const result = await openDialog({
             title: '新项目',
             html: `<label class="pi-field"><span>项目名（一条 if 线）</span><input class="pi-inp" data-f="name" placeholder="如：龙宫温养"></label>
+                ${groupField(current && current.group ? current.group : '')}
                 <label class="pi-check"><input type="checkbox" data-f="infinite"><span>无限流模式（主空间出发、世界库、污染）</span></label>`,
+            onMount: mountGroupField,
             actions: [
                 { label: '取消', value: null },
-                { label: '确定', primary: true, value: box => ({ name: box.querySelector('[data-f=name]').value, mode: box.querySelector('[data-f=infinite]').checked ? 'infinite' : 'normal' }) },
+                { label: '确定', primary: true, value: box => ({ name: box.querySelector('[data-f=name]').value, group: readGroupField(box), mode: box.querySelector('[data-f=infinite]').checked ? 'infinite' : 'normal' }) },
             ],
         });
         if (!result) return;
         const name = result.name;
         try {
-            const project = await data.createProject(name, '', result.mode);
+            const project = await data.createProject(name, result.group, result.mode);
             if (!runtime.activeId() && cardKey()) await runtime.switchProject(project.id);
             await selectProject(project.id, 'discuss');
         } catch (error) {
@@ -308,19 +333,18 @@ export function createApp({ data, runtime, version }) {
     async function editProject(id) {
         const meta = data.index().projects.find(item => item.id === id);
         if (!meta) return;
-        const groups = [...new Set(data.index().projects.map(item => item.group).filter(Boolean))];
         if (!data.project(id)) await data.loadProject(id);
         const mode = data.project(id) ? data.project(id).mode : 'normal';
         const result = await openDialog({
             title: '编辑项目',
             html: `<label class="pi-field"><span>名称</span><input class="pi-inp" data-f="name" value="${esc(meta.name)}"></label>
-                <label class="pi-field"><span>分组（留空不分组）</span><input class="pi-inp" data-f="group" value="${esc(meta.group)}" list="pi-groups"></label>
-                <datalist id="pi-groups">${groups.map(name => `<option value="${esc(name)}">`).join('')}</datalist>
+                ${groupField(meta.group || '')}
                 <label class="pi-check"><input type="checkbox" data-f="infinite"${mode === 'infinite' ? ' checked' : ''}><span>无限流模式</span></label>`,
+            onMount: mountGroupField,
             actions: [
                 { label: '删除项目', danger: true, value: 'delete' },
                 { label: '取消', value: null },
-                { label: '保存', primary: true, value: box => ({ name: box.querySelector('[data-f=name]').value.trim(), group: box.querySelector('[data-f=group]').value.trim(), mode: box.querySelector('[data-f=infinite]').checked ? 'infinite' : 'normal' }) },
+                { label: '保存', primary: true, value: box => ({ name: box.querySelector('[data-f=name]').value.trim(), group: readGroupField(box), mode: box.querySelector('[data-f=infinite]').checked ? 'infinite' : 'normal' }) },
             ],
         });
         if (!result) return;

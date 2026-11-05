@@ -1,4 +1,5 @@
-import { CHANGE_FIELD, NODE_FIELDS, changeLines, flattenUnits, mainNodeNames, makeId, moveItem, moveStageToVolume, nearestUnitId, outlineIssues, outlineToText, parseOutlineText, pushOutlineHistory, replaceRest, replaceStages, stageLabel, stageNodes, stageToText, volumeLabel, volumesFromHistory, volumeToText } from '../core/outline.js';
+import { CHANGE_FIELD, NODE_FIELDS, changeLines, flattenUnits, mainNodeNames, makeId, moveItem, moveStageToVolume, nearestUnitId, outlineIssues, outlineToText, parseOutlineText, pushOutlineHistory, replaceRest, replaceStages, restoreOutline, stageLabel, stageNodes, stageToText, volumeLabel, volumeToText } from '../core/outline.js';
+import { outlineLinks, withAliases, withRenames } from '../core/align.js';
 import { currentIndex, goTo, unitStates } from '../core/progress.js';
 import { fixYamlMessages, outlineMessages, parseOutlineReply, rewriteRestMessages, stageOpMessages } from '../core/prompts.js';
 import { downloadBlob, toast } from '../host/st.js';
@@ -8,7 +9,7 @@ import { genActions, genRefTexts, genRefsBar } from './gen-refs.js';
 import { normalizeGenRefs } from '../core/store.js';
 import { ICONS } from './styles.js';
 import { afterImport, classifyEntries, pickWorldbookEntries } from './wb-import.js';
-import { hookSteps, migrateStageThreads, remapNodes, renameNode } from '../core/threads.js';
+import { hookSteps, migrateStageThreads, remapNodes, renameByPosition, renameNode } from '../core/threads.js';
 
 const NODE_KEYS = {
     main: ['名称', '地点', '事件', '偏转'],
@@ -260,9 +261,9 @@ function liveProgress(view) {
     return view.runtime.activeId() === view.projectId ? view.runtime.progress() : null;
 }
 
-function remapProgress(view, stageId, field, mapIndex) {
+// progress 为改大纲之前取的进度：改完再取时已按名称归位过，再按位置重排会排反。
+function remapProgress(view, progress, stageId, field, mapIndex) {
     const meta = NODE_FIELDS.find(item => item.field === field);
-    const progress = liveProgress(view);
     if (!meta || !progress) return;
     const next = remapNodes(progress, stageId, meta.prefix, mapIndex);
     if (next !== progress) view.runtime.setProgress(next);
@@ -271,14 +272,15 @@ function remapProgress(view, stageId, field, mapIndex) {
 const swapIndex = (a, b) => i => (i === a ? b : i === b ? a : i);
 
 // label 非空时，改动前的大纲先入历史版本。
-function update(view, fn, label = '') {
+// alias：改动附带写进对照表的阶段 id 别名（[[旧id, 新id]]，见 core/align.js），其他聊天读进度时按它对回。
+function update(view, fn, label = '', { alias = [] } = {}) {
     return view.data.updateProject(view.projectId, project => ({
         ...project,
-        outline: {
+        outline: withAliases({
             ...project.outline,
             volumes: fn(project.outline.volumes),
             ...(label ? { history: pushOutlineHistory(project.outline.history, project.outline.volumes, label) } : {}),
-        },
+        }, alias),
     }));
 }
 
@@ -396,13 +398,17 @@ function setMultiItem(view, index, parsed) {
     view.renderBody();
 }
 
-async function writeVolumes(view, n, request) {
+// onConfirmed：写卷弹窗与覆盖草稿的确认都通过、开始写作前调用。
+async function writeVolumes(view, n, request, onConfirmed = null) {
+    const id = view.projectId;
+    const pending = st(view).draft && st(view).draft.projectId === id ? st(view).draft : parkedDrafts.get(id);
+    if (pending && !(await confirmDialog({ title: '覆盖草稿', body: '草稿区还有未处理的 AI 结果，开始写作后会被新草稿替换。', okLabel: '开始写作', danger: true }))) return;
+    // 讨论记录参考开关在确认之后才打开，参考文字随后按新开关取。
+    if (onConfirmed) onConfirmed();
     const project = view.project();
     const { talk, wb } = await genRefTexts(view, 12000);
     if (!project.setting.text.trim() && !talk.trim() && !wb.length) throw new Error('没有可参考的内容：在讨论页聊一聊，或点「世界书」选择条目。');
     const base = project.outline.volumes.length + 1;
-    const pending = st(view).draft && st(view).draft.projectId === project.id ? st(view).draft : parkedDrafts.get(project.id);
-    if (n > 1 && pending && !(await confirmDialog({ title: '覆盖草稿', body: '草稿区还有未处理的 AI 结果，开始写作后会被新草稿替换。', okLabel: '开始写作', danger: true }))) return;
     if (n <= 1) {
         const reply = await runTask(view, 'outline', () => ask(view, 'outline', volumeRequest({ project, talk, wb, no: base, k: 1, n: 1, request })));
         if (reply) setDraft(view, 'volume', reply);
@@ -576,8 +582,9 @@ export const actions = {
         const field = target.dataset.field;
         const index = Number(target.dataset.i);
         if (index <= 0) return;
+        const before = liveProgress(view);
         updateStage(view, stage.id, item => ({ ...item, data: { ...item.data, [field]: moveUp(item.data[field], index) } }));
-        remapProgress(view, stage.id, field, swapIndex(index - 1, index));
+        remapProgress(view, before, stage.id, field, swapIndex(index - 1, index));
         view.runtime.refresh();
         view.renderBody();
     },
@@ -586,8 +593,9 @@ export const actions = {
         const field = target.dataset.field;
         const index = Number(target.dataset.i);
         if (index >= (stage.data[field] || []).length - 1) return;
+        const before = liveProgress(view);
         updateStage(view, stage.id, item => ({ ...item, data: { ...item.data, [field]: moveItem(item.data[field], index, 1) } }));
-        remapProgress(view, stage.id, field, swapIndex(index, index + 1));
+        remapProgress(view, before, stage.id, field, swapIndex(index, index + 1));
         view.runtime.refresh();
         view.renderBody();
     },
@@ -606,13 +614,14 @@ export const actions = {
         const index = Number(target.dataset.i);
         const node = stage.data[field][index];
         if (!(await confirmDialog({ title: `删除「${(node && (node.名称 || node.类型)) || '节点'}」`, okLabel: '删除', danger: true }))) return;
+        const before = liveProgress(view);
         updateStage(view, stage.id, item => {
             const list = item.data[field].filter((_, i) => i !== index);
             const data = { ...item.data, [field]: list };
             if (!list.length && field !== '主线节点') delete data[field];
             return { ...item, data };
         });
-        remapProgress(view, stage.id, field, i => (i === index ? null : i > index ? i - 1 : i));
+        remapProgress(view, before, stage.id, field, i => (i === index ? null : i > index ? i - 1 : i));
         view.runtime.refresh();
         view.renderBody();
     },
@@ -660,8 +669,7 @@ export const actions = {
         if (view.busy.outline) return;
         const picked = await writeDialog(view);
         if (!picked) return;
-        if (withTalk) setTalkRef(view);
-        await writeVolumes(view, picked.n, picked.request);
+        await writeVolumes(view, picked.n, picked.request, withTalk ? () => setTalkRef(view) : null);
     },
     'multi-stop'(view) {
         const multi = st(view).multi;
@@ -785,11 +793,21 @@ export const actions = {
         const item = view.project().outline.history[Number(target.dataset.i)];
         if (!item || !(await confirmDialog({ title: '恢复大纲', body: '当前大纲会先存进历史版本，再换成这一版。' }))) return;
         const before = view.project().outline.volumes;
-        const volumes = volumesFromHistory(item.text, before);
-        update(view, () => volumes, '恢复历史版本');
         const progress = liveProgress(view);
-        const to = progress && nearestUnitId(before, volumes, flattenUnits(before)[currentIndex(flattenUnits(before), progress)]?.id);
-        if (to) view.runtime.setProgress(goTo(progress, flattenUnits(volumes), to));
+        const { volumes, alias } = restoreOutline(item.text, before);
+        update(view, () => volumes, '恢复历史版本', { alias });
+        // 当前聊天：先按位置补一次改名（节点名变回旧名），再看当前阶段是否还在；不在时沿别名表找，仍找不到取位置最接近的阶段。
+        if (progress) {
+            const units = flattenUnits(volumes);
+            const links = outlineLinks(view.project().outline, units);
+            let next = renameByPosition(progress, units, links);
+            const cur = flattenUnits(before)[currentIndex(flattenUnits(before), progress)]?.id;
+            const resolved = cur ? links.resolve(cur) : '';
+            const alive = resolved && units.some(unit => unit.id === resolved);
+            const to = alive ? (resolved === cur ? null : resolved) : nearestUnitId(before, volumes, cur);
+            if (to) next = goTo(next, units, to);
+            if (next !== progress) view.runtime.setProgress(next);
+        }
         st(view).sel = '';
         view.runtime.refresh();
         view.renderBody();
@@ -824,9 +842,10 @@ export const actions = {
         const ids = [draft.stageId, ...(draft.nextId ? [draft.nextId] : [])];
         const old = volume.stages.filter(stage => ids.includes(stage.id));
         const { volumes, stages, keepId } = replaceStages(project.outline.volumes, volume.id, ids, incoming);
-        update(view, () => volumes, STAGE_DRAFT[draft.mode]);
         // 第一段沿用原阶段 id；钟、钩子、已取消勾选的节点按名称迁到新阶段，进度指向沿用 id 的那段。
+        // 进度在改大纲之前取（之后取会先按别名表归位）；被换掉的 id 记进别名表，其他聊天打开时跟过来。
         const progress = liveProgress(view);
+        update(view, () => volumes, STAGE_DRAFT[draft.mode], { alias: ids.filter(id => id !== keepId).map(id => [id, keepId]) });
         if (progress) {
             const moved = migrateStageThreads(progress, old, stages, keepId);
             view.runtime.setProgress(ids.includes(progress.current) ? goTo(moved, flattenUnits(volumes), keepId) : moved);
@@ -899,6 +918,11 @@ export function onInput(view, target) {
         const field = target.dataset.nodeField;
         const index = Number(target.dataset.i);
         const key = target.dataset.k;
+        const pending = nameKey(stage.id, field, index);
+        if (['名称', '类型', '内容'].includes(key) && !pendingNames.has(pending)) {
+            const node = nodeAt(stage, field, index);
+            if (node) pendingNames.set(pending, node.name);
+        }
         updateStage(view, stage.id, item => {
             const list = [...item.data[field]];
             const prev = list[index] && typeof list[index] === 'object' ? list[index] : {};
@@ -919,13 +943,28 @@ export function onBlur(view, target) {
     if (target.matches('[data-stage-key],[data-vol-key],[data-stage-field],[data-stage-list],[data-node-field]')) view.runtime.refresh();
 }
 
-// 改了节点名：同一位置的钟、钩子记录跟着改名，免得按名称对不上而丢进度。
+// 改了节点名：改名记进大纲的改名表（其他聊天按改名链找回记录），当前聊天同一位置的钟、钩子、已演标记跟着改名。
+// 改名前的名称在第一次输入时记下（pendingNames），失焦时比对。
+const pendingNames = new Map();
+const nameKey = (stageId, field, index) => [stageId, field, index].join('|');
+
+function nodeAt(stage, field, index) {
+    return stage ? stageNodes(stage.data).find(item => item.field === field && item.index === index) : null;
+}
+
 function syncNodeName(view, field, index) {
     const { stage } = findSel(view.project(), st(view).sel);
-    const progress = liveProgress(view);
-    if (!stage || !progress) return;
-    const node = stageNodes(stage.data).find(item => item.field === field && item.index === index);
+    if (!stage) return;
+    const key = nameKey(stage.id, field, index);
+    const from = pendingNames.get(key);
+    pendingNames.delete(key);
+    const node = nodeAt(stage, field, index);
     if (!node) return;
+    if (from && from !== node.name) {
+        view.data.updateProject(view.projectId, project => ({ ...project, outline: withRenames(project.outline, [{ stageId: stage.id, field, from, to: node.name }]) }));
+    }
+    const progress = liveProgress(view);
+    if (!progress) return;
     const next = renameNode(progress, { id: stage.id }, node);
     if (next !== progress) view.runtime.setProgress(next);
 }

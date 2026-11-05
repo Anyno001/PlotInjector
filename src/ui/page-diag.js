@@ -41,6 +41,7 @@ function problems(info) {
     if (!info.cardKey) out.push({ text: '当前没有打开角色卡聊天。', fix: '' });
     else if (!info.id) out.push({ text: `「${info.card}」没有启用项目，自动检测不会运行。`, fix: '' });
     else if (!info.units) out.push({ text: '启用项目的大纲为空，没有可检测的阶段。', fix: '' });
+    if (info.progress && Number(info.progress.lastFailFloor) > info.floors) out.push({ text: `上次检测失败记在第 ${info.progress.lastFailFloor} 楼，当前只有 ${info.floors} 楼。`, fix: 'reset-base' });
     if (info.progress && info.progress.lastCheckFloor > info.floors) out.push({ text: `上次检测记在第 ${info.progress.lastCheckFloor} 楼，当前只有 ${info.floors} 楼。`, fix: 'reset-base' });
     if (info.llm.source === 'custom' && !String(info.llm.model || '').trim()) out.push({ text: '进度检测用独立接口，但没有选择模型。', fix: '' });
     const received = info.events.find(item => item.key === 'MESSAGE_RECEIVED');
@@ -51,7 +52,7 @@ function problems(info) {
 
 function nextText(info) {
     if (!info.progress) return '—';
-    const gap = info.floors - info.progress.lastCheckFloor;
+    const gap = info.floors - Math.max(info.progress.lastCheckFloor, Number(info.progress.lastFailFloor) || 0);
     const left = info.settings.checkEvery - gap;
     return left > 0 ? `还差 ${left} 楼` : '下一条回复后检测';
 }
@@ -66,6 +67,7 @@ function rows(info) {
         ['启用项目', info.name || '—'],
         ['当前楼数', String(info.floors)],
         ['上次检测楼层', info.progress ? String(info.progress.lastCheckFloor) : '—'],
+        ...(info.progress && info.progress.lastFailFloor ? [['上次检测失败楼层', String(info.progress.lastFailFloor)]] : []),
         ['检测间隔', `每 ${info.settings.checkEvery} 楼`],
         ['下次检测', nextText(info)],
         ['检测接口', llm],

@@ -3,7 +3,7 @@ import { acuField, groupByField } from '../core/acu.js';
 import { estimateTokens } from '../core/tokens.js';
 import { buildPattern, healthCheck, orderPlan, punctPlan, regexPlan, sortEntries, triggerTest } from '../core/wbtools.js';
 import { chatMessages, countTokens, downloadBlob, hostDocument, toast } from '../host/st.js';
-import { addEntries, allBookNames, bookEntries, globalBookNames, boundBookNames, createBook, deleteEntries, duplicateBook, loadBook, patchEntries, removeBook, renameBook, restoreEntries, setEntriesDisabled, snapshotEntries, transferEntries, updateEntry } from '../host/worldbook.js';
+import { addEntries, allBookNames, bookEntries, globalBookNames, boundBookNames, createBook, deleteEntries, duplicateBook, loadBook, patchEntries, removeBook, renameBook, restoreEntries, setEntriesDisabled, snapshotEntries, transferEntries, updateEntry, worldInfoMatchSettings } from '../host/worldbook.js';
 import { confirmDialog, esc, menuDialog, openDialog, options, pickFiles, promptDialog } from './dom.js';
 import { ICONS } from './styles.js';
 
@@ -645,11 +645,12 @@ export const actions = {
         const group = (name, list, extra) => (list.length ? `<div class="pi-wb-sec-hd">${name}<small>${list.length}</small></div>${list.map(item => row(item, extra(item))).join('')}` : '');
         const run = box => {
             const text = box.querySelector('[data-f="text"]').value;
-            const result = triggerTest(entries, text, tk);
+            const globals = worldInfoMatchSettings();
+            const result = triggerTest(entries, text, tk, globals);
             const body = group('常驻', result.constant, () => '') + group('关键词命中', result.keyword, item => `${esc(item.matched.join('、'))} · `);
             box.querySelector('[data-f="result"]').innerHTML = `${body || '<p class="pi-hint">没有命中的条目</p>'}
                 <p class="pi-meta">合计 ${result.tokens.total} token（常驻 ${result.tokens.constant}，关键词 ${result.tokens.keyword}）</p>
-                <p class="pi-meta">未计算递归、概率、分组与扫描深度</p>`;
+                <p class="pi-meta">未计算递归、概率、分组与扫描深度</p>${globals.known ? '' : '<p class="pi-meta">未读到酒馆全局匹配设置，按不区分大小写、不全词匹配计算</p>'}`;
         };
         await openDialog({
             title: '触发测试',

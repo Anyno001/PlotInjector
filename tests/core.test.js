@@ -368,18 +368,33 @@ test('世界书触发测试：禁用不算、常驻必中、关键词不分大�
     assert.equal(r.tokens.constant, 10);
 });
 
-test('世界书触发测试：区分大小写与全词匹配，中文关键词照常包含匹配', () => {
-    const hit = (extra, text) => triggerTest([wbEntry('1', { keys: ['cat'], ...extra })], text).keyword.length;
-    assert.equal(hit({}, 'The CAT sat'), 1);
-    assert.equal(hit({ caseSensitive: null }, 'The CAT sat'), 1);
-    assert.equal(hit({ caseSensitive: true }, 'The CAT sat'), 0);
-    assert.equal(hit({ caseSensitive: true }, 'the cat sat'), 1);
-    assert.equal(hit({}, 'concatenate'), 1);
-    assert.equal(hit({ matchWholeWords: true }, 'concatenate'), 0);
-    assert.equal(hit({ matchWholeWords: true }, 'a cat, sat'), 1);
-    assert.equal(hit({ matchWholeWords: true }, 'cat'), 1);
-    const han = triggerTest([wbEntry('2', { keys: ['龙'], matchWholeWords: true })], '巨龙来了').keyword.length;
-    assert.equal(han, 1);
+test('世界书触发测试：区分大小写与全词匹配照酒馆 matchKeys；条目为 null 时跟随全局设置', () => {
+    const hit = (key, extra, text, globals) => triggerTest([wbEntry('1', { keys: [key], ...extra })], text, undefined, globals).keyword.length;
+    assert.equal(hit('cat', {}, 'The CAT sat'), 1);
+    assert.equal(hit('cat', { caseSensitive: null }, 'The CAT sat'), 1);
+    assert.equal(hit('cat', { caseSensitive: true }, 'The CAT sat'), 0);
+    assert.equal(hit('cat', { caseSensitive: true }, 'the cat sat'), 1);
+    assert.equal(hit('cat', {}, 'concatenate'), 1);
+    assert.equal(hit('cat', { matchWholeWords: true }, 'concatenate'), 0);
+    assert.equal(hit('cat', { matchWholeWords: true }, 'a cat, sat'), 1);
+    assert.equal(hit('cat', { matchWholeWords: true }, 'cat'), 1);
+    // 酒馆的 \W 只认 ASCII 字母数字下划线，中文字算边界：单个中文词在中文正文里全词匹配照样命中。
+    assert.equal(hit('龙', { matchWholeWords: true }, '巨龙来了'), 1);
+    assert.equal(hit('龙', { matchWholeWords: true }, 'a龙b'), 0, '两侧是 ASCII 字母时不算全词');
+    assert.equal(hit('龙', { matchWholeWords: true }, 'a 龙'), 1);
+    // 不再区分拉丁字符：带重音的字母在 \W 看来也是边界。
+    assert.equal(hit('cafe', { matchWholeWords: true }, 'écafeé'), 1);
+    // 多个词按包含匹配。
+    assert.equal(hit('big cat', { matchWholeWords: true }, 'abig catz'), 1);
+    // 条目为 null 时跟随全局。
+    assert.equal(hit('cat', {}, 'The CAT sat', { caseSensitive: true }), 0);
+    assert.equal(hit('cat', { caseSensitive: false }, 'The CAT sat', { caseSensitive: true }), 1, '条目设置优先于全局');
+    assert.equal(hit('cat', {}, 'concatenate', { matchWholeWords: true }), 0);
+    assert.equal(hit('cat', { matchWholeWords: false }, 'concatenate', { matchWholeWords: true }), 1);
+    // 正则：flags 限 gimsuy，写法不合法时当普通文字。
+    assert.equal(hit('/c.t/', {}, 'cut'), 1);
+    assert.equal(hit('/c.t/x', {}, '/c.t/x here'), 1, 'flags 不合法时按普通文字包含');
+    assert.equal(hit('/C.T/', {}, 'cut', { caseSensitive: false }), 0, '正则不受大小写设置影响');
 });
 
 test('世界书触发测试：次要关键词四种逻辑', () => {
@@ -966,4 +981,249 @@ test('旧大纲按运行时的实际调用方式（带 threads 参数、newThrea
             assert.deepEqual(got, want.check, `${name}/${carryOver}`);
         }
     }
+});
+
+// v0.1.24 复验修复：跨聊天对照表（改名表、阶段 id 别名表）、对调覆盖、已演标记名称兜底、检测失败楼数、占位新线名。
+import { alignProgress, outlineLinks, withAliases, withRenames, RENAME_MAX, ALIAS_MAX } from '../src/core/align.js';
+import { checkBase, currentIndex, goTo, normalizeProgress, offNodes } from '../src/core/progress.js';
+import { restoreOutline } from '../src/core/outline.js';
+import { renameByPosition, renameNode } from '../src/core/threads.js';
+import { bookEntries } from '../src/host/worldbook.js';
+
+const cloneOutline = project => JSON.parse(JSON.stringify(project.outline));
+const unitsOf = outline => flattenUnits(outline.volumes);
+const liveOf = (outline, progress) => {
+    const units = unitsOf(outline);
+    const links = outlineLinks(outline, units);
+    return liveThreads(units, unitStates(units, progress, links), progress, { links });
+};
+const hookOf = (live, name) => live.hooks.find(hook => hook.node.name === name);
+
+test('对调覆盖：两个钩子对调后只在另一个聊天的进度上写 B，A 的激活楼数保留', () => {
+    const project = projectWith(THREADS);
+    const before = cloneOutline(project);
+    const sid = unitsOf(before)[0].id;
+    // 聊天 B：在对调前激活了 A（酒馆密谈，s1），没激活二号钩子（s2）。
+    let chatB = applyCheck(emptyProgress('p'), liveOf(before, emptyProgress('p')), parseCheckReply('{"done":[],"hooks":["酒馆密谈"]}'), { floor: 2 }).progress;
+    assert.equal(threadState(chatB).hooks[`${sid}:s1`].name, '酒馆密谈');
+    // 聊天 A 里对调了 s1、s2，只改了聊天 A 的进度；聊天 B 的进度原样。
+    const after = cloneOutline(project);
+    const list = after.volumes[0].stages[0].data.支线事件;
+    [list[1], list[2]] = [list[2], list[1]];
+    const live = liveOf(after, chatB);
+    assert.equal(hookOf(live, '酒馆密谈').at, 2, '按名称读对了 A');
+    assert.equal(hookOf(live, '酒馆密谈').savedKey, `${sid}:s1`);
+    chatB = applyCheck(chatB, live, parseCheckReply('{"done":[],"hooks":["二号钩子"]}'), { floor: 5 }).progress;
+    const again = liveOf(after, chatB);
+    assert.equal(hookOf(again, '酒馆密谈').at, 2, 'A 的 at 保留');
+    assert.equal(hookOf(again, '二号钩子').at, 5);
+    const hooks = threadState(chatB).hooks;
+    assert.equal(hooks[`${sid}:s1`].name, '二号钩子', 'B 写在它现在的位置');
+    assert.equal(hooks[`${sid}:s2`].name, '酒馆密谈', 'A 搬到它按名称应在的位置');
+    assert.equal(hooks[`${sid}:s2`].at, 2);
+    // 手动菜单写入同样先归位。
+    const manual = patchLive(chatB, hookOf(again, '二号钩子'), { at: 7 });
+    assert.equal(hookOf(liveOf(after, manual), '酒馆密谈').at, 2, '手动菜单写入不盖掉别人的记录');
+    assert.equal(hookOf(liveOf(after, manual), '二号钩子').at, 7);
+});
+
+test('已演标记按名称兜底：其他聊天的 slots.off 在节点对调、改名、删除后按 offNames 找回，旧的纯 id 数组照旧按位置读', () => {
+    const project = projectWith(MINI);
+    const before = cloneOutline(project);
+    const unit0 = unitsOf(before)[0];
+    let chatB = uncheckByNames(emptyProgress('p'), unit0.id, stageNodes(unit0.stage.data), ['甲事件']);
+    assert.deepEqual(chatB.slots[unit0.id].off, ['m0']);
+    assert.deepEqual(chatB.slots[unit0.id].offNames, { m0: '甲事件' }, '写 off 时记下节点名');
+    const after = cloneOutline(project);
+    const mains = after.volumes[0].stages[0].data.主线节点;
+    [mains[0], mains[1]] = [mains[1], mains[0]];
+    const unit = unitsOf(after)[0];
+    assert.deepEqual(offNodes(chatB, unit), ['m1'], '位置变了按名称找回');
+    const states = unitStates(unitsOf(after), chatB);
+    assert.match(buildIndexText(unitsOf(after), states, chatB), /\[已演\] 主线｜甲事件[\s\S]*\[未演\] 主线｜乙事件|\[未演\] 主线｜乙事件[\s\S]*\[已演\] 主线｜甲事件/);
+    const detail = buildEntries({ ...project, outline: after }, chatB, normalizeSettings({})).find(entry => entry.kind === 'detail').content;
+    assert.doesNotMatch(detail, /甲事件/, '注入时已演的节点不写');
+    assert.match(detail, /乙事件/);
+    // 归位后写回现在的位置；再勾回按现在的位置清掉。
+    const aligned = alignProgress(chatB, after);
+    assert.deepEqual(aligned.slots[unit.id].off, ['m1']);
+    assert.deepEqual(aligned.slots[unit.id].offNames, { m1: '甲事件' });
+    assert.equal(alignProgress(aligned, after), aligned, '已归位的原样返回');
+    assert.deepEqual(offNodes(setNodeChecked(aligned, unit.id, 'm1', true), unit), []);
+    // 名称对不上又没有改名记录：不按位置误认给别的节点。
+    mains[1] = { 名称: '换掉了' };
+    assert.deepEqual(offNodes(chatB, unitsOf(after)[0]), []);
+    // 旧数据（没有 offNames）照旧按位置读。
+    const legacy = setNodeChecked(emptyProgress('p'), unit0.id, 'm0', false);
+    assert.equal(legacy.slots[unit0.id].offNames, undefined);
+    assert.deepEqual(offNodes(legacy, unit0), ['m0']);
+    // 节点上移下移时 offNames 跟着重排。
+    const moved = remapNodes(chatB, unit0.id, 'm', i => (i === 0 ? 1 : i === 1 ? 0 : i));
+    assert.deepEqual(moved.slots[unit0.id].offNames, { m1: '甲事件' });
+});
+
+test('改名表：A 聊天改了节点名，B 聊天（进度没同步）按改名链读到原记录；改名后恢复历史，两个聊天都读得到', () => {
+    const project = projectWith(THREADS);
+    const before = cloneOutline(project);
+    const sid = unitsOf(before)[0].id;
+    let chatB = applyCheck(emptyProgress('p'), liveOf(before, emptyProgress('p')), parseCheckReply('{"done":[],"hooks":["酒馆密谈"]}'), { floor: 3 }).progress;
+    chatB = uncheckByNames(chatB, sid, stageNodes(unitsOf(before)[0].stage.data), ['甲事件']);
+    // 聊天 A：改名并记进改名表；聊天 A 自己的进度按位置跟着改。
+    let chatA = chatB;
+    const renamed = cloneOutline(project);
+    renamed.volumes[0].stages[0].data.支线事件[1].名称 = '密谈改名';
+    renamed.volumes[0].stages[0].data.主线节点[0].名称 = '甲改名';
+    let outline = withRenames(renamed, [
+        { stageId: sid, field: '支线事件', from: '酒馆密谈', to: '密谈改名' },
+        { stageId: sid, field: '主线节点', from: '甲事件', to: '甲改名' },
+    ]);
+    for (const node of stageNodes(outline.volumes[0].stages[0].data)) chatA = renameNode(chatA, { id: sid }, node);
+    assert.equal(hookOf(liveOf(outline, chatA), '密谈改名').at, 3);
+    assert.equal(hookOf(liveOf(outline, chatB), '密谈改名').at, 3, 'B 聊天按改名链找回钩子');
+    assert.deepEqual(offNodes(chatB, unitsOf(outline)[0], outlineLinks(outline)), ['m0'], 'B 聊天按改名链找回已演标记');
+    const alignedB = alignProgress(chatB, outline);
+    assert.equal(threadState(alignedB).hooks[`${sid}:s1`].name, '密谈改名', '归位时记录改成现名');
+    // 恢复改名前的历史版本：节点名变回旧名。
+    const restored = restoreOutline(outlineToText(before.volumes), outline.volumes);
+    assert.equal(restored.volumes[0].stages[0].id, sid);
+    outline = withAliases({ ...outline, volumes: restored.volumes }, restored.alias);
+    const units = unitsOf(outline);
+    const links = outlineLinks(outline, units);
+    chatA = renameByPosition(chatA, units, links);
+    assert.equal(hookOf(liveOf(outline, chatA), '酒馆密谈').at, 3, '当前聊天恢复后读得到');
+    assert.equal(hookOf(liveOf(outline, alignedB), '酒馆密谈').at, 3, '已归位到新名的聊天反向走改名链读得到');
+    assert.equal(hookOf(liveOf(outline, chatB), '酒馆密谈').at, 3, '没同步过的聊天原样读得到');
+    assert.deepEqual(offNodes(alignedB, units[0], links), ['m0']);
+});
+
+const MERGE = `剧情_卷一_合并:
+  阶段一_前:
+    时间范围: 一
+    主线节点:
+      - 名称: 前事件
+    世界动态:
+      - 类型: 前钟
+        进度钟: 4
+  阶段二_后:
+    时间范围: 二
+    主线节点:
+      - 名称: 后事件
+    支线事件:
+      - 名称: 后钩子
+        条件: 下雨
+    世界动态:
+      - 类型: 后钟
+        进度钟: 6
+  阶段三_尾:
+    时间范围: 三
+    主线节点:
+      - 名称: 尾事件
+`;
+
+test('阶段 id 别名表：B 聊天停在被合并掉的段，打开后 current 落在合并后的段，钟、钩子、已演标记也跟过来', () => {
+    const project = projectWith(MERGE);
+    const before = cloneOutline(project);
+    const [first, second, third] = unitsOf(before);
+    // 聊天 B 停在第二段：后钟 3/6、后钩子已激活、后事件已演。
+    let chatB = goTo(emptyProgress('p'), unitsOf(before), second.id);
+    chatB = applyCheck(chatB, liveOf(before, chatB), parseCheckReply('{"done":[],"hooks":["后钩子"],"clocks":[{"name":"后钟","tick":2},{"name":"前钟","tick":1}]}'), { floor: 4 }).progress;
+    chatB = applyCheck(chatB, liveOf(before, chatB), parseCheckReply('{"done":[],"clocks":[{"name":"后钟","tick":1}]}'), { floor: 6 }).progress;
+    chatB = uncheckByNames(chatB, second.id, stageNodes(second.stage.data), ['后事件']);
+    // 聊天 A 里合并一、二段（沿用第一段 id），被换掉的 id 记进别名表。
+    const merged = { key: '阶段一_合并', data: { 时间范围: '一到二', 主线节点: [{ 名称: '前事件' }, { 名称: '后事件' }], 支线事件: [{ 名称: '后钩子', 条件: '下雨' }], 世界动态: [{ 类型: '前钟', 进度钟: 4 }, { 类型: '后钟', 进度钟: 6 }] } };
+    const result = replaceStages(before.volumes, before.volumes[0].id, [first.id, second.id], [merged]);
+    const outline = withAliases({ ...before, volumes: result.volumes }, [[second.id, result.keepId]]);
+    assert.deepEqual(outline.idAlias, { [second.id]: first.id });
+    const units = unitsOf(outline);
+    const links = outlineLinks(outline, units);
+    assert.equal(currentIndex(units, chatB), 0, '不查别名表时退回第一段（旧行为）');
+    assert.equal(units[currentIndex(units, chatB, links)].id, first.id, '查别名表落在合并后的段');
+    assert.equal(currentIndex([...units.slice(1), units[0]], chatB, links), 1, '合并后的段不在第一位时同样找到');
+    const aligned = alignProgress(chatB, outline);
+    assert.equal(aligned.current, first.id);
+    const live = liveOf(outline, aligned);
+    assert.equal(live.clocks.find(clock => clock.node.name === '后钟').filled, 3, '钟跟过来');
+    assert.equal(live.clocks.find(clock => clock.node.name === '前钟').filled, 1);
+    assert.equal(hookOf(live, '后钩子').at, 4, '钩子跟过来');
+    assert.deepEqual(offNodes(aligned, units[0]), ['m1'], '已演标记跟过来');
+    assert.equal(aligned.slots[second.id], undefined, '旧 id 的槽位并进新 id');
+    assert.ok(Object.keys(threadState(aligned).clocks).every(key => key.startsWith(`${first.id}:`)), '钟的键写回新 id');
+    assert.equal(alignProgress(aligned, outline), aligned);
+    // 未归位时直接读也能按别名对上。
+    assert.equal(liveOf(outline, chatB).clocks.find(clock => clock.node.name === '后钟').filled, 3);
+    assert.ok(units.some(unit => unit.id === third.id), '没参与合并的段不动');
+});
+
+test('别名表：链式解析、防环、旧 id 重新出现时以现存为准；normalizeProject 补默认值并限长', () => {
+    const outline = withAliases(withAliases({ volumes: [{ id: 'v', key: 'k', stages: [mkStage('c', '阶段一_丙')] }] }, [['a', 'b']]), [['b', 'c']]);
+    const links = outlineLinks(outline);
+    assert.equal(links.resolve('a'), 'c', '链式解析');
+    assert.equal(links.resolve('c'), 'c');
+    assert.equal(links.resolve('zz'), 'zz');
+    const loop = outlineLinks({ volumes: [], idAlias: { a: 'b', b: 'a' } });
+    assert.equal(loop.resolve('a'), 'a', '成环时原样返回');
+    assert.deepEqual(withAliases({ idAlias: { a: 'b' } }, [['b', 'a']]).idAlias, { b: 'a' }, '反向别名删掉');
+    const old = normalizeProject({ outline: { volumes: [] } }, 'p');
+    assert.deepEqual(old.outline.renames, []);
+    assert.deepEqual(old.outline.idAlias, {});
+    const big = normalizeProject({ outline: {
+        volumes: [],
+        renames: [...Array.from({ length: RENAME_MAX + 50 }, (_, i) => ({ stageId: 's', field: '支线事件', from: `a${i}`, to: `b${i}` })), null, { stageId: 's', field: '不认识', from: 'x', to: 'y' }, { stageId: 's', field: '支线事件', from: 'x', to: 'x' }],
+        idAlias: Object.fromEntries(Array.from({ length: ALIAS_MAX + 20 }, (_, i) => [`o${i}`, `n${i}`]).concat([['self', 'self'], ['bad', 3]])),
+    } }, 'p');
+    assert.equal(big.outline.renames.length, RENAME_MAX);
+    assert.equal(big.outline.renames.at(-1).from, `a${RENAME_MAX + 49}`, '只留最近的');
+    assert.equal(Object.keys(big.outline.idAlias).length, ALIAS_MAX);
+    assert.equal(big.outline.idAlias.self, undefined);
+    assert.deepEqual(normalizeProject({ outline: { volumes: [], renames: 'x', idAlias: [1] } }, 'p').outline.renames, []);
+    assert.deepEqual(newProject('x').outline.idAlias, {});
+});
+
+test('历史恢复：卷改过名时按阶段名在全书范围内配对，阶段 id 保持；配不上的给新 id 并记进别名表', () => {
+    const current = [{ id: 'v1', key: '剧情_卷一_新名', stages: [mkStage('a', '阶段一_甲'), mkStage('b', '阶段二_乙'), mkStage('c', '阶段三_丙')] }];
+    const text = outlineToText([{ key: '剧情_卷一_旧名', stages: [mkStage('x', '阶段一_甲'), mkStage('y', '阶段二_乙'), mkStage('z', '阶段三_改过')] }]);
+    const { volumes, alias } = restoreOutline(text, current);
+    assert.equal(volumes[0].id, 'v1', '卷 id 取阶段配到最多的旧卷');
+    assert.deepEqual(volumes[0].stages.slice(0, 2).map(stage => stage.id), ['a', 'b']);
+    const fresh = volumes[0].stages[2].id;
+    assert.ok(!['a', 'b', 'c'].includes(fresh));
+    assert.deepEqual(alias, [['c', fresh]], '同位置配不上的旧阶段记进别名表');
+    assert.deepEqual(volumesFromHistory(text, current).map(volume => volume.stages.map(stage => stage.id).slice(0, 2)), [['a', 'b']]);
+    // 阶段挪到了另一卷：全书范围内按名称配上。
+    const two = [{ id: 'v1', key: 'k1', stages: [mkStage('a', '阶段一_甲')] }, { id: 'v2', key: 'k2', stages: [mkStage('b', '阶段一_乙')] }];
+    const back = restoreOutline(outlineToText([{ key: 'k1', stages: [mkStage('x', '阶段一_甲'), mkStage('y', '阶段一_乙')] }]), two);
+    assert.deepEqual(back.volumes[0].stages.map(stage => stage.id), ['a', 'b']);
+    assert.deepEqual(back.alias, []);
+});
+
+test('检测失败只记 lastFailFloor 控制重试间隔，lastCheckFloor（readTo、「·已读」）不动', () => {
+    const progress = normalizeProgress({ lastCheckFloor: 4, lastFailFloor: 9 }, 'p');
+    assert.equal(progress.lastCheckFloor, 4);
+    assert.equal(checkBase(progress), 9, '重试间隔从失败的楼数算');
+    assert.equal(checkBase({ lastCheckFloor: 6 }), 6);
+    assert.equal('lastFailFloor' in normalizeProgress({ lastCheckFloor: 4, lastFailFloor: 0 }, 'p'), false);
+    assert.equal('lastFailFloor' in normalizeProgress({}, 'p'), false);
+    const { units, live } = threadSetup();
+    const index = buildIndexText(units, unitStates(units, progress), progress);
+    const messages = buildCheckMessages(units[0], index, [{ index: 5, text: '没读过' }], checkThreads(live(progress), { readTo: progress.lastCheckFloor }));
+    assert.match(messages[1].content, /【第 5 楼】\n没读过/, '失败那批楼不标已读');
+});
+
+test('newThread 占位名：去掉首尾空白与末尾标点后比对，新增没有新线、无新线、N/A、- 等写法', () => {
+    for (const name of ['没有新线', '没有新的线。', '无新线！', 'N/A', 'n/a', '-', '  无。 ', '暂无；', 'None.', '没有新线，']) {
+        assert.equal(parseCheckReply(JSON.stringify({ newThread: { name, summary: 'x' } })).newThread, null, name);
+        assert.equal(parseCheckReply(JSON.stringify({ newThread: name })).newThread, null, name);
+    }
+    assert.equal(parseCheckReply('{"newThread":{"name":"追查失踪案。","summary":"x"}}').newThread.name, '追查失踪案。', '真名不受影响');
+});
+
+test('世界书条目读取：probability 为 null 或缺省时为 100，useProbability 关闭时显示 100', () => {
+    const read = entry => bookEntries({ entries: { 0: { uid: 0, key: ['a'], ...entry } } })[0];
+    assert.equal(read({ probability: null }).probability, 100);
+    assert.equal(read({}).probability, 100);
+    assert.equal(read({ probability: 30 }).probability, 30);
+    assert.equal(read({ probability: 30 }).useProbability, true);
+    assert.equal(read({ probability: 30, useProbability: false }).probability, 100);
+    assert.equal(read({ probability: 30, useProbability: false }).useProbability, false);
+    assert.equal(read({ probability: 0, useProbability: true }).probability, 0);
 });

@@ -1,5 +1,6 @@
 import { DEFAULT_PARAMS, OLD_DEFAULT_PARAMS } from './inject.js';
 import { normalizeInfinite } from './infinite.js';
+import { normalizeAlias, normalizeRenames } from './align.js';
 import { makeId } from './outline.js';
 import { DEFAULT_MEMO, DEFAULT_WB_RULE, migrateOc, normalizeWbRule } from './refs.js';
 
@@ -113,7 +114,7 @@ export function newProject(name, now = Date.now(), mode = 'normal') {
         name: String(name || '').trim() || '新项目',
         createdAt: now,
         setting: { text: '', history: [], check: '', fixes: [], mute: [] },
-        outline: { volumes: [], history: [] },
+        outline: { volumes: [], history: [], renames: [], idAlias: {} },
         defaults: JSON.parse(JSON.stringify(DEFAULT_PARAMS)),
         genRefs: normalizeGenRefs(),
         mode: mode === 'infinite' ? 'infinite' : 'normal',
@@ -139,6 +140,9 @@ export function normalizeProject(value, id) {
         },
         outline: {
             history: src.outline && Array.isArray(src.outline.history) ? src.outline.history.filter(item => item && typeof item.text === 'string') : [],
+            // 跨聊天对照表（见 core/align.js）：节点改名最多 200 条，阶段 id 别名最多 300 条。
+            renames: normalizeRenames(src.outline && src.outline.renames),
+            idAlias: normalizeAlias(src.outline && src.outline.idAlias),
             volumes: volumes.filter(vol => vol && Array.isArray(vol.stages)).map(vol => ({
                 id: vol.id || makeId('v'),
                 key: String(vol.key || '剧情_未命名'),
