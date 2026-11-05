@@ -4,13 +4,14 @@ import { parseOutlineReply, rewriteRestMessages, syncSettingMessages } from '../
 import { changedBlockKeys, mergeBlocks, parseSettingReply, pushHistory, splitBlocks } from '../core/setting.js';
 import { BUILTIN_GUIDE } from '../core/guide.js';
 import { flattenUnits, replaceRest, stageLabel, stageNodes, volumeLabel } from '../core/outline.js';
-import { advance, currentIndex, emptyProgress, goTo, isMuted, mute, uncheckByNames, unitStates } from '../core/progress.js';
+import { advance, currentIndex, emptyProgress, goTo, isMuted, mute, patchSlot, uncheckByNames, unitStates } from '../core/progress.js';
 import { createWorld, emptyInfinite, enterWorld, leaveWorld, reenterWorld, removeWorld, undoEnter, undoLeave, withTrigger } from '../core/infinite-flow.js';
 import { decideTrigger, hashText, judgeTrigger, makeTrigger, parseTrainState } from '../core/infinite-state.js';
 import { hubWordNames, normalizeInfinite, randomFloat, resolveHub, rollWorldDice, titleKey } from '../core/infinite.js';
 import { buildWorldMessages, horrorTitle, parseWorldReply, worldSpecText } from '../core/infinite-world.js';
-import { makeId } from '../core/outline.js';
+import { makeId, pushOutlineHistory } from '../core/outline.js';
 import { resolveLlm } from '../core/store.js';
+import { addPlayerThread, applyCheck, checkThreads, clampThreads, hasNodeNamed, ignoreThread, isThreadNode, liveThreads, maskUnits, threadState, threadSwitches } from '../core/threads.js';
 import { requestLlm } from '../host/llm.js';
 import { cardKey, cardName, chatMessages, ctx, hostWindow, toast } from '../host/st.js';
 import { readEntryContent, writeFallbackBook } from '../host/worldbook.js';
@@ -96,7 +97,27 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
         return project ? flattenUnits(project.outline.volumes) : [];
     }
 
+    // 进行中阶段换了：在新阶段的槽位记下楼数，没写条件的支线钩子从这里开始计时。
+    function stampActive(prev, next) {
+        if (!next || next.infinite) return next;
+        const list = units();
+        if (!list.length) return next;
+        const activeOf = prog => {
+            const states = unitStates(list, prog);
+            const found = list.find(unit => states[unit.id] === 'active');
+            return found ? found.id : '';
+        };
+        const now = activeOf(next);
+        if (!now) return next;
+        const changed = !prev || prev.projectId !== next.projectId || activeOf(prev) !== now;
+        const slot = next.slots[now] || {};
+        if (!changed && slot.since) return next;
+        if (!prev && slot.since) return next;
+        return patchSlot(next, now, { since: floorCount() });
+    }
+
     function setProgress(next, reason = 'progress') {
+        next = stampActive(progress && progressFor === next.projectId ? progress : null, next);
         progress = next;
         progressFor = next.projectId;
         writeProgress(next);
@@ -242,7 +263,7 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
         if (!parsed.ok) throw new Error(`改写结果格式有误：${parsed.error}`);
         const before = { volumes: project.outline.volumes, progress: prog, setting: project.setting.text };
         const volumes = replaceRest(project.outline.volumes, unit.stage.id, parsed.volumes);
-        data.updateProject(project.id, current => ({ ...current, outline: { ...current.outline, volumes } }));
+        data.updateProject(project.id, current => ({ ...current, outline: { ...current.outline, volumes, history: pushOutlineHistory(current.outline.history, current.outline.volumes, '偏离改写') } }));
         const first = parsed.volumes[0] && parsed.volumes[0].stages[0];
         if (first) setProgress(goTo(currentProgress(), flattenUnits(volumes), first.id));
         return before;
@@ -304,6 +325,56 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
                     const prog = currentProgress();
                     if (prog && !prog.offMuted.includes(unit.id)) setProgress({ ...prog, offMuted: [...prog.offMuted, unit.id] });
                 } },
+            ],
+        });
+    }
+
+    function threadEventText(event) {
+        const map = {
+            'clock-tick': `进度钟「${event.name}」推进到 ${event.filled}/${event.total}`,
+            'clock-due': `进度钟「${event.name}」已满格，本段必须发生`,
+            'clock-done': `世界动态「${event.name}」已发生`,
+            'hook-on': `支线「${event.name}」条件满足，已激活`,
+            'chain-step': `支线链「${event.name}」进入第 ${event.step + 1}/${event.total} 步`,
+            'hook-done': `支线「${event.name}」已演完`,
+            'hook-expired': `支线「${event.name}」超过时限，已过期`,
+        };
+        return map[event.type] || event.type;
+    }
+
+    // 玩家自开的线收录为当前阶段的支线；有大纲历史时先入栈。
+    function adoptThread(projectId, stageId, thread) {
+        data.updateProject(projectId, current => ({
+            ...current,
+            outline: {
+                ...current.outline,
+                volumes: addPlayerThread(current.outline.volumes, stageId, thread),
+                history: pushOutlineHistory(current.outline.history, current.outline.volumes, '收录支线'),
+            },
+        }));
+        log(`收录玩家自开的线「${thread.name}」为支线`);
+        scheduleFallback();
+        emit('progress');
+    }
+
+    function offerThread(unit, thread) {
+        const settings = data.settings();
+        const project = activeProject();
+        const prog = currentProgress();
+        if (settings.newThreadMode === 'off' || !project || !prog || !threadSwitches(project).sideOn) return;
+        if (threadState(prog).ignored.includes(thread.name) || hasNodeNamed(units(), thread.name)) return;
+        if (settings.newThreadMode === 'auto') {
+            adoptThread(project.id, unit.stage.id, thread);
+            notice.show({ id: 'thread', title: `已收录支线「${thread.name}」`, body: thread.summary, timeout: 10000 });
+            return;
+        }
+        notice.show({
+            id: 'thread',
+            title: `正文开了一条新线「${thread.name}」`,
+            body: thread.summary || '大纲里没有这条线。',
+            actions: [
+                { label: '收录为支线', primary: true, run: () => adoptThread(project.id, unit.stage.id, thread) },
+                { label: '忽略', run: () => setProgress(ignoreThread(currentProgress(), thread.name)) },
             ],
         });
     }
@@ -556,7 +627,8 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
             if (manual) toast('info', '当前卡没有启用的项目。');
             return null;
         }
-        const unit = activeUnit();
+        const sw = threadSwitches(project);
+        const unit = activeUnit() && maskUnits([activeUnit()], sw)[0];
         if (!unit) {
             log('跳过检测：大纲为空');
             return null;
@@ -571,10 +643,13 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
         log(`开始检测：${placeOf(unit)}，读最近 ${floors.length} 楼${manual ? '（手动）' : ''}`);
         emit('checking');
         try {
-            const list = units();
+            const list = maskUnits(units(), sw);
             const states = unitStates(list, prog);
-            const index = buildIndexText(list, states, prog, { carryOver: settings.carryOver });
-            const messages = buildCheckMessages(unit, index, floors);
+            const index = buildIndexText(list, states, prog, { carryOver: settings.carryOver, hookCap: settings.hookCap });
+            const threadInfo = checkThreads(liveThreads(list, states, prog, { carryOver: settings.carryOver, hookCap: settings.hookCap }), {
+                newThreadMode: sw.sideOn ? settings.newThreadMode : 'off', ignored: threadState(prog).ignored, readTo: prog.lastCheckFloor,
+            });
+            const messages = buildCheckMessages(unit, index, floors, threadInfo);
             let result = null;
             for (let attempt = 0; ; attempt += 1) {
                 try {
@@ -588,10 +663,13 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
             }
             notice.hide('checkfail');
             let next = currentProgress();
-            next = uncheckByNames(next, unit.id, stageNodes(unit.stage.data), result.done);
+            // 钩子与支线链由 applyCheck 处理（链要走完最后一步才算演完）。
+            next = uncheckByNames(next, unit.id, stageNodes(unit.stage.data).filter(node => !isThreadNode(node)), result.done);
             if (settings.carryOver) for (const item of carriedNodes(list, states, prog)) next = uncheckByNames(next, item.unit.id, [item.node], result.done);
-            next = { ...next, lastCheckFloor: floorCount() };
+            const merged = applyCheck(next, liveThreads(list, unitStates(list, next), next, { carryOver: settings.carryOver, hookCap: settings.hookCap }), result, { floor: floorCount() });
+            next = { ...merged.progress, lastCheckFloor: floorCount() };
             setProgress(next);
+            for (const event of merged.events) log(threadEventText(event));
             log(`检测完成：已演 ${result.done.length} 个节点${result.stageDone ? '，本阶段已演完' : ''}${result.offTrack ? '，偏离大纲' : ''}`);
             if (result.offTrack && settings.offTrackMode !== 'off' && !next.offMuted.includes(unit.id)) {
                 handleOffTrack(unit, result.offReason || result.reason);
@@ -600,6 +678,7 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
             } else if (manual) {
                 toast('info', result.reason || '本阶段尚未演完。');
             }
+            if (result.newThread && sw.sideOn) offerThread(unit, result.newThread);
             return result;
         } catch (error) {
             setProgress({ ...currentProgress(), lastCheckFloor: floorCount() });
@@ -625,9 +704,12 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
         const prog = currentProgress();
         if (!prog) return null;
         const floors = floorCount();
-        if (prog.lastCheckFloor <= floors) return prog;
-        log(`上次检测楼层 ${prog.lastCheckFloor} 大于当前楼数 ${floors}，已改为 ${floors}`);
-        const next = { ...prog, lastCheckFloor: floors };
+        // 支线钩子、进度钟记下的楼数也一并夹到现有楼数。
+        const threads = clampThreads(prog, floors);
+        if (prog.lastCheckFloor <= floors && threads === prog) return prog;
+        if (prog.lastCheckFloor > floors) log(`上次检测楼层 ${prog.lastCheckFloor} 大于当前楼数 ${floors}，已改为 ${floors}`);
+        if (threads !== prog) log(`支线与进度钟记下的楼数大于当前楼数 ${floors}，已改为 ${floors}`);
+        const next = { ...threads, lastCheckFloor: Math.min(prog.lastCheckFloor, floors) };
         setProgress(next, 'floor');
         return next;
     }
@@ -719,6 +801,7 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
         chatStartFloors = floorCount();
         notice.hide('advance');
         notice.hide('offtrack');
+        notice.hide('thread');
         const id = activeId();
         if (id) {
             try {

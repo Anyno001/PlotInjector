@@ -3,6 +3,7 @@ import { INFINITE_SLOT } from './infinite.js';
 import { buildInfiniteDetail, emptyInfinite } from './infinite-flow.js';
 import { SETTING_SLOT, offNodes, unitStates } from './progress.js';
 import { injectedSetting } from './setting.js';
+import { isThreadNode, liveThreads, maskUnits, threadChangeLines, threadIndexLines, threadSwitches, threadsText } from './threads.js';
 import { stringifyYaml } from './yaml.js';
 
 // 位置编号与酒馆 world_info_position 一致。
@@ -77,7 +78,7 @@ function nodeLine(node, mark) {
     return `  - ${mark ? `[${mark}] ` : ''}${node.label}｜${node.name}${event}`;
 }
 
-export function buildIndexText(units, states, progress, { carryOver = true } = {}) {
+export function buildIndexText(units, states, progress, { carryOver = true, hookCap } = {}) {
     const lines = [];
     const done = units.filter(unit => states[unit.id] === 'done');
     const active = units.filter(unit => states[unit.id] === 'active');
@@ -94,9 +95,10 @@ export function buildIndexText(units, states, progress, { carryOver = true } = {
         const off = new Set(offNodes(progress, unit.id));
         const range = rangeOf(unit);
         lines.push('【当前】', `- ${stagePlace(unit)}${range ? `｜时间范围：${range}` : ''}`);
-        for (const node of stageNodes(unit.stage.data).filter(item => item.kind !== 'world')) lines.push(nodeLine(node, off.has(node.id) ? '已演' : '未演'));
+        for (const node of stageNodes(unit.stage.data).filter(item => item.kind !== 'world' && !isThreadNode(item))) lines.push(nodeLine(node, off.has(node.id) ? '已演' : '未演'));
         if (carryOver) for (const { node } of carriedNodes(units, states, progress)) if (node.kind !== 'world') lines.push(nodeLine(node, '未演·延续'));
     }
+    if (active.length) lines.push(...threadIndexLines(liveThreads(units, states, progress, { carryOver, hookCap })));
     for (const unit of next) {
         const range = rangeOf(unit);
         const instr = unit.stage.data && unit.stage.data.AI指令;
@@ -138,7 +140,7 @@ export function carriedNodes(units, states, progress, { withOff = false } = {}) 
         if (states[unit.id] !== 'done') continue;
         const off = new Set(offNodes(progress, unit.id));
         for (const node of stageNodes(unit.stage.data)) {
-            if (node.kind === 'main') continue;
+            if (node.kind === 'main' || isThreadNode(node)) continue;
             if (!off.has(node.id)) out.push({ unit, node, off: false });
             else if (withOff) out.push({ unit, node, off: true });
         }
@@ -156,10 +158,10 @@ function carriedText(carried) {
     return `\n延续自前面阶段、尚未发生的支线与世界动态（可在合适时机自然安排，不必强行发生）：\n${lines.join('\n')}`;
 }
 
-// next：下一阶段，快速时写在说明末尾，让正文知道往哪里收。
-export function buildDetailText(unit, off, settings, { pace = 'normal', next = null, carried = [] } = {}) {
+// next：下一阶段，快速时写在说明末尾，让正文知道往哪里收。threads：钩子与进度钟的注入文字，带新键的节点不再原样写进阶段 YAML。
+export function buildDetailText(unit, off, settings, { pace = 'normal', next = null, carried = [], threads = '' } = {}) {
     const tag = String(settings.tagName || '剧情参考').trim() || '剧情参考';
-    const data = filterStageData(unit.stage.data, off);
+    const data = filterStageData(unit.stage.data, [...off, ...stageNodes(unit.stage.data).filter(isThreadNode).map(node => node.id)]);
     const body = stringifyYaml({ [unit.stage.key]: data }).trimEnd();
     const vol = splitVolumeKey(unit.volume.key).short;
     let note = paceText(settings, pace);
@@ -167,13 +169,14 @@ export function buildDetailText(unit, off, settings, { pace = 'normal', next = n
         const range = rangeOf(next);
         note += `\n下一阶段：${stagePlace(next)}${range ? `（${range}）` : ''}`;
     }
-    return `<${tag} 卷="${vol}" 阶段="${unit.stage.key}">\n${note}\n${body}${carriedText(carried)}\n</${tag}>`;
+    return `<${tag} 卷="${vol}" 阶段="${unit.stage.key}">\n${note}\n${body}${carriedText(carried)}${threads}\n</${tag}>`;
 }
 
-// 已演完阶段的状态变化，接在设定后面注入。
-export function changesText(units, states) {
+// 已演完阶段的状态变化，接在设定后面注入；live 给出时再接上已发生的世界动态后果与错过支线的后果。
+export function changesText(units, states, live = null) {
     const lines = units.filter(unit => states[unit.id] === 'done')
-        .flatMap(unit => changeLines(unit.stage.data).map(text => `- ${text}（${stagePlace(unit)}）`));
+        .flatMap(unit => changeLines(unit.stage.data).map(text => `- ${text}（${stagePlace(unit)}）`))
+        .concat(threadChangeLines(live));
     return lines.length ? `已演完的剧情带来的变化（设定里对应的开局状态以这里为准）：\n${lines.join('\n')}` : '';
 }
 
@@ -183,9 +186,14 @@ export function buildEntries(project, progress, settings) {
     const entries = [];
     if (!project) return entries;
     const infinite = project.mode === 'infinite';
-    const units = infinite ? [] : flattenUnits(project.outline && project.outline.volumes);
+    const allUnits = infinite ? [] : flattenUnits(project.outline && project.outline.volumes);
+    const units = maskUnits(allUnits, threadSwitches(project));
     const states = unitStates(units, progress);
-    const settingText = [injectedSetting(project.setting), changesText(units, states)].filter(Boolean).join('\n\n');
+    const threadOpts = { carryOver: settings.carryOver !== false, hookCap: settings.hookCap };
+    const live = infinite ? null : liveThreads(units, states, progress, threadOpts);
+    // 关掉支线或世界动态后，已经发生的后果仍是既成事实，按完整大纲取。
+    const done = infinite || units === allUnits ? live : liveThreads(allUnits, states, progress, threadOpts);
+    const settingText = [injectedSetting(project.setting), changesText(units, states, done)].filter(Boolean).join('\n\n');
     if (settingText) {
         entries.push({
             slotId: SETTING_SLOT, kind: 'setting', title: '设定',
@@ -203,13 +211,18 @@ export function buildEntries(project, progress, settings) {
     if (units.length) {
         const next = units.find(unit => states[unit.id] === 'next') || null;
         const carried = settings.carryOver === false ? [] : carriedNodes(units, states, progress);
+        let threads = threadsText(live);
         for (const unit of units) {
             if (states[unit.id] !== 'active') continue;
             const off = offNodes(progress, unit.id);
+            const params = pickParams(defaults.detail, progress.slots[unit.id]);
+            // 支线与进度钟的文字接在第一个启用的进行中阶段条目上；都停用时不注入。
+            const own = params.enabled ? threads : '';
             entries.push({
                 slotId: unit.id, kind: 'detail', title: `${volumeLabel(unit.volume.key)}·${splitStageKey(unit.stage.key).short}`,
-                unit, content: buildDetailText(unit, off, settings, { pace: progress.pace, next, carried }), ...pickParams(defaults.detail, progress.slots[unit.id]),
+                unit, content: buildDetailText(unit, off, settings, { pace: progress.pace, next, carried, threads: own }), ...params,
             });
+            if (params.enabled) threads = '';
         }
     }
     return entries;

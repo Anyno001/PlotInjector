@@ -101,7 +101,7 @@ async function withProject(host) {
     const volumes = (await import('../src/core/outline.js')).parseOutlineText;
     const yamlMod = await import('../src/core/yaml.js');
     yamlMod.setYamlLib(YAML);
-    instance.data.saveProject({ ...project, setting: { ...project.setting, text: '世界观声明:\n基于: 测试' }, outline: { volumes: volumes(OUTLINE) } });
+    instance.data.saveProject({ ...project, setting: { ...project.setting, text: '世界观声明:\n基于: 测试' }, outline: { ...project.outline, volumes: volumes(OUTLINE) } });
     await instance.runtime.switchProject(project.id);
     return project;
 }
@@ -496,7 +496,9 @@ test('世界书管理：token 统计、修复关键词标点、批量选择后�
 
     doc.querySelector('[data-act="book-more"]').click();
     await tick(10);
-    doc.querySelector('.pi-dialog [data-dlg-value="wb-punct"]').click();
+    doc.querySelector('.pi-dialog [data-dlg-value="wb-health"]').click();
+    await tick(20);
+    doc.querySelector('.pi-dialog [data-dlg-value="::punct"]').click();
     await okDialog();
     assert.deepEqual(books.测试书.entries[0].key, ['甲', '甲甲', '甲乙']);
 
@@ -706,6 +708,8 @@ test('不走讨论直接写大纲：大纲页选世界书「全选」后，全�
     await tick(30);
     assert.match(doc.querySelector('[data-act="gen-wb"]').textContent, /世界书 14 条/);
     doc.querySelector('[data-act="ai-volume"]').click();
+    await tick(20);
+    doc.querySelector('.pi-dialog .pi-dlg-acts .is-primary').click();
     await tick(40);
     const user = host.llmCalls.at(-1)[1].content;
     assert.match(user, /【世界书参考】/);
@@ -881,9 +885,7 @@ test('界面操作改动立即反映到注入内容与本地文件', async () =>
     const fire = (node, type) => node.dispatchEvent(new host.win.Event(type, { bubbles: true }));
 
     doc.querySelector('[data-act="tab"][data-tab="run"]').click();
-    const box = doc.querySelector('[data-node="m0"]');
-    box.checked = false;
-    fire(box, 'change');
+    doc.querySelector('[data-act="node-toggle"][data-node="m0"]').click();
     let lore = await entriesNow(host.eventSource);
     assert.doesNotMatch(lore[1].content, /甲事件/);
 
@@ -1178,4 +1180,44 @@ test('无限流开副本：手动按钮，读取卡里（关闭的）恐怖类�
     assert.ok(log.includes(`卡里没找到「${prefix}中式民俗」`), '日志里记一笔');
     assert.equal(host.win.__errors.length, 0, host.win.__errors.join('\n'));
     await instance.destroy();
+});
+
+test('多卷写作中途切换项目：已写好的卷收进原项目草稿，回到该项目可见并能全部追加', async () => {
+    const host = await boot();
+    const project = await withProject(host);
+    const other = await host.instance.data.createProject('海岛线');
+    let calls = 0;
+    host.win.__reply = async () => {
+        calls += 1;
+        if (calls > 1) await tick(80);
+        return `\`\`\`yaml\n剧情_卷${calls + 1}_新:\n  阶段一_起:\n    时间范围: 之后\n    主线节点:\n      - 名称: 丙${calls}\n        事件: 丙${calls}发生。\n\`\`\``;
+    };
+    host.click();
+    await tick(10);
+    const doc = host.win.document;
+    doc.querySelector('[data-act="tab"][data-tab="outline"]').click();
+    await tick(30);
+    doc.querySelector('[data-act="ai-volume"]').click();
+    await tick(20);
+    doc.querySelector('.pi-dialog [data-wv-n]').value = '2';
+    doc.querySelector('.pi-dialog .pi-dlg-acts .is-primary').click();
+    await tick(30);
+    doc.querySelector(`.pi-side [data-act="project"][data-id="${other.id}"]`).click();
+    await tick(200);
+    doc.querySelector('[data-act="tab"][data-tab="outline"]').click();
+    await tick(30);
+    assert.equal(doc.querySelector('[data-act="multi-append"]'), null, '别的项目不显示这份草稿');
+    doc.querySelector(`.pi-side [data-act="project"][data-id="${project.id}"]`).click();
+    await tick(40);
+    doc.querySelector('[data-act="tab"][data-tab="outline"]').click();
+    await tick(30);
+    const append = doc.querySelector('[data-act="multi-append"]');
+    assert.ok(append, '回到原项目能看到草稿');
+    assert.equal(append.disabled, false);
+    assert.equal(calls, 2, '两卷都已写完');
+    append.click();
+    await tick(30);
+    assert.equal(host.instance.data.project(project.id).outline.volumes.length, 3, '全部追加进原项目');
+    assert.equal(host.instance.data.project(other.id).outline.volumes.length, 0);
+    await host.instance.destroy();
 });

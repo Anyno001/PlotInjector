@@ -200,7 +200,7 @@ export const actions = {
     },
     'to-outline'(view) {
         view.go('outline');
-        return outlineTab.actions['ai-volume'](view);
+        return outlineTab.actions['ai-volume'](view, null, { withTalk: true });
     },
     'use-yaml'(view, target) {
         const msg = view.data.chat(view.projectId).messages.find(item => item.id === target.dataset.id);

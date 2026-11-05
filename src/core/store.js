@@ -54,6 +54,8 @@ export const DEFAULT_SETTINGS = {
     offTrackMode: 'ask',
     carryOver: true,
     handleMode: 'ask',
+    hookCap: 2,
+    newThreadMode: 'ask',
     checkEvery: 3,
     checkFloors: 3,
     guide: '',
@@ -66,6 +68,7 @@ export const DEFAULT_SETTINGS = {
 
 const HANDLE_MODES = ['ask', 'auto', 'nodes'];
 const OFF_MODES = ['ask', 'auto', 'off'];
+const THREAD_MODES = ['ask', 'auto', 'off'];
 
 export function normalizeSettings(value) {
     const src = value && typeof value === 'object' ? value : {};
@@ -76,6 +79,8 @@ export function normalizeSettings(value) {
         offTrackMode: OFF_MODES.includes(src.offTrackMode) ? src.offTrackMode : DEFAULT_SETTINGS.offTrackMode,
         carryOver: src.carryOver !== false,
         handleMode: HANDLE_MODES.includes(src.handleMode) ? src.handleMode : DEFAULT_SETTINGS.handleMode,
+        hookCap: Math.max(1, Math.min(6, Math.round(Number(src.hookCap)) || DEFAULT_SETTINGS.hookCap)),
+        newThreadMode: THREAD_MODES.includes(src.newThreadMode) ? src.newThreadMode : DEFAULT_SETTINGS.newThreadMode,
         checkEvery: Math.max(1, Math.min(50, Number(src.checkEvery) || DEFAULT_SETTINGS.checkEvery)),
         checkFloors: Math.max(1, Math.min(20, Number(src.checkFloors) || DEFAULT_SETTINGS.checkFloors)),
         persona: typeof src.persona === 'string' ? src.persona : '',
@@ -108,7 +113,7 @@ export function newProject(name, now = Date.now(), mode = 'normal') {
         name: String(name || '').trim() || '新项目',
         createdAt: now,
         setting: { text: '', history: [], check: '', fixes: [], mute: [] },
-        outline: { volumes: [] },
+        outline: { volumes: [], history: [] },
         defaults: JSON.parse(JSON.stringify(DEFAULT_PARAMS)),
         genRefs: normalizeGenRefs(),
         mode: mode === 'infinite' ? 'infinite' : 'normal',
@@ -133,6 +138,7 @@ export function normalizeProject(value, id) {
             mute: Array.isArray(setting.mute) ? setting.mute.map(String) : [],
         },
         outline: {
+            history: src.outline && Array.isArray(src.outline.history) ? src.outline.history.filter(item => item && typeof item.text === 'string') : [],
             volumes: volumes.filter(vol => vol && Array.isArray(vol.stages)).map(vol => ({
                 id: vol.id || makeId('v'),
                 key: String(vol.key || '剧情_未命名'),
@@ -141,6 +147,7 @@ export function normalizeProject(value, id) {
         },
         defaults: normalizeDefaults(src.defaults),
         genRefs: normalizeGenRefs(src.genRefs),
+        threads: { sideOn: !(src.threads && src.threads.sideOn === false), worldOn: !(src.threads && src.threads.worldOn === false) },
         mode: src.mode === 'infinite' ? 'infinite' : 'normal',
         ...(src.infinite && typeof src.infinite === 'object' ? { infinite: normalizeInfinite(src.infinite) } : {}),
     };

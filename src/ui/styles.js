@@ -341,6 +341,67 @@ label.pi-wb-row{cursor:pointer}
 .pi-dialog{align-items:flex-start;box-sizing:border-box;padding-top:calc(56px + env(safe-area-inset-top,0px))}
 .pi-dialog-box{max-height:calc(100dvh - 80px)}
 }
+/* wb-tools v0.1.23 */
+.pi-wb-sort{display:flex;align-items:center;gap:8px;margin:0 0 8px}
+.pi-wb-sort .pi-sel{width:auto;min-width:0}
+.pi-wb-adv{display:flex;align-items:center;gap:6px;width:100%;padding:6px 0;border:0;background:none;color:var(--pi-txt2);font:inherit;font-size:12px;font-weight:600;cursor:pointer}
+.pi-wb-adv-bd{display:flex;flex-direction:column;gap:8px}
+.pi-wb-hit{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:var(--pi-r-in);background:var(--pi-fill);margin:4px 0}
+.pi-wb-hit .pi-wb-title{flex:1;min-width:0}
+.pi-wb-hit .pi-meta{max-width:60%;overflow:hidden;text-overflow:ellipsis}
+.pi-dlg-body .pi-menu-item .pi-meta{max-width:50%;overflow:hidden;text-overflow:ellipsis}
+/* /wb-tools v0.1.23 */
+/* outline v0.1.23 */
+.pi-ov-stage{display:flex;flex-direction:column;gap:2px;width:100%;margin:0 0 6px;padding:8px 10px;border:0;border-radius:var(--pi-r-in);background:var(--pi-fill);color:var(--pi-txt);text-align:left;font-family:inherit;font-size:13px;cursor:pointer}
+.pi-ov-stage:hover{background:var(--pi-fill2)}
+.pi-ov-stage.is-active{background:var(--pi-accent-soft);color:var(--pi-accent)}
+.pi-ov-stage.is-done{color:var(--pi-txt2)}
+.pi-ov-title{font-weight:600}
+.pi-ov-node{white-space:normal}
+.pi-ov-stage.is-active .pi-meta{color:var(--pi-accent)}
+.pi-block{display:block}
+.pi-hist{display:flex;align-items:center;gap:8px;padding:6px 0}
+.pi-hist>.pi-grow{flex:1;min-width:0;overflow-wrap:anywhere}
+.pi-hist-n{flex-shrink:0;white-space:nowrap}
+.pi-titem.is-issue{align-items:flex-start}
+.pi-titem.is-issue .pi-pname{white-space:normal;overflow:visible;text-overflow:clip;line-height:1.5}
+.pi-vitem{padding:8px 10px;margin:0 0 6px;border-radius:var(--pi-r-in);background:var(--pi-fill)}
+.pi-vitem .pi-ta{background:var(--pi-bg)}
+.pi-vrow{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--pi-dark)}
+.pi-vrow>.pi-grow{flex:1;min-width:0;overflow-wrap:anywhere}
+.pi-vitem .pi-hint{margin:6px 0 0}
+.pi-err{margin:2px 0 6px}
+.pi-err>summary{font-size:12px;color:var(--pi-txt2);cursor:pointer}
+.pi-err .pi-meta{margin-top:2px;overflow-wrap:anywhere}
+.pi-node .pi-play>summary{font-size:12px;font-weight:500;color:var(--pi-txt2)}
+.pi-menu-item:disabled{opacity:.4;cursor:default;pointer-events:none}
+/* /outline v0.1.23 */
+/* threads v0.1.23 */
+.pi-hook{display:flex;align-items:center;gap:6px}
+.pi-node-row{display:flex;align-items:center;gap:8px;min-height:32px;font-size:13px}
+.pi-node-name{flex:1;min-width:0}
+.pi-node-row.is-off,.pi-node-row.is-off .pi-badge,.pi-node-row.is-quiet{color:var(--pi-txt2)}
+.pi-tl-nodes .pi-kind.is-main{background:var(--pi-dark);color:var(--pi-on-dark)}
+.pi-tl-nodes .pi-kind.is-side{background:var(--pi-bg);color:var(--pi-txt)}
+.pi-tl-nodes .pi-kind.is-world{background:transparent;color:var(--pi-txt2);padding-left:0;padding-right:0}
+.pi-tl-nodes .pi-node-row.is-off .pi-kind{background:var(--pi-fill2);color:var(--pi-txt2)}
+.pi-node-row.is-off .pi-node-txt{text-decoration:line-through}
+.pi-hook>.pi-node-row{flex:1;min-width:0}
+.pi-meta-btn{min-height:32px;min-width:40px;padding:0 2px;border:0;background:none;font:inherit;font-size:12px;cursor:pointer;color:var(--pi-txt2);text-align:right}
+.pi-meta-btn.is-dot{display:inline-flex;align-items:center;gap:5px}
+.pi-meta-btn.is-dot::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--pi-accent)}
+.pi-check.is-quiet{color:var(--pi-txt2)}
+.pi-pace-cell{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 10px;border-radius:20px;background:var(--pi-surf);font-size:12px;font-weight:600;color:var(--pi-txt2)}
+.pi-pace .pi-pair{flex:1;gap:6px}
+.pi-pace-label{min-width:56px}
+.pi-clock{width:100%;border:0;background:none;color:var(--pi-txt);font:inherit;font-size:13px;font-weight:400;text-align:left;align-items:center}
+.pi-clock-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pi-clock-dots{display:inline-flex;gap:3px}
+.pi-clock-dots i{width:6px;height:6px;border-radius:50%;background:var(--pi-rule)}
+.pi-clock-dots i.is-on{background:var(--pi-dark)}
+.pi-play{margin-top:4px}
+.pi-play>summary{font-size:12px;font-weight:600;color:var(--pi-txt2);cursor:pointer;padding:4px 0}
+/* /threads v0.1.23 */
 `;
 
 export const ICONS = {
@@ -378,4 +439,5 @@ export const ICONS = {
     more: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="3.5" cy="8" r="1.3"/><circle cx="8" cy="8" r="1.3"/><circle cx="12.5" cy="8" r="1.3"/></svg>',
     pulse: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M1.5 8.5h3l1.8-4 3 8 1.9-4h3.3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     file: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M4 1h5.5L13 4.5V14a1 1 0 01-1 1H4a1 1 0 01-1-1V2a1 1 0 011-1z" stroke="currentColor" stroke-width="1.2"/><path d="M9 1v4h4" stroke="currentColor" stroke-width="1.2"/></svg>',
+    undo: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M5.5 3L2.5 6l3 3M2.5 6h6.2a4.3 4.3 0 010 8.5H6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
 };

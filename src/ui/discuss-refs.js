@@ -1,5 +1,6 @@
 import { acuField, groupByField } from '../core/acu.js';
 import { buildIndexText } from '../core/inject.js';
+import { maskUnits, threadSwitches } from '../core/threads.js';
 import { flattenUnits, outlineToText, stageLabel, volumeLabel } from '../core/outline.js';
 import { unitStates } from '../core/progress.js';
 import { checkedSet, entryRefId, fieldChecked, isMemoField, ruleFromSelection } from '../core/refs.js';
@@ -27,10 +28,11 @@ export async function loadBoundBooks() {
 export function progressText(view) {
     if (view.runtime.activeId() !== view.projectId) return '';
     const project = view.project();
-    const units = flattenUnits(project.outline.volumes);
+    const units = maskUnits(flattenUnits(project.outline.volumes), threadSwitches(project));
     if (!units.length) return '';
     const progress = view.runtime.progress();
-    return buildIndexText(units, unitStates(units, progress), progress, { carryOver: view.data.settings().carryOver });
+    const settings = view.data.settings();
+    return buildIndexText(units, unitStates(units, progress), progress, { carryOver: settings.carryOver, hookCap: settings.hookCap });
 }
 
 export function floorsText(view, count) {

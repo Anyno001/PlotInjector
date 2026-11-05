@@ -62,6 +62,18 @@ export function bookEntries(data) {
         depth: Number(entry.depth ?? 4),
         role: Number(entry.role) || 0,
         order: Number(entry.order ?? 100),
+        selective: entry.selective !== false,
+        selectiveLogic: Number(entry.selectiveLogic) || 0,
+        caseSensitive: typeof entry.caseSensitive === 'boolean' ? entry.caseSensitive : null,
+        matchWholeWords: typeof entry.matchWholeWords === 'boolean' ? entry.matchWholeWords : null,
+        probability: Number.isFinite(Number(entry.probability)) ? Number(entry.probability) : 100,
+        excludeRecursion: Boolean(entry.excludeRecursion),
+        preventRecursion: Boolean(entry.preventRecursion),
+        group: String(entry.group || ''),
+        groupWeight: Number(entry.groupWeight ?? 100),
+        sticky: Number(entry.sticky) || 0,
+        cooldown: Number(entry.cooldown) || 0,
+        delay: Number(entry.delay) || 0,
     }));
 }
 
@@ -91,7 +103,7 @@ export function setEntriesDisabled(name, keys, disabled) {
 }
 
 // 改一条的触发与位置：constant 常驻 / 关键词触发，key 主要关键词，keysecondary 次要关键词，position/depth/role/order 与酒馆一致。
-const ENTRY_FIELDS = ['comment', 'constant', 'key', 'keysecondary', 'position', 'depth', 'role', 'order', 'content'];
+const ENTRY_FIELDS = ['comment', 'constant', 'key', 'keysecondary', 'position', 'depth', 'role', 'order', 'content', 'probability', 'useProbability', 'excludeRecursion', 'preventRecursion', 'group', 'groupWeight', 'sticky', 'cooldown', 'delay'];
 
 export function updateEntry(name, key, patch) {
     return queued(name, async () => {
@@ -118,6 +130,19 @@ export function patchEntries(name, patches) {
         }
         await saveBook(name, data);
         return backup;
+    });
+}
+
+// 撤销用：读出整本书的 entries 深拷贝；写回整本 entries。都走同一本书的写队列，不会和未写完的改动交错。
+export function snapshotEntries(name) {
+    return queued(name, async () => clone((await loadBook(name)).entries));
+}
+
+export function restoreEntries(name, entries) {
+    return queued(name, async () => {
+        const data = clone(await loadBook(name));
+        data.entries = clone(entries);
+        await saveBook(name, data);
     });
 }
 
