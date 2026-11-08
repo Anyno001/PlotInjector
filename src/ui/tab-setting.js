@@ -71,7 +71,7 @@ export function render(view) {
     const hasOutline = project.outline.volumes.some(volume => volume.stages.length);
     const chip = block => `<span class="pi-chip pi-block-chip${mute.has(block.key) ? ' is-mute' : ''}"><button type="button" data-act="jump" data-key="${esc(block.key)}" title="跳到这一块">${esc(block.title)}</button><button type="button" class="pi-block-eye" data-act="block-mute" data-key="${esc(block.key)}" title="${mute.has(block.key) ? '已设为不注入，点击恢复注入' : '注入正文，点击设为不注入'}">${mute.has(block.key) ? ICONS.eyeOff : ICONS.eye}</button><button type="button" class="pi-block-del" data-act="block-del" data-key="${esc(block.key)}" title="删除整个分块">${ICONS.close}</button></span>`;
     return `${s.draft ? draftHtml(view, project, s.draft) : ''}
-        <div class="pi-card"><h3>设定 ${checkBadge(project.setting.check)}</h3>
+        <div class="pi-card"><h3>设定 ${checkBadge(project.setting.check)}<span class="pi-spacer"></span><button type="button" class="pi-btn is-primary is-sm" data-act="setting-save">保存</button></h3>
         <div class="pi-tools is-c4">
             <button type="button" class="pi-btn is-sm is-primary" data-act="from-talk"${busy ? ' disabled' : ''}>${busy ? '<span class="pi-spin"></span>整理中' : 'AI 整理'}</button>
             <button type="button" class="pi-btn is-sm" data-act="sync-outline"${busy || !hasOutline || !text.trim() ? ' disabled' : ''}>按大纲校对</button>
@@ -180,6 +180,21 @@ export const actions = {
         }
         st(view).draft = { body: mergeBlocks(project.setting.text, parsed.body, keys), check: parsed.check, fixes: [], keys, sync: true };
         view.renderBody();
+    },
+    // 手动保存：把编辑框内容再写一遍、记进历史、立即落盘，并刷新注入内容（不用等失焦）。
+    async 'setting-save'(view, target) {
+        const box = target.closest('.pi-card')?.querySelector('[data-setting]');
+        if (box) {
+            onInput(view, box);
+            onBlur(view, box);
+        }
+        view.runtime.refresh();
+        try {
+            await view.data.flush();
+            toast('success', '设定已保存，注入内容已刷新。');
+        } catch (error) {
+            toast('error', `保存失败：${error.message}`);
+        }
     },
     'block-mute'(view, target) {
         const key = target.dataset.key;

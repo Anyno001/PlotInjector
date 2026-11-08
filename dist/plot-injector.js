@@ -1,4 +1,4 @@
-// PlotInjector v0.1.25
+// PlotInjector v0.1.26
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -5150,7 +5150,7 @@ ${yaml}
   function render2(view) {
     let project = view.project(), s = st2(view), text = project.setting.text, blocks = splitBlocks(text).filter((block) => block.title !== "开头"), mute2 = new Set(project.setting.mute), muted = blocks.some((block) => mute2.has(block.key)), busy = view.busy.setting, hasOutline = project.outline.volumes.some((volume) => volume.stages.length), chip = (block) => `<span class="pi-chip pi-block-chip${mute2.has(block.key) ? " is-mute" : ""}"><button type="button" data-act="jump" data-key="${esc(block.key)}" title="跳到这一块">${esc(block.title)}</button><button type="button" class="pi-block-eye" data-act="block-mute" data-key="${esc(block.key)}" title="${mute2.has(block.key) ? "已设为不注入，点击恢复注入" : "注入正文，点击设为不注入"}">${mute2.has(block.key) ? ICONS.eyeOff : ICONS.eye}</button><button type="button" class="pi-block-del" data-act="block-del" data-key="${esc(block.key)}" title="删除整个分块">${ICONS.close}</button></span>`;
     return `${s.draft ? draftHtml2(view, project, s.draft) : ""}
-        <div class="pi-card"><h3>设定 ${checkBadge(project.setting.check)}</h3>
+        <div class="pi-card"><h3>设定 ${checkBadge(project.setting.check)}<span class="pi-spacer"></span><button type="button" class="pi-btn is-primary is-sm" data-act="setting-save">保存</button></h3>
         <div class="pi-tools is-c4">
             <button type="button" class="pi-btn is-sm is-primary" data-act="from-talk"${busy ? " disabled" : ""}>${busy ? '<span class="pi-spin"></span>整理中' : "AI 整理"}</button>
             <button type="button" class="pi-btn is-sm" data-act="sync-outline"${busy || !hasOutline || !text.trim() ? " disabled" : ""}>按大纲校对</button>
@@ -5226,6 +5226,16 @@ ${parsed.body}` : parsed.body;
         return;
       }
       st2(view).draft = { body: mergeBlocks(project.setting.text, parsed.body, keys), check: parsed.check, fixes: [], keys, sync: !0 }, view.renderBody();
+    },
+    // 手动保存：把编辑框内容再写一遍、记进历史、立即落盘，并刷新注入内容（不用等失焦）。
+    async "setting-save"(view, target) {
+      let box = target.closest(".pi-card")?.querySelector("[data-setting]");
+      box && (onInput2(view, box), onBlur2(view, box)), view.runtime.refresh();
+      try {
+        await view.data.flush(), toast("success", "设定已保存，注入内容已刷新。");
+      } catch (error) {
+        toast("error", `保存失败：${error.message}`);
+      }
     },
     "block-mute"(view, target) {
       let key = target.dataset.key, mute2 = new Set(view.project().setting.mute);
@@ -7267,7 +7277,7 @@ ${parsed.body}` : parsed.body;
   }
 
   // src/index.js
-  var VERSION = "0.1.25", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.1.26", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")
