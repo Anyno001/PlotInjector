@@ -149,7 +149,7 @@ function nodeTabs(stage, kind) {
 function stageEditor(volume, stage, raw, kind) {
     const known = new Set(['时间范围', 'AI指令', CHANGE_FIELD, ...NODE_FIELDS.map(item => item.field)]);
     const extra = Object.keys(stage.data).filter(key => !known.has(key));
-    const head = `<div class="pi-card"><h3>阶段<span class="pi-spacer"></span><button type="button" class="pi-icon-btn" data-act="stage-menu" title="更多">${ICONS.more}</button></h3>
+    const head = `<div class="pi-card"><h3>阶段<span class="pi-spacer"></span>${raw ? '' : '<button type="button" class="pi-btn is-primary is-sm" data-act="outline-save">保存</button>'}<button type="button" class="pi-icon-btn" data-act="stage-menu" title="更多">${ICONS.more}</button></h3>
         <p class="pi-hint">所属：${esc(volumeLabel(volume.key))}</p>`;
     if (raw) {
         return `${head}<textarea class="pi-ta is-mono is-tall" data-raw>${esc(stageToText(stage))}</textarea>
@@ -164,7 +164,7 @@ function stageEditor(volume, stage, raw, kind) {
 }
 
 function volumeEditor(volume) {
-    return `<div class="pi-card"><h3>卷<span class="pi-spacer"></span><button type="button" class="pi-icon-btn" data-act="vol-menu" title="更多">${ICONS.more}</button></h3>
+    return `<div class="pi-card"><h3>卷<span class="pi-spacer"></span><button type="button" class="pi-btn is-primary is-sm" data-act="outline-save">保存</button><button type="button" class="pi-icon-btn" data-act="vol-menu" title="更多">${ICONS.more}</button></h3>
         <div class="pi-tools is-c1"><button type="button" class="pi-btn is-sm" data-act="stage-add">＋新阶段</button></div>
         <label class="pi-field"><span>卷名（剧情_卷X_标题）</span><input class="pi-inp" data-vol-key value="${esc(volume.key)}"></label>
         <p class="pi-hint">${volume.stages.length} 个阶段</p></div>`;
@@ -553,6 +553,20 @@ export const actions = {
     raw(view) {
         st(view).raw = !st(view).raw;
         view.renderBody();
+    },
+    // 手动保存：把编辑框里的内容再写一遍、立即落盘，并刷新注入内容（不用等失焦）。
+    async 'outline-save'(view, target) {
+        target.closest('.pi-body')?.querySelectorAll('[data-stage-key],[data-vol-key],[data-stage-field],[data-stage-list],[data-node-field]').forEach(box => {
+            onInput(view, box);
+            onBlur(view, box);
+        });
+        view.runtime.refresh();
+        try {
+            await view.data.flush();
+            toast('success', '大纲已保存，注入内容已刷新。');
+        } catch (error) {
+            toast('error', `保存失败：${error.message}`);
+        }
     },
     'raw-apply'(view, target) {
         const { stage } = findSel(view.project(), st(view).sel);

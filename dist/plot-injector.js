@@ -1,4 +1,4 @@
-// PlotInjector v0.1.24
+// PlotInjector v0.1.25
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -4497,7 +4497,7 @@ ${floor.text}`).join(`
     return `<div class="pi-seg pi-node-seg">${NODE_FIELDS.map((meta2) => `<button type="button" class="pi-seg-btn${meta2.kind === kind ? " is-sel" : ""}" data-act="node-kind" data-kind="${meta2.kind}">${esc(meta2.label)} ${count(meta2)}</button>`).join("")}</div>`;
   }
   function stageEditor(volume, stage, raw, kind) {
-    let known = /* @__PURE__ */ new Set(["时间范围", "AI指令", CHANGE_FIELD, ...NODE_FIELDS.map((item) => item.field)]), extra = Object.keys(stage.data).filter((key) => !known.has(key)), head = `<div class="pi-card"><h3>阶段<span class="pi-spacer"></span><button type="button" class="pi-icon-btn" data-act="stage-menu" title="更多">${ICONS.more}</button></h3>
+    let known = /* @__PURE__ */ new Set(["时间范围", "AI指令", CHANGE_FIELD, ...NODE_FIELDS.map((item) => item.field)]), extra = Object.keys(stage.data).filter((key) => !known.has(key)), head = `<div class="pi-card"><h3>阶段<span class="pi-spacer"></span>${raw ? "" : '<button type="button" class="pi-btn is-primary is-sm" data-act="outline-save">保存</button>'}<button type="button" class="pi-icon-btn" data-act="stage-menu" title="更多">${ICONS.more}</button></h3>
         <p class="pi-hint">所属：${esc(volumeLabel(volume.key))}</p>`;
     return raw ? `${head}<textarea class="pi-ta is-mono is-tall" data-raw>${esc(stageToText(stage))}</textarea>
             <div class="pi-tools is-c1 is-end"><button type="button" class="pi-btn is-primary is-sm" data-act="raw-apply">应用</button></div><p class="pi-status" data-raw-status></p></div>` : `${head}<label class="pi-field"><span>阶段名（阶段N_标题）</span><input class="pi-inp" data-stage-key value="${esc(stage.key)}"></label>
@@ -4509,7 +4509,7 @@ ${floor.text}`).join(`
         ${nodeTabs(stage, kind)}${nodeEditor(stage, NODE_FIELDS.find((meta2) => meta2.kind === kind))}`;
   }
   function volumeEditor(volume) {
-    return `<div class="pi-card"><h3>卷<span class="pi-spacer"></span><button type="button" class="pi-icon-btn" data-act="vol-menu" title="更多">${ICONS.more}</button></h3>
+    return `<div class="pi-card"><h3>卷<span class="pi-spacer"></span><button type="button" class="pi-btn is-primary is-sm" data-act="outline-save">保存</button><button type="button" class="pi-icon-btn" data-act="vol-menu" title="更多">${ICONS.more}</button></h3>
         <div class="pi-tools is-c1"><button type="button" class="pi-btn is-sm" data-act="stage-add">＋新阶段</button></div>
         <label class="pi-field"><span>卷名（剧情_卷X_标题）</span><input class="pi-inp" data-vol-key value="${esc(volume.key)}"></label>
         <p class="pi-hint">${volume.stages.length} 个阶段</p></div>`;
@@ -4786,6 +4786,17 @@ ${floor.text}`).join(`
     },
     raw(view) {
       st(view).raw = !st(view).raw, view.renderBody();
+    },
+    // 手动保存：把编辑框里的内容再写一遍、立即落盘，并刷新注入内容（不用等失焦）。
+    async "outline-save"(view, target) {
+      target.closest(".pi-body")?.querySelectorAll("[data-stage-key],[data-vol-key],[data-stage-field],[data-stage-list],[data-node-field]").forEach((box) => {
+        onInput(view, box), onBlur(view, box);
+      }), view.runtime.refresh();
+      try {
+        await view.data.flush(), toast("success", "大纲已保存，注入内容已刷新。");
+      } catch (error) {
+        toast("error", `保存失败：${error.message}`);
+      }
     },
     "raw-apply"(view, target) {
       let { stage } = findSel(view.project(), st(view).sel), box = target.closest(".pi-card"), status = box.querySelector("[data-raw-status]");
@@ -7256,7 +7267,7 @@ ${parsed.body}` : parsed.body;
   }
 
   // src/index.js
-  var VERSION = "0.1.24", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.1.25", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")
