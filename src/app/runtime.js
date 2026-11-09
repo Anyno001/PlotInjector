@@ -1,5 +1,5 @@
 import { buildCheckMessages, buildPersonaCheckMessages, cleanFloorText, parseCheckReply } from '../core/check.js';
-import { alignPersonaProgress, applyMoves, checkItems, currentStage, hasPersonas, personaEnv, moveText, resolveMoves, setFixedValue, syncPersonas, undoMoves, unsetFixed } from '../core/personas.js';
+import { alignPersonaProgress, applyMoves, checkItems, currentStage, hasPersonas, personaEnv, moveText, resolveMoves, syncPersonas, undoMoves } from '../core/personas.js';
 import { buildEntries, buildIndexText, carriedNodes, toWorldInfoEntry } from '../core/inject.js';
 import { parseOutlineReply, rewriteRestMessages, syncSettingMessages } from '../core/prompts.js';
 import { changedBlockKeys, mergeBlocks, parseSettingReply, pushHistory, splitBlocks } from '../core/setting.js';
@@ -36,7 +36,7 @@ const placeOf = unit => `${volumeLabel(unit.volume.key)}·${stageLabel(unit.stag
 
 // 运行时：注入、每 N 楼检测、偏离大纲时提醒或自动改写。UI 关着也在跑。
 // askReason 由入口传入（弹输入框），运行时本身不依赖界面。
-export function createRuntime({ data, notice, emit, askReason = async () => '', askFixed = async () => null }) {
+export function createRuntime({ data, notice, emit, askReason = async () => '' }) {
     const view = hostWindow();
     let progress = null;
     let progressFor = '';
@@ -213,34 +213,9 @@ export function createRuntime({ data, notice, emit, askReason = async () => '', 
         return Boolean(eventTypes().WORLDINFO_ENTRIES_LOADED);
     }
 
-    // 新聊天第一次注入前还有没选的固定选项时弹窗让用户选；取消则本次先按第一个选项注入，下次再问。
-    let askingFixed = null;
-    async function ensureFixed() {
-        const project = activeProject();
-        const prog = currentProgress();
-        const missing = project && prog ? unsetFixed(project.personas, prog) : [];
-        if (!missing.length || fixedDeclined === `${progressFor}:${chatKey()}`) return;
-        if (!askingFixed) {
-            askingFixed = (async () => {
-                const picked = await askFixed(missing);
-                if (picked) {
-                    let next = currentProgress();
-                    for (const [id, value] of Object.entries(picked)) next = setFixedValue(next, id, value);
-                    setProgress(next);
-                } else {
-                    fixedDeclined = `${progressFor}:${chatKey()}`;
-                }
-            })().finally(() => { askingFixed = null; });
-        }
-        await askingFixed;
-    }
-    let fixedDeclined = '';
-    const chatKey = () => String(ctx() && ctx().chatId || '');
-
     async function onEntriesLoaded(payload) {
         if (!payload || !Array.isArray(payload.chatLore)) return;
         if (opening) await waitOpening();
-        await ensureFixed();
         try {
             refreshPersonas();
             payload.chatLore.push(...virtualEntries());
@@ -984,7 +959,6 @@ export function createRuntime({ data, notice, emit, askReason = async () => '', 
     async function onChatChanged() {
         progress = null;
         progressFor = '';
-        fixedDeclined = '';
         abandonOpening();
         lastRead = null;
         pendingCheck = false;

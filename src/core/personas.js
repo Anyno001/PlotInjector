@@ -17,12 +17,11 @@ export const PERSONA_SLOT_PREFIX = '@persona:';
 
 const isObj = value => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 const text = value => String(value ?? '');
-const escapeRe = value => text(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const intOr = (value, fallback) => (Number.isFinite(Number(value)) && value !== '' && value !== null ? Math.round(Number(value)) : fallback);
 const num = value => (value === undefined || value === null || value === '' || !Number.isFinite(Number(value)) ? undefined : Number(value));
 
 export function emptyPersonas() {
-    return { lines: [], fixed: [], imported: [] };
+    return { lines: [], imported: [] };
 }
 
 export function newStage(name = '新阶段') {
@@ -69,22 +68,11 @@ function normalizeLine(value) {
     };
 }
 
-function normalizeFixed(value) {
-    const src = isObj(value) ? value : {};
-    return {
-        id: text(src.id) || makeId('pf'),
-        name: text(src.name).trim(),
-        options: [...new Set((Array.isArray(src.options) ? src.options : []).map(item => text(item).trim()).filter(Boolean))],
-        varPath: text(src.varPath),
-    };
-}
-
 // 旧项目没有 personas 字段时补空结构；线没有阶段时补一个，免得界面与注入处处判空。
 export function normalizePersonas(value) {
     const src = isObj(value) ? value : {};
     return {
         lines: (Array.isArray(src.lines) ? src.lines : []).filter(isObj).map(normalizeLine).map(line => (line.stages.length ? line : { ...line, stages: [newStage('阶段一')] })),
-        fixed: (Array.isArray(src.fixed) ? src.fixed : []).filter(isObj).map(normalizeFixed).filter(item => item.name),
         imported: (Array.isArray(src.imported) ? src.imported : []).filter(isObj).map(item => ({ book: text(item.book), uid: text(item.uid), key: text(item.key ?? item.uid), title: text(item.title) })),
     };
 }
@@ -100,28 +88,6 @@ export function groupLines(lines) {
         groups.get(key).push(line);
     }
     return [...groups.entries()].sort(([a], [b]) => (a === '' ? -1 : b === '' ? 1 : 0)).map(([name, list]) => ({ name, lines: list }));
-}
-
-// 固定选项当前值：聊天里选过的优先，没选过（或选的值已不在选项里）为空串。
-export function fixedValue(item, progress) {
-    const picked = normalizePersonaProgress(progress && progress.personas).fixed[item.id];
-    return item.options.includes(picked) ? picked : '';
-}
-
-export const unsetFixed = (personas, progress) => (personas ? personas.fixed.filter(item => item.options.length && !fixedValue(item, progress)) : []);
-
-// 文中 {{选项名}} 按值替换；未选时先用第一个选项（注入前会弹窗让用户选）。
-export function applyFixed(content, personas, progress) {
-    let out = text(content);
-    for (const item of personas.fixed) {
-        if (!item.options.length) continue;
-        const value = fixedValue(item, progress) || item.options[0];
-        // 整段只在选中该值时保留：{{选项名=值}}…{{/选项名}}
-        const block = new RegExp(`\\{\\{${escapeRe(item.name)}=([^}]*)\\}\\}([\\s\\S]*?)\\{\\{/${escapeRe(item.name)}\\}\\}`, 'g');
-        out = out.replace(block, (all, v, body) => (v === value ? body : ''));
-        out = out.split(`{{${item.name}}}`).join(value);
-    }
-    return out.replace(/\n{3,}/g, '\n\n');
 }
 
 // ---------- 当前阶段 ----------
@@ -211,11 +177,6 @@ export function releasePersona(progress, lineId) {
     return pp.manual.includes(lineId) ? withPersonas(progress, { manual: without(pp.manual, lineId) }) : progress;
 }
 
-export function setFixedValue(progress, fixedId, value) {
-    const pp = normalizePersonaProgress(progress && progress.personas);
-    return withPersonas(progress, { fixed: { ...pp.fixed, [fixedId]: value } });
-}
-
 export function mutePersona(progress, lineId, muted = true) {
     const pp = normalizePersonaProgress(progress && progress.personas);
     const list = muted ? [...new Set([...pp.muted, lineId])] : without(pp.muted, lineId);
@@ -262,7 +223,7 @@ export function alignPersonaProgress(progress, personas) {
         changed = true;
     }
     for (const key of Object.keys(next)) {
-        if (['fixed', 'muted', 'manual', 'auto', 'names'].includes(key) || alive.has(key)) continue;
+        if (['muted', 'manual', 'auto', 'names'].includes(key) || alive.has(key)) continue;
         delete next[key];
         changed = true;
     }
@@ -271,9 +232,9 @@ export function alignPersonaProgress(progress, personas) {
 
 // ---------- 注入 ----------
 
-// 一条线的注入文字：公共文字 + 当前阶段内容，固定选项按值替换。
-export function personaContent(line, stage, personas, progress) {
-    return applyFixed([line.common, stage && stage.text].map(item => text(item).trim()).filter(Boolean).join('\n'), personas, progress);
+// 一条线的注入文字：公共文字 + 当前阶段内容。
+export function personaContent(line, stage) {
+    return [line.common, stage && stage.text].map(item => text(item).trim()).filter(Boolean).join('\n');
 }
 
 // 关键词触发：常驻直接注入；有关键词的线，最近几楼文字命中才注入；既不常驻又没写关键词的线不注入。
@@ -294,7 +255,7 @@ export function buildPersonaEntries(project, progress, { recentText, globals, fa
         if (!line.enabled) continue;
         if (recentText !== undefined && !lineTriggered(line, recentText, globals)) continue;
         const { stage } = currentStage(line, progress, env);
-        const content = personaContent(line, stage, personas, progress);
+        const content = personaContent(line, stage);
         if (!content) continue;
         out.push({
             slotId: personaSlotId(line), kind: 'persona', title: `人设·${line.group ? `${line.group}·` : ''}${line.name}`, lineId: line.id,

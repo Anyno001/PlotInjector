@@ -1,4 +1,4 @@
-// PlotInjector v0.1.27
+// PlotInjector v0.1.28
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -752,14 +752,14 @@ ${value.name}`);
   }
 
   // src/core/persona-progress.js
-  var PERSONA_RESERVED = ["fixed", "muted", "manual", "auto", "names"], isObj2 = (value) => !!value && typeof value == "object" && !Array.isArray(value), strMap = (value) => Object.fromEntries(Object.entries(isObj2(value) ? value : {}).filter(([, item]) => typeof item == "string")), strList = (value) => Array.isArray(value) ? [...new Set(value.filter((item) => typeof item == "string"))] : [];
+  var PERSONA_RESERVED = ["muted", "manual", "auto", "names"], isObj2 = (value) => !!value && typeof value == "object" && !Array.isArray(value), strMap = (value) => Object.fromEntries(Object.entries(isObj2(value) ? value : {}).filter(([, item]) => typeof item == "string")), strList = (value) => Array.isArray(value) ? [...new Set(value.filter((item) => typeof item == "string"))] : [];
   function emptyPersonaProgress() {
-    return { fixed: {}, muted: [], manual: [], auto: {}, names: {} };
+    return { muted: [], manual: [], auto: {}, names: {} };
   }
   function normalizePersonaProgress(value) {
     let src = isObj2(value) ? value : {}, out = emptyPersonaProgress();
     for (let [key, item] of Object.entries(src)) !PERSONA_RESERVED.includes(key) && typeof item == "string" && (out[key] = item);
-    return out.fixed = strMap(src.fixed), out.muted = strList(src.muted), out.manual = strList(src.manual), out.auto = strMap(src.auto), out.names = strMap(src.names), out;
+    return out.muted = strList(src.muted), out.manual = strList(src.manual), out.auto = strMap(src.auto), out.names = strMap(src.names), out;
   }
 
   // src/core/progress.js
@@ -979,9 +979,9 @@ ${value.name}`);
     { value: "outline", label: "跟随大纲" },
     { value: "fame", label: "读声望" },
     { value: "manual", label: "手动" }
-  ], MODE_KEYS = PERSONA_MODES.map((item) => item.value), PERSONA_SLOT_PREFIX = "@persona:", isObj3 = (value) => !!value && typeof value == "object" && !Array.isArray(value), text = (value) => String(value ?? ""), escapeRe = (value) => text(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), intOr = (value, fallback) => Number.isFinite(Number(value)) && value !== "" && value !== null ? Math.round(Number(value)) : fallback, num = (value) => value == null || value === "" || !Number.isFinite(Number(value)) ? void 0 : Number(value);
+  ], MODE_KEYS = PERSONA_MODES.map((item) => item.value), PERSONA_SLOT_PREFIX = "@persona:", isObj3 = (value) => !!value && typeof value == "object" && !Array.isArray(value), text = (value) => String(value ?? ""), intOr = (value, fallback) => Number.isFinite(Number(value)) && value !== "" && value !== null ? Math.round(Number(value)) : fallback, num = (value) => value == null || value === "" || !Number.isFinite(Number(value)) ? void 0 : Number(value);
   function emptyPersonas() {
-    return { lines: [], fixed: [], imported: [] };
+    return { lines: [], imported: [] };
   }
   function newStage(name = "新阶段") {
     return { id: makeId("ps"), name, cond: "", unitId: "", range: {}, text: "" };
@@ -1031,20 +1031,10 @@ ${value.name}`);
       sources: (Array.isArray(src.sources) ? src.sources : []).filter(isObj3).map((item) => ({ book: text(item.book), uid: text(item.uid), key: text(item.key ?? item.uid) }))
     };
   }
-  function normalizeFixed(value) {
-    let src = isObj3(value) ? value : {};
-    return {
-      id: text(src.id) || makeId("pf"),
-      name: text(src.name).trim(),
-      options: [...new Set((Array.isArray(src.options) ? src.options : []).map((item) => text(item).trim()).filter(Boolean))],
-      varPath: text(src.varPath)
-    };
-  }
   function normalizePersonas(value) {
     let src = isObj3(value) ? value : {};
     return {
       lines: (Array.isArray(src.lines) ? src.lines : []).filter(isObj3).map(normalizeLine).map((line) => line.stages.length ? line : { ...line, stages: [newStage("阶段一")] }),
-      fixed: (Array.isArray(src.fixed) ? src.fixed : []).filter(isObj3).map(normalizeFixed).filter((item) => item.name),
       imported: (Array.isArray(src.imported) ? src.imported : []).filter(isObj3).map((item) => ({ book: text(item.book), uid: text(item.uid), key: text(item.key ?? item.uid), title: text(item.title) }))
     };
   }
@@ -1056,22 +1046,6 @@ ${value.name}`);
       groups.has(key) || groups.set(key, []), groups.get(key).push(line);
     }
     return [...groups.entries()].sort(([a], [b]) => a === "" ? -1 : b === "" ? 1 : 0).map(([name, list]) => ({ name, lines: list }));
-  }
-  function fixedValue(item, progress) {
-    let picked = normalizePersonaProgress(progress && progress.personas).fixed[item.id];
-    return item.options.includes(picked) ? picked : "";
-  }
-  var unsetFixed = (personas2, progress) => personas2 ? personas2.fixed.filter((item) => item.options.length && !fixedValue(item, progress)) : [];
-  function applyFixed(content, personas2, progress) {
-    let out = text(content);
-    for (let item of personas2.fixed) {
-      if (!item.options.length) continue;
-      let value = fixedValue(item, progress) || item.options[0], block = new RegExp(`\\{\\{${escapeRe(item.name)}=([^}]*)\\}\\}([\\s\\S]*?)\\{\\{/${escapeRe(item.name)}\\}\\}`, "g");
-      out = out.replace(block, (all, v, body) => v === value ? body : ""), out = out.split(`{{${item.name}}}`).join(value);
-    }
-    return out.replace(/\n{3,}/g, `
-
-`);
   }
   function rangeHas(range, value) {
     return Number.isFinite(value) ? (range.min === void 0 || value >= range.min) && (range.max === void 0 || value <= range.max) : !1;
@@ -1124,10 +1098,6 @@ ${value.name}`);
     let pp = normalizePersonaProgress(progress && progress.personas);
     return pp.manual.includes(lineId) ? withPersonas(progress, { manual: without(pp.manual, lineId) }) : progress;
   }
-  function setFixedValue(progress, fixedId, value) {
-    let pp = normalizePersonaProgress(progress && progress.personas);
-    return withPersonas(progress, { fixed: { ...pp.fixed, [fixedId]: value } });
-  }
   function mutePersona(progress, lineId, muted = !0) {
     let pp = normalizePersonaProgress(progress && progress.personas), list = muted ? [.../* @__PURE__ */ new Set([...pp.muted, lineId])] : without(pp.muted, lineId);
     return list.length === pp.muted.length ? progress : withPersonas(progress, { muted: list });
@@ -1161,12 +1131,12 @@ ${value.name}`);
       byName ? next[line.id] = byName.id : (delete next[line.id], delete next.names[line.id]), changed = !0;
     }
     for (let key of Object.keys(next))
-      ["fixed", "muted", "manual", "auto", "names"].includes(key) || alive.has(key) || (delete next[key], changed = !0);
+      ["muted", "manual", "auto", "names"].includes(key) || alive.has(key) || (delete next[key], changed = !0);
     return changed ? { ...progress, personas: next } : progress;
   }
-  function personaContent(line, stage, personas2, progress) {
-    return applyFixed([line.common, stage && stage.text].map((item) => text(item).trim()).filter(Boolean).join(`
-`), personas2, progress);
+  function personaContent(line, stage) {
+    return [line.common, stage && stage.text].map((item) => text(item).trim()).filter(Boolean).join(`
+`);
   }
   function lineTriggered(line, recentText, globals = {}) {
     return line.constant ? !0 : line.keys.length > 0 && matchesAny(line.keys, recentText, {}, globals);
@@ -1177,7 +1147,7 @@ ${value.name}`);
     let personas2 = project.personas, env = personaEnv(project, progress, fame), out = [];
     for (let line of personas2.lines) {
       if (!line.enabled || recentText !== void 0 && !lineTriggered(line, recentText, globals)) continue;
-      let { stage } = currentStage(line, progress, env), content = personaContent(line, stage, personas2, progress);
+      let { stage } = currentStage(line, progress, env), content = personaContent(line, stage);
       content && out.push({
         slotId: personaSlotId(line),
         kind: "persona",
@@ -3377,7 +3347,7 @@ ${horrorGuide}` : "",
 
   // src/app/runtime.js
   var VIRTUAL_WORLD = "剧情注入器", LOG_MAX2 = 40, PENDING_MAX_MS = 3e4, CHECK_RETRIES = 3, RETRY_GAP_MS = 2e3, WORLD_RETRIES = 2, WORLD_WAIT_MS = 9e4, placeOf = (unit) => `${volumeLabel(unit.volume.key)}·${stageLabel(unit.stage.key)}`;
-  function createRuntime({ data, notice, emit, askReason = async () => "", askFixed = async () => null }) {
+  function createRuntime({ data, notice, emit, askReason = async () => "" }) {
     let view = hostWindow(), progress = null, progressFor = "", alignedFrom = null, alignedOutline = null, alignedPersonas = null, checking = !1, fallbackTimer = 0, generating = !1, chatStartFloors = 0, pendingCheck = !1, pendingTimer = 0, opening = !1, openGen = 0, openPromise = Promise.resolve(null), pendingTrigger = null, lastRead = null, listeners = [], stats = {}, logs = [];
     function log(text2) {
       logs.push({ at: Date.now(), text: text2 }), logs.length > LOG_MAX2 && logs.shift();
@@ -3470,25 +3440,9 @@ ${horrorGuide}` : "",
     function hasEntriesEvent() {
       return !!eventTypes().WORLDINFO_ENTRIES_LOADED;
     }
-    let askingFixed = null;
-    async function ensureFixed() {
-      let project = activeProject(), prog = currentProgress(), missing = project && prog ? unsetFixed(project.personas, prog) : [];
-      !missing.length || fixedDeclined === `${progressFor}:${chatKey()}` || (askingFixed || (askingFixed = (async () => {
-        let picked = await askFixed(missing);
-        if (picked) {
-          let next = currentProgress();
-          for (let [id, value] of Object.entries(picked)) next = setFixedValue(next, id, value);
-          setProgress(next);
-        } else
-          fixedDeclined = `${progressFor}:${chatKey()}`;
-      })().finally(() => {
-        askingFixed = null;
-      })), await askingFixed);
-    }
-    let fixedDeclined = "", chatKey = () => String(ctx() && ctx().chatId || "");
     async function onEntriesLoaded(payload) {
       if (!(!payload || !Array.isArray(payload.chatLore))) {
-        opening && await waitOpening(), await ensureFixed();
+        opening && await waitOpening();
         try {
           refreshPersonas(), payload.chatLore.push(...virtualEntries());
         } catch (error) {
@@ -3983,7 +3937,7 @@ ${horrorGuide}` : "",
       clampBase() && emit("floor");
     }
     async function onChatChanged() {
-      progress = null, progressFor = "", fixedDeclined = "", abandonOpening(), lastRead = null, pendingCheck = !1, view.clearTimeout(pendingTimer), chatStartFloors = floorCount(), notice.hide("advance"), notice.hide("offtrack"), notice.hide("thread"), notice.hide("persona");
+      progress = null, progressFor = "", abandonOpening(), lastRead = null, pendingCheck = !1, view.clearTimeout(pendingTimer), chatStartFloors = floorCount(), notice.hide("advance"), notice.hide("offtrack"), notice.hide("thread"), notice.hide("persona");
       let id = activeId();
       if (id)
         try {
@@ -6133,7 +6087,7 @@ ${parsed.body}` : parsed.body;
     return vars;
   }
   function classifyVar(info, override = "") {
-    return info.ops.has("<=") || info.ops.has(">=") ? "num" : override === "fixed" ? "fixed" : override === "line" ? "enum" : info.nested || info.inline ? "fixed" : "enum";
+    return info.ops.has("<=") || info.ops.has(">=") ? "num" : info.nested || override === "fixed" ? "fixed" : override === "line" ? "enum" : info.inline ? "fixed" : "enum";
   }
   var trimBlock = (text2) => String(text2).replace(/^[ \t]*\n/, "").replace(/\s+$/, ""), stripComments = (text2) => String(text2).replace(/<!--[\s\S]*?-->/g, "");
   function renderNodes(nodes, ctx2) {
@@ -6145,21 +6099,10 @@ ${parsed.body}` : parsed.body;
       }
       let one = node.parsed.vars && node.parsed.vars.size === 1 ? [...node.parsed.vars][0] : "", fixed = one && ctx2.kinds.get(one) === "fixed", body = () => node.inline ? renderNodes(node.children, ctx2) : trimBlock(renderNodes(node.children, ctx2));
       if (fixed && node.parsed.terms.every((term) => term.op === "==")) {
-        let name = ctx2.nameOf(one);
-        for (let term of node.parsed.terms) out += `{{${name}=${term.value}}}${body()}{{/${name}}}`;
+        let picked = ctx2.picks.get(one);
+        (node.parsed.or ? node.parsed.terms.some((term) => term.value === picked) : node.parsed.terms.every((term) => term.value === picked)) && (out += body());
       } else
         ctx2.issue("error", `嵌套了无法拆分的 if「${node.cond.replace(/cell:/g, "")}」`), out += renderNodes(node.children, ctx2);
-    }
-    return out;
-  }
-  function collapseFixed(text2, fixedItems) {
-    let out = text2;
-    for (let item of fixedItems) {
-      let name = item.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), block = `\\{\\{${name}=([^}]*)\\}\\}([^{}]*)\\{\\{\\/${name}\\}\\}`;
-      out = out.replace(new RegExp(`(?:${block})+`, "g"), (run) => {
-        let blocks = [...run.matchAll(new RegExp(block, "g"))], same = blocks.every((match) => match[1] === match[2].trim()), covers = item.options.every((option) => blocks.some((match) => match[1] === option));
-        return same && covers && blocks.length === item.options.length ? `{{${item.name}}}` : run;
-      });
     }
     return out;
   }
@@ -6185,7 +6128,7 @@ ${parsed.body}` : parsed.body;
     }
     return out;
   }
-  function buildPlan(entries, { overrides = {}, existing = null } = {}) {
+  function buildPlan(entries, { overrides = {}, picks = {} } = {}) {
     let parsed = entries.map((entry) => ({ entry, key: `${entry.book}\0${entry.key}`, tree: parseEntry(entry.content) })), blocked = /* @__PURE__ */ new Set(), issues = [], report = (entry, level, text2) => {
       issues.push({ book: entry.book, key: entry.key, title: entry.title, level, text: text2 }), level === "error" && blocked.add(`${entry.book}\0${entry.key}`);
     };
@@ -6200,13 +6143,10 @@ ${parsed.body}` : parsed.body;
       if (kinds.get(item.path) === "num" && item.values.some((value) => !isNumber(value)))
         for (let entry of entries) item.entries.has(`${entry.book}\0${entry.key}`) && report(entry, "error", `变量「${pathNames(item.path).name}」同时用了数值与文字比较`);
     }
-    let fixedItems = [];
-    for (let item of info.values()) {
-      if (kinds.get(item.path) !== "fixed") continue;
-      let name = pathNames(item.path).name, old = existing && existing.fixed.find((entry) => entry.name === name);
-      fixedItems.push({ id: old ? old.id : makeId("pf"), name, options: [.../* @__PURE__ */ new Set([...old ? old.options : [], ...item.values])], varPath: item.path, reused: !!old });
-    }
-    let nameOf = (path) => pathNames(path).name, lines2 = /* @__PURE__ */ new Map(), lineFor = (path, kind, entry) => {
+    let pickMap = /* @__PURE__ */ new Map();
+    for (let item of info.values())
+      kinds.get(item.path) === "fixed" && pickMap.set(item.path, item.values.includes(picks[item.path]) ? picks[item.path] : item.values[0]);
+    let lines2 = /* @__PURE__ */ new Map(), lineFor = (path, kind, entry) => {
       if (!lines2.has(path)) {
         let names2 = pathNames(path);
         lines2.set(path, { kind, path, group: names2.group, name: names2.name, entry, common: "", stages: /* @__PURE__ */ new Map(), sources: [] });
@@ -6216,7 +6156,7 @@ ${parsed.body}` : parsed.body;
     }, plainLines = [];
     for (let { entry, key, tree } of parsed) {
       if (blocked.has(key)) continue;
-      let entryIssues = [], ctx2 = { kinds, nameOf, issue: (level, text2) => entryIssues.push({ level, text: text2 }) }, outside = [], staged = [];
+      let entryIssues = [], ctx2 = { kinds, picks: pickMap, issue: (level, text2) => entryIssues.push({ level, text: text2 }) }, outside = [], staged = [];
       for (let node of tree.nodes) {
         let one = node.type === "if" && node.parsed.vars && node.parsed.vars.size === 1 ? [...node.parsed.vars][0] : "";
         if (node.type === "if" && !node.parsed.vars) {
@@ -6229,7 +6169,7 @@ ${parsed.body}` : parsed.body;
         }
         node.type === "if" && kinds.get(one) !== "fixed" ? staged.push({ node, path: one, kind: kinds.get(one) }) : outside.push({ at: staged.length, text: node.type === "text" ? node.text : renderNodes([node], ctx2) });
       }
-      let tidy = (text2) => collapseFixed(stripComments(text2), fixedItems);
+      let tidy = (text2) => stripComments(text2);
       for (let part of staged) part.body = trimBlock(tidy(renderNodes(part.node.children, ctx2)));
       for (let problem of entryIssues) report(entry, problem.level, problem.text);
       if (entryIssues.some((problem) => problem.level === "error")) continue;
@@ -6279,19 +6219,13 @@ ${suffix.trim()}` : body;
     }
     for (let { entry, text: text2 } of plainLines)
       text2 && out.push({ group: "", name: entryName(entry.title), keys: entry.keys, constant: entry.constant, position: entry.position, depth: entry.depth, role: entry.role, order: entry.order, common: "", mode: "manual", fame: { bar: "", partner: "" }, stages: [{ ...newStage("默认"), text: text2 }], source: { book: entry.book, uid: String(entry.uid), varPath: "" }, sources: [{ book: entry.book, uid: String(entry.uid), key: String(entry.key) }] });
-    for (let item of fixedItems) {
-      let meta2 = info.get(item.varPath), keys = [...meta2.entries], lost = (/* @__PURE__ */ new Set([...keys.filter((key) => blocked.has(key)), ...meta2.lost || []])).size;
-      if (!lost || keys.every((key) => blocked.has(key))) continue;
-      let entry = entries.find((one) => keys.includes(`${one.book}\0${one.key}`) && !blocked.has(`${one.book}\0${one.key}`));
-      entry && report(entry, "warn", `固定选项「${item.name}」有 ${lost} 个来源条目未能转入，可选值可能不全；若它会随剧情变化，请改成人设线`);
-    }
-    let used = new Set(entries.map((entry) => `${entry.book}\0${entry.key}`)), usedFixed = fixedItems.filter((item) => [...info.get(item.varPath).entries].some((key) => used.has(key) && !blocked.has(key))), varList = [...info.values()].map((item) => ({ path: item.path, name: pathNames(item.path).name, group: pathNames(item.path).group, kind: kinds.get(item.path), values: item.values, entries: item.entries.size, canFix: !(item.ops.has("<=") || item.ops.has(">=")) }));
-    return { lines: out, fixed: usedFixed, issues, blocked, vars: varList };
+    let varList = [...info.values()].map((item) => ({ path: item.path, name: pathNames(item.path).name, group: pathNames(item.path).group, kind: kinds.get(item.path), values: item.values, pick: pickMap.get(item.path), entries: item.entries.size, canFix: !(item.ops.has("<=") || item.ops.has(">=")), canLine: !item.nested }));
+    return { lines: out, issues, blocked, vars: varList };
   }
   var lineKeyOf = (source) => `${source.book}\0${source.key ?? source.uid}`;
   function applyPlan(personas2, plan, entries) {
-    let ok = entries.filter((entry) => !plan.blocked.has(`${entry.book}\0${entry.key}`)), lines2 = plan.lines.map((line) => ({ id: makeId("pl"), enabled: !0, ...line })), fixedIds = new Set(plan.fixed.map((item) => item.id)), fixed = [...personas2.fixed.filter((item) => !fixedIds.has(item.id)), ...plan.fixed.map(({ reused, ...item }) => item)], imported = [...personas2.imported.filter((item) => !ok.some((entry) => entry.book === item.book && String(entry.key) === String(item.key))), ...ok.map((entry) => ({ book: entry.book, uid: String(entry.uid), key: String(entry.key), title: entry.title }))];
-    return { ...personas2, lines: [...personas2.lines, ...lines2], fixed, imported };
+    let ok = entries.filter((entry) => !plan.blocked.has(`${entry.book}\0${entry.key}`)), lines2 = plan.lines.map((line) => ({ id: makeId("pl"), enabled: !0, ...line })), imported = [...personas2.imported.filter((item) => !ok.some((entry) => entry.book === item.book && String(entry.key) === String(item.key))), ...ok.map((entry) => ({ book: entry.book, uid: String(entry.uid), key: String(entry.key), title: entry.title }))];
+    return { ...personas2, lines: [...personas2.lines, ...lines2], imported };
   }
   function releaseImported(personas2, item, { removeLines = !1 } = {}) {
     let imported = personas2.imported.filter((entry) => !(entry.book === item.book && String(entry.key) === String(item.key)));
@@ -6326,14 +6260,16 @@ ${suffix.trim()}` : body;
                 <span class="pi-wb-title" title="${esc(entry.title)}">${esc(entry.title)}</span><span class="pi-meta">≈${estimateTokens(entry.content)}</span></label>`).join("")}</div>`;
     }).join("") : '<p class="pi-hint">当前启用的世界书里没有含 if 条件的手写条目。</p>';
   }
-  var KIND_LABEL = [{ value: "enum", label: "拆成阶段" }, { value: "fixed", label: "固定选项" }];
+  function varChoices(item) {
+    let fix = item.values.map((value) => ({ value: `fix:${value}`, label: `写死为 ${value}` })), line = item.canLine ? [{ value: "line", label: "拆成阶段" }] : [];
+    return item.kind === "fixed" ? [...fix, ...line] : [...line, ...fix];
+  }
   function previewHtml(plan) {
     let issues = plan.issues.map((issue) => `<p class="pi-hint is-warn">${esc(issue.title)}：${esc(issue.text)}</p>`).join(""), lines2 = plan.lines.map((line) => `<div class="pi-wb-hit"><span class="pi-wb-title">${esc(line.group ? `${line.group} · ` : "")}${esc(line.name)}</span>
-        <span class="pi-meta">${line.mode === "fame" ? "读声望" : line.mode === "check" ? "条件检测" : "手动"} · ${line.stages.length} 阶段</span></div>`).join(""), vars = plan.vars.filter((item) => item.kind !== "num").map((item) => `<div class="pi-wb-hit"><span class="pi-wb-title" title="${esc(item.path)}">${esc(item.name)}<small> ${esc(item.values.join("、"))}</small></span>
-        <select class="pi-sel" data-pi-kind="${esc(item.path)}">${options(KIND_LABEL, item.kind === "fixed" ? "fixed" : "enum")}</select></div>`).join("");
+        <span class="pi-meta">${line.mode === "fame" ? "读声望" : line.mode === "check" ? "条件检测" : "手动"} · ${line.stages.length} 阶段</span></div>`).join(""), vars = plan.vars.filter((item) => item.kind !== "num").map((item) => `<div class="pi-wb-hit"><span class="pi-wb-title" title="${esc(item.path)}">${esc(item.name)}</span>
+        <select class="pi-sel" data-pi-kind="${esc(item.path)}">${options(varChoices(item), item.kind === "fixed" ? `fix:${item.pick}` : "line")}</select></div>`).join("");
     return `${issues}
         <div class="pi-wb-sec-hd">人设线<small>${plan.lines.length}</small></div>${lines2 || '<p class="pi-hint">没有可转入的内容。</p>'}
-        ${plan.fixed.length ? `<div class="pi-wb-sec-hd">固定选项<small>${plan.fixed.length}</small></div>${plan.fixed.map((item) => `<div class="pi-wb-hit"><span class="pi-wb-title">${esc(item.name)}</span><span class="pi-meta">${esc(item.options.join("、"))}</span></div>`).join("")}` : ""}
         ${vars ? `<div class="pi-wb-sec-hd">变量识别（可改判）</div>${vars}` : ""}`;
   }
   async function openImport(view) {
@@ -6345,7 +6281,7 @@ ${suffix.trim()}` : body;
     } catch (error) {
       return toast("error", `读取世界书失败：${error.message}`), !1;
     }
-    let all = books.flatMap((book) => book.entries), picked = /* @__PURE__ */ new Set(), overrides = {}, step = "list", chosen = () => all.filter((entry) => picked.has(idOf(entry))), plan = () => buildPlan(chosen(), { overrides, existing: normalizePersonas(view.project().personas) }), draw = (box) => {
+    let all = books.flatMap((book) => book.entries), picked = /* @__PURE__ */ new Set(), overrides = {}, picks = {}, step = "list", chosen = () => all.filter((entry) => picked.has(idOf(entry))), plan = () => buildPlan(chosen(), { overrides, picks }), draw = (box) => {
       let body = box.querySelector("[data-f=body]");
       body.innerHTML = step === "list" ? listHtml(books, picked) : previewHtml(plan()), box.querySelector("[data-f=count]").textContent = step === "list" ? `已选 ${picked.size} 条` : "预览";
       for (let btn of box.querySelectorAll("[data-dlg]"))
@@ -6360,7 +6296,10 @@ ${suffix.trim()}` : body;
             let id = `${t.dataset.piBook}\0${t.dataset.piPick}`;
             t.checked ? picked.add(id) : picked.delete(id), draw(box);
           }
-          t.dataset.piKind && (overrides = { ...overrides, [t.dataset.piKind]: t.value === "fixed" ? "fixed" : "line" }, draw(box));
+          if (t.dataset.piKind) {
+            let path = t.dataset.piKind, fix = t.value.startsWith("fix:");
+            overrides = { ...overrides, [path]: fix ? "fixed" : "line" }, fix && (picks = { ...picks, [path]: t.value.slice(4) }), draw(box);
+          }
         }), box.addEventListener("click", (event) => {
           let t = event.target.closest("[data-pi-all]");
           if (!t) return;
@@ -6462,14 +6401,6 @@ ${suffix.trim()}` : body;
             <span class="pi-meta">${esc(info.stage ? info.stage.name : "")}${note ? ` · ${note}` : ""}</span>
             <input type="checkbox" title="启用" data-pl-on="${esc(line.id)}"${line.enabled ? " checked" : ""}></div>${open ? lineBody(view, line, units) : ""}</div>`;
   }
-  function fixedCard(view, all) {
-    let rows2 = all.fixed.map((item) => `<div class="pi-node"><div class="pi-node-hd">${input(`data-pf="${esc(item.id)}" data-f="name"`, item.name, ' placeholder="选项名，正文里写成 {{选项名}}"')}
-        <button type="button" class="pi-icon-btn is-danger" data-act="fx-del" data-fixed="${esc(item.id)}" title="删除">${ICONS.trash}</button></div>
-        ${field("可选值（逗号分隔）", input(`data-pf="${esc(item.id)}" data-f="options"`, item.options.join("，")))}</div>`).join("");
-    return `<div class="pi-card"><h3>固定选项<span class="pi-meta">每个聊天选一次</span><span class="pi-spacer"></span>
-        <button type="button" class="pi-btn is-sm is-ghost" data-act="fx-add">${ICONS.plus}添加</button></h3>
-        ${rows2 || '<p class="pi-hint">没有固定选项。主角性别这类整段文字替换的选择写在这里，文中用 {{选项名}} 引用。</p>'}</div>`;
-  }
   function importedCard(all) {
     let rows2 = all.imported.map((item, index) => `<div class="pi-wb-row"><span class="pi-wb-title" title="${esc(item.book)}">${esc(item.title || item.key)}<small> ${esc(item.book)}</small></span>
         <button type="button" class="pi-btn is-sm" data-act="imp-restore" data-i="${index}">恢复</button></div>`).join("");
@@ -6484,7 +6415,6 @@ ${suffix.trim()}` : body;
     return `<div class="pi-card"><h3>人设<span class="pi-meta">${all.lines.length} 条线</span><span class="pi-spacer"></span>
             <button type="button" class="pi-btn is-sm is-primary" data-act="pl-add">${ICONS.plus}新建人设线</button></h3>
         ${groups || '<p class="pi-hint">还没有人设线。新建一条，或从世界书转入。</p>'}</div>
-        ${fixedCard(view, all)}
         ${importedCard(all)}`;
   }
   var LINE_PATCH = {
@@ -6512,10 +6442,6 @@ ${suffix.trim()}` : body;
     let d = target.dataset;
     if (d.plOn)
       return patchLine(view, d.plOn, (line) => ({ ...line, enabled: target.checked })), view.renderBody();
-    if (d.pf) {
-      let parse = d.f === "options" ? { options: [...new Set(String(target.value).split(/[,，、\n]/).map((item) => item.trim()).filter(Boolean))] } : { name: target.value.trim() };
-      return patchPersonas(view, (all) => ({ ...all, fixed: all.fixed.map((item) => item.id === d.pf ? { ...item, ...parse } : item) })), view.renderBody();
-    }
     if (d.pl)
       return d.ps ? patchStage(view, d.pl, d.ps, (stage) => ({ ...stage, ...d.f === "min" || d.f === "max" ? rangePatch(stage, d.f, target.value) : (STAGE_PATCH[d.f] || (() => ({})))(target.value) })) : d.f === "fameBar" || d.f === "famePartner" ? patchLine(view, d.pl, (line) => ({ ...line, fame: { ...line.fame, [d.f === "fameBar" ? "bar" : "partner"]: target.value.trim() } })) : LINE_PATCH[d.f] && patchLine(view, d.pl, (line) => ({ ...line, ...LINE_PATCH[d.f](target.value) })), view.renderBody();
   }
@@ -6561,12 +6487,6 @@ ${suffix.trim()}` : body;
     async "imp-restore"(view, target) {
       let item = personas(view).imported[Number(target.dataset.i)];
       item && await restoreImported(view, item) && view.renderBody();
-    },
-    "fx-add"(view) {
-      patchPersonas(view, (all) => ({ ...all, fixed: [...all.fixed, { id: makeId("pf"), name: `选项${all.fixed.length + 1}`, options: ["甲", "乙"], varPath: "" }] })), view.renderBody();
-    },
-    "fx-del"(view, target) {
-      patchPersonas(view, (all) => ({ ...all, fixed: all.fixed.filter((item) => item.id !== target.dataset.fixed) })), view.renderBody();
     }
   };
 
@@ -6661,15 +6581,15 @@ ${suffix.trim()}` : body;
   }
   function personaCard(view, project, progress, st9) {
     if (!hasPersonas(project)) return "";
-    let all = project.personas, env = personaEnv(project, progress, view.runtime.fame()), muted = new Set(progress.personas && progress.personas.muted || []), fixed = all.fixed.filter((item) => item.options.length).map((item) => `<label class="pi-field"><span>${esc(item.name)}</span><select class="pi-sel" data-pfixed="${esc(item.id)}">${fixedValue(item, progress) ? "" : '<option value="" selected disabled>请选择</option>'}${options(item.options.map((value) => ({ value, label: value })), fixedValue(item, progress))}</select></label>`).join(""), collapsed = new Set(st9.personaFold || []), line = (item) => {
+    let all = project.personas, env = personaEnv(project, progress, view.runtime.fame()), muted = new Set(progress.personas && progress.personas.muted || []), collapsed = new Set(st9.personaFold || []), line = (item) => {
       let info = currentStage(item, progress, env), note = [info.source === "manual" && item.mode !== "manual" ? "手动" : "", info.lost ? "读不到声望" : "", muted.has(item.id) ? "不提醒" : ""].filter(Boolean).join(" · "), caps = item.stages.map((stage, index) => `<button type="button" class="pi-chip${index === info.index ? " is-on" : ""}" data-act="persona-pick" data-line="${esc(item.id)}" data-stage="${esc(stage.id)}">${esc(stage.name)}</button>`).join("");
       return `<div class="pi-pl-row${info.lost ? " is-lost" : ""}"><div class="pi-pl-hd"><span class="pi-pl-name">${esc(item.name)}</span>${note ? `<span class="pi-tl-state">${esc(note)}</span>` : ""}
             <button type="button" class="pi-icon-btn" data-act="persona-menu" data-line="${esc(item.id)}" title="更多">${ICONS.more}</button></div><div class="pi-refs">${caps}</div></div>`;
-    }, groups = groupLines(all.lines.filter((item) => item.enabled)).map((group) => {
+    };
+    return `<div class="pi-card"><h3>人设阶段</h3>${groupLines(all.lines.filter((item) => item.enabled)).map((group) => {
       let key = group.name || "::none", shut = collapsed.has(key);
       return `<div class="pi-group${shut ? " is-collapsed" : ""}"><button type="button" class="pi-group-hd" data-act="persona-fold" data-group="${esc(key)}">${shut ? ICONS.caret : ICONS.caretDown}${esc(group.name || "未分组")}<small>${group.lines.length}</small></button>${shut ? "" : group.lines.map(line).join("")}</div>`;
-    }).join("");
-    return `<div class="pi-card"><h3>人设阶段</h3>${fixed ? `<div class="pi-pair">${fixed}</div>` : ""}${groups || '<p class="pi-hint">没有启用的人设线。</p>'}</div>`;
+    }).join("") || '<p class="pi-hint">没有启用的人设线。</p>'}</div>`;
   }
   function render5(view) {
     let { data, runtime } = view, project = view.project(), st9 = view.tabState("run"), notActive = activateCard(view, project);
@@ -6821,10 +6741,6 @@ ${suffix.trim()}` : body;
   };
   function onChange3(view, target) {
     let { runtime } = view;
-    if (target.dataset.pfixed) {
-      runtime.setProgress(setFixedValue(runtime.progress(), target.dataset.pfixed, target.value)), view.renderBody();
-      return;
-    }
     if (target.dataset.param) {
       let value = Math.round(Number(target.value));
       if (!Number.isFinite(value)) return;
@@ -8280,7 +8196,7 @@ ${suffix.trim()}` : body;
   }
 
   // src/index.js
-  var VERSION = "0.1.27", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.1.28", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")
@@ -8305,11 +8221,7 @@ ${suffix.trim()}` : body;
       } catch (error) {
         console.error("[剧情注入器] 界面刷新失败", error);
       }
-    }, runtime = createRuntime({ data, notice, emit, askReason, askFixed: (items) => openDialog({
-      title: "选择人设选项",
-      html: items.map((item) => `<label class="pi-field"><span>${esc(item.name)}</span><select class="pi-sel" data-fx="${esc(item.id)}">${options(item.options.map((value) => ({ value, label: value })), item.options[0])}</select></label>`).join(""),
-      actions: [{ label: "稍后再选", value: null }, { label: "确定", primary: !0, value: (box) => Object.fromEntries([...box.querySelectorAll("[data-fx]")].map((node) => [node.dataset.fx, node.value])) }]
-    }) });
+    }, runtime = createRuntime({ data, notice, emit, askReason });
     app = createApp({ data, runtime, version: VERSION });
     let started = !1, ready = data.init().then(() => {
       runtime.start(), started = !0, emit("index");

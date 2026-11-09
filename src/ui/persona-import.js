@@ -33,17 +33,21 @@ function listHtml(books, picked) {
     }).join('');
 }
 
-const KIND_LABEL = [{ value: 'enum', label: '拆成阶段' }, { value: 'fixed', label: '固定选项' }];
+// 每个变量一个下拉：写死为某值（转入时只留这段文字）或拆成阶段（嵌套在别的阶段里的只能写死）。
+function varChoices(item) {
+    const fix = item.values.map(value => ({ value: `fix:${value}`, label: `写死为 ${value}` }));
+    const line = item.canLine ? [{ value: 'line', label: '拆成阶段' }] : [];
+    return item.kind === 'fixed' ? [...fix, ...line] : [...line, ...fix];
+}
 
 function previewHtml(plan) {
     const issues = plan.issues.map(issue => `<p class="pi-hint is-warn">${esc(issue.title)}：${esc(issue.text)}</p>`).join('');
     const lines = plan.lines.map(line => `<div class="pi-wb-hit"><span class="pi-wb-title">${esc(line.group ? `${line.group} · ` : '')}${esc(line.name)}</span>
         <span class="pi-meta">${line.mode === 'fame' ? '读声望' : line.mode === 'check' ? '条件检测' : '手动'} · ${line.stages.length} 阶段</span></div>`).join('');
-    const vars = plan.vars.filter(item => item.kind !== 'num').map(item => `<div class="pi-wb-hit"><span class="pi-wb-title" title="${esc(item.path)}">${esc(item.name)}<small> ${esc(item.values.join('、'))}</small></span>
-        <select class="pi-sel" data-pi-kind="${esc(item.path)}">${options(KIND_LABEL, item.kind === 'fixed' ? 'fixed' : 'enum')}</select></div>`).join('');
+    const vars = plan.vars.filter(item => item.kind !== 'num').map(item => `<div class="pi-wb-hit"><span class="pi-wb-title" title="${esc(item.path)}">${esc(item.name)}</span>
+        <select class="pi-sel" data-pi-kind="${esc(item.path)}">${options(varChoices(item), item.kind === 'fixed' ? `fix:${item.pick}` : 'line')}</select></div>`).join('');
     return `${issues}
         <div class="pi-wb-sec-hd">人设线<small>${plan.lines.length}</small></div>${lines || '<p class="pi-hint">没有可转入的内容。</p>'}
-        ${plan.fixed.length ? `<div class="pi-wb-sec-hd">固定选项<small>${plan.fixed.length}</small></div>${plan.fixed.map(item => `<div class="pi-wb-hit"><span class="pi-wb-title">${esc(item.name)}</span><span class="pi-meta">${esc(item.options.join('、'))}</span></div>`).join('')}` : ''}
         ${vars ? `<div class="pi-wb-sec-hd">变量识别（可改判）</div>${vars}` : ''}`;
 }
 
@@ -61,9 +65,10 @@ export async function openImport(view) {
     const all = books.flatMap(book => book.entries);
     const picked = new Set();
     let overrides = {};
+    let picks = {};
     let step = 'list';
     const chosen = () => all.filter(entry => picked.has(idOf(entry)));
-    const plan = () => buildPlan(chosen(), { overrides, existing: normalizePersonas(view.project().personas) });
+    const plan = () => buildPlan(chosen(), { overrides, picks });
     const draw = box => {
         const body = box.querySelector('[data-f=body]');
         body.innerHTML = step === 'list' ? listHtml(books, picked) : previewHtml(plan());
@@ -81,7 +86,13 @@ export async function openImport(view) {
             box.addEventListener('change', event => {
                 const t = event.target;
                 if (t.dataset.piPick) { const id = `${t.dataset.piBook}\u0000${t.dataset.piPick}`; if (t.checked) picked.add(id); else picked.delete(id); draw(box); }
-                if (t.dataset.piKind) { overrides = { ...overrides, [t.dataset.piKind]: t.value === 'fixed' ? 'fixed' : 'line' }; draw(box); }
+                if (t.dataset.piKind) {
+                    const path = t.dataset.piKind;
+                    const fix = t.value.startsWith('fix:');
+                    overrides = { ...overrides, [path]: fix ? 'fixed' : 'line' };
+                    if (fix) picks = { ...picks, [path]: t.value.slice(4) };
+                    draw(box);
+                }
             });
             box.addEventListener('click', event => {
                 const t = event.target.closest('[data-pi-all]');

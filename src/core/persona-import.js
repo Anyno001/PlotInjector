@@ -3,7 +3,7 @@ import { newStage } from './personas.js';
 
 // 从世界书转入人设：解析条目里的 <if cell="表/行/列 == 值">…</if>，按变量拆成人设线，纯逻辑，不碰酒馆。
 // 条件写法：cell="路径 == 值"、cond="cell:路径 >= 21 & cell:路径 <= 40"（& 为并且）、cond="cell:路径 == 甲, cell:路径 == 乙"（逗号为或者）。
-// 固定选项里整段的内容用 {{选项名=值}}…{{/选项名}} 表示（只在该值被选中时保留），整句只是选项值本身的用 {{选项名}} 表示；替换见 personas.js 的 applyFixed。
+// 句中短 if、嵌套在阶段里的 if 的变量不拆阶段，转入时按预览里选的值「写死」：只保留选中值那段文字。
 
 const TAG = /<if\s+(cell|cond)\s*=\s*(?:"([^"]*)"|'([^']*)')\s*>|<\/if\s*>/gi;
 const TERM = /^(?:cell:)?\s*(.+?)\s*(==|!=|<=|>=|<|>)\s*(.+?)\s*$/;
@@ -135,13 +135,14 @@ function scanVars(parsedEntries) {
     return vars;
 }
 
-// 变量分类：只用 == 比较，并且出现在别的 if 里面或夹在一句话中间的，默认当固定选项；带 <=、>= 的是数值（读声望）；其余是枚举阶段。
+// 变量分类：只用 == 比较，并且出现在别的 if 里面或夹在一句话中间的，默认写死为某值（嵌套的只能写死）；带 <=、>= 的是数值（读声望）；其余是枚举阶段。
 export function classifyVar(info, override = '') {
     const numeric = info.ops.has('<=') || info.ops.has('>=');
     if (numeric) return 'num';
+    if (info.nested) return 'fixed';
     if (override === 'fixed') return 'fixed';
     if (override === 'line') return 'enum';
-    return info.nested || info.inline ? 'fixed' : 'enum';
+    return info.inline ? 'fixed' : 'enum';
 }
 
 // ---------- 渲染成文字 ----------
@@ -149,7 +150,7 @@ export function classifyVar(info, override = '') {
 const trimBlock = text => String(text).replace(/^[ \t]*\n/, '').replace(/\s+$/, '');
 const stripComments = text => String(text).replace(/<!--[\s\S]*?-->/g, '');
 
-// 固定选项 if → 块标记；其他 if（嵌套在阶段里的非固定变量）记问题后只保留内容。
+// 写死的变量 if → 只保留选中值那段；其他 if（嵌套在阶段里的非写死变量）记问题后只保留内容。
 function renderNodes(nodes, ctx) {
     let out = '';
     for (const node of nodes) {
@@ -158,28 +159,13 @@ function renderNodes(nodes, ctx) {
         const fixed = one && ctx.kinds.get(one) === 'fixed';
         const body = () => (node.inline ? renderNodes(node.children, ctx) : trimBlock(renderNodes(node.children, ctx)));
         if (fixed && node.parsed.terms.every(term => term.op === '==')) {
-            const name = ctx.nameOf(one);
-            for (const term of node.parsed.terms) out += `{{${name}=${term.value}}}${body()}{{/${name}}}`;
+            const picked = ctx.picks.get(one);
+            const hit = node.parsed.or ? node.parsed.terms.some(term => term.value === picked) : node.parsed.terms.every(term => term.value === picked);
+            if (hit) out += body();
         } else {
             ctx.issue('error', `嵌套了无法拆分的 if「${node.cond.replace(/cell:/g, '')}」`);
             out += renderNodes(node.children, ctx);
         }
-    }
-    return out;
-}
-
-// 相邻的整组块、每块内容正好是选项值本身：合成一个 {{选项名}}。
-function collapseFixed(text, fixedItems) {
-    let out = text;
-    for (const item of fixedItems) {
-        const name = item.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const block = `\\{\\{${name}=([^}]*)\\}\\}([^{}]*)\\{\\{\\/${name}\\}\\}`;
-        out = out.replace(new RegExp(`(?:${block})+`, 'g'), run => {
-            const blocks = [...run.matchAll(new RegExp(block, 'g'))];
-            const same = blocks.every(match => match[1] === match[2].trim());
-            const covers = item.options.every(option => blocks.some(match => match[1] === option));
-            return same && covers && blocks.length === item.options.length ? `{{${item.name}}}` : run;
-        });
     }
     return out;
 }
@@ -221,9 +207,9 @@ function numericStages(entries) {
     return out;
 }
 
-// 返回 { lines, fixed, issues, blocked: Set(条目key), vars }。
-// entries：[{ book, key, uid, title, content, keys, constant, position, depth, role, order }]；overrides：{ [路径]: 'fixed' | 'line' }；existing：项目现有 personas（固定选项同名时合并）。
-export function buildPlan(entries, { overrides = {}, existing = null } = {}) {
+// 返回 { lines, issues, blocked: Set(条目key), vars }。
+// entries：[{ book, key, uid, title, content, keys, constant, position, depth, role, order }]；overrides：{ [路径]: 'fixed'（写死） | 'line' }；picks：{ [路径]: 写死时保留的值 }，缺省取第一个值。
+export function buildPlan(entries, { overrides = {}, picks = {} } = {}) {
     const parsed = entries.map(entry => ({ entry, key: `${entry.book}\u0000${entry.key}`, tree: parseEntry(entry.content) }));
     const blocked = new Set();
     const issues = [];
@@ -248,16 +234,12 @@ export function buildPlan(entries, { overrides = {}, existing = null } = {}) {
         }
     }
 
-    // 固定选项：名字取列名，可选值按出现顺序。
-    const fixedItems = [];
+    // 写死的变量：保留的值取预览里选的，缺省第一个。
+    const pickMap = new Map();
     for (const item of info.values()) {
         if (kinds.get(item.path) !== 'fixed') continue;
-        const name = pathNames(item.path).name;
-        const old = existing && existing.fixed.find(entry => entry.name === name);
-        fixedItems.push({ id: old ? old.id : makeId('pf'), name, options: [...new Set([...(old ? old.options : []), ...item.values])], varPath: item.path, reused: Boolean(old) });
+        pickMap.set(item.path, item.values.includes(picks[item.path]) ? picks[item.path] : item.values[0]);
     }
-    const nameOf = path => pathNames(path).name;
-
     // 线按变量归并，条目顺序拼接。
     const lines = new Map();
     const lineFor = (path, kind, entry) => {
@@ -274,7 +256,7 @@ export function buildPlan(entries, { overrides = {}, existing = null } = {}) {
     for (const { entry, key, tree } of parsed) {
         if (blocked.has(key)) continue;
         const entryIssues = [];
-        const ctx = { kinds, nameOf, issue: (level, text) => entryIssues.push({ level, text }) };
+        const ctx = { kinds, picks: pickMap, issue: (level, text) => entryIssues.push({ level, text }) };
         const outside = [];
         const staged = [];
         for (const node of tree.nodes) {
@@ -284,7 +266,7 @@ export function buildPlan(entries, { overrides = {}, existing = null } = {}) {
             if (node.type === 'if' && kinds.get(one) !== 'fixed') staged.push({ node, path: one, kind: kinds.get(one) });
             else outside.push({ at: staged.length, text: node.type === 'text' ? node.text : renderNodes([node], ctx) });
         }
-        const tidy = text => collapseFixed(stripComments(text), fixedItems);
+        const tidy = text => stripComments(text);
         // 阶段内容先渲染：里面嵌套的、不能拆分的 if 在这里记问题。
         for (const part of staged) part.body = trimBlock(tidy(renderNodes(part.node.children, ctx)));
         for (const problem of entryIssues) report(entry, problem.level, problem.text);
@@ -336,26 +318,14 @@ export function buildPlan(entries, { overrides = {}, existing = null } = {}) {
             out.push({ ...base, mode: 'check', fame: { bar: '', partner: '' }, stages });
         }
     }
-    // 没有阶段、只有固定选项替换的条目：一条手动线，一个阶段。
+    // 没有阶段、只有写死替换的条目：一条手动线，一个阶段。
     for (const { entry, text } of plainLines) {
         if (!text) continue;
         out.push({ group: '', name: entryName(entry.title), keys: entry.keys, constant: entry.constant, position: entry.position, depth: entry.depth, role: entry.role, order: entry.order, common: '', mode: 'manual', fame: { bar: '', partner: '' }, stages: [{ ...newStage('默认'), text }], source: { book: entry.book, uid: String(entry.uid), varPath: '' }, sources: [{ book: entry.book, uid: String(entry.uid), key: String(entry.key) }] });
     }
 
-    // 固定选项的部分来源条目被拦下时，可选值可能不全（如「星期几」只剩几天）：提示改判或补齐。
-    for (const item of fixedItems) {
-        const meta = info.get(item.varPath);
-        const keys = [...meta.entries];
-        const lost = new Set([...keys.filter(key => blocked.has(key)), ...(meta.lost || [])]).size;
-        if (!lost || keys.every(key => blocked.has(key))) continue;
-        const entry = entries.find(one => keys.includes(`${one.book}\u0000${one.key}`) && !blocked.has(`${one.book}\u0000${one.key}`));
-        if (entry) report(entry, 'warn', `固定选项「${item.name}」有 ${lost} 个来源条目未能转入，可选值可能不全；若它会随剧情变化，请改成人设线`);
-    }
-
-    const used = new Set(entries.map(entry => `${entry.book}\u0000${entry.key}`));
-    const usedFixed = fixedItems.filter(item => [...info.get(item.varPath).entries].some(key => used.has(key) && !blocked.has(key)));
-    const varList = [...info.values()].map(item => ({ path: item.path, name: pathNames(item.path).name, group: pathNames(item.path).group, kind: kinds.get(item.path), values: item.values, entries: item.entries.size, canFix: !(item.ops.has('<=') || item.ops.has('>=')) }));
-    return { lines: out, fixed: usedFixed, issues, blocked, vars: varList };
+    const varList = [...info.values()].map(item => ({ path: item.path, name: pathNames(item.path).name, group: pathNames(item.path).group, kind: kinds.get(item.path), values: item.values, pick: pickMap.get(item.path), entries: item.entries.size, canFix: !(item.ops.has('<=') || item.ops.has('>=')), canLine: !item.nested }));
+    return { lines: out, issues, blocked, vars: varList };
 }
 
 // ---------- 写入与恢复 ----------
@@ -366,10 +336,8 @@ const lineKeyOf = source => `${source.book}\u0000${source.key ?? source.uid}`;
 export function applyPlan(personas, plan, entries) {
     const ok = entries.filter(entry => !plan.blocked.has(`${entry.book}\u0000${entry.key}`));
     const lines = plan.lines.map(line => ({ id: makeId('pl'), enabled: true, ...line }));
-    const fixedIds = new Set(plan.fixed.map(item => item.id));
-    const fixed = [...personas.fixed.filter(item => !fixedIds.has(item.id)), ...plan.fixed.map(({ reused, ...item }) => item)];
     const imported = [...personas.imported.filter(item => !ok.some(entry => entry.book === item.book && String(entry.key) === String(item.key))), ...ok.map(entry => ({ book: entry.book, uid: String(entry.uid), key: String(entry.key), title: entry.title }))];
-    return { ...personas, lines: [...personas.lines, ...lines], fixed, imported };
+    return { ...personas, lines: [...personas.lines, ...lines], imported };
 }
 
 // 恢复一条原条目：从 imported 里去掉；removeLines 为真时一并删掉只来自这条的人设线（来自多条的线只去掉这一来源）。

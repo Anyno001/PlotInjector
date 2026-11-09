@@ -3,7 +3,7 @@ import { createDataStore } from './app/data.js';
 import { createRuntime } from './app/runtime.js';
 import { hostWindow, libs, toast } from './host/st.js';
 import { createApp } from './ui/app.js';
-import { ensureStyle, esc, openDialog, options, promptDialog, removeStyle } from './ui/dom.js';
+import { ensureStyle, promptDialog, removeStyle } from './ui/dom.js';
 import { createNotices } from './ui/notice.js';
 
 const VERSION = typeof __PI_VERSION__ === 'string' ? __PI_VERSION__ : 'dev';
@@ -37,12 +37,7 @@ function boot() {
     const emit = reason => {
         try { if (app) app.refresh(reason); } catch (error) { console.error('[剧情注入器] 界面刷新失败', error); }
     };
-    const askFixed = items => openDialog({
-        title: '选择人设选项',
-        html: items.map(item => `<label class="pi-field"><span>${esc(item.name)}</span><select class="pi-sel" data-fx="${esc(item.id)}">${options(item.options.map(value => ({ value, label: value })), item.options[0])}</select></label>`).join(''),
-        actions: [{ label: '稍后再选', value: null }, { label: '确定', primary: true, value: box => Object.fromEntries([...box.querySelectorAll('[data-fx]')].map(node => [node.dataset.fx, node.value])) }],
-    });
-    const runtime = createRuntime({ data, notice, emit, askReason, askFixed });
+    const runtime = createRuntime({ data, notice, emit, askReason });
     app = createApp({ data, runtime, version: VERSION });
 
     let started = false;

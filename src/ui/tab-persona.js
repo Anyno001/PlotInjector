@@ -1,5 +1,5 @@
 import { POSITIONS, ROLES } from '../core/inject.js';
-import { flattenUnits, makeId, stageLabel, volumeLabel } from '../core/outline.js';
+import { flattenUnits, stageLabel, volumeLabel } from '../core/outline.js';
 import { PERSONA_MODES, currentStage, groupLines, newLine, newStage, personaEnv } from '../core/personas.js';
 import { emptyProgress } from '../core/progress.js';
 import { estimateTokens } from '../core/tokens.js';
@@ -89,15 +89,6 @@ function lineRow(view, line, open, units) {
             <input type="checkbox" title="启用" data-pl-on="${esc(line.id)}"${line.enabled ? ' checked' : ''}></div>${open ? lineBody(view, line, units) : ''}</div>`;
 }
 
-function fixedCard(view, all) {
-    const rows = all.fixed.map(item => `<div class="pi-node"><div class="pi-node-hd">${input(`data-pf="${esc(item.id)}" data-f="name"`, item.name, ' placeholder="选项名，正文里写成 {{选项名}}"')}
-        <button type="button" class="pi-icon-btn is-danger" data-act="fx-del" data-fixed="${esc(item.id)}" title="删除">${ICONS.trash}</button></div>
-        ${field('可选值（逗号分隔）', input(`data-pf="${esc(item.id)}" data-f="options"`, item.options.join('，')))}</div>`).join('');
-    return `<div class="pi-card"><h3>固定选项<span class="pi-meta">每个聊天选一次</span><span class="pi-spacer"></span>
-        <button type="button" class="pi-btn is-sm is-ghost" data-act="fx-add">${ICONS.plus}添加</button></h3>
-        ${rows || '<p class="pi-hint">没有固定选项。主角性别这类整段文字替换的选择写在这里，文中用 {{选项名}} 引用。</p>'}</div>`;
-}
-
 function importedCard(all) {
     const rows = all.imported.map((item, index) => `<div class="pi-wb-row"><span class="pi-wb-title" title="${esc(item.book)}">${esc(item.title || item.key)}<small> ${esc(item.book)}</small></span>
         <button type="button" class="pi-btn is-sm" data-act="imp-restore" data-i="${index}">恢复</button></div>`).join('');
@@ -120,7 +111,6 @@ export function render(view) {
     return `<div class="pi-card"><h3>人设<span class="pi-meta">${all.lines.length} 条线</span><span class="pi-spacer"></span>
             <button type="button" class="pi-btn is-sm is-primary" data-act="pl-add">${ICONS.plus}新建人设线</button></h3>
         ${groups || '<p class="pi-hint">还没有人设线。新建一条，或从世界书转入。</p>'}</div>
-        ${fixedCard(view, all)}
         ${importedCard(all)}`;
 }
 
@@ -155,11 +145,6 @@ export function onChange(view, target) {
     const d = target.dataset;
     if (d.plOn) {
         patchLine(view, d.plOn, line => ({ ...line, enabled: target.checked }));
-        return view.renderBody();
-    }
-    if (d.pf) {
-        const parse = d.f === 'options' ? { options: [...new Set(String(target.value).split(/[,，、\n]/).map(item => item.trim()).filter(Boolean))] } : { name: target.value.trim() };
-        patchPersonas(view, all => ({ ...all, fixed: all.fixed.map(item => (item.id === d.pf ? { ...item, ...parse } : item)) }));
         return view.renderBody();
     }
     if (!d.pl) return undefined;
@@ -230,13 +215,5 @@ export const actions = {
     async 'imp-restore'(view, target) {
         const item = personas(view).imported[Number(target.dataset.i)];
         if (item && (await restoreImported(view, item))) view.renderBody();
-    },
-    'fx-add'(view) {
-        patchPersonas(view, all => ({ ...all, fixed: [...all.fixed, { id: makeId('pf'), name: `选项${all.fixed.length + 1}`, options: ['甲', '乙'], varPath: '' }] }));
-        view.renderBody();
-    },
-    'fx-del'(view, target) {
-        patchPersonas(view, all => ({ ...all, fixed: all.fixed.filter(item => item.id !== target.dataset.fixed) }));
-        view.renderBody();
     },
 };

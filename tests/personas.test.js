@@ -10,7 +10,7 @@ import { buildEntries } from '../src/core/inject.js';
 import { buildCheckMessages, buildPersonaCheckMessages, parseCheckReply } from '../src/core/check.js';
 import { newProject, normalizeProject, normalizeSettings } from '../src/core/store.js';
 import { flattenUnits } from '../src/core/outline.js';
-import { applyFixed, applyMoves, alignPersonaProgress, buildPersonaEntries, checkItems, currentStage, emptyPersonas, fixedValue, newLine, newStage, normalizePersonas, resolveMoves, setFixedValue, setPersonaStage, syncPersonas, undoMoves, unsetFixed } from '../src/core/personas.js';
+import { applyMoves, alignPersonaProgress, buildPersonaEntries, checkItems, currentStage, emptyPersonas, newLine, newStage, normalizePersonas, resolveMoves, setPersonaStage, syncPersonas, undoMoves } from '../src/core/personas.js';
 import { applyPlan, buildPlan, parseCond, parseEntry, releaseImported } from '../src/core/persona-import.js';
 import { flattenUnits as flat } from '../src/core/outline.js';
 
@@ -47,8 +47,8 @@ function lineOf(mode, stages, extra = {}) {
 
 test('旧项目没有 personas 字段时补空结构，人设相关设置有默认值', () => {
     const project = normalizeProject({ id: 'p', name: 'x' }, 'p');
-    assert.deepEqual(project.personas, { lines: [], fixed: [], imported: [] });
-    assert.deepEqual(newProject('x').personas, { lines: [], fixed: [], imported: [] });
+    assert.deepEqual(project.personas, { lines: [], imported: [] });
+    assert.deepEqual(newProject('x').personas, { lines: [], imported: [] });
     assert.equal(normalizeSettings({}).personaMode, 'ask');
     assert.equal(normalizeSettings({ personaMode: 'bad' }).personaMode, 'ask');
     assert.equal(normalizeSettings({ personaMode: 'auto' }).personaMode, 'auto');
@@ -58,7 +58,7 @@ test('旧进度不带 personas 字段时不凭空多出来', () => {
     const progress = normalizeProgress({ projectId: 'p', current: 'a' }, 'p');
     assert.equal('personas' in progress, false);
     const withP = normalizeProgress({ projectId: 'p', personas: { l1: 's1', fixed: { f: '他' } } }, 'p');
-    assert.deepEqual(withP.personas, { l1: 's1', fixed: { f: '他' }, muted: [], manual: [], auto: {}, names: {} });
+    assert.deepEqual(withP.personas, { l1: 's1', muted: [], manual: [], auto: {}, names: {} });
 });
 
 test('没有人设线时 buildEntries 与旧输出一致（不多条目）', () => {
@@ -67,28 +67,25 @@ test('没有人设线时 buildEntries 与旧输出一致（不多条目）', () 
     assert.deepEqual(buildEntries(project, progress, normalizeSettings({})), []);
 });
 
-test('normalizePersonas 补默认值、补一个阶段、丢掉空名固定选项', () => {
-    const out = normalizePersonas({ lines: [{ name: ' 甲 ', mode: 'bad', stages: [] }], fixed: [{ name: '', options: ['他'] }, { name: '性别', options: ['他', '他', '她'] }] });
+test('normalizePersonas 补默认值、补一个阶段、丢掉旧数据里的 fixed', () => {
+    const out = normalizePersonas({ lines: [{ name: ' 甲 ', mode: 'bad', stages: [] }], fixed: [{ name: '', options: ['他'] }, { name: '性别', options: ['他', '她'] }] });
     assert.equal(out.lines[0].name, '甲');
     assert.equal(out.lines[0].mode, 'check');
     assert.equal(out.lines[0].stages.length, 1);
     assert.equal(out.lines[0].constant, true);
-    assert.deepEqual(out.fixed.map(item => [item.name, item.options]), [['性别', ['他', '她']]]);
+    assert.equal('fixed' in out, false, '旧数据带 fixed 读入不报错且被丢弃');
 });
 
 // ---------- 注入 ----------
 
-test('人设线注入：公共文字在阶段内容之前，当前阶段手动切换，固定选项按值替换', () => {
-    const line = lineOf('manual', [['敌对', '她针对{{性别}}。'], ['动摇', '她动摇了。']], { common: '柳云岚是邻家歌手。' });
-    const fixed = { id: 'pf1', name: '性别', options: ['他', '她'], varPath: '' };
-    const project = projectWith(line, { fixed: [fixed] });
+test('人设线注入：公共文字在阶段内容之前，当前阶段手动切换', () => {
+    const line = lineOf('manual', [['敌对', '她针对他。'], ['动摇', '她动摇了。']], { common: '柳云岚是邻家歌手。' });
+    const project = projectWith(line);
     let progress = emptyProgress(project.id);
     let entries = buildEntries(project, progress, normalizeSettings({}));
     const persona = entries.filter(item => item.kind === 'persona');
     assert.equal(persona.length, 1);
-    assert.equal(persona[0].content, '柳云岚是邻家歌手。\n她针对他。', '未选固定选项时先用第一个');
-    progress = setFixedValue(progress, 'pf1', '她');
-    assert.equal(buildEntries(project, progress, normalizeSettings({})).find(item => item.kind === 'persona').content, '柳云岚是邻家歌手。\n她针对她。');
+    assert.equal(persona[0].content, '柳云岚是邻家歌手。\n她针对他。');
     progress = setPersonaStage(progress, project.personas.lines[0], project.personas.lines[0].stages[1].id);
     assert.equal(buildEntries(project, progress, normalizeSettings({})).find(item => item.kind === 'persona').content, '柳云岚是邻家歌手。\n她动摇了。');
     assert.equal(emptyProgress('p').personas, undefined, '原进度不被改');
@@ -116,25 +113,6 @@ test('关键词触发：常驻直接注入；有关键词的线在最近楼层�
     const noKeys = projectWith({ ...line, keys: [] });
     assert.equal(buildPersonaEntries(noKeys, progress, { recentText: '柳云岚' }).length, 0, '既不常驻又没关键词不注入');
 });
-
-test('固定选项：未选提醒、选后取值、选项被改掉后当作未选', () => {
-    const fixed = { id: 'f', name: '性别', options: ['他', '她'], varPath: '' };
-    const personas = { ...emptyPersonas(), fixed: [fixed] };
-    assert.equal(unsetFixed(personas, emptyProgress('p')).length, 1);
-    const progress = setFixedValue(emptyProgress('p'), 'f', '她');
-    assert.equal(fixedValue(fixed, progress), '她');
-    assert.equal(unsetFixed(personas, progress).length, 0);
-    assert.equal(fixedValue({ ...fixed, options: ['男', '女'] }, progress), '');
-});
-
-test('固定选项整段块只在选中值时保留', () => {
-    const personas = { ...emptyPersonas(), fixed: [{ id: 'f', name: '性别', options: ['他', '她'], varPath: '' }] };
-    const content = '性别：\n{{性别=他}}男{{/性别}}{{性别=她}}女{{/性别}}\n称呼{{性别}}';
-    assert.equal(applyFixed(content, personas, setFixedValue(emptyProgress('p'), 'f', '她')), '性别：\n女\n称呼她');
-    assert.equal(applyFixed(content, personas, emptyProgress('p')), '性别：\n男\n称呼他');
-});
-
-// ---------- 四种切换方式 ----------
 
 test('跟随大纲：取已到达的大纲阶段里绑定最靠后的；没绑定的跳过；还没到任何绑定阶段用第一阶段', () => {
     const units = flat(parseOutlineText(OUTLINE));
@@ -305,7 +283,7 @@ test('解析：嵌套、未闭合、多余 </if> 都被标出', () => {
     assert.match(parseEntry('<if foo="1">x</if>').issues.map(item => item.text).join(), /无法识别/);
 });
 
-test('拆分：柳云岚对顾小川 → 一条线按出现顺序成四个阶段，进入条件取「状态：」一行，主角性别成固定选项', () => {
+test('拆分：柳云岚对顾小川 → 一条线按出现顺序成四个阶段，进入条件取「状态：」一行，主角性别转入时写死为所选值', () => {
     const plan = buildPlan([entry(28)]);
     assert.deepEqual(plan.issues, []);
     assert.equal(plan.lines.length, 1);
@@ -319,18 +297,17 @@ test('拆分：柳云岚对顾小川 → 一条线按出现顺序成四个阶段
     assert.deepEqual([line.position, line.depth, line.order], [0, 4, 135]);
     assert.deepEqual(line.keys, ['柳云岚', '邻家歌手', '银渐层', '选拔赛']);
     assert.deepEqual(line.source, { book: '示例世界书', uid: '28', varPath: '重要角色表/柳云岚/对顾小川' });
-    assert.equal(plan.fixed.length, 1);
-    assert.deepEqual([plan.fixed[0].name, plan.fixed[0].options], ['主角的客观性别', ['他', '她']]);
-    assert.match(line.stages[0].text, /顾小川\{\{主角的客观性别=他\}\}弟弟\{\{\/主角的客观性别\}\}\{\{主角的客观性别=她\}\}妹妹\{\{\/主角的客观性别\}\}/);
+    assert.match(line.stages[0].text, /顾小川弟弟/, '默认写死为第一个值「他」');
+    assert.doesNotMatch(line.stages[0].text, /妹妹|\{\{/);
     assert.doesNotMatch(line.stages.map(stage => stage.text).join(), /<if|<\/if>/);
     assert.ok(line.stages.every(stage => stage.text.startsWith('<追加_2>\n') && stage.text.endsWith('</追加_2>')), '外层的 <追加_2> 标签跟着每个阶段走');
-    const personas = { ...emptyPersonas(), fixed: plan.fixed, lines: [{ ...newLine(), ...line }] };
-    const text = applyFixed(line.stages[0].text, personas, setFixedValue(emptyProgress('p'), plan.fixed[0].id, '她'));
-    assert.match(text, /顾小川妹妹/);
-    assert.doesNotMatch(text, /弟弟|\{\{/);
+    const she = buildPlan([entry(28)], { picks: { '主角信息表/主角信息/主角的客观性别': '她' } });
+    assert.match(she.lines[0].stages[0].text, /顾小川妹妹/);
+    assert.doesNotMatch(she.lines[0].stages.map(stage => stage.text).join(), /弟弟|\{\{/);
+    assert.equal(she.vars.find(item => item.path === '主角信息表/主角信息/主角的客观性别').pick, '她');
 });
 
-test('拆分：整条线外面的文字、固定选项的整段块（顾小川履历）', () => {
+test('拆分：整条线外面的文字、写死所选值的整段块（顾小川履历，选他 / 选她）', () => {
     const plan = buildPlan([entry(13)]);
     assert.deepEqual(plan.issues, []);
     assert.equal(plan.lines.length, 1, '没有阶段的条目成一条手动线');
@@ -338,9 +315,8 @@ test('拆分：整条线外面的文字、固定选项的整段块（顾小川�
     assert.equal(line.mode, 'manual');
     assert.equal(line.name, '顾小川');
     assert.equal(line.stages.length, 1);
-    const personas = { ...emptyPersonas(), fixed: plan.fixed, lines: [] };
-    const male = applyFixed(line.stages[0].text, personas, setFixedValue(emptyProgress('p'), plan.fixed[0].id, '他'));
-    const female = applyFixed(line.stages[0].text, personas, setFixedValue(emptyProgress('p'), plan.fixed[0].id, '她'));
+    const male = plan.lines[0].stages[0].text;
+    const female = buildPlan([entry(13)], { picks: { '主角信息表/主角信息/主角的客观性别': '她' } }).lines[0].stages[0].text;
     assert.match(male, /性别：男/);
     assert.doesNotMatch(male, /性别：女|假小子/);
     assert.match(male, /这副嗓子比同龄人低一截/);
@@ -361,7 +337,6 @@ test('拆分：<= / >= 数值条件 → 读声望，补空档阶段，区间取�
     assert.deepEqual(line.stages.map(stage => stage.range), [{ max: 20 }, { min: 21, max: 40 }, { min: 41, max: 65 }, { min: 66 }]);
     assert.match(line.stages[0].text, /麻烦制造机/);
     assert.match(line.stages[3].text, /不可替代的灵魂人物/);
-    assert.equal(plan.fixed.length, 0);
 });
 
 test('拆分：数值区间中间缺的补空阶段', () => {
@@ -377,7 +352,8 @@ test('拆分：多个变量拆成多条线共用条目的关键词与参数；�
     const line = plan.lines[0];
     assert.equal(line.name, '信赖程度');
     assert.deepEqual(line.stages.map(stage => stage.name), ['拘谨', '试探', '熟悉', '默契']);
-    assert.match(line.stages[2].text, /\{\{主角的客观性别=他\}\}/);
+    assert.match(line.stages[2].text, /低沉的试唱/);
+    assert.doesNotMatch(line.stages[2].text, /音域|\{\{/);
     assert.match(line.stages[0].text, /^<追加_5>\n\[沈听澜的相处设定·拘谨\]/);
     const two = '<if cell="X表/甲/一 == a">A</if><if cell="X表/甲/二 == b">B</if>';
     const split = buildPlan([{ book: 'b', key: '1', uid: '1', title: 't', content: `前言\n${two}\n后记`, keys: ['k'], constant: false, position: 1, depth: 4, role: 0, order: 9 }]);
@@ -411,28 +387,29 @@ test('预览问题：未闭合、嵌套无法拆分、无法解析的条件、�
     assert.equal(ok.lines.length, 1, '好条目不受坏条目影响');
 });
 
-test('用户改判：把默认的阶段变量改成固定选项，或把固定选项改成阶段', () => {
+test('用户改判：句中变量可写死为某值或拆成阶段；嵌套的只能写死', () => {
     const content = '<if cell="X表/甲/态度 == 好">好</if><if cell="X表/甲/态度 == 坏">坏</if>';
     const item = { book: 'b', key: '1', uid: '1', title: 't', content, keys: [], constant: true, position: 0, depth: 4, role: 0, order: 1 };
     const asLine = buildPlan([item]);
     assert.equal(asLine.vars[0].kind, 'enum');
-    const asFixed = buildPlan([item], { overrides: { 'X表/甲/态度': 'fixed' } });
-    assert.equal(asFixed.fixed.length, 1);
+    const asFixed = buildPlan([item], { overrides: { 'X表/甲/态度': 'fixed' }, picks: { 'X表/甲/态度': '坏' } });
     assert.equal(asFixed.lines.filter(line => line.mode === 'check').length, 0);
+    assert.equal(asFixed.lines[0].stages[0].text, '坏');
     const sex = buildPlan([entry(143)], { overrides: { '主角信息表/主角信息/主角的客观性别': 'line' } });
-    assert.equal(sex.fixed.length, 0);
+    const info = sex.vars.find(v => v.path === '主角信息表/主角信息/主角的客观性别');
+    assert.equal(info.kind, 'fixed', '嵌套在阶段里的变量不能改判成阶段');
+    assert.equal(info.canLine, false);
 });
 
-test('整卡五条 fixture 一起转入：人设线数量与固定选项合并为一个', () => {
+test('整卡五条 fixture 一起转入：人设线数量', () => {
     const plan = buildPlan([7, 13, 28, 31, 143].map(entry));
     assert.deepEqual(plan.issues, []);
     const names = plan.lines.map(line => `${line.group}/${line.name}`);
     assert.deepEqual(names.sort(), ['/顾小川', '顾小川/节目组态度', '沈听澜/信赖程度', '沈听澜/柳云岚对沈听澜', '柳云岚/对顾小川'].sort());
-    assert.equal(plan.fixed.length, 1);
     assert.equal(plan.lines.length, 5);
 });
 
-test('转入写入：新对象、记 imported、固定选项同名合并；恢复可选删除对应线，多来源的线只去掉这一来源', () => {
+test('转入写入：新对象、记 imported；恢复可选删除对应线，多来源的线只去掉这一来源', () => {
     const entries = [entry(28), entry(143)];
     const plan = buildPlan(entries);
     const before = emptyPersonas();
@@ -440,9 +417,6 @@ test('转入写入：新对象、记 imported、固定选项同名合并；恢�
     assert.deepEqual(before, emptyPersonas(), '原对象不被改');
     assert.equal(after.lines.length, 2);
     assert.deepEqual(after.imported.map(item => item.key), ['28', '143']);
-    assert.equal(after.fixed.length, 1);
-    const again = buildPlan([entry(28)], { existing: after });
-    assert.equal(again.fixed[0].id, after.fixed[0].id, '固定选项同名沿用');
     const kept = releaseImported(after, after.imported[0]);
     assert.deepEqual(kept.imported.map(item => item.key), ['143']);
     assert.equal(kept.lines.length, 2);

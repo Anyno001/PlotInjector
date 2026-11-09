@@ -1228,7 +1228,7 @@ const personaLines = [
     {
         id: 'pl1', group: '柳云岚', name: '对顾小川', keys: [], constant: true, position: 0, depth: 4, role: 0, order: 100, enabled: true, common: '柳云岚是邻家歌手。',
         mode: 'check', fame: { bar: '', partner: '' }, source: null, sources: [],
-        stages: [{ id: 's1', name: '敌对', cond: '', unitId: '', range: {}, text: '她对{{性别}}充满敌意。' }, { id: 's2', name: '动摇', cond: '顾小川帮了她', unitId: '', range: {}, text: '她动摇了。' }],
+        stages: [{ id: 's1', name: '敌对', cond: '', unitId: '', range: {}, text: '她对他充满敌意。' }, { id: 's2', name: '动摇', cond: '顾小川帮了她', unitId: '', range: {}, text: '她动摇了。' }],
     },
     {
         id: 'pl2', group: '节目组', name: '节目组态度', keys: [], constant: true, position: 0, depth: 4, role: 0, order: 101, enabled: true, common: '',
@@ -1240,26 +1240,24 @@ const personaLines = [
 async function withPersonas(host, { lines = personaLines, withOutline = true } = {}) {
     const project = withOutline ? await withProject(host) : await host.instance.data.createProject('人设线');
     if (!withOutline) await host.instance.runtime.switchProject(project.id);
-    host.instance.data.updateProject(project.id, current => ({ ...current, personas: { lines, fixed: [{ id: 'fx1', name: '性别', options: ['他', '她'], varPath: '' }], imported: [] } }));
+    host.instance.data.updateProject(project.id, current => ({ ...current, personas: { lines, fixed: [{ id: 'fx1', name: '性别', options: ['他', '她'], varPath: '' }], imported: [] } })); // 带旧数据的 fixed，读入时应被丢弃
     return project;
 }
 
 const clickText = (doc, selector, label) => [...doc.querySelectorAll(selector)].find(btn => btn.textContent.trim() === label).click();
 
-test('分阶段人设：注入虚拟条目，固定选项弹窗选择后替换，执行页手动切换阶段', async () => {
+test('分阶段人设：注入虚拟条目（旧数据带 fixed 读入不报错、不弹窗），执行页手动切换阶段', async () => {
     const host = await boot();
     await withPersonas(host);
     host.win.IGS = { stats: { fame: () => [{ name: '节目组态度', owner: '顾小川', cls: '口碑', value: 10, tier: '' }] } };
     const doc = host.win.document;
     const pending = entriesNow(host.eventSource);
     await tick(10);
-    assert.ok(doc.querySelector('.pi-dialog [data-fx="fx1"]'), '新聊天第一次注入前未选固定选项会弹窗');
-    doc.querySelector('.pi-dialog [data-fx="fx1"]').value = '她';
-    clickText(doc, '.pi-dialog [data-dlg]', '确定');
+    assert.equal(doc.querySelector('.pi-dialog'), null, '不再弹固定选项');
     let lore = await pending;
     const persona = lore.filter(entry => entry.comment.startsWith('剧情注入器·人设'));
     assert.deepEqual(persona.map(entry => entry.comment), ['剧情注入器·人设·柳云岚·对顾小川', '剧情注入器·人设·节目组·节目组态度']);
-    assert.equal(persona[0].content, '柳云岚是邻家歌手。\n她对她充满敌意。');
+    assert.equal(persona[0].content, '柳云岚是邻家歌手。\n她对他充满敌意。');
     assert.equal(persona[1].content, '节目组恨不得换掉顾小川。');
     host.click();
     await tick(10);
@@ -1269,6 +1267,7 @@ test('分阶段人设：注入虚拟条目，固定选项弹窗选择后替换�
     doc.querySelector('[data-act="tab"][data-tab="run"]').click();
     await tick(10);
     assert.match(doc.querySelector('.pi-body').textContent, /人设阶段/);
+    assert.equal(doc.querySelector('[data-pfixed]'), null);
     doc.querySelector('[data-act="persona-pick"][data-line="pl1"][data-stage="s2"]').click();
     await tick(10);
     assert.ok(doc.querySelector('[data-act="persona-pick"][data-stage="s2"]').classList.contains('is-on'));
@@ -1284,7 +1283,6 @@ test('分阶段人设：注入虚拟条目，固定选项弹窗选择后替换�
 test('分阶段人设：读声望随 IGS 读数与 igs:stats-changed 事件变化，读不到值时标灰并退回手动值', async () => {
     const host = await boot();
     const project = await withPersonas(host, { lines: [personaLines[1]] });
-    host.instance.data.updateProject(project.id, current => ({ ...current, personas: { ...current.personas, fixed: [] } }));
     let value = 10;
     host.win.IGS = { stats: { fame: () => [{ name: '节目组态度', owner: '顾小川', cls: '口碑', value, tier: '' }] } };
     const text = async () => (await entriesNow(host.eventSource)).find(entry => entry.comment.endsWith('节目组态度')).content;
@@ -1306,7 +1304,6 @@ test('分阶段人设：读声望随 IGS 读数与 igs:stats-changed 事件变�
 test('分阶段人设：条件检测并入定期检测请求，采用后推进一格；检测提示不带人设正文', async () => {
     const host = await boot();
     const project = await withPersonas(host, { lines: [personaLines[0]] });
-    host.instance.data.updateProject(project.id, current => ({ ...current, personas: { ...current.personas, fixed: [] } }));
     host.instance.data.updateSettings({ checkEvery: 2 });
     host.win.__reply = () => '{"done":[],"stageDone":false,"reason":"x","personas":[{"line":"柳云岚·对顾小川","to":"动摇","floor":1,"reason":"顾小川帮了她"}]}';
     host.context.chat.push({ is_user: true, mes: '一' }, { is_user: false, mes: '顾小川帮了柳云岚。' });
@@ -1329,7 +1326,6 @@ test('分阶段人设：条件检测并入定期检测请求，采用后推进�
 test('分阶段人设：自动模式直接推进并可撤销；设为不检测时检测提示不带人设', async () => {
     const host = await boot();
     const project = await withPersonas(host, { lines: [personaLines[0]] });
-    host.instance.data.updateProject(project.id, current => ({ ...current, personas: { ...current.personas, fixed: [] } }));
     host.instance.data.updateSettings({ checkEvery: 2, personaMode: 'auto' });
     host.win.__reply = () => '{"done":[],"stageDone":false,"personas":[{"line":"对顾小川","to":"动摇"}]}';
     host.context.chat.push({ is_user: true, mes: '一' }, { is_user: false, mes: '正文。' });
@@ -1352,7 +1348,6 @@ test('分阶段人设：自动模式直接推进并可撤销；设为不检测�
 test('分阶段人设：没有大纲时也能只检测人设阶段', async () => {
     const host = await boot();
     const project = await withPersonas(host, { lines: [personaLines[0]], withOutline: false });
-    host.instance.data.updateProject(project.id, current => ({ ...current, personas: { ...current.personas, fixed: [] } }));
     host.instance.data.updateSettings({ checkEvery: 2 });
     host.win.__reply = () => '{"personas":[{"line":"对顾小川","to":"动摇","floor":1,"reason":"帮了"}]}';
     host.context.chat.push({ is_user: true, mes: '一' }, { is_user: false, mes: '正文。' });
@@ -1367,7 +1362,7 @@ test('分阶段人设：没有大纲时也能只检测人设阶段', async () =>
 test('分阶段人设：世界书转入，勾选预览后转入并关闭原条目，恢复后重新开启并可删除对应线', async () => {
     const host = await boot();
     const project = await withPersonas(host, { lines: [] });
-    host.instance.data.updateProject(project.id, current => ({ ...current, personas: { lines: [], fixed: [], imported: [] } }));
+    host.instance.data.updateProject(project.id, current => ({ ...current, personas: { lines: [], imported: [] } }));
     const card = JSON.parse(fs.readFileSync(path.join(root, 'tests/fixtures/persona-card.json'), 'utf8'));
     const book = { entries: JSON.parse(JSON.stringify(card.entries)) };
     book.entries[99] = { uid: 99, comment: '无 if 条目', content: '普通内容', disable: false, key: [], constant: true };

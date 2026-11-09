@@ -1,7 +1,7 @@
 import { DEFAULT_PARAMS, PACES, POSITIONS, ROLES, buildIndexText, carriedNodes, positionLabel } from '../core/inject.js';
 import { flattenUnits, stageLabel, stageNodes, volumeLabel } from '../core/outline.js';
 import { STATE_LABELS, checkBase, goTo, offNodes, patchSlot, setNodeChecked, unitStates } from '../core/progress.js';
-import { currentStage, fixedValue, groupLines, hasPersonas, mutePersona, personaEnv, releasePersona, setFixedValue, setPersonaStage } from '../core/personas.js';
+import { currentStage, groupLines, hasPersonas, mutePersona, personaEnv, releasePersona, setPersonaStage } from '../core/personas.js';
 import { clockPhase, isThreadNode, liveThreads, maskUnits, patchLive, threadSwitches } from '../core/threads.js';
 import { estimateTokens } from '../core/tokens.js';
 import { cardKey, cardName } from '../host/st.js';
@@ -135,13 +135,12 @@ export function activateCard(view, project) {
                 <button type="button" class="pi-btn" data-act="activate-card">设为本卡默认</button></div></div>`;
 }
 
-// 人设阶段卡：固定选项一行在顶部；每个角色一组，每条线一行阶段胶囊，粉色标当前，「⋯」里改提醒与自动判断。
+// 人设阶段卡：每个角色一组，每条线一行阶段胶囊，粉色标当前，「⋯」里改提醒与自动判断。
 function personaCard(view, project, progress, st) {
     if (!hasPersonas(project)) return '';
     const all = project.personas;
     const env = personaEnv(project, progress, view.runtime.fame());
     const muted = new Set((progress.personas && progress.personas.muted) || []);
-    const fixed = all.fixed.filter(item => item.options.length).map(item => `<label class="pi-field"><span>${esc(item.name)}</span><select class="pi-sel" data-pfixed="${esc(item.id)}">${fixedValue(item, progress) ? '' : '<option value="" selected disabled>请选择</option>'}${options(item.options.map(value => ({ value, label: value })), fixedValue(item, progress))}</select></label>`).join('');
     const collapsed = new Set(st.personaFold || []);
     const line = item => {
         const info = currentStage(item, progress, env);
@@ -155,7 +154,7 @@ function personaCard(view, project, progress, st) {
         const shut = collapsed.has(key);
         return `<div class="pi-group${shut ? ' is-collapsed' : ''}"><button type="button" class="pi-group-hd" data-act="persona-fold" data-group="${esc(key)}">${shut ? ICONS.caret : ICONS.caretDown}${esc(group.name || '未分组')}<small>${group.lines.length}</small></button>${shut ? '' : group.lines.map(line).join('')}</div>`;
     }).join('');
-    return `<div class="pi-card"><h3>人设阶段</h3>${fixed ? `<div class="pi-pair">${fixed}</div>` : ''}${groups || '<p class="pi-hint">没有启用的人设线。</p>'}</div>`;
+    return `<div class="pi-card"><h3>人设阶段</h3>${groups || '<p class="pi-hint">没有启用的人设线。</p>'}</div>`;
 }
 
 export function render(view) {
@@ -358,11 +357,6 @@ export const actions = {
 
 export function onChange(view, target) {
     const { runtime } = view;
-    if (target.dataset.pfixed) {
-        runtime.setProgress(setFixedValue(runtime.progress(), target.dataset.pfixed, target.value));
-        view.renderBody();
-        return;
-    }
     if (target.dataset.param) {
         const value = Math.round(Number(target.value));
         if (!Number.isFinite(value)) return;
