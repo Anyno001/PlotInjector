@@ -2,6 +2,7 @@ import { DEFAULT_PARAMS, OLD_DEFAULT_PARAMS } from './inject.js';
 import { normalizeInfinite } from './infinite.js';
 import { normalizeAlias, normalizeRenames } from './align.js';
 import { makeId } from './outline.js';
+import { emptyPersonas, normalizePersonas } from './personas.js';
 import { DEFAULT_MEMO, DEFAULT_WB_RULE, migrateOc, normalizeWbRule } from './refs.js';
 
 export const INDEX_FILE = 'pi-index.json';
@@ -53,6 +54,7 @@ export function resolveLlm(settings, role) {
 export const DEFAULT_SETTINGS = {
     tagName: '剧情参考',
     offTrackMode: 'ask',
+    personaMode: 'ask',
     carryOver: true,
     handleMode: 'ask',
     hookCap: 2,
@@ -70,6 +72,7 @@ export const DEFAULT_SETTINGS = {
 const HANDLE_MODES = ['ask', 'auto', 'nodes'];
 const OFF_MODES = ['ask', 'auto', 'off'];
 const THREAD_MODES = ['ask', 'auto', 'off'];
+const PERSONA_MODES = ['ask', 'auto', 'off'];
 
 export function normalizeSettings(value) {
     const src = value && typeof value === 'object' ? value : {};
@@ -78,6 +81,7 @@ export function normalizeSettings(value) {
         ...DEFAULT_SETTINGS,
         ...src,
         offTrackMode: OFF_MODES.includes(src.offTrackMode) ? src.offTrackMode : DEFAULT_SETTINGS.offTrackMode,
+        personaMode: PERSONA_MODES.includes(src.personaMode) ? src.personaMode : DEFAULT_SETTINGS.personaMode,
         carryOver: src.carryOver !== false,
         handleMode: HANDLE_MODES.includes(src.handleMode) ? src.handleMode : DEFAULT_SETTINGS.handleMode,
         hookCap: Math.max(1, Math.min(6, Math.round(Number(src.hookCap)) || DEFAULT_SETTINGS.hookCap)),
@@ -117,6 +121,7 @@ export function newProject(name, now = Date.now(), mode = 'normal') {
         outline: { volumes: [], history: [], renames: [], idAlias: {} },
         defaults: JSON.parse(JSON.stringify(DEFAULT_PARAMS)),
         genRefs: normalizeGenRefs(),
+        personas: emptyPersonas(),
         mode: mode === 'infinite' ? 'infinite' : 'normal',
         ...(mode === 'infinite' ? { infinite: normalizeInfinite({}) } : {}),
     };
@@ -151,6 +156,7 @@ export function normalizeProject(value, id) {
         },
         defaults: normalizeDefaults(src.defaults),
         genRefs: normalizeGenRefs(src.genRefs),
+        personas: normalizePersonas(src.personas),
         threads: { sideOn: !(src.threads && src.threads.sideOn === false), worldOn: !(src.threads && src.threads.worldOn === false) },
         mode: src.mode === 'infinite' ? 'infinite' : 'normal',
         ...(src.infinite && typeof src.infinite === 'object' ? { infinite: normalizeInfinite(src.infinite) } : {}),

@@ -1,5 +1,6 @@
 import { NO_LINKS, resolveOff } from './align.js';
 import { normalizeInfiniteProgress } from './infinite-flow.js';
+import { normalizePersonaProgress } from './persona-progress.js';
 
 // 进度随聊天存在 chat_metadata.plotInjector；这里只做纯计算，所有函数返回新对象，不原地改。
 export const SETTING_SLOT = '@setting';
@@ -25,6 +26,8 @@ export function normalizeProgress(value, projectId) {
         lastCheckFloor: Number(value.lastCheckFloor) || 0,
         pace: ['slow', 'normal', 'fast'].includes(value.pace) ? value.pace : 'normal',
     };
+    // 人设进度只在聊天里用过人设时才有这个字段，旧进度原样不动。
+    if (value.personas && typeof value.personas === 'object') out.personas = normalizePersonaProgress(value.personas);
     // lastFailFloor：上次检测失败时的楼数，只用来控制重试间隔；成功检测后删掉。
     if (Number(out.lastFailFloor) > 0) out.lastFailFloor = Number(out.lastFailFloor);
     else delete out.lastFailFloor;

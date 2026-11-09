@@ -81,6 +81,7 @@ export function render(view) {
     const s = view.data.settings();
     const modes = [{ value: 'ask', label: '弹出确认' }, { value: 'auto', label: '自动推进（可撤销）' }, { value: 'nodes', label: '仅勾选节点，不推进阶段' }];
     const offModes = [{ value: 'ask', label: '弹出提醒' }, { value: 'auto', label: '自动改写后续阶段（可撤销）' }, { value: 'off', label: '不检查偏离' }];
+    const personaModes = [{ value: 'ask', label: '弹出确认' }, { value: 'auto', label: '自动推进（可撤销）' }, { value: 'off', label: '不检测' }];
     const threadModes = [{ value: 'ask', label: '弹出确认' }, { value: 'auto', label: '自动收录为支线' }, { value: 'off', label: '不识别' }];
     return `<div class="pi-card"><h3>注入内容</h3>
         <label class="pi-field"><span>详细条目的标签名</span><input class="pi-inp" data-set="tagName" value="${esc(s.tagName)}"></label></div>
@@ -89,6 +90,7 @@ export function render(view) {
             <label class="pi-field"><span>每次读取楼数</span><input class="pi-inp" type="number" min="1" data-set="checkFloors" value="${s.checkFloors}"></label></div>
         <label class="pi-field"><span>判定阶段已演完后</span><select class="pi-sel" data-set="handleMode">${options(modes, s.handleMode)}</select></label>
         <label class="pi-field"><span>偏离大纲时</span><select class="pi-sel" data-set="offTrackMode">${options(offModes, s.offTrackMode)}</select></label>
+        <label class="pi-field"><span>人设阶段变化时</span><select class="pi-sel" data-set="personaMode">${options(personaModes, s.personaMode)}</select></label>
         <label class="pi-check"><input type="checkbox" data-set="carryOver"${s.carryOver ? ' checked' : ''}><span>没演的支线与世界动态延续到后面的阶段</span></label>
         <div class="pi-pair"><label class="pi-field"><span>同时注入的激活支线</span><input class="pi-inp" type="number" min="1" max="6" data-set="hookCap" value="${s.hookCap}"></label>
             <label class="pi-field"><span>正文出现大纲外的新线时</span><select class="pi-sel" data-set="newThreadMode">${options(threadModes, s.newThreadMode)}</select></label></div>

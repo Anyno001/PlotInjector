@@ -36,31 +36,54 @@ function threadRules(threads) {
     return keys.length ? { keys, rules, hooks: Boolean(threads.hooks), readTo: clocks.length ? Number(threads.readTo) || 0 : 0 } : null;
 }
 
+// 检测提示里人设阶段的说明；items 为空时不加，提示与旧版逐字一致。每条只带线名、当前阶段、下一阶段与进入条件。
+const PERSONA_KEY = '"personas":[{"line":"线名","to":"下一阶段名","floor":依据所在楼号,"reason":"一句话依据"}]';
+const PERSONA_RULE = 'personas 对照【人设阶段】：只填正文里已经写出、满足该线「进入条件」的线；to 只能填该线的下一阶段名，不能跳段、不能退回；floor 填依据所在的楼号，reason 写一句依据。没有满足的就填空数组。';
+
+export function personaLines(items) {
+    return items.map(item => `- ${item.group ? `${item.group}·` : ''}${item.name}：当前「${item.from}」；下一阶段「${item.to}」，进入条件：${item.cond || '（未写，按阶段名判断）'}`).join('\n');
+}
+
 // newThread 的占位值：AI 没有新线时常写成这些。比对前去掉首尾空白与末尾标点。
 const EMPTY_NAMES = /^(?:无|没有|暂无|空|none|null|nil|n\/a|na|undefined|-|—|无新线|没有新线|没有新的线)$/i;
 const isEmptyName = name => EMPTY_NAMES.test(String(name).trim().replace(/[。．.！!？?；;，,、\s]+$/, '').trim());
 
 // index 是 buildIndexText 生成的剧情索引，里面已有当前段各节点的已演/未演。threads 见 threadRules。
-export function buildCheckMessages(unit, index, floors, threads = null) {
+export function buildCheckMessages(unit, index, floors, threads = null, personas = null) {
     const extra = threadRules(threads);
+    const pItems = Array.isArray(personas) ? personas : [];
     const format = '{"done":["节点名"],"stageDone":true或false,"offTrack":true或false,"offReason":"偏离说明，没有就留空","reason":"一句话"}';
     const system = [
         '你是剧情进度核对员。根据最近的正文，对照剧情索引判断进度。',
         '只认正文里已经写出的事件，计划、预告、角色设想不算发生。',
         '若剧情走了某个节点的「偏转」分支，在 reason 里写明是哪个节点、怎么偏的。',
         '另外判断剧情是否严重偏离大纲：正文的走向已经和【当前】【下一段】冲突，照原计划写下去会接不上（例如关键人物已死、关键事件已不可能发生、地点或立场彻底改变）。普通的细节出入、走了偏转分支都不算严重偏离。',
-        `只输出一个 JSON 对象，不加说明：${extra ? `${format.slice(0, -1)},${extra.keys.join(',')}}` : format}`,
+        `只输出一个 JSON 对象，不加说明：${extra || pItems.length ? `${format.slice(0, -1)}${[...(extra ? extra.keys : []), ...(pItems.length ? [PERSONA_KEY] : [])].map(key => `,${key}`).join('')}}` : format}`,
         `done 只填${extra && extra.hooks ? '【当前】或【支线钩子】' : '【当前】'}里出现过的节点名，原样照抄；stageDone 表示当前段所有主线节点都已发生、剧情已进入下一段。`,
         ...(extra ? extra.rules : []),
+        ...(pItems.length ? [PERSONA_RULE] : []),
     ].join('\n');
     // floor.index 是楼层下标，小于上次检测时楼数的楼上次已经读过。
     const readTo = extra ? extra.readTo : 0;
     const user = [
         `【剧情索引】\n${index}`,
+        ...(pItems.length ? ['', `【人设阶段】\n${personaLines(pItems)}`] : []),
         '',
         '【最近正文】',
         ...floors.map(floor => `【第 ${floor.index} 楼${readTo > 0 && floor.index < readTo ? '·已读' : ''}】\n${floor.text}`),
     ].join('\n');
+    return [{ role: 'system', content: system }, { role: 'user', content: user }];
+}
+
+// 没有大纲时只检测人设阶段：不带剧情索引，回复里只有 personas。
+export function buildPersonaCheckMessages(items, floors) {
+    const system = [
+        '你是人设阶段核对员。根据最近的正文，判断下列人设线是否已经进入下一阶段。',
+        '只认正文里已经写出的事件，计划、预告、角色设想不算发生。',
+        `只输出一个 JSON 对象，不加说明：{${PERSONA_KEY}}`,
+        PERSONA_RULE,
+    ].join('\n');
+    const user = [`【人设阶段】\n${personaLines(items)}`, '', '【最近正文】', ...floors.map(floor => `【第 ${floor.index} 楼】\n${floor.text}`)].join('\n');
     return [{ role: 'system', content: system }, { role: 'user', content: user }];
 }
 
@@ -80,6 +103,7 @@ export function parseCheckReply(text) {
     return {
         done, stageDone: flag(value.stageDone), offTrack: flag(value.offTrack), offReason: String(value.offReason || '').trim(), reason: String(value.reason || '').trim(),
         clocks: parseClocks(value.clocks, flag), hooks: names(value.hooks), newThread: parseThread(value.newThread),
+        ...(Array.isArray(value.personas) ? { personas: parsePersonaMoves(value.personas) } : {}),
     };
 }
 
@@ -95,6 +119,14 @@ function parseClocks(raw, flag) {
         const tick = Math.round(Number(item.tick ?? item.advance ?? item.推进));
         return { name: String(item.name ?? item.名称 ?? '').trim(), tick: Number.isFinite(tick) ? Math.min(CLOCK_TICK_MAX, tick) : 0, happened: flag(item.happened ?? item.发生) };
     }).filter(item => item.name);
+}
+
+// personas 只认数组里 line 与 to 都有内容的对象。
+function parsePersonaMoves(raw) {
+    return (Array.isArray(raw) ? raw : []).filter(item => item && typeof item === 'object').map(item => ({
+        line: String(item.line ?? item.线 ?? '').trim(), to: String(item.to ?? item.到 ?? '').trim(),
+        floor: Math.round(Number(item.floor ?? item.楼)) || 0, reason: String(item.reason ?? item.依据 ?? '').trim(),
+    })).filter(item => item.line && item.to);
 }
 
 function parseThread(raw) {

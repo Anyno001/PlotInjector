@@ -768,7 +768,7 @@ test('讨论页清空讨论：可先导出，设定和大纲不受影响', async
 test('设定页：分块标签上的删除键删掉整个分块，删前版本进历史', async () => {
     const host = await boot();
     const project = await withProject(host);
-    host.instance.data.updateProject(project.id, current => ({ ...current, setting: { ...current.setting, text: '世界观声明:\n基于: 测试\n\n铁则:\n- 甲\n\n人物档案:\n白墨' } }));
+    host.instance.data.updateProject(project.id, current => ({ ...current, setting: { ...current.setting, text: '世界观声明:\n基于: 测试\n\n铁则:\n- 甲\n\n人物档案:\n林北' } }));
     host.click();
     await tick(10);
     const doc = host.win.document;
@@ -779,7 +779,7 @@ test('设定页：分块标签上的删除键删掉整个分块，删前版本�
     doc.querySelector('.pi-dialog .pi-dlg-acts .is-danger').click();
     await tick(10);
     const setting = host.instance.data.project(project.id).setting;
-    assert.equal(setting.text, '世界观声明:\n基于: 测试\n\n人物档案:\n白墨');
+    assert.equal(setting.text, '世界观声明:\n基于: 测试\n\n人物档案:\n林北');
     assert.ok(setting.history.some(item => item.text.includes('铁则')));
     assert.equal(doc.querySelector('[data-act="block-del"][data-key="铁则"]'), null);
     await host.instance.destroy();
@@ -1219,5 +1219,196 @@ test('多卷写作中途切换项目：已写好的卷收进原项目草稿，�
     await tick(30);
     assert.equal(host.instance.data.project(project.id).outline.volumes.length, 3, '全部追加进原项目');
     assert.equal(host.instance.data.project(other.id).outline.volumes.length, 0);
+    await host.instance.destroy();
+});
+
+// ---------- 分阶段人设 ----------
+
+const personaLines = [
+    {
+        id: 'pl1', group: '柳云岚', name: '对顾小川', keys: [], constant: true, position: 0, depth: 4, role: 0, order: 100, enabled: true, common: '柳云岚是邻家歌手。',
+        mode: 'check', fame: { bar: '', partner: '' }, source: null, sources: [],
+        stages: [{ id: 's1', name: '敌对', cond: '', unitId: '', range: {}, text: '她对{{性别}}充满敌意。' }, { id: 's2', name: '动摇', cond: '顾小川帮了她', unitId: '', range: {}, text: '她动摇了。' }],
+    },
+    {
+        id: 'pl2', group: '节目组', name: '节目组态度', keys: [], constant: true, position: 0, depth: 4, role: 0, order: 101, enabled: true, common: '',
+        mode: 'fame', fame: { bar: '节目组态度', partner: '' }, source: null, sources: [],
+        stages: [{ id: 'f1', name: '低', cond: '', unitId: '', range: { max: 20 }, text: '节目组恨不得换掉顾小川。' }, { id: 'f2', name: '高', cond: '', unitId: '', range: { min: 21 }, text: '节目组全力保护顾小川。' }],
+    },
+];
+
+async function withPersonas(host, { lines = personaLines, withOutline = true } = {}) {
+    const project = withOutline ? await withProject(host) : await host.instance.data.createProject('人设线');
+    if (!withOutline) await host.instance.runtime.switchProject(project.id);
+    host.instance.data.updateProject(project.id, current => ({ ...current, personas: { lines, fixed: [{ id: 'fx1', name: '性别', options: ['他', '她'], varPath: '' }], imported: [] } }));
+    return project;
+}
+
+const clickText = (doc, selector, label) => [...doc.querySelectorAll(selector)].find(btn => btn.textContent.trim() === label).click();
+
+test('分阶段人设：注入虚拟条目，固定选项弹窗选择后替换，执行页手动切换阶段', async () => {
+    const host = await boot();
+    await withPersonas(host);
+    host.win.IGS = { stats: { fame: () => [{ name: '节目组态度', owner: '顾小川', cls: '口碑', value: 10, tier: '' }] } };
+    const doc = host.win.document;
+    const pending = entriesNow(host.eventSource);
+    await tick(10);
+    assert.ok(doc.querySelector('.pi-dialog [data-fx="fx1"]'), '新聊天第一次注入前未选固定选项会弹窗');
+    doc.querySelector('.pi-dialog [data-fx="fx1"]').value = '她';
+    clickText(doc, '.pi-dialog [data-dlg]', '确定');
+    let lore = await pending;
+    const persona = lore.filter(entry => entry.comment.startsWith('剧情注入器·人设'));
+    assert.deepEqual(persona.map(entry => entry.comment), ['剧情注入器·人设·柳云岚·对顾小川', '剧情注入器·人设·节目组·节目组态度']);
+    assert.equal(persona[0].content, '柳云岚是邻家歌手。\n她对她充满敌意。');
+    assert.equal(persona[1].content, '节目组恨不得换掉顾小川。');
+    host.click();
+    await tick(10);
+    doc.querySelector('[data-act="tab"][data-tab="persona"]').click();
+    await tick(10);
+    assert.match(doc.querySelector('.pi-body').textContent, /对顾小川/);
+    doc.querySelector('[data-act="tab"][data-tab="run"]').click();
+    await tick(10);
+    assert.match(doc.querySelector('.pi-body').textContent, /人设阶段/);
+    doc.querySelector('[data-act="persona-pick"][data-line="pl1"][data-stage="s2"]').click();
+    await tick(10);
+    assert.ok(doc.querySelector('[data-act="persona-pick"][data-stage="s2"]').classList.contains('is-on'));
+    assert.match(doc.querySelector('.pi-body').textContent, /手动/);
+    lore = await entriesNow(host.eventSource);
+    assert.match(lore.find(entry => entry.comment.endsWith('对顾小川')).content, /她动摇了/);
+    const meta = host.context.chatMetadata.plotInjector;
+    assert.equal(meta.byProject[meta.projectId].personas.pl1, 's2');
+    assert.equal(host.win.__errors.length, 0, host.win.__errors.join('\n'));
+    await host.instance.destroy();
+});
+
+test('分阶段人设：读声望随 IGS 读数与 igs:stats-changed 事件变化，读不到值时标灰并退回手动值', async () => {
+    const host = await boot();
+    const project = await withPersonas(host, { lines: [personaLines[1]] });
+    host.instance.data.updateProject(project.id, current => ({ ...current, personas: { ...current.personas, fixed: [] } }));
+    let value = 10;
+    host.win.IGS = { stats: { fame: () => [{ name: '节目组态度', owner: '顾小川', cls: '口碑', value, tier: '' }] } };
+    const text = async () => (await entriesNow(host.eventSource)).find(entry => entry.comment.endsWith('节目组态度')).content;
+    assert.match(await text(), /换掉/);
+    value = 50;
+    host.win.dispatchEvent(new host.win.CustomEvent('igs:stats-changed', { detail: { reason: 'ledger' } }));
+    await tick(10);
+    assert.match(await text(), /全力保护/);
+    host.win.IGS = undefined;
+    assert.match(await text(), /换掉/, '读不到值退回手动值（未手动选过为第一阶段）');
+    host.click();
+    await tick(10);
+    host.win.document.querySelector('[data-act="tab"][data-tab="run"]').click();
+    await tick(10);
+    assert.match(host.win.document.querySelector('.pi-body').textContent, /读不到声望/);
+    await host.instance.destroy();
+});
+
+test('分阶段人设：条件检测并入定期检测请求，采用后推进一格；检测提示不带人设正文', async () => {
+    const host = await boot();
+    const project = await withPersonas(host, { lines: [personaLines[0]] });
+    host.instance.data.updateProject(project.id, current => ({ ...current, personas: { ...current.personas, fixed: [] } }));
+    host.instance.data.updateSettings({ checkEvery: 2 });
+    host.win.__reply = () => '{"done":[],"stageDone":false,"reason":"x","personas":[{"line":"柳云岚·对顾小川","to":"动摇","floor":1,"reason":"顾小川帮了她"}]}';
+    host.context.chat.push({ is_user: true, mes: '一' }, { is_user: false, mes: '顾小川帮了柳云岚。' });
+    await host.eventSource.emit('message_received', 1, 'normal');
+    await tick(10);
+    assert.equal(host.llmCalls.length, 1);
+    assert.match(host.llmCalls[0][1].content, /【人设阶段】\n- 柳云岚·对顾小川：当前「敌对」；下一阶段「动摇」，进入条件：顾小川帮了她/);
+    assert.doesNotMatch(host.llmCalls[0][0].content + host.llmCalls[0][1].content, /充满敌意|她动摇了/);
+    const card = host.win.document.querySelector('[data-notice="persona"]');
+    assert.ok(card);
+    assert.match(card.textContent, /柳云岚 · 对顾小川：敌对 → 动摇（第 1 楼：顾小川帮了她）/);
+    const stage = () => (host.instance.runtime.progress().personas || {}).pl1;
+    assert.equal(stage(), undefined);
+    clickText(host.win.document, '[data-notice="persona"] button', '采用');
+    await tick(10);
+    assert.equal(stage(), 's2');
+    await host.instance.destroy();
+});
+
+test('分阶段人设：自动模式直接推进并可撤销；设为不检测时检测提示不带人设', async () => {
+    const host = await boot();
+    const project = await withPersonas(host, { lines: [personaLines[0]] });
+    host.instance.data.updateProject(project.id, current => ({ ...current, personas: { ...current.personas, fixed: [] } }));
+    host.instance.data.updateSettings({ checkEvery: 2, personaMode: 'auto' });
+    host.win.__reply = () => '{"done":[],"stageDone":false,"personas":[{"line":"对顾小川","to":"动摇"}]}';
+    host.context.chat.push({ is_user: true, mes: '一' }, { is_user: false, mes: '正文。' });
+    await host.eventSource.emit('message_received', 1, 'normal');
+    await tick(10);
+    assert.equal(host.instance.runtime.progress().personas.pl1, 's2');
+    clickText(host.win.document, '[data-notice="persona"] button', '撤销');
+    await tick(10);
+    assert.equal(host.instance.runtime.progress().personas.pl1, 's1');
+    host.instance.data.updateSettings({ personaMode: 'off' });
+    host.context.chat.push({ is_user: true, mes: '二' }, { is_user: false, mes: '正文二。' });
+    host.llmCalls.length = 0;
+    await host.eventSource.emit('message_received', 3, 'normal');
+    await tick(10);
+    assert.equal(host.llmCalls.length, 1);
+    assert.doesNotMatch(host.llmCalls[0][0].content + host.llmCalls[0][1].content, /personas|人设/);
+    await host.instance.destroy();
+});
+
+test('分阶段人设：没有大纲时也能只检测人设阶段', async () => {
+    const host = await boot();
+    const project = await withPersonas(host, { lines: [personaLines[0]], withOutline: false });
+    host.instance.data.updateProject(project.id, current => ({ ...current, personas: { ...current.personas, fixed: [] } }));
+    host.instance.data.updateSettings({ checkEvery: 2 });
+    host.win.__reply = () => '{"personas":[{"line":"对顾小川","to":"动摇","floor":1,"reason":"帮了"}]}';
+    host.context.chat.push({ is_user: true, mes: '一' }, { is_user: false, mes: '正文。' });
+    await host.eventSource.emit('message_received', 1, 'normal');
+    await tick(10);
+    assert.equal(host.llmCalls.length, 1);
+    assert.doesNotMatch(host.llmCalls[0][0].content, /剧情索引|stageDone/);
+    assert.ok(host.win.document.querySelector('[data-notice="persona"]'));
+    await host.instance.destroy();
+});
+
+test('分阶段人设：世界书转入，勾选预览后转入并关闭原条目，恢复后重新开启并可删除对应线', async () => {
+    const host = await boot();
+    const project = await withPersonas(host, { lines: [] });
+    host.instance.data.updateProject(project.id, current => ({ ...current, personas: { lines: [], fixed: [], imported: [] } }));
+    const card = JSON.parse(fs.readFileSync(path.join(root, 'tests/fixtures/persona-card.json'), 'utf8'));
+    const book = { entries: JSON.parse(JSON.stringify(card.entries)) };
+    book.entries[99] = { uid: 99, comment: '无 if 条目', content: '普通内容', disable: false, key: [], constant: true };
+    host.context.chatMetadata.world_info = '示例世界书';
+    host.context.getWorldInfoNames = () => ['示例世界书'];
+    host.context.loadWorldInfo = async () => JSON.parse(JSON.stringify(book));
+    host.context.saveWorldInfo = async (name, data) => { book.entries = data.entries; };
+    host.click();
+    await tick(10);
+    const doc = host.win.document;
+    doc.querySelector('[data-act="tab"][data-tab="persona"]').click();
+    await tick(10);
+    doc.querySelector('[data-act="imp-open"]').click();
+    await tick(30);
+    const rows = [...doc.querySelectorAll('.pi-dialog [data-pi-pick]')];
+    assert.equal(rows.length, 5, '只列含 if 的条目');
+    assert.ok(rows.every(row => !row.checked), '默认全不勾');
+    const row = rows.find(item => item.dataset.piPick === '28');
+    row.checked = true;
+    row.dispatchEvent(new host.win.Event('change', { bubbles: true }));
+    await tick(10);
+    clickText(doc, '.pi-dialog [data-dlg]', '预览');
+    await tick(10);
+    assert.match(doc.querySelector('.pi-dialog').textContent, /对顾小川/);
+    assert.match(doc.querySelector('.pi-dialog').textContent, /4 阶段/);
+    clickText(doc, '.pi-dialog [data-dlg]', '转入');
+    await tick(50);
+    const now = host.instance.data.project(project.id);
+    assert.equal(now.personas.lines.length, 1);
+    assert.equal(now.personas.lines[0].stages.length, 4);
+    assert.equal(now.personas.imported.map(item => item.key).join(), '28');
+    assert.equal(book.entries[28].disable, true, '原条目只关不删');
+    assert.equal(book.entries[7].disable, false, '没勾的不动');
+    doc.querySelector('[data-act="imp-restore"]').click();
+    await tick(20);
+    clickText(doc, '.pi-dialog [data-dlg]', '恢复并删除对应人设线');
+    await tick(50);
+    assert.equal(book.entries[28].disable, false);
+    const after = host.instance.data.project(project.id);
+    assert.equal(after.personas.lines.length, 0);
+    assert.equal(after.personas.imported.length, 0);
+    assert.equal(host.win.__errors.length, 0, host.win.__errors.join('\n'));
     await host.instance.destroy();
 });

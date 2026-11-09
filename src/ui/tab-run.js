@@ -1,6 +1,7 @@
 import { DEFAULT_PARAMS, PACES, POSITIONS, ROLES, buildIndexText, carriedNodes, positionLabel } from '../core/inject.js';
 import { flattenUnits, stageLabel, stageNodes, volumeLabel } from '../core/outline.js';
 import { STATE_LABELS, checkBase, goTo, offNodes, patchSlot, setNodeChecked, unitStates } from '../core/progress.js';
+import { currentStage, fixedValue, groupLines, hasPersonas, mutePersona, personaEnv, releasePersona, setFixedValue, setPersonaStage } from '../core/personas.js';
 import { clockPhase, isThreadNode, liveThreads, maskUnits, patchLive, threadSwitches } from '../core/threads.js';
 import { estimateTokens } from '../core/tokens.js';
 import { cardKey, cardName } from '../host/st.js';
@@ -134,6 +135,29 @@ export function activateCard(view, project) {
                 <button type="button" class="pi-btn" data-act="activate-card">设为本卡默认</button></div></div>`;
 }
 
+// 人设阶段卡：固定选项一行在顶部；每个角色一组，每条线一行阶段胶囊，粉色标当前，「⋯」里改提醒与自动判断。
+function personaCard(view, project, progress, st) {
+    if (!hasPersonas(project)) return '';
+    const all = project.personas;
+    const env = personaEnv(project, progress, view.runtime.fame());
+    const muted = new Set((progress.personas && progress.personas.muted) || []);
+    const fixed = all.fixed.filter(item => item.options.length).map(item => `<label class="pi-field"><span>${esc(item.name)}</span><select class="pi-sel" data-pfixed="${esc(item.id)}">${fixedValue(item, progress) ? '' : '<option value="" selected disabled>请选择</option>'}${options(item.options.map(value => ({ value, label: value })), fixedValue(item, progress))}</select></label>`).join('');
+    const collapsed = new Set(st.personaFold || []);
+    const line = item => {
+        const info = currentStage(item, progress, env);
+        const note = [info.source === 'manual' && item.mode !== 'manual' ? '手动' : '', info.lost ? '读不到声望' : '', muted.has(item.id) ? '不提醒' : ''].filter(Boolean).join(' · ');
+        const caps = item.stages.map((stage, index) => `<button type="button" class="pi-chip${index === info.index ? ' is-on' : ''}" data-act="persona-pick" data-line="${esc(item.id)}" data-stage="${esc(stage.id)}">${esc(stage.name)}</button>`).join('');
+        return `<div class="pi-pl-row${info.lost ? ' is-lost' : ''}"><div class="pi-pl-hd"><span class="pi-pl-name">${esc(item.name)}</span>${note ? `<span class="pi-tl-state">${esc(note)}</span>` : ''}
+            <button type="button" class="pi-icon-btn" data-act="persona-menu" data-line="${esc(item.id)}" title="更多">${ICONS.more}</button></div><div class="pi-refs">${caps}</div></div>`;
+    };
+    const groups = groupLines(all.lines.filter(item => item.enabled)).map(group => {
+        const key = group.name || '::none';
+        const shut = collapsed.has(key);
+        return `<div class="pi-group${shut ? ' is-collapsed' : ''}"><button type="button" class="pi-group-hd" data-act="persona-fold" data-group="${esc(key)}">${shut ? ICONS.caret : ICONS.caretDown}${esc(group.name || '未分组')}<small>${group.lines.length}</small></button>${shut ? '' : group.lines.map(line).join('')}</div>`;
+    }).join('');
+    return `<div class="pi-card"><h3>人设阶段</h3>${fixed ? `<div class="pi-pair">${fixed}</div>` : ''}${groups || '<p class="pi-hint">没有启用的人设线。</p>'}</div>`;
+}
+
 export function render(view) {
     const { data, runtime } = view;
     const project = view.project();
@@ -152,8 +176,9 @@ export function render(view) {
     const gap = settings.checkEvery - (runtime.floorCount() - checkBase(progress));
     return `<div class="pi-card"><h3>注入条目${book}<span class="pi-meta">≈${total} token</span><span class="pi-spacer"></span>
             <button type="button" class="pi-btn is-sm is-ghost" data-act="preview">预览</button></h3>
-        ${entries.length ? entries.map(entry => entryRow(entry, st.open === entry.slotId)).join('') : '<p class="pi-hint">设定和大纲都为空，没有可注入的内容。</p>'}
+        ${entries.filter(entry => entry.kind !== 'persona').length ? entries.filter(entry => entry.kind !== 'persona').map(entry => entryRow(entry, st.open === entry.slotId)).join('') : '<p class="pi-hint">设定和大纲都为空，没有可注入的内容。</p>'}
         </div>
+        ${personaCard(view, project, progress, st)}
         <div class="pi-card"><h3>阶段<span class="pi-meta">${gap > 0 ? `${gap} 楼后检测` : '下一楼检测'}</span><span class="pi-spacer"></span>
             ${units.length ? `<button type="button" class="pi-btn is-sm is-ghost" data-act="index-toggle">${st.indexOpen ? '收起索引' : '剧情索引'}</button>` : ''}</h3>
         ${units.length ? `${st.indexOpen ? `<pre class="pi-pre pi-index">${esc(buildIndexText(units, states, progress, { carryOver: settings.carryOver, hookCap: settings.hookCap }))}</pre>` : ''}
@@ -206,6 +231,34 @@ export const actions = {
         const st = view.tabState('run');
         st.open = st.open === target.dataset.slot ? '' : target.dataset.slot;
         view.renderBody();
+    },
+    'persona-fold'(view, target) {
+        const st = view.tabState('run');
+        const set = new Set(st.personaFold || []);
+        if (set.has(target.dataset.group)) set.delete(target.dataset.group);
+        else set.add(target.dataset.group);
+        st.personaFold = [...set];
+        view.renderBody();
+    },
+    'persona-pick'(view, target) {
+        const line = view.project().personas.lines.find(item => item.id === target.dataset.line);
+        if (!line) return;
+        view.runtime.setProgress(setPersonaStage(view.runtime.progress(), line, target.dataset.stage));
+    },
+    async 'persona-menu'(view, target) {
+        const line = view.project().personas.lines.find(item => item.id === target.dataset.line);
+        if (!line) return;
+        const progress = view.runtime.progress();
+        const pp = progress.personas || {};
+        const muted = (pp.muted || []).includes(line.id);
+        const manual = (pp.manual || []).includes(line.id);
+        const items = [
+            ...(line.mode !== 'manual' && manual ? [{ label: '恢复自动判断', value: 'release' }] : []),
+            muted ? { label: '恢复提醒', value: 'unmute' } : { label: '不再提醒', value: 'mute' },
+        ];
+        const pick = await menuDialog({ title: line.name, items });
+        if (!pick) return;
+        view.runtime.setProgress(pick === 'release' ? releasePersona(progress, line.id) : mutePersona(progress, line.id, pick === 'mute'));
     },
     next: view => view.runtime.openNext(),
     check: view => view.runtime.checkNow({ manual: true }),
@@ -305,6 +358,11 @@ export const actions = {
 
 export function onChange(view, target) {
     const { runtime } = view;
+    if (target.dataset.pfixed) {
+        runtime.setProgress(setFixedValue(runtime.progress(), target.dataset.pfixed, target.value));
+        view.renderBody();
+        return;
+    }
     if (target.dataset.param) {
         const value = Math.round(Number(target.value));
         if (!Number.isFinite(value)) return;

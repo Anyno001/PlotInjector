@@ -2,6 +2,7 @@ import { changeLines, filterStageData, flattenUnits, splitStageKey, splitVolumeK
 import { INFINITE_SLOT } from './infinite.js';
 import { buildInfiniteDetail, emptyInfinite } from './infinite-flow.js';
 import { NO_LINKS, outlineLinks } from './align.js';
+import { buildPersonaEntries } from './personas.js';
 import { SETTING_SLOT, offNodes, unitStates } from './progress.js';
 import { injectedSetting } from './setting.js';
 import { isThreadNode, liveThreads, maskUnits, threadChangeLines, threadIndexLines, threadSwitches, threadsText } from './threads.js';
@@ -183,7 +184,14 @@ export function changesText(units, states, live = null) {
 }
 
 // 执行页与注入共用：返回本轮要注入的条目（含停用的，UI 需要显示），注入时只取 enabled。
-export function buildEntries(project, progress, settings) {
+// personaOpts：{ recentText, globals, fame }，只用于人设线；recentText 给出时有关键词的线要命中才出现，不给就全部列出（执行页、预览用）。
+export function buildEntries(project, progress, settings, personaOpts = {}) {
+    const base = buildOutlineEntries(project, progress, settings);
+    const persona = project ? buildPersonaEntries(project, progress, personaOpts) : [];
+    return persona.length ? [...base, ...persona] : base;
+}
+
+function buildOutlineEntries(project, progress, settings) {
     const defaults = { ...DEFAULT_PARAMS, ...(project && project.defaults) };
     const entries = [];
     if (!project) return entries;

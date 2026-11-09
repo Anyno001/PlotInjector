@@ -116,6 +116,9 @@ function keyMatcher(key, { caseSensitive = null, matchWholeWords = null } = {}, 
 
 const matchedKeys = (keys, haystack, options, globals) => keys.filter(key => String(key).trim() && keyMatcher(key, options, globals)(haystack));
 
+// 人设线的关键词触发复用同一套匹配：keys 里任一个命中 haystack 即为真。
+export const matchesAny = (keys, haystack, options = {}, globals = {}) => matchedKeys(keys || [], String(haystack || ''), options, globals).length > 0;
+
 // 次要关键词逻辑：0 AND_ANY，1 NOT_ALL，2 NOT_ANY，3 AND_ALL。
 function secondaryPass(logic, hit, total) {
     if (logic === 1) return hit < total;

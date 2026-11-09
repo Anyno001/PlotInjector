@@ -1,4 +1,5 @@
-import { buildCheckMessages, cleanFloorText, parseCheckReply } from '../core/check.js';
+import { buildCheckMessages, buildPersonaCheckMessages, cleanFloorText, parseCheckReply } from '../core/check.js';
+import { alignPersonaProgress, applyMoves, checkItems, currentStage, hasPersonas, personaEnv, moveText, resolveMoves, setFixedValue, syncPersonas, undoMoves, unsetFixed } from '../core/personas.js';
 import { buildEntries, buildIndexText, carriedNodes, toWorldInfoEntry } from '../core/inject.js';
 import { parseOutlineReply, rewriteRestMessages, syncSettingMessages } from '../core/prompts.js';
 import { changedBlockKeys, mergeBlocks, parseSettingReply, pushHistory, splitBlocks } from '../core/setting.js';
@@ -15,7 +16,7 @@ import { resolveLlm } from '../core/store.js';
 import { addPlayerThread, applyCheck, checkThreads, clampThreads, hasNodeNamed, ignoreThread, isThreadNode, liveThreads, maskUnits, threadState, threadSwitches } from '../core/threads.js';
 import { requestLlm } from '../host/llm.js';
 import { cardKey, cardName, chatMessages, ctx, hostWindow, toast } from '../host/st.js';
-import { readEntryContent, writeFallbackBook } from '../host/worldbook.js';
+import { readEntryContent, worldInfoMatchSettings, worldInfoScanDepth, writeFallbackBook } from '../host/worldbook.js';
 import { bindChat, readChatState, readProgress, writeProgress } from './progress-store.js';
 
 export const VIRTUAL_WORLD = '剧情注入器';
@@ -35,13 +36,14 @@ const placeOf = unit => `${volumeLabel(unit.volume.key)}·${stageLabel(unit.stag
 
 // 运行时：注入、每 N 楼检测、偏离大纲时提醒或自动改写。UI 关着也在跑。
 // askReason 由入口传入（弹输入框），运行时本身不依赖界面。
-export function createRuntime({ data, notice, emit, askReason = async () => '' }) {
+export function createRuntime({ data, notice, emit, askReason = async () => '', askFixed = async () => null }) {
     const view = hostWindow();
     let progress = null;
     let progressFor = '';
     // 最近一次按大纲对照表归位时的输入（进度对象、大纲对象），两者都没变就不再算。
     let alignedFrom = null;
     let alignedOutline = null;
+    let alignedPersonas = null;
     let checking = false;
     let fallbackTimer = 0;
     let generating = false;
@@ -101,7 +103,28 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
             alignedFrom = progress;
             alignedOutline = project.outline;
         }
+        // 人设改了阶段（改名、删除）或线被删：把本聊天的人设进度对回当前人设，有变化就写回。
+        if (project && project.personas !== alignedPersonas) {
+            const aligned = alignPersonaProgress(progress, project.personas);
+            if (aligned !== progress) {
+                progress = aligned;
+                writeProgress(progress);
+                log('按人设对回了本聊天的人设进度');
+            }
+            alignedPersonas = project.personas;
+        }
         return progress;
+    }
+
+    // IGS 声望读数：没装 IGS、没开声望、读取失败都当没有。
+    function fameNow() {
+        try {
+            const igs = view.IGS;
+            const list = igs && igs.stats && typeof igs.stats.fame === 'function' ? igs.stats.fame() : [];
+            return Array.isArray(list) ? list : [];
+        } catch {
+            return [];
+        }
     }
 
     function links() {
@@ -138,6 +161,7 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
 
     function setProgress(next, reason = 'progress') {
         next = stampActive(progress && progressFor === next.projectId ? progress : null, next);
+        next = syncPersonas(activeProject(), next, fameNow());
         progress = next;
         progressFor = next.projectId;
         writeProgress(next);
@@ -145,14 +169,39 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
         emit(reason);
     }
 
-    function entries() {
+    // 最近 N 楼正文（N 为酒馆世界书扫描深度），人设线的关键词触发用。
+    function scanText() {
+        const depth = Math.max(1, worldInfoScanDepth());
+        return chatMessages().filter(msg => !isNote(msg)).slice(-depth).map(msg => String(msg.mes || '')).join('\n');
+    }
+
+    // inject=true：注入时用，有关键词的人设线要命中最近楼层才出现；否则全部列出（执行页、预览）。
+    function entries({ inject = false } = {}) {
         const project = activeProject();
         const prog = currentProgress();
-        return project && prog ? buildEntries(project, prog, data.settings()) : [];
+        if (!project || !prog) return [];
+        const persona = hasPersonas(project) ? { fame: fameNow(), ...(inject ? { recentText: scanText(), globals: worldInfoMatchSettings() } : {}) } : {};
+        return buildEntries(project, prog, data.settings(), persona);
     }
 
     function virtualEntries() {
-        return entries().filter(entry => entry.enabled && entry.content).map((entry, index) => toWorldInfoEntry(entry, index, VIRTUAL_WORLD));
+        return entries({ inject: true }).filter(entry => entry.enabled && entry.content).map((entry, index) => toWorldInfoEntry(entry, index, VIRTUAL_WORLD));
+    }
+
+    // 注入前按最新的大纲进度与声望读数刷新人设阶段（跟随大纲、读声望两种方式）。
+    function refreshPersonas() {
+        const project = activeProject();
+        const prog = currentProgress();
+        if (!hasPersonas(project) || !prog) return;
+        const next = syncPersonas(project, prog, fameNow());
+        if (next !== prog) setProgress(next);
+    }
+
+    function onStatsChanged() {
+        if (!hasPersonas(activeProject())) return;
+        refreshPersonas();
+        scheduleFallback();
+        emit('progress');
     }
 
     function eventTypes() {
@@ -164,10 +213,36 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
         return Boolean(eventTypes().WORLDINFO_ENTRIES_LOADED);
     }
 
+    // 新聊天第一次注入前还有没选的固定选项时弹窗让用户选；取消则本次先按第一个选项注入，下次再问。
+    let askingFixed = null;
+    async function ensureFixed() {
+        const project = activeProject();
+        const prog = currentProgress();
+        const missing = project && prog ? unsetFixed(project.personas, prog) : [];
+        if (!missing.length || fixedDeclined === `${progressFor}:${chatKey()}`) return;
+        if (!askingFixed) {
+            askingFixed = (async () => {
+                const picked = await askFixed(missing);
+                if (picked) {
+                    let next = currentProgress();
+                    for (const [id, value] of Object.entries(picked)) next = setFixedValue(next, id, value);
+                    setProgress(next);
+                } else {
+                    fixedDeclined = `${progressFor}:${chatKey()}`;
+                }
+            })().finally(() => { askingFixed = null; });
+        }
+        await askingFixed;
+    }
+    let fixedDeclined = '';
+    const chatKey = () => String(ctx() && ctx().chatId || '');
+
     async function onEntriesLoaded(payload) {
         if (!payload || !Array.isArray(payload.chatLore)) return;
         if (opening) await waitOpening();
+        await ensureFixed();
         try {
+            refreshPersonas();
             payload.chatLore.push(...virtualEntries());
         } catch (error) {
             console.error('[剧情注入器] 注入失败', error);
@@ -630,6 +705,93 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
         if (state) setInf(removeWorld(state.inf, worldId, state.infinite.config));
     }
 
+    // 条件检测型人设线：本次检测窗口内触发过、方式为条件检测、未设不提醒的才带；personaMode 为 off 时不带。
+    function personaCheckItems(floors) {
+        const project = activeProject();
+        const prog = currentProgress();
+        if (!hasPersonas(project) || !prog || data.settings().personaMode === 'off') return [];
+        return checkItems(project, prog, floors.map(floor => floor.text).join('\n'), { globals: worldInfoMatchSettings(), fame: fameNow() });
+    }
+
+    // 人设检测结果：询问（弹窗，可采用 / 不用）、自动（直接推进，可撤销）。只往前推一格。
+    function offerPersonaMoves(items, replyMoves) {
+        const project = activeProject();
+        const moves = resolveMoves(items, replyMoves);
+        if (!moves.length || !project) return;
+        const lines = moves.map(moveText);
+        const adopt = () => {
+            // 弹窗挂着期间阶段可能被手动改过：只采用当前阶段仍是检测时那一段的线。
+            const prog = currentProgress();
+            const env = personaEnv(project, prog, fameNow());
+            const still = moves.filter(move => {
+                const line = project.personas.lines.find(item => item.id === move.item.lineId);
+                return line && currentStage(line, prog, env).stage.id === move.item.fromId;
+            });
+            if (!still.length) { log('人设阶段推进作废：阶段已被改动'); return; }
+            setProgress(applyMoves(prog, project, still));
+            log(`人设阶段推进：${lines.join('；')}`);
+        };
+        if (data.settings().personaMode === 'auto') {
+            adopt();
+            notice.show({ id: 'persona', title: '人设阶段已推进', body: lines.join('\n'), actions: [{ label: '撤销', run: () => setProgress(undoMoves(currentProgress(), project, moves)) }], timeout: 15000 });
+            return;
+        }
+        notice.show({
+            id: 'persona', title: '人设阶段有变化', body: lines.join('\n'),
+            actions: [
+                { label: '采用', primary: true, run: adopt },
+                { label: '暂不', run: () => notice.hide('persona') },
+            ],
+        });
+    }
+
+    // 没有大纲（或大纲为空）时只检测人设阶段。
+    async function checkPersonasOnly({ manual = false } = {}) {
+        const settings = data.settings();
+        const floors = recentFloors(settings.checkFloors);
+        const items = floors.length ? personaCheckItems(floors) : [];
+        if (!items.length) {
+            if (floors.length && !manual) setProgress({ ...currentProgress(), lastCheckFloor: floorCount() });
+            log('跳过检测：大纲为空');
+            if (manual && hasPersonas(activeProject())) toast('info', floors.length ? '没有需要检测的人设线。' : '还没有可检测的正文。');
+            return null;
+        }
+        checking = true;
+        log(`开始检测人设阶段：${items.length} 条线，读最近 ${floors.length} 楼${manual ? '（手动）' : ''}`);
+        emit('checking');
+        try {
+            const messages = buildPersonaCheckMessages(items, floors);
+            let result = null;
+            for (let attempt = 0; ; attempt += 1) {
+                try {
+                    result = parseCheckReply(await requestLlm(messages, resolveLlm(settings, 'check'), { timeoutMs: 120000 }));
+                    break;
+                } catch (error) {
+                    if (attempt >= CHECK_RETRIES) throw error;
+                    log(`检测请求失败：${error.message}，${RETRY_GAP_MS / 1000} 秒后第 ${attempt + 1} 次重试`);
+                    await new Promise(resolve => view.setTimeout(resolve, RETRY_GAP_MS));
+                }
+            }
+            notice.hide('checkfail');
+            const next = { ...currentProgress(), lastCheckFloor: floorCount() };
+            delete next.lastFailFloor;
+            setProgress(next);
+            const moves = result.personas || [];
+            log(`人设检测完成：${moves.length} 条建议`);
+            offerPersonaMoves(items, moves);
+            if (manual && !moves.length) toast('info', '人设阶段没有变化。');
+            return result;
+        } catch (error) {
+            setProgress({ ...currentProgress(), lastFailFloor: floorCount() });
+            log(`检测失败：${error.message}`);
+            notice.show({ id: 'checkfail', title: '进度检测失败', body: `已自动重试 ${CHECK_RETRIES} 次：${error.message}`, actions: [{ label: '重试', primary: true, run: () => checkNow({ manual }) }, { label: '关闭', run: () => {} }] });
+            return null;
+        } finally {
+            checking = false;
+            emit('checked');
+        }
+    }
+
     async function checkNow({ manual = false } = {}) {
         if (isInfinite(activeProject())) {
             log('无限流项目不使用检测模型');
@@ -649,10 +811,7 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
         }
         const sw = threadSwitches(project);
         const unit = activeUnit() && maskUnits([activeUnit()], sw)[0];
-        if (!unit) {
-            log('跳过检测：大纲为空');
-            return null;
-        }
+        if (!unit) return checkPersonasOnly({ manual });
         const floors = recentFloors(settings.checkFloors);
         if (!floors.length) {
             log('跳过检测：没有可检测的正文');
@@ -671,7 +830,8 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
             const threadInfo = checkThreads(liveThreads(list, states, prog, opts), {
                 newThreadMode: sw.sideOn ? settings.newThreadMode : 'off', ignored: threadState(prog).ignored, readTo: prog.lastCheckFloor,
             });
-            const messages = buildCheckMessages(unit, index, floors, threadInfo);
+            const pItems = personaCheckItems(floors);
+            const messages = buildCheckMessages(unit, index, floors, threadInfo, pItems);
             let result = null;
             for (let attempt = 0; ; attempt += 1) {
                 try {
@@ -702,6 +862,7 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
                 toast('info', result.reason || '本阶段尚未演完。');
             }
             if (result.newThread && sw.sideOn) offerThread(unit, result.newThread);
+            offerPersonaMoves(pItems, result.personas || []);
             return result;
         } catch (error) {
             // 失败只记 lastFailFloor 控制重试间隔，lastCheckFloor（readTo、「·已读」）不动。
@@ -823,6 +984,7 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
     async function onChatChanged() {
         progress = null;
         progressFor = '';
+        fixedDeclined = '';
         abandonOpening();
         lastRead = null;
         pendingCheck = false;
@@ -831,6 +993,7 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
         notice.hide('advance');
         notice.hide('offtrack');
         notice.hide('thread');
+        notice.hide('persona');
         const id = activeId();
         if (id) {
             try {
@@ -873,6 +1036,7 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
     ];
 
     function bind() {
+        try { for (const win of new Set([view, window])) win.addEventListener('igs:stats-changed', onStatsChanged); } catch { /* 窗口已关闭 */ }
         const c = ctx();
         const types = eventTypes();
         if (!c || !c.eventSource) return;
@@ -891,6 +1055,7 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
     }
 
     function unbind() {
+        try { for (const win of new Set([view, window])) win.removeEventListener('igs:stats-changed', onStatsChanged); } catch { /* 窗口已关闭 */ }
         const c = ctx();
         for (const [, name, handler] of listeners.splice(0)) {
             try { c.eventSource.removeListener(name, handler); } catch { /* 酒馆已卸载 */ }
@@ -937,6 +1102,7 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
         setProgress,
         units,
         entries,
+        fame: fameNow,
         openNext,
         backTo,
         checkNow,

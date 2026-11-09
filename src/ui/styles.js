@@ -47,7 +47,7 @@ export const CSS = `
 .pi-icon-btn:hover{color:var(--pi-dark);background:var(--pi-surf)}
 .pi-icon-btn.is-danger:hover{color:var(--pi-danger);background:var(--pi-danger-soft)}
 .pi-menu{display:none}
-.pi-tabs{grid-column:2;display:grid;grid-auto-flow:column;grid-auto-columns:76px;gap:4px}
+.pi-tabs{grid-column:2;display:grid;grid-auto-flow:column;grid-auto-columns:64px;gap:4px}
 .pi-tab{text-align:center;padding:6px 0;border:0;border-radius:20px;background:none;color:var(--pi-txt2);font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:inherit}
 .pi-tab:hover{color:var(--pi-dark)}
 .pi-tab.is-sel{background:var(--pi-dark);color:var(--pi-on-dark)}
@@ -251,7 +251,7 @@ label.pi-wb-row{cursor:pointer}
 .pi-md li.is-sub{margin-left:16px}
 .pi-md blockquote{margin:0 0 8px;padding:2px 0 2px 10px;border-left:3px solid var(--pi-line);color:var(--pi-txt2)}
 .pi-md hr{border:0;border-top:1px solid var(--pi-line);margin:10px 0}
-.pi-md code{font-family:var(--pi-mono);font-size:12px;background:var(--pi-surf);border-radius:4px;padding:1px 4px}
+.pi-md code{font-family:var(--pi-mono);font-size:12px;line-height:inherit;color:var(--pi-txt);background:var(--pi-fill2);border:0;border-radius:4px;padding:1px 4px}
 .pi-md .pi-pre{margin:0 0 8px}
 .pi-md-table{overflow-x:auto;margin:0 0 8px}
 .pi-md table{border-collapse:collapse;font-size:12px}
@@ -348,6 +348,8 @@ label.pi-wb-row{cursor:pointer}
 .pi-wb-adv-bd{display:flex;flex-direction:column;gap:8px}
 .pi-wb-hit{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:var(--pi-r-in);background:var(--pi-fill);margin:4px 0}
 .pi-wb-hit .pi-wb-title{flex:1;min-width:0}
+.pi-wb-hit>.pi-sel{flex:0 0 auto;width:auto;background:var(--pi-bg)}
+.pi-wb-hit .pi-wb-title>small{color:var(--pi-txt2);font-size:12px}
 .pi-wb-hit .pi-meta{max-width:60%;overflow:hidden;text-overflow:ellipsis}
 .pi-dlg-body .pi-menu-item .pi-meta{max-width:50%;overflow:hidden;text-overflow:ellipsis}
 /* /wb-tools v0.1.23 */
@@ -402,6 +404,16 @@ label.pi-wb-row{cursor:pointer}
 .pi-play{margin-top:4px}
 .pi-play>summary{font-size:12px;font-weight:600;color:var(--pi-txt2);cursor:pointer;padding:4px 0}
 /* /threads v0.1.23 */
+/* persona v0.1.27 */
+.pi-pl-row{padding:6px 0 2px}
+.pi-pl-hd{display:flex;align-items:center;gap:8px;min-height:30px}
+.pi-pl-name{flex:1;min-width:0;font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pi-pl-row.is-lost .pi-pl-name{color:var(--pi-txt2)}
+.pi-pl-row .pi-refs{margin-bottom:2px}
+.pi-ps .pi-node-hd .pi-inp{flex:1;min-width:0}
+.pi-ps{background:var(--pi-fill)}
+.pi-icon-btn:disabled{opacity:.35;cursor:not-allowed}
+/* /persona v0.1.27 */
 `;
 
 export const ICONS = {
@@ -439,5 +451,7 @@ export const ICONS = {
     more: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="3.5" cy="8" r="1.3"/><circle cx="8" cy="8" r="1.3"/><circle cx="12.5" cy="8" r="1.3"/></svg>',
     pulse: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M1.5 8.5h3l1.8-4 3 8 1.9-4h3.3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     file: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M4 1h5.5L13 4.5V14a1 1 0 01-1 1H4a1 1 0 01-1-1V2a1 1 0 011-1z" stroke="currentColor" stroke-width="1.2"/><path d="M9 1v4h4" stroke="currentColor" stroke-width="1.2"/></svg>',
+    arrowUp: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 13V3M4 7l4-4 4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    arrowDown: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 3v10M4 9l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     undo: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M5.5 3L2.5 6l3 3M2.5 6h6.2a4.3 4.3 0 010 8.5H6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
 };

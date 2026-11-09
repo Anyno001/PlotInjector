@@ -1,4 +1,4 @@
-// PlotInjector v0.1.26
+// PlotInjector v0.1.27
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -15,8 +15,8 @@
     if (!lib) throw new Error("YAML 解析库未就绪");
     return lib;
   }
-  function parseYaml(text) {
-    return getYamlLib().parse(String(text || ""));
+  function parseYaml(text2) {
+    return getYamlLib().parse(String(text2 || ""));
   }
   function stringifyYaml(value) {
     return getYamlLib().stringify(value, { indent: 2, lineWidth: 0, minContentWidth: 0 });
@@ -30,8 +30,8 @@
 
   // src/core/setting.js
   var HEADING = /^(?:#{1,4}\s*)?([^\s\-*#\[][^:：]{0,30})[:：]\s*$|^(?:#{1,4}\s+)(.{1,30})$|^(\[追加\])\s*$/;
-  function splitBlocks(text) {
-    let lines2 = String(text || "").replace(/\r\n/g, `
+  function splitBlocks(text2) {
+    let lines2 = String(text2 || "").replace(/\r\n/g, `
 `).split(`
 `), blocks = [], current = { key: "", lines: [] }, counts = {};
     for (let line of lines2) {
@@ -57,20 +57,20 @@
     return joinBlocks(out);
   }
   function injectedSetting(setting) {
-    let text = String(setting && setting.text || "").trim(), mute2 = new Set(setting && Array.isArray(setting.mute) ? setting.mute : []);
-    return mute2.size ? joinBlocks(splitBlocks(text).filter((block) => !mute2.has(block.key))) : text;
+    let text2 = String(setting && setting.text || "").trim(), mute2 = new Set(setting && Array.isArray(setting.mute) ? setting.mute : []);
+    return mute2.size ? joinBlocks(splitBlocks(text2).filter((block) => !mute2.has(block.key))) : text2;
   }
   function changedBlockKeys(oldText, newText) {
     let old = new Map(splitBlocks(oldText).map((block) => [block.key, block.text]));
     return splitBlocks(newText).filter((block) => old.has(block.key) && old.get(block.key) !== block.text).map((block) => block.key);
   }
   var SECTION = /^\s*(?:#{1,4}\s*|\d+\s*[.、．]\s*|\*\*)*\s*(世界观正文|补定|速查)\s*(?:\*\*)?\s*[:：]?\s*(?:\*\*)?\s*/;
-  function stripFence(text) {
-    let match = /^\s*```[a-zA-Z]*\n([\s\S]*?)\n```\s*$/.exec(text);
-    return (match ? match[1] : text).trim();
+  function stripFence(text2) {
+    let match = /^\s*```[a-zA-Z]*\n([\s\S]*?)\n```\s*$/.exec(text2);
+    return (match ? match[1] : text2).trim();
   }
-  function parseSettingReply(text) {
-    let lines2 = String(text || "").replace(/\r\n/g, `
+  function parseSettingReply(text2) {
+    let lines2 = String(text2 || "").replace(/\r\n/g, `
 `).split(`
 `), sections = { 世界观正文: [], 补定: [], 速查: [] }, current = "世界观正文", sawHeading = !1;
     for (let line of lines2) {
@@ -87,15 +87,15 @@
 `)), fixes = sections.补定.map((line) => line.replace(/^\s*(?:[-*•]|\d+[.、])\s*/, "").trim()).filter(Boolean), verdict = /(PASS|FAIL)/i.exec([...sections.速查, ...sawHeading ? [] : lines2.slice(-3)].join(" "));
     return { body, fixes, check: verdict ? verdict[1].toUpperCase() : "" };
   }
-  function pushHistory(history, text, limit = 10, now = Date.now(), label = "") {
+  function pushHistory(history, text2, limit = 10, now = Date.now(), label = "") {
     let list = Array.isArray(history) ? history : [];
-    return list.length && list[0].text === text ? list : [{ at: now, text, ...label ? { label } : {} }, ...list].slice(0, limit);
+    return list.length && list[0].text === text2 ? list : [{ at: now, text: text2, ...label ? { label } : {} }, ...list].slice(0, limit);
   }
   function diffLines(a, b) {
     let x = String(a || "").split(`
 `), y = String(b || "").split(`
 `);
-    if (x.length * y.length > 4e6) return [...x.map((text) => ({ op: "-", text })), ...y.map((text) => ({ op: "+", text }))];
+    if (x.length * y.length > 4e6) return [...x.map((text2) => ({ op: "-", text: text2 })), ...y.map((text2) => ({ op: "+", text: text2 }))];
     let n = x.length, m = y.length, dp = Array.from({ length: n + 1 }, () => new Uint32Array(m + 1));
     for (let i2 = n - 1; i2 >= 0; i2 -= 1)
       for (let j2 = m - 1; j2 >= 0; j2 -= 1) dp[i2][j2] = x[i2] === y[j2] ? dp[i2 + 1][j2 + 1] + 1 : Math.max(dp[i2 + 1][j2], dp[i2][j2 + 1]);
@@ -116,7 +116,7 @@
   function changeLines(data) {
     let value = data && data[CHANGE_FIELD];
     return (Array.isArray(value) ? value : String(value || "").split(`
-`)).map((item) => item && typeof item == "object" ? Object.values(item).join("：") : String(item || "")).map((text) => text.replace(/^\s*(?:[-*•]|\d+[.、])\s*/, "").trim()).filter(Boolean);
+`)).map((item) => item && typeof item == "object" ? Object.values(item).join("：") : String(item || "")).map((text2) => text2.replace(/^\s*(?:[-*•]|\d+[.、])\s*/, "").trim()).filter(Boolean);
   }
   function makeId(prefix = "u") {
     return `${prefix}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
@@ -128,35 +128,35 @@
   function looksLikeVolume(value) {
     return isPlainObject(value) && Object.values(value).some(looksLikeStage);
   }
-  function volumesFromValue(value, idOf = makeId) {
+  function volumesFromValue(value, idOf2 = makeId) {
     if (!isPlainObject(value)) throw new Error("大纲顶层应是「卷名: 阶段」的映射");
     let entries = Object.entries(value);
     if (entries.length && entries.every(([, v]) => looksLikeStage(v)))
-      return [{ id: idOf("v"), key: "剧情_导入", stages: entries.map(([key, data]) => ({ id: idOf("s"), key, data })) }];
+      return [{ id: idOf2("v"), key: "剧情_导入", stages: entries.map(([key, data]) => ({ id: idOf2("s"), key, data })) }];
     if (looksLikeStage(value))
-      return [{ id: idOf("v"), key: "剧情_导入", stages: [{ id: idOf("s"), key: "阶段一_导入", data: value }] }];
+      return [{ id: idOf2("v"), key: "剧情_导入", stages: [{ id: idOf2("s"), key: "阶段一_导入", data: value }] }];
     let volumes = [];
     for (let [key, stages] of entries) {
       if (!looksLikeVolume(stages)) throw new Error(`「${key}」下没有可识别的阶段（需要 时间范围 / 主线节点 等字段）`);
       volumes.push({
-        id: idOf("v"),
+        id: idOf2("v"),
         key,
-        stages: Object.entries(stages).filter(([, data]) => isPlainObject(data)).map(([stageKey, data]) => ({ id: idOf("s"), key: stageKey, data }))
+        stages: Object.entries(stages).filter(([, data]) => isPlainObject(data)).map(([stageKey, data]) => ({ id: idOf2("s"), key: stageKey, data }))
       });
     }
     if (!volumes.length) throw new Error("没有读到任何卷");
     return volumes;
   }
-  function parseOutlineText(text, idOf = makeId) {
+  function parseOutlineText(text2, idOf2 = makeId) {
     let value;
     try {
-      value = parseYaml(text);
+      value = parseYaml(text2);
     } catch (error) {
       let line = yamlErrorLine(error), wrapped = new Error(`YAML 格式错误${line ? `（第 ${line} 行）` : ""}：${String(error.message || error).split(`
 `)[0]}`);
       throw wrapped.line = line, wrapped;
     }
-    return volumesFromValue(value, idOf);
+    return volumesFromValue(value, idOf2);
   }
   function volumeValue(volume) {
     let out = {};
@@ -184,8 +184,8 @@
     return title2 ? `${short}·${title2}` : short;
   }
   function splitStageKey(key) {
-    let text = String(key || ""), at = text.indexOf("_");
-    return at < 0 ? { short: text, title: "" } : { short: text.slice(0, at), title: text.slice(at + 1) };
+    let text2 = String(key || ""), at = text2.indexOf("_");
+    return at < 0 ? { short: text2, title: "" } : { short: text2.slice(0, at), title: text2.slice(at + 1) };
   }
   function stageLabel(key) {
     let { short, title: title2 } = splitStageKey(key);
@@ -201,10 +201,10 @@
   }
   function stageNodes(data) {
     let nodes = [];
-    for (let { field, kind, prefix, label } of NODE_FIELDS)
-      (Array.isArray(data && data[field]) ? data[field] : []).forEach((item, index) => {
+    for (let { field: field2, kind, prefix, label } of NODE_FIELDS)
+      (Array.isArray(data && data[field2]) ? data[field2] : []).forEach((item, index) => {
         let name = isPlainObject(item) ? String(item.名称 || item.类型 || item.内容 || "").trim() : String(item || "").trim();
-        nodes.push({ id: `${prefix}${index}`, kind, field, label, index, name: name || `${label}${index + 1}`, item });
+        nodes.push({ id: `${prefix}${index}`, kind, field: field2, label, index, name: name || `${label}${index + 1}`, item });
       });
     return nodes;
   }
@@ -246,8 +246,8 @@
       return queue && queue.length ? queue.shift() : null;
     };
   }
-  function restoreOutline(text, current = [], idOf = makeId) {
-    let old = current || [], takeVolume = queueByKey(old), used = /* @__PURE__ */ new Set(), parsed = parseOutlineText(text, idOf).map((volume) => {
+  function restoreOutline(text2, current = [], idOf2 = makeId) {
+    let old = current || [], takeVolume = queueByKey(old), used = /* @__PURE__ */ new Set(), parsed = parseOutlineText(text2, idOf2).map((volume) => {
       let match = takeVolume(volume.key), takeStage = queueByKey(match ? match.stages : []);
       return {
         volume,
@@ -392,8 +392,8 @@
   function cleanList(value) {
     let out = [];
     for (let item of Array.isArray(value) ? value : []) {
-      let text = String(item ?? "").trim();
-      text && !out.includes(text) && out.push(text);
+      let text2 = String(item ?? "").trim();
+      text2 && !out.includes(text2) && out.push(text2);
     }
     return out;
   }
@@ -432,9 +432,9 @@
     return pool.map((item) => `${item.label}|${item.weight}`).join(`
 `);
   }
-  function textToPool(text) {
+  function textToPool(text2) {
     let out = [];
-    for (let raw of String(text || "").split(`
+    for (let raw of String(text2 || "").split(`
 `)) {
       let cells2 = raw.split(/[|｜]/).map((cell) => cell.trim());
       cells2[0] && out.push({ label: cells2[0], weight: Number(cells2[1]) || 1 });
@@ -519,8 +519,8 @@
     let world = inf.trigger ? findWorld(inf.worlds, inf.trigger.worldId) : null;
     return world ? addLog(withTrigger({ ...inf, phase: "world", worldId: world.id }, null), note) : withTrigger(inf, null);
   }
-  function addLog(inf, text) {
-    return { ...inf, log: [...inf.log, text].slice(-LOG_MAX) };
+  function addLog(inf, text2) {
+    return { ...inf, log: [...inf.log, text2].slice(-LOG_MAX) };
   }
   function createWorld({ id, dice, parsed }) {
     return normalizeWorld({ id, title: parsed.title, dice, body: parsed.body });
@@ -584,12 +584,12 @@ ${world.body}
       }
       return id;
     }, cache = /* @__PURE__ */ new Map();
-    return { resolve, family: (stageId, field, name) => {
+    return { resolve, family: (stageId, field2, name) => {
       let cacheKey = `${stageId}
-${field}
+${field2}
 ${name}`;
       if (cache.has(cacheKey)) return cache.get(cacheKey);
-      let edges = renames.filter((item) => item.field === field && resolve(item.stageId) === stageId), names2 = /* @__PURE__ */ new Set([name]);
+      let edges = renames.filter((item) => item.field === field2 && resolve(item.stageId) === stageId), names2 = /* @__PURE__ */ new Set([name]);
       for (let grew = !0; grew; ) {
         grew = !1;
         for (let item of edges)
@@ -598,7 +598,7 @@ ${name}`;
       return cache.set(cacheKey, names2), names2;
     }, empty: !renames.length && !Object.keys(alias).length };
   }
-  var NO_LINKS = { resolve: (id) => id, family: (stageId, field, name) => /* @__PURE__ */ new Set([name]), empty: !0 };
+  var NO_LINKS = { resolve: (id) => id, family: (stageId, field2, name) => /* @__PURE__ */ new Set([name]), empty: !0 };
   function placeRecords(nodes, records, stageId, links = NO_LINKS) {
     let placed = /* @__PURE__ */ new Map(), used = /* @__PURE__ */ new Set(), own = (node, rec) => rec.stageId === stageId && rec.nodeId === node.id, fits = (node, rec) => prefixOf(rec.nodeId) === prefixOf(node.id), take = (node, rec) => {
       placed.set(node.id, rec), used.add(rec);
@@ -711,7 +711,7 @@ ${node.name}`;
     let out = map;
     for (let [key, value] of Object.entries(map)) {
       if (!keyNode(key).includes("~") || !isObj(value) || !value.name) continue;
-      let field = FIELD_OF[prefixOf(keyNode(key))], hit = byName.get(`${field}
+      let field2 = FIELD_OF[prefixOf(keyNode(key))], hit = byName.get(`${field2}
 ${value.name}`);
       if (!hit) continue;
       let target = `${hit.unit.id}:${hit.node.id}`;
@@ -741,14 +741,25 @@ ${value.name}`);
     }
     if (next.slots = slots, isObj(progress.threads)) {
       let threads = { ...progress.threads };
-      for (let [kind, field] of Object.entries(KIND_MAP)) {
-        let map = isObj(threads[field]) ? threads[field] : {};
+      for (let [kind, field2] of Object.entries(KIND_MAP)) {
+        let map = isObj(threads[field2]) ? threads[field2] : {};
         for (let unit of units) map = realignStage(map, unit.id, stageNodes(unit.stage.data).filter((node) => node.kind === kind), links);
-        threads[field] = adoptAcross(map, units, kind);
+        threads[field2] = adoptAcross(map, units, kind);
       }
       next.threads = threads;
     }
     return stable(next) === stable(progress) ? progress : next;
+  }
+
+  // src/core/persona-progress.js
+  var PERSONA_RESERVED = ["fixed", "muted", "manual", "auto", "names"], isObj2 = (value) => !!value && typeof value == "object" && !Array.isArray(value), strMap = (value) => Object.fromEntries(Object.entries(isObj2(value) ? value : {}).filter(([, item]) => typeof item == "string")), strList = (value) => Array.isArray(value) ? [...new Set(value.filter((item) => typeof item == "string"))] : [];
+  function emptyPersonaProgress() {
+    return { fixed: {}, muted: [], manual: [], auto: {}, names: {} };
+  }
+  function normalizePersonaProgress(value) {
+    let src = isObj2(value) ? value : {}, out = emptyPersonaProgress();
+    for (let [key, item] of Object.entries(src)) !PERSONA_RESERVED.includes(key) && typeof item == "string" && (out[key] = item);
+    return out.fixed = strMap(src.fixed), out.muted = strList(src.muted), out.manual = strList(src.manual), out.auto = strMap(src.auto), out.names = strMap(src.names), out;
   }
 
   // src/core/progress.js
@@ -770,7 +781,7 @@ ${value.name}`);
       lastCheckFloor: Number(value.lastCheckFloor) || 0,
       pace: ["slow", "normal", "fast"].includes(value.pace) ? value.pace : "normal"
     };
-    return Number(out.lastFailFloor) > 0 ? out.lastFailFloor = Number(out.lastFailFloor) : delete out.lastFailFloor, out;
+    return value.personas && typeof value.personas == "object" && (out.personas = normalizePersonaProgress(value.personas)), Number(out.lastFailFloor) > 0 ? out.lastFailFloor = Number(out.lastFailFloor) : delete out.lastFailFloor, out;
   }
   function checkBase(progress) {
     return Math.max(Number(progress && progress.lastCheckFloor) || 0, Number(progress && progress.lastFailFloor) || 0);
@@ -832,24 +843,413 @@ ${value.name}`);
     return isMuted(progress, unitId) ? progress : { ...progress, muted: [...progress.muted, unitId] };
   }
 
+  // src/core/wbtools.js
+  var isRegexKey = (key) => /^\/.+\/[a-z]*$/i.test(key), SPLIT = /[,，、;；\n]/, TRIM = /^[\s　。，、；：！？,.;:!?]+|[\s　。，、；：！？,.;:!?]+$/g;
+  function fixKeys(keys) {
+    let out = [];
+    for (let raw of keys) {
+      let parts = isRegexKey(String(raw).trim()) ? [String(raw).trim()] : String(raw).split(SPLIT).map((part) => part.replace(TRIM, ""));
+      for (let part of parts) part && !out.includes(part) && out.push(part);
+    }
+    return out;
+  }
+  var sameList = (a, b) => a.length === b.length && a.every((item, index) => item === b[index]);
+  function punctPlan(entries) {
+    let out = [];
+    for (let entry of entries) {
+      let key = fixKeys(entry.keys), second = fixKeys(entry.keysSecondary), patch = {};
+      sameList(key, entry.keys) || (patch.key = key), sameList(second, entry.keysSecondary) || (patch.keysecondary = second), Object.keys(patch).length && out.push({ key: entry.key, title: entry.title, patch, before: [...entry.keys, ...entry.keysSecondary].join(" | "), after: [...key, ...second].join(" | ") });
+    }
+    return out;
+  }
+  function buildPattern(find, { regex = !1, ignoreCase = !1 } = {}) {
+    if (!find) throw new Error("请填写要查找的内容");
+    let source = regex ? find : find.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    try {
+      return new RegExp(source, ignoreCase ? "gi" : "g");
+    } catch (error) {
+      throw new Error(`正则写法有误：${error.message}`);
+    }
+  }
+  var countIn = (text2, pattern) => (String(text2).match(pattern) || []).length;
+  function regexPlan(entries, pattern, replace, fields) {
+    let sub = (text2) => String(text2).replace(pattern, replace), out = [];
+    for (let entry of entries) {
+      let patch = {}, hits = 0;
+      if (fields.content && countIn(entry.content, pattern) && (hits += countIn(entry.content, pattern), patch.content = sub(entry.content)), fields.comment && entry.comment && countIn(entry.comment, pattern) && (hits += countIn(entry.comment, pattern), patch.comment = sub(entry.comment)), fields.keys)
+        for (let [from, field2] of [[entry.keys, "key"], [entry.keysSecondary, "keysecondary"]]) {
+          let n = from.reduce((sum, key) => sum + countIn(key, pattern), 0);
+          n && (hits += n, patch[field2] = from.map(sub).map((key) => key.trim()).filter(Boolean));
+        }
+      hits && out.push({ key: entry.key, title: entry.title, patch, hits });
+    }
+    return out;
+  }
+  function orderPlan(entries, { start, step, by = "list" }) {
+    let begin = Math.round(Number(start)), gap = Math.round(Number(step));
+    if (!Number.isFinite(begin) || begin < 0) throw new Error("起始数字需为不小于 0 的整数");
+    if (!Number.isFinite(gap) || gap < 1) throw new Error("间隔需为不小于 1 的整数");
+    return (by === "order" ? entries.map((entry, index) => ({ entry, index })).sort((a, b) => a.entry.order - b.entry.order || a.index - b.index).map((item) => item.entry) : entries).map((entry, index) => ({ key: entry.key, title: entry.title, from: entry.order, to: begin + index * gap }));
+  }
+  var escapeRegex = (text2) => text2.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  function parseRegexKey(text2) {
+    let match = text2.match(/^\/([\w\W]+?)\/([gimsuy]*)$/);
+    if (!match || /(^|[^\\])\//.test(match[1])) return null;
+    try {
+      return new RegExp(match[1].replace("\\/", "/"), match[2]);
+    } catch {
+      return null;
+    }
+  }
+  function keyMatcher(key, { caseSensitive = null, matchWholeWords = null } = {}, globals = {}) {
+    let text2 = String(key).trim(), regex = parseRegexKey(text2);
+    if (regex) return (haystack) => regex.test(haystack);
+    if (text2 === "") return () => !1;
+    let sensitive = caseSensitive ?? !!globals.caseSensitive, whole = matchWholeWords ?? !!globals.matchWholeWords, fold = (value) => sensitive ? value : value.toLowerCase(), needle = fold(text2);
+    if (whole && needle.split(/\s+/).length === 1) {
+      let pattern = new RegExp(`(?:^|\\W)(${escapeRegex(needle)})(?:$|\\W)`);
+      return (haystack) => pattern.test(fold(haystack));
+    }
+    return (haystack) => fold(haystack).includes(needle);
+  }
+  var matchedKeys = (keys, haystack, options2, globals) => keys.filter((key) => String(key).trim() && keyMatcher(key, options2, globals)(haystack)), matchesAny = (keys, haystack, options2 = {}, globals = {}) => matchedKeys(keys || [], String(haystack || ""), options2, globals).length > 0;
+  function secondaryPass(logic, hit, total) {
+    return logic === 1 ? hit < total : logic === 2 ? hit === 0 : logic === 3 ? hit === total : hit > 0;
+  }
+  function triggerTest(entries, text2, tokenOf2 = () => 0, globals = {}) {
+    let haystack = String(text2 || ""), constant = [], keyword = [];
+    for (let entry of entries) {
+      if (entry.disabled) continue;
+      let options2 = { caseSensitive: entry.caseSensitive, matchWholeWords: entry.matchWholeWords };
+      if (entry.constant) {
+        constant.push({ key: entry.key, title: entry.title, tokens: tokenOf2(entry) });
+        continue;
+      }
+      let primary = matchedKeys(entry.keys, haystack, options2, globals);
+      if (!primary.length) continue;
+      let matched = primary, secondary = entry.selective === !1 ? [] : entry.keysSecondary.filter((key) => String(key).trim());
+      if (secondary.length) {
+        let logic = Number(entry.selectiveLogic) || 0, hit = matchedKeys(secondary, haystack, options2, globals);
+        if (!secondaryPass(logic, hit.length, secondary.length)) continue;
+        (logic === 0 || logic === 3) && (matched = [...primary, ...hit]);
+      }
+      keyword.push({ key: entry.key, title: entry.title, matched, tokens: tokenOf2(entry) });
+    }
+    let sum = (list) => list.reduce((total, item) => total + item.tokens, 0);
+    return { constant, keyword, tokens: { constant: sum(constant), keyword: sum(keyword), total: sum(constant) + sum(keyword) } };
+  }
+  var isShortKey = (key) => {
+    let text2 = String(key).trim();
+    return !text2 || isRegexKey(text2) ? !1 : text2.length <= 1 || /^[A-Za-z]{1,2}$/.test(text2);
+  };
+  function healthCheck(entries, tokenOf2 = () => 0) {
+    let on = entries.filter((entry) => !entry.disabled), shortKeys = [];
+    for (let entry of on) {
+      if (entry.constant) continue;
+      let words = entry.keys.filter(isShortKey);
+      words.length && shortKeys.push({ key: entry.key, title: entry.title, words });
+    }
+    let noKeys = on.filter((entry) => !entry.constant && !entry.keys.some((key) => String(key).trim())).map((entry) => ({ key: entry.key, title: entry.title })), byWord = /* @__PURE__ */ new Map();
+    for (let entry of on)
+      if (!entry.constant)
+        for (let word of new Set(entry.keys.map((key) => String(key).trim()).filter(Boolean))) {
+          let id = word.toLowerCase();
+          byWord.has(id) || byWord.set(id, { word, entries: [] }), byWord.get(id).entries.push({ key: entry.key, title: entry.title });
+        }
+    let shared = [...byWord.values()].filter((item) => item.entries.length > 1), byTitle = /* @__PURE__ */ new Map();
+    for (let entry of entries) {
+      let id = String(entry.title).trim();
+      byTitle.has(id) || byTitle.set(id, { title: id, entries: [] }), byTitle.get(id).entries.push({ key: entry.key, title: entry.title });
+    }
+    let dupTitles = [...byTitle.values()].filter((item) => item.entries.length > 1), constTokens = on.filter((entry) => entry.constant).reduce((sum, entry) => sum + tokenOf2(entry), 0), total = on.reduce((sum, entry) => sum + tokenOf2(entry), 0), ratio = total ? constTokens / total : 0;
+    return { shortKeys, noKeys, shared, dupTitles, constant: { count: on.filter((entry) => entry.constant).length, tokens: constTokens, total, ratio, warn: ratio > 0.6 } };
+  }
+  function sortEntries(entries, mode, tokenOf2 = () => 0) {
+    let list = entries.map((entry, index) => ({ entry, index })), by = {
+      order: (a, b) => a.entry.order - b.entry.order,
+      tokens: (a, b) => tokenOf2(b.entry) - tokenOf2(a.entry),
+      title: (a, b) => String(a.entry.title).localeCompare(String(b.entry.title), "zh")
+    }[mode];
+    return by ? list.sort((a, b) => by(a, b) || a.index - b.index).map((item) => item.entry) : entries;
+  }
+
+  // src/core/personas.js
+  var PERSONA_MODES = [
+    { value: "check", label: "条件检测" },
+    { value: "outline", label: "跟随大纲" },
+    { value: "fame", label: "读声望" },
+    { value: "manual", label: "手动" }
+  ], MODE_KEYS = PERSONA_MODES.map((item) => item.value), PERSONA_SLOT_PREFIX = "@persona:", isObj3 = (value) => !!value && typeof value == "object" && !Array.isArray(value), text = (value) => String(value ?? ""), escapeRe = (value) => text(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), intOr = (value, fallback) => Number.isFinite(Number(value)) && value !== "" && value !== null ? Math.round(Number(value)) : fallback, num = (value) => value == null || value === "" || !Number.isFinite(Number(value)) ? void 0 : Number(value);
+  function emptyPersonas() {
+    return { lines: [], fixed: [], imported: [] };
+  }
+  function newStage(name = "新阶段") {
+    return { id: makeId("ps"), name, cond: "", unitId: "", range: {}, text: "" };
+  }
+  function newLine(name = "新人设", group = "") {
+    return {
+      id: makeId("pl"),
+      group,
+      name,
+      keys: [],
+      constant: !0,
+      position: 0,
+      depth: 4,
+      role: 0,
+      order: 100,
+      enabled: !0,
+      common: "",
+      mode: "manual",
+      fame: { bar: "", partner: "" },
+      stages: [newStage("阶段一")],
+      source: null
+    };
+  }
+  function normalizeStage(value) {
+    let src = isObj3(value) ? value : {}, range = isObj3(src.range) ? src.range : {}, min = num(range.min), max = num(range.max);
+    return { id: text(src.id) || makeId("ps"), name: text(src.name).trim() || "阶段", cond: text(src.cond), unitId: text(src.unitId), range: { ...min !== void 0 ? { min } : {}, ...max !== void 0 ? { max } : {} }, text: text(src.text) };
+  }
+  function normalizeLine(value) {
+    let src = isObj3(value) ? value : {}, fame = isObj3(src.fame) ? src.fame : {}, source = isObj3(src.source) ? src.source : null;
+    return {
+      id: text(src.id) || makeId("pl"),
+      group: text(src.group).trim(),
+      name: text(src.name).trim() || "未命名",
+      keys: (Array.isArray(src.keys) ? src.keys : []).map((item) => text(item).trim()).filter(Boolean),
+      constant: src.constant !== !1,
+      position: intOr(src.position, 0),
+      depth: Math.max(0, intOr(src.depth, 4)),
+      role: intOr(src.role, 0),
+      order: intOr(src.order, 100),
+      enabled: src.enabled !== !1,
+      common: text(src.common),
+      mode: MODE_KEYS.includes(src.mode) ? src.mode : "check",
+      fame: { bar: text(fame.bar).trim(), partner: text(fame.partner).trim() },
+      stages: (Array.isArray(src.stages) ? src.stages : []).filter(isObj3).map(normalizeStage),
+      source: source ? { book: text(source.book), uid: text(source.uid), varPath: text(source.varPath) } : null,
+      // 一条线可能由几个条目的片段合并而成，恢复原条目时按它找回（比计划多存的字段）。
+      sources: (Array.isArray(src.sources) ? src.sources : []).filter(isObj3).map((item) => ({ book: text(item.book), uid: text(item.uid), key: text(item.key ?? item.uid) }))
+    };
+  }
+  function normalizeFixed(value) {
+    let src = isObj3(value) ? value : {};
+    return {
+      id: text(src.id) || makeId("pf"),
+      name: text(src.name).trim(),
+      options: [...new Set((Array.isArray(src.options) ? src.options : []).map((item) => text(item).trim()).filter(Boolean))],
+      varPath: text(src.varPath)
+    };
+  }
+  function normalizePersonas(value) {
+    let src = isObj3(value) ? value : {};
+    return {
+      lines: (Array.isArray(src.lines) ? src.lines : []).filter(isObj3).map(normalizeLine).map((line) => line.stages.length ? line : { ...line, stages: [newStage("阶段一")] }),
+      fixed: (Array.isArray(src.fixed) ? src.fixed : []).filter(isObj3).map(normalizeFixed).filter((item) => item.name),
+      imported: (Array.isArray(src.imported) ? src.imported : []).filter(isObj3).map((item) => ({ book: text(item.book), uid: text(item.uid), key: text(item.key ?? item.uid), title: text(item.title) }))
+    };
+  }
+  var hasPersonas = (project) => !!(project && project.personas && Array.isArray(project.personas.lines) && project.personas.lines.length);
+  function groupLines(lines2) {
+    let groups = /* @__PURE__ */ new Map();
+    for (let line of lines2) {
+      let key = line.group || "";
+      groups.has(key) || groups.set(key, []), groups.get(key).push(line);
+    }
+    return [...groups.entries()].sort(([a], [b]) => a === "" ? -1 : b === "" ? 1 : 0).map(([name, list]) => ({ name, lines: list }));
+  }
+  function fixedValue(item, progress) {
+    let picked = normalizePersonaProgress(progress && progress.personas).fixed[item.id];
+    return item.options.includes(picked) ? picked : "";
+  }
+  var unsetFixed = (personas2, progress) => personas2 ? personas2.fixed.filter((item) => item.options.length && !fixedValue(item, progress)) : [];
+  function applyFixed(content, personas2, progress) {
+    let out = text(content);
+    for (let item of personas2.fixed) {
+      if (!item.options.length) continue;
+      let value = fixedValue(item, progress) || item.options[0], block = new RegExp(`\\{\\{${escapeRe(item.name)}=([^}]*)\\}\\}([\\s\\S]*?)\\{\\{/${escapeRe(item.name)}\\}\\}`, "g");
+      out = out.replace(block, (all, v, body) => v === value ? body : ""), out = out.split(`{{${item.name}}}`).join(value);
+    }
+    return out.replace(/\n{3,}/g, `
+
+`);
+  }
+  function rangeHas(range, value) {
+    return Number.isFinite(value) ? (range.min === void 0 || value >= range.min) && (range.max === void 0 || value <= range.max) : !1;
+  }
+  function fameReading(line, fame) {
+    let bar = (Array.isArray(fame) ? fame : []).find((item) => item && item.name === line.fame.bar);
+    if (!bar) return null;
+    if (line.fame.partner) {
+      let pair = (Array.isArray(bar.pairs) ? bar.pairs : []).find((item) => item.partner === line.fame.partner);
+      return pair ? Number(pair.value) : null;
+    }
+    return Number.isFinite(Number(bar.value)) ? Number(bar.value) : null;
+  }
+  var storedIndex = (line, pp) => Math.max(0, line.stages.findIndex((stage) => stage.id === pp[line.id]));
+  function outlineIndex(line, env) {
+    let units = env.units || [], links = env.links || NO_LINKS, position = new Map(units.map((unit, i) => [unit.id, i])), best = -1, at = 0;
+    return line.stages.forEach((stage, i) => {
+      if (!stage.unitId) return;
+      let id = links.resolve(stage.unitId), pos = position.get(id);
+      pos === void 0 || !["done", "active"].includes(env.states && env.states[id]) || pos >= best && (best = pos, at = i);
+    }), at;
+  }
+  function fameIndex(line, env) {
+    let value = fameReading(line, env.fame);
+    return value === null ? -1 : line.stages.findIndex((stage) => rangeHas(stage.range, value));
+  }
+  function currentStage(line, progress, env = {}) {
+    let pp = normalizePersonaProgress(progress && progress.personas), manualHeld = pp.manual.includes(line.id), stored = storedIndex(line, pp), pick = (index, source, lost = !1) => ({ stage: line.stages[index], index, source, lost });
+    if (line.mode === "outline" && !manualHeld) return pick(outlineIndex(line, env), "outline");
+    if (line.mode === "fame" && !manualHeld) {
+      let index = fameIndex(line, env);
+      return index >= 0 ? pick(index, "fame") : pick(stored, "manual", fameReading(line, env.fame) === null);
+    }
+    return pick(stored, manualHeld ? "manual" : line.mode === "check" ? "check" : "manual");
+  }
+  function personaEnv(project, progress, fame = []) {
+    let infinite = project && project.mode === "infinite", units = infinite || !project ? [] : flattenUnits(project.outline && project.outline.volumes), links = infinite || !units.length ? NO_LINKS : outlineLinks(project.outline, units);
+    return { units, links, states: units.length ? unitStates(units, progress, links) : {}, fame };
+  }
+  var withPersonas = (progress, patch) => ({ ...progress, personas: { ...normalizePersonaProgress(progress && progress.personas), ...patch } }), without = (list, id) => list.filter((item) => item !== id);
+  function setPersonaStage(progress, line, stageId, env = {}) {
+    let pp = normalizePersonaProgress(progress && progress.personas), manual = line.mode === "manual" ? pp.manual : [.../* @__PURE__ */ new Set([...pp.manual, line.id])], stage = line.stages.find((item) => item.id === stageId);
+    return withPersonas(progress, {
+      [line.id]: stageId,
+      manual,
+      names: { ...pp.names, ...stage ? { [line.id]: stage.name } : {} }
+    });
+  }
+  function releasePersona(progress, lineId) {
+    let pp = normalizePersonaProgress(progress && progress.personas);
+    return pp.manual.includes(lineId) ? withPersonas(progress, { manual: without(pp.manual, lineId) }) : progress;
+  }
+  function setFixedValue(progress, fixedId, value) {
+    let pp = normalizePersonaProgress(progress && progress.personas);
+    return withPersonas(progress, { fixed: { ...pp.fixed, [fixedId]: value } });
+  }
+  function mutePersona(progress, lineId, muted = !0) {
+    let pp = normalizePersonaProgress(progress && progress.personas), list = muted ? [.../* @__PURE__ */ new Set([...pp.muted, lineId])] : without(pp.muted, lineId);
+    return list.length === pp.muted.length ? progress : withPersonas(progress, { muted: list });
+  }
+  function syncPersonas(project, progress, fame = []) {
+    if (!hasPersonas(project) || !progress) return progress;
+    let pp = normalizePersonaProgress(progress.personas), env = personaEnv(project, progress, fame), next = pp;
+    for (let line of project.personas.lines) {
+      if (line.mode !== "outline" && line.mode !== "fame") continue;
+      let index = line.mode === "outline" ? outlineIndex(line, env) : fameIndex(line, env);
+      if (index < 0) continue;
+      let stage = line.stages[index];
+      if (next.auto[line.id] === stage.id) continue;
+      let wasSet = next.auto[line.id] !== void 0;
+      next = { ...next, auto: { ...next.auto, [line.id]: stage.id }, manual: wasSet ? without(next.manual, line.id) : next.manual };
+    }
+    return next === pp ? progress : { ...progress, personas: next };
+  }
+  function alignPersonaProgress(progress, personas2) {
+    if (!progress || !progress.personas || !personas2) return progress;
+    let pp = normalizePersonaProgress(progress.personas), next = { ...pp, names: { ...pp.names }, auto: { ...pp.auto } }, changed = !1, alive = new Set(personas2.lines.map((line) => line.id));
+    for (let line of personas2.lines) {
+      let id = pp[line.id];
+      if (id === void 0) continue;
+      let hit = line.stages.find((stage) => stage.id === id);
+      if (hit) {
+        next.names[line.id] !== hit.name && (next.names[line.id] = hit.name, changed = !0);
+        continue;
+      }
+      let byName = line.stages.find((stage) => stage.name === pp.names[line.id]);
+      byName ? next[line.id] = byName.id : (delete next[line.id], delete next.names[line.id]), changed = !0;
+    }
+    for (let key of Object.keys(next))
+      ["fixed", "muted", "manual", "auto", "names"].includes(key) || alive.has(key) || (delete next[key], changed = !0);
+    return changed ? { ...progress, personas: next } : progress;
+  }
+  function personaContent(line, stage, personas2, progress) {
+    return applyFixed([line.common, stage && stage.text].map((item) => text(item).trim()).filter(Boolean).join(`
+`), personas2, progress);
+  }
+  function lineTriggered(line, recentText, globals = {}) {
+    return line.constant ? !0 : line.keys.length > 0 && matchesAny(line.keys, recentText, {}, globals);
+  }
+  var personaSlotId = (line) => `${PERSONA_SLOT_PREFIX}${line.id}`;
+  function buildPersonaEntries(project, progress, { recentText, globals, fame = [] } = {}) {
+    if (!hasPersonas(project)) return [];
+    let personas2 = project.personas, env = personaEnv(project, progress, fame), out = [];
+    for (let line of personas2.lines) {
+      if (!line.enabled || recentText !== void 0 && !lineTriggered(line, recentText, globals)) continue;
+      let { stage } = currentStage(line, progress, env), content = personaContent(line, stage, personas2, progress);
+      content && out.push({
+        slotId: personaSlotId(line),
+        kind: "persona",
+        title: `人设·${line.group ? `${line.group}·` : ""}${line.name}`,
+        lineId: line.id,
+        content,
+        position: line.position,
+        depth: line.depth,
+        role: line.role,
+        order: line.order,
+        enabled: !0
+      });
+    }
+    return out;
+  }
+  function checkItems(project, progress, recentText, { globals = {}, fame = [] } = {}) {
+    if (!hasPersonas(project) || !progress) return [];
+    let pp = normalizePersonaProgress(progress.personas), env = personaEnv(project, progress, fame), out = [];
+    for (let line of project.personas.lines) {
+      if (!line.enabled || line.mode !== "check" || pp.muted.includes(line.id) || !lineTriggered(line, recentText, globals)) continue;
+      let { stage, index } = currentStage(line, progress, env), next = line.stages[index + 1];
+      next && out.push({ lineId: line.id, group: line.group, name: line.name, from: stage.name, fromId: stage.id, to: next.name, toId: next.id, cond: next.cond.trim(), wasManual: pp.manual.includes(line.id) });
+    }
+    return out;
+  }
+  var itemLabel = (item) => `${item.group ? `${item.group} · ` : ""}${item.name}`;
+  function resolveMoves(items, moves) {
+    let out = [];
+    for (let move of Array.isArray(moves) ? moves : []) {
+      let key = text(move && move.line).trim(), to = text(move && move.to).trim(), item = items.find((entry) => entry.name === key || itemLabel(entry) === key || `${entry.group}·${entry.name}` === key || `${entry.group}${entry.name}` === key);
+      !item || out.some((entry) => entry.item === item) || to !== item.to && to !== item.toId || out.push({ item, floor: Number(move.floor) > 0 ? Math.round(Number(move.floor)) : 0, reason: text(move.reason).trim() });
+    }
+    return out;
+  }
+  var moveText = (move) => `${itemLabel(move.item)}：${move.item.from} → ${move.item.to}${move.floor || move.reason ? `（${move.floor ? `第 ${move.floor} 楼` : ""}${move.floor && move.reason ? "：" : ""}${move.reason}）` : ""}`;
+  function applyMoves(progress, project, moves) {
+    let next = progress;
+    for (let move of moves) {
+      let line = project.personas.lines.find((item) => item.id === move.item.lineId);
+      line && (next = releasePersona(setPersonaStage(next, line, move.item.toId), line.id));
+    }
+    return next;
+  }
+  function undoMoves(progress, project, moves) {
+    let next = progress;
+    for (let move of moves) {
+      let line = project.personas.lines.find((item) => item.id === move.item.lineId);
+      if (!line) continue;
+      let pp = normalizePersonaProgress(next.personas), manual = move.item.wasManual ? [.../* @__PURE__ */ new Set([...pp.manual, line.id])] : pp.manual.filter((id) => id !== line.id);
+      next = withPersonas(next, { [line.id]: move.item.fromId, manual, names: { ...pp.names, [line.id]: move.item.from } });
+    }
+    return next;
+  }
+
   // src/core/threads.js
-  var isObj2 = (value) => !!value && typeof value == "object" && !Array.isArray(value), str = (value) => String(value ?? "").trim(), clamp = (value, min, max) => Math.max(min, Math.min(max, value)), int = (value) => Number.isFinite(Number(value)) ? Math.round(Number(value)) : 0, CLOCK_MAX_TICK = 2, DEFAULT_HOOK_CAP = 2;
+  var isObj4 = (value) => !!value && typeof value == "object" && !Array.isArray(value), str = (value) => String(value ?? "").trim(), clamp = (value, min, max) => Math.max(min, Math.min(max, value)), int = (value) => Number.isFinite(Number(value)) ? Math.round(Number(value)) : 0, CLOCK_MAX_TICK = 2, DEFAULT_HOOK_CAP = 2;
   function clockSize(item) {
-    if (!isObj2(item)) return 0;
+    if (!isObj4(item)) return 0;
     let size = int(item.进度钟);
     return size >= 2 ? Math.min(12, size) : 0;
   }
   function hookCondition(item) {
-    return isObj2(item) ? str(item.条件) : "";
+    return isObj4(item) ? str(item.条件) : "";
   }
   function hookSteps(item) {
-    if (!isObj2(item)) return [];
+    if (!isObj4(item)) return [];
     let value = item.步骤;
     return (Array.isArray(value) ? value : String(value ?? "").split(`
-`)).map((entry) => isObj2(entry) ? Object.values(entry).join("：") : String(entry ?? "")).map((text) => text.replace(/^\s*(?:[-*•]|\d+[.、])\s*/, "").trim()).filter(Boolean);
+`)).map((entry) => isObj4(entry) ? Object.values(entry).join("：") : String(entry ?? "")).map((text2) => text2.replace(/^\s*(?:[-*•]|\d+[.、])\s*/, "").trim()).filter(Boolean);
   }
   function hookLimit(item) {
-    if (!isObj2(item)) return null;
+    if (!isObj4(item)) return null;
     let value = str(item.时限);
     return value ? /^\d+$/.test(value) && Number(value) > 0 ? { floors: Number(value) } : value === "本卷" ? { volume: !0 } : null : null;
   }
@@ -858,7 +1258,7 @@ ${value.name}`);
   }
   var threadKey = (unit, node) => `${unit.id}:${node.id}`;
   function threadSwitches(project) {
-    let raw = project && isObj2(project.threads) ? project.threads : {};
+    let raw = project && isObj4(project.threads) ? project.threads : {};
     return { sideOn: raw.sideOn !== !1, worldOn: raw.worldOn !== !1 };
   }
   function maskUnits(units, sw) {
@@ -866,26 +1266,26 @@ ${value.name}`);
     let drop = [...sw.sideOn ? [] : ["支线事件"], ...sw.worldOn ? [] : ["世界动态"]];
     return (units || []).map((unit) => {
       let data = { ...unit.stage.data };
-      for (let field of drop) delete data[field];
+      for (let field2 of drop) delete data[field2];
       return { ...unit, stage: { ...unit.stage, data } };
     });
   }
   function threadState(progress) {
-    let raw = progress && isObj2(progress.threads) ? progress.threads : {};
+    let raw = progress && isObj4(progress.threads) ? progress.threads : {};
     return {
-      clocks: isObj2(raw.clocks) ? raw.clocks : {},
-      hooks: isObj2(raw.hooks) ? raw.hooks : {},
+      clocks: isObj4(raw.clocks) ? raw.clocks : {},
+      hooks: isObj4(raw.hooks) ? raw.hooks : {},
       ignored: Array.isArray(raw.ignored) ? raw.ignored : []
     };
   }
   function withState(progress, patch) {
     return { ...progress, threads: { ...threadState(progress), ...patch } };
   }
-  var mapOf = (node) => node.kind === "world" ? "clocks" : "hooks", unitOfKey = (key) => key.slice(0, key.indexOf(":")), nodeOfKey = (key) => key.slice(key.indexOf(":") + 1), kindNodes = (unit, field) => stageNodes(unit.stage && unit.stage.data).filter((node) => node.kind === (field === "clocks" ? "world" : "side"));
+  var mapOf = (node) => node.kind === "world" ? "clocks" : "hooks", unitOfKey = (key) => key.slice(0, key.indexOf(":")), nodeOfKey = (key) => key.slice(key.indexOf(":") + 1), kindNodes = (unit, field2) => stageNodes(unit.stage && unit.stage.data).filter((node) => node.kind === (field2 === "clocks" ? "world" : "side"));
   function patchLive(progress, item, patch) {
-    let field = mapOf(item.node), state = threadState(progress)[field], map = item.unit.stage ? realignStage(state, item.unit.id, kindNodes(item.unit, field), item.links || NO_LINKS) : { ...state }, next = patch === null ? { name: item.node.name } : { ...item.saved, ...patch, name: item.node.name };
+    let field2 = mapOf(item.node), state = threadState(progress)[field2], map = item.unit.stage ? realignStage(state, item.unit.id, kindNodes(item.unit, field2), item.links || NO_LINKS) : { ...state }, next = patch === null ? { name: item.node.name } : { ...item.saved, ...patch, name: item.node.name };
     for (let name of Object.keys(next)) next[name] === void 0 && delete next[name];
-    return map[item.key] = next, withState(progress, { [field]: map });
+    return map[item.key] = next, withState(progress, { [field2]: map });
   }
   function remapNodes(progress, unitId, prefix, mapIndex) {
     let pattern = new RegExp(`^${prefix}(\\d+)$`), move = (id) => {
@@ -923,8 +1323,8 @@ ${value.name}`);
   function renameNode(progress, unit, node) {
     let next = progress, slot = progress.slots && progress.slots[unit.id], offName = slot && slot.offNames && slot.offNames[node.id];
     if (offName && offName !== node.name && (next = { ...next, slots: { ...next.slots, [unit.id]: { ...slot, offNames: { ...slot.offNames, [node.id]: node.name } } } }), node.kind === "main") return next;
-    let field = mapOf(node), map = threadState(next)[field], key = threadKey(unit, node);
-    return !map[key] || !map[key].name || map[key].name === node.name ? next : withState(next, { [field]: { ...map, [key]: { ...map[key], name: node.name } } });
+    let field2 = mapOf(node), map = threadState(next)[field2], key = threadKey(unit, node);
+    return !map[key] || !map[key].name || map[key].name === node.name ? next : withState(next, { [field2]: { ...map, [key]: { ...map[key], name: node.name } } });
   }
   function renameByPosition(progress, units, links = NO_LINKS) {
     let next = progress;
@@ -942,8 +1342,8 @@ ${value.name}`);
     for (let stage of oldStages) {
       let unit = { id: stage.id, stage }, off = new Set(offNodes(progress, unit)), nodes = stageNodes(stage.data), placed = { clocks: placeStageMap(state.clocks, stage.id, nodes.filter((node) => node.kind === "world")), hooks: placeStageMap(state.hooks, stage.id, nodes.filter((node) => node.kind === "side")) };
       for (let node of nodes) {
-        let field = mapOf(node), hit = node.kind === "main" ? null : placed[field].get(node.id);
-        pool.push({ field: node.field, name: node.name, map: field, value: hit && Object.keys(hit.saved).length ? hit.saved : null, off: off.has(node.id), used: !1 });
+        let field2 = mapOf(node), hit = node.kind === "main" ? null : placed[field2].get(node.id);
+        pool.push({ field: node.field, name: node.name, map: field2, value: hit && Object.keys(hit.saved).length ? hit.saved : null, off: off.has(node.id), used: !1 });
       }
     }
     let strip = (map) => Object.fromEntries(Object.entries(map).filter(([key]) => !oldIds.has(unitOfKey(key)))), clocks = strip(state.clocks), hooks = strip(state.hooks), slots = { ...progress.slots }, kept = slots[keepId] ? { ...slots[keepId] } : null;
@@ -965,9 +1365,9 @@ ${value.name}`);
       let out = {};
       for (let [key, value] of Object.entries(map)) {
         let item = value;
-        for (let field of fields) {
-          let top = field === "lastTickFloor" ? floors : Math.max(1, floors);
-          item && Number(item[field]) > top && (item = { ...item, [field]: top }, changed = !0);
+        for (let field2 of fields) {
+          let top = field2 === "lastTickFloor" ? floors : Math.max(1, floors);
+          item && Number(item[field2]) > top && (item = { ...item, [field2]: top }, changed = !0);
         }
         out[key] = item;
       }
@@ -1028,7 +1428,7 @@ ${value.name}`);
     return hook.steps.length ? `第 ${Math.min(hook.step + 1, hook.steps.length)}/${hook.steps.length} 步` : "";
   }
   function hookLine(hook) {
-    let item = isObj2(hook.node.item) ? hook.node.item : {}, body = (hook.steps.length ? [item.地点, `${stepText(hook)}：${hook.steps[hook.step] || ""}`] : [item.地点, item.事件 || item.内容, item.触发 ? `触发：${item.触发}` : ""]).map(str).filter(Boolean);
+    let item = isObj4(hook.node.item) ? hook.node.item : {}, body = (hook.steps.length ? [item.地点, `${stepText(hook)}：${hook.steps[hook.step] || ""}`] : [item.地点, item.事件 || item.内容, item.触发 ? `触发：${item.触发}` : ""]).map(str).filter(Boolean);
     return `- 支线｜${hook.node.name}${fromText(hook)}${body.length ? `：${body.join("；")}` : ""}`;
   }
   function clockLine(clock) {
@@ -1052,7 +1452,7 @@ ${clocks.map(clockLine).join(`
     if (hooks.length) {
       lines2.push("【支线钩子】");
       for (let hook of hooks) {
-        let chain = hook.steps.length && hook.status !== "wait" && hook.status !== "expired", mark = chain ? `${stepText(hook)}${hook.status === "queue" ? "·排队" : ""}` : marks[hook.status], item = isObj2(hook.node.item) ? hook.node.item : {}, detail = hook.status === "wait" ? `条件：${hook.cond}` : chain ? hook.steps[hook.step] : str(item.事件 || item.内容);
+        let chain = hook.steps.length && hook.status !== "wait" && hook.status !== "expired", mark = chain ? `${stepText(hook)}${hook.status === "queue" ? "·排队" : ""}` : marks[hook.status], item = isObj4(hook.node.item) ? hook.node.item : {}, detail = hook.status === "wait" ? `条件：${hook.cond}` : chain ? hook.steps[hook.step] : str(item.事件 || item.内容);
         lines2.push(`  - [${mark}] 支线｜${indexName(hook)}${detail ? `：${detail.replace(/\s+/g, " ").slice(0, 120)}` : ""}`);
       }
     }
@@ -1262,12 +1662,16 @@ ${body}${carriedText(carried)}${threads}
 </${tag}>`;
   }
   function changesText(units, states, live = null) {
-    let lines2 = units.filter((unit) => states[unit.id] === "done").flatMap((unit) => changeLines(unit.stage.data).map((text) => `- ${text}（${stagePlace(unit)}）`)).concat(threadChangeLines(live));
+    let lines2 = units.filter((unit) => states[unit.id] === "done").flatMap((unit) => changeLines(unit.stage.data).map((text2) => `- ${text2}（${stagePlace(unit)}）`)).concat(threadChangeLines(live));
     return lines2.length ? `已演完的剧情带来的变化（设定里对应的开局状态以这里为准）：
 ${lines2.join(`
 `)}` : "";
   }
-  function buildEntries(project, progress, settings) {
+  function buildEntries(project, progress, settings, personaOpts = {}) {
+    let base = buildOutlineEntries(project, progress, settings), persona = project ? buildPersonaEntries(project, progress, personaOpts) : [];
+    return persona.length ? [...base, ...persona] : base;
+  }
+  function buildOutlineEntries(project, progress, settings) {
     let defaults = { ...DEFAULT_PARAMS, ...project && project.defaults }, entries = [];
     if (!project) return entries;
     let infinite = project.mode === "infinite", allUnits = infinite ? [] : flattenUnits(project.outline && project.outline.volumes), units = maskUnits(allUnits, threadSwitches(project)), links = infinite ? NO_LINKS : outlineLinks(project.outline, allUnits), states = unitStates(units, progress, links), threadOpts = { carryOver: settings.carryOver !== !1, hookCap: settings.hookCap, links }, live = infinite ? null : liveThreads(units, states, progress, threadOpts), done = infinite || units === allUnits ? live : liveThreads(allUnits, states, progress, threadOpts), settingText = [injectedSetting(project.setting), changesText(units, states, done)].filter(Boolean).join(`
@@ -1364,8 +1768,8 @@ ${lines2.join(`
   function groupByField(entries) {
     let map = /* @__PURE__ */ new Map();
     for (let entry of entries) {
-      let field = acuField(entry.title);
-      field && (map.has(field) || map.set(field, []), map.get(field).push(entry));
+      let field2 = acuField(entry.title);
+      field2 && (map.has(field2) || map.set(field2, []), map.get(field2).push(entry));
     }
     return [...map].sort(([a], [b]) => +(a === EN_FIELD) - +(b === EN_FIELD));
   }
@@ -1381,9 +1785,9 @@ ${lines2.join(`
     if (src.picks && typeof src.picks == "object") for (let [id, on] of Object.entries(src.picks)) typeof on == "boolean" && (picks[id] = on);
     return { fields, picks };
   }
-  var isMemoField = (field) => MEMO_FIELD.test(field);
-  function fieldChecked(rule, field) {
-    return Object.prototype.hasOwnProperty.call(rule.fields, field) ? rule.fields[field] : INDEX_FIELD.test(field) && !isMemoField(field);
+  var isMemoField = (field2) => MEMO_FIELD.test(field2);
+  function fieldChecked(rule, field2) {
+    return Object.prototype.hasOwnProperty.call(rule.fields, field2) ? rule.fields[field2] : INDEX_FIELD.test(field2) && !isMemoField(field2);
   }
   var rowNo = (entry) => {
     let match = /-(\d+)$/.exec(entry.title);
@@ -1394,12 +1798,12 @@ ${lines2.join(`
     for (let book of books) {
       let memos = [];
       for (let entry of book.entries) {
-        let field = acuField(entry.title);
-        if (!field) {
+        let field2 = acuField(entry.title);
+        if (!field2) {
           entry.disabled || out.add(entryRefId(book.name, entry));
           continue;
         }
-        isMemoField(field) ? memos.push(entry) : fieldChecked(rule, field) && out.add(entryRefId(book.name, entry));
+        isMemoField(field2) ? memos.push(entry) : fieldChecked(rule, field2) && out.add(entryRefId(book.name, entry));
       }
       memos.sort((a, b) => rowNo(b) - rowNo(a)).slice(0, Math.max(0, memo)).forEach((entry) => out.add(entryRefId(book.name, entry)));
     }
@@ -1413,7 +1817,7 @@ ${lines2.join(`
   }
   function ruleFromSelection(books, fields, checked, memo = DEFAULT_MEMO) {
     let rule = { fields: {}, picks: {} };
-    for (let [field, on] of Object.entries(fields)) !isMemoField(field) && on !== fieldChecked(rule, field) && (rule.fields[field] = on);
+    for (let [field2, on] of Object.entries(fields)) !isMemoField(field2) && on !== fieldChecked(rule, field2) && (rule.fields[field2] = on);
     let base = defaultSet(rule, books, memo);
     for (let book of books)
       for (let entry of book.entries) {
@@ -1460,6 +1864,7 @@ ${lines2.join(`
   var DEFAULT_SETTINGS = {
     tagName: "剧情参考",
     offTrackMode: "ask",
+    personaMode: "ask",
     carryOver: !0,
     handleMode: "ask",
     hookCap: 2,
@@ -1472,13 +1877,14 @@ ${lines2.join(`
     loaderRef: "",
     llm: { discuss: { ...DEFAULT_LLM }, outline: { ...DEFAULT_LLM }, check: { ...DEFAULT_LLM } },
     presets: []
-  }, HANDLE_MODES = ["ask", "auto", "nodes"], OFF_MODES = ["ask", "auto", "off"], THREAD_MODES = ["ask", "auto", "off"];
+  }, HANDLE_MODES = ["ask", "auto", "nodes"], OFF_MODES = ["ask", "auto", "off"], THREAD_MODES = ["ask", "auto", "off"], PERSONA_MODES2 = ["ask", "auto", "off"];
   function normalizeSettings(value) {
     let src = value && typeof value == "object" ? value : {}, { llm, presets } = normalizeLlm(src);
     return {
       ...DEFAULT_SETTINGS,
       ...src,
       offTrackMode: OFF_MODES.includes(src.offTrackMode) ? src.offTrackMode : DEFAULT_SETTINGS.offTrackMode,
+      personaMode: PERSONA_MODES2.includes(src.personaMode) ? src.personaMode : DEFAULT_SETTINGS.personaMode,
       carryOver: src.carryOver !== !1,
       handleMode: HANDLE_MODES.includes(src.handleMode) ? src.handleMode : DEFAULT_SETTINGS.handleMode,
       hookCap: Math.max(1, Math.min(6, Math.round(Number(src.hookCap)) || DEFAULT_SETTINGS.hookCap)),
@@ -1514,6 +1920,7 @@ ${lines2.join(`
       outline: { volumes: [], history: [], renames: [], idAlias: {} },
       defaults: JSON.parse(JSON.stringify(DEFAULT_PARAMS)),
       genRefs: normalizeGenRefs(),
+      personas: emptyPersonas(),
       mode: mode === "infinite" ? "infinite" : "normal",
       ...mode === "infinite" ? { infinite: normalizeInfinite({}) } : {}
     };
@@ -1545,6 +1952,7 @@ ${lines2.join(`
       },
       defaults: normalizeDefaults(src.defaults),
       genRefs: normalizeGenRefs(src.genRefs),
+      personas: normalizePersonas(src.personas),
       threads: { sideOn: !(src.threads && src.threads.sideOn === !1), worldOn: !(src.threads && src.threads.worldOn === !1) },
       mode: src.mode === "infinite" ? "infinite" : "normal",
       ...src.infinite && typeof src.infinite == "object" ? { infinite: normalizeInfinite(src.infinite) } : {}
@@ -1616,12 +2024,12 @@ ${lines2.join(`
     return hostWindow().document;
   }
   function ctx() {
-    let st8 = hostWindow().SillyTavern;
-    return st8 && typeof st8.getContext == "function" ? st8.getContext() : st8 || null;
+    let st9 = hostWindow().SillyTavern;
+    return st9 && typeof st9.getContext == "function" ? st9.getContext() : st9 || null;
   }
   function libs() {
-    let st8 = hostWindow().SillyTavern;
-    return st8 && st8.libs || {};
+    let st9 = hostWindow().SillyTavern;
+    return st9 && st9.libs || {};
   }
   function helper() {
     let w = hostWindow();
@@ -1657,10 +2065,10 @@ ${lines2.join(`
     let c = ctx();
     return c && Array.isArray(c.chat) ? c.chat : [];
   }
-  async function countTokens(text) {
+  async function countTokens(text2) {
     let c = ctx();
     try {
-      if (c && typeof c.getTokenCountAsync == "function") return await c.getTokenCountAsync(String(text || ""));
+      if (c && typeof c.getTokenCountAsync == "function") return await c.getTokenCountAsync(String(text2 || ""));
     } catch {
     }
     return null;
@@ -1672,8 +2080,8 @@ ${lines2.join(`
 
   // src/host/files.js
   var fetchFn = () => hostWindow().fetch.bind(hostWindow());
-  function utf8Base64(text) {
-    let bytes = new TextEncoder().encode(text), binary = "";
+  function utf8Base64(text2) {
+    let bytes = new TextEncoder().encode(text2), binary = "";
     for (let i = 0; i < bytes.length; i += 32768) binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 32768));
     return hostWindow().btoa(binary);
   }
@@ -1692,21 +2100,21 @@ ${lines2.join(`
     let res = await fetchWithTimeout(`/${filePath(name)}?t=${Date.now()}`, { cache: "no-store" });
     if (res.status === 404) return null;
     if (!res.ok) throw new Error(`读取 ${name} 失败（HTTP ${res.status}）`);
-    let text = await res.text();
+    let text2 = await res.text();
     try {
-      return { value: JSON.parse(text), bytes: new TextEncoder().encode(text).length };
+      return { value: JSON.parse(text2), bytes: new TextEncoder().encode(text2).length };
     } catch {
       throw new Error(`${name} 不是有效 JSON`);
     }
   }
   async function writeJsonFile(name, value) {
-    let text = JSON.stringify(value), res = await fetchFn()("/api/files/upload", {
+    let text2 = JSON.stringify(value), res = await fetchFn()("/api/files/upload", {
       method: "POST",
       headers: { ...requestHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify({ name, data: utf8Base64(text) })
+      body: JSON.stringify({ name, data: utf8Base64(text2) })
     });
     if (!res.ok) throw new Error(`写入 ${name} 失败（HTTP ${res.status}）`);
-    return new TextEncoder().encode(text).length;
+    return new TextEncoder().encode(text2).length;
   }
   async function deleteFile(name) {
     let res = await fetchFn()("/api/files/delete", {
@@ -1766,25 +2174,25 @@ ${lines2.join(`
   }
 
   // src/app/data.js
-  function createDataStore({ onChange: onChange7 = () => {
+  function createDataStore({ onChange: onChange8 = () => {
   }, onError = () => {
   } } = {}) {
     let index = emptyIndex(), ready = !1, projects = /* @__PURE__ */ new Map(), chats = /* @__PURE__ */ new Map(), loading = /* @__PURE__ */ new Map(), failed = /* @__PURE__ */ new Set(), writer = createWriter({
       onSaved(name, bytes) {
         if (failed.delete(name), name === INDEX_FILE) return;
         let id = /^pi-[pc]-(.+)\.json$/.exec(name)?.[1], meta2 = index.projects.find((item) => item.id === id), kind = name.startsWith("pi-p-") ? "project" : "chat", knownFile = index.files.includes(name);
-        meta2 && meta2.bytes[kind] !== bytes && (index = { ...index, projects: index.projects.map((item) => item === meta2 ? { ...item, bytes: { ...item.bytes, [kind]: bytes } } : item) }), knownFile || (index = { ...index, files: [...index.files, name] }), (!knownFile || meta2 && meta2.bytes[kind] !== bytes) && writer.schedule(INDEX_FILE, index), onChange7("saved");
+        meta2 && meta2.bytes[kind] !== bytes && (index = { ...index, projects: index.projects.map((item) => item === meta2 ? { ...item, bytes: { ...item.bytes, [kind]: bytes } } : item) }), knownFile || (index = { ...index, files: [...index.files, name] }), (!knownFile || meta2 && meta2.bytes[kind] !== bytes) && writer.schedule(INDEX_FILE, index), onChange8("saved");
       },
       onError(name, error) {
-        failed.add(name), onError(error), onChange7("save-failed");
+        failed.add(name), onError(error), onChange8("save-failed");
       }
     });
     function setIndex(next) {
-      index = next, writer.schedule(INDEX_FILE, index), onChange7("index");
+      index = next, writer.schedule(INDEX_FILE, index), onChange8("index");
     }
     async function init() {
       let file = await readJsonFile(INDEX_FILE);
-      index = normalizeIndex(file && file.value), index.files.includes(INDEX_FILE) || (index = { ...index, files: [INDEX_FILE, ...index.files] }), ready = !0, onChange7("index");
+      index = normalizeIndex(file && file.value), index.files.includes(INDEX_FILE) || (index = { ...index, files: [INDEX_FILE, ...index.files] }), ready = !0, onChange8("index");
     }
     async function loadProject(id) {
       if (projects.has(id)) return projects.get(id);
@@ -1799,7 +2207,7 @@ ${lines2.join(`
       setIndex({ ...index, projects: index.projects.map((item) => item.id === id ? { ...item, ...patch, updatedAt: Date.now() } : item) });
     }
     function saveProject(project) {
-      projects.set(project.id, project), writer.schedule(projectFile(project.id), project), touch(project.id, { name: project.name }), onChange7("project", project.id);
+      projects.set(project.id, project), writer.schedule(projectFile(project.id), project), touch(project.id, { name: project.name }), onChange8("project", project.id);
     }
     function updateProject(id, fn) {
       let current = projects.get(id);
@@ -1815,7 +2223,7 @@ ${lines2.join(`
         ...index,
         projects: [...index.projects, { id: project.id, name: project.name, group, updatedAt: Date.now(), bytes: { project: bytes } }],
         files: index.files.includes(projectFile(project.id)) ? index.files : [...index.files, projectFile(project.id)]
-      }, writer.schedule(INDEX_FILE, index), onChange7("index"), project;
+      }, writer.schedule(INDEX_FILE, index), onChange8("index"), project;
     }
     async function deleteProject(id) {
       writer.cancel(projectFile(id)), writer.cancel(chatFile(id)), await deleteFile(projectFile(id)), await deleteFile(chatFile(id)), projects.delete(id), chats.delete(id);
@@ -1834,7 +2242,7 @@ ${lines2.join(`
       return chats.set(id, chat), chat;
     }
     function saveChat(id, chat) {
-      chats.set(id, chat), writer.schedule(chatFile(id), chat), onChange7("chat", id);
+      chats.set(id, chat), writer.schedule(chatFile(id), chat), onChange8("chat", id);
     }
     async function clearChat(id) {
       writer.cancel(chatFile(id)), await deleteFile(chatFile(id)), chats.set(id, emptyChat());
@@ -1863,7 +2271,7 @@ ${lines2.join(`
     }
     function resetAll() {
       for (let name of [...index.files]) writer.cancel(name);
-      projects.clear(), chats.clear(), index = emptyIndex(), onChange7("index");
+      projects.clear(), chats.clear(), index = emptyIndex(), onChange8("index");
     }
     return {
       init,
@@ -1896,8 +2304,8 @@ ${lines2.join(`
   }
 
   // src/core/check.js
-  function cleanFloorText(text, limit = 3e3) {
-    let out = String(text || "");
+  function cleanFloorText(text2, limit = 3e3) {
+    let out = String(text2 || "");
     return out = out.replace(/<(think|thinking|reasoning|status|statusbar|状态栏|details)\b[^>]*>[\s\S]*?<\/\1>/gi, ""), out = out.replace(/```[\s\S]*?```/g, ""), out = out.replace(/<\s*剧情推进\s*\/?\s*>/g, ""), out = out.replace(/<[^>\n]{1,80}>/g, ""), out = out.replace(/\n{3,}/g, `
 
 `).trim(), out.length > limit ? out.slice(-limit) : out;
@@ -1912,20 +2320,28 @@ ${lines2.join(`
     }
     return clocks.length && threads.readTo > 0 && rules.push("标有「已读」的楼层上次检测已经读过，clocks 只按之后的新楼层推进；没有新楼层时省略 clocks 的推进。"), keys.length ? { keys, rules, hooks: !!threads.hooks, readTo: clocks.length && Number(threads.readTo) || 0 } : null;
   }
+  var PERSONA_KEY = '"personas":[{"line":"线名","to":"下一阶段名","floor":依据所在楼号,"reason":"一句话依据"}]', PERSONA_RULE = "personas 对照【人设阶段】：只填正文里已经写出、满足该线「进入条件」的线；to 只能填该线的下一阶段名，不能跳段、不能退回；floor 填依据所在的楼号，reason 写一句依据。没有满足的就填空数组。";
+  function personaLines(items) {
+    return items.map((item) => `- ${item.group ? `${item.group}·` : ""}${item.name}：当前「${item.from}」；下一阶段「${item.to}」，进入条件：${item.cond || "（未写，按阶段名判断）"}`).join(`
+`);
+  }
   var EMPTY_NAMES = /^(?:无|没有|暂无|空|none|null|nil|n\/a|na|undefined|-|—|无新线|没有新线|没有新的线)$/i, isEmptyName = (name) => EMPTY_NAMES.test(String(name).trim().replace(/[。．.！!？?；;，,、\s]+$/, "").trim());
-  function buildCheckMessages(unit, index, floors, threads = null) {
-    let extra = threadRules(threads), format = '{"done":["节点名"],"stageDone":true或false,"offTrack":true或false,"offReason":"偏离说明，没有就留空","reason":"一句话"}', system = [
+  function buildCheckMessages(unit, index, floors, threads = null, personas2 = null) {
+    let extra = threadRules(threads), pItems = Array.isArray(personas2) ? personas2 : [], format = '{"done":["节点名"],"stageDone":true或false,"offTrack":true或false,"offReason":"偏离说明，没有就留空","reason":"一句话"}', system = [
       "你是剧情进度核对员。根据最近的正文，对照剧情索引判断进度。",
       "只认正文里已经写出的事件，计划、预告、角色设想不算发生。",
       "若剧情走了某个节点的「偏转」分支，在 reason 里写明是哪个节点、怎么偏的。",
       "另外判断剧情是否严重偏离大纲：正文的走向已经和【当前】【下一段】冲突，照原计划写下去会接不上（例如关键人物已死、关键事件已不可能发生、地点或立场彻底改变）。普通的细节出入、走了偏转分支都不算严重偏离。",
-      `只输出一个 JSON 对象，不加说明：${extra ? `${format.slice(0, -1)},${extra.keys.join(",")}}` : format}`,
+      `只输出一个 JSON 对象，不加说明：${extra || pItems.length ? `${format.slice(0, -1)}${[...extra ? extra.keys : [], ...pItems.length ? [PERSONA_KEY] : []].map((key) => `,${key}`).join("")}}` : format}`,
       `done 只填${extra && extra.hooks ? "【当前】或【支线钩子】" : "【当前】"}里出现过的节点名，原样照抄；stageDone 表示当前段所有主线节点都已发生、剧情已进入下一段。`,
-      ...extra ? extra.rules : []
+      ...extra ? extra.rules : [],
+      ...pItems.length ? [PERSONA_RULE] : []
     ].join(`
 `), readTo = extra ? extra.readTo : 0, user = [
       `【剧情索引】
 ${index}`,
+      ...pItems.length ? ["", `【人设阶段】
+${personaLines(pItems)}`] : [],
       "",
       "【最近正文】",
       ...floors.map((floor) => `【第 ${floor.index} 楼${readTo > 0 && floor.index < readTo ? "·已读" : ""}】
@@ -1934,8 +2350,21 @@ ${floor.text}`)
 `);
     return [{ role: "system", content: system }, { role: "user", content: user }];
   }
-  function parseCheckReply(text) {
-    let raw = String(text || ""), start = raw.indexOf("{"), end = raw.lastIndexOf("}");
+  function buildPersonaCheckMessages(items, floors) {
+    let system = [
+      "你是人设阶段核对员。根据最近的正文，判断下列人设线是否已经进入下一阶段。",
+      "只认正文里已经写出的事件，计划、预告、角色设想不算发生。",
+      `只输出一个 JSON 对象，不加说明：{${PERSONA_KEY}}`,
+      PERSONA_RULE
+    ].join(`
+`), user = [`【人设阶段】
+${personaLines(items)}`, "", "【最近正文】", ...floors.map((floor) => `【第 ${floor.index} 楼】
+${floor.text}`)].join(`
+`);
+    return [{ role: "system", content: system }, { role: "user", content: user }];
+  }
+  function parseCheckReply(text2) {
+    let raw = String(text2 || ""), start = raw.indexOf("{"), end = raw.lastIndexOf("}");
     if (start < 0 || end <= start) throw new Error("检测结果不是 JSON");
     let value;
     try {
@@ -1952,7 +2381,8 @@ ${floor.text}`)
       reason: String(value.reason || "").trim(),
       clocks: parseClocks(value.clocks, flag),
       hooks: names(value.hooks),
-      newThread: parseThread(value.newThread)
+      newThread: parseThread(value.newThread),
+      ...Array.isArray(value.personas) ? { personas: parsePersonaMoves(value.personas) } : {}
     };
   }
   var CLOCK_TICK_MAX = 2, names = (list) => Array.isArray(list) ? list.map((item) => String(item ?? "").trim()).filter(Boolean) : [];
@@ -1961,6 +2391,14 @@ ${floor.text}`)
       let tick = Math.round(Number(item.tick ?? item.advance ?? item.推进));
       return { name: String(item.name ?? item.名称 ?? "").trim(), tick: Number.isFinite(tick) ? Math.min(CLOCK_TICK_MAX, tick) : 0, happened: flag(item.happened ?? item.发生) };
     }).filter((item) => item.name);
+  }
+  function parsePersonaMoves(raw) {
+    return (Array.isArray(raw) ? raw : []).filter((item) => item && typeof item == "object").map((item) => ({
+      line: String(item.line ?? item.线 ?? "").trim(),
+      to: String(item.to ?? item.到 ?? "").trim(),
+      floor: Math.round(Number(item.floor ?? item.楼)) || 0,
+      reason: String(item.reason ?? item.依据 ?? "").trim()
+    })).filter((item) => item.line && item.to);
   }
   function parseThread(raw) {
     if (!raw) return null;
@@ -2023,7 +2461,7 @@ ${guide}`), parts.join(`
     return live.slice(0, Math.max(0, live.length - FOLD_KEEP));
   }
   function foldMessages(summary, messages) {
-    let text = messages.map((msg) => `${msg.role === "user" ? "用户" : "AI"}：${msg.content}`).join(`
+    let text2 = messages.map((msg) => `${msg.role === "user" ? "用户" : "AI"}：${msg.content}`).join(`
 
 `);
     return [
@@ -2032,7 +2470,7 @@ ${guide}`), parts.join(`
 ${summary}
 
 ` : ""}【新的讨论】
-${text}` }
+${text2}` }
     ];
   }
   function chatRequest(system, summary, messages) {
@@ -2043,12 +2481,12 @@ ${summary}` });
     return out;
   }
   function transcript(summary, messages, limit = 3e4) {
-    let text = messages.filter((msg) => !msg.folded).map((msg) => `${msg.role === "user" ? "用户" : "AI"}：${msg.content}`).join(`
+    let text2 = messages.filter((msg) => !msg.folded).map((msg) => `${msg.role === "user" ? "用户" : "AI"}：${msg.content}`).join(`
 
 `), joined = `${summary ? `【摘要】
 ${summary}
 
-` : ""}${text}`;
+` : ""}${text2}`;
     return joined.length > limit ? joined.slice(-limit) : joined;
   }
   var refBlock = (refs) => refs && refs.length ? `【世界书参考】
@@ -2106,7 +2544,7 @@ ${stageToText(stage).replace(/^/gm, "  ").trimEnd()}
   ].join(`
 `);
   function changesBlock(units, title2) {
-    let lines2 = units.flatMap((unit) => changeLines(unit.stage.data).map((text) => `- ${stageLabel(unit.stage.key)}：${text}`));
+    let lines2 = units.flatMap((unit) => changeLines(unit.stage.data).map((text2) => `- ${stageLabel(unit.stage.key)}：${text2}`));
     return lines2.length ? `【${title2}】
 ${lines2.join(`
 `)}` : "";
@@ -2178,17 +2616,17 @@ ${reason}` : ""
 `);
     return [{ role: "system", content: system }, { role: "user", content: user }];
   }
-  function fixYamlMessages(text, error) {
+  function fixYamlMessages(text2, error) {
     return [
       { role: "system", content: `修正下面 YAML 的格式错误，内容不变。
 ${OUTLINE_RULES}` },
       { role: "user", content: `【错误】${error}
 
-${text}` }
+${text2}` }
     ];
   }
-  function extractYaml(text, { all = !1 } = {}) {
-    let raw = String(text || "");
+  function extractYaml(text2, { all = !1 } = {}) {
+    let raw = String(text2 || "");
     if (all) {
       let blocks = [...raw.matchAll(/```ya?ml\s*\n([\s\S]*?)```/gi)].map((match) => match[1].trim()).filter(Boolean);
       if (blocks.length) return blocks.join(`
@@ -2198,13 +2636,13 @@ ${text}` }
     let fenced = /```ya?ml\s*\n([\s\S]*?)```/i.exec(raw) || /```\s*\n([\s\S]*?)```/.exec(raw);
     return (fenced ? fenced[1] : raw).trim();
   }
-  function hasYamlBlock(text) {
-    return /```ya?ml\s*\n[\s\S]*?```/i.test(String(text || ""));
+  function hasYamlBlock(text2) {
+    return /```ya?ml\s*\n[\s\S]*?```/i.test(String(text2 || ""));
   }
-  function parseOutlineReply(text, idOf, { all = !1 } = {}) {
-    let yaml = extractYaml(text, { all });
+  function parseOutlineReply(text2, idOf2, { all = !1 } = {}) {
+    let yaml = extractYaml(text2, { all });
     try {
-      return { ok: !0, yaml, volumes: volumesFromValue(parseYaml(yaml), idOf) };
+      return { ok: !0, yaml, volumes: volumesFromValue(parseYaml(yaml), idOf2) };
     } catch (error) {
       let line = yamlErrorLine(error);
       return { ok: !1, yaml, line, error: `${line ? `第 ${line} 行：` : ""}${String(error.message || error).split(`
@@ -2384,8 +2822,8 @@ NSFW指引（涉及成人内容时）:
 
   // src/core/infinite-state.js
   var POLLUTION_LINE = /^[ \t　]*污染[^\n]*$/gm, NEGATION = /(?:未|没|不|尚未|还没|还未)$/;
-  function escapeRegExp(text) {
-    return String(text).replace(/[.*+?^${}()|[\]\\/-]/g, "\\$&");
+  function escapeRegExp(text2) {
+    return String(text2).replace(/[.*+?^${}()|[\]\\/-]/g, "\\$&");
   }
   function patterns(hub) {
     let tag = escapeRegExp(hub.blockTag), fields = hub.fieldNames.map(escapeRegExp).join("|");
@@ -2404,17 +2842,17 @@ NSFW指引（涉及成人内容时）:
     return !1;
   }
   function classifyTrainValue(value, config) {
-    let hub = resolveHub(config), text = String(value || ""), hits = [];
+    let hub = resolveHub(config), text2 = String(value || ""), hits = [];
     for (let key of ["back", "depart", "away", "hub"]) {
       let hit = !1;
       for (let word of hub.words[key])
-        hasWord(text, word) && (hit = !0), text = text.split(word).join("　");
+        hasWord(text2, word) && (hit = !0), text2 = text2.split(word).join("　");
       hit && hits.push(hub.words[key][0]);
     }
     return hits.length && hits.length < 3 ? hits[0] : "";
   }
-  function parseTrainState(text, config) {
-    let hub = resolveHub(config), re = patterns(hub), src = String(text || ""), opens = [...src.matchAll(re.open)];
+  function parseTrainState(text2, config) {
+    let hub = resolveHub(config), re = patterns(hub), src = String(text2 || ""), opens = [...src.matchAll(re.open)];
     if (!opens.length) return "";
     let last = opens[opens.length - 1], body = src.slice(last.index + last[0].length), close = re.close.exec(body);
     close && (body = body.slice(0, close.index));
@@ -2429,8 +2867,8 @@ NSFW指引（涉及成人内容时）:
     let names2 = hubWordNames(config);
     return [names2.back, names2.hub];
   }
-  function hashText(text) {
-    let h = 2166136261, s = String(text || "");
+  function hashText(text2) {
+    let h = 2166136261, s = String(text2 || "");
     for (let i = 0; i < s.length; i += 1)
       h ^= s.charCodeAt(i), h = Math.imul(h, 16777619) >>> 0;
     return h.toString(16).padStart(8, "0");
@@ -2438,11 +2876,11 @@ NSFW指引（涉及成人内容时）:
   function decideTrigger(phase, state, config) {
     return phase === "train" && enterStates(config).includes(state) ? "enter" : phase === "world" && leaveStates(config).includes(state) ? "leave" : "";
   }
-  function makeTrigger({ kind, floor, text, worldId = "" }) {
-    return { kind, floor: Number(floor), hash: hashText(text), worldId: String(worldId || "") };
+  function makeTrigger({ kind, floor, text: text2, worldId = "" }) {
+    return { kind, floor: Number(floor), hash: hashText(text2), worldId: String(worldId || "") };
   }
-  function judgeTrigger(trigger, text, config) {
-    return trigger ? text == null || !(trigger.kind === "enter" ? enterStates(config) : leaveStates(config)).includes(parseTrainState(text, config)) ? "undo" : hashText(text) === trigger.hash ? "same" : "keep" : "none";
+  function judgeTrigger(trigger, text2, config) {
+    return trigger ? text2 == null || !(trigger.kind === "enter" ? enterStates(config) : leaveStates(config)).includes(parseTrainState(text2, config)) ? "undo" : hashText(text2) === trigger.hash ? "same" : "keep" : "none";
   }
   function describeRead(read, config) {
     return read && read.state ? `上次读到：第 ${read.floor} 楼 ${resolveHub(config).hubName}：${read.state}` : "最新一楼没有状态块";
@@ -2504,9 +2942,9 @@ ${horrorGuide}` : "",
     return [{ role: "system", content: system }, { role: "user", content: user }];
   }
   var MARK = /^[\s#*>\-]*[【\[]\s*(标题|档案)\s*[】\]][:：]?\s*(.*)$/;
-  function parseWorldReply(text) {
+  function parseWorldReply(text2) {
     let parts = { 标题: [], 档案: [] }, key = "";
-    for (let line of String(text || "").replace(/\r/g, "").split(`
+    for (let line of String(text2 || "").replace(/\r/g, "").split(`
 `)) {
       let hit = MARK.exec(line);
       hit ? (key = hit[1], hit[2].trim() && parts[key].push(hit[2].trim())) : key && parts[key].push(line);
@@ -2532,8 +2970,8 @@ ${horrorGuide}` : "",
     return /\/v\d+$/i.test(root) ? root : `${root}/v1`;
   }
   function safeDetail(value, apiKey) {
-    let text = String(value || ""), key = String(apiKey || "").trim();
-    return key && (text = text.split(key).join("[已隐藏]")), text.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim().slice(0, 160);
+    let text2 = String(value || ""), key = String(apiKey || "").trim();
+    return key && (text2 = text2.split(key).join("[已隐藏]")), text2.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim().slice(0, 160);
   }
   function connection(llm) {
     let key = String(llm.apiKey || "").trim();
@@ -2550,20 +2988,20 @@ ${horrorGuide}` : "",
       signal,
       headers: { ...requestHeaders(), "Content-Type": "application/json" },
       body: JSON.stringify(body)
-    }), text = await res.text(), data = null;
+    }), text2 = await res.text(), data = null;
     try {
-      data = JSON.parse(text);
+      data = JSON.parse(text2);
     } catch {
     }
     if (!res.ok || data && data.error) {
-      let detail = safeDetail(data && data.error && (data.error.message || data.error) || data && data.message || text, llm.apiKey);
+      let detail = safeDetail(data && data.error && (data.error.message || data.error) || data && data.message || text2, llm.apiKey);
       throw new Error(`接口请求失败${res.ok ? "" : `（HTTP ${res.status}）`}${detail ? `：${detail}` : ""}`);
     }
-    if (!data) throw new Error(`接口返回的不是 JSON${text ? `：${safeDetail(text, llm.apiKey)}` : ""}`);
+    if (!data) throw new Error(`接口返回的不是 JSON${text2 ? `：${safeDetail(text2, llm.apiKey)}` : ""}`);
     return data;
   }
-  function stripThinking(text) {
-    let out = String(text || "");
+  function stripThinking(text2) {
+    let out = String(text2 || "");
     return out = out.replace(/^\s*<(think|thinking)>[\s\S]*?<\/\1>\s*/i, ""), out.trim();
   }
   async function viaTavern(messages) {
@@ -2604,9 +3042,9 @@ ${horrorGuide}` : "",
       let job = llm.source === "custom" ? viaCustom(messages, llm, controller.signal) : viaTavern(messages);
       job.catch(() => {
       });
-      let text = stripThinking(await Promise.race([job, timeout, stopped]));
-      if (!text) throw new Error("模型没有返回内容");
-      return text;
+      let text2 = stripThinking(await Promise.race([job, timeout, stopped]));
+      if (!text2) throw new Error("模型没有返回内容");
+      return text2;
     } finally {
       view.clearTimeout(timer), signal && onAbort && signal.removeEventListener("abort", onAbort);
     }
@@ -2657,6 +3095,21 @@ ${horrorGuide}` : "",
     }
     let doc = hostDocument(), box = (id) => doc && doc.querySelector(`#${id}`), caseBox = box("world_info_case_sensitive"), wholeBox = box("world_info_match_whole_words");
     return caseBox && wholeBox ? { caseSensitive: !!caseBox.checked, matchWholeWords: !!wholeBox.checked, known: !0 } : { caseSensitive: !1, matchWholeWords: !1, known: !1 };
+  }
+  function worldInfoScanDepth() {
+    let valid = (value) => Number.isFinite(Number(value)) && Number(value) >= 0 && value !== "" && value !== null ? Math.round(Number(value)) : null;
+    try {
+      let c = ctx(), found2 = c && typeof c.getWorldInfoSettings == "function" ? valid(c.getWorldInfoSettings().world_info_depth) : null;
+      if (found2 !== null) return found2;
+    } catch {
+    }
+    try {
+      let found2 = valid(hostWindow().world_info_depth);
+      if (found2 !== null) return found2;
+    } catch {
+    }
+    let box = hostDocument().querySelector("#world_info_depth"), found = box ? valid(box.value) : null;
+    return found !== null ? found : 2;
   }
   function allBookNames() {
     let c = ctx();
@@ -2724,7 +3177,7 @@ ${horrorGuide}` : "",
     return queued(name, async () => {
       let data = clone(await loadBook(name)), entry = data.entries[key];
       if (!entry) throw new Error("条目已不存在");
-      for (let field of ENTRY_FIELDS) Object.prototype.hasOwnProperty.call(patch, field) && (entry[field] = patch[field]);
+      for (let field2 of ENTRY_FIELDS) Object.prototype.hasOwnProperty.call(patch, field2) && (entry[field2] = patch[field2]);
       Object.prototype.hasOwnProperty.call(patch, "keysecondary") && (entry.selective = patch.keysecondary.length > 0), await saveBook(name, data);
     });
   }
@@ -2735,7 +3188,7 @@ ${horrorGuide}` : "",
         let entry = data.entries[key];
         if (entry) {
           backup.entries[key] = clone(entry);
-          for (let field of ENTRY_FIELDS) Object.prototype.hasOwnProperty.call(patch, field) && (entry[field] = patch[field]);
+          for (let field2 of ENTRY_FIELDS) Object.prototype.hasOwnProperty.call(patch, field2) && (entry[field2] = patch[field2]);
           Object.prototype.hasOwnProperty.call(patch, "keysecondary") && (entry.selective = patch.keysecondary.length > 0);
         }
       }
@@ -2924,10 +3377,10 @@ ${horrorGuide}` : "",
 
   // src/app/runtime.js
   var VIRTUAL_WORLD = "剧情注入器", LOG_MAX2 = 40, PENDING_MAX_MS = 3e4, CHECK_RETRIES = 3, RETRY_GAP_MS = 2e3, WORLD_RETRIES = 2, WORLD_WAIT_MS = 9e4, placeOf = (unit) => `${volumeLabel(unit.volume.key)}·${stageLabel(unit.stage.key)}`;
-  function createRuntime({ data, notice, emit, askReason = async () => "" }) {
-    let view = hostWindow(), progress = null, progressFor = "", alignedFrom = null, alignedOutline = null, checking = !1, fallbackTimer = 0, generating = !1, chatStartFloors = 0, pendingCheck = !1, pendingTimer = 0, opening = !1, openGen = 0, openPromise = Promise.resolve(null), pendingTrigger = null, lastRead = null, listeners = [], stats = {}, logs = [];
-    function log(text) {
-      logs.push({ at: Date.now(), text }), logs.length > LOG_MAX2 && logs.shift();
+  function createRuntime({ data, notice, emit, askReason = async () => "", askFixed = async () => null }) {
+    let view = hostWindow(), progress = null, progressFor = "", alignedFrom = null, alignedOutline = null, alignedPersonas = null, checking = !1, fallbackTimer = 0, generating = !1, chatStartFloors = 0, pendingCheck = !1, pendingTimer = 0, opening = !1, openGen = 0, openPromise = Promise.resolve(null), pendingTrigger = null, lastRead = null, listeners = [], stats = {}, logs = [];
+    function log(text2) {
+      logs.push({ at: Date.now(), text: text2 }), logs.length > LOG_MAX2 && logs.shift();
     }
     function chatBoundId() {
       let id = readChatState().projectId;
@@ -2949,7 +3402,19 @@ ${horrorGuide}` : "",
         let aligned = alignProgress(progress, project.outline);
         aligned !== progress && (progress = aligned, writeProgress(progress), log("按大纲对照表归位了本聊天的进度")), alignedFrom = progress, alignedOutline = project.outline;
       }
+      if (project && project.personas !== alignedPersonas) {
+        let aligned = alignPersonaProgress(progress, project.personas);
+        aligned !== progress && (progress = aligned, writeProgress(progress), log("按人设对回了本聊天的人设进度")), alignedPersonas = project.personas;
+      }
       return progress;
+    }
+    function fameNow() {
+      try {
+        let igs = view.IGS, list = igs && igs.stats && typeof igs.stats.fame == "function" ? igs.stats.fame() : [];
+        return Array.isArray(list) ? list : [];
+      } catch {
+        return [];
+      }
     }
     function links() {
       let project = activeProject();
@@ -2973,14 +3438,30 @@ ${horrorGuide}` : "",
       return !changed && slot.since || !prev && slot.since ? next : patchSlot(next, now, { since: floorCount() });
     }
     function setProgress(next, reason = "progress") {
-      next = stampActive(progress && progressFor === next.projectId ? progress : null, next), progress = next, progressFor = next.projectId, writeProgress(next), scheduleFallback(), emit(reason);
+      next = stampActive(progress && progressFor === next.projectId ? progress : null, next), next = syncPersonas(activeProject(), next, fameNow()), progress = next, progressFor = next.projectId, writeProgress(next), scheduleFallback(), emit(reason);
     }
-    function entries() {
+    function scanText() {
+      let depth = Math.max(1, worldInfoScanDepth());
+      return chatMessages().filter((msg) => !isNote(msg)).slice(-depth).map((msg) => String(msg.mes || "")).join(`
+`);
+    }
+    function entries({ inject = !1 } = {}) {
       let project = activeProject(), prog = currentProgress();
-      return project && prog ? buildEntries(project, prog, data.settings()) : [];
+      if (!project || !prog) return [];
+      let persona = hasPersonas(project) ? { fame: fameNow(), ...inject ? { recentText: scanText(), globals: worldInfoMatchSettings() } : {} } : {};
+      return buildEntries(project, prog, data.settings(), persona);
     }
     function virtualEntries() {
-      return entries().filter((entry) => entry.enabled && entry.content).map((entry, index) => toWorldInfoEntry(entry, index, VIRTUAL_WORLD));
+      return entries({ inject: !0 }).filter((entry) => entry.enabled && entry.content).map((entry, index) => toWorldInfoEntry(entry, index, VIRTUAL_WORLD));
+    }
+    function refreshPersonas() {
+      let project = activeProject(), prog = currentProgress();
+      if (!hasPersonas(project) || !prog) return;
+      let next = syncPersonas(project, prog, fameNow());
+      next !== prog && setProgress(next);
+    }
+    function onStatsChanged() {
+      hasPersonas(activeProject()) && (refreshPersonas(), scheduleFallback(), emit("progress"));
     }
     function eventTypes() {
       let c = ctx();
@@ -2989,11 +3470,27 @@ ${horrorGuide}` : "",
     function hasEntriesEvent() {
       return !!eventTypes().WORLDINFO_ENTRIES_LOADED;
     }
+    let askingFixed = null;
+    async function ensureFixed() {
+      let project = activeProject(), prog = currentProgress(), missing = project && prog ? unsetFixed(project.personas, prog) : [];
+      !missing.length || fixedDeclined === `${progressFor}:${chatKey()}` || (askingFixed || (askingFixed = (async () => {
+        let picked = await askFixed(missing);
+        if (picked) {
+          let next = currentProgress();
+          for (let [id, value] of Object.entries(picked)) next = setFixedValue(next, id, value);
+          setProgress(next);
+        } else
+          fixedDeclined = `${progressFor}:${chatKey()}`;
+      })().finally(() => {
+        askingFixed = null;
+      })), await askingFixed);
+    }
+    let fixedDeclined = "", chatKey = () => String(ctx() && ctx().chatId || "");
     async function onEntriesLoaded(payload) {
       if (!(!payload || !Array.isArray(payload.chatLore))) {
-        opening && await waitOpening();
+        opening && await waitOpening(), await ensureFixed();
         try {
-          payload.chatLore.push(...virtualEntries());
+          refreshPersonas(), payload.chatLore.push(...virtualEntries());
         } catch (error) {
           console.error("[剧情注入器] 注入失败", error);
         }
@@ -3056,13 +3553,13 @@ ${horrorGuide}` : "",
       }
     }
     async function syncSetting(projectId, { from = 0, reason = "" } = {}) {
-      let project = data.project(projectId), text = project && project.setting.text.trim();
-      if (!text) return [];
-      let list = flattenUnits(project.outline.volumes), guide = String(data.settings().guide || "").trim() || BUILTIN_GUIDE, reply2 = await requestLlm(syncSettingMessages({ guide, setting: text, units: list, fromUnitIndex: from, reason }), resolveLlm(data.settings(), "outline")), body = parseSettingReply(reply2).body, keys = body ? changedBlockKeys(text, body) : [];
+      let project = data.project(projectId), text2 = project && project.setting.text.trim();
+      if (!text2) return [];
+      let list = flattenUnits(project.outline.volumes), guide = String(data.settings().guide || "").trim() || BUILTIN_GUIDE, reply2 = await requestLlm(syncSettingMessages({ guide, setting: text2, units: list, fromUnitIndex: from, reason }), resolveLlm(data.settings(), "outline")), body = parseSettingReply(reply2).body, keys = body ? changedBlockKeys(text2, body) : [];
       if (!keys.length) return [];
-      let next = mergeBlocks(text, body, keys);
+      let next = mergeBlocks(text2, body, keys);
       data.updateProject(projectId, (current) => ({ ...current, setting: { ...current.setting, text: next, history: pushHistory(pushHistory(current.setting.history, current.setting.text), next) } }));
-      let titles = new Map(splitBlocks(text).map((block) => [block.key, block.title]));
+      let titles = new Map(splitBlocks(text2).map((block) => [block.key, block.title]));
       return keys.map((key) => titles.get(key) || key);
     }
     async function rewriteRest(reason) {
@@ -3175,8 +3672,8 @@ ${horrorGuide}` : "",
       for (let i = chat.length - 1; i >= 0 && out.length < count; i -= 1) {
         let msg = chat[i];
         if (isNote(msg)) continue;
-        let text = cleanFloorText(msg.mes);
-        text && out.unshift({ index: i, text: `${msg.is_user ? "（用户）" : ""}${text}` });
+        let text2 = cleanFloorText(msg.mes);
+        text2 && out.unshift({ index: i, text: `${msg.is_user ? "（用户）" : ""}${text2}` });
       }
       return out;
     }
@@ -3212,12 +3709,12 @@ ${horrorGuide}` : "",
       if (!state) return;
       let pending = opening && pendingTrigger ? pendingTrigger : null, trig = pending || state.inf.trigger;
       if (!trig) return;
-      let msg = chatMessages()[trig.floor], text = msg && !msg.is_user && !msg.is_system ? String(msg.mes || "") : null;
-      if (text !== null && !text.trim()) return;
-      let cfg = state.infinite.config, names2 = hubWordNames(cfg), word = trig.kind === "enter" ? names2.depart : names2.back, verdict = judgeTrigger(trig, text, cfg);
+      let msg = chatMessages()[trig.floor], text2 = msg && !msg.is_user && !msg.is_system ? String(msg.mes || "") : null;
+      if (text2 !== null && !text2.trim()) return;
+      let cfg = state.infinite.config, names2 = hubWordNames(cfg), word = trig.kind === "enter" ? names2.depart : names2.back, verdict = judgeTrigger(trig, text2, cfg);
       if (!(verdict === "none" || verdict === "same")) {
         if (verdict === "keep") {
-          let next = { ...trig, hash: hashText(text) };
+          let next = { ...trig, hash: hashText(text2) };
           pending ? pendingTrigger = next : setInf(withTrigger(state.inf, next)), log(`第 ${trig.floor} 楼文字变了，仍是「${word}」，不重复处理`);
           return;
         }
@@ -3319,6 +3816,68 @@ ${horrorGuide}` : "",
       let state = infState();
       state && setInf(removeWorld(state.inf, worldId, state.infinite.config));
     }
+    function personaCheckItems(floors) {
+      let project = activeProject(), prog = currentProgress();
+      return !hasPersonas(project) || !prog || data.settings().personaMode === "off" ? [] : checkItems(project, prog, floors.map((floor) => floor.text).join(`
+`), { globals: worldInfoMatchSettings(), fame: fameNow() });
+    }
+    function offerPersonaMoves(items, replyMoves) {
+      let project = activeProject(), moves = resolveMoves(items, replyMoves);
+      if (!moves.length || !project) return;
+      let lines2 = moves.map(moveText), adopt = () => {
+        let prog = currentProgress(), env = personaEnv(project, prog, fameNow()), still = moves.filter((move) => {
+          let line = project.personas.lines.find((item) => item.id === move.item.lineId);
+          return line && currentStage(line, prog, env).stage.id === move.item.fromId;
+        });
+        if (!still.length) {
+          log("人设阶段推进作废：阶段已被改动");
+          return;
+        }
+        setProgress(applyMoves(prog, project, still)), log(`人设阶段推进：${lines2.join("；")}`);
+      };
+      if (data.settings().personaMode === "auto") {
+        adopt(), notice.show({ id: "persona", title: "人设阶段已推进", body: lines2.join(`
+`), actions: [{ label: "撤销", run: () => setProgress(undoMoves(currentProgress(), project, moves)) }], timeout: 15e3 });
+        return;
+      }
+      notice.show({
+        id: "persona",
+        title: "人设阶段有变化",
+        body: lines2.join(`
+`),
+        actions: [
+          { label: "采用", primary: !0, run: adopt },
+          { label: "暂不", run: () => notice.hide("persona") }
+        ]
+      });
+    }
+    async function checkPersonasOnly({ manual = !1 } = {}) {
+      let settings = data.settings(), floors = recentFloors(settings.checkFloors), items = floors.length ? personaCheckItems(floors) : [];
+      if (!items.length)
+        return floors.length && !manual && setProgress({ ...currentProgress(), lastCheckFloor: floorCount() }), log("跳过检测：大纲为空"), manual && hasPersonas(activeProject()) && toast("info", floors.length ? "没有需要检测的人设线。" : "还没有可检测的正文。"), null;
+      checking = !0, log(`开始检测人设阶段：${items.length} 条线，读最近 ${floors.length} 楼${manual ? "（手动）" : ""}`), emit("checking");
+      try {
+        let messages = buildPersonaCheckMessages(items, floors), result = null;
+        for (let attempt = 0; ; attempt += 1)
+          try {
+            result = parseCheckReply(await requestLlm(messages, resolveLlm(settings, "check"), { timeoutMs: 12e4 }));
+            break;
+          } catch (error) {
+            if (attempt >= CHECK_RETRIES) throw error;
+            log(`检测请求失败：${error.message}，${RETRY_GAP_MS / 1e3} 秒后第 ${attempt + 1} 次重试`), await new Promise((resolve) => view.setTimeout(resolve, RETRY_GAP_MS));
+          }
+        notice.hide("checkfail");
+        let next = { ...currentProgress(), lastCheckFloor: floorCount() };
+        delete next.lastFailFloor, setProgress(next);
+        let moves = result.personas || [];
+        return log(`人设检测完成：${moves.length} 条建议`), offerPersonaMoves(items, moves), manual && !moves.length && toast("info", "人设阶段没有变化。"), result;
+      } catch (error) {
+        return setProgress({ ...currentProgress(), lastFailFloor: floorCount() }), log(`检测失败：${error.message}`), notice.show({ id: "checkfail", title: "进度检测失败", body: `已自动重试 ${CHECK_RETRIES} 次：${error.message}`, actions: [{ label: "重试", primary: !0, run: () => checkNow({ manual }) }, { label: "关闭", run: () => {
+        } }] }), null;
+      } finally {
+        checking = !1, emit("checked");
+      }
+    }
     async function checkNow({ manual = !1 } = {}) {
       if (isInfinite(activeProject()))
         return log("无限流项目不使用检测模型"), null;
@@ -3328,8 +3887,7 @@ ${horrorGuide}` : "",
       if (!project || !prog)
         return log("跳过检测：当前卡没有启用的项目"), manual && toast("info", "当前卡没有启用的项目。"), null;
       let sw = threadSwitches(project), unit = activeUnit() && maskUnits([activeUnit()], sw)[0];
-      if (!unit)
-        return log("跳过检测：大纲为空"), null;
+      if (!unit) return checkPersonasOnly({ manual });
       let floors = recentFloors(settings.checkFloors);
       if (!floors.length)
         return log("跳过检测：没有可检测的正文"), manual && toast("info", "还没有可检测的正文。"), null;
@@ -3339,7 +3897,7 @@ ${horrorGuide}` : "",
           newThreadMode: sw.sideOn ? settings.newThreadMode : "off",
           ignored: threadState(prog).ignored,
           readTo: prog.lastCheckFloor
-        }), messages = buildCheckMessages(unit, index, floors, threadInfo), result = null;
+        }), pItems = personaCheckItems(floors), messages = buildCheckMessages(unit, index, floors, threadInfo, pItems), result = null;
         for (let attempt = 0; ; attempt += 1)
           try {
             result = parseCheckReply(await requestLlm(messages, resolveLlm(settings, "check"), { timeoutMs: 12e4 }));
@@ -3354,7 +3912,7 @@ ${horrorGuide}` : "",
         let merged = applyCheck(next, liveThreads(list, unitStates(list, next), next, opts), result, { floor: floorCount() });
         next = { ...merged.progress, lastCheckFloor: floorCount() }, delete next.lastFailFloor, setProgress(next);
         for (let event of merged.events) log(threadEventText(event));
-        return log(`检测完成：已演 ${result.done.length} 个节点${result.stageDone ? "，本阶段已演完" : ""}${result.offTrack ? "，偏离大纲" : ""}`), result.offTrack && settings.offTrackMode !== "off" && !next.offMuted.includes(unit.id) ? handleOffTrack(unit, result.offReason || result.reason) : result.stageDone ? proposeAdvance({ unit, reason: result.reason }) : manual && toast("info", result.reason || "本阶段尚未演完。"), result.newThread && sw.sideOn && offerThread(unit, result.newThread), result;
+        return log(`检测完成：已演 ${result.done.length} 个节点${result.stageDone ? "，本阶段已演完" : ""}${result.offTrack ? "，偏离大纲" : ""}`), result.offTrack && settings.offTrackMode !== "off" && !next.offMuted.includes(unit.id) ? handleOffTrack(unit, result.offReason || result.reason) : result.stageDone ? proposeAdvance({ unit, reason: result.reason }) : manual && toast("info", result.reason || "本阶段尚未演完。"), result.newThread && sw.sideOn && offerThread(unit, result.newThread), offerPersonaMoves(pItems, result.personas || []), result;
       } catch (error) {
         return setProgress({ ...currentProgress(), lastFailFloor: floorCount() }), log(`检测失败：${error.message}`), notice.show({
           id: "checkfail",
@@ -3425,7 +3983,7 @@ ${horrorGuide}` : "",
       clampBase() && emit("floor");
     }
     async function onChatChanged() {
-      progress = null, progressFor = "", abandonOpening(), lastRead = null, pendingCheck = !1, view.clearTimeout(pendingTimer), chatStartFloors = floorCount(), notice.hide("advance"), notice.hide("offtrack"), notice.hide("thread");
+      progress = null, progressFor = "", fixedDeclined = "", abandonOpening(), lastRead = null, pendingCheck = !1, view.clearTimeout(pendingTimer), chatStartFloors = floorCount(), notice.hide("advance"), notice.hide("offtrack"), notice.hide("thread"), notice.hide("persona");
       let id = activeId();
       if (id)
         try {
@@ -3452,6 +4010,10 @@ ${horrorGuide}` : "",
       ["GENERATION_STOPPED", onGenerationEnded]
     ];
     function bind() {
+      try {
+        for (let win of /* @__PURE__ */ new Set([view, window])) win.addEventListener("igs:stats-changed", onStatsChanged);
+      } catch {
+      }
       let c = ctx(), types = eventTypes();
       if (!(!c || !c.eventSource))
         for (let [key, handler] of BINDINGS) {
@@ -3465,6 +4027,10 @@ ${horrorGuide}` : "",
         }
     }
     function unbind() {
+      try {
+        for (let win of /* @__PURE__ */ new Set([view, window])) win.removeEventListener("igs:stats-changed", onStatsChanged);
+      } catch {
+      }
       let c = ctx();
       for (let [, name, handler] of listeners.splice(0))
         try {
@@ -3503,6 +4069,7 @@ ${horrorGuide}` : "",
       setProgress,
       units,
       entries,
+      fame: fameNow,
       openNext,
       backTo,
       checkNow,
@@ -3579,7 +4146,7 @@ ${horrorGuide}` : "",
 .pi-icon-btn:hover{color:var(--pi-dark);background:var(--pi-surf)}
 .pi-icon-btn.is-danger:hover{color:var(--pi-danger);background:var(--pi-danger-soft)}
 .pi-menu{display:none}
-.pi-tabs{grid-column:2;display:grid;grid-auto-flow:column;grid-auto-columns:76px;gap:4px}
+.pi-tabs{grid-column:2;display:grid;grid-auto-flow:column;grid-auto-columns:64px;gap:4px}
 .pi-tab{text-align:center;padding:6px 0;border:0;border-radius:20px;background:none;color:var(--pi-txt2);font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:inherit}
 .pi-tab:hover{color:var(--pi-dark)}
 .pi-tab.is-sel{background:var(--pi-dark);color:var(--pi-on-dark)}
@@ -3783,7 +4350,7 @@ label.pi-wb-row{cursor:pointer}
 .pi-md li.is-sub{margin-left:16px}
 .pi-md blockquote{margin:0 0 8px;padding:2px 0 2px 10px;border-left:3px solid var(--pi-line);color:var(--pi-txt2)}
 .pi-md hr{border:0;border-top:1px solid var(--pi-line);margin:10px 0}
-.pi-md code{font-family:var(--pi-mono);font-size:12px;background:var(--pi-surf);border-radius:4px;padding:1px 4px}
+.pi-md code{font-family:var(--pi-mono);font-size:12px;line-height:inherit;color:var(--pi-txt);background:var(--pi-fill2);border:0;border-radius:4px;padding:1px 4px}
 .pi-md .pi-pre{margin:0 0 8px}
 .pi-md-table{overflow-x:auto;margin:0 0 8px}
 .pi-md table{border-collapse:collapse;font-size:12px}
@@ -3880,6 +4447,8 @@ label.pi-wb-row{cursor:pointer}
 .pi-wb-adv-bd{display:flex;flex-direction:column;gap:8px}
 .pi-wb-hit{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:var(--pi-r-in);background:var(--pi-fill);margin:4px 0}
 .pi-wb-hit .pi-wb-title{flex:1;min-width:0}
+.pi-wb-hit>.pi-sel{flex:0 0 auto;width:auto;background:var(--pi-bg)}
+.pi-wb-hit .pi-wb-title>small{color:var(--pi-txt2);font-size:12px}
 .pi-wb-hit .pi-meta{max-width:60%;overflow:hidden;text-overflow:ellipsis}
 .pi-dlg-body .pi-menu-item .pi-meta{max-width:50%;overflow:hidden;text-overflow:ellipsis}
 /* /wb-tools v0.1.23 */
@@ -3934,6 +4503,16 @@ label.pi-wb-row{cursor:pointer}
 .pi-play{margin-top:4px}
 .pi-play>summary{font-size:12px;font-weight:600;color:var(--pi-txt2);cursor:pointer;padding:4px 0}
 /* /threads v0.1.23 */
+/* persona v0.1.27 */
+.pi-pl-row{padding:6px 0 2px}
+.pi-pl-hd{display:flex;align-items:center;gap:8px;min-height:30px}
+.pi-pl-name{flex:1;min-width:0;font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pi-pl-row.is-lost .pi-pl-name{color:var(--pi-txt2)}
+.pi-pl-row .pi-refs{margin-bottom:2px}
+.pi-ps .pi-node-hd .pi-inp{flex:1;min-width:0}
+.pi-ps{background:var(--pi-fill)}
+.pi-icon-btn:disabled{opacity:.35;cursor:not-allowed}
+/* /persona v0.1.27 */
 `, ICONS = {
     close: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
     plus: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
@@ -3969,6 +4548,8 @@ label.pi-wb-row{cursor:pointer}
     more: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="3.5" cy="8" r="1.3"/><circle cx="8" cy="8" r="1.3"/><circle cx="12.5" cy="8" r="1.3"/></svg>',
     pulse: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M1.5 8.5h3l1.8-4 3 8 1.9-4h3.3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     file: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M4 1h5.5L13 4.5V14a1 1 0 01-1 1H4a1 1 0 01-1-1V2a1 1 0 011-1z" stroke="currentColor" stroke-width="1.2"/><path d="M9 1v4h4" stroke="currentColor" stroke-width="1.2"/></svg>',
+    arrowUp: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 13V3M4 7l4-4 4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    arrowDown: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 3v10M4 9l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     undo: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M5.5 3L2.5 6l3 3M2.5 6h6.2a4.3 4.3 0 010 8.5H6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>'
   };
 
@@ -4001,12 +4582,12 @@ label.pi-wb-row{cursor:pointer}
   function options(list, value) {
     return list.map((item) => `<option value="${esc(item.value)}"${String(item.value) === String(value) ? " selected" : ""}>${esc(item.label)}</option>`).join("");
   }
-  function openDialog({ title: title2, html = "", actions: actions11 = [{ label: "确定", value: !0, primary: !0 }], onMount } = {}) {
+  function openDialog({ title: title2, html = "", actions: actions12 = [{ label: "确定", value: !0, primary: !0 }], onMount } = {}) {
     let doc = hostDocument();
     return new Promise((resolve) => {
       let root = el(`<div class="pi-root pi-dialog"><div class="pi-dialog-box" role="dialog">
             ${title2 ? `<h4>${esc(title2)}</h4>` : ""}<div class="pi-dlg-body">${html}</div>
-            <div class="pi-dlg-acts">${actions11.map((action, index) => `<button type="button" class="pi-btn${action.primary ? " is-primary" : ""}${action.danger ? " is-danger" : ""}" data-dlg="${index}">${esc(action.label)}</button>`).join("")}</div>
+            <div class="pi-dlg-acts">${actions12.map((action, index) => `<button type="button" class="pi-btn${action.primary ? " is-primary" : ""}${action.danger ? " is-danger" : ""}" data-dlg="${index}">${esc(action.label)}</button>`).join("")}</div>
         </div></div>`), finish = (value) => {
         doc.removeEventListener("keydown", onKey, !0), root.remove(), resolve(value);
       }, onKey = (event) => {
@@ -4018,7 +4599,7 @@ label.pi-wb-row{cursor:pointer}
         if (pick) return finish(pick.dataset.dlgValue);
         let button = event.target.closest("[data-dlg]");
         if (!button) return;
-        let action = actions11[Number(button.dataset.dlg)], value = typeof action.value == "function" ? action.value(root) : action.value;
+        let action = actions12[Number(button.dataset.dlg)], value = typeof action.value == "function" ? action.value(root) : action.value;
         value !== void 0 && finish(value);
       }), doc.addEventListener("keydown", onKey, !0), doc.body.appendChild(root), onMount && onMount(root), root.querySelector("input,textarea,select")?.focus();
     });
@@ -4028,10 +4609,10 @@ label.pi-wb-row{cursor:pointer}
     return openDialog({ title: title2, html, actions: [{ label: "取消", value: !1 }, { label: okLabel, value: !0, primary: !danger, danger }] }).then(Boolean);
   }
   function promptDialog({ title: title2, label = "", value = "", multiline = !1, placeholder = "" }) {
-    let input = multiline ? `<textarea class="pi-ta is-mono is-tall" data-dlg-input placeholder="${esc(placeholder)}">${esc(value)}</textarea>` : `<input class="pi-inp" data-dlg-input value="${esc(value)}" placeholder="${esc(placeholder)}">`;
+    let input2 = multiline ? `<textarea class="pi-ta is-mono is-tall" data-dlg-input placeholder="${esc(placeholder)}">${esc(value)}</textarea>` : `<input class="pi-inp" data-dlg-input value="${esc(value)}" placeholder="${esc(placeholder)}">`;
     return openDialog({
       title: title2,
-      html: `<label class="pi-field">${label ? `<span>${esc(label)}</span>` : ""}${input}</label>`,
+      html: `<label class="pi-field">${label ? `<span>${esc(label)}</span>` : ""}${input2}</label>`,
       actions: [{ label: "取消", value: null }, { label: "确定", primary: !0, value: (root) => root.querySelector("[data-dlg-input]").value }]
     });
   }
@@ -4045,12 +4626,12 @@ label.pi-wb-row{cursor:pointer}
   function pickFiles({ accept = "", multiple = !1 } = {}) {
     let doc = hostDocument();
     return new Promise((resolve) => {
-      let input = doc.createElement("input");
-      input.type = "file", input.accept = accept, input.multiple = multiple, input.hidden = !0, input.addEventListener("change", () => {
-        resolve([...input.files]), input.remove();
-      }), input.addEventListener("cancel", () => {
-        resolve([]), input.remove();
-      }), doc.body.appendChild(input), input.click();
+      let input2 = doc.createElement("input");
+      input2.type = "file", input2.accept = accept, input2.multiple = multiple, input2.hidden = !0, input2.addEventListener("change", () => {
+        resolve([...input2.files]), input2.remove();
+      }), input2.addEventListener("cancel", () => {
+        resolve([]), input2.remove();
+      }), doc.body.appendChild(input2), input2.click();
     });
   }
 
@@ -4088,8 +4669,8 @@ label.pi-wb-row{cursor:pointer}
   }
 
   // src/core/tokens.js
-  function estimateTokens(text) {
-    let value = String(text || ""), cjk = (value.match(/[　-鿿가-힯＀-￯]/g) || []).length;
+  function estimateTokens(text2) {
+    let value = String(text2 || ""), cjk = (value.match(/[　-鿿가-힯＀-￯]/g) || []).length;
     return Math.ceil(cjk + (value.length - cjk) / 4);
   }
 
@@ -4120,13 +4701,13 @@ ${floor.text}`).join(`
   async function resolveRefs(view, chat, project) {
     let refs = [], r = chat.refs;
     if (r.setting && project.setting.text.trim() && refs.push({ title: "当前设定", text: project.setting.text }), r.outline && project.outline.volumes.length) {
-      let text = outlineToText(project.outline.volumes);
-      refs.push({ title: "当前大纲", text: text.length < 12e3 ? text : flattenUnits(project.outline.volumes).map((unit) => `${volumeLabel(unit.volume.key)}·${stageLabel(unit.stage.key)}`).join(`
+      let text2 = outlineToText(project.outline.volumes);
+      refs.push({ title: "当前大纲", text: text2.length < 12e3 ? text2 : flattenUnits(project.outline.volumes).map((unit) => `${volumeLabel(unit.volume.key)}·${stageLabel(unit.stage.key)}`).join(`
 `) });
     }
     if (r.progress) {
-      let text = progressText(view);
-      text && refs.push({ title: "剧情进度（已演、进行中与之后的阶段）", text });
+      let text2 = progressText(view);
+      text2 && refs.push({ title: "剧情进度（已演、进行中与之后的阶段）", text: text2 });
     }
     let floors = floorsText(view, r.floors);
     return floors && refs.push({ title: `最近 ${r.floors} 楼正文`, text: floors }), [...refs, ...await wbRefTexts(r.wb, r.memo)];
@@ -4155,10 +4736,10 @@ ${floor.text}`).join(`
                 <button type="button" class="pi-btn is-sm is-ghost" data-ref-all="${esc(book.name)}" data-on="1">全选</button>
                 <button type="button" class="pi-btn is-sm is-ghost" data-ref-all="${esc(book.name)}" data-on="0">全不选</button></span></div>
             ${hand.map((entry) => row(entryRefId(book.name, entry), entry, checked.has(entryRefId(book.name, entry)), ` data-ref-hand="${esc(book.name)}"`)).join("")}</div>` : "", acuHtml = fields.length ? `<div class="pi-wb-sec"><div class="pi-wb-sec-hd">数据库条目<small>${fields.reduce((sum, [, list]) => sum + list.length, 0)}</small></div>
-            ${fields.map(([field, list]) => {
-        let memoField = isMemoField(field), lead = memoField ? '<span class="pi-wb-pad"></span>' : `<input type="checkbox" data-ref-field="${esc(field)}"${fieldChecked(rule, field) ? " checked" : ""}>`, memoBox = memoField ? `<span class="pi-wb-memo">最近<input class="pi-inp is-num" type="number" min="0" data-ref-memo value="${memo}">条</span>` : "";
-        return `<div class="pi-wb-sub"><div class="pi-wb-sub-hd">${lead}<button type="button" class="pi-wb-name" data-ref-fold>${ICONS.caret}<span class="pi-wb-field">${esc(field)}</span><small>${list.length}</small></button>${memoBox}</div>
-                    <div class="pi-wb-fold" hidden>${list.map((entry) => row(entryRefId(book.name, entry), entry, checked.has(entryRefId(book.name, entry)), ` data-ref-of="${esc(field)}"${memoField ? " data-ref-memo-row" : ""}`)).join("")}</div></div>`;
+            ${fields.map(([field2, list]) => {
+        let memoField = isMemoField(field2), lead = memoField ? '<span class="pi-wb-pad"></span>' : `<input type="checkbox" data-ref-field="${esc(field2)}"${fieldChecked(rule, field2) ? " checked" : ""}>`, memoBox = memoField ? `<span class="pi-wb-memo">最近<input class="pi-inp is-num" type="number" min="0" data-ref-memo value="${memo}">条</span>` : "";
+        return `<div class="pi-wb-sub"><div class="pi-wb-sub-hd">${lead}<button type="button" class="pi-wb-name" data-ref-fold>${ICONS.caret}<span class="pi-wb-field">${esc(field2)}</span><small>${list.length}</small></button>${memoBox}</div>
+                    <div class="pi-wb-fold" hidden>${list.map((entry) => row(entryRefId(book.name, entry), entry, checked.has(entryRefId(book.name, entry)), ` data-ref-of="${esc(field2)}"${memoField ? " data-ref-memo-row" : ""}`)).join("")}</div></div>`;
       }).join("")}</div>` : "";
       return `<div class="pi-ref-book"><p class="pi-hint"><b>${esc(book.name)}</b> <span class="pi-badge">${esc(book.source)}</span></p>${handHtml}${acuHtml || ""}${!hand.length && !fields.length ? '<p class="pi-hint">没有条目</p>' : ""}</div>`;
     }).join("");
@@ -4166,7 +4747,7 @@ ${floor.text}`).join(`
   async function pickRefs(refs, title2 = "附带的世界书条目") {
     let chat = { refs }, books = await loadBoundBooks();
     if (!books.length) return { none: !0 };
-    let memoRows = (box) => [...box.querySelectorAll("[data-ref-memo-row]")], rowNo2 = (input) => Number((/-(\d+)$/.exec(input.closest("label").querySelector(".pi-wb-title").textContent) || [])[1] ?? -1);
+    let memoRows = (box) => [...box.querySelectorAll("[data-ref-memo-row]")], rowNo2 = (input2) => Number((/-(\d+)$/.exec(input2.closest("label").querySelector(".pi-wb-title").textContent) || [])[1] ?? -1);
     return await openDialog({
       title: title2,
       html: `<div class="pi-ref-top"><span class="pi-hint" data-ref-sum></span><span class="pi-spacer"></span>
@@ -4177,10 +4758,10 @@ ${floor.text}`).join(`
         primary: !0,
         value: (box) => {
           let fields = {};
-          box.querySelectorAll("[data-ref-field]").forEach((input) => {
-            fields[input.dataset.refField] = input.checked;
+          box.querySelectorAll("[data-ref-field]").forEach((input2) => {
+            fields[input2.dataset.refField] = input2.checked;
           });
-          let memoInput = box.querySelector("[data-ref-memo]"), memo = memoInput ? Math.max(0, Math.round(Number(memoInput.value) || 0)) : chat.refs.memo, checked = new Set([...box.querySelectorAll("[data-ref-id]:checked")].map((input) => input.dataset.refId));
+          let memoInput = box.querySelector("[data-ref-memo]"), memo = memoInput ? Math.max(0, Math.round(Number(memoInput.value) || 0)) : chat.refs.memo, checked = new Set([...box.querySelectorAll("[data-ref-id]:checked")].map((input2) => input2.dataset.refId));
           return { memo, wb: ruleFromSelection(books, fields, checked, memo) };
         }
       }],
@@ -4188,12 +4769,12 @@ ${floor.text}`).join(`
         let byId = /* @__PURE__ */ new Map();
         for (let book of books) for (let entry of book.entries) byId.set(entryRefId(book.name, entry), entry);
         let sum = () => {
-          let ids = [...box.querySelectorAll("[data-ref-id]:checked")].map((input) => input.dataset.refId), tokens = ids.reduce((total, id) => total + estimateTokens(byId.get(id)?.content || ""), 0);
+          let ids = [...box.querySelectorAll("[data-ref-id]:checked")].map((input2) => input2.dataset.refId), tokens = ids.reduce((total, id) => total + estimateTokens(byId.get(id)?.content || ""), 0);
           box.querySelector("[data-ref-sum]").textContent = `已选 ${ids.length} 条，约 ${tokens} token`;
         }, applyMemo = () => {
           let n = Math.max(0, Math.round(Number(box.querySelector("[data-ref-memo]")?.value) || 0));
-          for (let book of box.querySelectorAll(".pi-ref-book")) memoRows(book).sort((a, b) => rowNo2(b) - rowNo2(a)).forEach((input, i) => {
-            input.checked = i < n;
+          for (let book of box.querySelectorAll(".pi-ref-book")) memoRows(book).sort((a, b) => rowNo2(b) - rowNo2(a)).forEach((input2, i) => {
+            input2.checked = i < n;
           });
         };
         box.addEventListener("click", (event) => {
@@ -4206,21 +4787,21 @@ ${floor.text}`).join(`
           let every = event.target.closest("[data-ref-every]");
           if (every) {
             let on = every.dataset.refEvery === "1";
-            box.querySelectorAll("[data-ref-id], [data-ref-field]").forEach((input) => {
-              input.checked = on;
+            box.querySelectorAll("[data-ref-id], [data-ref-field]").forEach((input2) => {
+              input2.checked = on;
             });
             let memoInput = box.querySelector("[data-ref-memo]");
             memoInput && (memoInput.value = on ? String(Math.max(...[...box.querySelectorAll(".pi-ref-book")].map((book) => memoRows(book).length), 0)) : "0"), sum();
             return;
           }
           let all = event.target.closest("[data-ref-all]");
-          all && ([...box.querySelectorAll("[data-ref-hand]")].filter((input) => input.dataset.refHand === all.dataset.refAll).forEach((input) => {
-            input.checked = all.dataset.on === "1";
+          all && ([...box.querySelectorAll("[data-ref-hand]")].filter((input2) => input2.dataset.refHand === all.dataset.refAll).forEach((input2) => {
+            input2.checked = all.dataset.on === "1";
           }), sum());
         }), box.addEventListener("change", (event) => {
-          let field = event.target.dataset.refField;
-          field !== void 0 && [...box.querySelectorAll("[data-ref-of]")].filter((input) => input.dataset.refOf === field).forEach((input) => {
-            input.checked = event.target.checked;
+          let field2 = event.target.dataset.refField;
+          field2 !== void 0 && [...box.querySelectorAll("[data-ref-of]")].filter((input2) => input2.dataset.refOf === field2).forEach((input2) => {
+            input2.checked = event.target.checked;
           }), sum();
         }), box.addEventListener("input", (event) => {
           event.target.matches("[data-ref-memo]") && (applyMemo(), sum());
@@ -4230,8 +4811,8 @@ ${floor.text}`).join(`
   }
 
   // src/ui/markdown.js
-  function inline(text) {
-    let codes = [], out = esc(text).replace(/`([^`]+)`/g, (_, code) => `\0${codes.push(code) - 1}\0`);
+  function inline(text2) {
+    let codes = [], out = esc(text2).replace(/`([^`]+)`/g, (_, code) => `\0${codes.push(code) - 1}\0`);
     return out = out.replace(/\*\*(.+?)\*\*|__(.+?)__/g, (_, a, b) => `<strong>${a ?? b}</strong>`).replace(/(^|[^*])\*(?!\s)(.+?)\*(?!\*)/g, "$1<em>$2</em>").replace(/~~(.+?)~~/g, "<del>$1</del>"), out.replace(/\u0000(\d+)\u0000/g, (_, i) => `<code>${codes[i]}</code>`);
   }
   var RE = {
@@ -4289,8 +4870,8 @@ ${floor.text}`).join(`
       if (list) {
         let items = [];
         for (; i < lines2.length && RE[list].test(lines2[i]); ) {
-          let [, indent, text] = RE[list].exec(lines2[i++]);
-          items.push(`<li${indent.length >= 2 ? ' class="is-sub"' : ""}>${inline(text)}</li>`);
+          let [, indent, text2] = RE[list].exec(lines2[i++]);
+          items.push(`<li${indent.length >= 2 ? ' class="is-sub"' : ""}>${inline(text2)}</li>`);
         }
         out.push(`<${list}>${items.join("")}</${list}>`);
         continue;
@@ -4362,12 +4943,12 @@ ${floor.text}`).join(`
         <span>${esc(entry.title)} <span class="pi-badge">≈${entry.content.length} 字</span></span></label>`).join("")}`).join(""), picked = await openDialog({
       title: title2,
       html: `<div class="pi-ref-top"><span class="pi-spacer"></span><button type="button" class="pi-btn is-sm is-ghost" data-pick-every="1">全选</button><button type="button" class="pi-btn is-sm is-ghost" data-pick-every="0">全不选</button></div>${html}`,
-      actions: [{ label: "取消", value: null }, { label: "导入选中", primary: !0, value: (root) => [...root.querySelectorAll("[data-pick]:checked")].map((input) => input.dataset.pick) }],
+      actions: [{ label: "取消", value: null }, { label: "导入选中", primary: !0, value: (root) => [...root.querySelectorAll("[data-pick]:checked")].map((input2) => input2.dataset.pick) }],
       onMount(box) {
         box.addEventListener("click", (event) => {
           let every = event.target.closest("[data-pick-every]");
-          every && box.querySelectorAll("[data-pick]").forEach((input) => {
-            input.checked = every.dataset.pickEvery === "1";
+          every && box.querySelectorAll("[data-pick]").forEach((input2) => {
+            input2.checked = every.dataset.pickEvery === "1";
           });
         });
       }
@@ -4414,7 +4995,7 @@ ${floor.text}`).join(`
     world: ["类型", "来源", "内容"]
   }, LONG_KEYS = /* @__PURE__ */ new Set(["事件", "偏转", "内容", "触发"]), NEW_NODE = { main: { 名称: "", 地点: "", 事件: "", 偏转: "" }, side: { 名称: "", 地点: "", 事件: "", 触发: "" }, world: { 类型: "", 来源: "", 内容: "" } }, st = (view) => view.tabState("outline"), STAGE_DRAFT = { "stage-refine": "细化节点", "stage-split": "拆成两段", "stage-merge": "与下一段合并" }, fmtTime = (time2) => new Date(time2).toLocaleString(), ERR_PREFIX = /^(?:YAML 格式错误(?:（第 \d+ 行）)?|第 \d+ 行)[：:]\s*/;
   function errParts(error, line) {
-    let text = String(error && error.message || error || ""), no = line || error && error.line || Number((/第 (\d+) 行/.exec(text) || [])[1]) || 0, detail = text.replace(ERR_PREFIX, "").trim(), yaml = !!no || /^YAML 格式错误/.test(text) && !/[一-鿿]/.test(detail);
+    let text2 = String(error && error.message || error || ""), no = line || error && error.line || Number((/第 (\d+) 行/.exec(text2) || [])[1]) || 0, detail = text2.replace(ERR_PREFIX, "").trim(), yaml = !!no || /^YAML 格式错误/.test(text2) && !/[一-鿿]/.test(detail);
     return { no, detail, yaml };
   }
   function errHtml(error, line, tag = "p") {
@@ -4467,19 +5048,19 @@ ${floor.text}`).join(`
 `) : String(value[key] ?? ""), attrs = (key) => `data-node-field="${esc(meta2.field)}" data-i="${index}" data-k="${esc(key)}" data-play placeholder="${esc(PLAY_HINTS[key])}"`;
     return `<details class="pi-play"${keys.some((key) => shown(key).trim()) ? " open" : ""}><summary>玩法</summary>
         ${keys.map((key) => {
-      let field = `<label class="pi-field"><span>${esc(key)}</span>${PLAY_LONG.has(key) ? `<textarea class="pi-ta" rows="2" ${attrs(key)}>${esc(shown(key))}</textarea>` : `<input class="pi-inp" ${key === "进度钟" ? 'type="number" min="2" max="12" ' : ""}${attrs(key)} value="${esc(shown(key))}">`}</label>`;
-      return PLAY_SHORT.has(key) ? `<div class="pi-pair">${field}</div>` : field;
+      let field2 = `<label class="pi-field"><span>${esc(key)}</span>${PLAY_LONG.has(key) ? `<textarea class="pi-ta" rows="2" ${attrs(key)}>${esc(shown(key))}</textarea>` : `<input class="pi-inp" ${key === "进度钟" ? 'type="number" min="2" max="12" ' : ""}${attrs(key)} value="${esc(shown(key))}">`}</label>`;
+      return PLAY_SHORT.has(key) ? `<div class="pi-pair">${field2}</div>` : field2;
     }).join("")}</details>`;
   }
   function playValue(key, raw) {
-    let text = String(raw ?? "").trim();
+    let text2 = String(raw ?? "").trim();
     if (key === "步骤") {
-      let lines2 = text.split(`
+      let lines2 = text2.split(`
 `).map((line) => line.trim()).filter(Boolean);
       return lines2.length ? lines2 : void 0;
     }
-    if (text)
-      return key === "进度钟" || key === "时限" && /^\d+$/.test(text) ? Number(text) : text;
+    if (text2)
+      return key === "进度钟" || key === "时限" && /^\d+$/.test(text2) ? Number(text2) : text2;
   }
   function nodeEditor(stage, meta2) {
     let list = Array.isArray(stage.data[meta2.field]) ? stage.data[meta2.field] : [], items = list.map((item, index) => {
@@ -4573,8 +5154,8 @@ ${floor.text}`).join(`
   function liveProgress(view) {
     return view.runtime.activeId() === view.projectId ? view.runtime.progress() : null;
   }
-  function remapProgress(view, progress, stageId, field, mapIndex) {
-    let meta2 = NODE_FIELDS.find((item) => item.field === field);
+  function remapProgress(view, progress, stageId, field2, mapIndex) {
+    let meta2 = NODE_FIELDS.find((item) => item.field === field2);
     if (!meta2 || !progress) return;
     let next = remapNodes(progress, stageId, meta2.prefix, mapIndex);
     next !== progress && view.runtime.setProgress(next);
@@ -4607,9 +5188,9 @@ ${floor.text}`).join(`
   }
   async function importTexts(view, texts) {
     let added = [], failed = [];
-    for (let { name, text } of texts)
+    for (let { name, text: text2 } of texts)
       try {
-        added.push(...parseOutlineText(text));
+        added.push(...parseOutlineText(text2));
       } catch (error) {
         failed.push({ name, error });
       }
@@ -4661,8 +5242,8 @@ ${floor.text}`).join(`
     view.data.updateProject(view.projectId, (project) => ({ ...project, genRefs: { ...normalizeGenRefs(project.genRefs), talk: !0 } }));
   }
   function volumeRequest({ project, talk, wb, extra = [], no, k, n, request }) {
-    let text = n > 1 ? `共写 ${n} 卷，这是第 ${k} 卷。${request || ""}` : request;
-    return outlineMessages({ setting: project.setting.text, talk, refs: wb, volumes: [...project.outline.volumes, ...extra], volumeNo: no, request: text });
+    let text2 = n > 1 ? `共写 ${n} 卷，这是第 ${k} 卷。${request || ""}` : request;
+    return outlineMessages({ setting: project.setting.text, talk, refs: wb, volumes: [...project.outline.volumes, ...extra], volumeNo: no, request: text2 });
   }
   function setMultiItem(view, index, parsed) {
     let draft = st(view).draft;
@@ -4809,20 +5390,20 @@ ${floor.text}`).join(`
       }
     },
     "node-add"(view, target) {
-      let { stage } = findSel(view.project(), st(view).sel), field = target.dataset.field;
-      updateStage(view, stage.id, (item) => ({ ...item, data: { ...item.data, [field]: [...Array.isArray(item.data[field]) ? item.data[field] : [], { ...NEW_NODE[target.dataset.kind] }] } })), view.renderBody();
+      let { stage } = findSel(view.project(), st(view).sel), field2 = target.dataset.field;
+      updateStage(view, stage.id, (item) => ({ ...item, data: { ...item.data, [field2]: [...Array.isArray(item.data[field2]) ? item.data[field2] : [], { ...NEW_NODE[target.dataset.kind] }] } })), view.renderBody();
     },
     "node-up"(view, target) {
-      let { stage } = findSel(view.project(), st(view).sel), field = target.dataset.field, index = Number(target.dataset.i);
+      let { stage } = findSel(view.project(), st(view).sel), field2 = target.dataset.field, index = Number(target.dataset.i);
       if (index <= 0) return;
       let before = liveProgress(view);
-      updateStage(view, stage.id, (item) => ({ ...item, data: { ...item.data, [field]: moveUp(item.data[field], index) } })), remapProgress(view, before, stage.id, field, swapIndex(index - 1, index)), view.runtime.refresh(), view.renderBody();
+      updateStage(view, stage.id, (item) => ({ ...item, data: { ...item.data, [field2]: moveUp(item.data[field2], index) } })), remapProgress(view, before, stage.id, field2, swapIndex(index - 1, index)), view.runtime.refresh(), view.renderBody();
     },
     "node-down"(view, target) {
-      let { stage } = findSel(view.project(), st(view).sel), field = target.dataset.field, index = Number(target.dataset.i);
-      if (index >= (stage.data[field] || []).length - 1) return;
+      let { stage } = findSel(view.project(), st(view).sel), field2 = target.dataset.field, index = Number(target.dataset.i);
+      if (index >= (stage.data[field2] || []).length - 1) return;
       let before = liveProgress(view);
-      updateStage(view, stage.id, (item) => ({ ...item, data: { ...item.data, [field]: moveItem(item.data[field], index, 1) } })), remapProgress(view, before, stage.id, field, swapIndex(index, index + 1)), view.runtime.refresh(), view.renderBody();
+      updateStage(view, stage.id, (item) => ({ ...item, data: { ...item.data, [field2]: moveItem(item.data[field2], index, 1) } })), remapProgress(view, before, stage.id, field2, swapIndex(index, index + 1)), view.runtime.refresh(), view.renderBody();
     },
     async "node-menu"(view, target) {
       let index = Number(target.dataset.i), pick = await menuDialog({ title: `${target.dataset.field} ${index + 1}`, items: [
@@ -4833,13 +5414,13 @@ ${floor.text}`).join(`
       pick && await actions[pick](view, target);
     },
     async "node-del"(view, target) {
-      let { stage } = findSel(view.project(), st(view).sel), field = target.dataset.field, index = Number(target.dataset.i), node = stage.data[field][index];
+      let { stage } = findSel(view.project(), st(view).sel), field2 = target.dataset.field, index = Number(target.dataset.i), node = stage.data[field2][index];
       if (!await confirmDialog({ title: `删除「${node && (node.名称 || node.类型) || "节点"}」`, okLabel: "删除", danger: !0 })) return;
       let before = liveProgress(view);
       updateStage(view, stage.id, (item) => {
-        let list = item.data[field].filter((_, i) => i !== index), data = { ...item.data, [field]: list };
-        return !list.length && field !== "主线节点" && delete data[field], { ...item, data };
-      }), remapProgress(view, before, stage.id, field, (i) => i === index ? null : i > index ? i - 1 : i), view.runtime.refresh(), view.renderBody();
+        let list = item.data[field2].filter((_, i) => i !== index), data = { ...item.data, [field2]: list };
+        return !list.length && field2 !== "主线节点" && delete data[field2], { ...item, data };
+      }), remapProgress(view, before, stage.id, field2, (i) => i === index ? null : i > index ? i - 1 : i), view.runtime.refresh(), view.renderBody();
     },
     async "outline-menu"(view) {
       let pick = await menuDialog({ title: "大纲", items: [
@@ -4855,20 +5436,20 @@ ${floor.text}`).join(`
       files.length && await importTexts(view, await Promise.all(files.sort((a, b) => a.name.localeCompare(b.name, "zh")).map(async (file) => ({ name: file.name, text: await file.text() }))));
     },
     async "import-paste"(view) {
-      let text = await promptDialog({ title: "粘贴剧情 YAML", multiline: !0, placeholder: `剧情_卷一_标题:
+      let text2 = await promptDialog({ title: "粘贴剧情 YAML", multiline: !0, placeholder: `剧情_卷一_标题:
   阶段一_标题:
     时间范围: …` });
-      text && await importTexts(view, [{ name: "粘贴内容", text }]);
+      text2 && await importTexts(view, [{ name: "粘贴内容", text: text2 }]);
     },
     async "import-wb"(view) {
       let picked = await pickWorldbookEntries("从世界书导入大纲或设定");
       if (!picked.length) return;
       let { outline, setting } = classifyEntries(picked);
       outline.length && addVolumes(view, outline.flatMap((item) => item.volumes)), setting.length && view.data.updateProject(view.projectId, (project) => {
-        let text = [project.setting.text, ...setting.map((entry) => entry.content)].filter(Boolean).join(`
+        let text2 = [project.setting.text, ...setting.map((entry) => entry.content)].filter(Boolean).join(`
 
 `);
-        return { ...project, setting: { ...project.setting, text } };
+        return { ...project, setting: { ...project.setting, text: text2 } };
       }), toast("success", `${outline.length} 条进大纲，${setting.length} 条进设定。`), view.runtime.refresh(), view.renderBody(), await afterImport(picked);
     },
     async export(view) {
@@ -4885,7 +5466,7 @@ ${floor.text}`).join(`
       multi && multi.controller.abort();
     },
     async "multi-fix"(view, target) {
-      let draft = st(view).draft, i = Number(target.dataset.i), box = target.closest(".pi-vitem")?.querySelector("[data-draft-yaml]"), text = box ? box.value : draft.items[i].yaml, reply2 = await runTask(view, "outline", () => ask(view, "outline", fixYamlMessages(text, draft.items[i].error)));
+      let draft = st(view).draft, i = Number(target.dataset.i), box = target.closest(".pi-vitem")?.querySelector("[data-draft-yaml]"), text2 = box ? box.value : draft.items[i].yaml, reply2 = await runTask(view, "outline", () => ask(view, "outline", fixYamlMessages(text2, draft.items[i].error)));
       reply2 && setMultiItem(view, i, parseOutlineReply(reply2, void 0, { all: !0 }));
     },
     async "multi-menu"(view, target) {
@@ -4931,7 +5512,7 @@ ${yaml}
       addVolumes(view, volumes, "AI 追加多卷"), st(view).draft = null, view.renderBody();
     },
     async "draft-fix"(view, target) {
-      let draft = st(view).draft, box = target.closest(".pi-card").querySelector("[data-draft-yaml]"), text = box ? box.value : draft.yaml, reply2 = await runTask(view, "outline", () => ask(view, "outline", fixYamlMessages(text, draft.error)));
+      let draft = st(view).draft, box = target.closest(".pi-card").querySelector("[data-draft-yaml]"), text2 = box ? box.value : draft.yaml, reply2 = await runTask(view, "outline", () => ask(view, "outline", fixYamlMessages(text2, draft.error)));
       reply2 && setDraft(view, draft.mode, reply2, { fromUnitId: draft.fromUnitId, reason: draft.reason, stageId: draft.stageId, nextId: draft.nextId });
     },
     "draft-reparse"(view, target) {
@@ -5046,32 +5627,32 @@ ${yaml}
         return;
       }
       if (target.dataset.stageField) {
-        let field = target.dataset.stageField;
-        updateStage(view, stage.id, (item) => ({ ...item, data: { ...item.data, [field]: target.value } }));
+        let field2 = target.dataset.stageField;
+        updateStage(view, stage.id, (item) => ({ ...item, data: { ...item.data, [field2]: target.value } }));
         return;
       }
       if (target.dataset.stageList) {
-        let field = target.dataset.stageList, lines2 = target.value.split(`
+        let field2 = target.dataset.stageList, lines2 = target.value.split(`
 `).map((line) => line.trim()).filter(Boolean);
         updateStage(view, stage.id, (item) => {
-          let data = { ...item.data, [field]: lines2 };
-          return lines2.length || delete data[field], { ...item, data };
+          let data = { ...item.data, [field2]: lines2 };
+          return lines2.length || delete data[field2], { ...item, data };
         });
         return;
       }
       if (target.dataset.nodeField) {
-        let field = target.dataset.nodeField, index = Number(target.dataset.i), key = target.dataset.k, pending = nameKey(stage.id, field, index);
+        let field2 = target.dataset.nodeField, index = Number(target.dataset.i), key = target.dataset.k, pending = nameKey(stage.id, field2, index);
         if (["名称", "类型", "内容"].includes(key) && !pendingNames.has(pending)) {
-          let node = nodeAt(stage, field, index);
+          let node = nodeAt(stage, field2, index);
           node && pendingNames.set(pending, node.name);
         }
         updateStage(view, stage.id, (item) => {
-          let list = [...item.data[field]], prev = list[index] && typeof list[index] == "object" ? list[index] : {};
+          let list = [...item.data[field2]], prev = list[index] && typeof list[index] == "object" ? list[index] : {};
           if (list[index] = { ...prev, [key]: target.value }, target.dataset.play !== void 0) {
             let value = playValue(key, target.value);
             value === void 0 ? delete list[index][key] : list[index][key] = value;
           }
-          return { ...item, data: { ...item.data, [field]: list } };
+          return { ...item, data: { ...item.data, [field2]: list } };
         });
       }
     }
@@ -5079,18 +5660,18 @@ ${yaml}
   function onBlur(view, target) {
     target.dataset.nodeField && ["名称", "类型", "内容"].includes(target.dataset.k) && syncNodeName(view, target.dataset.nodeField, Number(target.dataset.i)), target.matches("[data-stage-key],[data-vol-key],[data-stage-field],[data-stage-list],[data-node-field]") && view.runtime.refresh();
   }
-  var pendingNames = /* @__PURE__ */ new Map(), nameKey = (stageId, field, index) => [stageId, field, index].join("|");
-  function nodeAt(stage, field, index) {
-    return stage ? stageNodes(stage.data).find((item) => item.field === field && item.index === index) : null;
+  var pendingNames = /* @__PURE__ */ new Map(), nameKey = (stageId, field2, index) => [stageId, field2, index].join("|");
+  function nodeAt(stage, field2, index) {
+    return stage ? stageNodes(stage.data).find((item) => item.field === field2 && item.index === index) : null;
   }
-  function syncNodeName(view, field, index) {
+  function syncNodeName(view, field2, index) {
     let { stage } = findSel(view.project(), st(view).sel);
     if (!stage) return;
-    let key = nameKey(stage.id, field, index), from = pendingNames.get(key);
+    let key = nameKey(stage.id, field2, index), from = pendingNames.get(key);
     pendingNames.delete(key);
-    let node = nodeAt(stage, field, index);
+    let node = nodeAt(stage, field2, index);
     if (!node) return;
-    from && from !== node.name && view.data.updateProject(view.projectId, (project) => ({ ...project, outline: withRenames(project.outline, [{ stageId: stage.id, field, from, to: node.name }]) }));
+    from && from !== node.name && view.data.updateProject(view.projectId, (project) => ({ ...project, outline: withRenames(project.outline, [{ stageId: stage.id, field: field2, from, to: node.name }]) }));
     let progress = liveProgress(view);
     if (!progress) return;
     let next = renameNode(progress, { id: stage.id }, node);
@@ -5148,28 +5729,28 @@ ${yaml}
         ${chosen ? `<p class="pi-hint">${esc(fmt(chosen.at))} → 当前</p>${diffHtml(chosen.text, project.setting.text)}` : ""}</div>`;
   }
   function render2(view) {
-    let project = view.project(), s = st2(view), text = project.setting.text, blocks = splitBlocks(text).filter((block) => block.title !== "开头"), mute2 = new Set(project.setting.mute), muted = blocks.some((block) => mute2.has(block.key)), busy = view.busy.setting, hasOutline = project.outline.volumes.some((volume) => volume.stages.length), chip = (block) => `<span class="pi-chip pi-block-chip${mute2.has(block.key) ? " is-mute" : ""}"><button type="button" data-act="jump" data-key="${esc(block.key)}" title="跳到这一块">${esc(block.title)}</button><button type="button" class="pi-block-eye" data-act="block-mute" data-key="${esc(block.key)}" title="${mute2.has(block.key) ? "已设为不注入，点击恢复注入" : "注入正文，点击设为不注入"}">${mute2.has(block.key) ? ICONS.eyeOff : ICONS.eye}</button><button type="button" class="pi-block-del" data-act="block-del" data-key="${esc(block.key)}" title="删除整个分块">${ICONS.close}</button></span>`;
+    let project = view.project(), s = st2(view), text2 = project.setting.text, blocks = splitBlocks(text2).filter((block) => block.title !== "开头"), mute2 = new Set(project.setting.mute), muted = blocks.some((block) => mute2.has(block.key)), busy = view.busy.setting, hasOutline = project.outline.volumes.some((volume) => volume.stages.length), chip = (block) => `<span class="pi-chip pi-block-chip${mute2.has(block.key) ? " is-mute" : ""}"><button type="button" data-act="jump" data-key="${esc(block.key)}" title="跳到这一块">${esc(block.title)}</button><button type="button" class="pi-block-eye" data-act="block-mute" data-key="${esc(block.key)}" title="${mute2.has(block.key) ? "已设为不注入，点击恢复注入" : "注入正文，点击设为不注入"}">${mute2.has(block.key) ? ICONS.eyeOff : ICONS.eye}</button><button type="button" class="pi-block-del" data-act="block-del" data-key="${esc(block.key)}" title="删除整个分块">${ICONS.close}</button></span>`;
     return `${s.draft ? draftHtml2(view, project, s.draft) : ""}
         <div class="pi-card"><h3>设定 ${checkBadge(project.setting.check)}<span class="pi-spacer"></span><button type="button" class="pi-btn is-primary is-sm" data-act="setting-save">保存</button></h3>
         <div class="pi-tools is-c4">
             <button type="button" class="pi-btn is-sm is-primary" data-act="from-talk"${busy ? " disabled" : ""}>${busy ? '<span class="pi-spin"></span>整理中' : "AI 整理"}</button>
-            <button type="button" class="pi-btn is-sm" data-act="sync-outline"${busy || !hasOutline || !text.trim() ? " disabled" : ""}>按大纲校对</button>
+            <button type="button" class="pi-btn is-sm" data-act="sync-outline"${busy || !hasOutline || !text2.trim() ? " disabled" : ""}>按大纲校对</button>
             <button type="button" class="pi-btn is-sm" data-act="import-wb">从世界书导入</button>
             <button type="button" class="pi-btn is-sm${s.history ? " is-primary" : ""}" data-act="history">历史版本 ${project.setting.history.length}</button>
             <label class="pi-check"><input type="checkbox" data-append${s.append ? " checked" : ""}><span>只追加，不改动已有分块</span></label></div>
         ${genRefsBar(view, "setting")}
         ${blocks.length ? `<div class="pi-toc">${blocks.map(chip).join("")}</div>` : ""}
-        <textarea class="pi-ta is-tall" data-setting placeholder="世界观正文。执行时作为常驻条目注入（角色定义后），取代世界书里手改的剧情设定条目。">${esc(text)}</textarea>
-        <div class="pi-row"><span class="pi-hint pi-grow">≈<span data-tokens>${estimateTokens(text)}</span> token${muted ? `，注入 ≈${estimateTokens(injectedSetting(project.setting))}` : ""}</span><span class="pi-status" data-save-status></span></div>
+        <textarea class="pi-ta is-tall" data-setting placeholder="世界观正文。执行时作为常驻条目注入（角色定义后），取代世界书里手改的剧情设定条目。">${esc(text2)}</textarea>
+        <div class="pi-row"><span class="pi-hint pi-grow">≈<span data-tokens>${estimateTokens(text2)}</span> token${muted ? `，注入 ≈${estimateTokens(injectedSetting(project.setting))}` : ""}</span><span class="pi-status" data-save-status></span></div>
         ${fixesHtml(project.setting.fixes, "saved")}</div>
         ${s.history ? historyHtml2(project, s.historyAt) : ""}`;
   }
   function setSetting(view, patch) {
     view.data.updateProject(view.projectId, (project) => ({ ...project, setting: { ...project.setting, ...patch } }));
   }
-  function commit(view, text, extra = {}) {
+  function commit(view, text2, extra = {}) {
     let project = view.project(), history = pushHistory(project.setting.history, project.setting.text);
-    history = pushHistory(history, text), setSetting(view, { text, history, ...extra }), view.runtime.refresh();
+    history = pushHistory(history, text2), setSetting(view, { text: text2, history, ...extra }), view.runtime.refresh();
   }
   function guessBlock(blocks, fix) {
     let chars = new Set(String(fix).replace(/\s/g, "")), best = blocks[0], score = -1;
@@ -5282,7 +5863,7 @@ ${parsed.body}` : parsed.body;
     },
     // 删掉整个分块（标题和内容一起），删前的版本留在历史版本里，可回退。
     async "block-del"(view, target) {
-      let text = view.project().setting.text, blocks = splitBlocks(text), block = blocks.find((item) => item.key === target.dataset.key);
+      let text2 = view.project().setting.text, blocks = splitBlocks(text2), block = blocks.find((item) => item.key === target.dataset.key);
       block && await confirmDialog({ title: `删除分块「${block.title}」`, body: "删除前的版本保存在历史版本里，可以回退。", okLabel: "删除", danger: !0 }) && (commit(view, joinBlocks(blocks.filter((item) => item.key !== block.key))), view.renderBody());
     },
     jump(view, target) {
@@ -5364,10 +5945,10 @@ ${parsed.body}` : parsed.body;
         let fold = foldCandidates(chat.messages), summary = await ask(view, "discuss", foldMessages(chat.summary, fold), { signal }), ids = new Set(fold.map((msg) => msg.id));
         chat = { ...view.data.chat(projectId), summary, messages: view.data.chat(projectId).messages.map((msg) => ids.has(msg.id) ? { ...msg, folded: !0 } : msg) }, view.data.saveChat(projectId, chat);
       }
-      let system = discussSystemPrompt({ guide: guideText(view), refs: await resolveRefs(view, chat, project), persona: view.data.settings().persona }), text = await ask(view, "discuss", chatRequest(system, chat.summary, chat.messages), { signal });
+      let system = discussSystemPrompt({ guide: guideText(view), refs: await resolveRefs(view, chat, project), persona: view.data.settings().persona }), text2 = await ask(view, "discuss", chatRequest(system, chat.summary, chat.messages), { signal });
       if (signal.aborted) return;
       let latest2 = view.data.chat(projectId);
-      view.data.saveChat(projectId, { ...latest2, messages: [...latest2.messages, { id: makeId("m"), role: "assistant", content: text, at: Date.now() }] });
+      view.data.saveChat(projectId, { ...latest2, messages: [...latest2.messages, { id: makeId("m"), role: "assistant", content: text2, at: Date.now() }] });
     } catch (error) {
       signal.aborted || toast("error", `讨论请求失败：${error.message}`);
     } finally {
@@ -5398,9 +5979,9 @@ ${parsed.body}` : parsed.body;
       choice && (choice === "export" && downloadBlob(`${view.project().name}-讨论记录-${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}.md`, talkMarkdown(view, chat), "text/markdown"), view.data.saveChat(view.projectId, { ...chat, summary: "", messages: [] }), st3(view).draft = "", view.renderBody());
     },
     send(view, target) {
-      let box = target.closest(".pi-body").querySelector("[data-compose]"), text = box.value.trim();
-      if (text)
-        return updateChat(view, (chat) => ({ ...chat, messages: [...chat.messages, { id: makeId("m"), role: "user", content: text, at: Date.now() }] })), st3(view).draft = "", box.value = "", view.renderBody(), reply(view);
+      let box = target.closest(".pi-body").querySelector("[data-compose]"), text2 = box.value.trim();
+      if (text2)
+        return updateChat(view, (chat) => ({ ...chat, messages: [...chat.messages, { id: makeId("m"), role: "user", content: text2, at: Date.now() }] })), st3(view).draft = "", box.value = "", view.renderBody(), reply(view);
     },
     stop(view) {
       controllers.get(view.projectId)?.abort();
@@ -5416,8 +5997,8 @@ ${parsed.body}` : parsed.body;
       }), view.renderBody(), reply(view);
     },
     async "msg-edit"(view, target) {
-      let msg = view.data.chat(view.projectId).messages.find((item) => item.id === target.dataset.id), text = await promptDialog({ title: "编辑消息", value: msg.content, multiline: !0 });
-      text != null && (updateChat(view, (chat) => ({ ...chat, messages: chat.messages.map((item) => item.id === msg.id ? { ...item, content: text } : item) })), view.renderBody());
+      let msg = view.data.chat(view.projectId).messages.find((item) => item.id === target.dataset.id), text2 = await promptDialog({ title: "编辑消息", value: msg.content, multiline: !0 });
+      text2 != null && (updateChat(view, (chat) => ({ ...chat, messages: chat.messages.map((item) => item.id === msg.id ? { ...item, content: text2 } : item) })), view.renderBody());
     },
     async "msg-del"(view, target) {
       await confirmDialog({ title: "删除这条消息", okLabel: "删除", danger: !0 }) && (updateChat(view, (chat) => ({ ...chat, messages: chat.messages.filter((item) => item.id !== target.dataset.id) })), view.renderBody());
@@ -5471,26 +6052,544 @@ ${parsed.body}` : parsed.body;
   }
   var refreshOn3 = [];
 
+  // src/ui/tab-persona.js
+  var tab_persona_exports = {};
+  __export(tab_persona_exports, {
+    actions: () => actions4,
+    onChange: () => onChange2,
+    render: () => render4,
+    stageInfo: () => stageInfo
+  });
+
+  // src/core/persona-import.js
+  var TAG = /<if\s+(cell|cond)\s*=\s*(?:"([^"]*)"|'([^']*)')\s*>|<\/if\s*>/gi, TERM = /^(?:cell:)?\s*(.+?)\s*(==|!=|<=|>=|<|>)\s*(.+?)\s*$/, hasIf = (content) => /<if\s/i.test(String(content || ""));
+  function isNumber(value) {
+    return value !== "" && Number.isFinite(Number(value));
+  }
+  function parseCond(raw) {
+    let text2 = String(raw || "").trim();
+    if (!text2) return { error: "条件为空" };
+    let hasAnd = text2.includes("&"), parts = text2.split(hasAnd ? "&" : /[,，]/).map((item) => item.trim()).filter(Boolean), terms = [];
+    for (let part of parts) {
+      let match = TERM.exec(part);
+      if (!match) return { error: `无法解析条件「${part}」` };
+      if (!["==", "<=", ">="].includes(match[2])) return { error: `不支持的比较符「${match[2]}」` };
+      terms.push({ path: match[1].trim(), op: match[2], value: match[3].trim() });
+    }
+    return terms.length ? { vars: new Set(terms.map((term) => term.path)), terms, or: !hasAnd && terms.length > 1 } : { error: "条件为空" };
+  }
+  function isInline(siblings) {
+    let last = siblings[siblings.length - 1];
+    return last ? last.type === "if" ? last.inline : last.text.slice(last.text.lastIndexOf(`
+`) + 1).trim() !== "" : !1;
+  }
+  function parseEntry(content) {
+    let source = String(content || ""), root = { children: [] }, stack = [root], issues = [], last = 0, open = 0, push = (node) => stack[stack.length - 1].children.push(node), pushText = (text2) => {
+      text2 && push({ type: "text", text: text2 });
+    };
+    for (let match of source.matchAll(TAG)) {
+      if (pushText(source.slice(last, match.index)), last = match.index + match[0].length, match[0][1] === "/") {
+        stack.length === 1 ? issues.push({ level: "error", text: "多出一个 </if>，没有对应的开头" }) : stack.pop();
+        continue;
+      }
+      open += 1;
+      let cond = match[2] ?? match[3] ?? "", node = { type: "if", cond, raw: match[0], parsed: parseCond(cond), children: [], depth: stack.length - 1, inline: isInline(stack[stack.length - 1].children) };
+      push(node), stack.push(node);
+    }
+    pushText(source.slice(last)), stack.length > 1 && issues.push({ level: "error", text: `有 ${stack.length - 1} 个 <if> 没有写 </if>` });
+    let found = (source.match(/<if\b/gi) || []).length;
+    return found !== open && issues.push({ level: "error", text: `有 ${found - open} 个 <if> 标签写法无法识别（只支持 cell= 与 cond=）` }), { nodes: root.children, issues };
+  }
+  function* walkIfs(nodes) {
+    for (let node of nodes)
+      node.type === "if" && (yield node, yield* walkIfs(node.children));
+  }
+  var SUFFIX = /(?:状态|数值|信息|追踪|角色)?表$/;
+  function pathNames(path) {
+    let parts = String(path).split("/").map((item) => item.trim()), column = parts[parts.length - 1] || path;
+    if (parts.length < 3) return { group: parts.length === 2 ? parts[0] : "", name: column };
+    let table = parts[0].replace(SUFFIX, ""), row2 = parts[1];
+    return { group: table && row2.includes(table) ? table : row2, name: column };
+  }
+  var entryName = (title2) => (String(title2 || "").replace(/<!--[\s\S]*?-->/g, "").split(`
+`).map((line) => line.trim()).find(Boolean) || "").replace(/^[^\p{L}\p{N}[]+/u, "").replace(/^\[[^\]]*\]\s*/, "") || "未命名", loose = (value) => String(value).replace(/[\s　，。、；;：:！!？?·・.]/g, "").toLowerCase();
+  function scanVars(parsedEntries) {
+    let vars = /* @__PURE__ */ new Map(), lostRefs = /* @__PURE__ */ new Map();
+    for (let { key, tree } of parsedEntries)
+      for (let node of walkIfs(tree.nodes)) {
+        if (!node.parsed.vars) continue;
+        if (node.parsed.vars.size !== 1) {
+          for (let path2 of node.parsed.vars) (lostRefs.get(path2) || lostRefs.set(path2, /* @__PURE__ */ new Set()).get(path2)).add(key);
+          continue;
+        }
+        let [path] = node.parsed.vars;
+        vars.has(path) || vars.set(path, { path, ops: /* @__PURE__ */ new Set(), values: [], nested: !1, inline: !1, entries: /* @__PURE__ */ new Set() });
+        let info = vars.get(path);
+        info.entries.add(key), node.depth > 0 && (info.nested = !0), node.inline && (info.inline = !0);
+        for (let term of node.parsed.terms)
+          info.ops.add(term.op), term.op === "==" && !info.values.includes(term.value) && info.values.push(term.value);
+      }
+    for (let [path, keys] of lostRefs) vars.has(path) && (vars.get(path).lost = keys);
+    return vars;
+  }
+  function classifyVar(info, override = "") {
+    return info.ops.has("<=") || info.ops.has(">=") ? "num" : override === "fixed" ? "fixed" : override === "line" ? "enum" : info.nested || info.inline ? "fixed" : "enum";
+  }
+  var trimBlock = (text2) => String(text2).replace(/^[ \t]*\n/, "").replace(/\s+$/, ""), stripComments = (text2) => String(text2).replace(/<!--[\s\S]*?-->/g, "");
+  function renderNodes(nodes, ctx2) {
+    let out = "";
+    for (let node of nodes) {
+      if (node.type === "text") {
+        out += node.text;
+        continue;
+      }
+      let one = node.parsed.vars && node.parsed.vars.size === 1 ? [...node.parsed.vars][0] : "", fixed = one && ctx2.kinds.get(one) === "fixed", body = () => node.inline ? renderNodes(node.children, ctx2) : trimBlock(renderNodes(node.children, ctx2));
+      if (fixed && node.parsed.terms.every((term) => term.op === "==")) {
+        let name = ctx2.nameOf(one);
+        for (let term of node.parsed.terms) out += `{{${name}=${term.value}}}${body()}{{/${name}}}`;
+      } else
+        ctx2.issue("error", `嵌套了无法拆分的 if「${node.cond.replace(/cell:/g, "")}」`), out += renderNodes(node.children, ctx2);
+    }
+    return out;
+  }
+  function collapseFixed(text2, fixedItems) {
+    let out = text2;
+    for (let item of fixedItems) {
+      let name = item.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), block = `\\{\\{${name}=([^}]*)\\}\\}([^{}]*)\\{\\{\\/${name}\\}\\}`;
+      out = out.replace(new RegExp(`(?:${block})+`, "g"), (run) => {
+        let blocks = [...run.matchAll(new RegExp(block, "g"))], same = blocks.every((match) => match[1] === match[2].trim()), covers = item.options.every((option) => blocks.some((match) => match[1] === option));
+        return same && covers && blocks.length === item.options.length ? `{{${item.name}}}` : run;
+      });
+    }
+    return out;
+  }
+  function rangeOfTerms(terms) {
+    let range = {};
+    for (let term of terms) {
+      let value = Number(term.value);
+      if (!Number.isFinite(value)) return null;
+      term.op === ">=" ? range.min = range.min === void 0 ? value : Math.max(range.min, value) : term.op === "<=" ? range.max = range.max === void 0 ? value : Math.min(range.max, value) : (range.min = value, range.max = value);
+    }
+    return range;
+  }
+  var rangeKey = (range) => `${range.min ?? ""}~${range.max ?? ""}`, rangeName = (range) => range.min === void 0 ? `≤${range.max}` : range.max === void 0 ? `≥${range.min}` : range.min === range.max ? `${range.min}` : `${range.min}–${range.max}`, stateLine = (text2) => {
+    let match = /^[ \t]*状态[：:][ \t]*(.+)$/m.exec(String(text2));
+    return match ? match[1].trim() : "";
+  }, join = (a, b) => [a, b].filter((item) => String(item).trim()).join(`
+`);
+  function numericStages(entries) {
+    let sorted = [...entries].sort((a, b) => (a.range.min ?? -1 / 0) - (b.range.min ?? -1 / 0)), out = [];
+    for (let item of sorted) {
+      let prev = out[out.length - 1], from = prev && prev.range.max !== void 0 ? prev.range.max + 1 : void 0;
+      prev && from !== void 0 && item.range.min !== void 0 && item.range.min > from && out.push({ ...newStage("空档"), name: rangeName({ min: from, max: item.range.min - 1 }), range: { min: from, max: item.range.min - 1 }, text: "" }), out.push({ ...newStage(rangeName(item.range)), range: item.range, text: item.text, cond: "" });
+    }
+    return out;
+  }
+  function buildPlan(entries, { overrides = {}, existing = null } = {}) {
+    let parsed = entries.map((entry) => ({ entry, key: `${entry.book}\0${entry.key}`, tree: parseEntry(entry.content) })), blocked = /* @__PURE__ */ new Set(), issues = [], report = (entry, level, text2) => {
+      issues.push({ book: entry.book, key: entry.key, title: entry.title, level, text: text2 }), level === "error" && blocked.add(`${entry.book}\0${entry.key}`);
+    };
+    for (let item of parsed) for (let issue of item.tree.issues) report(item.entry, issue.level, issue.text);
+    let info = scanVars(parsed), kinds = new Map([...info.values()].map((item) => [item.path, classifyVar(item, overrides[item.path])]));
+    for (let item of info.values()) {
+      let seen = /* @__PURE__ */ new Map();
+      for (let value of item.values) {
+        let norm2 = loose(value);
+        seen.has(norm2) && seen.get(norm2) !== value ? report(entries.find((entry) => item.entries.has(`${entry.book}\0${entry.key}`)) || entries[0], "warn", `变量「${pathNames(item.path).name}」的值写法不一致：「${seen.get(norm2)}」与「${value}」`) : seen.set(norm2, value);
+      }
+      if (kinds.get(item.path) === "num" && item.values.some((value) => !isNumber(value)))
+        for (let entry of entries) item.entries.has(`${entry.book}\0${entry.key}`) && report(entry, "error", `变量「${pathNames(item.path).name}」同时用了数值与文字比较`);
+    }
+    let fixedItems = [];
+    for (let item of info.values()) {
+      if (kinds.get(item.path) !== "fixed") continue;
+      let name = pathNames(item.path).name, old = existing && existing.fixed.find((entry) => entry.name === name);
+      fixedItems.push({ id: old ? old.id : makeId("pf"), name, options: [.../* @__PURE__ */ new Set([...old ? old.options : [], ...item.values])], varPath: item.path, reused: !!old });
+    }
+    let nameOf = (path) => pathNames(path).name, lines2 = /* @__PURE__ */ new Map(), lineFor = (path, kind, entry) => {
+      if (!lines2.has(path)) {
+        let names2 = pathNames(path);
+        lines2.set(path, { kind, path, group: names2.group, name: names2.name, entry, common: "", stages: /* @__PURE__ */ new Map(), sources: [] });
+      }
+      let line = lines2.get(path);
+      return line.sources.some((source) => source.book === entry.book && source.uid === entry.uid) || line.sources.push({ book: entry.book, uid: String(entry.uid), key: String(entry.key) }), line;
+    }, plainLines = [];
+    for (let { entry, key, tree } of parsed) {
+      if (blocked.has(key)) continue;
+      let entryIssues = [], ctx2 = { kinds, nameOf, issue: (level, text2) => entryIssues.push({ level, text: text2 }) }, outside = [], staged = [];
+      for (let node of tree.nodes) {
+        let one = node.type === "if" && node.parsed.vars && node.parsed.vars.size === 1 ? [...node.parsed.vars][0] : "";
+        if (node.type === "if" && !node.parsed.vars) {
+          entryIssues.push({ level: "error", text: `${node.parsed.error}：${node.cond}` });
+          continue;
+        }
+        if (node.type === "if" && node.parsed.vars.size !== 1) {
+          entryIssues.push({ level: "error", text: `多个变量组合的条件暂不支持：${node.cond.replace(/cell:/g, "")}` });
+          continue;
+        }
+        node.type === "if" && kinds.get(one) !== "fixed" ? staged.push({ node, path: one, kind: kinds.get(one) }) : outside.push({ at: staged.length, text: node.type === "text" ? node.text : renderNodes([node], ctx2) });
+      }
+      let tidy = (text2) => collapseFixed(stripComments(text2), fixedItems);
+      for (let part of staged) part.body = trimBlock(tidy(renderNodes(part.node.children, ctx2)));
+      for (let problem of entryIssues) report(entry, problem.level, problem.text);
+      if (entryIssues.some((problem) => problem.level === "error")) continue;
+      let piece = (at) => outside.filter((item) => item.at === at).map((item) => item.text).join("");
+      if (!staged.length) {
+        let body = tidy(outside.map((item) => item.text).join("")).trim();
+        plainLines.push({ entry, text: body });
+        continue;
+      }
+      let prefix = tidy(piece(0)), suffix = tidy(piece(staged.length)), between = staged.slice(1).map((_, i) => tidy(piece(i + 1))).join(""), tag = /^\s*<([^\s>/]+)>\s*$/.exec(prefix), wrap = !!tag && suffix.trim() === `</${tag[1]}>` && !between.trim(), common = wrap ? "" : [prefix, between, suffix].map((item) => item.trim()).filter(Boolean).join(`
+`), first = !0;
+      for (let part of staged) {
+        let line = lineFor(part.path, part.kind === "num" ? "num" : "enum", entry);
+        first && common && (line.common = join(line.common, common), first = !1);
+        let body = part.body, text2 = wrap ? `${prefix.trim()}
+${body}
+${suffix.trim()}` : body;
+        if (part.kind === "num") {
+          let range = rangeOfTerms(part.node.parsed.terms);
+          if (!range) {
+            report(entry, "error", `数值条件无法解析：${part.node.cond}`);
+            continue;
+          }
+          let id = rangeKey(range), old = line.stages.get(id);
+          line.stages.set(id, { range, text: join(old ? old.text : "", text2) });
+        } else
+          for (let term of part.node.parsed.terms) {
+            if (term.op !== "==") {
+              report(entry, "error", `文字变量「${line.name}」用了 ${term.op}`);
+              continue;
+            }
+            let old = line.stages.get(term.value);
+            line.stages.set(term.value, { value: term.value, text: join(old ? old.text : "", text2) });
+          }
+      }
+    }
+    let out = [];
+    for (let line of lines2.values()) {
+      if (!line.sources.some((source) => !blocked.has(`${source.book}\0${source.key}`))) continue;
+      let base = { group: line.group, name: line.name, keys: line.entry.keys, constant: line.entry.constant, position: line.entry.position, depth: line.entry.depth, role: line.entry.role, order: line.entry.order, common: line.common, source: { book: line.entry.book, uid: String(line.entry.uid), varPath: line.path }, sources: line.sources };
+      if (line.kind === "num")
+        out.push({ ...base, mode: "fame", fame: { bar: line.name, partner: "" }, stages: numericStages([...line.stages.values()]) });
+      else {
+        let stages = [...line.stages.values()].map((item) => ({ ...newStage(item.value), cond: stateLine(item.text), text: item.text }));
+        out.push({ ...base, mode: "check", fame: { bar: "", partner: "" }, stages });
+      }
+    }
+    for (let { entry, text: text2 } of plainLines)
+      text2 && out.push({ group: "", name: entryName(entry.title), keys: entry.keys, constant: entry.constant, position: entry.position, depth: entry.depth, role: entry.role, order: entry.order, common: "", mode: "manual", fame: { bar: "", partner: "" }, stages: [{ ...newStage("默认"), text: text2 }], source: { book: entry.book, uid: String(entry.uid), varPath: "" }, sources: [{ book: entry.book, uid: String(entry.uid), key: String(entry.key) }] });
+    for (let item of fixedItems) {
+      let meta2 = info.get(item.varPath), keys = [...meta2.entries], lost = (/* @__PURE__ */ new Set([...keys.filter((key) => blocked.has(key)), ...meta2.lost || []])).size;
+      if (!lost || keys.every((key) => blocked.has(key))) continue;
+      let entry = entries.find((one) => keys.includes(`${one.book}\0${one.key}`) && !blocked.has(`${one.book}\0${one.key}`));
+      entry && report(entry, "warn", `固定选项「${item.name}」有 ${lost} 个来源条目未能转入，可选值可能不全；若它会随剧情变化，请改成人设线`);
+    }
+    let used = new Set(entries.map((entry) => `${entry.book}\0${entry.key}`)), usedFixed = fixedItems.filter((item) => [...info.get(item.varPath).entries].some((key) => used.has(key) && !blocked.has(key))), varList = [...info.values()].map((item) => ({ path: item.path, name: pathNames(item.path).name, group: pathNames(item.path).group, kind: kinds.get(item.path), values: item.values, entries: item.entries.size, canFix: !(item.ops.has("<=") || item.ops.has(">=")) }));
+    return { lines: out, fixed: usedFixed, issues, blocked, vars: varList };
+  }
+  var lineKeyOf = (source) => `${source.book}\0${source.key ?? source.uid}`;
+  function applyPlan(personas2, plan, entries) {
+    let ok = entries.filter((entry) => !plan.blocked.has(`${entry.book}\0${entry.key}`)), lines2 = plan.lines.map((line) => ({ id: makeId("pl"), enabled: !0, ...line })), fixedIds = new Set(plan.fixed.map((item) => item.id)), fixed = [...personas2.fixed.filter((item) => !fixedIds.has(item.id)), ...plan.fixed.map(({ reused, ...item }) => item)], imported = [...personas2.imported.filter((item) => !ok.some((entry) => entry.book === item.book && String(entry.key) === String(item.key))), ...ok.map((entry) => ({ book: entry.book, uid: String(entry.uid), key: String(entry.key), title: entry.title }))];
+    return { ...personas2, lines: [...personas2.lines, ...lines2], fixed, imported };
+  }
+  function releaseImported(personas2, item, { removeLines = !1 } = {}) {
+    let imported = personas2.imported.filter((entry) => !(entry.book === item.book && String(entry.key) === String(item.key)));
+    if (!removeLines) return { ...personas2, imported };
+    let gone = lineKeyOf(item), lines2 = personas2.lines.flatMap((line) => {
+      let sources = Array.isArray(line.sources) && line.sources.length ? line.sources : line.source ? [{ book: line.source.book, uid: line.source.uid, key: line.source.uid }] : [];
+      if (!sources.some((source) => lineKeyOf(source) === gone)) return [line];
+      let rest = sources.filter((source) => lineKeyOf(source) !== gone);
+      return rest.length ? [{ ...line, sources: rest }] : [];
+    });
+    return { ...personas2, imported, lines: lines2 };
+  }
+
+  // src/ui/persona-import.js
+  async function loadCandidates() {
+    let names2 = [.../* @__PURE__ */ new Set([...boundBookNames().map((item) => item.name), ...globalBookNames()])], books = [];
+    for (let name of names2)
+      try {
+        let entries = bookEntries(await loadBook(name)).filter((entry) => !entry.disabled && !acuField(entry.title) && hasIf(entry.content)).map((entry) => ({ ...entry, book: name }));
+        entries.length && books.push({ name, entries });
+      } catch {
+      }
+    return books;
+  }
+  var idOf = (entry) => `${entry.book}\0${entry.key}`;
+  function listHtml(books, picked) {
+    return books.length ? books.map((book) => {
+      let all = book.entries.every((entry) => picked.has(idOf(entry)));
+      return `<div class="pi-wb-sec"><div class="pi-wb-sec-hd">${esc(book.name)}<small>${book.entries.length}</small>
+            <span class="pi-wb-bulk"><button type="button" class="pi-btn is-sm is-ghost" data-pi-all="${esc(book.name)}">${all ? "取消全选" : "全选"}</button></span></div>
+            ${book.entries.map((entry) => `<label class="pi-wb-row"><input type="checkbox" data-pi-pick="${esc(entry.key)}" data-pi-book="${esc(entry.book)}"${picked.has(idOf(entry)) ? " checked" : ""}>
+                <span class="pi-wb-title" title="${esc(entry.title)}">${esc(entry.title)}</span><span class="pi-meta">≈${estimateTokens(entry.content)}</span></label>`).join("")}</div>`;
+    }).join("") : '<p class="pi-hint">当前启用的世界书里没有含 if 条件的手写条目。</p>';
+  }
+  var KIND_LABEL = [{ value: "enum", label: "拆成阶段" }, { value: "fixed", label: "固定选项" }];
+  function previewHtml(plan) {
+    let issues = plan.issues.map((issue) => `<p class="pi-hint is-warn">${esc(issue.title)}：${esc(issue.text)}</p>`).join(""), lines2 = plan.lines.map((line) => `<div class="pi-wb-hit"><span class="pi-wb-title">${esc(line.group ? `${line.group} · ` : "")}${esc(line.name)}</span>
+        <span class="pi-meta">${line.mode === "fame" ? "读声望" : line.mode === "check" ? "条件检测" : "手动"} · ${line.stages.length} 阶段</span></div>`).join(""), vars = plan.vars.filter((item) => item.kind !== "num").map((item) => `<div class="pi-wb-hit"><span class="pi-wb-title" title="${esc(item.path)}">${esc(item.name)}<small> ${esc(item.values.join("、"))}</small></span>
+        <select class="pi-sel" data-pi-kind="${esc(item.path)}">${options(KIND_LABEL, item.kind === "fixed" ? "fixed" : "enum")}</select></div>`).join("");
+    return `${issues}
+        <div class="pi-wb-sec-hd">人设线<small>${plan.lines.length}</small></div>${lines2 || '<p class="pi-hint">没有可转入的内容。</p>'}
+        ${plan.fixed.length ? `<div class="pi-wb-sec-hd">固定选项<small>${plan.fixed.length}</small></div>${plan.fixed.map((item) => `<div class="pi-wb-hit"><span class="pi-wb-title">${esc(item.name)}</span><span class="pi-meta">${esc(item.options.join("、"))}</span></div>`).join("")}` : ""}
+        ${vars ? `<div class="pi-wb-sec-hd">变量识别（可改判）</div>${vars}` : ""}`;
+  }
+  async function openImport(view) {
+    if (!view.project())
+      return toast("info", "先选择一个项目。"), !1;
+    let books = [];
+    try {
+      books = await loadCandidates();
+    } catch (error) {
+      return toast("error", `读取世界书失败：${error.message}`), !1;
+    }
+    let all = books.flatMap((book) => book.entries), picked = /* @__PURE__ */ new Set(), overrides = {}, step = "list", chosen = () => all.filter((entry) => picked.has(idOf(entry))), plan = () => buildPlan(chosen(), { overrides, existing: normalizePersonas(view.project().personas) }), draw = (box) => {
+      let body = box.querySelector("[data-f=body]");
+      body.innerHTML = step === "list" ? listHtml(books, picked) : previewHtml(plan()), box.querySelector("[data-f=count]").textContent = step === "list" ? `已选 ${picked.size} 条` : "预览";
+      for (let btn of box.querySelectorAll("[data-dlg]"))
+        (btn.textContent === "返回选择" || btn.textContent === "转入") && (btn.hidden = step === "list"), btn.textContent === "预览" && (btn.hidden = step !== "list");
+    }, result = await openDialog({
+      title: "从世界书转入人设",
+      html: '<p class="pi-hint is-warn" data-f="count"></p><div data-f="body"></div>',
+      onMount: (box) => {
+        draw(box), box.addEventListener("change", (event) => {
+          let t = event.target;
+          if (t.dataset.piPick) {
+            let id = `${t.dataset.piBook}\0${t.dataset.piPick}`;
+            t.checked ? picked.add(id) : picked.delete(id), draw(box);
+          }
+          t.dataset.piKind && (overrides = { ...overrides, [t.dataset.piKind]: t.value === "fixed" ? "fixed" : "line" }, draw(box));
+        }), box.addEventListener("click", (event) => {
+          let t = event.target.closest("[data-pi-all]");
+          if (!t) return;
+          let book = books.find((item) => item.name === t.dataset.piAll), every = book.entries.every((entry) => picked.has(idOf(entry)));
+          for (let entry of book.entries) every ? picked.delete(idOf(entry)) : picked.add(idOf(entry));
+          draw(box);
+        });
+      },
+      actions: [
+        { label: "取消", value: null },
+        { label: "返回选择", value: (box) => {
+          step = "list", draw(box);
+        } },
+        { label: "预览", primary: !0, value: (box) => {
+          picked.size ? (step = "preview", draw(box)) : toast("info", "先勾选要转入的条目。");
+        } },
+        { label: "转入", primary: !0, value: () => ({ entries: chosen(), plan: plan() }) }
+      ]
+    });
+    return result ? commit2(view, result) : !1;
+  }
+  async function commit2(view, { entries, plan }) {
+    let ok = entries.filter((entry) => !plan.blocked.has(idOf(entry)));
+    if (!ok.length)
+      return toast("warning", "勾选的条目都有错误，没有转入。"), !1;
+    view.data.updateProject(view.projectId, (project) => ({ ...project, personas: applyPlan(normalizePersonas(project.personas), plan, entries) }));
+    let byBook = /* @__PURE__ */ new Map();
+    for (let entry of ok) byBook.set(entry.book, [...byBook.get(entry.book) || [], entry.key]);
+    for (let [book, keys] of byBook) await setEntriesDisabled(book, keys, !0);
+    return view.runtime.refresh(), toast("success", `已转入 ${plan.lines.length} 条人设线，关闭了 ${ok.length} 个原条目。`), !0;
+  }
+  async function restoreImported(view, item) {
+    let choice = await openDialog({
+      title: `恢复「${item.title || item.key}」`,
+      html: '<p class="pi-hint">重新开启这个原条目。</p>',
+      actions: [{ label: "取消", value: null }, { label: "恢复并删除对应人设线", value: "drop" }, { label: "只恢复", primary: !0, value: "keep" }]
+    });
+    if (!choice) return !1;
+    try {
+      await setEntriesDisabled(item.book, [item.key], !1);
+    } catch (error) {
+      return toast("error", `恢复失败：${error.message}`), !1;
+    }
+    return view.data.updateProject(view.projectId, (project) => ({ ...project, personas: releaseImported(normalizePersonas(project.personas), item, { removeLines: choice === "drop" }) })), view.runtime.refresh(), !0;
+  }
+
+  // src/ui/tab-persona.js
+  var st4 = (view) => view.tabState("persona"), modeLabel = (value) => (PERSONA_MODES.find((item) => item.value === value) || PERSONA_MODES[0]).label, SOURCE_NOTE = { manual: "手动", check: "", outline: "", fame: "" };
+  function personas(view) {
+    return view.project().personas;
+  }
+  function patchPersonas(view, fn) {
+    view.data.updateProject(view.projectId, (project) => ({ ...project, personas: fn(project.personas) })), view.runtime.refresh();
+  }
+  function patchLine(view, lineId, fn) {
+    patchPersonas(view, (all) => ({ ...all, lines: all.lines.map((line) => line.id === lineId ? fn(line) : line) }));
+  }
+  function patchStage(view, lineId, stageId, fn) {
+    patchLine(view, lineId, (line) => ({ ...line, stages: line.stages.map((stage) => stage.id === stageId ? fn(stage) : stage) }));
+  }
+  function stageInfo(view, line) {
+    let project = view.project(), active = view.runtime.activeId() === view.projectId, progress = active ? view.runtime.progress() : emptyProgress(view.projectId);
+    return currentStage(line, progress, personaEnv(project, progress, active ? view.runtime.fame() : []));
+  }
+  var keyText = (line) => line.keys.join("，"), splitKeys = (value) => String(value || "").split(/[,，、\n]/).map((item) => item.trim()).filter(Boolean), field = (label, body) => `<label class="pi-field"><span>${label}</span>${body}</label>`, input = (attrs, value, extra = "") => `<input class="pi-inp" ${attrs} value="${esc(value)}"${extra}>`;
+  function stageHtml(view, line, stage, index, current, units) {
+    let attrs = (name) => `data-pl="${esc(line.id)}" data-ps="${esc(stage.id)}" data-f="${name}"`, act = (name, icon, title2, disabled = !1) => `<button type="button" class="pi-icon-btn${name === "ps-del" ? " is-danger" : ""}" data-act="${name}" data-line="${esc(line.id)}" data-stage="${esc(stage.id)}" title="${title2}"${disabled ? " disabled" : ""}>${icon}</button>`, extra = line.mode === "check" ? field("进入条件", input(attrs("cond"), stage.cond, ' placeholder="如：主角出手帮了她，她开始动摇"')) : line.mode === "outline" ? field("跟随大纲阶段", `<select class="pi-sel" ${attrs("unitId")}>${options([{ value: "", label: "不绑定（跳过）" }, ...units.map((unit) => ({ value: unit.id, label: `${volumeLabel(unit.volume.key)}·${stageLabel(unit.stage.key)}` }))], stage.unitId)}</select>`) : line.mode === "fame" ? `<div class="pi-pair">${field("声望下限", input(`${attrs("min")} type="number"`, stage.range.min ?? ""))}${field("声望上限", input(`${attrs("max")} type="number"`, stage.range.max ?? ""))}</div>` : "";
+    return `<div class="pi-node pi-ps">
+        <div class="pi-node-hd">${index === current ? '<span class="pi-badge is-accent">当前</span>' : ""}${input(attrs("name"), stage.name)}
+            ${act("ps-up", ICONS.arrowUp, "上移", index === 0)}${act("ps-down", ICONS.arrowDown, "下移", index === line.stages.length - 1)}${act("ps-del", ICONS.trash, "删除阶段", line.stages.length <= 1)}</div>
+        ${extra}
+        ${field(`人设内容 ≈${estimateTokens(stage.text)}`, `<textarea class="pi-ta" rows="6" ${attrs("text")}>${esc(stage.text)}</textarea>`)}</div>`;
+  }
+  function lineBody(view, line, units) {
+    let attrs = (name) => `data-pl="${esc(line.id)}" data-f="${name}"`, atDepth = line.position === 4, info = stageInfo(view, line), fameBody = line.mode === "fame" ? `<datalist id="pi-fame-list">${view.runtime.fame().map((bar) => `<option value="${esc(bar.name)}"></option>`).join("")}</datalist>
+        <div class="pi-pair">${field("声望条名称", input(`${attrs("fameBar")} list="pi-fame-list"`, line.fame.bar))}${field("对象（可空）", input(attrs("famePartner"), line.fame.partner))}</div>
+        <p class="pi-hint">读不到声望值时沿用手动选择的阶段。</p>` : "";
+    return `<div class="pi-entry-bd">
+        <div class="pi-pair">${field("线名", input(attrs("name"), line.name))}${field("角色（分组）", input(attrs("group"), line.group))}</div>
+        <label class="pi-field"><span>切换方式</span><select class="pi-sel" ${attrs("mode")}>${options(PERSONA_MODES, line.mode)}</select></label>
+        ${fameBody}
+        <div class="pi-pair">${field("触发方式", `<select class="pi-sel" ${attrs("constant")}>${options([{ value: "1", label: "常驻" }, { value: "0", label: "关键词触发" }], line.constant ? "1" : "0")}</select>`)}
+            ${line.constant ? "" : field("关键词（逗号分隔）", input(attrs("keys"), keyText(line)))}</div>
+        <div class="pi-pair ${atDepth ? "is-c4" : ""}">
+            ${field("位置", `<select class="pi-sel" ${attrs("position")}>${options(POSITIONS, line.position)}</select>`)}
+            ${atDepth ? `${field("深度", input(`${attrs("depth")} type="number" min="0"`, line.depth))}${field("角色", `<select class="pi-sel" ${attrs("role")}>${options(ROLES, line.role)}</select>`)}` : ""}
+            ${field("顺序", input(`${attrs("order")} type="number"`, line.order))}</div>
+        ${field(`公共文字（在阶段内容之前）≈${estimateTokens(line.common)}`, `<textarea class="pi-ta" rows="4" ${attrs("common")}>${esc(line.common)}</textarea>`)}
+        <div class="pi-wb-sec-hd">阶段<small>${line.stages.length}</small></div>
+        ${line.stages.map((stage, index) => stageHtml(view, line, stage, index, info.index, units)).join("")}
+        <div class="pi-tools is-c2 is-end"><button type="button" class="pi-btn is-sm" data-act="ps-add" data-line="${esc(line.id)}">${ICONS.plus}添加阶段</button>
+            <button type="button" class="pi-btn is-sm is-danger" data-act="pl-del" data-line="${esc(line.id)}">删除这条线</button></div></div>`;
+  }
+  function lineRow(view, line, open, units) {
+    let info = stageInfo(view, line), note = info.source === "manual" && line.mode !== "manual" ? "手动" : SOURCE_NOTE[info.source] || "";
+    return `<div class="pi-entry${line.enabled ? "" : " is-off"}">
+        <div class="pi-entry-hd" data-act="pl-open" data-line="${esc(line.id)}">${open ? ICONS.caretDown : ICONS.caret}
+            <span class="pi-etitle">${esc(line.name)}</span><span class="pi-badge">${esc(modeLabel(line.mode))}</span>
+            <span class="pi-meta">${esc(info.stage ? info.stage.name : "")}${note ? ` · ${note}` : ""}</span>
+            <input type="checkbox" title="启用" data-pl-on="${esc(line.id)}"${line.enabled ? " checked" : ""}></div>${open ? lineBody(view, line, units) : ""}</div>`;
+  }
+  function fixedCard(view, all) {
+    let rows2 = all.fixed.map((item) => `<div class="pi-node"><div class="pi-node-hd">${input(`data-pf="${esc(item.id)}" data-f="name"`, item.name, ' placeholder="选项名，正文里写成 {{选项名}}"')}
+        <button type="button" class="pi-icon-btn is-danger" data-act="fx-del" data-fixed="${esc(item.id)}" title="删除">${ICONS.trash}</button></div>
+        ${field("可选值（逗号分隔）", input(`data-pf="${esc(item.id)}" data-f="options"`, item.options.join("，")))}</div>`).join("");
+    return `<div class="pi-card"><h3>固定选项<span class="pi-meta">每个聊天选一次</span><span class="pi-spacer"></span>
+        <button type="button" class="pi-btn is-sm is-ghost" data-act="fx-add">${ICONS.plus}添加</button></h3>
+        ${rows2 || '<p class="pi-hint">没有固定选项。主角性别这类整段文字替换的选择写在这里，文中用 {{选项名}} 引用。</p>'}</div>`;
+  }
+  function importedCard(all) {
+    let rows2 = all.imported.map((item, index) => `<div class="pi-wb-row"><span class="pi-wb-title" title="${esc(item.book)}">${esc(item.title || item.key)}<small> ${esc(item.book)}</small></span>
+        <button type="button" class="pi-btn is-sm" data-act="imp-restore" data-i="${index}">恢复</button></div>`).join("");
+    return `<div class="pi-card"><h3>世界书转入<span class="pi-spacer"></span><button type="button" class="pi-btn is-sm" data-act="imp-open">转入人设</button></h3>
+        ${rows2 || '<p class="pi-hint">还没有从世界书转入过条目。</p>'}${rows2 ? '<p class="pi-hint">转入时关闭了原条目，点恢复可重新开启。</p>' : ""}</div>`;
+  }
+  function render4(view) {
+    let project = view.project(), all = personas(view), s = st4(view), units = flattenUnits(project.outline.volumes), collapsed = new Set(s.collapsed || []), groups = groupLines(all.lines).map((group) => {
+      let key = group.name || "::none", shut = collapsed.has(key), head = `<button type="button" class="pi-group-hd" data-act="pg-fold" data-group="${esc(key)}">${shut ? ICONS.caret : ICONS.caretDown}${esc(group.name || "未分组")}<small>${group.lines.length}</small></button>`;
+      return `<div class="pi-group${shut ? " is-collapsed" : ""}">${head}${shut ? "" : group.lines.map((line) => lineRow(view, line, s.open === line.id, units)).join("")}</div>`;
+    }).join("");
+    return `<div class="pi-card"><h3>人设<span class="pi-meta">${all.lines.length} 条线</span><span class="pi-spacer"></span>
+            <button type="button" class="pi-btn is-sm is-primary" data-act="pl-add">${ICONS.plus}新建人设线</button></h3>
+        ${groups || '<p class="pi-hint">还没有人设线。新建一条，或从世界书转入。</p>'}</div>
+        ${fixedCard(view, all)}
+        ${importedCard(all)}`;
+  }
+  var LINE_PATCH = {
+    name: (value) => ({ name: value.trim() || "未命名" }),
+    group: (value) => ({ group: value.trim() }),
+    mode: (value) => ({ mode: value }),
+    constant: (value) => ({ constant: value === "1" }),
+    keys: (value) => ({ keys: splitKeys(value) }),
+    position: (value) => ({ position: Number(value) }),
+    role: (value) => ({ role: Number(value) }),
+    depth: (value) => ({ depth: Math.max(0, Math.round(Number(value) || 0)) }),
+    order: (value) => ({ order: Math.round(Number(value) || 0) }),
+    common: (value) => ({ common: value })
+  }, STAGE_PATCH = {
+    name: (value) => ({ name: value.trim() || "阶段" }),
+    cond: (value) => ({ cond: value }),
+    unitId: (value) => ({ unitId: value }),
+    text: (value) => ({ text: value })
+  };
+  function rangePatch(stage, which, value) {
+    let range = { ...stage.range };
+    return String(value).trim() === "" || !Number.isFinite(Number(value)) ? delete range[which] : range[which] = Number(value), { range };
+  }
+  function onChange2(view, target) {
+    let d = target.dataset;
+    if (d.plOn)
+      return patchLine(view, d.plOn, (line) => ({ ...line, enabled: target.checked })), view.renderBody();
+    if (d.pf) {
+      let parse = d.f === "options" ? { options: [...new Set(String(target.value).split(/[,，、\n]/).map((item) => item.trim()).filter(Boolean))] } : { name: target.value.trim() };
+      return patchPersonas(view, (all) => ({ ...all, fixed: all.fixed.map((item) => item.id === d.pf ? { ...item, ...parse } : item) })), view.renderBody();
+    }
+    if (d.pl)
+      return d.ps ? patchStage(view, d.pl, d.ps, (stage) => ({ ...stage, ...d.f === "min" || d.f === "max" ? rangePatch(stage, d.f, target.value) : (STAGE_PATCH[d.f] || (() => ({})))(target.value) })) : d.f === "fameBar" || d.f === "famePartner" ? patchLine(view, d.pl, (line) => ({ ...line, fame: { ...line.fame, [d.f === "fameBar" ? "bar" : "partner"]: target.value.trim() } })) : LINE_PATCH[d.f] && patchLine(view, d.pl, (line) => ({ ...line, ...LINE_PATCH[d.f](target.value) })), view.renderBody();
+  }
+  function moveStage(view, lineId, stageId, step) {
+    patchLine(view, lineId, (line) => {
+      let from = line.stages.findIndex((stage) => stage.id === stageId), to = from + step;
+      if (from < 0 || to < 0 || to >= line.stages.length) return line;
+      let stages = [...line.stages];
+      return [stages[from], stages[to]] = [stages[to], stages[from]], { ...line, stages };
+    }), view.renderBody();
+  }
+  var actions4 = {
+    "pl-open"(view, target, event) {
+      if (event.target.closest("input")) return;
+      let s = st4(view);
+      s.open = s.open === target.dataset.line ? "" : target.dataset.line, view.renderBody();
+    },
+    "pg-fold"(view, target) {
+      let s = st4(view), set = new Set(s.collapsed || []);
+      set.has(target.dataset.group) ? set.delete(target.dataset.group) : set.add(target.dataset.group), s.collapsed = [...set], view.renderBody();
+    },
+    "pl-add"(view) {
+      let line = newLine("新人设线", "");
+      patchPersonas(view, (all) => ({ ...all, lines: [...all.lines, line] }));
+      let s = st4(view);
+      s.open = line.id, s.collapsed = (s.collapsed || []).filter((key) => key !== "::none"), view.renderBody();
+    },
+    async "pl-del"(view, target) {
+      let line = personas(view).lines.find((item) => item.id === target.dataset.line);
+      !line || !await confirmDialog({ title: `删除「${line.name}」`, body: "这条人设线连同全部阶段一并删除。", okLabel: "删除", danger: !0 }) || (patchPersonas(view, (all) => ({ ...all, lines: all.lines.filter((item) => item.id !== line.id) })), view.renderBody());
+    },
+    "ps-add"(view, target) {
+      patchLine(view, target.dataset.line, (line) => ({ ...line, stages: [...line.stages, newStage(`阶段${line.stages.length + 1}`)] })), view.renderBody();
+    },
+    "ps-del"(view, target) {
+      patchLine(view, target.dataset.line, (line) => ({ ...line, stages: line.stages.length > 1 ? line.stages.filter((stage) => stage.id !== target.dataset.stage) : line.stages })), view.renderBody();
+    },
+    "ps-up": (view, target) => moveStage(view, target.dataset.line, target.dataset.stage, -1),
+    "ps-down": (view, target) => moveStage(view, target.dataset.line, target.dataset.stage, 1),
+    async "imp-open"(view) {
+      await openImport(view) && view.renderBody();
+    },
+    async "imp-restore"(view, target) {
+      let item = personas(view).imported[Number(target.dataset.i)];
+      item && await restoreImported(view, item) && view.renderBody();
+    },
+    "fx-add"(view) {
+      patchPersonas(view, (all) => ({ ...all, fixed: [...all.fixed, { id: makeId("pf"), name: `选项${all.fixed.length + 1}`, options: ["甲", "乙"], varPath: "" }] })), view.renderBody();
+    },
+    "fx-del"(view, target) {
+      patchPersonas(view, (all) => ({ ...all, fixed: all.fixed.filter((item) => item.id !== target.dataset.fixed) })), view.renderBody();
+    }
+  };
+
   // src/ui/tab-run.js
   var tab_run_exports = {};
   __export(tab_run_exports, {
-    actions: () => actions4,
+    actions: () => actions5,
     activateCard: () => activateCard,
     entryRow: () => entryRow,
-    onChange: () => onChange2,
-    render: () => render4
+    onChange: () => onChange3,
+    render: () => render5
   });
   function toggleNode(view, unitId, nodeId, checked) {
     let unit = view.runtime.units().find((item) => item.id === unitId), node = unit && stageNodes(unit.stage.data).find((item) => item.id === nodeId), next = setNodeChecked(view.runtime.progress(), unitId, nodeId, checked, node ? node.name : ""), hook = checked && viewLive(view).hooks.find((item) => item.key === `${unitId}:${nodeId}`);
     hook && hook.steps.length && hook.step >= hook.steps.length && (next = patchLive(next, hook, { step: hook.steps.length - 1 })), view.runtime.setProgress(next);
   }
   function entryRow(entry, expanded) {
-    let atDepth = entry.position === 4, field = (name) => `data-kind="${entry.kind}" data-param="${name}"`, body = expanded ? `<div class="pi-entry-bd">
+    let atDepth = entry.position === 4, field2 = (name) => `data-kind="${entry.kind}" data-param="${name}"`, body = expanded ? `<div class="pi-entry-bd">
         <div class="pi-pair ${atDepth ? "is-c4" : ""}">
-            <label class="pi-field"><span>位置</span><select class="pi-sel" ${field("position")}>${options(POSITIONS, entry.position)}</select></label>
-            ${atDepth ? `<label class="pi-field"><span>深度</span><input class="pi-inp" type="number" min="0" ${field("depth")} value="${entry.depth}"></label>
-            <label class="pi-field"><span>角色</span><select class="pi-sel" ${field("role")}>${options(ROLES, entry.role)}</select></label>` : ""}
-            <label class="pi-field"><span>顺序</span><input class="pi-inp" type="number" ${field("order")} value="${entry.order}"></label>
+            <label class="pi-field"><span>位置</span><select class="pi-sel" ${field2("position")}>${options(POSITIONS, entry.position)}</select></label>
+            ${atDepth ? `<label class="pi-field"><span>深度</span><input class="pi-inp" type="number" min="0" ${field2("depth")} value="${entry.depth}"></label>
+            <label class="pi-field"><span>角色</span><select class="pi-sel" ${field2("role")}>${options(ROLES, entry.role)}</select></label>` : ""}
+            <label class="pi-field"><span>顺序</span><input class="pi-inp" type="number" ${field2("order")} value="${entry.order}"></label>
         </div>
         <pre class="pi-pre">${esc(entry.content)}</pre></div>` : "";
     return `<div class="pi-entry${entry.enabled ? "" : " is-off"}">
@@ -5560,24 +6659,37 @@ ${parsed.body}` : parsed.body;
                 <button type="button" class="pi-btn is-primary" data-act="activate">设为当前聊天使用</button>
                 <button type="button" class="pi-btn" data-act="activate-card">设为本卡默认</button></div></div>`;
   }
-  function render4(view) {
-    let { data, runtime } = view, project = view.project(), st8 = view.tabState("run"), notActive = activateCard(view, project);
+  function personaCard(view, project, progress, st9) {
+    if (!hasPersonas(project)) return "";
+    let all = project.personas, env = personaEnv(project, progress, view.runtime.fame()), muted = new Set(progress.personas && progress.personas.muted || []), fixed = all.fixed.filter((item) => item.options.length).map((item) => `<label class="pi-field"><span>${esc(item.name)}</span><select class="pi-sel" data-pfixed="${esc(item.id)}">${fixedValue(item, progress) ? "" : '<option value="" selected disabled>请选择</option>'}${options(item.options.map((value) => ({ value, label: value })), fixedValue(item, progress))}</select></label>`).join(""), collapsed = new Set(st9.personaFold || []), line = (item) => {
+      let info = currentStage(item, progress, env), note = [info.source === "manual" && item.mode !== "manual" ? "手动" : "", info.lost ? "读不到声望" : "", muted.has(item.id) ? "不提醒" : ""].filter(Boolean).join(" · "), caps = item.stages.map((stage, index) => `<button type="button" class="pi-chip${index === info.index ? " is-on" : ""}" data-act="persona-pick" data-line="${esc(item.id)}" data-stage="${esc(stage.id)}">${esc(stage.name)}</button>`).join("");
+      return `<div class="pi-pl-row${info.lost ? " is-lost" : ""}"><div class="pi-pl-hd"><span class="pi-pl-name">${esc(item.name)}</span>${note ? `<span class="pi-tl-state">${esc(note)}</span>` : ""}
+            <button type="button" class="pi-icon-btn" data-act="persona-menu" data-line="${esc(item.id)}" title="更多">${ICONS.more}</button></div><div class="pi-refs">${caps}</div></div>`;
+    }, groups = groupLines(all.lines.filter((item) => item.enabled)).map((group) => {
+      let key = group.name || "::none", shut = collapsed.has(key);
+      return `<div class="pi-group${shut ? " is-collapsed" : ""}"><button type="button" class="pi-group-hd" data-act="persona-fold" data-group="${esc(key)}">${shut ? ICONS.caret : ICONS.caretDown}${esc(group.name || "未分组")}<small>${group.lines.length}</small></button>${shut ? "" : group.lines.map(line).join("")}</div>`;
+    }).join("");
+    return `<div class="pi-card"><h3>人设阶段</h3>${fixed ? `<div class="pi-pair">${fixed}</div>` : ""}${groups || '<p class="pi-hint">没有启用的人设线。</p>'}</div>`;
+  }
+  function render5(view) {
+    let { data, runtime } = view, project = view.project(), st9 = view.tabState("run"), notActive = activateCard(view, project);
     if (notActive) return notActive;
     let progress = runtime.progress(), entries = runtime.entries(), sw = threadSwitches(project), units = maskUnits(flattenUnits(project.outline.volumes), sw), states = unitStates(units, progress), total = entries.filter((entry) => entry.enabled).reduce((sum, entry) => sum + estimateTokens(entry.content), 0), settings = data.settings(), checking = runtime.isChecking(), book = runtime.injectMode() === "virtual" ? "" : '<span class="pi-badge is-warn">专用世界书</span>', gap = settings.checkEvery - (runtime.floorCount() - checkBase(progress));
     return `<div class="pi-card"><h3>注入条目${book}<span class="pi-meta">≈${total} token</span><span class="pi-spacer"></span>
             <button type="button" class="pi-btn is-sm is-ghost" data-act="preview">预览</button></h3>
-        ${entries.length ? entries.map((entry) => entryRow(entry, st8.open === entry.slotId)).join("") : '<p class="pi-hint">设定和大纲都为空，没有可注入的内容。</p>'}
+        ${entries.filter((entry) => entry.kind !== "persona").length ? entries.filter((entry) => entry.kind !== "persona").map((entry) => entryRow(entry, st9.open === entry.slotId)).join("") : '<p class="pi-hint">设定和大纲都为空，没有可注入的内容。</p>'}
         </div>
+        ${personaCard(view, project, progress, st9)}
         <div class="pi-card"><h3>阶段<span class="pi-meta">${gap > 0 ? `${gap} 楼后检测` : "下一楼检测"}</span><span class="pi-spacer"></span>
-            ${units.length ? `<button type="button" class="pi-btn is-sm is-ghost" data-act="index-toggle">${st8.indexOpen ? "收起索引" : "剧情索引"}</button>` : ""}</h3>
-        ${units.length ? `${st8.indexOpen ? `<pre class="pi-pre pi-index">${esc(buildIndexText(units, states, progress, { carryOver: settings.carryOver, hookCap: settings.hookCap }))}</pre>` : ""}
+            ${units.length ? `<button type="button" class="pi-btn is-sm is-ghost" data-act="index-toggle">${st9.indexOpen ? "收起索引" : "剧情索引"}</button>` : ""}</h3>
+        ${units.length ? `${st9.indexOpen ? `<pre class="pi-pre pi-index">${esc(buildIndexText(units, states, progress, { carryOver: settings.carryOver, hookCap: settings.hookCap }))}</pre>` : ""}
         <div class="pi-pace"><span class="pi-pace-label">推进速度</span><div class="pi-seg">${PACES.map((pace) => `<button type="button" class="pi-seg-btn${pace.value === progress.pace ? " is-sel" : ""}" data-act="pace" data-pace="${pace.value}">${pace.label}</button>`).join("")}</div></div>
         ${switchRow(sw)}
         <div class="pi-tools is-c3">
             <button type="button" class="pi-btn is-primary is-sm" data-act="next">打开下一段</button>
             <button type="button" class="pi-btn is-sm" data-act="check"${checking ? " disabled" : ""}>${checking ? '<span class="pi-spin"></span>检测中' : "立即检测"}</button>
             <button type="button" class="pi-btn is-sm" data-act="rewrite">改写后续</button></div>
-        ${timeline(units, states, progress, settings.carryOver ? carriedNodes(units, states, progress, { withOff: !0 }) : [], liveOf(units, states, progress, settings), sw, st8.expiredOpen)}` : '<p class="pi-hint">大纲为空。到「大纲」页导入剧情 YAML，或让 AI 写一卷。</p>'}
+        ${timeline(units, states, progress, settings.carryOver ? carriedNodes(units, states, progress, { withOff: !0 }) : [], liveOf(units, states, progress, settings), sw, st9.expiredOpen)}` : '<p class="pi-hint">大纲为空。到「大纲」页导入剧情 YAML，或让 AI 写一卷。</p>'}
         </div>`;
   }
   function liveOf(units, states, progress, settings) {
@@ -5591,7 +6703,7 @@ ${parsed.body}` : parsed.body;
     let { runtime } = view;
     runtime.setProgress(patchSlot(runtime.progress(), slotId, patch));
   }
-  var actions4 = {
+  var actions5 = {
     activate: (view) => view.runtime.switchProject(view.projectId, "chat"),
     "activate-card": (view) => view.runtime.switchProject(view.projectId, "card"),
     // 推进速度随聊天保存，改完立即换掉详细条目开头的说明。
@@ -5599,17 +6711,34 @@ ${parsed.body}` : parsed.body;
       view.runtime.setProgress({ ...view.runtime.progress(), pace: target.dataset.pace }), view.renderBody();
     },
     "index-toggle"(view) {
-      let st8 = view.tabState("run");
-      st8.indexOpen = !st8.indexOpen, view.renderBody();
+      let st9 = view.tabState("run");
+      st9.indexOpen = !st9.indexOpen, view.renderBody();
     },
     "expired-toggle"(view) {
-      let st8 = view.tabState("run");
-      st8.expiredOpen = !st8.expiredOpen, view.renderBody();
+      let st9 = view.tabState("run");
+      st9.expiredOpen = !st9.expiredOpen, view.renderBody();
     },
     "toggle-entry"(view, target, event) {
       if (event.target.closest("input,select")) return;
-      let st8 = view.tabState("run");
-      st8.open = st8.open === target.dataset.slot ? "" : target.dataset.slot, view.renderBody();
+      let st9 = view.tabState("run");
+      st9.open = st9.open === target.dataset.slot ? "" : target.dataset.slot, view.renderBody();
+    },
+    "persona-fold"(view, target) {
+      let st9 = view.tabState("run"), set = new Set(st9.personaFold || []);
+      set.has(target.dataset.group) ? set.delete(target.dataset.group) : set.add(target.dataset.group), st9.personaFold = [...set], view.renderBody();
+    },
+    "persona-pick"(view, target) {
+      let line = view.project().personas.lines.find((item) => item.id === target.dataset.line);
+      line && view.runtime.setProgress(setPersonaStage(view.runtime.progress(), line, target.dataset.stage));
+    },
+    async "persona-menu"(view, target) {
+      let line = view.project().personas.lines.find((item) => item.id === target.dataset.line);
+      if (!line) return;
+      let progress = view.runtime.progress(), pp = progress.personas || {}, muted = (pp.muted || []).includes(line.id), manual = (pp.manual || []).includes(line.id), items = [
+        ...line.mode !== "manual" && manual ? [{ label: "恢复自动判断", value: "release" }] : [],
+        muted ? { label: "恢复提醒", value: "unmute" } : { label: "不再提醒", value: "mute" }
+      ], pick = await menuDialog({ title: line.name, items });
+      pick && view.runtime.setProgress(pick === "release" ? releasePersona(progress, line.id) : mutePersona(progress, line.id, pick === "mute"));
     },
     next: (view) => view.runtime.openNext(),
     check: (view) => view.runtime.checkNow({ manual: !0 }),
@@ -5690,8 +6819,12 @@ ${parsed.body}` : parsed.body;
       return openDialog({ title: "最终注入预览", html: `${html}`, actions: [{ label: "关闭", value: !0, primary: !0 }] });
     }
   };
-  function onChange2(view, target) {
+  function onChange3(view, target) {
     let { runtime } = view;
+    if (target.dataset.pfixed) {
+      runtime.setProgress(setFixedValue(runtime.progress(), target.dataset.pfixed, target.value)), view.renderBody();
+      return;
+    }
     if (target.dataset.param) {
       let value = Math.round(Number(target.value));
       if (!Number.isFinite(value)) return;
@@ -5708,16 +6841,16 @@ ${parsed.body}` : parsed.body;
   // src/ui/tab-worlds.js
   var tab_worlds_exports = {};
   __export(tab_worlds_exports, {
-    actions: () => actions5,
-    onChange: () => onChange3,
+    actions: () => actions6,
+    onChange: () => onChange4,
     refreshOn: () => refreshOn4,
-    render: () => render5
+    render: () => render6
   });
-  var st4 = (view) => view.tabState("worlds"), infOf = (view) => normalizeInfinite(view.project().infinite);
+  var st5 = (view) => view.tabState("worlds"), infOf = (view) => normalizeInfinite(view.project().infinite);
   function save2(view, fn) {
     view.data.updateProject(view.projectId, (project) => ({ ...project, infinite: fn(normalizeInfinite(project.infinite)) })), view.runtime.refresh();
   }
-  var lines = (text) => String(text || "").split(`
+  var lines = (text2) => String(text2 || "").split(`
 `).map((line) => line.trim()).filter(Boolean);
   function wordTitle(key, hubName) {
     return { back: `返回${hubName}`, depart: "出发", away: "在副本里", hub: `在${hubName}` }[key];
@@ -5751,8 +6884,8 @@ ${parsed.body}` : parsed.body;
     return `<div class="pi-card"><h3>世界库<span class="pi-meta">${worlds.length} 份</span></h3>
         ${worlds.length ? [...worlds].reverse().map((world) => worldRow2(world, s.open === world.id, currentId)).join("") : '<p class="pi-hint">这条聊天里还没有世界。到「执行」页点「进入新世界」，或等检测到下车时自动写出档案。</p>'}</div>`;
   }
-  function render5(view) {
-    let infinite = infOf(view), s = st4(view);
+  function render6(view) {
+    let infinite = infOf(view), s = st5(view);
     return `${libraryCard(view, s)}
         <div class="pi-card"><h3>骰池</h3>
         <p class="pi-hint">每行「名称|权重」。情欲浓度写进档案末尾，由代码决定。</p>
@@ -5764,9 +6897,9 @@ ${parsed.body}` : parsed.body;
         <p class="pi-hint">开副本时按「前缀 + 恐怖类型」到角色卡世界书里找同标题的条目（关闭的也能读到），正文放进造世界提示，不进正文注入。</p>
         <label class="pi-field"><span>条目标题前缀</span><input class="pi-inp" data-prefix value="${esc(infinite.config.horrorPrefix)}"></label></div>`;
   }
-  var actions5 = {
+  var actions6 = {
     "world-open"(view, target) {
-      let s = st4(view);
+      let s = st5(view);
       s.open = s.open === target.dataset.id ? "" : target.dataset.id, view.renderBody();
     },
     "world-reopen"(view, target) {
@@ -5783,7 +6916,7 @@ ${parsed.body}` : parsed.body;
       save2(view, (infinite) => ({ ...infinite, spec: "" })), view.renderBody();
     }
   };
-  function onChange3(view, target) {
+  function onChange4(view, target) {
     if (target.dataset.pool) {
       let key = target.dataset.pool, rows2 = textToPool(target.value);
       save2(view, (infinite) => ({ ...infinite, pools: { ...infinite.pools, [key]: rows2 } })), view.renderBody();
@@ -5800,8 +6933,8 @@ ${parsed.body}` : parsed.body;
       return;
     }
     if (target.dataset.spec !== void 0) {
-      let text = target.value.trim() === DEFAULT_WORLD_SPEC.trim() ? "" : target.value;
-      save2(view, (infinite) => ({ ...infinite, spec: text }));
+      let text2 = target.value.trim() === DEFAULT_WORLD_SPEC.trim() ? "" : target.value;
+      save2(view, (infinite) => ({ ...infinite, spec: text2 }));
       return;
     }
     target.dataset.prefix !== void 0 && save2(view, (infinite) => ({ ...infinite, config: { ...infinite.config, horrorPrefix: target.value } }));
@@ -5811,13 +6944,13 @@ ${parsed.body}` : parsed.body;
   // src/ui/tab-infinite-run.js
   var tab_infinite_run_exports = {};
   __export(tab_infinite_run_exports, {
-    actions: () => actions6,
-    onChange: () => onChange2,
-    render: () => render6
+    actions: () => actions7,
+    onChange: () => onChange3,
+    render: () => render7
   });
   var WORD_TITLES = { back: "返回", depart: "出发", away: "在副本里", hub: "在主空间" };
-  function render6(view) {
-    let { runtime } = view, project = view.project(), st8 = view.tabState("run"), notActive = activateCard(view, project);
+  function render7(view) {
+    let { runtime } = view, project = view.project(), st9 = view.tabState("run"), notActive = activateCard(view, project);
     if (notActive) return notActive;
     let state = runtime.infState();
     if (!state) return '<div class="pi-empty"><span class="pi-spin"></span> 正在读取进度…</div>';
@@ -5831,12 +6964,12 @@ ${parsed.body}` : parsed.body;
         ${blanked.length ? `<p class="pi-hint">${esc(blanked.map((key) => WORD_TITLES[key]).join("、"))}的词被清空，现按默认词读取。</p>` : ""}</div>
         <div class="pi-card"><h3>注入条目${book}<span class="pi-meta">≈${total} token</span><span class="pi-spacer"></span>
             <button type="button" class="pi-btn is-sm is-ghost" data-act="preview">预览</button></h3>
-        ${entries.length ? entries.map((entry) => entryRow(entry, st8.open === entry.slotId)).join("") : '<p class="pi-hint">设定和世界库都为空，没有可注入的内容。</p>'}</div>
+        ${entries.length ? entries.map((entry) => entryRow(entry, st9.open === entry.slotId)).join("") : '<p class="pi-hint">设定和世界库都为空，没有可注入的内容。</p>'}</div>
         ${inf.log.length ? `<div class="pi-card"><h3>近期记录</h3><pre class="pi-pre">${esc(inf.log.slice().reverse().join(`
 `))}</pre></div>` : ""}`;
   }
-  var actions6 = {
-    ...actions4,
+  var actions7 = {
+    ...actions5,
     "inf-enter": (view) => view.runtime.openWorld(),
     async "inf-return"(view) {
       let hubName = resolveHub(view.runtime.infState()?.infinite.config).hubName;
@@ -5847,15 +6980,15 @@ ${parsed.body}` : parsed.body;
   // src/ui/page-settings.js
   var page_settings_exports = {};
   __export(page_settings_exports, {
-    actions: () => actions7,
-    onChange: () => onChange4,
+    actions: () => actions8,
+    onChange: () => onChange5,
     onInput: () => onInput4,
     refreshOn: () => refreshOn5,
-    render: () => render7
+    render: () => render8
   });
-  var st5 = (view) => view.tabState("settings"), currentRole = (view) => LLM_ROLES.some((item) => item.key === st5(view).role) ? st5(view).role : LLM_ROLES[0].key;
+  var st6 = (view) => view.tabState("settings"), currentRole = (view) => LLM_ROLES.some((item) => item.key === st6(view).role) ? st6(view).role : LLM_ROLES[0].key;
   function modelField(view, role, llm) {
-    let s = st5(view), models = s.models?.[role] || [];
+    let s = st6(view), models = s.models?.[role] || [];
     return `<div class="pi-field"><span>模型</span><div class="pi-inline">${!models.length || s.manual?.[role] ? `<input class="pi-inp" data-llm="${role}" data-k="model" value="${esc(llm.model)}" placeholder="模型名称">` : `<select class="pi-sel" data-llm="${role}" data-k="model">${llm.model && !models.includes(llm.model) ? `<option value="${esc(llm.model)}" selected>${esc(llm.model)}</option>` : ""}
             ${llm.model ? "" : '<option value="" selected disabled>选择模型</option>'}${options(models.map((model) => ({ value: model, label: model })), llm.model)}
             <option value="__manual">手动输入…</option></select>`}
@@ -5882,7 +7015,7 @@ ${parsed.body}` : parsed.body;
     return openDialog({ title: "载入接口预设", html: `<div class="pi-presets">${html}</div>`, actions: [{ label: "取消", value: null }] });
   }
   function guideCard(view, s) {
-    let open = st5(view).guideOpen, status = s.guide ? "自定义版本" : "内置版本";
+    let open = st6(view).guideOpen, status = s.guide ? "自定义版本" : "内置版本";
     return `<div class="pi-card"><h3>写作基准<span class="pi-spacer"></span>
             <button type="button" class="pi-btn is-sm is-ghost" data-act="guide-toggle">${open ? "收起" : "编辑"}</button></h3>
         <p class="pi-hint">当前使用：${status}</p>
@@ -5890,15 +7023,15 @@ ${parsed.body}` : parsed.body;
         <textarea class="pi-ta is-mono is-tall" data-guide>${esc(s.guide || BUILTIN_GUIDE)}</textarea>` : ""}</div>`;
   }
   function paceRow(view, s) {
-    let open = st5(view).paceOpen, changed = PACES.filter((item) => s.paceText[item.value]).map((item) => item.label), current = view.runtime.activeId() ? view.runtime.progress().pace : "", pace = PACES.some((item) => item.value === st5(view).pace) ? st5(view).pace : current || "normal", pick = PACES.map((item) => ({ value: item.value, label: `${item.label}${item.value === current ? "（当前聊天使用）" : ""}${s.paceText[item.value] ? "·已改" : ""}` }));
+    let open = st6(view).paceOpen, changed = PACES.filter((item) => s.paceText[item.value]).map((item) => item.label), current = view.runtime.activeId() ? view.runtime.progress().pace : "", pace = PACES.some((item) => item.value === st6(view).pace) ? st6(view).pace : current || "normal", pick = PACES.map((item) => ({ value: item.value, label: `${item.label}${item.value === current ? "（当前聊天使用）" : ""}${s.paceText[item.value] ? "·已改" : ""}` }));
     return `<div class="pi-set-row"><span>推进速度说明</span>${changed.length ? `<span class="pi-badge">已修改 ${changed.join("、")}</span>` : ""}<span class="pi-spacer"></span>
             <button type="button" class="pi-btn is-sm is-ghost" data-act="pace-toggle">${open ? "收起" : "编辑"}</button></div>
         ${open ? `<div class="pi-set-sub"><label class="pi-field"><span>编辑哪一档的说明</span><select class="pi-sel" data-pace-pick>${options(pick, pace)}</select></label>
         <textarea class="pi-ta" rows="3" data-pace-text="${pace}">${esc(paceText(s, pace))}</textarea>
         <div class="pi-tools is-c1 is-end"><button type="button" class="pi-btn is-sm" data-act="pace-reset" data-pace="${pace}"${s.paceText[pace] ? "" : " disabled"}>恢复默认</button></div></div>` : ""}`;
   }
-  function render7(view) {
-    let s = view.data.settings(), modes = [{ value: "ask", label: "弹出确认" }, { value: "auto", label: "自动推进（可撤销）" }, { value: "nodes", label: "仅勾选节点，不推进阶段" }], offModes = [{ value: "ask", label: "弹出提醒" }, { value: "auto", label: "自动改写后续阶段（可撤销）" }, { value: "off", label: "不检查偏离" }], threadModes = [{ value: "ask", label: "弹出确认" }, { value: "auto", label: "自动收录为支线" }, { value: "off", label: "不识别" }];
+  function render8(view) {
+    let s = view.data.settings(), modes = [{ value: "ask", label: "弹出确认" }, { value: "auto", label: "自动推进（可撤销）" }, { value: "nodes", label: "仅勾选节点，不推进阶段" }], offModes = [{ value: "ask", label: "弹出提醒" }, { value: "auto", label: "自动改写后续阶段（可撤销）" }, { value: "off", label: "不检查偏离" }], personaModes = [{ value: "ask", label: "弹出确认" }, { value: "auto", label: "自动推进（可撤销）" }, { value: "off", label: "不检测" }], threadModes = [{ value: "ask", label: "弹出确认" }, { value: "auto", label: "自动收录为支线" }, { value: "off", label: "不识别" }];
     return `<div class="pi-card"><h3>注入内容</h3>
         <label class="pi-field"><span>详细条目的标签名</span><input class="pi-inp" data-set="tagName" value="${esc(s.tagName)}"></label></div>
         <div class="pi-card"><h3>阶段推进</h3>
@@ -5906,6 +7039,7 @@ ${parsed.body}` : parsed.body;
             <label class="pi-field"><span>每次读取楼数</span><input class="pi-inp" type="number" min="1" data-set="checkFloors" value="${s.checkFloors}"></label></div>
         <label class="pi-field"><span>判定阶段已演完后</span><select class="pi-sel" data-set="handleMode">${options(modes, s.handleMode)}</select></label>
         <label class="pi-field"><span>偏离大纲时</span><select class="pi-sel" data-set="offTrackMode">${options(offModes, s.offTrackMode)}</select></label>
+        <label class="pi-field"><span>人设阶段变化时</span><select class="pi-sel" data-set="personaMode">${options(personaModes, s.personaMode)}</select></label>
         <label class="pi-check"><input type="checkbox" data-set="carryOver"${s.carryOver ? " checked" : ""}><span>没演的支线与世界动态延续到后面的阶段</span></label>
         <div class="pi-pair"><label class="pi-field"><span>同时注入的激活支线</span><input class="pi-inp" type="number" min="1" max="6" data-set="hookCap" value="${s.hookCap}"></label>
             <label class="pi-field"><span>正文出现大纲外的新线时</span><select class="pi-sel" data-set="newThreadMode">${options(threadModes, s.newThreadMode)}</select></label></div>
@@ -5923,27 +7057,27 @@ ${parsed.body}` : parsed.body;
   }
   function onInput4(view, target) {
     if (target.dataset.paceText) {
-      let key = target.dataset.paceText, text = target.value.trim() === PACE_TEXT[key] ? "" : target.value;
-      view.data.updateSettings({ paceText: { ...view.data.settings().paceText, [key]: text } }), view.runtime.refresh();
+      let key = target.dataset.paceText, text2 = target.value.trim() === PACE_TEXT[key] ? "" : target.value;
+      view.data.updateSettings({ paceText: { ...view.data.settings().paceText, [key]: text2 } }), view.runtime.refresh();
       return;
     }
     if (target.dataset.guide !== void 0) {
-      let text = target.value;
-      view.data.updateSettings({ guide: text.trim() === BUILTIN_GUIDE.trim() ? "" : text });
+      let text2 = target.value;
+      view.data.updateSettings({ guide: text2.trim() === BUILTIN_GUIDE.trim() ? "" : text2 });
       return;
     }
     target.dataset.set && target.type !== "checkbox" && target.tagName !== "SELECT" && view.data.updateSettings({ [target.dataset.set]: readValue(target) }), target.dataset.llm && target.tagName === "INPUT" && setRole(view, target.dataset.llm, { [target.dataset.k]: target.value.trim() });
   }
-  function onChange4(view, target) {
+  function onChange5(view, target) {
     if (target.dataset.pacePick !== void 0) {
-      st5(view).pace = target.value, view.renderBody();
+      st6(view).pace = target.value, view.renderBody();
       return;
     }
-    target.dataset.set && (target.type === "checkbox" || target.tagName === "SELECT") && (view.data.updateSettings({ [target.dataset.set]: readValue(target) }), view.runtime.refresh(), view.renderBody()), target.dataset.llm && target.tagName === "SELECT" && (target.value === "__manual" ? st5(view).manual = { ...st5(view).manual, [target.dataset.llm]: !0 } : setRole(view, target.dataset.llm, { [target.dataset.k]: target.value }), view.renderBody()), target.dataset.set && target.tagName !== "SELECT" && target.type !== "checkbox" && view.runtime.refresh();
+    target.dataset.set && (target.type === "checkbox" || target.tagName === "SELECT") && (view.data.updateSettings({ [target.dataset.set]: readValue(target) }), view.runtime.refresh(), view.renderBody()), target.dataset.llm && target.tagName === "SELECT" && (target.value === "__manual" ? st6(view).manual = { ...st6(view).manual, [target.dataset.llm]: !0 } : setRole(view, target.dataset.llm, { [target.dataset.k]: target.value }), view.renderBody()), target.dataset.set && target.tagName !== "SELECT" && target.type !== "checkbox" && view.runtime.refresh();
   }
-  var CONN_KEYS2 = ["endpoint", "apiKey", "model", "temperature"], actions7 = {
+  var CONN_KEYS2 = ["endpoint", "apiKey", "model", "temperature"], actions8 = {
     async models(view, target) {
-      let role = target.dataset.role, s = st5(view);
+      let role = target.dataset.role, s = st6(view);
       if (!s.loading) {
         s.loading = role, view.renderBody();
         try {
@@ -5955,7 +7089,7 @@ ${parsed.body}` : parsed.body;
       }
     },
     "llm-role"(view, target) {
-      st5(view).role = target.dataset.role, view.renderBody();
+      st6(view).role = target.dataset.role, view.renderBody();
     },
     // 同名预设直接覆盖，不同名新建一份。
     async "preset-save"(view) {
@@ -5979,17 +7113,17 @@ ${parsed.body}` : parsed.body;
           await confirmDialog({ title: `删除预设「${preset.name}」`, body: "已载入这个预设的用途不受影响。", okLabel: "删除", danger: !0 }) && view.data.updateSettings({ presets: presets.filter((item) => item.id !== id) });
           continue;
         }
-        return setRole(view, role, { source: "custom", ...Object.fromEntries(CONN_KEYS2.map((key) => [key, preset[key]])) }), st5(view).manual = { ...st5(view).manual, [role]: !1 }, toast("success", `已为「${LLM_ROLES.find((item) => item.key === role).label}」载入预设「${preset.name}」。`), view.renderBody();
+        return setRole(view, role, { source: "custom", ...Object.fromEntries(CONN_KEYS2.map((key) => [key, preset[key]])) }), st6(view).manual = { ...st6(view).manual, [role]: !1 }, toast("success", `已为「${LLM_ROLES.find((item) => item.key === role).label}」载入预设「${preset.name}」。`), view.renderBody();
       }
     },
     "pace-toggle"(view) {
-      st5(view).paceOpen = !st5(view).paceOpen, view.renderBody();
+      st6(view).paceOpen = !st6(view).paceOpen, view.renderBody();
     },
     "pace-reset"(view, target) {
       view.data.updateSettings({ paceText: { ...view.data.settings().paceText, [target.dataset.pace]: "" } }), view.runtime.refresh(), view.renderBody();
     },
     "guide-toggle"(view) {
-      st5(view).guideOpen = !st5(view).guideOpen, view.renderBody();
+      st6(view).guideOpen = !st6(view).guideOpen, view.renderBody();
     },
     "guide-reset"(view) {
       view.data.updateSettings({ guide: "" }), view.renderBody();
@@ -5999,10 +7133,10 @@ ${parsed.body}` : parsed.body;
   // src/ui/page-data.js
   var page_data_exports = {};
   __export(page_data_exports, {
-    actions: () => actions8,
-    onChange: () => onChange5,
+    actions: () => actions9,
+    onChange: () => onChange6,
     refreshOn: () => refreshOn6,
-    render: () => render8
+    render: () => render9
   });
 
   // src/core/zip.js
@@ -6072,7 +7206,7 @@ ${parsed.body}` : parsed.body;
   }
 
   // src/ui/page-data.js
-  var st6 = (view) => view.tabState("data"), latest = { state: "", version: "", error: "" }, viaLoader = () => !!window.__plotInjectorLoader;
+  var st7 = (view) => view.tabState("data"), latest = { state: "", version: "", error: "" }, viaLoader = () => !!window.__plotInjectorLoader;
   async function checkLatest(view) {
     latest.state = "checking", view.renderBody();
     try {
@@ -6104,7 +7238,7 @@ ${parsed.body}` : parsed.body;
     return names2;
   }
   function fileCell(view, name, bytes) {
-    let verified = st6(view).verified, missing = verified && verified[name] === !1;
+    let verified = st7(view).verified, missing = verified && verified[name] === !1;
     return !view.data.index().files.includes(name) && !bytes ? '<td class="pi-hint">—</td>' : `<td class="${missing ? "is-missing" : ""}">${missing ? "已丢失" : formatBytes(bytes)}
         ${missing ? "" : `<button type="button" class="pi-btn is-sm is-ghost" data-act="export-file" data-name="${esc(name)}">导出</button>`}
         <button type="button" class="pi-btn is-sm is-ghost is-danger" data-act="delete-file" data-name="${esc(name)}">删除</button></td>`;
@@ -6113,8 +7247,8 @@ ${parsed.body}` : parsed.body;
     return `<table class="pi-files"><thead><tr><th>项目</th><th>设定+大纲</th><th>讨论记录</th></tr></thead><tbody>${view.data.index().projects.map((item) => `<tr><td>${esc(item.group ? `${item.group}／` : "")}${esc(item.name)}</td>
         ${fileCell(view, projectFile(item.id), item.bytes.project)}${fileCell(view, chatFile(item.id), item.bytes.chat)}</tr>`).join("") || '<tr><td colspan="3" class="pi-hint">没有项目</td></tr>'}</tbody></table>`;
   }
-  function render8(view) {
-    let s = st6(view);
+  function render9(view) {
+    let s = st7(view);
     !s.verified && !s.verifying && verify(view);
     let orphans = s.verified ? Object.keys(s.verified).filter((name) => !referenced(view.data.index()).has(name)) : [], settings = view.data.settings();
     return `<div class="pi-card"><h3>本地文件</h3>
@@ -6127,7 +7261,7 @@ ${parsed.body}` : parsed.body;
         <p class="pi-hint">删除所有项目、讨论记录和当前聊天的进度，执行前自动下载备份。</p>
         <div class="pi-equal is-one pi-acts"><button type="button" class="pi-btn is-sm is-danger" data-act="wipe">备份并删除</button></div></div>`;
   }
-  function onChange5(view, target) {
+  function onChange6(view, target) {
     if (target.dataset.set !== "loaderRef") return;
     let ref = target.value.trim();
     if (/^\d+\.\d+\.\d+$/.test(ref) && (ref = `v${ref}`), ref && ref !== "main" && !/^v\d+\.\d+\.\d+$/.test(ref)) {
@@ -6137,7 +7271,7 @@ ${parsed.body}` : parsed.body;
     target.value = ref, view.data.updateSettings({ loaderRef: ref }), toast("success", ref ? `已指定 ${ref}，刷新酒馆页面生效。` : "已改为跟随最新版本，刷新酒馆页面生效。");
   }
   async function verify(view) {
-    let s = st6(view);
+    let s = st7(view);
     s.verifying = !0;
     try {
       let names2 = [.../* @__PURE__ */ new Set([...view.data.index().files, ...referenced(view.data.index())])];
@@ -6148,7 +7282,7 @@ ${parsed.body}` : parsed.body;
       s.verifying = !1, view.renderBody();
     }
   }
-  var actions8 = {
+  var actions9 = {
     "check-update"(view) {
       return checkLatest(view);
     },
@@ -6158,45 +7292,45 @@ ${parsed.body}` : parsed.body;
       await confirmDialog({ title: `更新到 v${latest.version}`, body, okLabel: "更新并刷新" }) && (pinned && (view.data.updateSettings({ loaderRef: "" }), await view.data.flush()), writeUi({ loader: null }), hostWindow().location.reload());
     },
     verify(view) {
-      return st6(view).verified = null, verify(view);
+      return st7(view).verified = null, verify(view);
     },
     async "export-file"(view, target) {
-      let text = await readRawFile(target.dataset.name);
-      if (text == null) throw new Error("文件读取失败");
-      downloadBlob(target.dataset.name, text);
+      let text2 = await readRawFile(target.dataset.name);
+      if (text2 == null) throw new Error("文件读取失败");
+      downloadBlob(target.dataset.name, text2);
     },
     async "delete-file"(view, target) {
       let name = target.dataset.name;
       if (!await confirmDialog({ title: "删除文件", list: [name], body: name.startsWith("pi-p-") ? "这是项目的设定和大纲，删除后项目无法打开。" : "", okLabel: "删除", danger: !0 })) return;
       let id = /^pi-[pc]-(.+)\.json$/.exec(name)?.[1];
-      name.startsWith("pi-c-") ? await view.data.clearChat(id) : name.startsWith("pi-p-") && await view.data.deleteProject(id), st6(view).verified = null, view.render();
+      name.startsWith("pi-c-") ? await view.data.clearChat(id) : name.startsWith("pi-p-") && await view.data.deleteProject(id), st7(view).verified = null, view.render();
     },
     async orphans(view) {
-      let names2 = Object.keys(st6(view).verified || {}).filter((name) => !referenced(view.data.index()).has(name) && st6(view).verified[name]), gone = Object.keys(st6(view).verified || {}).filter((name) => !referenced(view.data.index()).has(name) && !st6(view).verified[name]);
+      let names2 = Object.keys(st7(view).verified || {}).filter((name) => !referenced(view.data.index()).has(name) && st7(view).verified[name]), gone = Object.keys(st7(view).verified || {}).filter((name) => !referenced(view.data.index()).has(name) && !st7(view).verified[name]);
       if (!names2.length && gone.length)
-        return view.data.forgetFiles(gone), st6(view).verified = null, view.renderBody();
+        return view.data.forgetFiles(gone), st7(view).verified = null, view.renderBody();
       if (await confirmDialog({ title: "清理孤立文件", body: "这些文件不属于任何项目：", list: names2, okLabel: "删除", danger: !0 })) {
         for (let name of names2) await deleteFile(name);
-        view.data.forgetFiles([...names2, ...gone]), st6(view).verified = null, view.renderBody();
+        view.data.forgetFiles([...names2, ...gone]), st7(view).verified = null, view.renderBody();
       }
     },
     async "clear-chats"(view) {
       let ids = view.data.index().projects.map((item) => item.id);
       if (await confirmDialog({ title: "清空全部讨论记录", list: ids.map(chatFile), okLabel: "清空", danger: !0 })) {
         for (let id of ids) await view.data.clearChat(id);
-        st6(view).verified = null, view.renderBody();
+        st7(view).verified = null, view.renderBody();
       }
     },
     async wipe(view) {
       let index = view.data.index(), names2 = [.../* @__PURE__ */ new Set([...index.files, ...referenced(index)])], files = [];
       for (let name of names2) {
-        let text = await readRawFile(name);
-        text != null && files.push({ name, data: text });
+        let text2 = await readRawFile(name);
+        text2 != null && files.push({ name, data: text2 });
       }
       if (!files.length) throw new Error("没有可清除的文件");
       if (downloadBlob(`剧情注入器备份-${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}.zip`, buildZip(files), "application/zip"), !!await confirmDialog({ title: "重置插件", body: "备份已下载。确认后删除以下文件和当前聊天的进度，无法撤销。", list: files.map((file) => file.name), okLabel: "全部删除", danger: !0 })) {
         for (let file of files) await deleteFile(file.name);
-        await clearChatProgress(), view.data.resetAll(), view.projectId = "", st6(view).verified = null, view.runtime.refresh(), view.render(), toast("success", "已全部清除。");
+        await clearChatProgress(), view.data.resetAll(), view.projectId = "", st7(view).verified = null, view.runtime.refresh(), view.render(), toast("success", "已全部清除。");
       }
     }
   }, refreshOn6 = ["index"];
@@ -6204,155 +7338,23 @@ ${parsed.body}` : parsed.body;
   // src/ui/page-books.js
   var page_books_exports = {};
   __export(page_books_exports, {
-    actions: () => actions9,
-    onChange: () => onChange6,
+    actions: () => actions10,
+    onChange: () => onChange7,
     onInput: () => onInput5,
     refreshOn: () => refreshOn7,
-    render: () => render9
+    render: () => render10
   });
-
-  // src/core/wbtools.js
-  var isRegexKey = (key) => /^\/.+\/[a-z]*$/i.test(key), SPLIT = /[,，、;；\n]/, TRIM = /^[\s　。，、；：！？,.;:!?]+|[\s　。，、；：！？,.;:!?]+$/g;
-  function fixKeys(keys) {
-    let out = [];
-    for (let raw of keys) {
-      let parts = isRegexKey(String(raw).trim()) ? [String(raw).trim()] : String(raw).split(SPLIT).map((part) => part.replace(TRIM, ""));
-      for (let part of parts) part && !out.includes(part) && out.push(part);
-    }
-    return out;
-  }
-  var sameList = (a, b) => a.length === b.length && a.every((item, index) => item === b[index]);
-  function punctPlan(entries) {
-    let out = [];
-    for (let entry of entries) {
-      let key = fixKeys(entry.keys), second = fixKeys(entry.keysSecondary), patch = {};
-      sameList(key, entry.keys) || (patch.key = key), sameList(second, entry.keysSecondary) || (patch.keysecondary = second), Object.keys(patch).length && out.push({ key: entry.key, title: entry.title, patch, before: [...entry.keys, ...entry.keysSecondary].join(" | "), after: [...key, ...second].join(" | ") });
-    }
-    return out;
-  }
-  function buildPattern(find, { regex = !1, ignoreCase = !1 } = {}) {
-    if (!find) throw new Error("请填写要查找的内容");
-    let source = regex ? find : find.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    try {
-      return new RegExp(source, ignoreCase ? "gi" : "g");
-    } catch (error) {
-      throw new Error(`正则写法有误：${error.message}`);
-    }
-  }
-  var countIn = (text, pattern) => (String(text).match(pattern) || []).length;
-  function regexPlan(entries, pattern, replace, fields) {
-    let sub = (text) => String(text).replace(pattern, replace), out = [];
-    for (let entry of entries) {
-      let patch = {}, hits = 0;
-      if (fields.content && countIn(entry.content, pattern) && (hits += countIn(entry.content, pattern), patch.content = sub(entry.content)), fields.comment && entry.comment && countIn(entry.comment, pattern) && (hits += countIn(entry.comment, pattern), patch.comment = sub(entry.comment)), fields.keys)
-        for (let [from, field] of [[entry.keys, "key"], [entry.keysSecondary, "keysecondary"]]) {
-          let n = from.reduce((sum, key) => sum + countIn(key, pattern), 0);
-          n && (hits += n, patch[field] = from.map(sub).map((key) => key.trim()).filter(Boolean));
-        }
-      hits && out.push({ key: entry.key, title: entry.title, patch, hits });
-    }
-    return out;
-  }
-  function orderPlan(entries, { start, step, by = "list" }) {
-    let begin = Math.round(Number(start)), gap = Math.round(Number(step));
-    if (!Number.isFinite(begin) || begin < 0) throw new Error("起始数字需为不小于 0 的整数");
-    if (!Number.isFinite(gap) || gap < 1) throw new Error("间隔需为不小于 1 的整数");
-    return (by === "order" ? entries.map((entry, index) => ({ entry, index })).sort((a, b) => a.entry.order - b.entry.order || a.index - b.index).map((item) => item.entry) : entries).map((entry, index) => ({ key: entry.key, title: entry.title, from: entry.order, to: begin + index * gap }));
-  }
-  var escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  function parseRegexKey(text) {
-    let match = text.match(/^\/([\w\W]+?)\/([gimsuy]*)$/);
-    if (!match || /(^|[^\\])\//.test(match[1])) return null;
-    try {
-      return new RegExp(match[1].replace("\\/", "/"), match[2]);
-    } catch {
-      return null;
-    }
-  }
-  function keyMatcher(key, { caseSensitive = null, matchWholeWords = null } = {}, globals = {}) {
-    let text = String(key).trim(), regex = parseRegexKey(text);
-    if (regex) return (haystack) => regex.test(haystack);
-    if (text === "") return () => !1;
-    let sensitive = caseSensitive ?? !!globals.caseSensitive, whole = matchWholeWords ?? !!globals.matchWholeWords, fold = (value) => sensitive ? value : value.toLowerCase(), needle = fold(text);
-    if (whole && needle.split(/\s+/).length === 1) {
-      let pattern = new RegExp(`(?:^|\\W)(${escapeRegex(needle)})(?:$|\\W)`);
-      return (haystack) => pattern.test(fold(haystack));
-    }
-    return (haystack) => fold(haystack).includes(needle);
-  }
-  var matchedKeys = (keys, haystack, options2, globals) => keys.filter((key) => String(key).trim() && keyMatcher(key, options2, globals)(haystack));
-  function secondaryPass(logic, hit, total) {
-    return logic === 1 ? hit < total : logic === 2 ? hit === 0 : logic === 3 ? hit === total : hit > 0;
-  }
-  function triggerTest(entries, text, tokenOf2 = () => 0, globals = {}) {
-    let haystack = String(text || ""), constant = [], keyword = [];
-    for (let entry of entries) {
-      if (entry.disabled) continue;
-      let options2 = { caseSensitive: entry.caseSensitive, matchWholeWords: entry.matchWholeWords };
-      if (entry.constant) {
-        constant.push({ key: entry.key, title: entry.title, tokens: tokenOf2(entry) });
-        continue;
-      }
-      let primary = matchedKeys(entry.keys, haystack, options2, globals);
-      if (!primary.length) continue;
-      let matched = primary, secondary = entry.selective === !1 ? [] : entry.keysSecondary.filter((key) => String(key).trim());
-      if (secondary.length) {
-        let logic = Number(entry.selectiveLogic) || 0, hit = matchedKeys(secondary, haystack, options2, globals);
-        if (!secondaryPass(logic, hit.length, secondary.length)) continue;
-        (logic === 0 || logic === 3) && (matched = [...primary, ...hit]);
-      }
-      keyword.push({ key: entry.key, title: entry.title, matched, tokens: tokenOf2(entry) });
-    }
-    let sum = (list) => list.reduce((total, item) => total + item.tokens, 0);
-    return { constant, keyword, tokens: { constant: sum(constant), keyword: sum(keyword), total: sum(constant) + sum(keyword) } };
-  }
-  var isShortKey = (key) => {
-    let text = String(key).trim();
-    return !text || isRegexKey(text) ? !1 : text.length <= 1 || /^[A-Za-z]{1,2}$/.test(text);
-  };
-  function healthCheck(entries, tokenOf2 = () => 0) {
-    let on = entries.filter((entry) => !entry.disabled), shortKeys = [];
-    for (let entry of on) {
-      if (entry.constant) continue;
-      let words = entry.keys.filter(isShortKey);
-      words.length && shortKeys.push({ key: entry.key, title: entry.title, words });
-    }
-    let noKeys = on.filter((entry) => !entry.constant && !entry.keys.some((key) => String(key).trim())).map((entry) => ({ key: entry.key, title: entry.title })), byWord = /* @__PURE__ */ new Map();
-    for (let entry of on)
-      if (!entry.constant)
-        for (let word of new Set(entry.keys.map((key) => String(key).trim()).filter(Boolean))) {
-          let id = word.toLowerCase();
-          byWord.has(id) || byWord.set(id, { word, entries: [] }), byWord.get(id).entries.push({ key: entry.key, title: entry.title });
-        }
-    let shared = [...byWord.values()].filter((item) => item.entries.length > 1), byTitle = /* @__PURE__ */ new Map();
-    for (let entry of entries) {
-      let id = String(entry.title).trim();
-      byTitle.has(id) || byTitle.set(id, { title: id, entries: [] }), byTitle.get(id).entries.push({ key: entry.key, title: entry.title });
-    }
-    let dupTitles = [...byTitle.values()].filter((item) => item.entries.length > 1), constTokens = on.filter((entry) => entry.constant).reduce((sum, entry) => sum + tokenOf2(entry), 0), total = on.reduce((sum, entry) => sum + tokenOf2(entry), 0), ratio = total ? constTokens / total : 0;
-    return { shortKeys, noKeys, shared, dupTitles, constant: { count: on.filter((entry) => entry.constant).length, tokens: constTokens, total, ratio, warn: ratio > 0.6 } };
-  }
-  function sortEntries(entries, mode, tokenOf2 = () => 0) {
-    let list = entries.map((entry, index) => ({ entry, index })), by = {
-      order: (a, b) => a.entry.order - b.entry.order,
-      tokens: (a, b) => tokenOf2(b.entry) - tokenOf2(a.entry),
-      title: (a, b) => String(a.entry.title).localeCompare(String(b.entry.title), "zh")
-    }[mode];
-    return by ? list.sort((a, b) => by(a, b) || a.index - b.index).map((item) => item.entry) : entries;
-  }
-
-  // src/ui/page-books.js
-  var st7 = (view) => view.tabState("books"), GROUPS = {
+  var st8 = (view) => view.tabState("books"), GROUPS = {
     on: (entries) => entries.filter((entry) => !acuField(entry.title) && !entry.disabled),
     off: (entries) => entries.filter((entry) => !acuField(entry.title) && entry.disabled)
-  }, toggle = (entry) => `<button type="button" class="pi-switch${entry.disabled ? "" : " is-on"}" role="switch" aria-checked="${entry.disabled ? "false" : "true"}" data-act="wb-toggle" data-wb-toggle="${esc(entry.key)}" title="${entry.disabled ? "已关闭，点击开启" : "已开启，点击关闭"}"></button>`, norm = (text) => String(text || "").trim().toLowerCase(), entryHit = (entry, q) => !q || [entry.title, entry.content, ...entry.keys, ...entry.keysSecondary].some((text) => String(text).toLowerCase().includes(q)), searchBox = (key, value, placeholder) => `<div class="pi-psearch is-wb">${ICONS.search}<input class="pi-inp" data-search="${key}" placeholder="${placeholder}" value="${esc(value || "")}">
-    <button type="button" class="pi-icon-btn pi-search-x" data-act="search-close" title="关闭搜索">${ICONS.close}</button></div>`, title = (entry) => `<span class="pi-wb-title" title="${esc(entry.title)}">${esc(entry.title)}</span>`, num = (value) => value || "";
+  }, toggle = (entry) => `<button type="button" class="pi-switch${entry.disabled ? "" : " is-on"}" role="switch" aria-checked="${entry.disabled ? "false" : "true"}" data-act="wb-toggle" data-wb-toggle="${esc(entry.key)}" title="${entry.disabled ? "已关闭，点击开启" : "已开启，点击关闭"}"></button>`, norm = (text2) => String(text2 || "").trim().toLowerCase(), entryHit = (entry, q) => !q || [entry.title, entry.content, ...entry.keys, ...entry.keysSecondary].some((text2) => String(text2).toLowerCase().includes(q)), searchBox = (key, value, placeholder) => `<div class="pi-psearch is-wb">${ICONS.search}<input class="pi-inp" data-search="${key}" placeholder="${placeholder}" value="${esc(value || "")}">
+    <button type="button" class="pi-icon-btn pi-search-x" data-act="search-close" title="关闭搜索">${ICONS.close}</button></div>`, title = (entry) => `<span class="pi-wb-title" title="${esc(entry.title)}">${esc(entry.title)}</span>`, num2 = (value) => value || "";
   function advanced(entry, key, open) {
-    let field = (f, label, value, attrs = 'type="number" min="0"') => `<label class="pi-field"><span>${label}</span><input class="pi-inp" ${attrs} data-wb-edit="${key}" data-f="${f}" value="${esc(value)}"></label>`, check = (f, label, on) => `<label class="pi-check"><input type="checkbox" data-wb-edit="${key}" data-f="${f}"${on ? " checked" : ""}><span>${label}</span></label>`;
+    let field2 = (f, label, value, attrs = 'type="number" min="0"') => `<label class="pi-field"><span>${label}</span><input class="pi-inp" ${attrs} data-wb-edit="${key}" data-f="${f}" value="${esc(value)}"></label>`, check = (f, label, on) => `<label class="pi-check"><input type="checkbox" data-wb-edit="${key}" data-f="${f}"${on ? " checked" : ""}><span>${label}</span></label>`;
     return `<button type="button" class="pi-wb-adv" data-act="wb-adv" data-key="${key}">${open ? ICONS.caretDown : ICONS.caret}<span>高级</span></button>
-        ${open ? `<div class="pi-wb-adv-bd"><div class="pi-pair">${field("probability", "概率（0-100）", entry.probability, 'type="number" min="0" max="100"')}${field("groupWeight", "组权重", entry.groupWeight)}</div>
-        ${field("group", "分组", entry.group, 'type="text"')}
-        <div class="pi-pair is-c3">${field("sticky", "粘性", num(entry.sticky))}${field("cooldown", "冷却", num(entry.cooldown))}${field("delay", "延迟", num(entry.delay))}</div>
+        ${open ? `<div class="pi-wb-adv-bd"><div class="pi-pair">${field2("probability", "概率（0-100）", entry.probability, 'type="number" min="0" max="100"')}${field2("groupWeight", "组权重", entry.groupWeight)}</div>
+        ${field2("group", "分组", entry.group, 'type="text"')}
+        <div class="pi-pair is-c3">${field2("sticky", "粘性", num2(entry.sticky))}${field2("cooldown", "冷却", num2(entry.cooldown))}${field2("delay", "延迟", num2(entry.delay))}</div>
         <div class="pi-pair">${check("excludeRecursion", "不可被递归触发", entry.excludeRecursion)}${check("preventRecursion", "阻止进一步递归", entry.preventRecursion)}</div></div>` : ""}`;
   }
   function editor(entry, adv) {
@@ -6408,7 +7410,7 @@ ${parsed.body}` : parsed.body;
   }
   var SORTS = [{ value: "", label: "原顺序" }, { value: "order", label: "顺序值" }, { value: "tokens", label: "token 从大到小" }, { value: "title", label: "标题" }], tokenOf = (s) => (entry) => s.tokenMap && s.tokenMap.has(entry.key) ? s.tokenMap.get(entry.key) : estimateTokens(entry.content), sortList = (s, list) => sortEntries(list, s.sort, tokenOf(s)), UNDO_MAX = 10, undoStacks = /* @__PURE__ */ new Map(), undoStack = (name) => undoStacks.get(name) || [];
   async function snap(view, label, merge = "") {
-    let name = st7(view).book;
+    let name = st8(view).book;
     if (merge && undoStack(name).at(-1)?.merge === merge) return;
     let entries = await snapshotEntries(name), stack = undoStack(name);
     if (merge && stack.at(-1)?.merge === merge) return;
@@ -6429,9 +7431,9 @@ ${parsed.body}` : parsed.body;
   function acuSection(entries, openFields, expandAll = !1) {
     let fields = groupByField(entries);
     if (!fields.length) return "";
-    let total = fields.reduce((sum, [, list]) => sum + list.length, 0), sub = ([field, list]) => {
-      let on = list.filter((entry) => !entry.disabled).length, bulk = bulkBtn(`data-act="acu-field" data-field="${esc(field)}" data-on="1"`, "一键开启", on === list.length) + bulkBtn(`data-act="acu-field" data-field="${esc(field)}" data-on="0"`, "一键关闭", !on), open = expandAll || openFields.has(field);
-      return `<div class="pi-wb-sub"><div class="pi-wb-sub-hd is-fold" data-act="acu-fold" data-field="${esc(field)}">${open ? ICONS.caretDown : ICONS.caret}<span class="pi-wb-field" title="${esc(field)}">${esc(field)}</span><small>${on}/${list.length}</small><span class="pi-wb-bulk">${bulk}</span></div>
+    let total = fields.reduce((sum, [, list]) => sum + list.length, 0), sub = ([field2, list]) => {
+      let on = list.filter((entry) => !entry.disabled).length, bulk = bulkBtn(`data-act="acu-field" data-field="${esc(field2)}" data-on="1"`, "一键开启", on === list.length) + bulkBtn(`data-act="acu-field" data-field="${esc(field2)}" data-on="0"`, "一键关闭", !on), open = expandAll || openFields.has(field2);
+      return `<div class="pi-wb-sub"><div class="pi-wb-sub-hd is-fold" data-act="acu-fold" data-field="${esc(field2)}">${open ? ICONS.caretDown : ICONS.caret}<span class="pi-wb-field" title="${esc(field2)}">${esc(field2)}</span><small>${on}/${list.length}</small><span class="pi-wb-bulk">${bulk}</span></div>
             ${open ? list.map((entry) => `<div class="pi-wb-row${entry.disabled ? " is-off" : ""}">${toggle(entry)}${title(entry)}</div>`).join("") : ""}</div>`;
     };
     return `<div class="pi-wb-sec"><div class="pi-wb-sec-hd">数据库条目<small>${total}</small></div>${fields.map(sub).join("")}</div>`;
@@ -6451,8 +7453,8 @@ ${parsed.body}` : parsed.body;
     let hit = (name) => name.toLowerCase().includes(q), others = allBookNames().filter((name) => hit(name) && !listed.some((book) => book.name === name)).map((name) => ({ name, source: "其他" }));
     return [...listed.filter((book) => hit(book.name)), ...others];
   }
-  function render9(view) {
-    let s = st7(view), list = shownBooks(s).map((book) => {
+  function render10(view) {
+    let s = st8(view), list = shownBooks(s).map((book) => {
       let open = s.book === book.name, entries = open && s.entries ? s.entries : null;
       return `<div class="pi-book${open ? " is-open" : ""}"><div class="pi-book-hd" data-act="open-book" data-book="${esc(book.name)}">
             ${open ? ICONS.caretDown : ICONS.caret}<span class="pi-etitle" title="${esc(book.name)}">${esc(book.name)}</span><span class="pi-meta">${esc(book.source)}</span></div>
@@ -6465,50 +7467,50 @@ ${parsed.body}` : parsed.body;
         ${s.search === "book" ? searchBox("book", s.bookQuery, "搜索所有世界书") : ""}
         ${list || `<p class="pi-hint">${norm(s.bookQuery) ? "没有匹配的世界书" : "没有关联或全局启用的世界书，可从「更多」搜索或打开其他世界书。"}</p>`}</div>`;
   }
-  var splitKeys = (text) => String(text || "").split(/[,，、\n]/).map((item) => item.trim()).filter(Boolean);
+  var splitKeys2 = (text2) => String(text2 || "").split(/[,，、\n]/).map((item) => item.trim()).filter(Boolean);
   function editPatch(target) {
-    let field = target.dataset.f, value = target.value;
-    if (field === "constant") return { constant: value === "1" };
-    if (field === "key" || field === "keysecondary") return { [field]: splitKeys(value) };
-    if (field === "position" || field === "role") return { [field]: Number(value) };
-    if (field === "depth" || field === "order") return { [field]: Math.max(0, Math.round(Number(value) || 0)) };
-    if (field === "content" || field === "comment" || field === "group") return { [field]: value };
-    if (field === "probability") {
+    let field2 = target.dataset.f, value = target.value;
+    if (field2 === "constant") return { constant: value === "1" };
+    if (field2 === "key" || field2 === "keysecondary") return { [field2]: splitKeys2(value) };
+    if (field2 === "position" || field2 === "role") return { [field2]: Number(value) };
+    if (field2 === "depth" || field2 === "order") return { [field2]: Math.max(0, Math.round(Number(value) || 0)) };
+    if (field2 === "content" || field2 === "comment" || field2 === "group") return { [field2]: value };
+    if (field2 === "probability") {
       let n = String(value).trim() === "" ? 100 : Math.min(100, Math.max(0, Math.round(Number(value) || 0)));
       return { probability: n, useProbability: n < 100 };
     }
-    return field === "groupWeight" ? { groupWeight: String(value).trim() === "" ? 100 : Math.max(0, Math.round(Number(value) || 0)) } : field === "sticky" || field === "cooldown" || field === "delay" ? { [field]: value === "" ? null : Math.max(0, Math.round(Number(value) || 0)) } : field === "excludeRecursion" || field === "preventRecursion" ? { [field]: !!target.checked } : null;
+    return field2 === "groupWeight" ? { groupWeight: String(value).trim() === "" ? 100 : Math.max(0, Math.round(Number(value) || 0)) } : field2 === "sticky" || field2 === "cooldown" || field2 === "delay" ? { [field2]: value === "" ? null : Math.max(0, Math.round(Number(value) || 0)) } : field2 === "excludeRecursion" || field2 === "preventRecursion" ? { [field2]: !!target.checked } : null;
   }
   async function saveEdit(view, target) {
     let key = target.dataset.wbEdit, patch = editPatch(target);
-    !patch || !(st7(view).entries || []).some((item) => item.key === key) || (await snap(view, "编辑条目", `${key}:${target.dataset.f}`), await updateEntry(st7(view).book, key, patch), st7(view).entries = bookEntries(await loadBook(st7(view).book)), (target.tagName === "SELECT" || target.dataset.f === "comment") && view.renderBody());
+    !patch || !(st8(view).entries || []).some((item) => item.key === key) || (await snap(view, "编辑条目", `${key}:${target.dataset.f}`), await updateEntry(st8(view).book, key, patch), st8(view).entries = bookEntries(await loadBook(st8(view).book)), (target.tagName === "SELECT" || target.dataset.f === "comment") && view.renderBody());
   }
   function onInput5(view, target, event) {
-    !target.dataset.search || event.isComposing || (st7(view)[target.dataset.search === "book" ? "bookQuery" : "query"] = target.value, view.renderBody());
+    !target.dataset.search || event.isComposing || (st8(view)[target.dataset.search === "book" ? "bookQuery" : "query"] = target.value, view.renderBody());
   }
-  async function onChange6(view, target) {
+  async function onChange7(view, target) {
     if (target.dataset.wbSort !== void 0)
-      return st7(view).sort = target.value, view.renderBody();
+      return st8(view).sort = target.value, view.renderBody();
     if (target.dataset.wbPick) {
-      let picked = st7(view).picked;
+      let picked = st8(view).picked;
       return target.checked ? picked.add(target.dataset.wbPick) : picked.delete(target.dataset.wbPick), view.renderBody();
     }
     if (target.dataset.wbEdit) return saveEdit(view, target);
   }
   async function reloadBook(view) {
-    let s = st7(view);
+    let s = st8(view);
     s.entries = bookEntries(await loadBook(s.book));
     let keys = new Set(s.entries.map((entry) => entry.key));
     s.picked = new Set([...s.picked || []].filter((key) => keys.has(key))), view.renderBody(), countBook(view);
   }
   var tokenCache = /* @__PURE__ */ new Map(), TOKEN_CACHE_MAX = 3e3, TOKEN_BATCH = 8;
-  async function entryTokens(text) {
-    if (tokenCache.has(text)) return tokenCache.get(text);
-    let count = await countTokens(text);
-    return count == null ? null : (tokenCache.size >= TOKEN_CACHE_MAX && tokenCache.delete(tokenCache.keys().next().value), tokenCache.set(text, count), count);
+  async function entryTokens(text2) {
+    if (tokenCache.has(text2)) return tokenCache.get(text2);
+    let count = await countTokens(text2);
+    return count == null ? null : (tokenCache.size >= TOKEN_CACHE_MAX && tokenCache.delete(tokenCache.keys().next().value), tokenCache.set(text2, count), count);
   }
   async function countBook(view) {
-    let s = st7(view), book = s.book, entries = s.entries || [], counts = [];
+    let s = st8(view), book = s.book, entries = s.entries || [], counts = [];
     for (let i = 0; i < entries.length; i += TOKEN_BATCH)
       if (counts.push(...await Promise.all(entries.slice(i, i + TOKEN_BATCH).map((entry) => entry.content ? entryTokens(entry.content) : 0))), s.book !== book || s.entries !== entries) return;
     let exact = counts.every((count) => count != null), on = 0, all = 0;
@@ -6521,7 +7523,7 @@ ${parsed.body}` : parsed.body;
   }
   var handwritten = (entries) => entries.filter((entry) => !acuField(entry.title)), pickedEntries = (s) => handwritten(s.entries || []).filter((entry) => s.picked.has(entry.key)), PREVIEW_MAX = 30, previewList = (lines2) => lines2.length > PREVIEW_MAX ? [...lines2.slice(0, PREVIEW_MAX), `另有 ${lines2.length - PREVIEW_MAX} 条`] : lines2;
   async function applyPatches(view, plan, { label, backup = !1 }) {
-    let s = st7(view);
+    let s = st8(view);
     await snap(view, label);
     let result = await patchEntries(s.book, plan.map((item) => ({ key: item.key, patch: item.patch })));
     backup && downloadBlob(`${s.book}-${label}前备份.json`, JSON.stringify(result, null, 2)), toast("success", `${label}：已修改 ${plan.length} 条。`), await reloadBook(view);
@@ -6560,35 +7562,35 @@ ${parsed.body}` : parsed.body;
       actions: [{ label: "取消", value: null }, { label: "预览", primary: !0, value: (box) => ({ start: box.querySelector('[data-f="start"]').value, step: box.querySelector('[data-f="step"]').value, by: box.querySelector('[data-f="by"]').value }) }]
     });
   }
-  var actions9 = {
+  var actions10 = {
     // 整区一次改完：「全部关闭」关已开启区，「全部开启」开已关闭区；数据库条目不在其中。
     async "wb-bulk"(view, target) {
       let group = target.dataset.group, pick = GROUPS[group];
       if (!pick) return;
-      let keys = pick(shownEntries(st7(view))).map((entry) => entry.key);
-      keys.length && (target.disabled = !0, await snap(view, "整区开关"), await setEntriesDisabled(st7(view).book, keys, group === "on"), await reloadBook(view));
+      let keys = pick(shownEntries(st8(view))).map((entry) => entry.key);
+      keys.length && (target.disabled = !0, await snap(view, "整区开关"), await setEntriesDisabled(st8(view).book, keys, group === "on"), await reloadBook(view));
     },
     async "wb-toggle"(view, target) {
-      let key = target.dataset.wbToggle, entry = (st7(view).entries || []).find((item) => item.key === key);
-      entry && (target.disabled = !0, await snap(view, "开关条目"), await setEntriesDisabled(st7(view).book, [key], !entry.disabled), await reloadBook(view));
+      let key = target.dataset.wbToggle, entry = (st8(view).entries || []).find((item) => item.key === key);
+      entry && (target.disabled = !0, await snap(view, "开关条目"), await setEntriesDisabled(st8(view).book, [key], !entry.disabled), await reloadBook(view));
     },
     "wb-open"(view, target) {
-      let s = st7(view);
+      let s = st8(view);
       s.openKey = s.openKey === target.dataset.key ? "" : target.dataset.key, view.renderBody();
     },
     "acu-fold"(view, target, event) {
       if (event.target.closest("button")) return;
-      let s = st7(view), open = new Set(s.openFields || []);
+      let s = st8(view), open = new Set(s.openFields || []);
       open.has(target.dataset.field) ? open.delete(target.dataset.field) : open.add(target.dataset.field), s.openFields = open, view.renderBody();
     },
     // 一个字段的数据库条目整体开或关（写进世界书）。
     async "acu-field"(view, target) {
-      let on = target.dataset.on === "1", keys = shownEntries(st7(view)).filter((entry) => acuField(entry.title) === target.dataset.field && entry.disabled === on).map((entry) => entry.key);
-      keys.length && (target.disabled = !0, await snap(view, "数据库字段开关"), await setEntriesDisabled(st7(view).book, keys, !on), await reloadBook(view));
+      let on = target.dataset.on === "1", keys = shownEntries(st8(view)).filter((entry) => acuField(entry.title) === target.dataset.field && entry.disabled === on).map((entry) => entry.key);
+      keys.length && (target.disabled = !0, await snap(view, "数据库字段开关"), await setEntriesDisabled(st8(view).book, keys, !on), await reloadBook(view));
     },
     async "open-book"(view, target, event) {
       if (event.target.closest("button,input")) return;
-      let s = st7(view);
+      let s = st8(view);
       if (s.book === target.dataset.book)
         return s.book = "", s.entries = null, view.renderBody();
       await openBook(view, target.dataset.book);
@@ -6612,29 +7614,29 @@ ${parsed.body}` : parsed.body;
       allBookNames().includes(name) && (name = await promptDialog({ title: "导入世界书", label: `已有「${name}」，请换一个名字`, value: `${name}-导入` }), name == null) || (await openBook(view, await createBook(name, data)), toast("success", `已导入「${name.trim()}」，${Object.keys(data.entries).length} 条。`));
     },
     async "book-open"(view) {
-      let shown = new Set(listedBooks(st7(view)).map((book) => book.name)), names2 = allBookNames().filter((name2) => !shown.has(name2));
+      let shown = new Set(listedBooks(st8(view)).map((book) => book.name)), names2 = allBookNames().filter((name2) => !shown.has(name2));
       if (!names2.length) return toast("info", "没有其他世界书。");
       let name = await menuDialog({ title: "打开其他世界书", items: names2.map((item) => ({ label: item, value: item, icon: ICONS.book })) });
       name && await openBook(view, name);
     },
     async "book-rename"(view) {
-      let from = st7(view).book, to = await promptDialog({ title: "重命名世界书", label: "新名称", value: from });
+      let from = st8(view).book, to = await promptDialog({ title: "重命名世界书", label: "新名称", value: from });
       if (to == null || to.trim() === from) return;
       let result = await renameBook(from, to);
       undoStacks.delete(from), result.failed.length ? toast("warning", `已另存为「${result.name}」，但${result.failed.join("、")}的绑定没能改过去，旧书「${from}」保留，请在酒馆里手动改绑定后删除。`) : toast("success", `已重命名为「${result.name}」。`), await openBook(view, result.name);
     },
     async "book-copy"(view) {
-      let s = st7(view), to = await promptDialog({ title: "另存副本", label: "副本名称", value: `${s.book}-副本` });
+      let s = st8(view), to = await promptDialog({ title: "另存副本", label: "副本名称", value: `${s.book}-副本` });
       if (to == null) return;
       let name = await duplicateBook(s.book, to);
       s.extra = [.../* @__PURE__ */ new Set([...s.extra || [], name])], toast("success", `已另存为「${name}」。`), view.renderBody();
     },
     async "book-export"(view) {
-      let s = st7(view);
+      let s = st8(view);
       downloadBlob(`${s.book}.json`, JSON.stringify(await loadBook(s.book), null, 2));
     },
     async "book-delete"(view) {
-      let s = st7(view), name = s.book;
+      let s = st8(view), name = s.book;
       if (!await confirmDialog({ title: `删除世界书「${name}」`, body: "先下载整本备份，再删除并解除聊天、角色卡和全局的绑定，无法撤销。", list: [`${s.entries.length} 条条目`], okLabel: "删除", danger: !0 })) return;
       downloadBlob(`${name}-备份.json`, JSON.stringify(await loadBook(name), null, 2));
       let result = await removeBook(name);
@@ -6644,21 +7646,21 @@ ${parsed.body}` : parsed.body;
       openSearch(view, "book");
     },
     "wb-search"(view) {
-      if (st7(view).search === "entry") return actions9["search-close"](view);
+      if (st8(view).search === "entry") return actions10["search-close"](view);
       openSearch(view, "entry");
     },
     "search-close"(view) {
-      let s = st7(view);
+      let s = st8(view);
       s.search = "", s.query = "", s.bookQuery = "", view.renderBody();
     },
     async "wb-add"(view) {
-      let s = st7(view);
+      let s = st8(view);
       await snap(view, "新建条目");
       let [key] = await addEntries(s.book);
       await reloadBook(view), s.openKey = key, view.renderBody();
     },
     async "wb-dup"(view, target) {
-      await snap(view, "复制条目"), await addEntries(st7(view).book, [target.dataset.key]), await reloadBook(view);
+      await snap(view, "复制条目"), await addEntries(st8(view).book, [target.dataset.key]), await reloadBook(view);
     },
     // 「更多」菜单：页面级、整本书级、选中条目级各一份，选中后转给对应的操作。
     async "page-more"(view, target, event) {
@@ -6667,10 +7669,10 @@ ${parsed.body}` : parsed.body;
         { label: "搜索世界书", value: "book-search", icon: ICONS.search },
         { label: "打开其他世界书", value: "book-open", icon: ICONS.folder }
       ] });
-      if (pick) return actions9[pick](view, target, event);
+      if (pick) return actions10[pick](view, target, event);
     },
     async "book-more"(view, target, event) {
-      let pick = await menuDialog({ title: st7(view).book, items: [
+      let pick = await menuDialog({ title: st8(view).book, items: [
         { label: "触发测试", value: "wb-trigger", icon: ICONS.search },
         { label: "体检", value: "wb-health", icon: ICONS.pulse },
         { label: "重命名", value: "book-rename", icon: ICONS.pencil },
@@ -6678,86 +7680,86 @@ ${parsed.body}` : parsed.body;
         { label: "导出", value: "book-export", icon: ICONS.download },
         { label: "删除本书", value: "book-delete", icon: ICONS.trash, danger: !0 }
       ] });
-      if (pick) return actions9[pick](view, target, event);
+      if (pick) return actions10[pick](view, target, event);
     },
     async "pick-more"(view, target, event) {
-      let pick = await menuDialog({ title: `已选 ${st7(view).picked.size} 条`, items: [
+      let pick = await menuDialog({ title: `已选 ${st8(view).picked.size} 条`, items: [
         { label: "开启", value: "wb-pick-on", icon: ICONS.eye },
         { label: "关闭", value: "wb-pick-off", icon: ICONS.eyeOff }
       ] });
-      if (pick) return actions9[pick](view, target, event);
+      if (pick) return actions10[pick](view, target, event);
     },
     "wb-pick-on": (view) => setPicked(view, !1),
     "wb-pick-off": (view) => setPicked(view, !0),
     async "wb-pick-delete"(view) {
-      let s = st7(view), entries = pickedEntries(s);
+      let s = st8(view), entries = pickedEntries(s);
       if (!await confirmDialog({ title: `从「${s.book}」删除 ${entries.length} 条`, body: "删除前会下载这些条目的备份。", list: previewList(entries.map((entry) => entry.title)), okLabel: "删除", danger: !0 })) return;
       await snap(view, "批量删除");
       let backup = await deleteEntries(s.book, entries.map((entry) => entry.key));
       downloadBlob(`${s.book}-已删条目备份.json`, JSON.stringify(backup, null, 2)), s.picked = /* @__PURE__ */ new Set(), await reloadBook(view);
     },
     "wb-picking"(view) {
-      let s = st7(view);
+      let s = st8(view);
       s.picking = !s.picking, s.picked = /* @__PURE__ */ new Set(), s.openKey = "", view.renderBody();
     },
     "wb-pick-all"(view) {
-      let s = st7(view), list = handwritten(shownEntries(s)), all = list.every((entry) => s.picked.has(entry.key)), picked = new Set(s.picked);
+      let s = st8(view), list = handwritten(shownEntries(s)), all = list.every((entry) => s.picked.has(entry.key)), picked = new Set(s.picked);
       for (let entry of list) all ? picked.delete(entry.key) : picked.add(entry.key);
       s.picked = picked, view.renderBody();
     },
     // 关键词里写成「甲，乙、丙」的一整条拆成三个，去掉首尾标点与空格、重复项；/正则/ 形式的关键词不动。
     async "wb-punct"(view) {
-      let s = st7(view), plan = punctPlan(handwritten(s.entries || []));
+      let s = st8(view), plan = punctPlan(handwritten(s.entries || []));
       if (!plan.length) return toast("info", "关键词没有需要修复的标点。");
       await confirmDialog({ title: `修复关键词标点（${plan.length} 条）`, body: "以下条目的关键词将改为：", list: previewList(plan.map((item) => `${item.title}：${item.before} → ${item.after}`)), okLabel: "修复" }) && await applyPatches(view, plan, { label: "修复关键词标点" });
     },
     async "wb-regex"(view) {
-      let s = st7(view), usePicked = s.picking && s.picked.size, entries = usePicked ? pickedEntries(s) : handwritten(s.entries || []), input = await regexDialog(usePicked ? `已选 ${entries.length} 条` : `全部手写条目 ${entries.length} 条`);
-      if (!input) return;
-      if (!input.fields.content && !input.fields.comment && !input.fields.keys) throw new Error("请至少选择一个替换范围");
-      let plan = regexPlan(entries, buildPattern(input.find, input), input.replace, input.fields);
+      let s = st8(view), usePicked = s.picking && s.picked.size, entries = usePicked ? pickedEntries(s) : handwritten(s.entries || []), input2 = await regexDialog(usePicked ? `已选 ${entries.length} 条` : `全部手写条目 ${entries.length} 条`);
+      if (!input2) return;
+      if (!input2.fields.content && !input2.fields.comment && !input2.fields.keys) throw new Error("请至少选择一个替换范围");
+      let plan = regexPlan(entries, buildPattern(input2.find, input2), input2.replace, input2.fields);
       if (!plan.length) return toast("info", "没有匹配的内容。");
       let total = plan.reduce((sum, item) => sum + item.hits, 0);
       await confirmDialog({ title: `正则替换（${plan.length} 条，共 ${total} 处）`, body: "替换前会下载这些条目的备份。", list: previewList(plan.map((item) => `${item.title}：${item.hits} 处`)), okLabel: "替换", danger: !0 }) && await applyPatches(view, plan, { label: "正则替换", backup: !0 });
     },
     async "wb-order"(view) {
-      let s = st7(view), input = await orderDialog(s.picked.size);
-      if (!input) return;
-      let plan = orderPlan(pickedEntries(s), input);
+      let s = st8(view), input2 = await orderDialog(s.picked.size);
+      if (!input2) return;
+      let plan = orderPlan(pickedEntries(s), input2);
       await confirmDialog({ title: `顺序重排（${plan.length} 条）`, list: previewList(plan.map((item) => `${item.title}：${item.from} → ${item.to}`)), okLabel: "重排" }) && await applyPatches(view, plan.map((item) => ({ key: item.key, patch: { order: item.to } })), { label: "顺序重排" });
     },
     async "wb-move"(view) {
-      let s = st7(view), input = await moveDialog(s.book, s.picked.size);
-      if (!input) return;
-      if (!input.to) throw new Error("请选择或填写目标世界书");
-      let entries = pickedEntries(s), isNew = !allBookNames().includes(input.to);
+      let s = st8(view), input2 = await moveDialog(s.book, s.picked.size);
+      if (!input2) return;
+      if (!input2.to) throw new Error("请选择或填写目标世界书");
+      let entries = pickedEntries(s), isNew = !allBookNames().includes(input2.to);
       if (!await confirmDialog({
-        title: `${input.move ? "移动" : "复制"}到「${input.to}」${isNew ? "（新建）" : ""}`,
-        body: input.move ? "移动后从当前世界书删除，删除前会下载这些条目的备份。" : "",
+        title: `${input2.move ? "移动" : "复制"}到「${input2.to}」${isNew ? "（新建）" : ""}`,
+        body: input2.move ? "移动后从当前世界书删除，删除前会下载这些条目的备份。" : "",
         list: previewList(entries.map((entry) => entry.title)),
-        okLabel: input.move ? "移动" : "复制",
-        danger: input.move
+        okLabel: input2.move ? "移动" : "复制",
+        danger: input2.move
       })) return;
-      if (input.move) {
+      if (input2.move) {
         let raw = await loadBook(s.book);
         downloadBlob(`${s.book}-迁移前备份.json`, JSON.stringify({ entries: Object.fromEntries(entries.map((entry) => [entry.key, raw.entries[entry.key]])) }, null, 2));
       }
-      input.move && await snap(view, "迁移（移动）");
-      let result = await transferEntries(s.book, input.to, entries.map((entry) => entry.key), { move: input.move });
-      toast("success", `已${input.move ? "移动" : "复制"} ${result.copied} 条到「${input.to}」${result.created ? "（新建）" : ""}。`), s.picked = /* @__PURE__ */ new Set(), await reloadBook(view);
+      input2.move && await snap(view, "迁移（移动）");
+      let result = await transferEntries(s.book, input2.to, entries.map((entry) => entry.key), { move: input2.move });
+      toast("success", `已${input2.move ? "移动" : "复制"} ${result.copied} 条到「${input2.to}」${result.created ? "（新建）" : ""}。`), s.picked = /* @__PURE__ */ new Set(), await reloadBook(view);
     },
     "wb-adv"(view, target) {
-      let s = st7(view), open = new Set(s.advOpen || []);
+      let s = st8(view), open = new Set(s.advOpen || []);
       open.has(target.dataset.key) ? open.delete(target.dataset.key) : open.add(target.dataset.key), s.advOpen = open, view.renderBody();
     },
     async "wb-undo"(view) {
-      let s = st7(view), stack = undoStack(s.book), last = stack.at(-1);
+      let s = st8(view), stack = undoStack(s.book), last = stack.at(-1);
       last && await confirmDialog({ title: `撤销：${last.label}`, body: "整本世界书将写回该操作之前的状态。本书在这之后的其他改动也会一并撤回。", okLabel: "撤销", danger: !0 }) && (await restoreEntries(s.book, last.entries), undoStacks.set(s.book, stack.slice(0, -1)), toast("success", `已撤销：${last.label}`), await reloadBook(view));
     },
     // 触发测试：文本框可贴文字，也可取最近 N 楼；按酒馆规则模拟当前书的触发（不含递归、概率、分组）。
     async "wb-trigger"(view) {
-      let s = st7(view), entries = handwritten(s.entries || []), tk = tokenOf(s), row2 = (item, extra) => `<div class="pi-wb-hit"><span class="pi-wb-title" title="${esc(item.title)}">${esc(item.title)}</span><span class="pi-meta">${extra}${item.tokens} token</span></div>`, group = (name, list, extra) => list.length ? `<div class="pi-wb-sec-hd">${name}<small>${list.length}</small></div>${list.map((item) => row2(item, extra(item))).join("")}` : "", run = (box) => {
-        let text = box.querySelector('[data-f="text"]').value, globals = worldInfoMatchSettings(), result = triggerTest(entries, text, tk, globals), body = group("常驻", result.constant, () => "") + group("关键词命中", result.keyword, (item) => `${esc(item.matched.join("、"))} · `);
+      let s = st8(view), entries = handwritten(s.entries || []), tk = tokenOf(s), row2 = (item, extra) => `<div class="pi-wb-hit"><span class="pi-wb-title" title="${esc(item.title)}">${esc(item.title)}</span><span class="pi-meta">${extra}${item.tokens} token</span></div>`, group = (name, list, extra) => list.length ? `<div class="pi-wb-sec-hd">${name}<small>${list.length}</small></div>${list.map((item) => row2(item, extra(item))).join("")}` : "", run = (box) => {
+        let text2 = box.querySelector('[data-f="text"]').value, globals = worldInfoMatchSettings(), result = triggerTest(entries, text2, tk, globals), body = group("常驻", result.constant, () => "") + group("关键词命中", result.keyword, (item) => `${esc(item.matched.join("、"))} · `);
         box.querySelector('[data-f="result"]').innerHTML = `${body || '<p class="pi-hint">没有命中的条目</p>'}
                 <p class="pi-meta">合计 ${result.tokens.total} token（常驻 ${result.tokens.constant}，关键词 ${result.tokens.keyword}）</p>
                 <p class="pi-meta">未计算递归、概率、分组与扫描深度</p>${globals.known ? "" : '<p class="pi-meta">未读到酒馆全局匹配设置，按不区分大小写、不全词匹配计算</p>'}`;
@@ -6781,7 +7783,7 @@ ${parsed.body}` : parsed.body;
     },
     // 体检：只看手写条目；问题按类列出，点条目跳转并展开。
     async "wb-health"(view, target, event) {
-      let s = st7(view), entries = handwritten(s.entries || []), report = healthCheck(entries, tokenOf(s)), punct = punctPlan(entries), item = (key, name, detail = "") => `<button type="button" class="pi-menu-item" data-dlg-value="${esc(key)}"><span>${esc(name)}</span>${detail ? `<span class="pi-meta">${esc(detail)}</span>` : ""}</button>`, sec = (name, list, build) => list.length ? `<div class="pi-wb-sec-hd">${name}<small>${list.length}</small></div><div class="pi-menu-list">${list.map(build).join("")}</div>` : "", c = report.constant, html = `${sec("过短的关键词", report.shortKeys, (x) => item(x.key, x.title, x.words.join("、")))}
+      let s = st8(view), entries = handwritten(s.entries || []), report = healthCheck(entries, tokenOf(s)), punct = punctPlan(entries), item = (key, name, detail = "") => `<button type="button" class="pi-menu-item" data-dlg-value="${esc(key)}"><span>${esc(name)}</span>${detail ? `<span class="pi-meta">${esc(detail)}</span>` : ""}</button>`, sec = (name, list, build) => list.length ? `<div class="pi-wb-sec-hd">${name}<small>${list.length}</small></div><div class="pi-menu-list">${list.map(build).join("")}</div>` : "", c = report.constant, html = `${sec("过短的关键词", report.shortKeys, (x) => item(x.key, x.title, x.words.join("、")))}
             ${sec("没有主要关键词的开启条目", report.noKeys, (x) => item(x.key, x.title))}
             ${sec("多个条目共用的关键词", report.shared, (x) => item(x.entries[0].key, x.word, x.entries.map((e) => e.title).join("、")))}
             ${sec("标题重复", report.dupTitles, (x) => item(x.entries[0].key, x.title, `${x.entries.length} 条`))}
@@ -6789,28 +7791,28 @@ ${parsed.body}` : parsed.body;
             <div class="pi-wb-sec-hd">常驻条目</div>
             <p class="${c.warn ? "pi-hint is-warn" : "pi-meta"}">${c.count} 条，${c.tokens} token，占开启条目 ${Math.round(c.ratio * 100)}%${c.warn ? "，占比偏高" : ""}</p>`, pick = await openDialog({ title: "体检", html, actions: [{ label: "关闭", value: null }] });
       if (pick) {
-        if (pick === "::punct") return actions9["wb-punct"](view, target, event);
+        if (pick === "::punct") return actions10["wb-punct"](view, target, event);
         s.picking = !1, s.query = "", s.search === "entry" && (s.search = ""), s.openKey = pick, view.renderBody(), [...hostDocument().querySelectorAll(".pi-root .pi-wb-name")].find((node) => node.dataset.key === pick)?.scrollIntoView({ block: "center" });
       }
     },
     async "wb-delete"(view, target) {
-      let keys = [target.dataset.key], titles = st7(view).entries.filter((entry) => keys.includes(entry.key)).map((entry) => entry.title);
-      if (!await confirmDialog({ title: `从「${st7(view).book}」删除条目`, body: "删除前会下载这个条目的备份。", list: titles, okLabel: "删除", danger: !0 })) return;
+      let keys = [target.dataset.key], titles = st8(view).entries.filter((entry) => keys.includes(entry.key)).map((entry) => entry.title);
+      if (!await confirmDialog({ title: `从「${st8(view).book}」删除条目`, body: "删除前会下载这个条目的备份。", list: titles, okLabel: "删除", danger: !0 })) return;
       await snap(view, "删除条目");
-      let backup = await deleteEntries(st7(view).book, keys);
-      downloadBlob(`${st7(view).book}-已删条目备份.json`, JSON.stringify(backup, null, 2)), await reloadBook(view);
+      let backup = await deleteEntries(st8(view).book, keys);
+      downloadBlob(`${st8(view).book}-已删条目备份.json`, JSON.stringify(backup, null, 2)), await reloadBook(view);
     }
   };
   async function setPicked(view, disabled) {
-    let s = st7(view);
+    let s = st8(view);
     await snap(view, disabled ? "批量关闭" : "批量开启"), await setEntriesDisabled(s.book, [...s.picked], disabled), await reloadBook(view);
   }
   function openSearch(view, key) {
-    let s = st7(view);
+    let s = st8(view);
     s.search = key, key === "book" ? s.query = "" : s.bookQuery = "", view.renderBody(), hostDocument().querySelector(`.pi-root [data-search="${key}"]`)?.focus();
   }
   async function openBook(view, name) {
-    let s = st7(view);
+    let s = st8(view);
     listedBooks(s).some((book) => book.name === name) || (s.extra = [.../* @__PURE__ */ new Set([...s.extra || [], name])]), s.book = name, s.entries = null, s.openKey = "", s.query = "", s.search === "entry" && (s.search = ""), s.tokens = null, s.tokenMap = null, s.picking = !1, s.picked = /* @__PURE__ */ new Set(), await reloadBook(view);
   }
   var refreshOn7 = ["chat"];
@@ -6818,8 +7820,8 @@ ${parsed.body}` : parsed.body;
   // src/ui/page-diag.js
   var page_diag_exports = {};
   __export(page_diag_exports, {
-    actions: () => actions10,
-    render: () => render10
+    actions: () => actions11,
+    render: () => render11
   });
   var NEED = ["CHAT_CHANGED", "MESSAGE_RECEIVED"], EVENT_LABELS = {
     WORLDINFO_ENTRIES_LOADED: "条目加载（注入）",
@@ -6872,7 +7874,7 @@ ${parsed.body}` : parsed.body;
     return lines2.push("", "【问题】", ...list.length ? list.map((item) => `- ${item.text}`) : ["无"]), lines2.push("", "【最近记录】", ...info.logs.length ? info.logs.map((item) => `${time(item.at)} ${item.text}`) : ["无"]), lines2.join(`
 `);
   }
-  function render10(view) {
+  function render11(view) {
     let info = collect(view), list = problems(info), fixes = { rebind: "重新绑定事件", "reset-base": "从当前楼重新计数" }, problemHtml = list.length ? list.map((item) => `<div class="pi-diag-row"><span class="pi-badge is-warn">问题</span><span class="pi-diag-text">${esc(item.text)}</span>${item.fix ? `<button type="button" class="pi-btn is-sm" data-act="${item.fix}">${fixes[item.fix]}</button>` : ""}</div>`).join("") : '<p class="pi-hint">没有发现问题。</p>', events = info.events.map((item) => `<tr><td>${esc(EVENT_LABELS[item.key] || item.key)}</td>
         <td>${item.name ? item.bound ? '<span class="pi-badge is-ok">已绑定</span>' : '<span class="pi-badge is-warn">未绑定</span>' : '<span class="pi-badge is-danger">酒馆未提供</span>'}</td>
         <td>${item.count} 次</td><td>${time(item.at)}</td></tr>`).join(""), logs = info.logs.length ? info.logs.slice().reverse().map((item) => `${time(item.at)}  ${item.text}`).join(`
@@ -6889,18 +7891,18 @@ ${parsed.body}` : parsed.body;
         <table class="pi-files"><thead><tr><th>事件</th><th>状态</th><th>收到</th><th>最近</th></tr></thead><tbody>${events}</tbody></table></div>
         <div class="pi-card"><h3>最近记录</h3><pre class="pi-pre">${esc(logs)}</pre></div>`;
   }
-  async function copyText(text) {
+  async function copyText(text2) {
     let doc = hostDocument();
     try {
-      return await hostWindow().navigator.clipboard.writeText(text), !0;
+      return await hostWindow().navigator.clipboard.writeText(text2), !0;
     } catch {
       let box = doc.createElement("textarea");
-      box.value = text, box.className = "pi-copy-box", doc.body.appendChild(box), box.select();
+      box.value = text2, box.className = "pi-copy-box", doc.body.appendChild(box), box.select();
       let ok = !!(doc.execCommand && doc.execCommand("copy"));
       return box.remove(), ok;
     }
   }
-  var actions10 = {
+  var actions11 = {
     async check(view) {
       await view.runtime.checkNow({ manual: !0 }), view.renderBody();
     },
@@ -6920,6 +7922,7 @@ ${parsed.body}` : parsed.body;
   var TABS = [
     { key: "discuss", label: "讨论", mod: tab_discuss_exports },
     { key: "setting", label: "设定", mod: tab_setting_exports },
+    { key: "persona", label: "人设", mod: tab_persona_exports },
     { key: "outline", label: "大纲", mod: tab_outline_exports },
     { key: "run", label: "执行", mod: tab_run_exports }
   ], INFINITE_TABS = { outline: { label: "世界库", mod: tab_worlds_exports }, run: { mod: tab_infinite_run_exports } }, PAGES = {
@@ -6958,7 +7961,7 @@ ${parsed.body}` : parsed.body;
       busy: {},
       loadError: {},
       restored: !1,
-      render: render11,
+      render: render12,
       renderBody,
       renderSide,
       project: () => view.projectId ? data.project(view.projectId) : null,
@@ -6974,7 +7977,7 @@ ${parsed.body}` : parsed.body;
     view.tabState = tabState;
     let isInfinite = () => !!(view.project() && view.project().mode === "infinite"), tabOf = (tab) => ({ ...tab, ...isInfinite() ? INFINITE_TABS[tab.key] : null });
     function current() {
-      return view.page ? PAGES[view.page].mod : tabOf(TABS.find((tab) => tab.key === view.tab) || TABS[3]).mod;
+      return view.page ? PAGES[view.page].mod : tabOf(TABS.find((tab) => tab.key === view.tab) || TABS.find((tab) => tab.key === "run")).mod;
     }
     function sideHtml() {
       let index = data.index(), activeId = runtime.activeId(), list = groupProjects(index.projects).map((group) => {
@@ -7049,32 +8052,32 @@ ${parsed.body}` : parsed.body;
         box && (box.focus(), box.setSelectionRange(compose.start, compose.end));
       }
     }
-    function render11() {
+    function render12() {
       renderSide(), renderBody();
     }
     async function selectProject(id, tab) {
-      if (view.page = "", setDrawer(!1), view.projectId = id, delete view.loadError[id], writeUi({ projectId: id, page: "" }), render11(), !!id)
+      if (view.page = "", setDrawer(!1), view.projectId = id, delete view.loadError[id], writeUi({ projectId: id, page: "" }), render12(), !!id)
         try {
           let project = await data.loadProject(id);
           if (view.projectId !== id) return;
           if (!project) {
-            view.loadError[id] = "项目文件丢失，可在数据管理里查看", render11();
+            view.loadError[id] = "项目文件丢失，可在数据管理里查看", render12();
             return;
           }
-          view.tab = tab || (project.outline.volumes.length ? "run" : "discuss"), writeUi({ tab: view.tab }), render11();
+          view.tab = tab || (project.outline.volumes.length ? "run" : "discuss"), writeUi({ tab: view.tab }), render12();
         } catch (error) {
           if (view.projectId !== id) return;
-          view.loadError[id] = error.message, render11();
+          view.loadError[id] = error.message, render12();
         }
     }
     function restore() {
       let ui = readUi(), activeId = runtime.activeId(), remembered = data.index().projects.some((item) => item.id === ui.projectId) ? ui.projectId : "", id = activeId || remembered || data.index().projects[0] && data.index().projects[0].id || "";
-      view.restored = !0, render11();
+      view.restored = !0, render12();
       let page = PAGES[ui.page] ? ui.page : "";
-      id && selectProject(id, TABS.some((tab) => tab.key === ui.tab) ? ui.tab : void 0), page && (view.page = page, writeUi({ page }), render11());
+      id && selectProject(id, TABS.some((tab) => tab.key === ui.tab) ? ui.tab : void 0), page && (view.page = page, writeUi({ page }), render12());
     }
     function go(tab) {
-      view.page = "", view.tab = tab, writeUi({ tab, page: "" }), render11();
+      view.page = "", view.tab = tab, writeUi({ tab, page: "" }), render12();
     }
     let NEW_GROUP = "::new";
     function groupField(preset) {
@@ -7123,7 +8126,7 @@ ${parsed.body}` : parsed.body;
       if (pick) {
         if (pick === "edit") return editProject(id);
         try {
-          await runtime.switchProject(id, pick), toast("success", pick === "card" ? `「${meta2.name}」已设为本卡默认，当前聊天也已换用。` : `当前聊天改用「${meta2.name}」。`), render11();
+          await runtime.switchProject(id, pick), toast("success", pick === "card" ? `「${meta2.name}」已设为本卡默认，当前聊天也已换用。` : `当前聊天改用「${meta2.name}」。`), render12();
         } catch (error) {
           toast("error", `切换失败：${error.message}`);
         }
@@ -7149,13 +8152,13 @@ ${parsed.body}` : parsed.body;
         if (result === "delete") {
           if (!await confirmDialog({ title: `删除「${meta2.name}」`, body: "将删除以下文件，聊天里记录的该项目进度保留。", list: [`pi-p-${id}.json`, `pi-c-${id}.json`], okLabel: "删除", danger: !0 })) return;
           try {
-            await data.deleteProject(id), view.projectId === id && (view.projectId = ""), runtime.refresh(), render11();
+            await data.deleteProject(id), view.projectId === id && (view.projectId = ""), runtime.refresh(), render12();
           } catch (error) {
             toast("error", `删除失败：${error.message}`);
           }
           return;
         }
-        data.project(id) || await data.loadProject(id), data.renameProject(id, result.name, result.group), result.mode !== mode && data.updateProject(id, (project) => ({ ...project, mode: result.mode, infinite: normalizeInfinite(project.infinite) })), runtime.refresh(), render11();
+        data.project(id) || await data.loadProject(id), data.renameProject(id, result.name, result.group), result.mode !== mode && data.updateProject(id, (project) => ({ ...project, mode: result.mode, infinite: normalizeInfinite(project.infinite) })), runtime.refresh(), render12();
       }
     }
     function onClick(event) {
@@ -7168,13 +8171,13 @@ ${parsed.body}` : parsed.body;
       if (act === "new-project") return newProject2();
       if (act === "tab") return go(target.dataset.tab);
       if (act === "page")
-        return view.page = target.dataset.page, writeUi({ page: view.page }), setDrawer(!1), render11();
+        return view.page = target.dataset.page, writeUi({ page: view.page }), setDrawer(!1), render12();
       if (act === "drawer") return setDrawer(!view.drawer);
       if (act === "theme")
         return setNight(!isNight()), writeUi({ night: isNight() }), renderSide();
       if (act === "rename") return editProject(view.projectId);
       if (act === "retry-project") return selectProject(view.projectId, view.tab);
-      if (act === "retry-render") return render11();
+      if (act === "retry-render") return render12();
       if (act === "group") {
         let name = target.dataset.group;
         return view.collapsed.has(name) ? view.collapsed.delete(name) : view.collapsed.add(name), writeUi({ collapsed: [...view.collapsed] }), renderSide();
@@ -7202,7 +8205,7 @@ ${parsed.body}` : parsed.body;
       let item = event.target.closest(".pi-pitem");
       !item || !root.contains(item) || (event.preventDefault(), cancelPress(), !swallowAfterPress(event) && projectMenu(item.dataset.id));
     }
-    function onChange7(event) {
+    function onChange8(event) {
       let target = event.target;
       if (target.dataset.psearch !== void 0) return;
       let handler = current().onChange;
@@ -7220,13 +8223,13 @@ ${parsed.body}` : parsed.body;
     function open() {
       ensureStyle(), !root && (view.drawer = !1, lastSide = "", lastTop = "", root = el(`<div class="pi-root pi-overlay"><div class="pi-panel"><aside class="pi-side"></aside>
             <div class="pi-scrim" data-act="drawer"></div>
-            <section class="pi-main"><header class="pi-top"></header><div class="pi-body"></div></section></div></div>`), root.addEventListener("click", onClick), root.addEventListener("contextmenu", onContext), root.addEventListener("pointerdown", onPointerDown), root.addEventListener("pointermove", onPointerMove), root.addEventListener("pointerup", cancelPress), root.addEventListener("pointercancel", cancelPress), root.addEventListener("scroll", cancelPress, !0), root.addEventListener("change", onChange7), root.addEventListener("input", onInput6), root.addEventListener("compositionend", (event) => {
+            <section class="pi-main"><header class="pi-top"></header><div class="pi-body"></div></section></div></div>`), root.addEventListener("click", onClick), root.addEventListener("contextmenu", onContext), root.addEventListener("pointerdown", onPointerDown), root.addEventListener("pointermove", onPointerMove), root.addEventListener("pointerup", cancelPress), root.addEventListener("pointercancel", cancelPress), root.addEventListener("scroll", cancelPress, !0), root.addEventListener("change", onChange8), root.addEventListener("input", onInput6), root.addEventListener("compositionend", (event) => {
         event.target.dataset.search && onInput6(event);
       }), root.addEventListener("focusout", (event) => current().onBlur?.(view, event.target, event)), root.addEventListener("mousedown", (event) => {
         event.target === root && (root.dataset.down = "1");
       }), root.addEventListener("mouseup", (event) => {
         event.target === root && root.dataset.down && close(), delete root.dataset.down;
-      }), doc.addEventListener("keydown", onKey, !0), doc.body.appendChild(root), view.restored = !1, data.isReady() ? restore() : render11());
+      }), doc.addEventListener("keydown", onKey, !0), doc.body.appendChild(root), view.restored = !1, data.isReady() ? restore() : render12());
     }
     function close() {
       root && (current().unmount?.(view), doc.removeEventListener("keydown", onKey, !0), root.remove(), root = null, data.flush().catch(() => {
@@ -7253,16 +8256,16 @@ ${parsed.body}` : parsed.body;
     function hide(id) {
       view.clearTimeout(timers.get(id)), timers.delete(id), box?.querySelector(`[data-notice="${id}"]`)?.remove();
     }
-    function show({ id, title: title2, body = "", actions: actions11 = [], timeout = 0 }) {
+    function show({ id, title: title2, body = "", actions: actions12 = [], timeout = 0 }) {
       hide(id);
       let card = el(`<div class="pi-notice" data-notice="${esc(id)}"><b>${esc(title2)}</b>${body ? `<p>${esc(body)}</p>` : ""}
-            <div class="pi-row">${actions11.map((action, index) => `<button type="button" class="pi-btn is-sm${action.primary ? " is-primary" : ""}" data-act="${index}">${esc(action.label)}</button>`).join("")}</div></div>`);
+            <div class="pi-row">${actions12.map((action, index) => `<button type="button" class="pi-btn is-sm${action.primary ? " is-primary" : ""}" data-act="${index}">${esc(action.label)}</button>`).join("")}</div></div>`);
       card.addEventListener("click", (event) => {
         let button = event.target.closest("[data-act]");
         if (button) {
           hide(id);
           try {
-            actions11[Number(button.dataset.act)].run();
+            actions12[Number(button.dataset.act)].run();
           } catch (error) {
             console.error("[剧情注入器]", error);
           }
@@ -7277,7 +8280,7 @@ ${parsed.body}` : parsed.body;
   }
 
   // src/index.js
-  var VERSION = "0.1.26", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.1.27", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")
@@ -7302,7 +8305,11 @@ ${parsed.body}` : parsed.body;
       } catch (error) {
         console.error("[剧情注入器] 界面刷新失败", error);
       }
-    }, runtime = createRuntime({ data, notice, emit, askReason });
+    }, runtime = createRuntime({ data, notice, emit, askReason, askFixed: (items) => openDialog({
+      title: "选择人设选项",
+      html: items.map((item) => `<label class="pi-field"><span>${esc(item.name)}</span><select class="pi-sel" data-fx="${esc(item.id)}">${options(item.options.map((value) => ({ value, label: value })), item.options[0])}</select></label>`).join(""),
+      actions: [{ label: "稍后再选", value: null }, { label: "确定", primary: !0, value: (box) => Object.fromEntries([...box.querySelectorAll("[data-fx]")].map((node) => [node.dataset.fx, node.value])) }]
+    }) });
     app = createApp({ data, runtime, version: VERSION });
     let started = !1, ready = data.init().then(() => {
       runtime.start(), started = !0, emit("index");
