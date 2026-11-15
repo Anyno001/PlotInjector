@@ -14,6 +14,31 @@ export function fixKeys(keys) {
     return out;
 }
 
+// 输入框里的关键词：逗号、顿号、分号、换行拆开；整条写成 /正则/flags 的保留不拆（逗号写在正则里时用这种写法）。
+export function splitKeys(value) {
+    const out = [];
+    for (const line of String(value || '').split(/\r?\n/)) {
+        let rest = line.trim();
+        while (rest) {
+            // 以 / 开头时，从最长的候选收尾位置往短找，第一个满足「合法正则写法且后面紧跟分隔符或结尾」的整段保留。
+            let taken = 0;
+            if (rest[0] === '/') {
+                for (let end = rest.length; end > 1; end--) {
+                    const head = rest.slice(0, end);
+                    const after = rest.slice(end).trimStart();
+                    if (isRegexKey(head) && (!after || /^[,，、;；]/.test(after))) { taken = end; break; }
+                }
+            }
+            if (taken) { out.push(rest.slice(0, taken)); rest = rest.slice(taken).replace(/^\s*[,，、;；]?\s*/, ''); continue; }
+            const at = rest.search(SPLIT);
+            const part = (at < 0 ? rest : rest.slice(0, at)).trim();
+            if (part) out.push(part);
+            rest = at < 0 ? '' : rest.slice(at + 1).trim();
+        }
+    }
+    return out;
+}
+
 const sameList = (a, b) => a.length === b.length && a.every((item, index) => item === b[index]);
 
 // 返回 [{ key, title, patch, before, after }]，只列真正有变化的条目。
@@ -115,6 +140,9 @@ function keyMatcher(key, { caseSensitive = null, matchWholeWords = null } = {}, 
 }
 
 const matchedKeys = (keys, haystack, options, globals) => keys.filter(key => String(key).trim() && keyMatcher(key, options, globals)(haystack));
+
+// 人设线的关键词触发复用同一套匹配：keys 里任一个命中 haystack 即为真。
+export const matchesAny = (keys, haystack, options = {}, globals = {}) => matchedKeys(keys || [], String(haystack || ''), options, globals).length > 0;
 
 // 次要关键词逻辑：0 AND_ANY，1 NOT_ALL，2 NOT_ANY，3 AND_ALL。
 function secondaryPass(logic, hit, total) {

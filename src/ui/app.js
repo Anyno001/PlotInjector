@@ -8,6 +8,7 @@ import { ICONS } from './styles.js';
 import * as discuss from './tab-discuss.js';
 import * as setting from './tab-setting.js';
 import * as outline from './tab-outline.js';
+import * as persona from './tab-persona.js';
 import * as run from './tab-run.js';
 import * as worlds from './tab-worlds.js';
 import * as infiniteRun from './tab-infinite-run.js';
@@ -19,6 +20,7 @@ import * as diag from './page-diag.js';
 const TABS = [
     { key: 'discuss', label: '讨论', mod: discuss },
     { key: 'setting', label: '设定', mod: setting },
+    { key: 'persona', label: '人设', mod: persona },
     { key: 'outline', label: '大纲', mod: outline },
     { key: 'run', label: '执行', mod: run },
 ];
@@ -88,7 +90,8 @@ export function createApp({ data, runtime, version }) {
     const isInfinite = () => !!(view.project() && view.project().mode === 'infinite'),
         tabOf = (tab) => ({ ...tab, ...(isInfinite() ? INFINITE_TABS[tab.key] : null) });
     function current() {
-        return view.page ? PAGES[view.page].mod : tabOf(TABS.find((tab) => tab.key === view.tab) || TABS[3]).mod;
+        if (view.page) return PAGES[view.page].mod;
+        return tabOf(TABS.find((tab) => tab.key === view.tab) || TABS.find((tab) => tab.key === 'run')).mod;
     }
     function sideHtml() {
         const index = data.index(),

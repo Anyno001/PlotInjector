@@ -3,6 +3,7 @@ import { DEFAULT_PARAMS, OLD_DEFAULT_PARAMS } from './inject.js';
 import { normalizeInfinite } from './infinite.js';
 import { normalizeAlias, normalizeRenames } from './align.js';
 import { makeId } from './outline.js';
+import { emptyPersonas, normalizePersonas } from './personas.js';
 import { DEFAULT_MEMO, DEFAULT_WB_RULE, migrateOc, normalizeWbRule } from './refs.js';
 
 export const INDEX_FILE = 'pi-index.json';
@@ -57,7 +58,8 @@ export const DEFAULT_SETTINGS = {
     bodyGuide: !0,
     bodyGuideText: '',
     offTrackMode: 'ask',
-    carryOver: !0,
+    personaMode: 'ask',
+    carryOver: true,
     handleMode: 'ask',
     hookCap: 2,
     newThreadMode: 'ask',
@@ -78,6 +80,7 @@ export const DEFAULT_SETTINGS = {
 const HANDLE_MODES = ['ask', 'auto', 'nodes'];
 const OFF_MODES = ['ask', 'auto', 'off'];
 const THREAD_MODES = ['ask', 'auto', 'off'];
+const PERSONA_MODES = ['ask', 'auto', 'off'];
 
 export function normalizeSettings(value) {
     const src = value && typeof value == 'object' ? value : {},
@@ -86,6 +89,7 @@ export function normalizeSettings(value) {
         ...DEFAULT_SETTINGS,
         ...src,
         offTrackMode: OFF_MODES.includes(src.offTrackMode) ? src.offTrackMode : DEFAULT_SETTINGS.offTrackMode,
+        personaMode: PERSONA_MODES.includes(src.personaMode) ? src.personaMode : DEFAULT_SETTINGS.personaMode,
         carryOver: src.carryOver !== !1,
         bodyGuide: src.bodyGuide !== !1,
         bodyGuideText: String(src.bodyGuideText || ''),
@@ -142,6 +146,7 @@ export function newProject(name, now = Date.now(), mode = 'normal') {
         outline: { volumes: [], history: [], renames: [], idAlias: {} },
         defaults: JSON.parse(JSON.stringify(DEFAULT_PARAMS)),
         genRefs: normalizeGenRefs(),
+        personas: emptyPersonas(),
         mode: mode === 'infinite' ? 'infinite' : 'normal',
         ...(mode === 'infinite' ? { infinite: normalizeInfinite({}) } : {}),
     };
@@ -187,7 +192,8 @@ export function normalizeProject(value, id) {
         imports: Array.isArray(src.imports) ? src.imports.filter((x) => typeof x === 'string') : [],
         importAdopted: Array.isArray(src.importAdopted) ? src.importAdopted.filter((x) => typeof x === 'string') : [],
         genRefs: normalizeGenRefs(src.genRefs),
-        threads: { sideOn: !(src.threads && src.threads.sideOn === !1), worldOn: !(src.threads && src.threads.worldOn === !1) },
+        personas: normalizePersonas(src.personas),
+        threads: { sideOn: !(src.threads && src.threads.sideOn === false), worldOn: !(src.threads && src.threads.worldOn === false) },
         mode: src.mode === 'infinite' ? 'infinite' : 'normal',
         ...(src.infinite && typeof src.infinite == 'object' ? { infinite: normalizeInfinite(src.infinite) } : {}),
     };

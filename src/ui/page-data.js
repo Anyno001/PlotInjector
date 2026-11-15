@@ -2,6 +2,7 @@ import { importSrcFile, importJobFile } from '../app/import-store.js';
 
 import { INDEX_FILE, chatFile, formatBytes, projectFile } from '../core/store.js';
 import { buildZip } from '../core/zip.js';
+import { buildPersonaFile } from '../core/persona-file.js';
 import { clearChatProgress } from '../app/progress-store.js';
 import { deleteFile, readRawFile, verifyFiles } from '../host/files.js';
 import { downloadBlob, hostWindow, toast } from '../host/st.js';
@@ -93,6 +94,9 @@ export function render(view) {
         <div class="pi-equal pi-acts"><button type="button" class="pi-btn is-sm" data-act="verify">${s.verifying ? '<span class="pi-spin"></span>' : ''}重新核对</button>
             <button type="button" class="pi-btn is-sm" data-act="orphans"${orphans.length ? '' : ' disabled'}>清理孤立文件${orphans.length ? `（${orphans.length}）` : ''}</button>
             <button type="button" class="pi-btn is-sm" data-act="clear-chats">清空全部讨论记录</button></div></div>
+        <div class="pi-card"><h3>人设备份</h3>
+        <p class="pi-hint">只导出各项目的人设线，不含大纲、设定和讨论。导入在项目的「人设」页。</p>
+        <div class="pi-equal is-one pi-acts"><button type="button" class="pi-btn is-sm" data-act="export-personas">导出全部项目的人设</button></div></div>
         ${versionCard(view, settings)}
         <div class="pi-card"><h3>重置插件</h3>
         <p class="pi-hint">删除所有项目、讨论记录和当前聊天的进度，执行前自动下载备份。</p>
@@ -153,6 +157,18 @@ export const actions = {
         const text = await readRawFile(target.dataset.name);
         if (text == null) throw new Error('文件读取失败');
         downloadBlob(target.dataset.name, text);
+    },
+    async 'export-personas'(view) {
+        const files = [];
+        for (const item of view.data.index().projects) {
+            const project = view.data.project(item.id) || (await view.data.loadProject(item.id));
+            if (!project || !project.personas || !project.personas.lines.length) continue;
+            files.push({ name: `人设-${item.group ? `${item.group}-` : ''}${item.name}.json`, data: JSON.stringify(buildPersonaFile(project.personas, { project: item.name, version: view.version }), null, 2) });
+        }
+        if (!files.length) throw new Error('没有可导出的人设（项目里还没有人设线，或项目尚未载入）');
+        if (files.length === 1) downloadBlob(files[0].name, files[0].data);
+        else downloadBlob(`剧情注入器人设-${new Date().toISOString().slice(0, 10)}.zip`, buildZip(files), 'application/zip');
+        toast('success', `已导出 ${files.length} 个项目的人设。`);
     },
     async 'delete-file'(view, target) {
         const name = target.dataset.name;

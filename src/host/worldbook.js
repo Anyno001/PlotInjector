@@ -56,6 +56,23 @@ export function worldInfoMatchSettings() {
     return { caseSensitive: false, matchWholeWords: false, known: false };
 }
 
+// 酒馆全局的世界书扫描深度（world_info_depth）：依次试上下文、父窗口全局变量、世界书面板里的输入框；读不到按 2。
+export function worldInfoScanDepth() {
+    const valid = value => (Number.isFinite(Number(value)) && Number(value) >= 0 && value !== '' && value !== null ? Math.round(Number(value)) : null);
+    try {
+        const c = ctx();
+        const found = c && typeof c.getWorldInfoSettings === 'function' ? valid(c.getWorldInfoSettings().world_info_depth) : null;
+        if (found !== null) return found;
+    } catch { /* 改试其他来源 */ }
+    try {
+        const found = valid(hostWindow().world_info_depth);
+        if (found !== null) return found;
+    } catch { /* 改读界面 */ }
+    const box = hostDocument().querySelector('#world_info_depth');
+    const found = box ? valid(box.value) : null;
+    return found !== null ? found : 2;
+}
+
 export function allBookNames() {
     const c = ctx();
     return c && typeof c.getWorldInfoNames === 'function' ? c.getWorldInfoNames() : [];

@@ -3,6 +3,20 @@ import { ensureOutlineIds, isClueMode, stripAuthorBlocks, outlineVolumesView } f
 import { createClueRuntime } from './clue-runtime.js';
 
 import { DEFAULT_PARAMS, pickParams, buildEntries, buildIndexText, carriedNodes, toWorldInfoEntry } from '../core/inject.js';
+import { buildPersonaCheckMessages } from '../core/check.js';
+import {
+    alignPersonaProgress,
+    buildPersonaEntries,
+    applyMoves,
+    checkItems,
+    currentStage,
+    hasPersonas,
+    personaEnv,
+    moveText,
+    resolveMoves,
+    syncPersonas,
+    undoMoves,
+} from '../core/personas.js';
 import {
     SETTING_SLOT,
     CLUE_SLOT,
@@ -71,7 +85,7 @@ import {
 } from '../core/threads.js';
 
 import { cardKey, cardName, chatMessages, ctx, hostWindow, toast } from '../host/st.js';
-import { readEntryContent, writeFallbackBook } from '../host/worldbook.js';
+import { readEntryContent, worldInfoMatchSettings, worldInfoScanDepth, writeFallbackBook } from '../host/worldbook.js';
 import { bindChat, readChatState, readProgress, writeProgress } from './progress-store.js';
 
 export const VIRTUAL_WORLD = '剧情注入器';
@@ -93,24 +107,28 @@ const placeOf = (unit) => `${volumeLabel(unit.volume.key)}·${stageLabel(unit.st
 // askReason 由入口传入（弹输入框），运行时本身不依赖界面。
 export function createRuntime({ data, notice, emit, askReason = async () => '' }) {
     const view = hostWindow();
-    let progress = null,
-        progressFor = '',
-        alignedFrom = null,
-        alignedOutline = null,
-        checking = !1,
-        fallbackTimer = 0,
-        generating = !1,
-        chatStartFloors = 0,
-        pendingCheck = !1,
-        pendingTimer = 0,
-        opening = !1,
-        openGen = 0,
-        openPromise = Promise.resolve(null),
-        pendingTrigger = null,
-        lastRead = null;
-    const listeners = [],
-        stats = {},
-        logs = [];
+    let progress = null;
+    let progressFor = '';
+    // 最近一次按大纲对照表归位时的输入（进度对象、大纲对象），两者都没变就不再算。
+    let alignedFrom = null;
+    let alignedOutline = null;
+    let alignedPersonas = null;
+    let checking = false;
+    let fallbackTimer = 0;
+    let generating = false;
+    let chatStartFloors = 0;
+    let pendingCheck = false;
+    let pendingTimer = 0;
+    let opening = false;
+    let openGen = 0;
+    let openPromise = Promise.resolve(null);
+    let pendingTrigger = null;
+    let lastRead = null;
+    const listeners = [];
+    const stats = {};
+    const logs = [];
+
+    // 诊断页用：最近的事件与检测判断。
     function log(text) {
         (logs.push({ at: Date.now(), text }), logs.length > LOG_MAX && logs.shift());
     }
@@ -180,8 +198,32 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
                 (alignedFrom = progress),
                 (alignedOutline = project.outline));
         }
+        // 人设改了阶段（改名、删除）或线被删：把本聊天的人设进度对回当前人设，有变化就写回。
+        if (project && project.personas !== alignedPersonas) {
+            const aligned = alignPersonaProgress(progress, project.personas);
+            if (aligned !== progress) {
+                progress = aligned;
+                writeProgress(progress);
+                log('按人设对回了本聊天的人设进度');
+            }
+            alignedPersonas = project.personas;
+        }
         return progress;
     }
+
+    // IGS 声望读数：没装 IGS、没开声望、读取失败都当没有。
+    function fameNow() {
+        try {
+            const igs = view.IGS;
+            const list = igs && igs.stats && typeof igs.stats.fame === 'function' ? igs.stats.fame() : [];
+            // 好感读数并进同一个数组，kind 标 favor；旧版 IGS 没有 favor 接口就只有声望。
+            const favor = igs && igs.stats && typeof igs.stats.favor === 'function' ? igs.stats.favor() : [];
+            return [...(Array.isArray(list) ? list : []), ...(Array.isArray(favor) ? favor.map((row) => ({ ...row, kind: 'favor' })) : [])];
+        } catch {
+            return [];
+        }
+    }
+
     function links() {
         const project = activeProject();
         return project ? outlineLinks(project.outline) : void 0;
@@ -209,6 +251,7 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
     function setProgress(next, reason = 'progress') {
         const project = activeProject();
         if (project && project.mode !== 'infinite') next = stampNodeIds(next, project.outline.volumes);
+        next = syncPersonas(project, next, fameNow());
         ((next = stampActive(progress && progressFor === next.projectId ? progress : null, next)),
             (progress = next),
             (progressFor = next.projectId),
@@ -216,13 +259,14 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
             scheduleFallback(),
             emit(reason));
     }
-    function entries() {
+    function entries({ inject = false } = {}) {
         let project = activeProject(),
             prog = currentProgress();
+        const persona = hasPersonas(project) ? { fame: fameNow(), ...(inject ? {recentText: scanText(), globals: worldInfoMatchSettings()} : {}) } : {};
         return !project || !prog
             ? []
             : isClueMode(project)
-              ? buildClueEntries(project, prog)
+              ? [...buildClueEntries(project, prog), ...buildPersonaEntries(project, prog, persona)]
               : buildEntries(
                     {
                         ...project,
@@ -231,6 +275,7 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
                     },
                     prog,
                     data.settings(),
+                    persona,
                 );
     }
     function buildClueEntries(project, prog) {
@@ -261,7 +306,7 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
         );
     }
     function virtualEntries({ recordClue = !1 } = {}) {
-        let list = entries(),
+        let list = entries({ inject: true }),
             clueEntry = list.find((entry) => entry.slotId === CLUE_SLOT);
         return (
             recordClue &&
@@ -275,6 +320,32 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
             list.filter((entry) => entry.enabled && entry.content).map((entry, index) => toWorldInfoEntry(entry, index, VIRTUAL_WORLD))
         );
     }
+    // 最近 N 楼正文（N 为酒馆世界书扫描深度），人设线的关键词触发用。
+    function scanText() {
+        const depth = Math.max(1, worldInfoScanDepth());
+        return chatMessages()
+            .filter((msg) => !isNote(msg))
+            .slice(-depth)
+            .map((msg) => String(msg.mes || ''))
+            .join('\n');
+    }
+
+    // 注入前按最新的大纲进度与声望读数刷新人设阶段（跟随大纲、读声望两种方式）。
+    function refreshPersonas() {
+        const project = activeProject();
+        const prog = currentProgress();
+        if (!hasPersonas(project) || !prog) return;
+        const next = syncPersonas(project, prog, fameNow());
+        if (next !== prog) setProgress(next);
+    }
+
+    function onStatsChanged() {
+        if (!hasPersonas(activeProject())) return;
+        refreshPersonas();
+        scheduleFallback();
+        emit('progress');
+    }
+
     function eventTypes() {
         const c = ctx();
         return (c && c.eventTypes) || {};
@@ -285,6 +356,7 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
     async function onEntriesLoaded(payload) {
         if (!(!payload || !Array.isArray(payload.chatLore))) {
             opening && (await waitOpening());
+            refreshPersonas();
             try {
                 payload.chatLore.push(...virtualEntries({ recordClue: !0 }));
             } catch (error) {
@@ -750,32 +822,160 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
         const state = infState();
         state && setInf(removeWorld(state.inf, worldId, state.infinite.config));
     }
-    async function checkNow({ manual = !1 } = {}) {
-        if (isInfinite(activeProject())) return (log('无限流项目不使用检测模型'), null);
-        if (checking) return (log('跳过检测：上一次检测还没结束'), null);
-        const project = activeProject(),
-            prog = currentProgress(),
-            settings = data.settings();
-        if (!project || !prog) return (log('跳过检测：当前卡没有启用的项目'), manual && toast('info', '当前卡没有启用的项目。'), null);
-        const sw = threadSwitches(project),
-            unit = activeUnit() && maskUnits([activeUnit()], sw)[0];
-        if (!unit) return (log('跳过检测：大纲为空'), null);
+
+    // 条件检测型人设线：本次检测窗口内触发过、方式为条件检测、未设不提醒的才带；personaMode 为 off 时不带。
+    function personaCheckItems(floors) {
+        const project = activeProject();
+        const prog = currentProgress();
+        if (!hasPersonas(project) || !prog || data.settings().personaMode === 'off') return [];
+        return checkItems(project, prog, floors.map((floor) => floor.text).join('\n'), {
+            globals: worldInfoMatchSettings(),
+            fame: fameNow(),
+        });
+    }
+
+    // 人设检测结果：询问（弹窗，可采用 / 不用）、自动（直接推进，可撤销）。只往前推一格。
+    function offerPersonaMoves(items, replyMoves) {
+        const scope = ticket();
+        const project = activeProject();
+        const moves = resolveMoves(items, replyMoves);
+        if (!moves.length || !project) return;
+        const lines = moves.map(moveText);
+        const adopt = () => {
+            if (!ticketValid(scope)) return;
+            // 弹窗挂着期间阶段可能被手动改过：只采用当前阶段仍是检测时那一段的线。
+            const prog = currentProgress();
+            const env = personaEnv(project, prog, fameNow());
+            const still = moves.filter((move) => {
+                const line = project.personas.lines.find((item) => item.id === move.item.lineId);
+                return line && currentStage(line, prog, env).stage.id === move.item.fromId;
+            });
+            if (!still.length) {
+                log('人设阶段推进作废：阶段已被改动');
+                return;
+            }
+            setProgress(applyMoves(prog, project, still));
+            log(`人设阶段推进：${lines.join('；')}`);
+        };
+        if (data.settings().personaMode === 'auto') {
+            adopt();
+            notice.show({
+                id: 'persona',
+                title: '人设阶段已推进',
+                body: lines.join('\n'),
+                actions: [{ label: '撤销', run: () => ticketValid(scope) && setProgress(undoMoves(currentProgress(), activeProject(), moves)) }],
+                timeout: 15000,
+            });
+            return;
+        }
+        notice.show({
+            id: 'persona',
+            title: '人设阶段有变化',
+            body: lines.join('\n'),
+            actions: [
+                { label: '采用', primary: true, run: adopt },
+                { label: '暂不', run: () => notice.hide('persona') },
+            ],
+        });
+    }
+
+    // 没有大纲（或大纲为空）时只检测人设阶段。
+    async function checkPersonasOnly({ manual = false } = {}) {
+        const scope = ticket();
+        const settings = data.settings();
+        const floors = recentFloors(settings.checkFloors);
+        const items = floors.length ? personaCheckItems(floors) : [];
+        if (!items.length) {
+            if (floors.length && !manual) setProgress({ ...currentProgress(), lastCheckFloor: floorCount() });
+            log('跳过检测：大纲为空');
+            if (manual && hasPersonas(activeProject())) toast('info', floors.length ? '没有需要检测的人设线。' : '还没有可检测的正文。');
+            return null;
+        }
+        checking = true;
+        log(`开始检测人设阶段：${items.length} 条线，读最近 ${floors.length} 楼${manual ? '（手动）' : ''}`);
+        emit('checking');
+        try {
+            const messages = buildPersonaCheckMessages(items, floors);
+            let result = null;
+            for (let attempt = 0; ; attempt += 1) {
+                try {
+                    if (!ticketValid(scope)) return null;
+                    result = parseCheckReply(await requestLlm(messages, resolveLlm(settings, 'check'), { timeoutMs: 120000 }));
+                    break;
+                } catch (error) {
+                    if (!ticketValid(scope) || attempt >= CHECK_RETRIES) throw error;
+                    log(`检测请求失败：${error.message}，${RETRY_GAP_MS / 1000} 秒后第 ${attempt + 1} 次重试`);
+                    await new Promise((resolve) => view.setTimeout(resolve, RETRY_GAP_MS));
+                }
+            }
+            if (!ticketValid(scope)) return null;
+            notice.hide('checkfail');
+            const next = { ...currentProgress(), lastCheckFloor: floorCount() };
+            delete next.lastFailFloor;
+            setProgress(next);
+            const moves = result.personas || [];
+            log(`人设检测完成：${moves.length} 条建议`);
+            offerPersonaMoves(items, moves);
+            if (manual && !moves.length) toast('info', '人设阶段没有变化。');
+            return result;
+        } catch (error) {
+            if (!ticketValid(scope)) return null;
+            setProgress({ ...currentProgress(), lastFailFloor: floorCount() });
+            log(`检测失败：${error.message}`);
+            notice.show({
+                id: 'checkfail',
+                title: '进度检测失败',
+                body: `已自动重试 ${CHECK_RETRIES} 次：${error.message}`,
+                actions: [
+                    { label: '重试', primary: true, run: () => checkNow({ manual }) },
+                    { label: '关闭', run: () => {} },
+                ],
+            });
+            return null;
+        } finally {
+            checking = false;
+            emit('checked');
+        }
+    }
+
+    async function checkNow({ manual = false } = {}) {
+        if (isInfinite(activeProject())) {
+            log('无限流项目不使用检测模型');
+            return null;
+        }
+        if (checking) {
+            log('跳过检测：上一次检测还没结束');
+            return null;
+        }
+        const project = activeProject();
+        const prog = currentProgress();
+        const settings = data.settings();
+        if (!project || !prog) {
+            log('跳过检测：当前卡没有启用的项目');
+            if (manual) toast('info', '当前卡没有启用的项目。');
+            return null;
+        }
+        const sw = threadSwitches(project);
+        const unit = activeUnit() && maskUnits([activeUnit()], sw)[0];
+        if (!unit) return checkPersonasOnly({ manual });
         const floors = recentFloors(settings.checkFloors);
         if (!floors.length) return (log('跳过检测：没有可检测的正文'), manual && toast('info', '还没有可检测的正文。'), null);
         ((checking = !0), log(`开始检测：${placeOf(unit)}，读最近 ${floors.length} 楼${manual ? '（手动）' : ''}`), emit('checking'));
         let t = ticket();
         try {
             if (clueMode()) return await clueCheck(floors);
-            const list = maskUnits(flattenUnits(outlineVolumesView(project.outline.volumes)), sw),
-                states = unitStates(list, prog),
-                opts = { carryOver: settings.carryOver, hookCap: settings.hookCap, links: links() },
-                index = buildIndexText(list, states, prog, opts),
-                threadInfo = checkThreads(liveThreads(list, states, prog, opts), {
-                    newThreadMode: sw.sideOn ? settings.newThreadMode : 'off',
-                    ignored: threadState(prog).ignored,
-                    readTo: prog.lastCheckFloor,
-                }),
-                messages = buildCheckMessages(unit, index, floors, threadInfo);
+            const list = maskUnits(flattenUnits(outlineVolumesView(project.outline.volumes)), sw);
+            const states = unitStates(list, prog);
+            const opts = { carryOver: settings.carryOver, hookCap: settings.hookCap, links: links() };
+            const index = buildIndexText(list, states, prog, opts);
+            // readTo 只用成功检测时的楼数：检测失败的那批楼并没有读过。
+            const threadInfo = checkThreads(liveThreads(list, states, prog, opts), {
+                newThreadMode: sw.sideOn ? settings.newThreadMode : 'off',
+                ignored: threadState(prog).ignored,
+                readTo: prog.lastCheckFloor,
+            });
+            const pItems = personaCheckItems(floors);
+            const messages = buildCheckMessages(unit, index, floors, threadInfo, pItems);
             let result = null;
             for (let attempt = 0; ; attempt += 1)
                 try {
@@ -814,6 +1014,7 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
                       ? proposeAdvance({ unit, reason: result.reason })
                       : manual && toast('info', result.reason || '本阶段尚未演完。'),
                 result.newThread && sw.sideOn && offerThread(unit, result.newThread),
+                offerPersonaMoves(pItems, result.personas || []),
                 result
             );
         } catch (error) {
@@ -957,16 +1158,18 @@ ${finds.map((d) => `- ${d.text}`).join(`
         bumpEpoch();
         clue.onChatChanged();
         clue.register();
-        ((progress = null),
-            (progressFor = ''),
-            abandonOpening(),
-            (lastRead = null),
-            (pendingCheck = !1),
-            view.clearTimeout(pendingTimer),
-            (chatStartFloors = floorCount()),
-            notice.hide('advance'),
-            notice.hide('offtrack'),
-            notice.hide('thread'));
+        alignedPersonas = null;
+        progress = null;
+        progressFor = '';
+        abandonOpening();
+        lastRead = null;
+        pendingCheck = false;
+        view.clearTimeout(pendingTimer);
+        chatStartFloors = floorCount();
+        notice.hide('advance');
+        notice.hide('offtrack');
+        notice.hide('thread');
+        notice.hide('persona');
         const id = activeId();
         if (id)
             try {
@@ -985,6 +1188,8 @@ ${finds.map((d) => `- ${d.text}`).join(`
     async function switchProject(id, scope = 'chat') {
         bumpEpoch();
         clue.invalidate();
+        alignedPersonas = null;
+        notice.hide('persona');
         (id && (await data.loadProject(id)), abandonOpening());
         const bound = bindChat(id);
         ((scope === 'card' || !bound || !data.activeIdFor(cardKey())) && data.setActive(id),
@@ -1051,20 +1256,33 @@ ${finds.map((d) => `- ${d.text}`).join(`
         ['GENERATE_AFTER_COMBINE_PROMPTS', onPromptReady],
     ];
     function bind() {
-        const c = ctx(),
-            types = eventTypes();
-        if (!(!c || !c.eventSource))
-            for (const [key, handler] of BINDINGS) {
-                const name = types[key];
-                if (!name) continue;
-                const wrapped = (...args) => {
-                    const stat = stats[key] || (stats[key] = { count: 0, at: 0 });
-                    return ((stat.count += 1), (stat.at = Date.now()), handler(...args));
-                };
-                (c.eventSource.on(name, wrapped), listeners.push([key, name, wrapped]));
-            }
+        try {
+            for (const win of new Set([view, window])) win.addEventListener('igs:stats-changed', onStatsChanged);
+        } catch {
+            /* 窗口已关闭 */
+        }
+        const c = ctx();
+        const types = eventTypes();
+        if (!c || !c.eventSource) return;
+        for (const [key, handler] of BINDINGS) {
+            const name = types[key];
+            if (!name) continue;
+            const wrapped = (...args) => {
+                const stat = stats[key] || (stats[key] = { count: 0, at: 0 });
+                stat.count += 1;
+                stat.at = Date.now();
+                return handler(...args);
+            };
+            c.eventSource.on(name, wrapped);
+            listeners.push([key, name, wrapped]);
+        }
     }
     function unbind() {
+        try {
+            for (const win of new Set([view, window])) win.removeEventListener('igs:stats-changed', onStatsChanged);
+        } catch {
+            /* 窗口已关闭 */
+        }
         const c = ctx();
         for (const [, name, handler] of listeners.splice(0))
             try {
@@ -1110,6 +1328,7 @@ ${finds.map((d) => `- ${d.text}`).join(`
         setProgress,
         units,
         entries,
+        fame: fameNow,
         openNext,
         backTo,
         checkNow,
