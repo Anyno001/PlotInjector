@@ -130,12 +130,10 @@ export function fameReading(line, fame, dimOverride = '') {
     return Number.isFinite(Number(bar.value)) ? Number(bar.value) : null;
 }
 
-// 兜底阶段的下标：设了默认阶段用它，否则第一阶段。
+// 兜底阶段的下标：读数值的线数值不在任何区间、跟随大纲没到任何阶段时用；设了默认阶段用它，否则第一阶段。
 export const baseIndex = line => Math.max(0, line.stages.findIndex(stage => stage.id === line.defaultStage));
-const storedIndex = (line, pp) => {
-    const at = line.stages.findIndex(stage => stage.id === pp[line.id]);
-    return at < 0 ? baseIndex(line) : at;
-};
+// 记下的阶段：手动选的或检测推进的；没有记录就是第一阶段（默认阶段只管「条件都不符合」的兜底，不管这里）。
+const storedIndex = (line, pp) => Math.max(0, line.stages.findIndex(stage => stage.id === pp[line.id]));
 
 // 跟随大纲：已到达（已过或进行中）的大纲阶段里，绑定得最靠后的那个人设阶段；都没到时用第一阶段。
 export function outlineIndex(line, env) {

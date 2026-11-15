@@ -455,11 +455,13 @@ test('默认阶段：没推进过、数值不在任何区间时用默认阶段�
     const base = { id: 'l', mode: 'fame', fame: { source: 'fame', bar: 'x' }, stages: [{ id: 'a', name: 'A', range: { min: 50 } }, { id: 'b', name: 'B', range: { min: 80 } }, { id: 'c', name: 'C', range: { max: 10 } }] };
     const none = normalizePersonas({ lines: [base] }).lines[0];
     const withDef = normalizePersonas({ lines: [{ ...base, defaultStage: 'c' }] }).lines[0];
+    // 读数值线：数值读不到时沿用记下的阶段，没记过就第一阶段；数值读到但不在任何区间时才用默认阶段。
     assert.equal(currentStage(none, emptyProgress('p'), { fame: [] }).index, 0);
-    assert.equal(currentStage(withDef, emptyProgress('p'), { fame: [] }).index, 2);
+    assert.equal(currentStage(withDef, emptyProgress('p'), { fame: [] }).index, 0);
     assert.equal(normalizePersonas({ lines: [{ ...base, defaultStage: '不存在' }] }).lines[0].defaultStage, '');
+    // 手动、条件检测的线没推进过时仍是第一阶段，默认阶段不改「当前阶段」。
     const check = normalizePersonas({ lines: [{ ...base, mode: 'check', defaultStage: 'b' }] }).lines[0];
-    assert.equal(currentStage(check, emptyProgress('p'), {}).index, 1);
+    assert.equal(currentStage(check, emptyProgress('p'), {}).index, 0);
 });
 
 test('同时读多个数值：好感>=10 且 芥蒂<=50 才进阶段', () => {
@@ -472,4 +474,27 @@ test('同时读多个数值：好感>=10 且 芥蒂<=50 才进阶段', () => {
     assert.equal(fameIndex(line, { fame: row(20, 60) }), -1);
     assert.equal(fameIndex(line, { fame: row(5, 0) }), -1);
     assert.equal(normalizePersonas({ lines: [{ stages: [{ extra: [{ dim: '乱写', min: 'x' }] }] }] }).lines[0].stages[0].extra[0].dim, '好感');
+});
+
+test('人设单独导出导入：往返不丢字段，换新 id，来源与大纲绑定清掉', async () => {
+    const { buildPersonaFile, parsePersonaFile, mergePersonaLines } = await import('../src/core/persona-file.js');
+    const src = normalizePersonas({ lines: [{ id: 'l1', group: '雪', name: '对主角', mode: 'fame', defaultStage: 'b', fame: { source: 'favor', dim: '芥蒂', bar: '雪' }, source: { book: 'x', uid: '1' }, stages: [{ id: 'a', name: 'A', unitId: 'u1' }, { id: 'b', name: 'B', range: { min: 10 }, extra: [{ dim: '信任', min: 5 }], text: '正文' }] }] });
+    const file = JSON.stringify(buildPersonaFile(src, { project: 'P', version: '0.1.34' }));
+    const back = parsePersonaFile(file);
+    const line = back.lines[0];
+    assert.notEqual(line.id, 'l1');
+    assert.equal(line.stages[0].unitId, '');
+    assert.equal(line.source, null);
+    assert.equal(line.defaultStage, line.stages[1].id);
+    assert.deepEqual(line.stages[1].extra, [{ dim: '信任', min: 5 }]);
+    assert.equal(line.fame.dim, '芥蒂');
+    assert.throws(() => parsePersonaFile('{"a":1}'), /不是剧情注入器/);
+    assert.throws(() => parsePersonaFile('坏的'), /JSON/);
+    const same = mergePersonaLines(src.lines, back.lines, 'both');
+    assert.equal(same.lines.length, 2);
+    assert.equal(same.lines[1].name, '对主角（导入）');
+    const rep = mergePersonaLines(src.lines, back.lines, 'replace');
+    assert.equal(rep.lines.length, 1);
+    assert.equal(rep.lines[0].id, 'l1');
+    assert.equal(mergePersonaLines(src.lines, back.lines, 'skip').skipped, 1);
 });

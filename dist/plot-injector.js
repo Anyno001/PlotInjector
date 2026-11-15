@@ -1,4 +1,4 @@
-// PlotInjector v0.1.33
+// PlotInjector v0.1.34
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -1096,10 +1096,7 @@ ${value.name}`);
     }
     return Number.isFinite(Number(bar.value)) ? Number(bar.value) : null;
   }
-  var baseIndex = (line) => Math.max(0, line.stages.findIndex((stage) => stage.id === line.defaultStage)), storedIndex = (line, pp) => {
-    let at = line.stages.findIndex((stage) => stage.id === pp[line.id]);
-    return at < 0 ? baseIndex(line) : at;
-  };
+  var baseIndex = (line) => Math.max(0, line.stages.findIndex((stage) => stage.id === line.defaultStage)), storedIndex = (line, pp) => Math.max(0, line.stages.findIndex((stage) => stage.id === pp[line.id]));
   function outlineIndex(line, env) {
     let units = env.units || [], links = env.links || NO_LINKS, position = new Map(units.map((unit, i) => [unit.id, i])), best = -1, at = baseIndex(line);
     return line.stages.forEach((stage, i) => {
@@ -6094,6 +6091,52 @@ ${parsed.body}` : parsed.body;
     stageInfo: () => stageInfo
   });
 
+  // src/core/persona-file.js
+  var PERSONA_FILE_KIND = "plot-injector-personas";
+  function buildPersonaFile(personas2, { project = "", version = "" } = {}) {
+    let { lines: lines2 } = normalizePersonas(personas2), clean = lines2.map((line) => ({ ...line, source: null, sources: [] }));
+    return { kind: PERSONA_FILE_KIND, version: 1, app: version, project, exportedAt: (/* @__PURE__ */ new Date()).toISOString(), lines: clean };
+  }
+  function parsePersonaFile(text2, { keepOutline = !1 } = {}) {
+    let data;
+    try {
+      data = JSON.parse(text2);
+    } catch {
+      throw new Error("文件不是有效的 JSON");
+    }
+    if (!data || data.kind !== PERSONA_FILE_KIND || !Array.isArray(data.lines)) throw new Error("这不是剧情注入器导出的人设文件");
+    let { lines: lines2 } = normalizePersonas({ lines: data.lines });
+    if (!lines2.length) throw new Error("文件里没有人设线");
+    return { project: String(data.project || ""), lines: lines2.map((line) => reidLine(line, keepOutline)) };
+  }
+  function reidLine(line, keepOutline) {
+    let ids = /* @__PURE__ */ new Map(), stages = line.stages.map((stage) => {
+      let id = makeId("ps");
+      return ids.set(stage.id, id), { ...stage, id, ...keepOutline ? {} : { unitId: "" } };
+    });
+    return { ...line, id: makeId("pl"), stages, defaultStage: ids.get(line.defaultStage) || "", source: null, sources: [] };
+  }
+  function mergePersonaLines(existing, incoming, mode = "both") {
+    let out = [...existing], key = (line) => `${line.group}\0${line.name}`, added = 0, replaced = 0, skipped = 0;
+    for (let line of incoming) {
+      let at = out.findIndex((item) => key(item) === key(line));
+      if (at < 0) {
+        out.push(line), added++;
+        continue;
+      }
+      if (mode === "skip") {
+        skipped++;
+        continue;
+      }
+      if (mode === "replace") {
+        out[at] = { ...line, id: out[at].id }, replaced++;
+        continue;
+      }
+      out.push({ ...line, name: `${line.name}（导入）` }), added++;
+    }
+    return { lines: out, added, replaced, skipped };
+  }
+
   // src/core/persona-import.js
   var TAG = /<if\s+(cell|cond)\s*=\s*(?:"([^"]*)"|'([^']*)')\s*>|<\/if\s*>/gi, TERM = /^(?:cell:)?\s*(.+?)\s*(==|!=|<=|>=|<|>)\s*(.+?)\s*$/, hasIf = (content) => /<if\s/i.test(String(content || ""));
   function isNumber(value) {
@@ -6486,6 +6529,11 @@ ${suffix.trim()}` : body;
             <span class="pi-meta">${esc(info.stage ? info.stage.name : "")}${note ? ` · ${note}` : ""}</span>
             <input type="checkbox" title="启用" data-pl-on="${esc(line.id)}"${line.enabled ? " checked" : ""}></div>${open ? lineBody(view, line, units) : ""}</div>`;
   }
+  function fileCard(all) {
+    return `<div class="pi-card"><h3>导出与导入</h3>
+        <div class="pi-tools is-c2"><button type="button" class="pi-btn is-sm" data-act="pf-export"${all.lines.length ? "" : " disabled"}>导出人设</button>
+            <button type="button" class="pi-btn is-sm" data-act="pf-import">导入人设</button></div></div>`;
+  }
   function importedCard(all) {
     let rows2 = all.imported.map((item, index) => `<div class="pi-wb-row"><span class="pi-wb-title" title="${esc(item.book)}">${esc(item.title || item.key)}<small> ${esc(item.book)}</small></span>
         <button type="button" class="pi-btn is-sm" data-act="imp-restore" data-i="${index}">恢复</button></div>`).join("");
@@ -6500,7 +6548,8 @@ ${suffix.trim()}` : body;
     return `<div class="pi-card"><h3>人设<span class="pi-meta">${all.lines.length} 条线</span><span class="pi-spacer"></span>
             <button type="button" class="pi-btn is-sm is-primary" data-act="pl-add">${ICONS.plus}新建人设线</button></h3>
         ${groups || '<p class="pi-hint">还没有人设线。新建一条，或从世界书转入。</p>'}</div>
-        ${importedCard(all)}`;
+        ${importedCard(all)}
+        ${fileCard(all)}`;
   }
   var LINE_PATCH = {
     name: (value) => ({ name: value.trim() || "未命名" }),
@@ -6562,6 +6611,25 @@ ${suffix.trim()}` : body;
     "pg-fold"(view, target) {
       let s = st4(view), set = new Set(s.collapsed || []);
       set.has(target.dataset.group) ? set.delete(target.dataset.group) : set.add(target.dataset.group), s.collapsed = [...set], view.renderBody();
+    },
+    "pf-export"(view) {
+      let project = view.project();
+      downloadBlob(`人设-${project.name}-${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}.json`, JSON.stringify(buildPersonaFile(personas(view), { project: project.name, version: view.version }), null, 2)), toast("success", `已导出 ${personas(view).lines.length} 条人设线。`);
+    },
+    async "pf-import"(view) {
+      let [file] = await pickFiles({ accept: ".json,application/json" });
+      if (!file) return;
+      let parsed = parsePersonaFile(await file.text()), same = parsed.lines.filter((line) => personas(view).lines.some((item) => item.group === line.group && item.name === line.name)).length, mode = "both";
+      if (same) {
+        if (mode = await choiceDialog({ title: `导入 ${parsed.lines.length} 条人设线`, body: `其中 ${same} 条与现有人设线同组同名，怎么处理？`, choices: [
+          { label: "都保留（新的加「（导入）」）", value: "both", primary: !0 },
+          { label: "替换同名", value: "replace" },
+          { label: "跳过同名", value: "skip" },
+          { label: "取消", value: null }
+        ] }), !mode) return;
+      } else if (!await confirmDialog({ title: "导入人设", body: `将加入 ${parsed.lines.length} 条人设线。跟随大纲的阶段绑定不会带入，需要重新选。`, okLabel: "导入" })) return;
+      let merged = mergePersonaLines(personas(view).lines, parsed.lines, mode);
+      patchPersonas(view, (all) => ({ ...all, lines: merged.lines })), view.renderBody(), toast("success", `导入完成：新增 ${merged.added}，替换 ${merged.replaced}，跳过 ${merged.skipped}。`);
     },
     "pl-add"(view) {
       let line = newLine("新人设线", "");
@@ -7278,6 +7346,9 @@ ${suffix.trim()}` : body;
         <div class="pi-equal pi-acts"><button type="button" class="pi-btn is-sm" data-act="verify">${s.verifying ? '<span class="pi-spin"></span>' : ""}重新核对</button>
             <button type="button" class="pi-btn is-sm" data-act="orphans"${orphans.length ? "" : " disabled"}>清理孤立文件${orphans.length ? `（${orphans.length}）` : ""}</button>
             <button type="button" class="pi-btn is-sm" data-act="clear-chats">清空全部讨论记录</button></div></div>
+        <div class="pi-card"><h3>人设备份</h3>
+        <p class="pi-hint">只导出各项目的人设线，不含大纲、设定和讨论。导入在项目的「人设」页。</p>
+        <div class="pi-equal is-one pi-acts"><button type="button" class="pi-btn is-sm" data-act="export-personas">导出全部项目的人设</button></div></div>
         ${versionCard(view, settings)}
         <div class="pi-card"><h3>重置插件</h3>
         <p class="pi-hint">删除所有项目、讨论记录和当前聊天的进度，执行前自动下载备份。</p>
@@ -7320,6 +7391,15 @@ ${suffix.trim()}` : body;
       let text2 = await readRawFile(target.dataset.name);
       if (text2 == null) throw new Error("文件读取失败");
       downloadBlob(target.dataset.name, text2);
+    },
+    async "export-personas"(view) {
+      let files = [];
+      for (let item of view.data.index().projects) {
+        let project = view.data.project(item.id) || await view.data.loadProject(item.id);
+        !project || !project.personas || !project.personas.lines.length || files.push({ name: `人设-${item.group ? `${item.group}-` : ""}${item.name}.json`, data: JSON.stringify(buildPersonaFile(project.personas, { project: item.name, version: view.version }), null, 2) });
+      }
+      if (!files.length) throw new Error("没有可导出的人设（项目里还没有人设线，或项目尚未载入）");
+      files.length === 1 ? downloadBlob(files[0].name, files[0].data) : downloadBlob(`剧情注入器人设-${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}.zip`, buildZip(files), "application/zip"), toast("success", `已导出 ${files.length} 个项目的人设。`);
     },
     async "delete-file"(view, target) {
       let name = target.dataset.name;
@@ -8301,7 +8381,7 @@ ${suffix.trim()}` : body;
   }
 
   // src/index.js
-  var VERSION = "0.1.33", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.1.34", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")

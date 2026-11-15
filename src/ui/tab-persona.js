@@ -3,7 +3,9 @@ import { flattenUnits, stageLabel, volumeLabel } from '../core/outline.js';
 import { FAVOR_DIMS, PERSONA_MODES, currentStage, groupLines, newLine, newStage, personaEnv } from '../core/personas.js';
 import { emptyProgress } from '../core/progress.js';
 import { estimateTokens } from '../core/tokens.js';
-import { confirmDialog, esc, options } from './dom.js';
+import { buildPersonaFile, mergePersonaLines, parsePersonaFile } from '../core/persona-file.js';
+import { downloadBlob, toast } from '../host/st.js';
+import { choiceDialog, confirmDialog, esc, options, pickFiles } from './dom.js';
 import { ICONS } from './styles.js';
 import { openImport, restoreImported } from './persona-import.js';
 
@@ -100,6 +102,13 @@ function lineRow(view, line, open, units) {
             <input type="checkbox" title="启用" data-pl-on="${esc(line.id)}"${line.enabled ? ' checked' : ''}></div>${open ? lineBody(view, line, units) : ''}</div>`;
 }
 
+// 人设单独导出导入：文件只含人设线。
+function fileCard(all) {
+    return `<div class="pi-card"><h3>导出与导入</h3>
+        <div class="pi-tools is-c2"><button type="button" class="pi-btn is-sm" data-act="pf-export"${all.lines.length ? '' : ' disabled'}>导出人设</button>
+            <button type="button" class="pi-btn is-sm" data-act="pf-import">导入人设</button></div></div>`;
+}
+
 function importedCard(all) {
     const rows = all.imported.map((item, index) => `<div class="pi-wb-row"><span class="pi-wb-title" title="${esc(item.book)}">${esc(item.title || item.key)}<small> ${esc(item.book)}</small></span>
         <button type="button" class="pi-btn is-sm" data-act="imp-restore" data-i="${index}">恢复</button></div>`).join('');
@@ -122,7 +131,8 @@ export function render(view) {
     return `<div class="pi-card"><h3>人设<span class="pi-meta">${all.lines.length} 条线</span><span class="pi-spacer"></span>
             <button type="button" class="pi-btn is-sm is-primary" data-act="pl-add">${ICONS.plus}新建人设线</button></h3>
         ${groups || '<p class="pi-hint">还没有人设线。新建一条，或从世界书转入。</p>'}</div>
-        ${importedCard(all)}`;
+        ${importedCard(all)}
+        ${fileCard(all)}`;
 }
 
 const LINE_PATCH = {
@@ -207,6 +217,27 @@ export const actions = {
         else set.add(target.dataset.group);
         s.collapsed = [...set];
         view.renderBody();
+    },
+    'pf-export'(view) {
+        const project = view.project();
+        downloadBlob(`人设-${project.name}-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(buildPersonaFile(personas(view), { project: project.name, version: view.version }), null, 2));
+        toast('success', `已导出 ${personas(view).lines.length} 条人设线。`);
+    },
+    async 'pf-import'(view) {
+        const [file] = await pickFiles({ accept: '.json,application/json' });
+        if (!file) return;
+        const parsed = parsePersonaFile(await file.text());
+        const same = parsed.lines.filter(line => personas(view).lines.some(item => item.group === line.group && item.name === line.name)).length;
+        let mode = 'both';
+        if (same) {
+            mode = await choiceDialog({ title: `导入 ${parsed.lines.length} 条人设线`, body: `其中 ${same} 条与现有人设线同组同名，怎么处理？`, choices: [
+                { label: '都保留（新的加「（导入）」）', value: 'both', primary: true }, { label: '替换同名', value: 'replace' }, { label: '跳过同名', value: 'skip' }, { label: '取消', value: null }] });
+            if (!mode) return;
+        } else if (!(await confirmDialog({ title: '导入人设', body: `将加入 ${parsed.lines.length} 条人设线。跟随大纲的阶段绑定不会带入，需要重新选。`, okLabel: '导入' }))) return;
+        const merged = mergePersonaLines(personas(view).lines, parsed.lines, mode);
+        patchPersonas(view, all => ({ ...all, lines: merged.lines }));
+        view.renderBody();
+        toast('success', `导入完成：新增 ${merged.added}，替换 ${merged.replaced}，跳过 ${merged.skipped}。`);
     },
     'pl-add'(view) {
         const line = newLine('新人设线', '');
