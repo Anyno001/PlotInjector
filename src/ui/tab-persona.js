@@ -38,7 +38,7 @@ export function stageInfo(view, line) {
 }
 
 const keyText = line => line.keys.join('，');
-const splitKeys = value => String(value || '').split(/[,，、\n]/).map(item => item.trim()).filter(Boolean);
+import { splitKeys } from '../core/wbtools.js';
 const field = (label, body) => `<label class="pi-field"><span>${label}</span>${body}</label>`;
 const input = (attrs, value, extra = '') => `<input class="pi-inp" ${attrs} value="${esc(value)}"${extra}>`;
 
@@ -64,9 +64,10 @@ function lineBody(view, line, units) {
         <label class="pi-field"><span>数据来源</span><select class="pi-sel" ${attrs('fameSource')}>${options([{ value: 'fame', label: '声望' }, { value: 'favor', label: '角色对主角的关系数值' }], line.fame.source)}</select></label>
         ${isFavor ? `<label class="pi-field"><span>读哪一项</span><select class="pi-sel" ${attrs('fameDim')}>${options(FAVOR_DIMS.map(value => ({ value, label: value })), line.fame.dim)}</select></label>` : ''}
         <div class="pi-pair">${field(isFavor ? '角色名' : '声望条名称', input(`${attrs('fameBar')} list="pi-fame-list"`, line.fame.bar))}${isFavor ? '' : field('对象（可空）', input(attrs('famePartner'), line.fame.partner))}</div>
-        <p class="pi-hint">读不到数值时沿用手动选择的阶段。</p>` : '';
+        <p class="pi-hint">读不到数值时沿用手动选择的阶段，没选过就用默认阶段。</p>` : '';
     return `<div class="pi-entry-bd">
         <div class="pi-pair">${field('线名', input(attrs('name'), line.name))}${field('角色（分组）', input(attrs('group'), line.group))}</div>
+        <label class="pi-field"><span>默认阶段（条件都不符合时用）</span><select class="pi-sel" ${attrs('defaultStage')}>${options([{ value: '', label: '第一阶段' }, ...line.stages.map(stage => ({ value: stage.id, label: stage.name }))], line.defaultStage)}</select></label>
         <label class="pi-field"><span>切换方式</span><select class="pi-sel" ${attrs('mode')}>${options(PERSONA_MODES, line.mode)}</select></label>
         ${fameBody}
         <div class="pi-pair">${field('触发方式', `<select class="pi-sel" ${attrs('constant')}>${options([{ value: '1', label: '常驻' }, { value: '0', label: '关键词触发' }], line.constant ? '1' : '0')}</select>`)}
@@ -121,6 +122,7 @@ const LINE_PATCH = {
     name: value => ({ name: value.trim() || '未命名' }),
     group: value => ({ group: value.trim() }),
     mode: value => ({ mode: value }),
+    defaultStage: value => ({ defaultStage: value }),
     constant: value => ({ constant: value === '1' }),
     keys: value => ({ keys: splitKeys(value) }),
     position: value => ({ position: Number(value) }),

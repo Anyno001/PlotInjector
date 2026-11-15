@@ -444,3 +444,20 @@ test('读好感：按别名认人、可选信任/芥蒂/欲望，区间选阶段
     assert.equal(fameIndex(line, { fame }), 1);
     assert.equal(fameReading({ ...line, fame: { ...line.fame, bar: '路人' } }, fame), null);
 });
+
+test('关键词拆分：英文/中文逗号都拆，正则里的逗号不拆', async () => {
+    const { splitKeys } = await import('../src/core/wbtools.js');
+    assert.deepEqual(splitKeys('苏晴雪, 晴雪，小雪、雪儿;阿雪'), ['苏晴雪', '晴雪', '小雪', '雪儿', '阿雪']);
+    assert.deepEqual(splitKeys('/苏,晴雪/i，哪吒'), ['/苏,晴雪/i', '哪吒']);
+});
+
+test('默认阶段：没推进过、数值不在任何区间时用默认阶段，设了才生效', () => {
+    const base = { id: 'l', mode: 'fame', fame: { source: 'fame', bar: 'x' }, stages: [{ id: 'a', name: 'A', range: { min: 50 } }, { id: 'b', name: 'B', range: { min: 80 } }, { id: 'c', name: 'C', range: { max: 10 } }] };
+    const none = normalizePersonas({ lines: [base] }).lines[0];
+    const withDef = normalizePersonas({ lines: [{ ...base, defaultStage: 'c' }] }).lines[0];
+    assert.equal(currentStage(none, emptyProgress('p'), { fame: [] }).index, 0);
+    assert.equal(currentStage(withDef, emptyProgress('p'), { fame: [] }).index, 2);
+    assert.equal(normalizePersonas({ lines: [{ ...base, defaultStage: '不存在' }] }).lines[0].defaultStage, '');
+    const check = normalizePersonas({ lines: [{ ...base, mode: 'check', defaultStage: 'b' }] }).lines[0];
+    assert.equal(currentStage(check, emptyProgress('p'), {}).index, 1);
+});

@@ -1,7 +1,7 @@
 import { POSITIONS, ROLES } from '../core/inject.js';
 import { acuField, groupByField } from '../core/acu.js';
 import { estimateTokens } from '../core/tokens.js';
-import { buildPattern, healthCheck, orderPlan, punctPlan, regexPlan, sortEntries, triggerTest } from '../core/wbtools.js';
+import { splitKeys, buildPattern, healthCheck, orderPlan, punctPlan, regexPlan, sortEntries, triggerTest } from '../core/wbtools.js';
 import { chatMessages, countTokens, downloadBlob, hostDocument, toast } from '../host/st.js';
 import { addEntries, allBookNames, bookEntries, globalBookNames, boundBookNames, createBook, deleteEntries, duplicateBook, loadBook, patchEntries, removeBook, renameBook, restoreEntries, setEntriesDisabled, snapshotEntries, transferEntries, updateEntry, worldInfoMatchSettings } from '../host/worldbook.js';
 import { confirmDialog, esc, menuDialog, openDialog, options, pickFiles, promptDialog } from './dom.js';
@@ -207,7 +207,6 @@ export function render(view) {
         ${list || `<p class="pi-hint">${norm(s.bookQuery) ? '没有匹配的世界书' : '没有关联或全局启用的世界书，可从「更多」搜索或打开其他世界书。'}</p>`}</div>`;
 }
 
-const splitKeys = text => String(text || '').split(/[,，、\n]/).map(item => item.trim()).filter(Boolean);
 
 function editPatch(target) {
     const field = target.dataset.f;

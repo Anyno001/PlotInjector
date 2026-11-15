@@ -310,7 +310,7 @@ export function buildPlan(entries, { overrides = {}, picks = {} } = {}) {
     const out = [];
     for (const line of lines.values()) {
         if (!line.sources.some(source => !blocked.has(`${source.book}\u0000${source.key}`))) continue;
-        const base = { group: line.group, name: line.name, keys: line.entry.keys, constant: line.entry.constant, position: line.entry.position, depth: line.entry.depth, role: line.entry.role, order: line.entry.order, common: line.common, source: { book: line.entry.book, uid: String(line.entry.uid), varPath: line.path }, sources: line.sources };
+        const base = { group: line.group, name: line.name, keys: line.entry.keys, constant: line.entry.constant, position: line.entry.position, depth: line.entry.depth, role: line.entry.role, order: line.entry.order, common: line.common, defaultStage: '', source: { book: line.entry.book, uid: String(line.entry.uid), varPath: line.path }, sources: line.sources };
         if (line.kind === 'num') {
             out.push({ ...base, mode: 'fame', fame: { source: 'fame', dim: '好感', bar: line.name, partner: '' }, stages: numericStages([...line.stages.values()]) });
         } else {
@@ -321,7 +321,7 @@ export function buildPlan(entries, { overrides = {}, picks = {} } = {}) {
     // 没有阶段、只有写死替换的条目：一条手动线，一个阶段。
     for (const { entry, text } of plainLines) {
         if (!text) continue;
-        out.push({ group: '', name: entryName(entry.title), keys: entry.keys, constant: entry.constant, position: entry.position, depth: entry.depth, role: entry.role, order: entry.order, common: '', mode: 'manual', fame: { source: 'fame', dim: '好感', bar: '', partner: '' }, stages: [{ ...newStage('默认'), text }], source: { book: entry.book, uid: String(entry.uid), varPath: '' }, sources: [{ book: entry.book, uid: String(entry.uid), key: String(entry.key) }] });
+        out.push({ group: '', name: entryName(entry.title), keys: entry.keys, constant: entry.constant, position: entry.position, depth: entry.depth, role: entry.role, order: entry.order, common: '', defaultStage: '', mode: 'manual', fame: { source: 'fame', dim: '好感', bar: '', partner: '' }, stages: [{ ...newStage('默认'), text }], source: { book: entry.book, uid: String(entry.uid), varPath: '' }, sources: [{ book: entry.book, uid: String(entry.uid), key: String(entry.key) }] });
     }
 
     const varList = [...info.values()].map(item => ({ path: item.path, name: pathNames(item.path).name, group: pathNames(item.path).group, kind: kinds.get(item.path), values: item.values, pick: pickMap.get(item.path), entries: item.entries.size, canFix: !(item.ops.has('<=') || item.ops.has('>=')), canLine: !item.nested }));

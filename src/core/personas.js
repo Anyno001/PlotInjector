@@ -32,7 +32,7 @@ export function newStage(name = '新阶段') {
 export function newLine(name = '新人设', group = '') {
     return {
         id: makeId('pl'), group, name, keys: [], constant: true, position: 0, depth: 4, role: 0, order: 100, enabled: true,
-        common: '', mode: 'manual', fame: { source: 'fame', dim: '好感', bar: '', partner: '' }, stages: [newStage('阶段一')], source: null,
+        common: '', defaultStage: '', mode: 'manual', fame: { source: 'fame', dim: '好感', bar: '', partner: '' }, stages: [newStage('阶段一')], source: null,
     };
 }
 
@@ -46,6 +46,7 @@ function normalizeStage(value) {
 
 function normalizeLine(value) {
     const src = isObj(value) ? value : {};
+    const stages = (Array.isArray(src.stages) ? src.stages : []).filter(isObj).map(normalizeStage);
     const fame = isObj(src.fame) ? src.fame : {};
     const source = isObj(src.source) ? src.source : null;
     return {
@@ -62,7 +63,9 @@ function normalizeLine(value) {
         common: text(src.common),
         mode: MODE_KEYS.includes(src.mode) ? src.mode : 'check',
         fame: { source: fame.source === 'favor' ? 'favor' : 'fame', dim: FAVOR_DIMS.includes(fame.dim) ? fame.dim : '好感', bar: text(fame.bar).trim(), partner: text(fame.partner).trim() },
-        stages: (Array.isArray(src.stages) ? src.stages : []).filter(isObj).map(normalizeStage),
+        stages,
+        // 默认阶段：所有条件都不符合（没推进过、没到任何大纲阶段、数值不在任何区间）时用的阶段；空表示第一阶段。
+        defaultStage: stages.some(stage => stage.id === text(src.defaultStage)) ? text(src.defaultStage) : '',
         source: source ? { book: text(source.book), uid: text(source.uid), varPath: text(source.varPath) } : null,
         // 一条线可能由几个条目的片段合并而成，恢复原条目时按它找回（比计划多存的字段）。
         sources: (Array.isArray(src.sources) ? src.sources : []).filter(isObj).map(item => ({ book: text(item.book), uid: text(item.uid), key: text(item.key ?? item.uid) })),
@@ -117,7 +120,12 @@ export function fameReading(line, fame) {
     return Number.isFinite(Number(bar.value)) ? Number(bar.value) : null;
 }
 
-const storedIndex = (line, pp) => Math.max(0, line.stages.findIndex(stage => stage.id === pp[line.id]));
+// 兜底阶段的下标：设了默认阶段用它，否则第一阶段。
+export const baseIndex = line => Math.max(0, line.stages.findIndex(stage => stage.id === line.defaultStage));
+const storedIndex = (line, pp) => {
+    const at = line.stages.findIndex(stage => stage.id === pp[line.id]);
+    return at < 0 ? baseIndex(line) : at;
+};
 
 // 跟随大纲：已到达（已过或进行中）的大纲阶段里，绑定得最靠后的那个人设阶段；都没到时用第一阶段。
 export function outlineIndex(line, env) {
@@ -125,7 +133,7 @@ export function outlineIndex(line, env) {
     const links = env.links || NO_LINKS;
     const position = new Map(units.map((unit, i) => [unit.id, i]));
     let best = -1;
-    let at = 0;
+    let at = baseIndex(line);
     line.stages.forEach((stage, i) => {
         if (!stage.unitId) return;
         const id = links.resolve(stage.unitId);
@@ -151,7 +159,7 @@ export function fameIndex(line, env, pp = null) {
         const stage = line.stages[i];
         if (!stage.cond.trim() || unlocked.includes(stage.id)) return i;
     }
-    return 0;
+    return baseIndex(line);
 }
 
 // 返回 { stage, index, source, lost }：source 为 manual/check/outline/fame；lost 表示读声望读不到值、退回了手动值。
@@ -305,7 +313,7 @@ export function checkItems(project, progress, recentText, { globals = {}, fame =
             // 读数值：只检测「数值已到、条件还没确认」的阶段，从前往后一格一格确认。
             const raw = rangeIndex(line, env);
             if (raw < 0 || pp.manual.includes(line.id)) continue;
-            next = line.stages.slice(index + 1, raw + 1).find(item => item.cond.trim() && !pp.unlocked.includes(item.id));
+            next = line.stages.slice(1, raw + 1).find(item => item.cond.trim() && !pp.unlocked.includes(item.id));
             unlock = true;
         }
         if (!next) continue;

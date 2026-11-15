@@ -1227,7 +1227,7 @@ test('多卷写作中途切换项目：已写好的卷收进原项目草稿，�
 const personaLines = [
     {
         id: 'pl1', group: '柳云岚', name: '对顾小川', keys: [], constant: true, position: 0, depth: 4, role: 0, order: 100, enabled: true, common: '柳云岚是邻家歌手。',
-        mode: 'check', fame: { source: 'fame', dim: '好感', bar: '', partner: '' }, source: null, sources: [],
+        defaultStage: '', mode: 'check', fame: { source: 'fame', dim: '好感', bar: '', partner: '' }, source: null, sources: [],
         stages: [{ id: 's1', name: '敌对', cond: '', unitId: '', range: {}, text: '她对他充满敌意。' }, { id: 's2', name: '动摇', cond: '顾小川帮了她', unitId: '', range: {}, text: '她动摇了。' }],
     },
     {
