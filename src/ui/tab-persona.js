@@ -45,8 +45,8 @@ const input = (attrs, value, extra = '') => `<input class="pi-inp" ${attrs} valu
 // 附加数值条件：同时满足才进该阶段；只在读角色关系数值时可用。
 function extraHtml(attrs, line, stage) {
     if (line.fame.source !== 'favor') return '';
-    const rows = (stage.extra || []).map((item, i) => `<div class="pi-pair is-c4"><select class="pi-sel" ${attrs('extraDim')} data-i="${i}">${options(FAVOR_DIMS.map(value => ({ value, label: value })), item.dim)}</select>${input(`${attrs('extraMin')} data-i="${i}" type="number" placeholder="下限"`, item.min ?? '')}${input(`${attrs('extraMax')} data-i="${i}" type="number" placeholder="上限"`, item.max ?? '')}<button type="button" class="pi-icon-btn is-danger" data-act="extra-del" data-line="${esc(line.id)}" data-stage="${esc(stage.id)}" data-i="${i}" title="删除这条">${ICONS.trash}</button></div>`).join('');
-    return `${rows}<div class="pi-tools"><button type="button" class="pi-btn" data-act="extra-add" data-line="${esc(line.id)}" data-stage="${esc(stage.id)}">同时满足另一项数值</button></div>`;
+    const rows = (stage.extra || []).map((item, i) => `<div class="pi-extra">${field('同时要求', `<select class="pi-sel" ${attrs('extraDim')} data-i="${i}">${options(FAVOR_DIMS.map(value => ({ value, label: value })), item.dim)}</select>`)}${field(`${item.dim}下限`, input(`${attrs('extraMin')} data-i="${i}" type="number"`, item.min ?? ''))}${field(`${item.dim}上限`, input(`${attrs('extraMax')} data-i="${i}" type="number"`, item.max ?? ''))}<button type="button" class="pi-icon-btn is-danger" data-act="extra-del" data-line="${esc(line.id)}" data-stage="${esc(stage.id)}" data-i="${i}" title="删除这条">${ICONS.trash}</button></div>`).join('');
+    return `${rows}<div class="pi-tools is-c1"><button type="button" class="pi-btn is-sm" data-act="extra-add" data-line="${esc(line.id)}" data-stage="${esc(stage.id)}">${ICONS.plus}同时满足另一项数值</button></div>`;
 }
 
 function stageHtml(view, line, stage, index, current, units) {

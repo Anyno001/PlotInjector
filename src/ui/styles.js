@@ -85,6 +85,10 @@ export const CSS = `
 .pi-pair.is-c3{--pi-cols:3}
 .pi-pair.is-c4{--pi-cols:4}
 .pi-pair .pi-inp,.pi-pair .pi-sel{width:100%}
+.pi-extra{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) 28px;gap:0 8px;align-items:end}
+.pi-extra .pi-inp,.pi-extra .pi-sel{width:100%}
+.pi-extra .pi-field{margin-bottom:8px}
+.pi-extra .pi-icon-btn{margin-bottom:8px;align-self:end;height:36px}
 .pi-presets{display:flex;flex-direction:column;gap:6px;margin-bottom:8px}
 .pi-preset-pick{flex:1;min-width:0;display:flex;align-items:center;gap:8px;padding:4px 0;border:0;background:none;color:inherit;cursor:pointer;text-align:left;font-family:inherit}
 .pi-preset:hover{background:var(--pi-fill2)}

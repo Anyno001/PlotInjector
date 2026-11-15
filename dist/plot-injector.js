@@ -1,4 +1,4 @@
-// PlotInjector v0.1.32
+// PlotInjector v0.1.33
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -4213,6 +4213,10 @@ ${horrorGuide}` : "",
 .pi-pair.is-c3{--pi-cols:3}
 .pi-pair.is-c4{--pi-cols:4}
 .pi-pair .pi-inp,.pi-pair .pi-sel{width:100%}
+.pi-extra{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) 28px;gap:0 8px;align-items:end}
+.pi-extra .pi-inp,.pi-extra .pi-sel{width:100%}
+.pi-extra .pi-field{margin-bottom:8px}
+.pi-extra .pi-icon-btn{margin-bottom:8px;align-self:end;height:36px}
 .pi-presets{display:flex;flex-direction:column;gap:6px;margin-bottom:8px}
 .pi-preset-pick{flex:1;min-width:0;display:flex;align-items:center;gap:8px;padding:4px 0;border:0;background:none;color:inherit;cursor:pointer;text-align:left;font-family:inherit}
 .pi-preset:hover{background:var(--pi-fill2)}
@@ -6441,7 +6445,7 @@ ${suffix.trim()}` : body;
   }
   var keyText = (line) => line.keys.join("，"), field = (label, body) => `<label class="pi-field"><span>${label}</span>${body}</label>`, input = (attrs, value, extra = "") => `<input class="pi-inp" ${attrs} value="${esc(value)}"${extra}>`;
   function extraHtml(attrs, line, stage) {
-    return line.fame.source !== "favor" ? "" : `${(stage.extra || []).map((item, i) => `<div class="pi-pair is-c4"><select class="pi-sel" ${attrs("extraDim")} data-i="${i}">${options(FAVOR_DIMS.map((value) => ({ value, label: value })), item.dim)}</select>${input(`${attrs("extraMin")} data-i="${i}" type="number" placeholder="下限"`, item.min ?? "")}${input(`${attrs("extraMax")} data-i="${i}" type="number" placeholder="上限"`, item.max ?? "")}<button type="button" class="pi-icon-btn is-danger" data-act="extra-del" data-line="${esc(line.id)}" data-stage="${esc(stage.id)}" data-i="${i}" title="删除这条">${ICONS.trash}</button></div>`).join("")}<div class="pi-tools"><button type="button" class="pi-btn" data-act="extra-add" data-line="${esc(line.id)}" data-stage="${esc(stage.id)}">同时满足另一项数值</button></div>`;
+    return line.fame.source !== "favor" ? "" : `${(stage.extra || []).map((item, i) => `<div class="pi-extra">${field("同时要求", `<select class="pi-sel" ${attrs("extraDim")} data-i="${i}">${options(FAVOR_DIMS.map((value) => ({ value, label: value })), item.dim)}</select>`)}${field(`${item.dim}下限`, input(`${attrs("extraMin")} data-i="${i}" type="number"`, item.min ?? ""))}${field(`${item.dim}上限`, input(`${attrs("extraMax")} data-i="${i}" type="number"`, item.max ?? ""))}<button type="button" class="pi-icon-btn is-danger" data-act="extra-del" data-line="${esc(line.id)}" data-stage="${esc(stage.id)}" data-i="${i}" title="删除这条">${ICONS.trash}</button></div>`).join("")}<div class="pi-tools is-c1"><button type="button" class="pi-btn is-sm" data-act="extra-add" data-line="${esc(line.id)}" data-stage="${esc(stage.id)}">${ICONS.plus}同时满足另一项数值</button></div>`;
   }
   function stageHtml(view, line, stage, index, current, units) {
     let attrs = (name) => `data-pl="${esc(line.id)}" data-ps="${esc(stage.id)}" data-f="${name}"`, act = (name, icon, title2, disabled = !1) => `<button type="button" class="pi-icon-btn${name === "ps-del" ? " is-danger" : ""}" data-act="${name}" data-line="${esc(line.id)}" data-stage="${esc(stage.id)}" title="${title2}"${disabled ? " disabled" : ""}>${icon}</button>`, extra = line.mode === "check" ? field("进入条件", input(attrs("cond"), stage.cond, ' placeholder="如：主角出手帮了她，她开始动摇"')) : line.mode === "outline" ? field("跟随大纲阶段", `<select class="pi-sel" ${attrs("unitId")}>${options([{ value: "", label: "不绑定（跳过）" }, ...units.map((unit) => ({ value: unit.id, label: `${volumeLabel(unit.volume.key)}·${stageLabel(unit.stage.key)}` }))], stage.unitId)}</select>`) : line.mode === "fame" ? `<div class="pi-pair">${field(line.fame.source === "favor" ? `${line.fame.dim}下限` : "声望下限", input(`${attrs("min")} type="number"`, stage.range.min ?? ""))}${field(line.fame.source === "favor" ? `${line.fame.dim}上限` : "声望上限", input(`${attrs("max")} type="number"`, stage.range.max ?? ""))}</div>${extraHtml(attrs, line, stage)}${field("进入条件（可空，写了要检测确认后才进）", input(attrs("cond"), stage.cond, ' placeholder="如：已经发生过表白"'))}` : "";
@@ -8297,7 +8301,7 @@ ${suffix.trim()}` : body;
   }
 
   // src/index.js
-  var VERSION = "0.1.32", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.1.33", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")
