@@ -10,7 +10,7 @@ import { buildEntries } from '../src/core/inject.js';
 import { buildCheckMessages, buildPersonaCheckMessages, parseCheckReply } from '../src/core/check.js';
 import { newProject, normalizeProject, normalizeSettings } from '../src/core/store.js';
 import { flattenUnits } from '../src/core/outline.js';
-import { applyMoves, alignPersonaProgress, buildPersonaEntries, checkItems, currentStage, emptyPersonas, newLine, newStage, normalizePersonas, resolveMoves, setPersonaStage, syncPersonas, undoMoves } from '../src/core/personas.js';
+import { applyMoves, alignPersonaProgress, buildPersonaEntries, checkItems, currentStage, fameIndex, fameReading, emptyPersonas, newLine, newStage, normalizePersonas, resolveMoves, setPersonaStage, syncPersonas, undoMoves } from '../src/core/personas.js';
 import { applyPlan, buildPlan, parseCond, parseEntry, releaseImported } from '../src/core/persona-import.js';
 import { flattenUnits as flat } from '../src/core/outline.js';
 
@@ -435,4 +435,12 @@ test('转入的人设线经 normalize 往返不丢字段', () => {
     const after = applyPlan(emptyPersonas(), buildPlan(entries), entries);
     const round = normalizePersonas(JSON.parse(JSON.stringify(after)));
     assert.deepEqual(round, after);
+});
+
+test('读好感：按别名认人、可选信任/芥蒂/欲望，区间选阶段', () => {
+    const line = normalizePersonas({ lines: [{ id: 'l', mode: 'fame', fame: { source: 'favor', dim: '芥蒂', bar: '小雪' }, stages: [{ id: 'a', name: 'A', range: { max: 10 } }, { id: 'b', name: 'B', range: { min: 11 } }] }] }).lines[0];
+    const fame = [{ kind: 'favor', name: '苏晴雪', aliases: ['小雪'], value: 80, dims: { 好感: 80, 信任: 5, 了解: 5, 芥蒂: 30, 欲望: 0 } }];
+    assert.equal(fameReading(line, fame), 30);
+    assert.equal(fameIndex(line, { fame }), 1);
+    assert.equal(fameReading({ ...line, fame: { ...line.fame, bar: '路人' } }, fame), null);
 });

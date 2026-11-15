@@ -1,4 +1,4 @@
-// PlotInjector v0.1.29
+// PlotInjector v0.1.30
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -979,7 +979,7 @@ ${value.name}`);
     { value: "outline", label: "跟随大纲" },
     { value: "fame", label: "读声望/好感" },
     { value: "manual", label: "手动" }
-  ], MODE_KEYS = PERSONA_MODES.map((item) => item.value), PERSONA_SLOT_PREFIX = "@persona:", isObj3 = (value) => !!value && typeof value == "object" && !Array.isArray(value), text = (value) => String(value ?? ""), intOr = (value, fallback) => Number.isFinite(Number(value)) && value !== "" && value !== null ? Math.round(Number(value)) : fallback, num = (value) => value == null || value === "" || !Number.isFinite(Number(value)) ? void 0 : Number(value);
+  ], MODE_KEYS = PERSONA_MODES.map((item) => item.value), PERSONA_SLOT_PREFIX = "@persona:", FAVOR_DIMS = ["好感", "信任", "了解", "芥蒂", "欲望"], isObj3 = (value) => !!value && typeof value == "object" && !Array.isArray(value), text = (value) => String(value ?? ""), intOr = (value, fallback) => Number.isFinite(Number(value)) && value !== "" && value !== null ? Math.round(Number(value)) : fallback, num = (value) => value == null || value === "" || !Number.isFinite(Number(value)) ? void 0 : Number(value);
   function emptyPersonas() {
     return { lines: [], imported: [] };
   }
@@ -1000,7 +1000,7 @@ ${value.name}`);
       enabled: !0,
       common: "",
       mode: "manual",
-      fame: { source: "fame", bar: "", partner: "" },
+      fame: { source: "fame", dim: "好感", bar: "", partner: "" },
       stages: [newStage("阶段一")],
       source: null
     };
@@ -1024,7 +1024,7 @@ ${value.name}`);
       enabled: src.enabled !== !1,
       common: text(src.common),
       mode: MODE_KEYS.includes(src.mode) ? src.mode : "check",
-      fame: { source: fame.source === "favor" ? "favor" : "fame", bar: text(fame.bar).trim(), partner: text(fame.partner).trim() },
+      fame: { source: fame.source === "favor" ? "favor" : "fame", dim: FAVOR_DIMS.includes(fame.dim) ? fame.dim : "好感", bar: text(fame.bar).trim(), partner: text(fame.partner).trim() },
       stages: (Array.isArray(src.stages) ? src.stages : []).filter(isObj3).map(normalizeStage),
       source: source ? { book: text(source.book), uid: text(source.uid), varPath: text(source.varPath) } : null,
       // 一条线可能由几个条目的片段合并而成，恢复原条目时按它找回（比计划多存的字段）。
@@ -1051,8 +1051,12 @@ ${value.name}`);
     return Number.isFinite(value) ? (range.min === void 0 || value >= range.min) && (range.max === void 0 || value <= range.max) : !1;
   }
   function fameReading(line, fame) {
-    let kind = line.fame.source === "favor" ? "favor" : "fame", bar = (Array.isArray(fame) ? fame : []).find((item) => item && item.name === line.fame.bar && (item.kind || "fame") === kind);
+    let kind = line.fame.source === "favor" ? "favor" : "fame", name = line.fame.bar, bar = (Array.isArray(fame) ? fame : []).find((item) => item && (item.kind || "fame") === kind && (item.name === name || kind === "favor" && Array.isArray(item.aliases) && item.aliases.includes(name)));
     if (!bar) return null;
+    if (kind === "favor") {
+      let value = bar.dims && line.fame.dim in bar.dims ? Number(bar.dims[line.fame.dim]) : line.fame.dim === "好感" ? Number(bar.value) : NaN;
+      return Number.isFinite(value) ? value : null;
+    }
     if (line.fame.partner) {
       let pair = (Array.isArray(bar.pairs) ? bar.pairs : []).find((item) => item.partner === line.fame.partner);
       return pair ? Number(pair.value) : null;
@@ -6238,14 +6242,14 @@ ${suffix.trim()}` : body;
       if (!line.sources.some((source) => !blocked.has(`${source.book}\0${source.key}`))) continue;
       let base = { group: line.group, name: line.name, keys: line.entry.keys, constant: line.entry.constant, position: line.entry.position, depth: line.entry.depth, role: line.entry.role, order: line.entry.order, common: line.common, source: { book: line.entry.book, uid: String(line.entry.uid), varPath: line.path }, sources: line.sources };
       if (line.kind === "num")
-        out.push({ ...base, mode: "fame", fame: { source: "fame", bar: line.name, partner: "" }, stages: numericStages([...line.stages.values()]) });
+        out.push({ ...base, mode: "fame", fame: { source: "fame", dim: "好感", bar: line.name, partner: "" }, stages: numericStages([...line.stages.values()]) });
       else {
         let stages = [...line.stages.values()].map((item) => ({ ...newStage(item.value), cond: stateLine(item.text), text: item.text }));
-        out.push({ ...base, mode: "check", fame: { source: "fame", bar: "", partner: "" }, stages });
+        out.push({ ...base, mode: "check", fame: { source: "fame", dim: "好感", bar: "", partner: "" }, stages });
       }
     }
     for (let { entry, text: text2 } of plainLines)
-      text2 && out.push({ group: "", name: entryName(entry.title), keys: entry.keys, constant: entry.constant, position: entry.position, depth: entry.depth, role: entry.role, order: entry.order, common: "", mode: "manual", fame: { source: "fame", bar: "", partner: "" }, stages: [{ ...newStage("默认"), text: text2 }], source: { book: entry.book, uid: String(entry.uid), varPath: "" }, sources: [{ book: entry.book, uid: String(entry.uid), key: String(entry.key) }] });
+      text2 && out.push({ group: "", name: entryName(entry.title), keys: entry.keys, constant: entry.constant, position: entry.position, depth: entry.depth, role: entry.role, order: entry.order, common: "", mode: "manual", fame: { source: "fame", dim: "好感", bar: "", partner: "" }, stages: [{ ...newStage("默认"), text: text2 }], source: { book: entry.book, uid: String(entry.uid), varPath: "" }, sources: [{ book: entry.book, uid: String(entry.uid), key: String(entry.key) }] });
     let varList = [...info.values()].map((item) => ({ path: item.path, name: pathNames(item.path).name, group: pathNames(item.path).group, kind: kinds.get(item.path), values: item.values, pick: pickMap.get(item.path), entries: item.entries.size, canFix: !(item.ops.has("<=") || item.ops.has(">=")), canLine: !item.nested }));
     return { lines: out, issues, blocked, vars: varList };
   }
@@ -6393,7 +6397,7 @@ ${suffix.trim()}` : body;
   }
   var keyText = (line) => line.keys.join("，"), splitKeys = (value) => String(value || "").split(/[,，、\n]/).map((item) => item.trim()).filter(Boolean), field = (label, body) => `<label class="pi-field"><span>${label}</span>${body}</label>`, input = (attrs, value, extra = "") => `<input class="pi-inp" ${attrs} value="${esc(value)}"${extra}>`;
   function stageHtml(view, line, stage, index, current, units) {
-    let attrs = (name) => `data-pl="${esc(line.id)}" data-ps="${esc(stage.id)}" data-f="${name}"`, act = (name, icon, title2, disabled = !1) => `<button type="button" class="pi-icon-btn${name === "ps-del" ? " is-danger" : ""}" data-act="${name}" data-line="${esc(line.id)}" data-stage="${esc(stage.id)}" title="${title2}"${disabled ? " disabled" : ""}>${icon}</button>`, extra = line.mode === "check" ? field("进入条件", input(attrs("cond"), stage.cond, ' placeholder="如：主角出手帮了她，她开始动摇"')) : line.mode === "outline" ? field("跟随大纲阶段", `<select class="pi-sel" ${attrs("unitId")}>${options([{ value: "", label: "不绑定（跳过）" }, ...units.map((unit) => ({ value: unit.id, label: `${volumeLabel(unit.volume.key)}·${stageLabel(unit.stage.key)}` }))], stage.unitId)}</select>`) : line.mode === "fame" ? `<div class="pi-pair">${field(line.fame.source === "favor" ? "好感下限" : "声望下限", input(`${attrs("min")} type="number"`, stage.range.min ?? ""))}${field(line.fame.source === "favor" ? "好感上限" : "声望上限", input(`${attrs("max")} type="number"`, stage.range.max ?? ""))}</div>${field("进入条件（可空，写了要检测确认后才进）", input(attrs("cond"), stage.cond, ' placeholder="如：已经发生过表白"'))}` : "";
+    let attrs = (name) => `data-pl="${esc(line.id)}" data-ps="${esc(stage.id)}" data-f="${name}"`, act = (name, icon, title2, disabled = !1) => `<button type="button" class="pi-icon-btn${name === "ps-del" ? " is-danger" : ""}" data-act="${name}" data-line="${esc(line.id)}" data-stage="${esc(stage.id)}" title="${title2}"${disabled ? " disabled" : ""}>${icon}</button>`, extra = line.mode === "check" ? field("进入条件", input(attrs("cond"), stage.cond, ' placeholder="如：主角出手帮了她，她开始动摇"')) : line.mode === "outline" ? field("跟随大纲阶段", `<select class="pi-sel" ${attrs("unitId")}>${options([{ value: "", label: "不绑定（跳过）" }, ...units.map((unit) => ({ value: unit.id, label: `${volumeLabel(unit.volume.key)}·${stageLabel(unit.stage.key)}` }))], stage.unitId)}</select>`) : line.mode === "fame" ? `<div class="pi-pair">${field(line.fame.source === "favor" ? `${line.fame.dim}下限` : "声望下限", input(`${attrs("min")} type="number"`, stage.range.min ?? ""))}${field(line.fame.source === "favor" ? `${line.fame.dim}上限` : "声望上限", input(`${attrs("max")} type="number"`, stage.range.max ?? ""))}</div>${field("进入条件（可空，写了要检测确认后才进）", input(attrs("cond"), stage.cond, ' placeholder="如：已经发生过表白"'))}` : "";
     return `<div class="pi-node pi-ps">
         <div class="pi-node-hd">${index === current ? '<span class="pi-badge is-accent">当前</span>' : ""}${input(attrs("name"), stage.name)}
             ${act("ps-up", ICONS.arrowUp, "上移", index === 0)}${act("ps-down", ICONS.arrowDown, "下移", index === line.stages.length - 1)}${act("ps-del", ICONS.trash, "删除阶段", line.stages.length <= 1)}</div>
@@ -6401,8 +6405,9 @@ ${suffix.trim()}` : body;
         ${field(`人设内容 ≈${estimateTokens(stage.text)}`, `<textarea class="pi-ta" rows="6" ${attrs("text")}>${esc(stage.text)}</textarea>`)}</div>`;
   }
   function lineBody(view, line, units) {
-    let attrs = (name) => `data-pl="${esc(line.id)}" data-f="${name}"`, atDepth = line.position === 4, info = stageInfo(view, line), isFavor = line.fame.source === "favor", fameBody = line.mode === "fame" ? `<datalist id="pi-fame-list">${view.runtime.fame().filter((bar) => (bar.kind || "fame") === (isFavor ? "favor" : "fame")).map((bar) => `<option value="${esc(bar.name)}"></option>`).join("")}</datalist>
-        <label class="pi-field"><span>数据来源</span><select class="pi-sel" ${attrs("fameSource")}>${options([{ value: "fame", label: "声望" }, { value: "favor", label: "好感" }], line.fame.source)}</select></label>
+    let attrs = (name) => `data-pl="${esc(line.id)}" data-f="${name}"`, atDepth = line.position === 4, info = stageInfo(view, line), isFavor = line.fame.source === "favor", fameBody = line.mode === "fame" ? `<datalist id="pi-fame-list">${view.runtime.fame().filter((bar) => (bar.kind || "fame") === (isFavor ? "favor" : "fame")).flatMap((bar) => [bar.name, ...isFavor && Array.isArray(bar.aliases) ? bar.aliases : []]).map((name) => `<option value="${esc(name)}"></option>`).join("")}</datalist>
+        <label class="pi-field"><span>数据来源</span><select class="pi-sel" ${attrs("fameSource")}>${options([{ value: "fame", label: "声望" }, { value: "favor", label: "角色对主角的关系数值" }], line.fame.source)}</select></label>
+        ${isFavor ? `<label class="pi-field"><span>读哪一项</span><select class="pi-sel" ${attrs("fameDim")}>${options(FAVOR_DIMS.map((value) => ({ value, label: value })), line.fame.dim)}</select></label>` : ""}
         <div class="pi-pair">${field(isFavor ? "角色名" : "声望条名称", input(`${attrs("fameBar")} list="pi-fame-list"`, line.fame.bar))}${isFavor ? "" : field("对象（可空）", input(attrs("famePartner"), line.fame.partner))}</div>
         <p class="pi-hint">读不到数值时沿用手动选择的阶段。</p>` : "";
     return `<div class="pi-entry-bd">
@@ -6473,8 +6478,8 @@ ${suffix.trim()}` : body;
     if (d.pl) {
       if (d.ps)
         patchStage(view, d.pl, d.ps, (stage) => ({ ...stage, ...d.f === "min" || d.f === "max" ? rangePatch(stage, d.f, target.value) : (STAGE_PATCH[d.f] || (() => ({})))(target.value) }));
-      else if (d.f === "fameBar" || d.f === "famePartner" || d.f === "fameSource") {
-        let key = { fameBar: "bar", famePartner: "partner", fameSource: "source" }[d.f];
+      else if (d.f === "fameBar" || d.f === "famePartner" || d.f === "fameSource" || d.f === "fameDim") {
+        let key = { fameBar: "bar", famePartner: "partner", fameSource: "source", fameDim: "dim" }[d.f];
         patchLine(view, d.pl, (line) => ({ ...line, fame: { ...line.fame, [key]: target.value.trim(), ...d.f === "fameSource" ? { bar: "", partner: "" } : {} } }));
       } else LINE_PATCH[d.f] && patchLine(view, d.pl, (line) => ({ ...line, ...LINE_PATCH[d.f](target.value) }));
       return view.renderBody();
@@ -8231,7 +8236,7 @@ ${suffix.trim()}` : body;
   }
 
   // src/index.js
-  var VERSION = "0.1.29", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.1.30", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")

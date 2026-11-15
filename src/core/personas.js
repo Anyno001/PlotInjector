@@ -15,6 +15,7 @@ export const PERSONA_MODES = [
 const MODE_KEYS = PERSONA_MODES.map(item => item.value);
 export const PERSONA_SLOT_PREFIX = '@persona:';
 
+export const FAVOR_DIMS = ['好感', '信任', '了解', '芥蒂', '欲望'];
 const isObj = value => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 const text = value => String(value ?? '');
 const intOr = (value, fallback) => (Number.isFinite(Number(value)) && value !== '' && value !== null ? Math.round(Number(value)) : fallback);
@@ -31,7 +32,7 @@ export function newStage(name = '新阶段') {
 export function newLine(name = '新人设', group = '') {
     return {
         id: makeId('pl'), group, name, keys: [], constant: true, position: 0, depth: 4, role: 0, order: 100, enabled: true,
-        common: '', mode: 'manual', fame: { source: 'fame', bar: '', partner: '' }, stages: [newStage('阶段一')], source: null,
+        common: '', mode: 'manual', fame: { source: 'fame', dim: '好感', bar: '', partner: '' }, stages: [newStage('阶段一')], source: null,
     };
 }
 
@@ -60,7 +61,7 @@ function normalizeLine(value) {
         enabled: src.enabled !== false,
         common: text(src.common),
         mode: MODE_KEYS.includes(src.mode) ? src.mode : 'check',
-        fame: { source: fame.source === 'favor' ? 'favor' : 'fame', bar: text(fame.bar).trim(), partner: text(fame.partner).trim() },
+        fame: { source: fame.source === 'favor' ? 'favor' : 'fame', dim: FAVOR_DIMS.includes(fame.dim) ? fame.dim : '好感', bar: text(fame.bar).trim(), partner: text(fame.partner).trim() },
         stages: (Array.isArray(src.stages) ? src.stages : []).filter(isObj).map(normalizeStage),
         source: source ? { book: text(source.book), uid: text(source.uid), varPath: text(source.varPath) } : null,
         // 一条线可能由几个条目的片段合并而成，恢复原条目时按它找回（比计划多存的字段）。
@@ -101,8 +102,14 @@ export function rangeHas(range, value) {
 export function fameReading(line, fame) {
     // 读数里声望行没有 kind，好感行 kind 为 'favor'（由运行时合并进同一个数组）。
     const kind = line.fame.source === 'favor' ? 'favor' : 'fame';
-    const bar = (Array.isArray(fame) ? fame : []).find(item => item && item.name === line.fame.bar && (item.kind || 'fame') === kind);
+    const name = line.fame.bar;
+    // 好感行可按别名认人（IGS 的角色别名）。
+    const bar = (Array.isArray(fame) ? fame : []).find(item => item && (item.kind || 'fame') === kind && (item.name === name || (kind === 'favor' && Array.isArray(item.aliases) && item.aliases.includes(name))));
     if (!bar) return null;
+    if (kind === 'favor') {
+        const value = bar.dims && line.fame.dim in bar.dims ? Number(bar.dims[line.fame.dim]) : line.fame.dim === '好感' ? Number(bar.value) : NaN;
+        return Number.isFinite(value) ? value : null;
+    }
     if (line.fame.partner) {
         const pair = (Array.isArray(bar.pairs) ? bar.pairs : []).find(item => item.partner === line.fame.partner);
         return pair ? Number(pair.value) : null;
