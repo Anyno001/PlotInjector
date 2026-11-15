@@ -1,4 +1,4 @@
-// 「线索推进」配套表格模板的生成脚本。表格的定义只有一份：插件源码 src/03g_core_clue-template.js
+// 「线索推进」配套表格模板的生成脚本。表格的定义只有一份：插件源码 src/core/clue-template.js
 // （执行页「生成线索模板」按钮用的就是它）；这里加载那份核心代码来生成随包文件，避免两边不一致。
 // 用法：node templates/clue-tables/build-template.mjs
 //   → 线索推进表格模板.json          只有三张线索表（给已经有自己表格的聊天手动导入用）
@@ -23,7 +23,6 @@ const MATE = {
   globalInjectionConfig: { readableEntryPlacement: { position: 'before_char', depth: 2, order: 99981 }, wrapperPlacement: { position: 'before_char', depth: 2, order: 99980 } },
 };
 
-export const sceneCatalogText = core.sceneCatalogText;
 // 只有三张线索表的模板（测试和「已有自己表格的聊天」用）。参数同 clueSheets。
 export function buildTemplate(opts = {}) {
   const out = {};
@@ -37,14 +36,14 @@ export function buildCombinedTemplate(defaultTemplate, clue = {}) {
 }
 
 // 插件「表格绑定」：与线索表的表名、列名一一对应。
-// 必须与 src/32b_ui_clue-run.js 的 BINDING_EXAMPLE 逐字一致（测试强制）。
+// 必须与 src/ui/clue-run.js 的 BINDING_EXAMPLE 逐字一致（测试强制）。
 // 主线开关不在表格里（执行页「暂停 / 继续主线」）；旧项目绑定的 switch 仍然有效。
 // 故事时间先读官方默认的「全局数据表」，没有时退回旧模板的线索控制表时间列。
 export const BINDING_YAML = `facts:
   - {表: 关键事实表, 编号列: 编号, 状态列: 状态, 已核实值: 已核实, 说法值: 存疑, 内容列: 内容, 来源列: 依据}
 knowledge:
   - {表: 知情表, 事实列: 事实, 角色列: 角色, 方式列: 获知方式, 可信度列: 可信度, 已核实值: 已核实, 来源列: 依据, 有效值: [亲见, 被告知, 听说, 推测]}
-scene: {路径: 线索控制表/主线/当前场景, 离场值: 离场}
+scene: {路径: 线索控制表/主线/当前场景, 离场值: 无}
 time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主线/当前时间]}
 `;
 

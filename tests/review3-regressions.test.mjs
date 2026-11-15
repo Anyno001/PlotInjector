@@ -134,35 +134,46 @@ async function setup(clue = {}) {
 }
 
 test('R4 scenario 5: enter A without finding, switch focus to B → the next full request has no trace of A\'s answers', async () => {
-  // legacy inject=link project + plot strategy 1 (finalMessage persisted into the user message)
+  // legacy inject=link project: still only temporary world info
   const { host, inst } = await setup({ inject: 'link' });
   inst.runtime.clue.setFocus('nA');
   const r1 = await host.send('去档案室', { reply: '你进了档案室，翻了一会儿没找到什么，就离开了。' });
   assert.match(r1.text, /档案里的答案A/);
   inst.runtime.clue.setFocus('nB');
   const r2 = await host.send('去码头');
-  const fullRequest = JSON.stringify(host.state.chat) + '\n' + r2.text + '\n' + r2.round.finalMessage;
+  const fullRequest = JSON.stringify(host.state.chat) + '\n' + r2.text;
   assert.ok(!fullRequest.includes('档案里的答案A'), 'A pending answer is nowhere in history or this request');
   assert.match(r2.text, /码头的答案B/);
   await inst.destroy();
 });
 
-test('candidates bound to the reply: fill for that floor gets A ids; reply that did not find it is the fill model\'s call; swipe → none', async () => {
+// 删实验联动接口第 2 步：原来断言实验 $L 文字，改成直接核对逐楼候选记录（正式功能「正文可能自己编了」靠它）。
+test('candidates bound to the reply: floor 1 records A (with its record rule), not later focus B; another swipe has none of its own', async () => {
   const { host, inst } = await setup();
   inst.runtime.clue.setFocus('nA');
   await host.send('去档案室', { reply: '你进门聊了几句就离开了。' });
-  const cand = host.db.fillCandidates([0, 1]);
-  assert.match(cand, /第 1 楼/);
-  assert.match(cand, /FA：实际取得档案时记 FA/);
-  assert.match(cand, /只是到达、尝试、答应或中途离开，都不要记录为已获得/);
-  assert.ok(!cand.includes('档案里的答案A'), 'answer text not repeated in the fill request');
-  // later focus change must not change what floor 1 is filled with
+  const recs = () => JSON.parse(JSON.stringify(inst.runtime.progress().clueCandidates || []));
+  const floor1 = recs().filter((x) => x.i === 1);
+  assert.equal(floor1.length, 1);
+  assert.equal(floor1[0].swipe, 0);
+  assert.deepEqual(floor1[0].candidates, [{ fact: 'FA', record: '实际取得档案时记 FA' }]);
+  assert.ok(!JSON.stringify(floor1).includes('档案里的答案A'), 'answer text not stored with the candidates');
+  // later focus change must not rewrite what floor 1 was offered
   inst.runtime.clue.setFocus('nB');
-  assert.match(host.db.fillCandidates([1]), /FA/);
-  assert.ok(!host.db.fillCandidates([1]).includes('FB'));
-  // a different swipe of floor 1 was generated in a different round → old candidates do not apply
+  inst.runtime.clue.invalidate();
+  assert.deepEqual(recs().filter((x) => x.i === 1)[0].candidates.map((c) => c.fact), ['FA']);
+  // the floor generated again (swipe 1): the focus-B op was anchored on swipe 0 so it no longer applies; with focus B set
+  // again for this swipe the new reply gets its own record, and the swipe-0 record is untouched
   host.state.chat[1].swipe_id = 1;
-  assert.equal(host.db.fillCandidates([1]), '');
+  await host.eventSource.emit(host.eventTypes.GENERATION_STARTED, 'swipe', {}, false);
+  inst.runtime.clue.setFocus('nB');
+  await host.worldInfo();
+  await host.eventSource.emit(host.eventTypes.MESSAGE_RECEIVED, 1);
+  await host.eventSource.emit(host.eventTypes.GENERATION_ENDED);
+  const both = recs().filter((x) => x.i === 1);
+  assert.deepEqual(both.map((x) => [x.swipe, x.candidates.map((c) => c.fact).join()]).sort(), [[0, 'FA'], [1, 'FB']]);
+  // FA still counts as offered in this chat (loose memory across swipes, GPT 实测返修审阅 §5 第 2 步)
+  assert.ok((inst.runtime.progress().clueOffered || []).includes('FA'));
   await inst.destroy();
 });
 

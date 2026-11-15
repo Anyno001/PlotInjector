@@ -129,14 +129,11 @@ async function twoProjects() {
   return { host, inst, a, b };
 }
 
-test('P1-3a: project switched between provideContext and world-info assembly → stale round injects nothing', async () => {
+// 删实验联动接口第 2 步：原来从实验 provider 的上下文开始；官方路径由 GENERATION_STARTED 建本轮票据。
+test('P1-3a: project switched between generation start and world-info assembly → stale round injects nothing', async () => {
   const { host, inst, b } = await twoProjects();
-  const p = host.db.providers.get('plot-injector');
-  const scope = { chatId: 'chat-1', roundId: 'r1' };
-  await p.awaitReady(scope);
-  assert.match(p.provideContext(scope), /入口A/);
-  await inst.runtime.switchProject(b.id);
   await host.eventSource.emit(host.eventTypes.GENERATION_STARTED, 'normal', {}, false);
+  await inst.runtime.switchProject(b.id);
   const stale = (await host.worldInfo()).map((e) => e.content).join('\n');
   assert.ok(!stale.includes('场景B') && !stale.includes('场景A'), 'stale round gets no clue material');
   await host.eventSource.emit(host.eventTypes.GENERATION_ENDED);

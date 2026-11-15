@@ -11,7 +11,14 @@ export function cloneTables(raw) {
 export function sheetList(tables) {
     return Object.entries(tables || {})
         .filter(([key, sheet]) => key.startsWith('sheet_') && sheet && Array.isArray(sheet.content))
-        .map(([key, sheet]) => ({ key, name: String(sheet.name || key), content: sheet.content, seedRows: sheet.seedRows }));
+        .map(([key, sheet]) => ({
+            key,
+            name: String(sheet.name || key),
+            content: sheet.content,
+            seedRows: sheet.seedRows,
+            note: String((sheet.sourceData && sheet.sourceData.note) || ''),
+            freq: sheet.updateConfig ? sheet.updateConfig.updateFrequency : void 0,
+        }));
 }
 
 export function findSheet(tables, name) {
@@ -61,9 +68,10 @@ export function readCell(tables, path) {
         found = findSheet(tables, table);
     if (found.error) return { state: 'unknown', reason: found.error };
     let { col, rows } = sheetRows(found.sheet),
-        c = col(column);
-    if (c < 0) return { state: 'unknown', reason: `表「${table}」缺少列「${column}」` };
-    let hits = rows.filter((row) => cellText(row[1]) === rowKey);
+        c = col(column),
+        hits = c < 0 ? [] : findRow(rows, rowKey);
+    if ((!hits.length && col(rowKey) >= 0 && findRow(rows, column).length && ((c = col(rowKey)), (hits = findRow(rows, column))), c < 0))
+        return { state: 'unknown', reason: `表「${table}」缺少列「${column}」` };
     if (!hits.length) return { state: 'unknown', reason: `表「${table}」没有行「${rowKey}」` };
     if (hits.length > 1) return { state: 'unknown', reason: `表「${table}」行「${rowKey}」重复` };
     let value = hits[0][c];
@@ -223,4 +231,204 @@ export function plotPresetConflicts(preset) {
         other.length && out.push({ task: String(t.name || t.id || '未命名任务'), tags: other });
     }
     return out;
+}
+
+export function findRow(rows, rowKey) {
+    let first = rows.filter((row) => cellText(row[1]) === rowKey);
+    return first.length ? first : rows.filter((row) => row.slice(1).some((cell) => cellText(cell) === rowKey));
+}
+
+export const ENTRY_OPEN = '(（[【「『';
+
+export const ENTRY_CLOSE = ')）]】」』';
+
+export const ENTRY_SEP = `;；|｜
+`;
+
+export const ENTRY_COMMA = ',，、';
+
+export const ENTRY_HEAD = /^\s*[^\s:：=,，、;；|｜()（）]{1,12}\s*[:：=]/;
+
+export const SELF_KEYS = ['主角', 'user', '<user>', '{{user}}', '玩家'];
+
+export function entryOf(key, value) {
+    let k = String(key).trim(),
+        m = /^(?:与|和|对|跟)\s*(.+?)\s*的(?:关系|好感度?|态度|印象|看法)$/.exec(k);
+    return (
+        (k = m ? m[1] : k.replace(/\s*的(?:关系|好感度?|态度|印象|看法)$/, '')),
+        k && k.length <= 24
+            ? {
+                  key: k.trim(),
+                  value: String(value)
+                      .trim()
+                      .replace(/^[−－]/, '-'),
+              }
+            : null
+    );
+}
+
+export function parseEntry(e) {
+    let depth = 0,
+        at = -1,
+        m;
+    for (let i = 0; i < e.length; i++) {
+        let ch = e[i];
+        if (ENTRY_OPEN.includes(ch)) depth++;
+        else if (ENTRY_CLOSE.includes(ch)) depth = Math.max(0, depth - 1);
+        else if (depth === 0 && ':：='.includes(ch)) {
+            at = i;
+            break;
+        }
+    }
+    return at > 0
+        ? entryOf(e.slice(0, at), e.slice(at + 1).replace(/^[\s:：=]+/, ''))
+        : (m = /^([^（(]{1,24}?)\s*[（(]([\s\S]*)[)）]$/.exec(e))
+          ? entryOf(m[1], m[2])
+          : (m = /^(\D{1,12}?)\s*([+\-−－]\s*\d+(?:\.\d+)?)$/.exec(e))
+            ? entryOf(m[1], m[2].replace(/\s+/g, ''))
+            : (m = /^(\S{1,12})\s+(\S[\s\S]*)$/.exec(e)) || (m = /^(\D{1,12}?)(\d+(?:\.\d+)?)$/.exec(e))
+              ? entryOf(m[1], m[2])
+              : null;
+}
+
+export function cellEntries(text) {
+    let s = cellText(text),
+        parts = [],
+        cur = '',
+        depth = 0,
+        flush = () => {
+            (cur.trim() && parts.push(cur.trim()), (cur = ''));
+        };
+    for (let i = 0; i < s.length; i++) {
+        let ch = s[i];
+        if (
+            (ENTRY_OPEN.includes(ch) ? depth++ : ENTRY_CLOSE.includes(ch) && (depth = Math.max(0, depth - 1)),
+            depth === 0 && ENTRY_SEP.includes(ch))
+        ) {
+            flush();
+            continue;
+        }
+        if (depth === 0 && ENTRY_COMMA.includes(ch) && ENTRY_HEAD.test(cur) && ENTRY_HEAD.test(s.slice(i + 1))) {
+            flush();
+            continue;
+        }
+        cur += ch;
+    }
+    if ((flush(), parts.length === 1 && /[,，、]/.test(parts[0]))) {
+        let bits = parts[0]
+            .split(/[,，、]/)
+            .map((x) => x.trim())
+            .filter(Boolean);
+        bits.length > 1 && bits.every((b) => /^\D{1,12}?\s*[+\-−－]?\s*\d+(?:\.\d+)?$/.test(b)) && (parts = bits);
+    }
+    let out = [];
+    for (let p of parts) {
+        let e = parseEntry(p);
+        e ? out.push(e) : out.length && (out[out.length - 1] = { ...out[out.length - 1], value: `${out[out.length - 1].value},${p}` });
+    }
+    return out;
+}
+
+export function pickEntry(text, key) {
+    let k = String(key ?? '').trim(),
+        list = cellEntries(text),
+        keys = SELF_KEYS.includes(k) ? SELF_KEYS : [k];
+    if (!k) return { state: 'unknown', reason: '没写要取哪一项' };
+    if (!list.length) return { state: 'unknown', reason: '这一格不是按「名字:内容」分条写的' };
+    let hits = list.filter((e) => keys.includes(e.key)),
+        vals = [...new Set(hits.map((e) => e.value))];
+    return hits.length
+        ? vals.length > 1
+            ? { state: 'unknown', reason: `这一格里「${k}」出现了 ${hits.length} 次、写法不同，分不清取哪个` }
+            : vals[0] === ''
+              ? { state: 'unknown', reason: `「${k}」这一项是空的` }
+              : { state: 'ok', value: vals[0] }
+        : { state: 'unknown', reason: `这一格里还没有「${k}」这一项` };
+}
+
+export const TIER_EDGE = /[\s:：,，。.;；|｜(（\-—~～/／]/;
+
+export function tierIndex(value, tiers) {
+    let list = (tiers || []).map((t) => cellText(t)),
+        v0 = cellText(value),
+        find = (v) => {
+            let hits = list.map((t, i) => ({ t, i })).filter(({ t }) => t && (v === t || (v.startsWith(t) && TIER_EDGE.test(v[t.length]))));
+            if (!hits.length) return -1;
+            let top = Math.max(...hits.map((h) => h.t.length)),
+                best = hits.filter((h) => h.t.length === top);
+            return best.length === 1 ? best[0].i : -1;
+        },
+        at = find(v0);
+    return at >= 0 ? at : find(v0.replace(/^\d+\s*[.、:：)）]?\s*/, ''));
+}
+
+export function tierCompare(op, cell, wanted, tiers) {
+    let a = tierIndex(cell, tiers),
+        b = (tiers || []).map((t) => cellText(t)).indexOf(cellText(wanted));
+    return a < 0 || b < 0
+        ? null
+        : op === '=='
+          ? a === b
+          : op === '!='
+            ? a !== b
+            : op === '>='
+              ? a >= b
+              : op === '<='
+                ? a <= b
+                : op === '>'
+                  ? a > b
+                  : a < b;
+}
+
+export const TIER_UP_WORDS = /从低到高|由低到高|从弱到强|由弱到强|从浅到深|由浅入深|升序|[<＜→]|->/;
+
+export const TIER_DOWN_WORDS = /从高到低|由高到低|从强到弱|由强到弱|从深到浅|降序|[>＞]/;
+
+export function tierOrderInNote(note, tiers) {
+    let list = (tiers || []).map((t) => cellText(t)).filter(Boolean),
+        lines = String(note || '').split(/\r?\n/);
+    if (list.length < 2) return !1;
+    let inLine = (line, seq) => {
+            let at = 0;
+            for (let t of seq) {
+                let i = line.indexOf(t, at);
+                if (i < 0) return !1;
+                at = i + t.length;
+            }
+            return !0;
+        },
+        stated = (k, words) => {
+            if (words.test(lines[k])) return !0;
+            for (let j = k + 1; j < lines.length && /^[\s·•\-*]/.test(lines[j]) && !/^\s*-\s*列\d/.test(lines[j]); j++)
+                if (words.test(lines[j])) return !0;
+            return !1;
+        },
+        down = [...list].reverse();
+    if (
+        lines.some((l, k) => inLine(l, list) && stated(k, TIER_UP_WORDS) && !TIER_DOWN_WORDS.test(l)) ||
+        lines.some((l, k) => inLine(l, down) && stated(k, TIER_DOWN_WORDS) && !TIER_UP_WORDS.test(l))
+    )
+        return !0;
+    let nums = list.map((t) => {
+        let re = new RegExp(`^\\s*[-·•*]?\\s*(\\d+)\\s*[.、:：)）]?\\s*${t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![^\\s:：（(，,。])`),
+            hit = lines.map((l) => re.exec(l)).find(Boolean);
+        return hit ? Number(hit[1]) : NaN;
+    });
+    return nums.every(Number.isFinite) && nums.every((n, i) => !i || n > nums[i - 1]);
+}
+
+export function countRows(tables, table, column, op, value, applyOp) {
+    let found = findSheet(tables, table);
+    if (found.error) return { state: 'unknown', reason: found.error };
+    let { col, rows } = sheetRows(found.sheet),
+        c = col(column);
+    if (c < 0) return { state: 'unknown', reason: `表「${table}」缺少列「${column}」` };
+    let n = 0,
+        unsure = 0;
+    for (let row of rows) {
+        if (cellText(row[c]) === '') continue;
+        let ok = applyOp(op, row[c], value);
+        ok === null ? unsure++ : ok && n++;
+    }
+    return { state: 'ok', count: n, unsure };
 }

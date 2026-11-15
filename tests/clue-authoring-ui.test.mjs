@@ -92,7 +92,7 @@ test('clue mode: run page 改写后续 uses the clue rewrite prompt from the clu
   // stage 1 done → current stage is 阶段二
   const s = Object.values(tables).find((x) => x && x.name === '关键事实表');
   s.content.find((r, i) => i > 0 && r[1] === 'F_box')[s.content[0].indexOf('状态')] = '已核实';
-  host.db.setTables(tables); host.db.commit(0);
+  host.db.setTables(tables);
   await click('[data-act="tab"][data-tab="run"]');
   host.llm.reply = '```yaml\n剧情_卷一_小镇失窃案:\n  阶段二_调查:\n    主线节点:\n      - {id: n_ledger, 名称: 查账本, 入口: 翻账本, 发现: [{事实: F_ledger, 内容: c}], 完成条件: {事实: F_ledger}}\n```';
   // the rewrite asks for a reason through a prompt dialog → answer it

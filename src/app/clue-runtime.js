@@ -1,10 +1,7 @@
-import { hostWindow, chatMessages, ctx, toast } from '../host/st.js';
-import { isClueMode, withNodeIds } from '../core/clue-model.js';
-import { normalizeClueOps, effectiveClueProgress, diffClueStatus, addClueOp } from '../core/clue-progress.js';
-
-import { cloneTables, readFacts, readKnowledge, readCell, sameValue, cellText, plotPresetConflicts } from '../core/clue-tables.js';
-
 import {
+    withLineIds,
+    lineToManual,
+    confirmTierOrder,
     compileClue,
     computeClueState,
     prebuiltGaps,
@@ -13,13 +10,51 @@ import {
     effectiveFact,
     AWAY_PREFIX,
 } from '../core/clue-rules.js';
+import {
+    focusTakenOver,
+    validStays,
+    stayText,
+    stayState,
+    normalizeClueOps,
+    effectiveClueProgress,
+    diffClueStatus,
+    addClueOp,
+} from '../core/clue-progress.js';
+import {
+    catalogKnown,
+    lineEntryPlan,
+    lineAwayInfo,
+    acuIsolationKey,
+    fillEvidence,
+    enterEvidence,
+    sideSlots,
+    mainSlotTaken,
+    LINE_CATALOG_COL,
+    sceneCatalogCell,
+    appendTargetFloor,
+} from '../core/lines.js';
 
-import { discoveryList, buildClueProjection, clueText } from '../core/clue-project.js';
+import { prebuildDiff, prebuildPlan, focusScore, discoveryList, buildClueProjection, clueText } from '../core/clue-project.js';
+
+import {
+    findSheet,
+    sheetRows,
+    findRow,
+    cloneTables,
+    readFacts,
+    readKnowledge,
+    readCell,
+    sameValue,
+    cellText,
+    plotPresetConflicts,
+} from '../core/clue-tables.js';
+
+import { hostWindow, chatMessages, ctx, toast } from '../host/st.js';
+import { isClueMode, withNodeIds } from '../core/clue-model.js';
+
 import { isPlainObject } from '../core/outline.js';
 
 import { requestToText, auditRequest } from '../core/clue-audit.js';
-
-export const CLUE_PROVIDER_ID = 'plot-injector';
 
 export const CLUE_LOG_MAX = 40;
 
@@ -33,25 +68,15 @@ export function acuApi() {
 }
 
 export function createClueRuntime({ data, getProject, getProgress, setProgress, emit, log, ticket = () => null, ticketValid = () => !0 }) {
-    // lastTableUpdate：官方表格更新回调最近一次触发的时间（只代表「表变了」，不代表上一楼的填表全部完成）。
     let lastTableUpdate = 0,
         lastAudit = null,
         lastInjected = null,
         dirty = !0,
         cache = null,
         lastStatus = null,
-        filling = !1,
-        lastFill = null,
-        lastCommit = null,
-        provided = null,
-        registered = !1,
-        unregister = null,
         tableCallback = null,
-        events = [];
-    // 本轮：从「等待填表」之前就建立，后续前置上下文、临时世界书注入都核对同一张票据。
-    let round = null;
-    // 自动填表流水线：数据库发 queued 后、settled 前都算「还有填表待处理」（v3）。
-    let pendingPipelines = /* @__PURE__ */ new Map();
+        events = [],
+        round = null;
     function note(text) {
         (events.push({ at: Date.now(), text }), events.length > CLUE_LOG_MAX && events.shift(), log(`[线索] ${text}`));
     }
@@ -63,13 +88,12 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
         let prog = getProgress();
         return normalizeClueOps(prog && prog.clue);
     }
-    // 给缺 ID 的节点补 ID 并保存；已有 ID 不动。只在线索模式下做，避免改写大纲模式项目。
     function ensureIds(p) {
-        let next = withNodeIds(p.outline.volumes);
-        return next === p.outline.volumes
+        let fix = (vols) => withLineIds(withNodeIds(vols));
+        return fix(p.outline.volumes) === p.outline.volumes
             ? p
-            : (data.updateProject(p.id, (cur) => ({ ...cur, outline: { ...cur.outline, volumes: withNodeIds(cur.outline.volumes) } })),
-              note('已给缺少 ID 的节点补上稳定 ID'),
+            : (data.updateProject(p.id, (cur) => ({ ...cur, outline: { ...cur.outline, volumes: fix(cur.outline.volumes) } })),
+              note('已给缺少编号的节点、剧情线补上稳定编号'),
               data.project(p.id) || p);
     }
     function snapshot(p) {
@@ -79,7 +103,7 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
                 facts: /* @__PURE__ */ new Map(),
                 knowledge: [],
                 tables: {},
-                problems: ['没有检测到数据库插件（AutoCardUpdaterAPI），所有事实视为未知'],
+                problems: ['没有检测到数据库插件（shujuku），所有线索都按未知算。请确认数据库插件已安装并开启'],
                 api: !1,
             };
         let tables = cloneTables(api.exportTableAsJson()),
@@ -98,7 +122,6 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
         }
         return { facts: f.facts, knowledge: k.rows, knowPresent, tables, problems, enabled, api: !0 };
     }
-    // 计算（带缓存）。表格更新、聊天变化、人工操作、项目修改都会置脏。
     function compute() {
         let p = project();
         if (!p) return null;
@@ -107,75 +130,599 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
         let compiled = compileClue(p.outline.volumes),
             snap = snapshot(p),
             prog = effectiveClueProgress(clueOps(), chatMessages()),
-            state = computeClueState(compiled, snap, prog, p.clue);
+            scenePath = p.clue.bindings.scene && p.clue.bindings.scene.路径,
+            sceneCell = scenePath ? readCell(snap.tables || {}, scenePath) : null;
+        prog.focusTaken = focusTakenOver(
+            prog,
+            (getProgress() || {}).stays,
+            chatMessages(),
+            sceneCell && sceneCell.state === 'ok' ? cellText(sceneCell.value) : void 0,
+        );
+        let state = computeClueState(compiled, snap, prog, p.clue);
         snap.api && (p.clue.bindings.facts || []).length && snap.problems.push(...prebuiltGaps(compiled, snap));
-        let hints = snap.api ? [...tableConsistencyHints(snap), ...uncandidatedHints(compiled, snap, prog)] : [],
+        let unoffered = snap.api ? unofferedFacts(compiled, snap, prog) : [],
+            hints = snap.api ? tableConsistencyHints(snap) : [],
             status = Object.fromEntries(state.nodeStates.filter((s) => s.node.uid).map((s) => [s.node.uid, s.status]));
         if (lastStatus && lastStatus.projectId === p.id)
             for (let change of diffClueStatus(lastStatus.map, status)) {
                 let s = state.nodeStates.find((x) => x.node.uid === change.uid);
                 note(`${s ? s.node.name : change.uid}：${NODE_STATUS_LABELS[change.from]} → ${NODE_STATUS_LABELS[change.to]}`);
             }
+        let multi = compiled.lines.length > 0,
+            known = multi && snap.api && scenePath ? catalogKnown(snap.tables, scenePath) : null,
+            plan = multi
+                ? lineEntryPlan(state, prog, {
+                      limit: p.clue.sideLimit || 1,
+                      offers: lineOffers(),
+                      round: aiFloors(),
+                      firstOffer: firstOffered(),
+                      known,
+                  })
+                : null,
+            notReady = multi && snap.api && (p.clue.bindings.facts || []).length ? factsNotReady(p, snap) : /* @__PURE__ */ new Set(),
+            away = multi ? linesAway(compiled, state, sceneCell && sceneCell.state === 'ok' ? cellText(sceneCell.value) : '') : {};
         return (
             (lastStatus = { projectId: p.id, map: status }),
-            (cache = { projectId: p.id, outline: p.outline, clue: p.clue, compiled, snap, prog, state, hints, at: Date.now() }),
+            (cache = {
+                projectId: p.id,
+                outline: p.outline,
+                clue: p.clue,
+                compiled,
+                snap,
+                prog,
+                state,
+                plan,
+                notReady,
+                hints,
+                unoffered,
+                away,
+                at: Date.now(),
+            }),
             (dirty = !1),
             cache
         );
     }
-    // 「没作为候选给过正文、却第一次被记为已核实」的事实（GPT §13.2）：可能是填表误记（如把推进计划当成发生），
-    // 也可能是合理的越序调查或替代发现。只提示作者检查依据，不改判定、不自动纠正。
-    // 候选记录：本聊天各楼绑定过的 clueCandidates（含已换掉的回复版本，宽松处理）+ 本次待绑定的。人工确认的事实不提示。
-    function uncandidatedHints(compiled, snap, prog) {
+    function linesAway(compiled, state, sceneNowValue) {
+        let uidLine = /* @__PURE__ */ new Map(),
+            placeOf = /* @__PURE__ */ new Map(),
+            out = {};
+        for (let n of compiled.nodes)
+            n.uid &&
+                n.unit.line &&
+                (uidLine.set(n.uid, n.unit.line.id), placeOf.set(n.uid, clueText(isPlainObject(n.item) ? n.item.地点 : '')));
+        let prog = getProgress(),
+            rows = [{ scene: sceneNowValue || '' }, ...validStays(prog && prog.stays, chatMessages())];
+        for (let s of state.lineStates || []) {
+            if (s.state !== '进行中') continue;
+            let a = lineAwayInfo(rows, s.line.id, uidLine, placeOf);
+            a && (out[s.line.id] = a);
+        }
+        return out;
+    }
+    function factsNotReady(p, snap) {
+        let diff = prebuildDiff(prebuildPlan(p.outline.volumes), snap, p.clue.bindings),
+            knows = (p.clue.bindings.knowledge || []).length && snap.knowPresent ? diff.newKnows : [];
+        return /* @__PURE__ */ new Set([...diff.newFacts.map((f) => f.code), ...knows.map((k) => k.fact)]);
+    }
+    function isoKey() {
+        let c = ctx(),
+            bridge = hostWindow().__ACU_USERSCRIPT_BRIDGE__,
+            a = acuIsolationKey(c && c.extensionSettings);
+        return a !== null ? a : acuIsolationKey(bridge && bridge.extension_settings);
+    }
+    var LINE_FLOOR_KEEP = 400;
+    function lineFloors() {
+        let prog = getProgress(),
+            chat = chatMessages();
+        return (prog && Array.isArray(prog.lineFloors) ? prog.lineFloors : []).filter(
+            (x) =>
+                chat[x.i] &&
+                !chat[x.i].is_user &&
+                (Number(chat[x.i].swipe_id) || 0) === x.swipe &&
+                String(chat[x.i].send_date ?? '') === x.stamp,
+        );
+    }
+    function lineOffers() {
+        return lineFloors()
+            .filter((x) => x.offer)
+            .map((x) => ({ i: x.i, line: x.offer }));
+    }
+    function firstOffered() {
+        return new Set(
+            lineFloors()
+                .map((x) => x.offer)
+                .filter(Boolean),
+        );
+    }
+    function aiFloors() {
+        return chatMessages().filter((m) => m && !m.is_user).length;
+    }
+    function bindLineFloor(index, used) {
+        let msg = chatMessages()[index],
+            prog = getProgress();
+        if (!msg || msg.is_user || !prog || !used) return;
+        let list = (Array.isArray(prog.lineFloors) ? prog.lineFloors : []).filter(
+            (x) => !(x.i === index && x.swipe === (Number(msg.swipe_id) || 0)),
+        );
+        (list.push({
+            i: index,
+            swipe: Number(msg.swipe_id) || 0,
+            stamp: String(msg.send_date ?? ''),
+            recognize: (used.recognize || []).map((r) => ({ uid: r.uid, line: r.line })),
+            offer: used.offer || '',
+        }),
+            setProgress({ ...prog, lineFloors: list.sort((a, b) => a.i - b.i).slice(-LINE_FLOOR_KEEP) }, 'line-floor'));
+    }
+    var SYNC_DELAY_MS = 1500;
+    let syncTimer = 0,
+        syncing = !1,
+        syncAgain = !1,
+        lastToast = { key: '', at: 0 },
+        lineBar = null,
+        catalogMissing = !1,
+        labelsWarned = !1;
+    function scheduleSync() {
+        let w = hostWindow();
+        (w.clearTimeout(syncTimer),
+            (syncTimer = w.setTimeout(() => {
+                syncLines().catch((e) => note(`多线同步出错：${e.message}`));
+            }, SYNC_DELAY_MS)));
+    }
+    function sceneSheetKey(p, tables) {
+        let path = p.clue.bindings.scene && p.clue.bindings.scene.路径,
+            name = path ? String(path).split('/')[0].trim() : '',
+            f = name ? findSheet(tables || {}, name) : { error: 'x' };
+        return f.error ? '' : f.sheet.key;
+    }
+    async function syncLines() {
+        if (syncing) return void (syncAgain = !0);
+        let p = project();
+        if (p) {
+            syncing = !0;
+            try {
+                dirty = !0;
+                let c = compute();
+                if (!c || !c.snap.api) return;
+                let t0 = ticket(),
+                    chat = chatMessages(),
+                    changed = !1,
+                    lastAi = -1;
+                if (!c.plan) return void (await writeCatalog(p, c, t0));
+                for (let i = chat.length - 1; i >= 0; i--)
+                    if (chat[i] && !chat[i].is_user) {
+                        lastAi = i;
+                        break;
+                    }
+                let rec = lastAi >= 0 ? lineFloors().find((x) => x.i === lastAi) : null,
+                    path = p.clue.bindings.scene && p.clue.bindings.scene.路径,
+                    cell = path ? readCell(c.snap.tables || {}, path) : null,
+                    value = cell && cell.state === 'ok' ? cellText(cell.value) : '',
+                    iso = isoKey(),
+                    proof = lastAi >= 0 ? fillEvidence(chat[lastAi], sceneSheetKey(p, c.snap.tables), iso) : { ok: !1, reason: '' },
+                    autoStart = c.state.lineStates.filter(
+                        (s) => s.line.mode === 'auto' && s.state === '进行中' && !s.manual.started && s.why === '开启条件已满足',
+                    );
+                if (
+                    (autoStart.length &&
+                        lastAi >= 0 &&
+                        (addOps(
+                            autoStart.map((s) => ({
+                                kind: 'line',
+                                target: s.line.id,
+                                value: 'start',
+                                text: `auto@${lastAi}`,
+                                note: '开启条件满足，自动开始',
+                                atIndex: lastAi,
+                            })),
+                        ),
+                        (changed = !0)),
+                    rec && value && rec.recognize.some((r) => r.uid === value))
+                ) {
+                    let denied = Object.fromEntries(Object.entries(c.prog.lines || {}).map(([k, v]) => [k, v.denied || []])),
+                        ev = enterEvidence({
+                            allowed: rec.recognize,
+                            cell: value,
+                            floor: lastAi,
+                            swipe: Number(chat[lastAi].swipe_id) || 0,
+                            evidenceOk: proof.ok,
+                            denied,
+                        }),
+                        ls = ev && c.state.lineStates.find((s) => s.line.id === ev.line);
+                    if (
+                        (proof.ok || note(`当前场景是入口 ${value}，但${proof.reason}，先不算进入（可以在执行页点「进入」）`),
+                        ev && ls && !ls.started && !ls.manual.state)
+                    ) {
+                        let slots = sideSlots(c.state.lineStates, p.clue.sideLimit || 1),
+                            busy = ls.line.kind === 'main' ? mainSlotTaken(c.state.lineStates, ls.line.id) : '';
+                        if (busy) note(`没有开始 ${ev.line}：${busy}`);
+                        else if (ls.line.kind === 'side' && c.prog.sidePaused) note(`支线已全部暂停：没有开始 ${ev.line}`);
+                        else if (ls.line.kind === 'side' && slots.full) {
+                            let off = slots.used.length === 1 ? c.state.lineStates.find((x) => x.line.id === slots.used[0]) : null;
+                            lineToast(`full:${ev.key}`, '支线已满', ls.line.name, '切换', () =>
+                                switchSide(ev.line, ev.key, lastAi, '', ev.uid),
+                            );
+                        } else
+                            (addOps([{ kind: 'line', target: ev.line, value: 'start', text: ev.key, note: '走进了入口', atIndex: lastAi }]),
+                                (changed = !0),
+                                note(`线 ${ev.line} 开始：第 ${lastAi} 楼走进了入口 ${ev.uid}`),
+                                lineToast(`start:${ev.key}`, ls.line.kind === 'side' ? '支线开始' : '主线开始', ls.line.name, '取消', () =>
+                                    denyStart(ev.line, ev.key),
+                                ));
+                    }
+                }
+                let dueEntry = c.plan.due && rec && rec.recognize.some((r) => r.line === c.plan.due && r.uid === value);
+                if (
+                    (!changed &&
+                        c.plan.due &&
+                        lastAi >= 0 &&
+                        proof.ok &&
+                        !dueEntry &&
+                        (addOps([
+                            {
+                                kind: 'line',
+                                target: c.plan.due,
+                                value: 'skip',
+                                note: '提示了 3 次没有进入，先让后面的上来',
+                                atIndex: lastAi,
+                            },
+                        ]),
+                        (changed = !0),
+                        note(`支线 ${c.plan.due} 提示了 3 次没有进入，排到后面`)),
+                    !ticketValid(t0))
+                )
+                    return;
+                changed && (dirty = !0);
+                let now = compute();
+                now && (await writeCatalog(p, now, t0), await fillRows(p, now, t0));
+            } finally {
+                ((syncing = !1), syncAgain && ((syncAgain = !1), scheduleSync()));
+            }
+        }
+    }
+    function addOps(list) {
+        let prog = getProgress();
+        if (!prog) return;
+        let ops = clueOps(),
+            chat = chatMessages();
+        for (let op of list) ops = addClueOp(ops, chat, op);
+        (setProgress({ ...prog, clue: ops }, 'clue-op'), invalidate(), list.forEach((op) => note(`操作：${opLabel(op)}`)));
+    }
+    function denyStart(id, key) {
+        (addOps([{ kind: 'line', target: id, value: 'deny', text: key, note: '玩家点了取消开启' }]), scheduleSync());
+    }
+    function switchSide(id, key, floor, pauseId = '', uid = '') {
+        let c = ((dirty = !0), compute()),
+            p = project();
+        if (!c || !p) return;
+        let s = c.state.lineStates.find((x) => x.line.id === id),
+            used = sideSlots(c.state.lineStates, p.clue.sideLimit || 1).used;
+        if (!s || s.started || (s.manual.state && s.manual.state !== 'pause') || !s.eligible)
+            return toast('info', '这条支线的状态已经变了，没有切换。');
+        if (c.prog.sidePaused) return toast('info', '支线已全部暂停，没有切换。先点「继续全部支线」。');
+        let off = pauseId || (used.length === 1 ? used[0] : '');
+        if (used.length >= (p.clue.sideLimit || 1) && !used.includes(off))
+            return toast('info', `现在有 ${used.length} 条支线在进行，请到执行页「剧情线」里先暂停其中一条，再点这条的「进入」。`);
+        let ops = [];
+        (used.includes(off) &&
+            used.length >= (p.clue.sideLimit || 1) &&
+            ops.push({ kind: 'line', target: off, value: 'pause', note: `切换到 ${id}` }),
+            s.manual.state === 'pause' && ops.push({ kind: 'line', target: id, value: 'resume' }),
+            ops.push({
+                kind: 'line',
+                target: id,
+                value: 'start',
+                text: key || 'manual',
+                note: ops.length ? `从 ${off} 切换过来` : '人工进入',
+                ...(Number.isInteger(floor) ? { atIndex: floor } : {}),
+            }),
+            (!key || key === 'manual') && uid && ops.push({ kind: 'focus', target: uid, value: !0, sceneAt: sceneNow() }));
+        let offName = ops.length > 1 && (c.state.lineStates.find((x) => x.line.id === off) || { line: { name: off } }).line.name;
+        (addOps(ops), scheduleSync(), offName && toast('success', `已换成「${s.line.name}」，「${offName}」先暂停。`));
+    }
+    function enterLine(id, pauseId = '', uid = '') {
+        let c = ((dirty = !0), compute()),
+            p = project();
+        if (!c || !p) return;
+        let s = c.state.lineStates.find((x) => x.line.id === id);
+        if (!s || s.started) return;
+        if (!s.eligible) throw new Error('这条线的开启条件还没满足；想早点开，可以修改它的开启条件');
+        let busy = s.line.kind === 'main' ? mainSlotTaken(c.state.lineStates, id) : '';
+        if (busy) throw new Error(`主线位置被占着：${busy}`);
+        if (s.line.kind === 'side' && c.prog.sidePaused) throw new Error('支线已全部暂停，先点「继续全部支线」');
+        let entry = uid && s.entries.includes(uid) ? uid : s.entries.length === 1 ? s.entries[0] : '';
+        if (s.line.kind === 'side' && sideSlots(c.state.lineStates, p.clue.sideLimit || 1).full)
+            return switchSide(id, 'manual', void 0, pauseId, entry);
+        (addOps([
+            { kind: 'line', target: id, value: 'start', text: 'manual', note: '人工进入' },
+            ...(entry ? [{ kind: 'focus', target: entry, value: !0, sceneAt: sceneNow() }] : []),
+        ]),
+            scheduleSync());
+    }
+    function lineToast(key, tag, text, action, run) {
+        let p = project();
+        if (!p || p.clue.lineToast === !1 || lastToast.key === key) return;
+        let t0 = ticket(),
+            guarded = () => (ticketValid(t0) && project() ? run() : toast('info', '已经切换了聊天或项目，这条提示作废了。'));
+        ((lastToast = { key, at: Date.now() }), lineBar && lineBar({ key, tag, text, action, run: guarded }));
+    }
+    async function writeCatalog(p, c, t0) {
+        let api = acuApi(),
+            col = LINE_CATALOG_COL,
+            path = p.clue.bindings.scene && p.clue.bindings.scene.路径;
+        if (!api || typeof api.updateCell != 'function' || !path) return;
+        let [table, row] = String(path)
+                .split('/')
+                .map((x) => x.trim()),
+            want = sceneCatalogCell(c.state, c.plan || { recognize: [] }, c.prog),
+            found = findSheet(c.snap.tables || {}, table);
+        if (found.error) return;
+        let { col: colOf, rows } = sheetRows(found.sheet),
+            ci = colOf(col),
+            hits = findRow(rows, row);
+        if (ci < 0) return catalogMissing || ((catalogMissing = !0), note(`线索控制表还没有「${col}」这一列：点一次「生成线索模板」补上`));
+        if (hits.length !== 1 || cellText(hits[0][ci]) === want || !ticketValid(t0)) return;
+        let index = found.sheet.content.indexOf(hits[0]);
+        if (index < 1) return;
+        let ok = await Promise.resolve(
+                api.updateCell({ tableName: table, rowIndex: index, colIdentifier: col, value: want, skipNotify: !0 }),
+            ).catch(() => !1),
+            back = readCell(cloneTables(api.exportTableAsJson()), `${table}/${row}/${col}`);
+        (ok && back.state === 'ok' && cellText(back.value) === want
+            ? note('场景目录已更新')
+            : note('场景目录没写上，下次再试；没写进去的入口先不提示'),
+            invalidate('clue-catalog'));
+    }
+    async function fillRows(p, c, t0) {
+        let api = acuApi(),
+            fb = (p.clue.bindings.facts || [])[0],
+            kb = (p.clue.bindings.knowledge || [])[0];
+        if (!api || typeof api.insertRow != 'function' || !fb) return;
+        let labels = isPlainObject(p.clue.labels) ? p.clue.labels : {},
+            plan = prebuildPlan(p.outline.volumes),
+            started = new Map(c.state.lineStates.filter((s) => s.started).map((s) => [s.line.id, s])),
+            target = appendTargetFloor(chatMessages(), isoKey()),
+            factLines = /* @__PURE__ */ new Map(),
+            triggers = new Set(plan.facts.filter((f) => f.trigger).map((f) => f.code));
+        for (let n of c.compiled.nodes)
+            for (let d of discoveryList(isPlainObject(n.item) ? n.item : {}))
+                d.fact &&
+                    factLines.set(d.fact, (factLines.get(d.fact) || /* @__PURE__ */ new Set()).add(n.unit.line ? n.unit.line.id : ''));
+        let lineReady = (lid) => {
+                if (!lid) return !0;
+                let s = started.get(lid);
+                return !!s && (s.manual.startAt === void 0 || s.manual.startAt < 0 || target >= s.manual.startAt);
+            },
+            wantFact = (code) => triggers.has(code) || !factLines.has(code) || [...factLines.get(code)].some(lineReady),
+            diff = prebuildDiff(
+                { ...plan, facts: plan.facts.filter((f) => wantFact(f.code)), knows: plan.knows.filter((k) => wantFact(k.fact)) },
+                c.snap,
+                p.clue.bindings,
+            ),
+            labelOf = (code) => labels[code] || {},
+            ready = diff.newFacts.filter((f) => labelOf(f.code).label),
+            waiting = diff.newFacts.length - ready.length;
+        if (
+            (waiting &&
+                !labelsWarned &&
+                ((labelsWarned = !0), note(`有 ${waiting} 条事实还没有标签，先不补行（采用大纲时会自动生成；也可以用「按大纲补表格行」）`)),
+            !ready.length && !diff.newKnows.length)
+        )
+            return;
+        let factOk = new Set(c.snap.facts ? c.snap.facts.keys() : []),
+            done = [];
+        for (let f of ready) {
+            if (!ticketValid(t0)) return;
+            let l = labelOf(f.code),
+                row = { [fb.编号列]: f.code, 标签: l.label, 登记口径: l.criterion || '' };
+            (fb.状态列 && (row[fb.状态列] = '未获得'),
+                (await Promise.resolve(api.insertRow({ tableName: fb.表, data: row, skipNotify: !0 })).catch(() => -1)) >= 0 &&
+                    (factOk.add(f.code), done.push(f.code)));
+        }
+        if (kb)
+            for (let k of diff.newKnows) {
+                if (!factOk.has(k.fact) || !ticketValid(t0)) continue;
+                let row = { 键: k.key, [kb.事实列]: k.fact, [kb.角色列]: k.actor };
+                (kb.方式列 && (row[kb.方式列] = Array.isArray(kb.未知值) ? kb.未知值[0] : kb.未知值 || '未知'),
+                    kb.可信度列 && (row[kb.可信度列] = '未核实'),
+                    (await Promise.resolve(api.insertRow({ tableName: kb.表, data: row, skipNotify: !0 })).catch(() => -1)) >= 0 &&
+                        done.push(k.key));
+            }
+        done.length &&
+            (note(`自动补了 ${done.length} 行：${done.slice(0, 6).join('、')}${done.length > 6 ? '……' : ''}`), invalidate('clue-rows'));
+    }
+    function lineAct(id, value, uid = '', s0 = null) {
+        if (s0 && !scopeValid(s0)) throw new Error('已经切换了聊天、项目或推进方式，这次操作没有执行，请重新点一次');
+        if (value === 'enter') return enterLine(id, '', uid);
+        if (value === 'deny') {
+            let c = compute(),
+                s = c && c.state.lineStates.find((x) => x.line.id === id);
+            return s && s.manual.evidence ? denyStart(id, s.manual.evidence) : act({ kind: 'line', target: id, value: '' });
+        }
+        if (value === 'resume') {
+            let c = ((dirty = !0), compute()),
+                p = project(),
+                s = c && c.state.lineStates.find((x) => x.line.id === id);
+            if (s && s.line.kind === 'side' && s.started && sideSlots(c.state.lineStates, p.clue.sideLimit || 1).full)
+                throw new Error('同时进行的支线已经满了：先暂停正在进行的那条，再继续这条');
+        }
+        (act({ kind: 'line', target: id, value: value || '' }), scheduleSync());
+    }
+    function toManual(id) {
+        let p = project();
+        return p
+            ? lineToManual(p.outline.volumes, id) === p.outline.volumes
+                ? !1
+                : (data.updateProject(p.id, (cur) => ({
+                      ...cur,
+                      outline: { ...cur.outline, volumes: lineToManual(cur.outline.volumes, id) },
+                  })),
+                  invalidate('line-manual'),
+                  !0)
+            : !1;
+    }
+    function confirmTiers(tiers) {
+        let p = project();
+        return p
+            ? confirmTierOrder(p.outline.volumes, tiers) === p.outline.volumes
+                ? !1
+                : (data.updateProject(p.id, (cur) => ({
+                      ...cur,
+                      outline: { ...cur.outline, volumes: confirmTierOrder(cur.outline.volumes, tiers) },
+                  })),
+                  invalidate('line-tiers'),
+                  !0)
+            : !1;
+    }
+    function moveLine(id, dir) {
+        let p = project();
+        if (!p) return;
+        let vols = p.outline.volumes,
+            idOf = (v) => (isPlainObject(v.line) ? String(v.line.编号 || '').trim() : ''),
+            sideOf = (v) => isPlainObject(v.line) && String(v.line.类型 || '').trim() !== '主线',
+            at = vols.findIndex((v) => idOf(v) === id);
+        if (at < 0 || !sideOf(vols[at])) return;
+        let to = at + dir;
+        for (; to >= 0 && to < vols.length && !sideOf(vols[to]);) to += dir;
+        if (to < 0 || to >= vols.length) return;
+        let next = vols.slice();
+        (([next[at], next[to]] = [next[to], next[at]]),
+            data.updateProject(p.id, (cur) => ({ ...cur, outline: { ...cur.outline, volumes: next } })),
+            invalidate('line-order'));
+    }
+    function unofferedFacts(compiled, snap, prog) {
         let pr = getProgress(),
             offered = /* @__PURE__ */ new Set();
         for (let x of pr && Array.isArray(pr.clueCandidates) ? pr.clueCandidates : [])
             for (let c of x.candidates || []) offered.add(c.fact);
-        // 逐楼记录最多留 CANDIDATE_KEEP 条；另存一份「本聊天给过的事实编号」，不设上限（数量很小），长聊天里不会误报（GPT §14.2-4）。
         for (let id of pr && Array.isArray(pr.clueOffered) ? pr.clueOffered : []) offered.add(id);
         for (let c of (pendingCandidates && pendingCandidates.candidates) || []) offered.add(c.fact);
         let tracked = /* @__PURE__ */ new Set();
         for (let n of compiled.nodes) for (let d of discoveryList(isPlainObject(n.item) ? n.item : {})) d.fact && tracked.add(d.fact);
-        // 「存疑」（说法值）也算：实测里填表把一段别的传闻错记到了 F_gossip（存疑），已核实之外的误记同样需要提醒。
-        let list = [],
-            claims = [];
-        for (let [id, f] of snap.facts || []) {
-            if (!tracked.has(id) || offered.has(id)) continue;
-            let over = prog.factOverrides && prog.factOverrides[id];
-            if (over && over.status === 'confirmed') continue;
-            f.status === 'confirmed' ? list.push(id) : f.claimed && claims.push(id);
+        let out = [],
+            overs = prog.factOverrides || {};
+        for (let [id, over] of Object.entries(overs)) {
+            if (!tracked.has(id) || !over || over.status !== 'revoked') continue;
+            let f = snap.facts && snap.facts.get(id);
+            out.push({ id, raw: f ? f.raw : '', text: over.text || (f && f.text) || '', revoked: !0 });
         }
-        let out = [];
-        list.length &&
-            out.push(
-                `这些事实被记为已核实，但插件从没把它们作为可能发现给过正文：${list.join('、')}。可能是合理的越序调查，也可能是填表把计划或推测当成了发生，请对照正文检查依据${list.length === 1 ? '' : '（逐条）'}`,
-            );
-        claims.length &&
-            out.push(
-                `这些事实被记为「说法 / 存疑」，但插件从没把它们作为可能发现给过正文：${claims.join('、')}。可能是填表把别的传闻对错了编号，请对照正文和登记口径检查`,
-            );
+        for (let [id, f] of snap.facts || [])
+            !tracked.has(id) ||
+                offered.has(id) ||
+                overs[id] ||
+                ((f.status === 'confirmed' || f.claimed) && out.push({ id, raw: f.raw, text: f.text || '', revoked: !1 }));
         return out;
+    }
+    function opScope() {
+        return { ticket: ticket(), iso: isoKey() };
+    }
+    function scopeValid(s0) {
+        return !!s0 && ticketValid(s0.ticket) && isoKey() === s0.iso;
+    }
+    async function voidFact(id, s0 = opScope()) {
+        let p = project(),
+            c = compute();
+        if (!p || !c || !scopeValid(s0))
+            return { done: !1, table: 'none', why: '已经切换了聊天、项目、推进方式或数据隔离，这次作废没有执行，请重新点一次' };
+        let f = c.snap.facts && c.snap.facts.get(id);
+        act({ kind: 'fact', target: id, value: 'revoked', text: f ? f.text : '', note: '玩家作废：正文可能自己编的' });
+        let r = await voidTables(p, id, s0.ticket, s0.iso).catch((e) => ({ table: 'none', why: (e && e.message) || String(e) }));
+        return (
+            invalidate('clue-void'),
+            note(r.table === 'ok' ? `作废 ${id}：表格已改回未获得` : `作废 ${id}：${r.why || '表格没改'}`),
+            { done: !0, ...r }
+        );
+    }
+    var SQL_WORD = /^[A-Za-z_\u0080-￿][A-Za-z0-9_$\u0080-￿]*$/;
+    async function voidTables(p, id, t0, iso0) {
+        let api = acuApi(),
+            fb = (p.clue.bindings.facts || [])[0],
+            kb = (p.clue.bindings.knowledge || [])[0];
+        if (!api || !fb || !fb.状态列) return { table: 'none', why: '没有绑定事实表的状态列，表格没改' };
+        if (typeof api.executeSqlMutation != 'function' || typeof api.querySql != 'function')
+            return {
+                table: 'none',
+                why: '数据库不是 SQLite 存储模式（或还没就绪），插件没法安全改表；需要的话请到数据库里把这条改回「未获得」',
+            };
+        let unknown = Array.isArray(kb && kb.未知值) ? kb.未知值[0] : (kb && kb.未知值) || '未知',
+            jobs = [
+                {
+                    what: '事实表',
+                    sql: [fb.表, fb.状态列, fb.编号列],
+                    text: `UPDATE ${fb.表} SET ${fb.状态列} = ? WHERE ${fb.编号列} = ?`,
+                    params: ['未获得', id],
+                },
+            ];
+        kb &&
+            kb.方式列 &&
+            kb.事实列 &&
+            jobs.push({
+                what: '知情表',
+                sql: [kb.表, kb.方式列, kb.事实列, ...(kb.可信度列 ? [kb.可信度列] : [])],
+                text: `UPDATE ${kb.表} SET ${kb.方式列} = ?${kb.可信度列 ? `, ${kb.可信度列} = ?` : ''} WHERE ${kb.事实列} = ?`,
+                params: [unknown, ...(kb.可信度列 ? ['未核实'] : []), id],
+            });
+        let bad = jobs.flatMap((j) => j.sql).find((name) => !SQL_WORD.test(String(name || '')));
+        if (bad !== void 0) return { table: 'none', why: `表名或列名「${bad}」带特殊字符，插件没法安全改表` };
+        let failed = [],
+            tried = 0;
+        for (let j of jobs) {
+            if (!ticketValid(t0) || isoKey() !== iso0)
+                return {
+                    table: tried ? 'partial' : 'none',
+                    why: tried ? '改表途中切换了聊天、项目或数据隔离，没有全部完成' : '切换了聊天、项目或数据隔离，表格没改',
+                };
+            tried++;
+            let res = await Promise.resolve(api.executeSqlMutation(j.text, j.params)).catch((e) => ({
+                errors: [(e && e.message) || String(e)],
+            }));
+            res && Array.isArray(res.errors) && res.errors.length && failed.push(`${j.what}：${res.errors[0]}`);
+        }
+        if (!ticketValid(t0) || isoKey() !== iso0) return { table: 'partial', why: '改表途中切换了聊天、项目或数据隔离，没法确认表格结果' };
+        let tables = cloneTables(api.exportTableAsJson()),
+            fr = readFacts(tables, [fb]),
+            kr = kb && kb.方式列 ? readKnowledge(tables, [kb]) : null,
+            fact = fr.facts.get(id),
+            knows = kr ? kr.rows.filter((row) => row.fact === id) : [],
+            factOk = !fr.problems.length && (!fact || (fact.status === 'unconfirmed' && !fact.claimed)),
+            knowOk = !kr || (!kr.problems.length && !knows.length);
+        if (factOk && knowOk && !failed.length) return { table: 'ok', why: '' };
+        let why = [
+            failed.join('；'),
+            fr.problems.length ? `事实表读不到：${fr.problems[0]}` : !factOk && '事实表这条还不是「未获得」',
+            kr && kr.problems.length
+                ? `知情表读不到：${kr.problems[0]}`
+                : !knowOk && `知情表还有 ${knows.map((k) => k.actor).join('、')} 记着知道`,
+        ]
+            .filter(Boolean)
+            .join('；');
+        return { table: (factOk && knowOk) || factOk || knowOk ? 'partial' : 'none', why: why || '没法确认表格结果' };
+    }
+    function restoreFact(id) {
+        act({ kind: 'fact', target: id, value: '', note: '玩家解除作废：按表格判断' });
+        let c = compute();
+        return c ? effectiveFact(id, c.snap, c.prog) : null;
     }
     function invalidate(reason = '') {
         ((dirty = !0), reason && emit(reason));
     }
-    // ---- 本轮票据（R3） ----
     function beginRound(source) {
-        return ((round = { ticket: ticket(), at: Date.now(), source, stale: !1 }), round);
+        return ((round = { ticket: ticket(), at: Date.now(), source }), round);
     }
-    // 没有本轮（或已过期）才新建；返回是否新建。已有的本轮哪怕失效也沿用（失效的本轮不提供任何材料）。
     function ensureRound(source) {
         return round && Date.now() - round.at <= ROUND_TTL_MS ? !1 : (beginRound(source), !0);
     }
     function roundState() {
-        if (!round) return { ok: !0 };
-        if (Date.now() - round.at > ROUND_TTL_MS) return ((round = null), { ok: !0 });
-        return ticketValid(round.ticket) ? { ok: !0 } : { ok: !1, reason: '本轮开始后切换了聊天、项目或推进方式' };
+        return round
+            ? Date.now() - round.at > ROUND_TTL_MS
+                ? ((round = null), { ok: !0 })
+                : ticketValid(round.ticket)
+                  ? { ok: !0 }
+                  : { ok: !1, reason: '本轮开始后切换了聊天、项目或推进方式' }
+            : { ok: !0 };
     }
     function endRound() {
         round = null;
     }
-    // 本轮给正文的投影。主线关闭、数据库不可用、本轮票据失效时返回空并给出原因，不退回整阶段注入。
     function projection() {
         let c = compute();
         if (!c) return { content: '', reason: '不是线索模式' };
@@ -185,33 +732,35 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
         let r = roundState();
         if (!r.ok) return { content: '', reason: r.reason };
         let prog = getProgress(),
-            out = buildClueProjection(c.state, c.snap, c.prog, data.settings(), { pace: prog && prog.pace });
-        return { ...out, reason: out.content ? '' : '当前没有可演的线索场景', stale: filling || pendingPipelines.size > 0 };
+            info = stayInfo(c),
+            out = buildClueProjection(c.state, c.snap, c.prog, data.settings(), {
+                pace: prog && prog.pace,
+                stay: stayText(stayState(prog && prog.stays, chatMessages(), info), 'clue'),
+                plan: c.plan,
+                notReady: c.notReady,
+            });
+        return {
+            ...out,
+            reason: out.content ? '' : '当前没有可演的线索场景',
+            lineOnly: !out.content && !!(out.used && out.used.recognize && out.used.recognize.length),
+        };
     }
-    // 给前置任务（召回 / 基础推进）的简短上下文：只给焦点场景的入口与地点、其它可进行入口；不给发现内容。
-    function preTaskContext() {
-        let c = compute();
-        if (!c || !c.snap.api || !c.snap.enabled || c.prog.paused) return '';
-        let lines = [],
-            focus = c.state.nodeStates.find((s) => s.node.uid && s.node.uid === c.state.focus.uid);
-        if (focus) {
-            let item = isPlainObject(focus.node.item) ? focus.node.item : {},
-                entry = clueText(item.入口),
-                place = clueText(item.地点);
-            (entry || place) &&
-                lines.push(
-                    `当前候选场景（尚未发生，由用户行动决定是否进入）：${[entry, place && `地点：${place}`].filter(Boolean).join('；')}`,
-                );
-        }
-        let leads = c.state.nodeStates
-            .filter((s) => s.status === 'available' && s !== focus && !s.disabled)
-            .map((s) => clueText(isPlainObject(s.node.item) ? s.node.item.入口 : ''))
-            .filter(Boolean);
-        return (leads.length && lines.push(`其他可进行的事：${leads.join('；')}`), lines.join('\n'));
+    function stayInfo(cc) {
+        let c = cc || compute();
+        if (!c) return null;
+        let paused = !!c.prog.paused || c.snap.enabled === !1,
+            p = project(),
+            path = p && p.clue.bindings.scene && p.clue.bindings.scene.路径,
+            cell = path ? readCell(c.snap.tables || {}, path) : null;
+        return {
+            key: paused ? '' : c.state.focus.uid || '',
+            score: focusScore(c.state, c.snap, c.prog),
+            paused,
+            scene: cell && cell.state === 'ok' ? cellText(cell.value) : '',
+        };
     }
-    // 记录实际注入（临时世界书），并把本轮候选发现编号存到聊天元数据，供之后填「这条回复」时使用。
     function record(via, out) {
-        ((lastInjected = {
+        lastInjected = {
             at: Date.now(),
             via,
             chars: (out.content || '').length,
@@ -219,22 +768,19 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
             facts: out.used ? out.used.facts.slice() : [],
             leads: out.used ? out.used.leads.slice() : [],
             reason: out.reason || '',
-            stale: !!out.stale,
             content: out.content || '',
-        }),
-            out.stale && note('本轮使用的表格可能不含上一轮的填表结果'));
-        // 每次注入都覆盖待绑定项：本次没有线索内容（主线关闭、票据失效等）就清空，不让上一次中止生成的候选落到这一楼。
+        };
+        let lineOnly = !out.content && out.lineOnly;
         pendingCandidates =
-            out.content && out.used && ((out.used.candidates || []).length || (out.used.scenes || []).length)
-                ? makePending(out.used)
+            out.used &&
+            (out.content || lineOnly) &&
+            ((out.used.candidates || []).length || (out.used.scenes || []).length || (out.used.recognize && out.used.recognize.length))
+                ? makePending(lineOnly ? { ...out.used, candidates: [], scenes: [] } : out.used)
                 : null;
     }
-    // 生成被中止且还没有回复绑定：这次的候选作废。
     function discardPendingCandidates() {
-        (pendingCandidates && note('生成已中止，本次的填表编号对照作废'), (pendingCandidates = null));
+        (pendingCandidates && note('生成已中止，这一次给正文的线索记录作废'), (pendingCandidates = null));
     }
-    // ---- 填表候选编号：按「哪一条回复」绑定，填表时按楼层与回复版本取回，不读当前焦点 ----
-    // 生成时还不知道回复会落在哪一楼：先记成「待定」，回复到达（MESSAGE_RECEIVED）时绑定到那一楼的当前回复版本。
     let pendingCandidates = null;
     function makePending(used) {
         return {
@@ -242,20 +788,22 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
             focus: used.focus,
             candidates: (used.candidates || []).map((c) => ({ fact: c.fact, record: c.record || '' })),
             scenes: (used.scenes || []).map((s) => ({ uid: s.uid, entry: s.entry || '', place: s.place || '', focus: !!s.focus })),
+            lines: used.recognize ? { recognize: used.recognize, offer: used.offer || '' } : null,
             ticket: round ? round.ticket : ticket(),
         };
     }
     function bindCandidatesToMessage(index) {
         let pc = pendingCandidates;
         if (((pendingCandidates = null), !pc || Date.now() - pc.at > ROUND_TTL_MS || !ticketValid(pc.ticket))) return;
+        pc.lines && bindLineFloor(index, pc.lines);
         let msg = chatMessages()[index];
         if (!msg || msg.is_user) return;
         let prog = getProgress();
         if (!prog) return;
         let list = (Array.isArray(prog.clueCandidates) ? prog.clueCandidates : []).filter(
-            (x) => !(x.i === index && x.swipe === (Number(msg.swipe_id) || 0)),
-        );
-        let offered = new Set(Array.isArray(prog.clueOffered) ? prog.clueOffered : []);
+                (x) => !(x.i === index && x.swipe === (Number(msg.swipe_id) || 0)),
+            ),
+            offered = new Set(Array.isArray(prog.clueOffered) ? prog.clueOffered : []);
         for (let c of pc.candidates || []) offered.add(c.fact);
         (list.push({
             i: index,
@@ -267,36 +815,6 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
         }),
             setProgress({ ...prog, clueCandidates: list.slice(-CANDIDATE_KEEP), clueOffered: [...offered] }, 'clue-candidates'));
     }
-    // 给填表请求：指定楼层范围内，每条回复「当前版本」实际提供过的候选。版本对不上（换了 swipe、重生成）就不给。
-    function candidatesFor(indices) {
-        // 没有明确楼层就不给（不能把历史上所有楼层的编号一起交出去）。
-        let prog = getProgress(),
-            chat = chatMessages(),
-            list = prog && Array.isArray(prog.clueCandidates) ? prog.clueCandidates : [],
-            wanted = new Set((indices || []).map(Number).filter(Number.isInteger));
-        if (!wanted.size) return [];
-        return list.filter(
-            (x) =>
-                wanted.has(x.i) &&
-                chat[x.i] &&
-                (Number(chat[x.i].swipe_id) || 0) === x.swipe &&
-                String(chat[x.i].send_date ?? '') === x.stamp,
-        );
-    }
-    // 数据库的聊天标识是去掉路径和 .jsonl 后缀的文件名（cleanChatName_ACU），酒馆 getCurrentChatId 可能带后缀；统一后精确比较。
-    function chatKeyOf(value) {
-        let text = String(value ?? '').trim();
-        return text
-            .split(/[\\/]/)
-            .pop()
-            .replace(/\.jsonl?$/, '');
-    }
-    function scopeMatches(scope) {
-        let c = ctx(),
-            chatId = c && typeof c.getCurrentChatId == 'function' ? chatKeyOf(c.getCurrentChatId()) : '';
-        return !scope || !scope.chatId || !chatId || chatKeyOf(scope.chatId) === chatId;
-    }
-    // 最终请求核验：酒馆把请求拼好之后（CHAT_COMPLETION_PROMPT_READY / GENERATE_AFTER_COMBINE_PROMPTS），只读检查。
     function auditFinalRequest(payload) {
         let c = compute();
         if (!c) return null;
@@ -308,26 +826,21 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
             history = chatMessages()
                 .filter((m) => m && !m.is_user && !m.is_system)
                 .map((m) => String(m.mes || '')),
-            isRevealed = (id) => effectiveFact(id, c.snap, c.prog).confirmed;
-        // 焦点豁免跟着「本轮实际注入了哪个焦点」走（GPT §17.1）：暂停、主线关闭、票据失效时投影为空，焦点场景同样算未开放内容；
-        // 别的路径把它带进请求要报警。不按「如果没暂停会是谁」来豁免。
-        let injectedFocus = fresh && out ? lastInjected.focus || '' : '',
-            auditState = { ...c.state, focus: { ...c.state.focus, uid: injectedFocus } };
-        let result = auditRequest(text, p, auditState, out, { history, isRevealed }),
+            isRevealed = (id) => effectiveFact(id, c.snap, c.prog).confirmed,
+            injectedFocus = (fresh && out && lastInjected.focus) || '',
+            auditState = { ...c.state, focus: { ...c.state.focus, uid: injectedFocus } },
+            result = auditRequest(text, p, auditState, out, { history, isRevealed }),
             leaks = result.leaks.filter((l) => l.level === 'leak');
         return (
             (lastAudit = { ...result, at: Date.now(), via: lastInjected ? lastInjected.via : '' }),
             leaks.length &&
                 (note(
-                    `最终请求核验：发现 ${leaks.length} 处本项目受限内容（${leaks
+                    `最终请求核验：发现 ${leaks.length} 处不该出现的剧情（${leaks
                         .slice(0, 3)
                         .map((l) => l.source)
                         .join('、')}${leaks.length > 3 ? '……' : ''}）`,
                 ),
-                toast(
-                    'warning',
-                    `本轮正文请求里出现了本项目未开放的作者材料（${leaks[0].source}）。来源不是剧情注入器的线索注入，请到诊断页查看。`,
-                )),
+                toast('warning', `本轮请求里混进了还不该出现的剧情（${leaks[0].source}），不是剧情注入器带进去的，请到诊断页查看。`)),
             result.duplicated &&
                 (note(`最终请求核验：本轮线索内容出现了 ${result.projectionCount} 次（重复注入）`),
                 toast('warning', '本轮线索内容在正文请求里出现了不止一次，请检查是否同时启用了别的注入路径。')),
@@ -335,184 +848,24 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
             result
         );
     }
-    // ---- R07 / R1：上一轮填表未提交时，等它结束再开始本轮 ----
-    // 数据库 v3 提供 queued/settled：只要还有没收尾的排队，就说明有填表待处理（含防抖、读聊天、楼层延迟）。
-    // 旧版数据库（v2 及以下）没有排队信号，只能退回「回复后宽限窗口」的估计，并在诊断页提示。
-    var FILL_GRACE_MS = 2500;
-    let expectFillUntil = 0,
-        waiters = [];
-    function wake() {
-        let list = waiters;
-        ((waiters = []), list.forEach((fn) => fn()));
-    }
-    function nextChange(ms) {
-        return new Promise((resolve) => {
-            let done = !1,
-                finish = () => {
-                    done || ((done = !0), hostWindow().clearTimeout(timer), resolve());
-                },
-                timer = hostWindow().setTimeout(finish, Math.max(0, ms));
-            waiters.push(finish);
-        });
-    }
-    function hasQueueSignals() {
-        let api = acuApi();
-        return !!(api && Number(api.plotLinkVersion) >= 3);
-    }
-    function expectFill() {
-        let p = project();
-        p && p.clue.waitFill !== !1 && !hasQueueSignals() && (expectFillUntil = Date.now() + FILL_GRACE_MS);
-    }
-    // 返回 { ready, reason, waitedMs }。不抛错；最长等待 maxMs（数据库侧另有 90 秒上限）。
-    // 等待期间本轮票据失效（切聊天 / 项目 / 模式）→ 立即返回 scope_changed，不再继续等。
-    async function waitForFill({ maxMs = 85e3, isValid = () => !0 } = {}) {
-        let p = project(),
-            started = Date.now(),
-            waited = !1;
-        if (!p || p.clue.waitFill === !1) return { ready: !0, reason: '', waitedMs: 0 };
-        for (;;) {
-            let now = Date.now(),
-                left = started + maxMs - now;
-            if (!isValid())
-                return (
-                    note('等待填表期间切换了聊天、项目或推进方式，本轮不提供线索材料'),
-                    { ready: !1, reason: 'scope_changed', waitedMs: now - started }
-                );
-            if (left <= 0)
-                return (
-                    note('等待上一轮填表超时，本轮按上一次已提交的表格计算'),
-                    { ready: !1, reason: 'fill_timeout', waitedMs: now - started }
-                );
-            if (filling || pendingPipelines.size || now < expectFillUntil) {
-                (filling || pendingPipelines.size) &&
-                    !waited &&
-                    ((waited = !0), note('上一轮填表尚未完成，等待其提交后再开始本轮'), toast('info', '等待上一轮填表完成后再开始本轮…'));
-                await nextChange(filling || pendingPipelines.size ? left : Math.min(left, expectFillUntil - now));
-                continue;
-            }
-            if (waited && lastFill && lastFill.phase === 'end' && !lastFill.success)
-                return (
-                    note('上一轮填表未成功，本轮按上一次已提交的表格计算'),
-                    { ready: !1, reason: lastFill.aborted ? 'fill_aborted' : 'fill_failed', waitedMs: Date.now() - started }
-                );
-            return (
-                waited && note(`上一轮填表已完成（等待 ${Math.round((Date.now() - started) / 100) / 10} 秒）`),
-                { ready: !0, reason: '', waitedMs: Date.now() - started }
-            );
-        }
-    }
-    let provider = {
-        id: CLUE_PROVIDER_ID,
-        // 本轮从这里开始：先建票据，再等待；等待期间票据失效则本轮不提供任何材料。
-        async awaitReady(scope) {
-            if (!scopeMatches(scope)) return { ready: !0 };
-            ensureRound('link');
-            let r = round,
-                result = await waitForFill({ isValid: () => ticketValid(r.ticket) });
-            return (result.reason === 'scope_changed' && (r.stale = !0), invalidate(), { ready: result.ready, reason: result.reason });
-        },
-        provideContext(scope) {
-            if (!scopeMatches(scope)) return (note('前置任务请求的聊天与当前聊天不一致，不提供上下文'), '');
-            ensureRound('link');
-            let rs = roundState();
-            if (!rs.ok || (round && round.stale)) return (note(`不提供前置任务上下文：${rs.reason || '本轮已失效'}`), '');
-            let text = preTaskContext();
-            return ((provided = { at: Date.now(), hook: 'context', chars: text.length }), text);
-        },
-        onFillEvent(event) {
-            if (event.chatKey && !scopeMatches({ chatId: event.chatKey })) return;
-            if (event.phase === 'queued') return (event.pipelineId && pendingPipelines.set(event.pipelineId, Date.now()), wake());
-            if (event.phase === 'settled')
-                return (event.pipelineId && pendingPipelines.delete(event.pipelineId), invalidate('clue-fill'), wake());
-            (event.phase === 'start'
-                ? ((filling = !0), (expectFillUntil = 0), note(`填表开始（${event.source === 'manual' ? '手动' : '自动'}）`))
-                : ((filling = !1),
-                  (lastFill = { ...event, at: Date.now() }),
-                  note(
-                      `填表结束：${event.aborted ? '已取消' : event.success ? '成功' : `失败${event.failedGroups ? `（${event.failedGroups} 组）` : ''}`}`,
-                  ),
-                  invalidate('clue-fill')),
-                wake());
-        },
-        onTableCommitted(event) {
-            if (event.chatKey && !scopeMatches({ chatId: event.chatKey })) return;
-            ((lastCommit = { ...event, at: Date.now() }), invalidate('clue-commit'));
-        },
-        // 填表候选：数据库在构建填表请求时调用（可选，v4）。只给这批楼层里每条回复实际提供过的候选编号与记录要求。
-        fillCandidates(scope, info) {
-            if (!scopeMatches(scope) || !project()) return null;
-            let items = candidatesFor(info && Array.isArray(info.messageIndices) ? info.messageIndices : []);
-            if (!items.length) return null;
-            // 场景编号只在绑定了「当前场景」单元格时给出：填表靠它把并行节点里实际进入的那个写进表格（否则没有地方可抄编号）。
-            let p = project(),
-                scenePath = (p && p.clue.bindings.scene && p.clue.bindings.scene.路径) || '',
-                sceneCol = scenePath ? scenePath.split('/').pop().trim() : '',
-                withScenes = !!sceneCol && items.some((x) => Array.isArray(x.scenes) && x.scenes.length),
-                withFacts = items.some((x) => x.candidates && x.candidates.length);
-            if (!withFacts && !withScenes) return null;
-            let lines = ['【线索编号对照（只用于匹配编号，不代表已经发生）】'];
-            withFacts &&
-                lines.push(
-                    '「可能发现」是这些回复生成时提供给正文的可能发现。只有正文里实际写出了对应结果，才按编号记录；正文没写出来、只是到达、尝试、答应或中途离开，都不要记录为已获得。',
-                );
-            let awayWord = cellText((p.clue.bindings.scene && p.clue.bindings.scene.离场值) || '离场');
-            withScenes &&
-                lines.push(
-                    `「可进入场景」是当时可以去做的事。「${sceneCol}」以这一批最后一楼结束时的位置为准：主角实际到达并开始做其中一件事，填它的编号（只能照抄下面列出的编号）；明确离开调查、转去做无关的事，填「${awayWord}」；只是提到、打算、约好，保持原值。`,
-                );
-            for (let x of items) {
-                let facts = x.candidates || [],
-                    scenes = withScenes && Array.isArray(x.scenes) ? x.scenes : [];
-                if (!facts.length && !scenes.length) continue;
-                lines.push(`第 ${x.i} 楼：`);
-                scenes.length &&
-                    lines.push(
-                        '  可进入场景：',
-                        ...scenes.map(
-                            (s) =>
-                                `  - ${s.uid}：${[s.entry, s.place && `地点：${s.place}`].filter(Boolean).join('；')}${s.focus ? '（生成时的焦点；实际是否到达以正文为准）' : ''}`,
-                        ),
-                    );
-                facts.length && lines.push('  可能发现：', ...facts.map((c) => `  - ${c.fact}${c.record ? `：${c.record}` : ''}`));
-            }
-            return { text: lines.join('\n') };
-        },
-    };
     function register() {
         let api = acuApi();
-        if (
-            (api &&
-                typeof api.registerTableUpdateCallback == 'function' &&
-                !tableCallback &&
-                ((tableCallback = () => ((lastTableUpdate = Date.now()), invalidate('clue-table'))),
-                api.registerTableUpdateCallback(tableCallback)),
-            registered)
-        )
-            return;
-        if (api && typeof api.registerPlotLinkProvider == 'function')
-            try {
-                let off = api.registerPlotLinkProvider(provider);
-                ((unregister =
-                    typeof off == 'function'
-                        ? off
-                        : () => api.unregisterPlotLinkProvider && api.unregisterPlotLinkProvider(CLUE_PROVIDER_ID)),
-                    (registered = !0),
-                    note('已向数据库注册剧情联动'));
-            } catch (error) {
-                note(`注册剧情联动失败：${error.message}`);
-            }
+        api &&
+            typeof api.registerTableUpdateCallback == 'function' &&
+            !tableCallback &&
+            ((tableCallback = () => {
+                ((lastTableUpdate = Date.now()), invalidate('clue-table'), project() && scheduleSync());
+            }),
+            api.registerTableUpdateCallback(tableCallback),
+            project() && scheduleSync());
     }
     function unregisterAll() {
         let api = acuApi();
         try {
-            unregister && unregister();
-        } catch {}
-        try {
             tableCallback && api && api.unregisterTableUpdateCallback && api.unregisterTableUpdateCallback(tableCallback);
         } catch {}
-        ((unregister = null), (tableCallback = null), (registered = !1), pendingPipelines.clear(), wake());
+        tableCallback = null;
     }
-    // 统一的人工写入口：所有人工修改都经过这里，记录来源并锚定当前楼层。
     function act(op) {
         let p = project(),
             prog = getProgress();
@@ -521,43 +874,54 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
         (setProgress({ ...prog, clue: ops }, 'clue-op'), invalidate(), note(`人工操作：${opLabel(op)}`));
     }
     function opLabel(op) {
-        if (op.kind === 'pause') return op.value ? '暂停主线' : '继续主线';
+        if (op.kind === 'pause')
+            return op.target === 'side' ? (op.value ? '暂停全部支线' : '继续全部支线') : op.value ? '暂停剧情' : '继续剧情';
+        if (op.kind === 'line')
+            return `${{ start: '开启', pause: '暂停', resume: '继续', done: '标记完成', abandon: '放弃', deny: '取消开启', skip: '跳过', '': '还原手动操作' }[String(op.value || '')] || op.value}线 ${op.target}${op.note ? `（${op.note}）` : ''}`;
         let names = {
-                open: { force: '开放', block: '暂禁', '': '恢复程序判断（开放）' },
-                done: { force: '标记完成', undo: '撤销完成', '': '恢复程序判断（完成）' },
+                open: { force: '手动开放', block: '暂时停用', '': '开放改回按条件判断' },
+                done: { force: '手动完成', undo: '算作没完成', '': '完成改回按表格判断' },
                 skip: { true: '跳过', '': '取消跳过' },
-                focus: { true: '设为焦点', '': '取消焦点' },
-                fact: { confirmed: '确认事实', revoked: '撤销事实', '': '恢复表格判断（事实）' },
+                focus: { true: '设为本轮场景', '': '取消我选的场景' },
+                fact: { confirmed: '确认线索', revoked: '作废线索', '': '线索改回按表格判断' },
             },
             label = (names[op.kind] && names[op.kind][String(op.value ?? '')]) || op.kind;
         return op.kind === 'focus' && op.value && op.target.startsWith(AWAY_PREFIX)
-            ? `离开调查 ${op.target.slice(AWAY_PREFIX.length)}`
+            ? `主角离开 ${op.target.slice(AWAY_PREFIX.length)}`
             : `${label} ${op.target}${op.note ? `（${op.note}）` : ''}`;
     }
-    // 手动选焦点：必须已开放；越过条件要先用「开放」操作，留下单独记录。
-    // 人工记「已离开这个调查」：不再自动聚焦到它，只给入口；之后填表写入新场景、或人工选焦点时恢复。随楼层回滚。
-    function leaveScene(uid) {
-        if (!uid) return;
-        act({ kind: 'focus', target: `${AWAY_PREFIX}${uid}`, value: !0 });
+    function sceneNow() {
+        let p = project(),
+            path = p && p.clue.bindings.scene && p.clue.bindings.scene.路径,
+            c = compute();
+        if (!path || !c) return '';
+        let cell = readCell(c.snap.tables || {}, path);
+        return cell.state === 'ok' ? cellText(cell.value) : '';
     }
-    // 暂停 / 继续主线（日常游玩）：只停注入和前置上下文，进度、表格、人工记录都不动。
-    function setPaused(paused) {
-        act({ kind: 'pause', target: 'main', value: paused ? !0 : '' });
+    function leaveScene(uid) {
+        uid && act({ kind: 'focus', target: `${AWAY_PREFIX}${uid}`, value: !0, sceneAt: sceneNow() });
+    }
+    function setPaused(paused, target = 'main') {
+        (act({ kind: 'pause', target: target === 'side' ? 'side' : 'main', value: paused ? !0 : '' }), scheduleSync());
     }
     function setFocus(uid) {
         let c = compute(),
             s = c && c.state.nodeStates.find((x) => x.node.uid === uid);
         if (uid && (!s || s.status === 'locked' || s.status === 'done' || s.disabled))
             throw new Error('这个节点当前不可进行；需要先满足开放条件，或用「人工开放」');
-        act(uid ? { kind: 'focus', target: uid, value: !0 } : { kind: 'focus', target: (c && c.prog.focus) || '', value: '' });
+        act(
+            uid
+                ? { kind: 'focus', target: uid, value: !0, sceneAt: sceneNow() }
+                : { kind: 'focus', target: (c && c.prog.focus) || '', value: '' },
+        );
     }
-    // 当前聊天实际生效的剧情推进预设里，有没有召回以外的启用任务。读不到就当没有（不提示）。
     function plotConflicts() {
         let api = acuApi();
         try {
             let name = api && typeof api.getCurrentPlotPreset == 'function' ? api.getCurrentPlotPreset() : '';
-            if (!name || typeof api.getPlotPresetDetails != 'function') return { preset: name || '', items: [] };
-            return { preset: name, items: plotPresetConflicts(api.getPlotPresetDetails(name)) };
+            return !name || typeof api.getPlotPresetDetails != 'function'
+                ? { preset: name || '', items: [] }
+                : { preset: name, items: plotPresetConflicts(api.getPlotPresetDetails(name)) };
         } catch {
             return { preset: '', items: [] };
         }
@@ -568,17 +932,8 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
         return {
             mode: project() ? 'clue' : 'outline',
             api: !!api,
-            linkApi: !!(api && typeof api.registerPlotLinkProvider == 'function'),
-            linkVersion: (api && api.plotLinkVersion) || 0,
-            queueSignals: hasQueueSignals(),
-            registered,
-            filling,
-            pendingFills: pendingPipelines.size,
-            lastFill,
-            lastCommit,
             lastTableUpdate,
             tableAgeMs: lastTableUpdate ? Date.now() - lastTableUpdate : null,
-            provided,
             lastInjected,
             lastAudit,
             problems: c ? [...c.snap.problems, ...c.state.problems.filter((x) => !c.snap.problems.includes(x)), ...c.compiled.errors] : [],
@@ -593,37 +948,47 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
         compute,
         invalidate,
         projection,
-        preTaskContext,
         act,
+        opScope,
+        voidFact,
+        restoreFact,
         setFocus,
         setPaused,
+        lineAct,
+        opLabel,
+        lineToManual: toManual,
+        confirmTiers,
+        moveLine,
+        syncLines,
+        scheduleSync,
+        setLineBar: (fn) => {
+            lineBar = fn;
+        },
+        hideLineBar: () => {
+            ((lastToast = { key: '', at: 0 }), lineBar && lineBar(null));
+        },
+        stayInfo: () => stayInfo(),
         register,
         stop: unregisterAll,
         diagnose,
-        isFilling: () => filling || pendingPipelines.size > 0,
         auditFinalRequest,
-        expectFill,
-        waitForFill,
         record,
-        beginRound,
         ensureRound,
         endRound,
-        roundState,
         bindCandidatesToMessage,
         discardPendingCandidates,
         leaveScene,
-        candidatesFor,
-        provider,
         lastInjected: () => lastInjected,
         onChatChanged() {
-            ((lastStatus = null),
+            (hostWindow().clearTimeout(syncTimer),
+                (catalogMissing = !1),
+                (labelsWarned = !1),
+                (lastToast = { key: '', at: 0 }),
+                lineBar && lineBar(null),
+                (lastStatus = null),
                 (lastTableUpdate = 0),
-                (filling = !1),
-                (expectFillUntil = 0),
-                pendingPipelines.clear(),
                 (pendingCandidates = null),
                 (round = null),
-                wake(),
                 invalidate());
         },
     };

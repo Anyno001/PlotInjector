@@ -139,22 +139,19 @@ export const actions = {
     },
     // 加载器把最新版本号缓存 30 分钟；清掉缓存再刷新，才会马上取到新版。
     async 'update-now'(view) {
-        const pinned = view.data.settings().loaderRef;
-        const body = pinned ? `将清空指定版本（${pinned}），改为跟随最新版本，然后刷新酒馆页面。` : '将刷新酒馆页面，载入最新版本。';
-        if (!(await confirmDialog({ title: `更新到 v${latest.version}`, body, okLabel: '更新并刷新' }))) return;
-        if (pinned) {
-            view.data.updateSettings({ loaderRef: '' });
-            await view.data.flush();
-        }
-        writeUi({ loader: null });
-        hostWindow().location.reload();
+        const pinned = view.data.settings().loaderRef,
+            body = pinned ? `将清空指定版本（${pinned}），改为跟随最新版本，然后刷新酒馆页面。` : '将刷新酒馆页面，载入最新版本。';
+        (await confirmDialog({ title: `更新到 v${latest.version}`, body, okLabel: '更新并刷新' })) &&
+            (pinned && (view.data.updateSettings({ loaderRef: '' }), await view.data.flush()),
+            writeUi({ loader: null }),
+            hostWindow().location.reload());
     },
     verify(view) {
-        st(view).verified = null;
-        return verify(view);
+        return ((st(view).verified = null), verify(view));
     },
     async 'export-file'(view, target) {
-        const text = await readRawFile(target.dataset.name);
+        await view.data.flush().catch(() => {});
+        let text = await readRawFile(target.dataset.name);
         if (text == null) throw new Error('文件读取失败');
         downloadBlob(target.dataset.name, text);
     },
@@ -162,13 +159,23 @@ export const actions = {
         const files = [];
         for (const item of view.data.index().projects) {
             const project = view.data.project(item.id) || (await view.data.loadProject(item.id));
-            if (!project || !project.personas || !project.personas.lines.length) continue;
-            files.push({ name: `人设-${item.group ? `${item.group}-` : ''}${item.name}.json`, data: JSON.stringify(buildPersonaFile(project.personas, { project: item.name, version: view.version }), null, 2) });
+            !project ||
+                !project.personas ||
+                !project.personas.lines.length ||
+                files.push({
+                    name: `人设-${item.group ? `${item.group}-` : ''}${item.name}.json`,
+                    data: JSON.stringify(buildPersonaFile(project.personas, { project: item.name, version: view.version }), null, 2),
+                });
         }
         if (!files.length) throw new Error('没有可导出的人设（项目里还没有人设线，或项目尚未载入）');
-        if (files.length === 1) downloadBlob(files[0].name, files[0].data);
-        else downloadBlob(`剧情注入器人设-${new Date().toISOString().slice(0, 10)}.zip`, buildZip(files), 'application/zip');
-        toast('success', `已导出 ${files.length} 个项目的人设。`);
+        (files.length === 1
+            ? downloadBlob(files[0].name, files[0].data)
+            : downloadBlob(
+                  `剧情注入器人设-${/* @__PURE__ */ new Date().toISOString().slice(0, 10)}.zip`,
+                  buildZip(files),
+                  'application/zip',
+              ),
+            toast('success', `已导出 ${files.length} 个项目的人设。`));
     },
     async 'delete-file'(view, target) {
         const name = target.dataset.name;
@@ -178,68 +185,68 @@ export const actions = {
                 list: [name],
                 body: name.startsWith('pi-p-') ? '这是项目的设定和大纲，删除后项目无法打开。' : '',
                 okLabel: '删除',
-                danger: true,
+                danger: !0,
             }))
         )
             return;
         const id = /^pi-[pc]-(.+)\.json$/.exec(name)?.[1];
-        if (name.startsWith('pi-c-')) await view.data.clearChat(id);
-        else if (name.startsWith('pi-p-')) await view.data.deleteProject(id);
-        st(view).verified = null;
-        view.render();
+        (name.startsWith('pi-c-') ? await view.data.clearChat(id) : name.startsWith('pi-p-') && (await view.data.deleteProject(id)),
+            (st(view).verified = null),
+            view.render());
     },
     async orphans(view) {
         const names = Object.keys(st(view).verified || {}).filter(
-            (name) => !referenced(view.data.index()).has(name) && st(view).verified[name],
-        );
-        const gone = Object.keys(st(view).verified || {}).filter(
-            (name) => !referenced(view.data.index()).has(name) && !st(view).verified[name],
-        );
-        if (!names.length && gone.length) {
-            view.data.forgetFiles(gone);
-            st(view).verified = null;
-            return view.renderBody();
+                (name) => !referenced(view.data.index()).has(name) && st(view).verified[name],
+            ),
+            gone = Object.keys(st(view).verified || {}).filter(
+                (name) => !referenced(view.data.index()).has(name) && !st(view).verified[name],
+            );
+        if (!names.length && gone.length) return (view.data.forgetFiles(gone), (st(view).verified = null), view.renderBody());
+        if (await confirmDialog({ title: '清理孤立文件', body: '这些文件不属于任何项目：', list: names, okLabel: '删除', danger: !0 })) {
+            for (const name of names) await deleteFile(name);
+            (view.data.forgetFiles([...names, ...gone]), (st(view).verified = null), view.renderBody());
         }
-        if (!(await confirmDialog({ title: '清理孤立文件', body: '这些文件不属于任何项目：', list: names, okLabel: '删除', danger: true })))
-            return;
-        for (const name of names) await deleteFile(name);
-        view.data.forgetFiles([...names, ...gone]);
-        st(view).verified = null;
-        view.renderBody();
     },
     async 'clear-chats'(view) {
         const ids = view.data.index().projects.map((item) => item.id);
-        if (!(await confirmDialog({ title: '清空全部讨论记录', list: ids.map(chatFile), okLabel: '清空', danger: true }))) return;
-        for (const id of ids) await view.data.clearChat(id);
-        st(view).verified = null;
-        view.renderBody();
+        if (await confirmDialog({ title: '清空全部讨论记录', list: ids.map(chatFile), okLabel: '清空', danger: !0 })) {
+            for (const id of ids) await view.data.clearChat(id);
+            ((st(view).verified = null), view.renderBody());
+        }
     },
     async wipe(view) {
-        const index = view.data.index();
-        const names = [...new Set([...index.files, ...referenced(index)])];
-        const files = [];
+        await view.data.flush().catch(() => {});
+        let index = view.data.index(),
+            names = [.../* @__PURE__ */ new Set([...index.files, ...referenced(index)])],
+            files = [];
         for (const name of names) {
             const text = await readRawFile(name);
-            if (text != null) files.push({ name, data: text });
+            text != null && files.push({ name, data: text });
         }
         if (!files.length) throw new Error('没有可清除的文件');
-        downloadBlob(`剧情注入器备份-${new Date().toISOString().slice(0, 10)}.zip`, buildZip(files), 'application/zip');
-        const ok = await confirmDialog({
-            title: '重置插件',
-            body: '备份已下载。确认后删除以下文件和当前聊天的进度，无法撤销。',
-            list: files.map((file) => file.name),
-            okLabel: '全部删除',
-            danger: true,
-        });
-        if (!ok) return;
-        for (const file of files) await deleteFile(file.name);
-        await clearChatProgress();
-        view.data.resetAll();
-        view.projectId = '';
-        st(view).verified = null;
-        view.runtime.refresh();
-        view.render();
-        toast('success', '已全部清除。');
+        if (
+            (downloadBlob(
+                `剧情注入器备份-${/* @__PURE__ */ new Date().toISOString().slice(0, 10)}.zip`,
+                buildZip(files),
+                'application/zip',
+            ),
+            !!(await confirmDialog({
+                title: '重置插件',
+                body: '备份已下载。确认后删除以下文件和当前聊天的进度，无法撤销。',
+                list: files.map((file) => file.name),
+                okLabel: '全部删除',
+                danger: !0,
+            })))
+        ) {
+            for (const file of files) await deleteFile(file.name);
+            (await clearChatProgress(),
+                view.data.resetAll(),
+                (view.projectId = ''),
+                (st(view).verified = null),
+                view.runtime.refresh(),
+                view.render(),
+                toast('success', '已全部清除。'));
+        }
     },
 };
 

@@ -195,11 +195,11 @@ export function currentStage(line, progress, env = {}) {
 }
 
 // 注入环境：大纲阶段与状态（跟随大纲用）、声望读数（读声望用）。
-export function personaEnv(project, progress, fame = []) {
+export function personaEnv(project, progress, fame = [], stageStates = null) {
     const infinite = project && project.mode === 'infinite';
     const units = infinite || !project ? [] : flattenUnits(project.outline && project.outline.volumes);
     const links = infinite || !units.length ? NO_LINKS : outlineLinks(project.outline, units);
-    return { units, links, states: units.length ? unitStates(units, progress, links) : {}, fame };
+    return { units, links, states: stageStates ?? (units.length ? unitStates(units, progress, links) : {}), fame };
 }
 
 // ---------- 进度写入（均返回新进度） ----------
@@ -232,10 +232,10 @@ export function mutePersona(progress, lineId, muted = true) {
 
 // 跟随大纲、读声望：自动算出的阶段与上次记下的不同，说明自动判断又推进了，清掉「手动」；并把算出的阶段记进存档，手动改回时有据可查。
 // 返回新进度，没变化时原样返回同一个对象。
-export function syncPersonas(project, progress, fame = []) {
+export function syncPersonas(project, progress, fame = [], stageStates = null) {
     if (!hasPersonas(project) || !progress) return progress;
     const pp = normalizePersonaProgress(progress.personas);
-    const env = personaEnv(project, progress, fame);
+    const env = personaEnv(project, progress, fame, stageStates);
     let next = pp;
     for (const line of project.personas.lines) {
         if (line.mode !== 'outline' && line.mode !== 'fame') continue;
@@ -293,10 +293,10 @@ export function lineTriggered(line, recentText, globals = {}) {
 export const personaSlotId = line => `${PERSONA_SLOT_PREFIX}${line.id}`;
 
 // 虚拟条目：与设定、大纲条目同一路径注入。opts.recentText 为 undefined 时不做关键词过滤（执行页、预览用）。
-export function buildPersonaEntries(project, progress, { recentText, globals, fame = [] } = {}) {
+export function buildPersonaEntries(project, progress, { recentText, globals, fame = [], stageStates = null } = {}) {
     if (!hasPersonas(project)) return [];
     const personas = project.personas;
-    const env = personaEnv(project, progress, fame);
+    const env = personaEnv(project, progress, fame, stageStates);
     const out = [];
     for (const line of personas.lines) {
         if (!line.enabled) continue;
@@ -316,10 +316,10 @@ export function buildPersonaEntries(project, progress, { recentText, globals, fa
 
 // 本次检测要带的人设线：方式为条件检测、启用、未设不提醒、窗口内触发过（常驻或关键词命中最近读取的正文）、还有下一阶段。
 // 每条只带线名、当前阶段名、下一阶段名与进入条件，不带人设正文。
-export function checkItems(project, progress, recentText, { globals = {}, fame = [] } = {}) {
+export function checkItems(project, progress, recentText, { globals = {}, fame = [], stageStates = null } = {}) {
     if (!hasPersonas(project) || !progress) return [];
     const pp = normalizePersonaProgress(progress.personas);
-    const env = personaEnv(project, progress, fame);
+    const env = personaEnv(project, progress, fame, stageStates);
     const out = [];
     for (const line of project.personas.lines) {
         if (!line.enabled || (line.mode !== 'check' && line.mode !== 'fame') || pp.muted.includes(line.id)) continue;

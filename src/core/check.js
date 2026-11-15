@@ -195,14 +195,15 @@ function parseThread(raw) {
         : null;
 }
 
-export function buildClueCheckMessages(material, floors) {
+export function buildClueCheckMessages(material, floors, personas = []) {
     let system = [
             '你是剧情核对员。根据最近的正文，判断下面这个场景里列出的发现是否已经在正文中实际发生。',
             '只认正文里已经写出的事件：到了地点不等于找到证据，答应提供不等于已经拿到，计划和猜测都不算。',
-            '只输出一个 JSON 对象，不加说明：{"done":["已发生的发现原文"],"stageDone":true或false,"offTrack":false,"offReason":"","reason":"一句话说明依据"}',
+            `只输出一个 JSON 对象，不加说明：{"done":["已发生的发现原文"],"stageDone":true或false,"offTrack":false,"offReason":"","reason":"一句话说明依据"${personas.length ? `,${PERSONA_KEY}` : ''}}`,
             'done 只能照抄下面【可能的发现】里的条目；stageDone 表示这个场景已经结束。',
+            ...(personas.length ? [PERSONA_RULE] : []),
         ].join('\n'),
-        user = ['【场景】', material, '', '【最近正文】', ...floors.map((floor) => `【第 ${floor.index} 楼】\n${floor.text}`)].join('\n');
+        user = ['【场景】', material, ...(personas.length ? [`【人设阶段】\n${personaLines(personas)}`] : []), '', '【最近正文】', ...floors.map((floor) => `【第 ${floor.index} 楼】\n${floor.text}`)].join('\n');
     return [
         { role: 'system', content: system },
         { role: 'user', content: user },

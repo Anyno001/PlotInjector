@@ -86,41 +86,54 @@ export async function readRawFile(name) {
 
 // 防抖写入：同一文件 800ms 内只写最后一版；失败保留待写内容并回调，不静默丢。
 export function createWriter({ delay = 800, write = writeJsonFile, onError = () => {}, onSaved = () => {} } = {}) {
-    const pending = new Map();
-    const timers = new Map();
-    const view = hostWindow();
-
-    async function flushOne(name) {
-        timers.delete(name);
-        if (!pending.has(name)) return;
-        const value = pending.get(name);
+    let pending = /* @__PURE__ */ new Map(),
+        timers = /* @__PURE__ */ new Map(),
+        running = /* @__PURE__ */ new Map(),
+        view = hostWindow();
+    function flushOne(name) {
+        if ((timers.has(name) && view.clearTimeout(timers.get(name)), timers.delete(name), running.has(name))) return running.get(name);
+        if (!pending.has(name)) return Promise.resolve();
+        let value = pending.get(name);
         pending.delete(name);
-        try {
-            const bytes = await write(name, value);
-            onSaved(name, bytes);
-        } catch (error) {
-            if (!pending.has(name)) pending.set(name, value);
-            onError(name, error);
-        }
+        let job = (async () => {
+            try {
+                let bytes = await write(name, value);
+                onSaved(name, bytes);
+            } catch (error) {
+                return (pending.has(name) || pending.set(name, value), onError(name, error), !1);
+            }
+            return !0;
+        })().then(async (ok) => {
+            (running.delete(name), ok && pending.has(name) && !timers.has(name) && (await flushOne(name)));
+        });
+        return (running.set(name, job), job);
     }
-
     return {
         schedule(name, value) {
-            pending.set(name, value);
-            if (timers.has(name)) view.clearTimeout(timers.get(name));
-            timers.set(name, view.setTimeout(() => flushOne(name), delay));
+            (pending.set(name, value),
+                timers.has(name) && view.clearTimeout(timers.get(name)),
+                timers.set(
+                    name,
+                    view.setTimeout(() => flushOne(name), delay),
+                ));
         },
+        // 等到所有待写和正在写的都结束（正在写的结束后，期间的新内容也会写完）。
         async flush() {
-            for (const timer of timers.values()) view.clearTimeout(timer);
+            for (let timer of timers.values()) view.clearTimeout(timer);
             timers.clear();
-            await Promise.all([...pending.keys()].map(flushOne));
+            for (let round = 0; round < 5 && (pending.size || running.size); round++) {
+                let before = new Set(pending.keys());
+                if (
+                    (await Promise.all([.../* @__PURE__ */ new Set([...pending.keys(), ...running.keys()])].map(flushOne)),
+                    [...pending.keys()].every((k) => before.has(k)) && !running.size && pending.size)
+                )
+                    break;
+            }
         },
         cancel(name) {
-            if (timers.has(name)) view.clearTimeout(timers.get(name));
-            timers.delete(name);
-            pending.delete(name);
+            (timers.has(name) && view.clearTimeout(timers.get(name)), timers.delete(name), pending.delete(name));
         },
-        hasPending: () => pending.size > 0,
-        failed: () => [...pending.keys()].filter(name => !timers.has(name)),
+        hasPending: () => pending.size > 0 || running.size > 0,
+        failed: () => [...pending.keys()].filter((name) => !timers.has(name)),
     };
 }

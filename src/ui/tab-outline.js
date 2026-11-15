@@ -1,8 +1,15 @@
-import { clueIndexText, chatFactSets, checkClueDraft, restoreHistory, clueProgressText, historyGuard } from '../core/clue-project.js';
-import { CLUE_STAGE_KEYS, reidConflicts, isClueMode } from '../core/clue-model.js';
-import { renderImport, importActions } from './long-import.js';
-
+import { lrActions, renderLineReview, lrOnChange } from './line-review.js';
 import {
+    tableCondReport,
+    clueIndexText,
+    chatFactSets,
+    checkClueDraft,
+    restoreHistory,
+    clueProgressText,
+    historyGuard,
+} from '../core/clue-project.js';
+import {
+    tableCatalogText,
     clueRewriteMessages,
     transcript,
     fixYamlMessages,
@@ -11,6 +18,13 @@ import {
     rewriteRestMessages,
     stageOpMessages,
 } from '../core/prompts.js';
+
+import { acuApi } from '../app/clue-runtime.js';
+import { cloneTables } from '../core/clue-tables.js';
+import { prepareLabels } from './clue-run.js';
+
+import { CLUE_STAGE_KEYS, reidConflicts, isClueMode } from '../core/clue-model.js';
+import { renderImport, importActions } from './long-import.js';
 
 import { settingPiecesFromEntries, afterImport, classifyEntries, pickWorldbookEntries } from './wb-import.js';
 import { stringifyYaml, parseYaml } from '../core/yaml.js';
@@ -317,18 +331,25 @@ function draftHtml(view, draft) {
             <textarea class="pi-ta is-mono is-tall" data-draft-yaml>${esc(draft.yaml)}</textarea>
             <div class="pi-tools is-c3 is-end"><button type="button" class="pi-btn is-primary is-sm" data-act="draft-fix"${view.busy.outline ? ' disabled' : ''}>让 AI 修正格式</button>
             <button type="button" class="pi-btn is-sm" data-act="draft-reparse">重新解析</button>
-            <button type="button" class="pi-btn is-sm" data-act="draft-drop">丢弃</button></div></div>`;
-    const summary =
-            (draft.scope ? `<p class="pi-hint">${esc(draft.scope)}</p>` : '') +
-            (draft.clue
-                ? `<details><summary>线索结构检查（${(draft.issues || []).length}）</summary>${(draft.issues || []).map((issue) => `<p class="pi-hint is-warn">${esc(issue)}</p>`).join('') || '<p class="pi-hint">没有发现结构问题。</p>'}</details>`
-                : '') +
+            <button type="button" class="pi-btn is-sm is-danger" data-act="draft-drop">丢弃</button></div></div>`;
+    let issues = draft.issues || [],
+        conds = draft.tableConds || [],
+        summary =
             draft.volumes
                 .map(
                     (volume) =>
                         `<p class="pi-hint"><b>${esc(volumeLabel(volume.key))}</b>：${volume.stages.map((stage) => esc(stageLabel(stage.key))).join('、')}</p>`,
                 )
-                .join(''),
+                .join('') +
+            (draft.scope ? `<p class="pi-hint">${esc(draft.scope)}</p>` : '') +
+            (conds.length
+                ? `<p class="pi-hint">读表格的条件：</p>${conds.map((x) => `<p class="pi-hint${x.level === 'ok' ? '' : ' is-warn'}">· ${esc(x.where)}：${esc(x.raw)}　现在：${esc(x.now || '（读不到）')}${x.level === 'ok' ? ' ✓' : ''}</p>`).join('')}`
+                : '') +
+            (issues.length
+                ? `<p class="pi-hint is-warn">线索结构检查（${issues.length}）：</p>${issues.map((i) => `<p class="pi-hint is-warn">· ${esc(i)}</p>`).join('')}`
+                : draft.clue
+                  ? '<p class="pi-hint">线索结构检查：没有发现问题。</p>'
+                  : ''),
         single = !!STAGE_DRAFT[draft.mode],
         buttons = single
             ? '<button type="button" class="pi-btn is-primary is-sm" data-act="draft-stage">替换</button>'
@@ -356,6 +377,7 @@ function syncDraft(view, s) {
 }
 
 export function render(view) {
+    if (st(view).lineReview && st(view).lineReview === view.projectId) return renderLineReview(view);
     if (st(view).importing === view.projectId) return renderImport(view);
     const project = view.project(),
         s = st(view);
@@ -368,7 +390,7 @@ export function render(view) {
             : volume
               ? volumeEditor(volume)
               : '<div class="pi-card"><p class="pi-hint">从左边选一卷或一个阶段编辑。</p></div>';
-    return `<div class="pi-card"><h3>大纲<span class="pi-spacer"></span><button type="button" class="pi-icon-btn" data-act="outline-menu" title="更多">${ICONS.more}</button></h3>
+    return `<div class="pi-card"><h3>大纲${isClueMode(project) && project.outline.volumes.some((v) => isPlainObject(v.line)) ? '<button type="button" class="pi-btn is-sm" data-act="lines-open">剧情线…</button>' : ''}<span class="pi-spacer"></span><button type="button" class="pi-icon-btn" data-act="outline-menu" title="更多">${ICONS.more}</button></h3>
         <div class="pi-tools is-c4"><button type="button" class="pi-btn is-sm" data-act="import-open-panel">导入长文…</button>
             <button type="button" class="pi-btn is-sm${s.check ? ' is-primary' : ''}" data-act="check-toggle">检查</button>
             <button type="button" class="pi-btn is-sm${s.overview ? ' is-primary' : ''}" data-act="overview-toggle">总览</button>
@@ -486,56 +508,58 @@ async function importTexts(view, texts) {
 }
 
 // all：多卷相关的入口（讨论页送来的 YAML、多卷写作）合并所有 yaml 代码块，其余只取第一个块。
-function setDraft(view, mode, reply, extra = {}, { all = false } = {}) {
+function setDraft(view, mode, reply, extra = {}, { all = !1 } = {}) {
     const task = extra.task || taskContext(view);
     if (!taskStillValid(view, task)) return staleTaskNotice(view, task);
     const project = view.project(),
-        draft = { mode, ...parseOutlineReply(reply, undefined, { all }), projectId: view.projectId, ...extra, task };
+        draft = { mode, ...parseOutlineReply(reply, void 0, { all }), projectId: view.projectId, ...extra, task };
     if (draft.ok && isClueMode(project)) {
         const units = flattenUnits(project.outline.volumes);
         let replaced = [],
             applied = [...project.outline.volumes, ...draft.volumes];
         if (mode === 'rewrite' && draft.fromUnitId) {
             const from = units.findIndex((u) => u.id === draft.fromUnitId);
-            if (from >= 0) {
-                replaced = units.slice(from);
-                applied = replaceRest(project.outline.volumes, draft.fromUnitId, draft.volumes);
-            }
+            from >= 0 &&
+                ((replaced = units.slice(from)), (applied = replaceRest(project.outline.volumes, draft.fromUnitId, draft.volumes)));
         } else if (STAGE_DRAFT[mode]) {
             const ids = new Set([draft.stageId, draft.nextId].filter(Boolean));
-            replaced = units.filter((u) => ids.has(u.id));
-            if (replaced.length)
-                applied = replaceStages(
-                    project.outline.volumes,
-                    replaced[0].volume.id,
-                    [...ids],
-                    draft.volumes.flatMap((v) => v.stages),
-                ).volumes;
+            ((replaced = units.filter((u) => ids.has(u.id))),
+                replaced.length &&
+                    (applied = replaceStages(
+                        project.outline.volumes,
+                        replaced[0].volume.id,
+                        [...ids],
+                        draft.volumes.flatMap((v) => v.stages),
+                    ).volumes));
         }
-        const replacedIds = new Set(replaced.map((u) => u.id));
-        const base = project.outline.volumes.map((v) => ({ ...v, stages: v.stages.filter((s) => !replacedIds.has(s.id)) }));
-        const keepIds = compileClue(replaced.map((u) => ({ ...u.volume, stages: [u.stage] })))
-            .nodes.map((n) => n.uid)
-            .filter(Boolean);
-        const current = view.runtime.activeId() === view.projectId ? view.runtime.clue.compute() : null;
-        const { known: obtained, claimed } = chatFactSets(current);
-        draft.clue = true;
-        draft.issues = checkClueDraft(draft.volumes, base, {
-            keepIds,
-            isObtained: (id) => obtained.includes(id),
-            obtainedFacts: obtained,
-            claimedFacts: claimed,
-            applied,
-        });
-        if (current && replaced.length) {
+        const replacedIds = new Set(replaced.map((u) => u.id)),
+            base = project.outline.volumes.map((v) => ({ ...v, stages: v.stages.filter((s) => !replacedIds.has(s.id)) })),
+            keepIds = compileClue(replaced.map((u) => ({ ...u.volume, stages: [u.stage] })))
+                .nodes.map((n) => n.uid)
+                .filter(Boolean),
+            current = view.runtime.activeId() === view.projectId ? view.runtime.clue.compute() : null,
+            { known: obtained, claimed } = chatFactSets(current),
+            tables = currentTables();
+        if (
+            ((draft.clue = !0),
+            (draft.issues = checkClueDraft(draft.volumes, base, {
+                keepIds,
+                isObtained: (id) => obtained.includes(id),
+                obtainedFacts: obtained,
+                claimedFacts: claimed,
+                applied,
+                tables,
+            })),
+            (draft.tableConds = tables ? tableCondReport(draft.volumes, tables) : []),
+            current && replaced.length)
+        ) {
             const guard = historyGuard(project.outline.volumes, applied, current.snap, current.prog, project.clue, {
                 scope: new Set(keepIds),
             });
             draft.issues.unshift(...guard.diffs, ...guard.notes);
         }
     }
-    putDraft(view, task.projectId, draft);
-    view.renderBody();
+    (putDraft(view, task.projectId, draft), view.renderBody());
 }
 
 export function showDraft(view, reply) {
@@ -652,7 +676,7 @@ function setTalkRef(view) {
 }
 
 // 第 k 卷的请求：volumes 带已有卷和本轮前面已写好的卷。
-function volumeRequest({ project, talk, wb, material, extra = [], no, k, n, request }) {
+function volumeRequest({ project, talk, wb, material, extra = [], no, k, n, request, tableCatalog }) {
     const volumes = [...project.outline.volumes, ...extra];
     return outlineMessages({
         setting: project.setting.text,
@@ -665,6 +689,7 @@ function volumeRequest({ project, talk, wb, material, extra = [], no, k, n, requ
         clueIndex: isClueMode(project) ? clueIndexText(volumes) : '',
         progress: material?.progress || '',
         recent: material?.recent || '',
+        tableCatalog: tableCatalog ?? (isClueMode(project) ? tableCatalogText(currentTables()) : ''),
     });
 }
 
@@ -774,6 +799,7 @@ async function writeVolumes(view, n, request, onConfirmed = null) {
 export const actions = {
     ...genActions,
     ...importActions,
+    ...lrActions,
     'node-kind'(view, target) {
         ((st(view).nodeKind = target.dataset.kind), view.renderBody());
     },
@@ -831,7 +857,7 @@ export const actions = {
         !volume ||
             !(await confirmDialog({
                 title: `删除「${volumeLabel(volume.key)}」`,
-                body: `连同 ${volume.stages.length} 个阶段一起删除。`,
+                body: `连同 ${volume.stages.length} 个阶段一起删除，不能撤销。想留一份的话先点「导出」。`,
                 okLabel: '删除',
                 danger: !0,
             })) ||
@@ -898,7 +924,12 @@ export const actions = {
     async 'stage-del'(view) {
         const { volume, stage } = findSel(view.project(), st(view).sel);
         !stage ||
-            !(await confirmDialog({ title: `删除「${stageLabel(stage.key)}」`, okLabel: '删除', danger: !0 })) ||
+            !(await confirmDialog({
+                title: `删除「${stageLabel(stage.key)}」`,
+                body: `连同里面的 ${stageNodes(stage.data).length} 个场景一起删除，删除前会保存到大纲历史。`,
+                okLabel: '删除',
+                danger: !0,
+            })) ||
             (updateVolume(
                 view,
                 volume.id,
@@ -996,7 +1027,14 @@ export const actions = {
             field = target.dataset.field,
             index = Number(target.dataset.i),
             node = stage.data[field][index];
-        if (!(await confirmDialog({ title: `删除「${(node && (node.名称 || node.类型)) || '节点'}」`, okLabel: '删除', danger: !0 })))
+        if (
+            !(await confirmDialog({
+                title: `删除「${(node && (node.名称 || node.类型)) || '节点'}」`,
+                body: '删除场景后会重新对齐进度。',
+                okLabel: '删除',
+                danger: !0,
+            }))
+        )
             return;
         const before = liveProgress(view);
         (updateStage(view, stage.id, (item) => {
@@ -1170,6 +1208,7 @@ ${yaml}
                         k: i + 1,
                         n: draft.n,
                         request: draft.request,
+                        tableCatalog: isClueMode(project) ? tableCatalogText(currentTables()) : '',
                     }),
                 ),
             );
@@ -1225,7 +1264,7 @@ ${yaml}
         (putDraft(view, view.projectId, null), view.renderBody());
     },
     'draft-new'(view) {
-        (addVolumes(view, st(view).draft.volumes, 'AI 新建卷'), (st(view).draft = null), view.renderBody());
+        (addVolumes(view, st(view).draft.volumes, 'AI 新建卷'), putDraft(view, view.projectId, null), view.renderBody(), afterAdopt(view));
     },
     async 'draft-replace'(view) {
         const { volume } = findSel(view.project(), st(view).sel);
@@ -1244,7 +1283,8 @@ ${yaml}
             (st(view).draft = null),
             (st(view).sel = incoming[0].id),
             view.runtime.refresh(),
-            view.renderBody());
+            view.renderBody(),
+            afterAdopt(view));
     },
     'draft-append'(view) {
         const { volume } = findSel(view.project(), st(view).sel);
@@ -1253,17 +1293,16 @@ ${yaml}
         (updateVolume(view, volume.id, (item) => ({ ...item, stages: [...item.stages, ...stages] }), 'AI 追加阶段'),
             (st(view).draft = null),
             view.runtime.refresh(),
-            view.renderBody());
+            view.renderBody(),
+            afterAdopt(view));
     },
     async 'draft-rest'(view) {
         let draft = getDraft(view);
-        // W3：草稿是在别的聊天（或别的推进方式）里生成的，不在这里应用；确认对话框前后各核对一次。
         if (draft && draft.task && !taskStillValid(view, draft.task))
             return toast(
                 'warning',
                 '这份改写草稿是在另一个聊天里生成的。历史保护要按那个聊天的进度计算，请回到原聊天应用，或丢弃后在这里重新生成。',
             );
-        // 最终确认框里列出按「现在」状态算出的倒退、跳过和失去的发现（15.3），由作者决定是否接受。
         let guard = rewriteGuardNow(view, draft),
             items = guard ? [...guard.diffs, ...guard.notes] : [];
         if (
@@ -1279,7 +1318,6 @@ ${yaml}
         )
             return;
         if (draft && draft.task && !taskStillValid(view, draft.task)) return toast('warning', '确认期间切换了聊天，没有应用。');
-        // 确认框开着的时候进度又变了（GPT §17.1，比如这期间取得了新事实）：把新出现的后果单独列出来，再确认一次。
         let after = rewriteGuardNow(view, draft),
             seen = new Set(items),
             added = after ? [...after.diffs, ...after.notes].filter((x) => !seen.has(x)) : [];
@@ -1296,11 +1334,12 @@ ${yaml}
             return;
         if (draft && draft.task && !taskStillValid(view, draft.task)) return toast('warning', '确认期间切换了聊天，没有应用。');
         const from = applyRest(view, draft, rewriteGuardNow(view, draft));
-        if (!isClueMode(view.project()))
-            await runTask(view, 'outline', () => view.runtime.syncSetting(view.projectId, { from, reason: draft.reason }));
-        (putDraft(view, view.projectId, null), view.renderBody());
+        (isClueMode(view.project()) ||
+            (await runTask(view, 'outline', () => view.runtime.syncSetting(view.projectId, { from, reason: draft.reason }))),
+            putDraft(view, view.projectId, null),
+            afterAdopt(view),
+            view.renderBody());
     },
-
     // outline v0.1.23：历史版本、检查、总览、单阶段草稿。
     history(view) {
         ((st(view).history = !st(view).history), (st(view).historyAt = void 0), view.renderBody());
@@ -1353,11 +1392,11 @@ ${yaml}
         const ids = [draft.stageId, ...(draft.nextId ? [draft.nextId] : [])],
             old = volume.stages.filter((stage) => ids.includes(stage.id));
         if (isClueMode(project) && view.runtime.activeId() === view.projectId) {
-            const current = view.runtime.clue.compute();
-            const preview = replaceStages(project.outline.volumes, volume.id, ids, incoming);
-            const guard = historyGuard(project.outline.volumes, preview.volumes, current.snap, current.prog, project.clue, {
-                scope: new Set(compileClue([{ ...volume, stages: old }]).nodes.map((n) => n.uid)),
-            });
+            const current = view.runtime.clue.compute(),
+                preview = replaceStages(project.outline.volumes, volume.id, ids, incoming),
+                guard = historyGuard(project.outline.volumes, preview.volumes, current.snap, current.prog, project.clue, {
+                    scope: new Set(compileClue([{ ...volume, stages: old }]).nodes.map((n) => n.uid)),
+                });
             incoming = restoreHistory([{ ...volume, stages: incoming }], guard).flatMap((v) => v.stages);
         }
         const { volumes, stages, keepId } = replaceStages(project.outline.volumes, volume.id, ids, incoming),
@@ -1410,72 +1449,73 @@ function renameInTree(target, id, label) {
 }
 
 export function onInput(view, target) {
-    const { stage, volume } = findSel(view.project(), st(view).sel);
-    if (target.dataset.aiRequest !== undefined) {
+    if (target.matches('[data-lr-win]') || target.matches('select[data-lr-field]')) return void lrOnChange(view, target);
+    let { stage, volume } = findSel(view.project(), st(view).sel);
+    if (target.dataset.aiRequest !== void 0) {
         st(view).request = target.value;
         return;
     }
-    if (target.dataset.volKey !== undefined && volume) {
+    if (target.dataset.volKey !== void 0 && volume) {
         const key = target.value.trim();
-        if (key && !view.project().outline.volumes.some((item) => item.key === key && item.id !== volume.id)) {
-            updateVolume(view, volume.id, (item) => ({ ...item, key }));
-            renameInTree(target, volume.id, volumeLabel(key));
+        key &&
+            !view.project().outline.volumes.some((item) => item.key === key && item.id !== volume.id) &&
+            (updateVolume(view, volume.id, (item) => ({ ...item, key })), renameInTree(target, volume.id, volumeLabel(key)));
+        return;
+    }
+    if (stage) {
+        if (target.dataset.stageKey !== void 0) {
+            const key = target.value.trim();
+            key &&
+                !volume.stages.some((item) => item.key === key && item.id !== stage.id) &&
+                (updateStage(view, stage.id, (item) => ({ ...item, key })), renameInTree(target, stage.id, stageLabel(key)));
+            return;
         }
-        return;
-    }
-    if (!stage) return;
-    if (target.dataset.stageKey !== undefined) {
-        const key = target.value.trim();
-        if (key && !volume.stages.some((item) => item.key === key && item.id !== stage.id)) {
-            updateStage(view, stage.id, (item) => ({ ...item, key }));
-            renameInTree(target, stage.id, stageLabel(key));
+        if (target.dataset.stageField) {
+            const field = target.dataset.stageField;
+            updateStage(view, stage.id, (item) => ({ ...item, data: { ...item.data, [field]: target.value } }));
+            return;
         }
-        return;
-    }
-    if (target.dataset.stageField) {
-        const field = target.dataset.stageField;
-        updateStage(view, stage.id, (item) => ({ ...item, data: { ...item.data, [field]: target.value } }));
-        return;
-    }
-    if (target.dataset.stageList) {
-        const field = target.dataset.stageList;
-        const lines = target.value
-            .split('\n')
-            .map((line) => line.trim())
-            .filter(Boolean);
-        updateStage(view, stage.id, (item) => {
-            const data = { ...item.data, [field]: lines };
-            if (!lines.length) delete data[field];
-            return { ...item, data };
-        });
-        return;
-    }
-    if (target.dataset.nodeField) {
-        const field = target.dataset.nodeField;
-        const index = Number(target.dataset.i);
-        const key = target.dataset.k;
-        const pending = nameKey(stage.id, field, index);
-        if (['名称', '类型', '内容'].includes(key) && !pendingNames.has(pending)) {
-            const node = nodeAt(stage, field, index);
-            if (node) pendingNames.set(pending, node.name);
+        if (target.dataset.stageList) {
+            const field = target.dataset.stageList,
+                lines = target.value
+                    .split(
+                        `
+`,
+                    )
+                    .map((line) => line.trim())
+                    .filter(Boolean);
+            updateStage(view, stage.id, (item) => {
+                const data = { ...item.data, [field]: lines };
+                return (lines.length || delete data[field], { ...item, data });
+            });
+            return;
         }
-        updateStage(view, stage.id, (item) => {
-            const list = [...item.data[field]];
-            const prev = list[index] && typeof list[index] === 'object' ? list[index] : {};
-            list[index] = { ...prev, [key]: target.value };
-            if (target.dataset.play !== undefined) {
-                const value = playValue(key, target.value);
-                if (value === undefined) delete list[index][key];
-                else list[index][key] = value;
+        if (target.dataset.nodeField) {
+            const field = target.dataset.nodeField,
+                index = Number(target.dataset.i),
+                key = target.dataset.k,
+                pending = nameKey(stage.id, field, index);
+            if (['名称', '类型', '内容'].includes(key) && !pendingNames.has(pending)) {
+                const node = nodeAt(stage, field, index);
+                node && pendingNames.set(pending, node.name);
             }
-            return { ...item, data: { ...item.data, [field]: list } };
-        });
+            updateStage(view, stage.id, (item) => {
+                const list = [...item.data[field]],
+                    prev = list[index] && typeof list[index] == 'object' ? list[index] : {};
+                if (((list[index] = { ...prev, [key]: target.value }), target.dataset.play !== void 0)) {
+                    const value = playValue(key, target.value);
+                    value === void 0 ? delete list[index][key] : (list[index][key] = value);
+                }
+                return { ...item, data: { ...item.data, [field]: list } };
+            });
+        }
     }
 }
 
 // 失焦时同步注入内容；名字改动直接改树上的文字，不整页重画（避免吞掉紧接着的点击）。
 export function onBlur(view, target) {
-    if (target.dataset.nodeYaml !== undefined || target.dataset.stageYaml !== undefined) return applyYamlField(view, target);
+    if (target.matches('[data-lr-field],[data-lr-comment]')) return lrOnChange(view, target);
+    if (target.dataset.nodeYaml !== void 0 || target.dataset.stageYaml !== void 0) return applyYamlField(view, target);
     (target.dataset.nodeField &&
         ['名称', '类型', '内容'].includes(target.dataset.k) &&
         syncNodeName(view, target.dataset.nodeField, Number(target.dataset.i)),
@@ -1711,3 +1751,17 @@ export function applyYamlField(view, target) {
 }
 
 export { st };
+
+export function currentTables() {
+    let api = acuApi();
+    try {
+        return api && typeof api.exportTableAsJson == 'function' ? cloneTables(api.exportTableAsJson()) : null;
+    } catch {
+        return null;
+    }
+}
+
+export function afterAdopt(view) {
+    let p = view.project();
+    p && isClueMode(p) && compileClue(p.outline.volumes).lines.length && prepareLabels(view);
+}

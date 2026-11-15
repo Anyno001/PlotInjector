@@ -23,7 +23,7 @@ const SETTING = ['港口：', '雾浓。', '<仅作者>', '幕后真相：', SEC
 async function bootUi() {
   const host = createHost({ tables: {} });
   const inst = host.load(); await inst.ready;
-  inst.data.updateSettings({ tourState: { revision: 1, done: ['core'] } });
+  inst.data.updateSettings({ tourState: { revision: 2, done: ['core'] } });
   const a = await inst.data.createProject('A');
   const b = await inst.data.createProject('B');
   await inst.runtime.switchProject(a.id);

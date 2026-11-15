@@ -201,7 +201,8 @@
     }
 
     async function latestTag() {
-        const atLeast = tag => (tag && tag !== 'main' && compareVersions(tag, MIN_TAG) >= 0 ? tag : MIN_TAG === 'v0.0.0' ? tag || 'main' : MIN_TAG);
+        // 新构建可能先推 main、稍后才打标签；不要尝试下载尚不存在的 MIN_TAG，也不要退回旧程序。
+        const atLeast = tag => (tag && tag !== 'main' && compareVersions(tag, MIN_TAG) >= 0 ? tag : 'main');
         const cached = readUi().loader;
         if (cached && cached.tag && cached.by === LOADER_VERSION && Date.now() - cached.at < TAG_TTL) return atLeast(cached.tag);
         for (const source of [fromGithub, fromJsdelivr]) {

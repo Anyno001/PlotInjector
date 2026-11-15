@@ -1,9 +1,11 @@
+import { stayText, stayState, addStay, stayEntry } from '../core/clue-progress.js';
+
 import { injectedSetting, changedBlockKeys, mergeBlocks, parseSettingReply, pushHistory, splitBlocks } from '../core/setting.js';
 import { ensureOutlineIds, isClueMode, stripAuthorBlocks, outlineVolumesView } from '../core/clue-model.js';
 import { createClueRuntime } from './clue-runtime.js';
 
 import { DEFAULT_PARAMS, pickParams, buildEntries, buildIndexText, carriedNodes, toWorldInfoEntry } from '../core/inject.js';
-import { buildPersonaCheckMessages } from '../core/check.js';
+import { buildPersonaCheckMessages, buildClueCheckMessages, buildCheckMessages, cleanFloorText, parseCheckReply } from '../core/check.js';
 import {
     alignPersonaProgress,
     buildPersonaEntries,
@@ -44,7 +46,6 @@ import {
 } from '../core/outline.js';
 import { discoveryList, clueText } from '../core/clue-project.js';
 
-import { buildClueCheckMessages, buildCheckMessages, cleanFloorText, parseCheckReply } from '../core/check.js';
 import { requestToText, auditOutlineRequest } from '../core/clue-audit.js';
 
 import { isBackgroundRequest, requestLlm } from '../host/llm.js';
@@ -107,28 +108,25 @@ const placeOf = (unit) => `${volumeLabel(unit.volume.key)}·${stageLabel(unit.st
 // askReason 由入口传入（弹输入框），运行时本身不依赖界面。
 export function createRuntime({ data, notice, emit, askReason = async () => '' }) {
     const view = hostWindow();
-    let progress = null;
-    let progressFor = '';
-    // 最近一次按大纲对照表归位时的输入（进度对象、大纲对象），两者都没变就不再算。
-    let alignedFrom = null;
-    let alignedOutline = null;
-    let alignedPersonas = null;
-    let checking = false;
-    let fallbackTimer = 0;
-    let generating = false;
-    let chatStartFloors = 0;
-    let pendingCheck = false;
-    let pendingTimer = 0;
-    let opening = false;
-    let openGen = 0;
-    let openPromise = Promise.resolve(null);
-    let pendingTrigger = null;
-    let lastRead = null;
-    const listeners = [];
-    const stats = {};
-    const logs = [];
-
-    // 诊断页用：最近的事件与检测判断。
+    let progress = null,
+        progressFor = '',
+        alignedFrom = null,
+        alignedOutline = null,
+        alignedPersonas = null,
+        checking = !1,
+        fallbackTimer = 0,
+        generating = !1,
+        chatStartFloors = 0,
+        pendingCheck = !1,
+        pendingTimer = 0,
+        opening = !1,
+        openGen = 0,
+        openPromise = Promise.resolve(null),
+        pendingTrigger = null,
+        lastRead = null;
+    const listeners = [],
+        stats = {},
+        logs = [];
     function log(text) {
         (logs.push({ at: Date.now(), text }), logs.length > LOG_MAX && logs.shift());
     }
@@ -145,7 +143,6 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
     function clueMode() {
         return !isInfinite(activeProject()) && isClueMode(activeProject());
     }
-    // 异步隔离：所有 await 模型的地方先取一张票（聊天 + 项目 + 模式 + 切换纪元），返回后票不一致就丢弃结果。
     let epoch = 0;
     function bumpEpoch() {
         epoch += 1;
@@ -163,7 +160,6 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
         let now = ticket();
         return !!t && t.epoch === now.epoch && t.chat === now.chat && t.project === now.project && t.mode === now.mode;
     }
-
     function chatBoundId() {
         const id = readChatState().projectId;
         return id && data.index().projects.some((item) => item.id === id) ? id : '';
@@ -172,13 +168,18 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
         return chatBoundId() || data.activeIdFor(cardKey());
     }
     function activeProject() {
-        const id = activeId();
-        const project = id ? data.project(id) : null;
+        const id = activeId(),
+            project = id ? data.project(id) : null;
         if (!project || project.mode === 'infinite') return project;
         const ids = ensureOutlineIds(project.outline.volumes, project.outlineIdMap);
-        if (!ids.changed) return project;
-        data.updateProject(id, (cur) => ({ ...cur, outline: { ...cur.outline, volumes: ids.volumes }, outlineIdMap: ids.legacyMap }));
-        return data.project(id);
+        return ids.changed
+            ? (data.updateProject(id, (cur) => ({
+                  ...cur,
+                  outline: { ...cur.outline, volumes: ids.volumes },
+                  outlineIdMap: ids.legacyMap,
+              })),
+              data.project(id))
+            : project;
     }
     function currentProgress() {
         const id = activeId();
@@ -192,38 +193,29 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
                 ((progress = { ...progress, infinite: emptyInfinite() }), writeProgress(progress)),
             project && !isInfinite(project) && (progress !== alignedFrom || project.outline !== alignedOutline))
         ) {
-            const migrated = migrateStableProgress(progress, project.outline.volumes, project.outlineIdMap, project.outline.idAlias);
-            const aligned = stampNodeIds(alignProgress(migrated, project.outline), project.outline.volumes);
+            const migrated = migrateStableProgress(progress, project.outline.volumes, project.outlineIdMap, project.outline.idAlias),
+                aligned = stampNodeIds(alignProgress(migrated, project.outline), project.outline.volumes);
             (aligned !== progress && ((progress = aligned), writeProgress(progress), log('按大纲对照表归位了本聊天的进度')),
                 (alignedFrom = progress),
                 (alignedOutline = project.outline));
         }
-        // 人设改了阶段（改名、删除）或线被删：把本聊天的人设进度对回当前人设，有变化就写回。
         if (project && project.personas !== alignedPersonas) {
             const aligned = alignPersonaProgress(progress, project.personas);
-            if (aligned !== progress) {
-                progress = aligned;
-                writeProgress(progress);
-                log('按人设对回了本聊天的人设进度');
-            }
-            alignedPersonas = project.personas;
+            (aligned !== progress && ((progress = aligned), writeProgress(progress), log('按人设对回了本聊天的人设进度')),
+                (alignedPersonas = project.personas));
         }
         return progress;
     }
-
-    // IGS 声望读数：没装 IGS、没开声望、读取失败都当没有。
     function fameNow() {
         try {
-            const igs = view.IGS;
-            const list = igs && igs.stats && typeof igs.stats.fame === 'function' ? igs.stats.fame() : [];
-            // 好感读数并进同一个数组，kind 标 favor；旧版 IGS 没有 favor 接口就只有声望。
-            const favor = igs && igs.stats && typeof igs.stats.favor === 'function' ? igs.stats.favor() : [];
+            const igs = view.IGS,
+                list = igs && igs.stats && typeof igs.stats.fame == 'function' ? igs.stats.fame() : [],
+                favor = igs && igs.stats && typeof igs.stats.favor == 'function' ? igs.stats.favor() : [];
             return [...(Array.isArray(list) ? list : []), ...(Array.isArray(favor) ? favor.map((row) => ({ ...row, kind: 'favor' })) : [])];
         } catch {
             return [];
         }
     }
-
     function links() {
         const project = activeProject();
         return project ? outlineLinks(project.outline) : void 0;
@@ -250,19 +242,38 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
     }
     function setProgress(next, reason = 'progress') {
         const project = activeProject();
-        if (project && project.mode !== 'infinite') next = stampNodeIds(next, project.outline.volumes);
-        next = syncPersonas(project, next, fameNow());
-        ((next = stampActive(progress && progressFor === next.projectId ? progress : null, next)),
+        (project && project.mode !== 'infinite' && (next = stampNodeIds(next, project.outline.volumes)),
+            (next = isClueMode(project) ? next : syncPersonas(project, next, fameNow())),
+            (next = stampActive(progress && progressFor === next.projectId ? progress : null, next)),
             (progress = next),
             (progressFor = next.projectId),
             writeProgress(next),
             scheduleFallback(),
             emit(reason));
     }
-    function entries({ inject = false } = {}) {
+    // 只在接口边界把线索阶段映射给人设；不改写大纲模式的独立进度。
+    function personaStates() {
+        if (!clueMode()) return null;
+        const computed = clue.compute();
+        return computed
+            ? Object.fromEntries(
+                  [...computed.state.stageStates].map(([id, state]) => [
+                      id,
+                      state.done ? 'done' : state.entered.v === 'true' ? 'active' : 'todo',
+                  ]),
+              )
+            : {};
+    }
+    function entries({ inject = !1 } = {}) {
         let project = activeProject(),
             prog = currentProgress();
-        const persona = hasPersonas(project) ? { fame: fameNow(), ...(inject ? {recentText: scanText(), globals: worldInfoMatchSettings()} : {}) } : {};
+        const persona = hasPersonas(project)
+            ? {
+                  fame: fameNow(),
+                  stageStates: personaStates(),
+                  ...(inject ? { recentText: scanText(), globals: worldInfoMatchSettings() } : {}),
+              }
+            : {};
         return !project || !prog
             ? []
             : isClueMode(project)
@@ -275,8 +286,25 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
                     },
                     prog,
                     data.settings(),
-                    persona,
+                    { ...persona, stayOf: (unit) => stayText(stayState(prog.stays, chatMessages(), outlineStay(prog, unit)), 'outline') },
                 );
+    }
+    function outlineStay(prog, unit) {
+        let list = flattenUnits((activeProject() || { outline: { volumes: [] } }).outline.volumes),
+            states = unitStates(list, prog),
+            active = list.filter((u) => states[u.id] === 'active'),
+            only = active.length === 1 ? active[0] : null,
+            enabled = (u) => pickParams({ ...DEFAULT_PARAMS, ...activeProject().defaults }.detail, prog.slots[u.id]).enabled;
+        return unit ? { key: unit.id, paused: !enabled(unit) } : { key: only ? only.id : '', paused: !!only && !enabled(only) };
+    }
+    function recordStay(messageId) {
+        let prog = currentProgress(),
+            project = activeProject();
+        if (!prog || !project) return;
+        let info = isClueMode(project) ? clue.stayInfo() : outlineStay(prog, null);
+        if (!info) return;
+        let next = addStay(prog.stays, stayEntry(chatMessages(), Number(messageId), info));
+        next !== prog.stays && setProgress({ ...prog, stays: next }, 'stay');
     }
     function buildClueEntries(project, prog) {
         let defaults = { ...DEFAULT_PARAMS, ...project.defaults },
@@ -299,14 +327,14 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
                 content: proj.content,
                 reason: proj.reason,
                 used: proj.used,
-                stale: proj.stale,
+                lineOnly: !!proj.lineOnly,
                 ...pickParams(defaults.detail, prog.slots[CLUE_SLOT]),
             }),
             out
         );
     }
     function virtualEntries({ recordClue = !1 } = {}) {
-        let list = entries({ inject: true }),
+        let list = entries({ inject: !0 }),
             clueEntry = list.find((entry) => entry.slotId === CLUE_SLOT);
         return (
             recordClue &&
@@ -314,38 +342,30 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
                 clue.record(
                     'worldbook',
                     clueEntry.enabled
-                        ? { content: clueEntry.content, used: clueEntry.used, reason: clueEntry.reason, stale: clueEntry.stale }
+                        ? { content: clueEntry.content, used: clueEntry.used, reason: clueEntry.reason, lineOnly: clueEntry.lineOnly }
                         : { content: '', reason: '线索条目已被关闭' },
                 ),
             list.filter((entry) => entry.enabled && entry.content).map((entry, index) => toWorldInfoEntry(entry, index, VIRTUAL_WORLD))
         );
     }
-    // 最近 N 楼正文（N 为酒馆世界书扫描深度），人设线的关键词触发用。
     function scanText() {
         const depth = Math.max(1, worldInfoScanDepth());
         return chatMessages()
             .filter((msg) => !isNote(msg))
             .slice(-depth)
-            .map((msg) => String(msg.mes || ''))
-            .join('\n');
+            .map((msg) => String(msg.mes || '')).join(`
+`);
     }
-
-    // 注入前按最新的大纲进度与声望读数刷新人设阶段（跟随大纲、读声望两种方式）。
     function refreshPersonas() {
-        const project = activeProject();
-        const prog = currentProgress();
+        const project = activeProject(),
+            prog = currentProgress();
         if (!hasPersonas(project) || !prog) return;
-        const next = syncPersonas(project, prog, fameNow());
-        if (next !== prog) setProgress(next);
+        const next = syncPersonas(project, prog, fameNow(), personaStates());
+        next !== prog && setProgress(next);
     }
-
     function onStatsChanged() {
-        if (!hasPersonas(activeProject())) return;
-        refreshPersonas();
-        scheduleFallback();
-        emit('progress');
+        hasPersonas(activeProject()) && (refreshPersonas(), scheduleFallback(), emit('progress'));
     }
-
     function eventTypes() {
         const c = ctx();
         return (c && c.eventTypes) || {};
@@ -355,8 +375,7 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
     }
     async function onEntriesLoaded(payload) {
         if (!(!payload || !Array.isArray(payload.chatLore))) {
-            opening && (await waitOpening());
-            refreshPersonas();
+            (opening && (await waitOpening()), refreshPersonas());
             try {
                 payload.chatLore.push(...virtualEntries({ recordClue: !0 }));
             } catch (error) {
@@ -822,141 +841,139 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
         const state = infState();
         state && setInf(removeWorld(state.inf, worldId, state.infinite.config));
     }
-
-    // 条件检测型人设线：本次检测窗口内触发过、方式为条件检测、未设不提醒的才带；personaMode 为 off 时不带。
     function personaCheckItems(floors) {
-        const project = activeProject();
-        const prog = currentProgress();
-        if (!hasPersonas(project) || !prog || data.settings().personaMode === 'off') return [];
-        return checkItems(project, prog, floors.map((floor) => floor.text).join('\n'), {
-            globals: worldInfoMatchSettings(),
-            fame: fameNow(),
-        });
+        const project = activeProject(),
+            prog = currentProgress();
+        return !hasPersonas(project) || !prog || data.settings().personaMode === 'off'
+            ? []
+            : checkItems(
+                  project,
+                  prog,
+                  floors.map((floor) => floor.text).join(`
+`),
+                  {
+                      globals: worldInfoMatchSettings(),
+                      fame: fameNow(),
+                      stageStates: personaStates(),
+                  },
+              );
     }
-
-    // 人设检测结果：询问（弹窗，可采用 / 不用）、自动（直接推进，可撤销）。只往前推一格。
     function offerPersonaMoves(items, replyMoves) {
-        const scope = ticket();
-        const project = activeProject();
-        const moves = resolveMoves(items, replyMoves);
+        const scope = ticket(),
+            project = activeProject(),
+            moves = resolveMoves(items, replyMoves);
         if (!moves.length || !project) return;
-        const lines = moves.map(moveText);
-        const adopt = () => {
-            if (!ticketValid(scope)) return;
-            // 弹窗挂着期间阶段可能被手动改过：只采用当前阶段仍是检测时那一段的线。
-            const prog = currentProgress();
-            const env = personaEnv(project, prog, fameNow());
-            const still = moves.filter((move) => {
-                const line = project.personas.lines.find((item) => item.id === move.item.lineId);
-                return line && currentStage(line, prog, env).stage.id === move.item.fromId;
-            });
-            if (!still.length) {
-                log('人设阶段推进作废：阶段已被改动');
-                return;
-            }
-            setProgress(applyMoves(prog, project, still));
-            log(`人设阶段推进：${lines.join('；')}`);
-        };
+        const lines = moves.map(moveText),
+            adopt = () => {
+                if (!ticketValid(scope)) return;
+                const prog = currentProgress(),
+                    env = personaEnv(activeProject(), prog, fameNow(), personaStates()),
+                    still = moves.filter((move) => {
+                        const line = activeProject().personas.lines.find((item) => item.id === move.item.lineId);
+                        return line && currentStage(line, prog, env).stage.id === move.item.fromId;
+                    });
+                if (!still.length) {
+                    log('人设阶段推进作废：阶段已被改动');
+                    return;
+                }
+                (setProgress(applyMoves(prog, activeProject(), still)), log(`人设阶段推进：${lines.join('；')}`));
+            };
         if (data.settings().personaMode === 'auto') {
-            adopt();
-            notice.show({
-                id: 'persona',
-                title: '人设阶段已推进',
-                body: lines.join('\n'),
-                actions: [{ label: '撤销', run: () => ticketValid(scope) && setProgress(undoMoves(currentProgress(), activeProject(), moves)) }],
-                timeout: 15000,
-            });
+            (adopt(),
+                notice.show({
+                    id: 'persona',
+                    title: '人设阶段已推进',
+                    body: lines.join(`
+`),
+                    actions: [
+                        {
+                            label: '撤销',
+                            run: () => ticketValid(scope) && setProgress(undoMoves(currentProgress(), activeProject(), moves)),
+                        },
+                    ],
+                    timeout: 15e3,
+                }));
             return;
         }
         notice.show({
             id: 'persona',
             title: '人设阶段有变化',
-            body: lines.join('\n'),
+            body: lines.join(`
+`),
             actions: [
-                { label: '采用', primary: true, run: adopt },
+                { label: '采用', primary: !0, run: adopt },
                 { label: '暂不', run: () => notice.hide('persona') },
             ],
         });
     }
-
-    // 没有大纲（或大纲为空）时只检测人设阶段。
-    async function checkPersonasOnly({ manual = false } = {}) {
-        const scope = ticket();
-        const settings = data.settings();
-        const floors = recentFloors(settings.checkFloors);
-        const items = floors.length ? personaCheckItems(floors) : [];
-        if (!items.length) {
-            if (floors.length && !manual) setProgress({ ...currentProgress(), lastCheckFloor: floorCount() });
-            log('跳过检测：大纲为空');
-            if (manual && hasPersonas(activeProject())) toast('info', floors.length ? '没有需要检测的人设线。' : '还没有可检测的正文。');
-            return null;
-        }
-        checking = true;
-        log(`开始检测人设阶段：${items.length} 条线，读最近 ${floors.length} 楼${manual ? '（手动）' : ''}`);
-        emit('checking');
+    async function checkPersonasOnly({ manual = !1 } = {}) {
+        const scope = ticket(),
+            settings = data.settings(),
+            floors = recentFloors(settings.checkFloors),
+            items = floors.length ? personaCheckItems(floors) : [];
+        if (!items.length)
+            return (
+                floors.length && !manual && setProgress({ ...currentProgress(), lastCheckFloor: floorCount() }),
+                log('跳过检测：大纲为空'),
+                manual && hasPersonas(activeProject()) && toast('info', floors.length ? '没有需要检测的人设线。' : '还没有可检测的正文。'),
+                null
+            );
+        ((checking = !0),
+            log(`开始检测人设阶段：${items.length} 条线，读最近 ${floors.length} 楼${manual ? '（手动）' : ''}`),
+            emit('checking'));
         try {
             const messages = buildPersonaCheckMessages(items, floors);
             let result = null;
-            for (let attempt = 0; ; attempt += 1) {
+            for (let attempt = 0; ; attempt += 1)
                 try {
                     if (!ticketValid(scope)) return null;
-                    result = parseCheckReply(await requestLlm(messages, resolveLlm(settings, 'check'), { timeoutMs: 120000 }));
+                    result = parseCheckReply(await requestLlm(messages, resolveLlm(settings, 'check'), { timeoutMs: 12e4 }));
                     break;
                 } catch (error) {
                     if (!ticketValid(scope) || attempt >= CHECK_RETRIES) throw error;
-                    log(`检测请求失败：${error.message}，${RETRY_GAP_MS / 1000} 秒后第 ${attempt + 1} 次重试`);
-                    await new Promise((resolve) => view.setTimeout(resolve, RETRY_GAP_MS));
+                    (log(`检测请求失败：${error.message}，${RETRY_GAP_MS / 1e3} 秒后第 ${attempt + 1} 次重试`),
+                        await new Promise((resolve) => view.setTimeout(resolve, RETRY_GAP_MS)));
                 }
-            }
             if (!ticketValid(scope)) return null;
             notice.hide('checkfail');
             const next = { ...currentProgress(), lastCheckFloor: floorCount() };
-            delete next.lastFailFloor;
-            setProgress(next);
+            (delete next.lastFailFloor, setProgress(next));
             const moves = result.personas || [];
-            log(`人设检测完成：${moves.length} 条建议`);
-            offerPersonaMoves(items, moves);
-            if (manual && !moves.length) toast('info', '人设阶段没有变化。');
-            return result;
+            return (
+                log(`人设检测完成：${moves.length} 条建议`),
+                offerPersonaMoves(items, moves),
+                manual && !moves.length && toast('info', '人设阶段没有变化。'),
+                result
+            );
         } catch (error) {
-            if (!ticketValid(scope)) return null;
-            setProgress({ ...currentProgress(), lastFailFloor: floorCount() });
-            log(`检测失败：${error.message}`);
-            notice.show({
-                id: 'checkfail',
-                title: '进度检测失败',
-                body: `已自动重试 ${CHECK_RETRIES} 次：${error.message}`,
-                actions: [
-                    { label: '重试', primary: true, run: () => checkNow({ manual }) },
-                    { label: '关闭', run: () => {} },
-                ],
-            });
-            return null;
+            return (
+                ticketValid(scope) &&
+                    (setProgress({ ...currentProgress(), lastFailFloor: floorCount() }),
+                    log(`检测失败：${error.message}`),
+                    notice.show({
+                        id: 'checkfail',
+                        title: '进度检测失败',
+                        body: `已自动重试 ${CHECK_RETRIES} 次：${error.message}`,
+                        actions: [
+                            { label: '重试', primary: !0, run: () => checkNow({ manual }) },
+                            { label: '关闭', run: () => {} },
+                        ],
+                    })),
+                null
+            );
         } finally {
-            checking = false;
-            emit('checked');
+            ((checking = !1), emit('checked'));
         }
     }
-
-    async function checkNow({ manual = false } = {}) {
-        if (isInfinite(activeProject())) {
-            log('无限流项目不使用检测模型');
-            return null;
-        }
-        if (checking) {
-            log('跳过检测：上一次检测还没结束');
-            return null;
-        }
-        const project = activeProject();
-        const prog = currentProgress();
-        const settings = data.settings();
-        if (!project || !prog) {
-            log('跳过检测：当前卡没有启用的项目');
-            if (manual) toast('info', '当前卡没有启用的项目。');
-            return null;
-        }
-        const sw = threadSwitches(project);
-        const unit = activeUnit() && maskUnits([activeUnit()], sw)[0];
+    async function checkNow({ manual = !1 } = {}) {
+        if (isInfinite(activeProject())) return (log('无限流项目不使用检测模型'), null);
+        if (checking) return (log('跳过检测：上一次检测还没结束'), null);
+        const project = activeProject(),
+            prog = currentProgress(),
+            settings = data.settings();
+        if (!project || !prog) return (log('跳过检测：当前卡没有启用的项目'), manual && toast('info', '当前卡没有启用的项目。'), null);
+        const sw = threadSwitches(project),
+            unit = activeUnit() && maskUnits([activeUnit()], sw)[0];
         if (!unit) return checkPersonasOnly({ manual });
         const floors = recentFloors(settings.checkFloors);
         if (!floors.length) return (log('跳过检测：没有可检测的正文'), manual && toast('info', '还没有可检测的正文。'), null);
@@ -964,18 +981,17 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
         let t = ticket();
         try {
             if (clueMode()) return await clueCheck(floors);
-            const list = maskUnits(flattenUnits(outlineVolumesView(project.outline.volumes)), sw);
-            const states = unitStates(list, prog);
-            const opts = { carryOver: settings.carryOver, hookCap: settings.hookCap, links: links() };
-            const index = buildIndexText(list, states, prog, opts);
-            // readTo 只用成功检测时的楼数：检测失败的那批楼并没有读过。
-            const threadInfo = checkThreads(liveThreads(list, states, prog, opts), {
-                newThreadMode: sw.sideOn ? settings.newThreadMode : 'off',
-                ignored: threadState(prog).ignored,
-                readTo: prog.lastCheckFloor,
-            });
-            const pItems = personaCheckItems(floors);
-            const messages = buildCheckMessages(unit, index, floors, threadInfo, pItems);
+            const list = maskUnits(flattenUnits(outlineVolumesView(project.outline.volumes)), sw),
+                states = unitStates(list, prog),
+                opts = { carryOver: settings.carryOver, hookCap: settings.hookCap, links: links() },
+                index = buildIndexText(list, states, prog, opts),
+                threadInfo = checkThreads(liveThreads(list, states, prog, opts), {
+                    newThreadMode: sw.sideOn ? settings.newThreadMode : 'off',
+                    ignored: threadState(prog).ignored,
+                    readTo: prog.lastCheckFloor,
+                }),
+                pItems = personaCheckItems(floors),
+                messages = buildCheckMessages(unit, index, floors, threadInfo, pItems);
             let result = null;
             for (let attempt = 0; ; attempt += 1)
                 try {
@@ -1018,21 +1034,20 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
                 result
             );
         } catch (error) {
-            if (!ticketValid(t)) return (log('检测失败且请求期间已切换，保留当前进度'), null);
-            return (
-                setProgress({ ...currentProgress(), lastFailFloor: floorCount() }),
-                log(`检测失败：${error.message}`),
-                notice.show({
-                    id: 'checkfail',
-                    title: '进度检测失败',
-                    body: `已自动重试 ${CHECK_RETRIES} 次：${error.message}`,
-                    actions: [
-                        { label: '重试', primary: !0, run: () => checkNow({ manual }) },
-                        { label: '关闭', run: () => {} },
-                    ],
-                }),
-                null
-            );
+            return ticketValid(t)
+                ? (setProgress({ ...currentProgress(), lastFailFloor: floorCount() }),
+                  log(`检测失败：${error.message}`),
+                  notice.show({
+                      id: 'checkfail',
+                      title: '进度检测失败',
+                      body: `已自动重试 ${CHECK_RETRIES} 次：${error.message}`,
+                      actions: [
+                          { label: '重试', primary: !0, run: () => checkNow({ manual }) },
+                          { label: '关闭', run: () => {} },
+                      ],
+                  }),
+                  null)
+                : (log('检测失败且请求期间已切换，保留当前进度'), null);
         } finally {
             ((checking = !1), emit('checked'));
         }
@@ -1040,7 +1055,10 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
     async function clueCheck(floors) {
         let c = clue.compute(),
             focus = c && c.state.nodeStates.find((s) => s.node.uid && s.node.uid === c.state.focus.uid);
-        if (!focus) return (toast('info', '线索模式下需要先有焦点场景才能检测。'), null);
+        if (!focus)
+            return hasPersonas(activeProject())
+                ? checkPersonasOnly({ manual: true })
+                : (toast('info', '线索模式下需要先有焦点场景才能检测。'), null);
         let item = isPlainObject(focus.node.item) ? focus.node.item : {},
             finds = discoveryList(item),
             material = [
@@ -1056,10 +1074,14 @@ ${finds.map((d) => `- ${d.text}`).join(`
             ].filter(Boolean).join(`
 `),
             t = ticket(),
-            reply2 = await requestLlm(buildClueCheckMessages(material, floors), resolveLlm(data.settings(), 'check'), { timeoutMs: 12e4 }),
+            pItems = personaCheckItems(floors),
+            reply2 = await requestLlm(buildClueCheckMessages(material, floors, pItems), resolveLlm(data.settings(), 'check'), {
+                timeoutMs: 12e4,
+            }),
             result = parseCheckReply(reply2);
         return ticketValid(t)
-            ? (log(`线索检测建议：${result.done.length ? '场景可能已演完' : '场景未演完'}`),
+            ? (offerPersonaMoves(pItems, result.personas || []),
+              log(`线索检测建议：${result.done.length ? '场景可能已演完' : '场景未演完'}`),
               notice.show({
                   id: 'clue-check',
                   title: '检测建议（不会自动改状态）',
@@ -1106,13 +1128,7 @@ ${finds.map((d) => `- ${d.text}`).join(`
             }, PENDING_MAX_MS)));
     }
     function onGenerationStarted(type, options2, dryRun) {
-        if (dryRun || ((generating = !0), !clueMode())) return;
-        (clue.register(),
-            clue.invalidate(),
-            clue.ensureRound(String(type || 'generate')) &&
-                clue.isFilling() &&
-                (log(`上一轮填表尚未完成；本次生成（${type || '普通'}）没有经过数据库剧情推进，无法等待，线索按上一次已提交的表格计算`),
-                toast('warning', '上一轮填表还没完成，本次生成没有经过数据库剧情推进，无法等待；线索按上一次已提交的表格计算。')));
+        dryRun || ((generating = !0), clueMode() && (clue.register(), clue.invalidate(), clue.ensureRound(String(type || 'generate'))));
     }
     function onGenerationEnded() {
         ((generating = !1), clue.endRound(), runPending());
@@ -1127,11 +1143,11 @@ ${finds.map((d) => `- ${d.text}`).join(`
             (log(`收到第 ${messageId} 楼：当前卡没有启用的项目，不检测`), emit('floor'));
             return;
         }
-        if (clueMode()) {
-            clue.bindCandidatesToMessage(Number(messageId));
-            clue.expectFill();
-            clue.invalidate();
-            emit('floor');
+        if ((recordStay(messageId), clueMode())) {
+            (clue.bindCandidatesToMessage(Number(messageId)),
+                clue.invalidate(),
+                log(`收到第 ${messageId} 楼：线索模式不做自动检测，等待填表结果`),
+                emit('floor'));
             return;
         }
         if (isInfinite(project)) {
@@ -1147,29 +1163,28 @@ ${finds.map((d) => `- ${d.text}`).join(`
             emit('floor'));
     }
     function onMessageChanged() {
-        clue.invalidate();
-        if (isInfinite(activeProject())) {
+        if ((clue.invalidate(), isInfinite(activeProject()))) {
             (refreshRead(), revalidateTrigger(), emit('floor'));
             return;
         }
         clampBase() && emit('floor');
     }
     async function onChatChanged() {
-        bumpEpoch();
-        clue.onChatChanged();
-        clue.register();
-        alignedPersonas = null;
-        progress = null;
-        progressFor = '';
-        abandonOpening();
-        lastRead = null;
-        pendingCheck = false;
-        view.clearTimeout(pendingTimer);
-        chatStartFloors = floorCount();
-        notice.hide('advance');
-        notice.hide('offtrack');
-        notice.hide('thread');
-        notice.hide('persona');
+        (bumpEpoch(),
+            clue.onChatChanged(),
+            clue.register(),
+            (alignedPersonas = null),
+            (progress = null),
+            (progressFor = ''),
+            abandonOpening(),
+            (lastRead = null),
+            (pendingCheck = !1),
+            view.clearTimeout(pendingTimer),
+            (chatStartFloors = floorCount()),
+            notice.hide('advance'),
+            notice.hide('offtrack'),
+            notice.hide('thread'),
+            notice.hide('persona'));
         const id = activeId();
         if (id)
             try {
@@ -1186,15 +1201,19 @@ ${finds.map((d) => `- ${d.text}`).join(`
             emit('chat'));
     }
     async function switchProject(id, scope = 'chat') {
-        bumpEpoch();
-        clue.invalidate();
-        alignedPersonas = null;
-        notice.hide('persona');
-        (id && (await data.loadProject(id)), abandonOpening());
+        (bumpEpoch(),
+            clue.invalidate(),
+            (alignedPersonas = null),
+            notice.hide('persona'),
+            id && (await data.loadProject(id)),
+            abandonOpening());
         const bound = bindChat(id);
         ((scope === 'card' || !bound || !data.activeIdFor(cardKey())) && data.setActive(id),
             (progress = null),
             (progressFor = ''),
+            clue.hideLineBar(),
+            clue.invalidate(),
+            clueMode() && clue.scheduleSync(),
             scheduleFallback(),
             emit('switch'));
     }
@@ -1209,39 +1228,41 @@ ${finds.map((d) => `- ${d.text}`).join(`
             states = isInfinite(project) ? Object.fromEntries(list.map((u) => [u.id, 'done'])) : unitStates(list, prog),
             projection = entries()
                 .filter((e) => e.enabled && e.content)
-                .map((e) => e.content);
-        let history = chatMessages()
-            .filter((m) => m && !m.is_user && !m.is_system)
-            .map((m) => String(m.mes || ''));
-        let result = auditOutlineRequest(text, project, states, projection, { history }),
+                .map((e) => e.content),
+            history = chatMessages()
+                .filter((m) => m && !m.is_user && !m.is_system)
+                .map((m) => String(m.mes || '')),
+            result = auditOutlineRequest(text, project, states, projection, { history }),
             leaks = result.leaks;
-        lastOutlineAudit = { ...result, at: Date.now() };
-        leaks.length &&
-            (log(
-                `最终请求核验：发现 ${leaks.length} 处本项目受限内容（${leaks
-                    .slice(0, 3)
-                    .map((l) => l.source)
-                    .join('、')}${leaks.length > 3 ? '……' : ''}）`,
-            ),
-            toast(
-                'warning',
-                `本轮正文请求里出现了还不该出现的剧情内容（${leaks[0].source}，匹配到「${leaks[0].sample}」）。可能是世界书、预设或别的插件带进来的，请到诊断页查看。`,
-            ));
-        result.duplicated &&
-            (log(`最终请求核验：本轮剧情内容出现了 ${result.projectionCount} 次（重复注入）`),
-            toast('warning', '本轮剧情内容在正文请求里出现了不止一次，请检查是否同时启用了别的注入路径。'));
-        return (emit('clue-audit'), lastOutlineAudit);
+        return (
+            (lastOutlineAudit = { ...result, at: Date.now() }),
+            leaks.length &&
+                (log(
+                    `最终请求核验：发现 ${leaks.length} 处不该出现的剧情（${leaks
+                        .slice(0, 3)
+                        .map((l) => l.source)
+                        .join('、')}${leaks.length > 3 ? '……' : ''}）`,
+                ),
+                toast(
+                    'warning',
+                    `本轮正文请求里出现了还不该出现的剧情内容（${leaks[0].source}，匹配到「${leaks[0].sample}」）。可能是世界书、预设或别的插件带进来的，请到诊断页查看。`,
+                )),
+            result.duplicated &&
+                (log(`最终请求核验：本轮剧情内容出现了 ${result.projectionCount} 次（重复注入）`),
+                toast('warning', '本轮剧情内容在正文请求里出现了不止一次，请检查是否同时启用了别的注入路径。')),
+            emit('clue-audit'),
+            lastOutlineAudit
+        );
     }
     function onPromptReady(payload) {
-        if (payload && payload.dryRun) return;
-        try {
-            if (isBackgroundRequest(requestToText(payload))) return log('插件自己的后台请求（讨论、整理、导入、检测），不做正文核验');
-            clueMode() ? clue.auditFinalRequest(payload) : auditOutline(payload);
-        } catch (error) {
-            log(`最终请求核验出错：${error.message}`);
-        }
+        if (!(payload && payload.dryRun))
+            try {
+                if (isBackgroundRequest(requestToText(payload))) return log('插件自己的后台请求（讨论、整理、导入、检测），不做正文核验');
+                clueMode() ? clue.auditFinalRequest(payload) : auditOutline(payload);
+            } catch (error) {
+                log(`最终请求核验出错：${error.message}`);
+            }
     }
-
     const BINDINGS = [
         ['WORLDINFO_ENTRIES_LOADED', onEntriesLoaded],
         ['CHAT_CHANGED', onChatChanged],
@@ -1257,32 +1278,25 @@ ${finds.map((d) => `- ${d.text}`).join(`
     ];
     function bind() {
         try {
-            for (const win of new Set([view, window])) win.addEventListener('igs:stats-changed', onStatsChanged);
-        } catch {
-            /* 窗口已关闭 */
-        }
-        const c = ctx();
-        const types = eventTypes();
-        if (!c || !c.eventSource) return;
-        for (const [key, handler] of BINDINGS) {
-            const name = types[key];
-            if (!name) continue;
-            const wrapped = (...args) => {
-                const stat = stats[key] || (stats[key] = { count: 0, at: 0 });
-                stat.count += 1;
-                stat.at = Date.now();
-                return handler(...args);
-            };
-            c.eventSource.on(name, wrapped);
-            listeners.push([key, name, wrapped]);
-        }
+            for (const win of /* @__PURE__ */ new Set([view, window])) win.addEventListener('igs:stats-changed', onStatsChanged);
+        } catch {}
+        const c = ctx(),
+            types = eventTypes();
+        if (!(!c || !c.eventSource))
+            for (const [key, handler] of BINDINGS) {
+                const name = types[key];
+                if (!name) continue;
+                const wrapped = (...args) => {
+                    const stat = stats[key] || (stats[key] = { count: 0, at: 0 });
+                    return ((stat.count += 1), (stat.at = Date.now()), handler(...args));
+                };
+                (c.eventSource.on(name, wrapped), listeners.push([key, name, wrapped]));
+            }
     }
     function unbind() {
         try {
-            for (const win of new Set([view, window])) win.removeEventListener('igs:stats-changed', onStatsChanged);
-        } catch {
-            /* 窗口已关闭 */
-        }
+            for (const win of /* @__PURE__ */ new Set([view, window])) win.removeEventListener('igs:stats-changed', onStatsChanged);
+        } catch {}
         const c = ctx();
         for (const [, name, handler] of listeners.splice(0))
             try {
@@ -1329,6 +1343,7 @@ ${finds.map((d) => `- ${d.text}`).join(`
         units,
         entries,
         fame: fameNow,
+        personaStates,
         openNext,
         backTo,
         checkNow,

@@ -224,7 +224,6 @@ test('real ST: a fact first recorded as 存疑 without ever being offered is als
   const s = Object.values(t).find((x) => x && x.name === '关键事实表');
   s.content.find((r, i) => i > 0 && r[1] === 'F_seen')[s.content[0].indexOf('状态')] = '存疑';
   host.db.setTables(t);
-  const hints = inst.runtime.clue.compute().hints.join('\n');
-  assert.match(hints, /「说法 \/ 存疑」，但插件从没把它们作为可能发现给过正文：F_seen/);
+  assert.deepEqual(JSON.parse(JSON.stringify(inst.runtime.clue.compute().unoffered.map((x) => [x.id, x.raw]))), [['F_seen', '存疑']]);
   await inst.destroy();
 });

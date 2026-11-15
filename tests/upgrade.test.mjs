@@ -92,7 +92,7 @@ async function clueSetup() {
   await inst.runtime.switchProject(p.id);
   await host.eventSource.emit(host.eventTypes.CHAT_CHANGED);
   const set = (sheet, key, col, v) => { const s = Object.values(tables).find((x) => x && x.name === sheet); s.content.find((r, i) => i > 0 && r[1] === key)[s.content[0].indexOf(col)] = v; };
-  const commit = () => { host.db.setTables(tables); host.db.commit(host.state.chat.length - 1); };
+  const commit = () => { host.db.setTables(tables); };
   const status = () => Object.fromEntries(inst.runtime.clue.compute().state.nodeStates.map((s) => [s.node.uid, s.status]));
   return { host, inst, pid: p.id, set, commit, status };
 }
@@ -124,7 +124,6 @@ test('F08: main paused → no injection, but facts and manual ops are kept; resu
   inst.runtime.clue.setPaused(true);
   const r = await host.send('闲聊', { reply: '聊天气' });
   assert.equal(r.text.includes('账本'), false, 'paused: nothing injected');
-  assert.equal(r.round.preContext || '', '', 'paused: no pre-task context either');
   assert.deepEqual(status(), before, 'facts-derived status kept while paused');
   inst.runtime.clue.setPaused(false);
   assert.equal(inst.runtime.clue.compute().state.focus.uid, 'n_ledger', 'manual focus kept across pause');

@@ -1,10 +1,18 @@
-import { isPlainObject, STAGE_HINT_KEYS, NODE_FIELDS, stageLabel, flattenUnits, stageNodes } from './outline.js';
-import { clueText, clueAlternativeRoutes, clueReachability } from './clue-project.js';
-import { CLUE_OUTLINE_RULES, OUTLINE_RULES } from './prompts.js';
+import { CLUE_LINE_RULES, CLUE_OUTLINE_RULES_WITH_LINES, CLUE_OUTLINE_RULES, OUTLINE_RULES } from './prompts.js';
+import { discoveryList, clueText, clueAlternativeRoutes, clueReachability } from './clue-project.js';
+import {
+    volumeLabel,
+    splitStageKey,
+    isPlainObject,
+    STAGE_HINT_KEYS,
+    NODE_FIELDS,
+    stageLabel,
+    flattenUnits,
+    stageNodes,
+} from './outline.js';
+import { conditionRefs, parseCondition, compileClue } from './clue-rules.js';
 
 import { CLUE_STAGE_KEYS, CLUE_NODE_KEYS, nodeUid, stripAuthorDeep, outlineStageData } from './clue-model.js';
-
-import { compileClue } from './clue-rules.js';
 
 export const CHAPTER_HEAD =
     /^(?:#{1,4}\s+.+|第[0-9一二三四五六七八九十百零〇两]+[章回节幕部卷].*|Chapter\s+\d+.*|[一二三四五六七八九十]+、.+)$/i;
@@ -510,26 +518,24 @@ export function mergeImportParts(vols) {
         conflicts = [],
         asList = (x) => (Array.isArray(x) ? x : isPlainObject(x) ? [x] : []),
         same = (a, b) => JSON.stringify(a) === JSON.stringify(b),
-        empty = (v) => v == null || v === '' || (Array.isArray(v) && !v.length);
-    let mergeFields = (into, from, skip, where) => {
-        for (let [k, v] of Object.entries(from)) {
-            if (skip.includes(k) || empty(v)) continue;
-            empty(into[k]) ? (into[k] = v) : same(into[k], v) || conflicts.push({ ...where, field: k, kept: into[k], other: v });
-        }
-    };
-    let mergeNode = (a, b, where) => {
-        let finds = asList(a.发现);
-        for (let d of asList(b.发现)) {
-            let f = isPlainObject(d) ? d.事实 : '',
-                k = f ? finds.findIndex((x) => isPlainObject(x) && x.事实 === f) : finds.findIndex((x) => same(x, d));
-            k < 0
-                ? finds.push(d)
-                : isPlainObject(d) && isPlainObject(finds[k])
-                  ? mergeFields(finds[k], d, ['事实'], { ...where, field: `发现 ${f}` })
-                  : 0;
-        }
-        return (finds.length && (a.发现 = finds), mergeFields(a, b, ['id', '发现'], where), a);
-    };
+        empty = (v) => v == null || v === '' || (Array.isArray(v) && !v.length),
+        mergeFields = (into, from, skip, where) => {
+            for (let [k, v] of Object.entries(from))
+                skip.includes(k) ||
+                    empty(v) ||
+                    (empty(into[k]) ? (into[k] = v) : same(into[k], v) || conflicts.push({ ...where, field: k, kept: into[k], other: v }));
+        },
+        mergeNode = (a, b, where) => {
+            let finds = asList(a.发现);
+            for (let d of asList(b.发现)) {
+                let f = isPlainObject(d) ? d.事实 : '',
+                    k = f ? finds.findIndex((x) => isPlainObject(x) && x.事实 === f) : finds.findIndex((x) => same(x, d));
+                k < 0
+                    ? finds.push(d)
+                    : isPlainObject(d) && isPlainObject(finds[k]) && mergeFields(finds[k], d, ['事实'], { ...where, field: `发现 ${f}` });
+            }
+            return (finds.length && (a.发现 = finds), mergeFields(a, b, ['id', '发现'], where), a);
+        };
     for (let v of vols || [])
         for (let st0 of v.stages || []) {
             let st = JSON.parse(JSON.stringify(st0)),
@@ -548,14 +554,452 @@ export function mergeImportParts(vols) {
                     k >= 0 ? mergeNode(list[k], n, { ...where, node: n.id }) : list.push(n);
                 }
         }
-    let out = vols && vols.length ? [{ ...vols[0], stages }] : [];
+    let lineIds = [...new Set((vols || []).map((v) => (isPlainObject(v.line) ? String(v.line.编号 || '').trim() : '')).filter(Boolean))];
+    lineIds.length > 1 &&
+        conflicts.push({ stage: '（整份草稿）', field: '线', kept: lineIds[0], other: lineIds.slice(1).join('、'), lines: lineIds });
+    let first = vols && vols.length ? vols[0] : null,
+        keepLine = (vols || []).map((v) => v.line).find((l) => isPlainObject(l)),
+        out = first ? [{ ...first, ...(keepLine ? { line: keepLine } : {}), stages }] : [];
     return Object.defineProperty(out, 'conflicts', { value: conflicts, enumerable: !1 });
 }
 
 export function importConflictText(c) {
+    if (c.lines)
+        return `草稿里写了好几条剧情线（${c.lines.join('、')}），长文导入暂时只能合成一条：保留了「${c.lines[0]}」，其余几条的阶段并进了这一条，它们的线编号和开启条件没有保留。要分开成几条线，采用后在大纲页让 AI 另写新卷`;
     let s = (v) => (typeof v == 'string' ? v : JSON.stringify(v)).slice(0, 80);
     return `${c.stage}${c.node ? `·${c.node}` : ''} 的「${c.field}」两段写得不一样：保留了前一段的「${s(c.kept)}」，后一段是「${s(c.other)}」。需要的话在采用后手动改`;
 }
 
 export const IMPORT_NEEDS_EXAMPLE =
     '这是我写的剧情方案，开头的真相和人物表只给我自己看，不要放进剧情。调查部分想细一点玩，打斗和赶路带过就行。中间有两条调查线不分先后，走哪条都能继续。原作的反转保留，其他细节可以为了好玩改动。';
+
+export const IMPORT_LINE_INDEX = [
+    '支线:   # 这份文档里的每一条支线，按文档顺序。编号从 S01 起，整份文档统一（后面几段沿用前面已经编好的编号）',
+    '  - {编号: S01, 名称: 支线的短标题, 主要人物: [..], 开启条件原文: 文档里写的开启时机或前提（没写就省略）, 关系: 和其他支线的关系原文（如「默认在 8 之后」，没写就省略）, 文档里的序号: 文档自己的编号（如「8」）, 本段有经过: 本段材料里有这条支线的具体经过写 true；只在总览表、目录里提到写 false}',
+].join(`
+`);
+
+export function importLineIndexMessages(base) {
+    return [
+        {
+            role: 'system',
+            content: `${base[0].content.replace(
+                /```yaml\n/,
+                `\`\`\`yaml
+${IMPORT_LINE_INDEX}
+`,
+            )}
+这份文档是好几条分别成卷的支线，不要合并成一条连续的剧情。先在「支线」里列出本段出现的每一条支线（一条支线被切成两段时，后一段沿用前一段的编号，不要另建）。
+每条支线有没有开启前提，逐条照原文抄进「开启条件原文」「关系」：「分别成卷」不等于「没有前提」，原文写了「默认在 8 之后」就照抄；原文明说「独立」也照抄「独立」；原文没写就省略。`,
+        },
+        base[1],
+    ];
+}
+
+export function mergeLineIdentity(list) {
+    let here = (l) => !(l.本段有经过 === !1 || l.本段有经过 === 'false' || l.本段有经过 === '否'),
+        out = [],
+        byId = /* @__PURE__ */ new Map(),
+        byNo = /* @__PURE__ */ new Map(),
+        notes = [];
+    for (let [k, idx] of (list || []).entries())
+        for (let l of isPlainObject(idx) && Array.isArray(idx.支线) ? idx.支线 : []) {
+            if (!isPlainObject(l) || !l.编号) continue;
+            let id = String(l.编号).trim(),
+                hit = byId.get(id),
+                no = String(l.文档里的序号 ?? '').trim();
+            if (hit) {
+                for (let [kk, v] of Object.entries(l)) (hit[kk] == null || hit[kk] === '') && (hit[kk] = v);
+                here(l) && !hit.parts.includes(k) && hit.parts.push(k);
+                continue;
+            }
+            let entry = { ...l, 编号: id, parts: here(l) ? [k] : [] };
+            (out.push(entry),
+                byId.set(id, entry),
+                no && byNo.has(no) && byNo.get(no) !== id
+                    ? notes.push(`文档里第 ${no} 条支线被编了两个编号（${byNo.get(no)}、${id}），请确认是不是同一条`)
+                    : no && byNo.set(no, id));
+        }
+    for (let l of out)
+        l.parts.length ||
+            (l.parts = (list || [])
+                .map((idx, k) =>
+                    isPlainObject(idx) &&
+                    Array.isArray(idx.支线) &&
+                    idx.支线.some((x) => isPlainObject(x) && String(x.编号 || '').trim() === l.编号)
+                        ? k
+                        : -1,
+                )
+                .filter((k) => k >= 0));
+    return { lines: out, notes };
+}
+
+export function importLineTable(lines) {
+    return (lines || []).map(
+        (l) =>
+            `- ${l.编号}「${clueText(l.名称)}」${l.文档里的序号 ? `（文档第 ${l.文档里的序号} 条）` : ''}${l.主要人物 ? ` 人物：${[].concat(l.主要人物).join('、')}` : ''}${l.开启条件原文 ? ` 开启：${clueText(l.开启条件原文)}` : ''}${l.关系 ? ` 关系：${clueText(l.关系)}` : ''}`,
+    ).join(`
+`);
+}
+
+export const IMPORT_LINES_PER_CALL = 3;
+
+export function importLineBatches(lines, partNo) {
+    let mine = (lines || []).filter((l) => !Array.isArray(l.parts) || l.parts.includes(partNo)).map((l) => l.编号),
+        out = [];
+    for (let i = 0; i < mine.length; i += IMPORT_LINES_PER_CALL) out.push(mine.slice(i, i + IMPORT_LINES_PER_CALL));
+    return out;
+}
+
+export function importLineDraftMessages({
+    part,
+    index,
+    lines,
+    only = [],
+    mainLines = '',
+    tableCatalog = '',
+    prevTail = '',
+    needs = '',
+    done = '',
+}) {
+    let base = importDraftMessages({ part, index, prevTail, mode: 'clue', needs, done }),
+        sys = `${base[0].content}
+${CLUE_LINE_RULES.join(`
+`)}
+· 上面说的「只引用有节点产出的事实编号」，线的开启条件例外：它里面的事实可以不需要节点产出。
+这份材料是好几条分别成卷的支线：
+· 本段里的**每一条**支线写成单独的一卷，卷的第一个键写「线」，类型写「支线」，编号**必须**用【线身份表】里的编号；卷名写「剧情_编号_标题」。不要把两条支线写进同一卷，也不要写主线。
+· 一条支线从上一段延续过来时，用同一个编号、同一个卷名，只写新增的阶段或节点。
+· 每条支线的事实编号、节点 id 带上这条支线的编号（如 F_s03_poster、s03_cinema），免得不同支线撞号。
+· 开启条件和开启时段只照【线身份表】里这条线自己的「开启」「关系」写，每条分开判断，不要照抄同一次写的别的线。三种情况：
+  - 写的是「独立」或什么都没写：不写开启条件，也不写开启时段。邀请、碰面这类由头写成第一个节点的入口，不要编成「收到邀请」的事实条件。
+  - 写的是「默认在 8 之后」：只写 {线: 文档第 8 条对应的编号 == 完成}，不要再加别的事实或门槛。写的是主线某一步之后：写开启时段或 {线: 主线编号 == …}。
+  - 写的是表格和事件都表达不准的经历（「至少与三名队员有单独往来后」）：写「开启方式: 人工」，原话放进「原开启条件」。
+· 篇幅默认每条 1～2 个阶段、每个阶段 1～3 个节点，作者备注只写要点；原文里必要的结果和依赖不要为了篇幅删掉。${
+            only.length
+                ? `
+· 这一次**只写** ${only.join('、')} 这几条（本段里别的支线另外再写），每一条都要写。`
+                : ''
+        }`,
+        mine = (lines || []).filter((l) => only.includes(l.编号)),
+        said = (l) => [clueText(l.开启条件原文), clueText(l.关系)].filter(Boolean).join('；'),
+        gate = mine.length
+            ? `【这一次要写的线：文档对开启的说法】
+${mine.map((l) => `- ${l.编号}：${said(l) || '（文档没写）'}`).join(`
+`)}
+照这里写开启条件：说法是「独立」或没写的，不写开启条件、不写开启时段，也不要加主线的条件；写了「在 N 之后」的，只等文档第 N 条对应的那条线；别的说法照原意写，写不准就人工。`
+            : '',
+        user = [
+            `【线身份表（整份文档统一的支线编号，只能用这些）】
+${importLineTable(lines)}`,
+            mainLines &&
+                `【项目里已有的主线（只有文档明确提到主线时才引用）】
+${mainLines}`,
+            tableCatalog,
+            base[1].content,
+            gate,
+        ].filter(Boolean).join(`
+
+`);
+    return [
+        { role: 'system', content: sys },
+        { role: 'user', content: user },
+    ];
+}
+
+export function importLineIssues(drafts, existing, { index = null, known = [], claimed = [] } = {}) {
+    let out = {},
+        idOf = (v) => (isPlainObject(v.line) ? String(v.line.编号 || '').trim() : ''),
+        add = (id, x) => (out[id] = out[id] || []).push(x);
+    for (let v of drafts || []) {
+        let id = idOf(v);
+        if (id)
+            for (let x of checkImportDraft([v], { index, mode: 'clue' }))
+                /没有做名字保密检查/.test(x.text) ||
+                    x.text.startsWith('按大纲推演') ||
+                    x.text.startsWith('替代途径') ||
+                    x.text.startsWith('有些地方取决于') ||
+                    compileClue([v]).errors.includes(x.text) ||
+                    add(id, x);
+    }
+    let oldGives = /* @__PURE__ */ new Map();
+    for (let n of compileClue(existing || []).nodes)
+        for (let d of discoveryList(isPlainObject(n.item) ? n.item : {}))
+            d.fact && !oldGives.has(d.fact) && oldGives.set(d.fact, { node: n.name, text: d.text });
+    for (let v of drafts || [])
+        for (let n of compileClue([v]).nodes)
+            for (let d of discoveryList(isPlainObject(n.item) ? n.item : {})) {
+                let old = d.fact && oldGives.get(d.fact);
+                if (!old || clueText(old.text) === clueText(d.text)) continue;
+                let got = known.includes(d.fact);
+                add(idOf(v), {
+                    level: got ? 'error' : 'warn',
+                    text: `线索编号 ${d.fact} 项目里已经有了（「${old.node}」：${old.text}），这条线的「${n.name}」又用它表示「${d.text}」。${got ? '这个聊天里它已经拿到了，采用后这条线会被当成已经查到。' : ''}如果是同一件事的另一条查法可以保留；不是同一件事的话，写意见让 AI 换一个编号`,
+                });
+            }
+    let all = [...(existing || []), ...(drafts || [])],
+        mine = new Set((drafts || []).map(idOf)),
+        reach = clueReachability(all, { knownFacts: known, claimedFacts: claimed });
+    for (let id of mine) {
+        let stuck = [...reach.stuckStages, ...reach.stuckNodes].filter((x) => x.line === id);
+        if (!stuck.length) continue;
+        let hard = stuck.filter((x) => !x.unknown),
+            soft = stuck.filter((x) => x.unknown),
+            say = (list) =>
+                list
+                    .slice(0, 4)
+                    .map((x) => `${x.stage}${x.node ? `·${x.node}` : ''}（${x.why}）`)
+                    .join('；');
+        ((hard = hard.filter((x) => !/线 [A-Za-z]+\d+ (未触发|可开启)/.test(x.why))),
+            hard.length &&
+                add(id, {
+                    level: 'error',
+                    text: `这条线走不通：${say(hard)}。常见原因是阶段的进入条件要等本阶段自己才能查到的线索，写意见让 AI 改`,
+                }),
+            !hard.length &&
+                soft.length &&
+                add(id, { level: 'info', text: `有些地方要到玩的时候才知道能不能走通（取决于时间或表格）：${say(soft)}` }));
+    }
+    return out;
+}
+
+export function lineIdsMissing(volumes, only) {
+    let got = new Set((volumes || []).map((v) => (isPlainObject(v.line) ? String(v.line.编号 || '').trim() : '')));
+    return (only || []).filter((id) => !got.has(id));
+}
+
+export function mergeImportByLine(vols) {
+    let groups = /* @__PURE__ */ new Map(),
+        order = [],
+        conflicts = [];
+    for (let v of vols || []) {
+        let id = isPlainObject(v.line) ? String(v.line.编号 || '').trim() : '',
+            key = id || `?${v.key}`;
+        (groups.has(key) || (groups.set(key, []), order.push(key)), groups.get(key).push(v));
+    }
+    let out = [];
+    for (let key of order) {
+        let list = groups.get(key),
+            merged = mergeImportParts(list),
+            line = {};
+        for (let v of list)
+            if (isPlainObject(v.line))
+                for (let [k, val] of Object.entries(v.line))
+                    line[k] == null || line[k] === ''
+                        ? (line[k] = val)
+                        : JSON.stringify(line[k]) !== JSON.stringify(val) &&
+                          conflicts.push({ stage: `线 ${key}`, field: k, kept: line[k], other: val });
+        (conflicts.push(...merged.conflicts.filter((c) => !c.lines)),
+            key.startsWith('?') &&
+                conflicts.push({ stage: volumeLabel(list[0].key), field: '线', kept: '（没写）', other: '', noLine: !0 }),
+            merged[0] && out.push({ ...merged[0], ...(Object.keys(line).length ? { line } : {}) }));
+    }
+    return Object.defineProperty(out, 'conflicts', { value: conflicts, enumerable: !1 });
+}
+
+export function reidLines(drafts, existingVolumes, avoid = [], prior = {}) {
+    let taken = new Set(
+            (existingVolumes || []).map((v) => (isPlainObject(v.line) ? String(v.line.编号 || '').trim() : '')).filter(Boolean),
+        ),
+        map = {},
+        refd = new Set(avoid);
+    for (let l of compileClue(drafts || []).lines || []) for (let id of conditionRefs(l.open).lines) refd.add(id);
+    let next = (id) => {
+            let m = /^([A-Za-z]+)(\d+)$/.exec(id),
+                p = m ? m[1] : 'S',
+                n = m ? Number(m[2]) : 1,
+                w = m ? m[2].length : 2;
+            for (; taken.has(`${p}${String(n).padStart(w, '0')}`) || refd.has(`${p}${String(n).padStart(w, '0')}`);) n++;
+            return `${p}${String(n).padStart(w, '0')}`;
+        },
+        own = (drafts || []).map((v) => (isPlainObject(v.line) ? String(v.line.编号 || '').trim() : '')).filter(Boolean),
+        clash = new Set(own.filter((id) => taken.has(id)));
+    for (let id of own) clash.has(id) || taken.add(id);
+    for (let id of own) clash.has(id) && !map[id] && ((map[id] = next(id)), taken.add(map[id]));
+    let report = { ...map };
+    for (let [from, to] of Object.entries(prior || {})) !own.includes(from) && from !== to && (map[from] = to);
+    if (!Object.keys(map).length) return [drafts, report];
+    let fix = (value) =>
+        typeof value == 'string'
+            ? value.replace(/(线\s*[:：]\s*)([A-Za-z]+\d+)/g, (all, head, id) => (map[id] ? `${head}${map[id]}` : all))
+            : Array.isArray(value)
+              ? value.map(fix)
+              : isPlainObject(value)
+                ? Object.fromEntries(
+                      Object.entries(value).map(([k, v]) => [
+                          k,
+                          k === '线' && typeof v == 'string' ? v.replace(/^\s*([A-Za-z]+\d+)/, (all, id) => map[id] || all) : fix(v),
+                      ]),
+                  )
+                : value;
+    return [
+        drafts.map((v) => {
+            let line = isPlainObject(v.line) ? fix({ ...v.line }) : v.line,
+                id = line && String(v.line.编号 || '').trim();
+            line && map[id] && (line.编号 = map[id]);
+            let key = map[id] ? v.key.replace(id, map[id]) : v.key;
+            return { ...v, key, ...(line ? { line } : {}), stages: v.stages.map((s) => ({ ...s, data: fix(s.data) })) };
+        }),
+        report,
+    ];
+}
+
+export const LINE_FREE_WORDS = /独立|无前提|没有前提|不需要前提|随时/;
+
+export function inventedOpenIssue(vol, ident, mains = []) {
+    let line = isPlainObject(vol.line) ? vol.line : {},
+        id = String(line.编号 || '').trim(),
+        me = (ident || []).find((l) => l.编号 === id),
+        cond = line.开启条件,
+        win = isPlainObject(line.开启时段) && String(line.开启时段.主线 || '').trim() ? line.开启时段 : null,
+        hasCond = !(cond == null || cond === '' || (isPlainObject(cond) && !Object.keys(cond).length));
+    if (!me || (!hasCond && !win)) return null;
+    let rel = clueText(me.关系),
+        raw = clueText(me.开启条件原文),
+        text = `${rel} ${raw}`.trim(),
+        said = text || '没写开启前提',
+        esc2 = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
+        mentions = (rid) => {
+            let t = (ident || []).find((l) => l.编号 === rid),
+                m = (mains || []).find((l) => l.id === rid),
+                no = t ? String(t.文档里的序号 ?? '').trim() : '';
+            return [rid, no, t && clueText(t.名称), m && m.name]
+                .filter(Boolean)
+                .some((w) =>
+                    w === no
+                        ? new RegExp(`(^|[^0-9])${esc2(w)}(?![0-9])`).test(text) && !new RegExp(`与\\s*${esc2(w)}\\s*独立`).test(text)
+                        : text.includes(w),
+                );
+        },
+        otherIds = (ident || []).filter((l) => l.编号 !== id),
+        refsAny = otherIds.some((l) => mentions(l.编号)) || (mains || []).some((m) => mentions(m.id)),
+        free = !!text && LINE_FREE_WORDS.test(text) && !refsAny,
+        stance = free ? 'free' : text ? 'stated' : 'silent',
+        atoms = [],
+        errs = [],
+        parsed = hasCond ? parseCondition(cond, errs) : null,
+        walk = (c) => c && (c.kind === 'group' ? c.items.forEach(walk) : atoms.push(c));
+    walk(parsed);
+    let lineAtoms = atoms.filter((a) => a.kind === 'line'),
+        unbacked = lineAtoms.filter((a) => !mentions(a.line)).map((a) => a.line),
+        others = atoms.filter((a) => a.kind !== 'line'),
+        problems = [];
+    return (
+        unbacked.length && problems.push(`要等 ${unbacked.join('、')}，但文档没提到${unbacked.length > 1 ? '它们' : '它'}`),
+        stance === 'free' && others.length && problems.push(`多了 ${others.map((a) => a.raw || a.kind).join('、')}`),
+        stance !== 'free' &&
+            lineAtoms.length > unbacked.length &&
+            others.length &&
+            problems.push(`除了等线，还多了 ${others.map((a) => a.raw || a.kind).join('、')}，请核对原文有没有这一项`),
+        stance === 'free' && win && problems.push(`加了开启时段（${String(win.主线).trim()}）`),
+        stance === 'stated' &&
+            !lineAtoms.length &&
+            others.length &&
+            problems.push(`是 ${others.map((a) => a.raw || a.kind).join('、')}，请核对原文是不是这个意思`),
+        problems.length
+            ? {
+                  text: `${stance === 'free' ? `文档里这条是独立的（${said}）` : stance === 'stated' ? `文档写的是：${said}` : '文档没写这条的开启前提'}；AI 写的开启条件${problems.join('；')}`,
+                  level: stance === 'free' || unbacked.length ? 'error' : 'warn',
+                  canDrop: stance === 'free',
+              }
+            : stance === 'silent' && hasCond && !lineAtoms.length
+              ? { text: '文档没写这条的开启前提，AI 写了开启条件，请核对原文', level: 'warn', canDrop: !1 }
+              : null
+    );
+}
+
+export function droppedLineRefs(kept, dropped, existingVolumes = []) {
+    let gone = new Set(dropped),
+        out = [],
+        comp = compileClue([...existingVolumes, ...kept]);
+    for (let l of comp.lines || [])
+        for (let id of conditionRefs(l.open).lines)
+            gone.has(id) &&
+                out.push(
+                    `线 ${l.id}「${l.name}」的开启条件要等 ${id}，但 ${id} 不要了：${l.id} 会一直开不了，可以写意见让 AI 改条件，或者一起不要`,
+                );
+    for (let l of comp.lines || []) l.window && gone.has(l.window.main) && out.push(`线 ${l.id} 的开启时段引用了 ${l.window.main}`);
+    return out;
+}
+
+export function lineReviseMessages({ targets, context = '', tableCatalog = '', mainLines = '' }) {
+    let fence = '```';
+    return [
+        {
+            role: 'system',
+            content: [
+                `下面几条剧情线（每条是一卷）各带一句作者意见。按意见修改这几条，输出修改后的这几卷（一个 ${fence}yaml 代码块，顶层键是卷名，卷的第一个键是「线」）。`,
+                '· 只改列出的这几条，每条都要输出；线的编号不能改；没提到的部分原样保留。',
+                '· 别的线只是给你参考，不要输出、不要改。',
+                '· 改开启条件时按下面线的写法。意见说「主线到某个阶段以后 / 期间才能开」的，在线下面写单独的字段「开启时段: {主线: M1, 从: 阶段短名}」（要关的话加 到），旧的开启条件去掉（没有别的要求就整个不写）；不要写进开启条件，也不要为它另编一个事实。',
+                '· 改剧情内容时，还是同一件事的节点必须沿用原来的 id（哪怕改了名称、入口），新加的事才用新 id。',
+                CLUE_OUTLINE_RULES_WITH_LINES,
+            ].join(`
+`),
+        },
+        {
+            role: 'user',
+            content: [
+                mainLines &&
+                    `【项目里已有的主线】
+${mainLines}`,
+                context &&
+                    `【其他线（只读）】
+${context}`,
+                tableCatalog,
+                ...targets.map(
+                    (t) => `【要改的线 ${t.id}】
+意见：${t.comment}
+${fence}yaml
+${t.yaml}
+${fence}`,
+                ),
+            ].filter(Boolean).join(`
+
+`),
+        },
+    ];
+}
+
+export function pickRevised(volumes, ids) {
+    let got = {};
+    for (let v of volumes || []) {
+        let id = isPlainObject(v.line) ? String(v.line.编号 || '').trim() : '';
+        id && ids.includes(id) && !got[id] && (got[id] = v);
+    }
+    return { got, missing: ids.filter((id) => !got[id]) };
+}
+
+export function lineChangeText(before, after) {
+    let out = [],
+        show = (v) => (v == null || v === '' ? '（无）' : (typeof v == 'string' ? v : JSON.stringify(v).replace(/"/g, '')).slice(0, 60)),
+        a = isPlainObject(before.line) ? before.line : {},
+        b = isPlainObject(after.line) ? after.line : {};
+    for (let [k, label] of [
+        ['类型', '类型'],
+        ['简介', '简介'],
+        ['开启条件', '开启'],
+        ['开启方式', '开启方式'],
+        ['开启时段', '时段'],
+        ['入口提示', '入口'],
+    ])
+        JSON.stringify(a[k] ?? null) !== JSON.stringify(b[k] ?? null) && out.push(`${label}：${show(a[k])} → ${show(b[k])}`);
+    let count = (v) => `${v.stages.length} 个阶段 · ${v.stages.reduce((n, s) => n + stageNodes(s.data).length, 0)} 个场景`;
+    return (
+        count(before) !== count(after)
+            ? out.push(`内容：${count(before)} → ${count(after)}`)
+            : JSON.stringify(before.stages.map((s) => s.data)) !== JSON.stringify(after.stages.map((s) => s.data)) &&
+              out.push('内容有改动'),
+        out
+    );
+}
+
+export function mainLinesText(volumes) {
+    return (compileClue(volumes || []).lines || [])
+        .filter((l) => l.kind === 'main')
+        .map(
+            (l) =>
+                `- ${l.id}「${l.name}」阶段：${l.units.map((u) => splitStageKey(u.stage.key).short || stageLabel(u.stage.key)).join('、')}`,
+        ).join(`
+`);
+}

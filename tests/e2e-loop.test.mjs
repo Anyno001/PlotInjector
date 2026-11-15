@@ -18,8 +18,8 @@ const OUTLINE_VOLUMES = [{
 const BINDINGS = { facts: [{ 表: '事实表', 编号列: '编号', 状态列: '状态', 已核实值: '已核实', 内容列: '内容' }] };
 const tablesWith = (rows) => ({ sheet_f: { name: '事实表', content: [[null, '编号', '状态', '内容'], ...rows.map((r) => [null, ...r])] } });
 
-async function setup({ inject = 'worldbook', link = !process.env.PI_OFFICIAL, mode = 'clue', outline = OUTLINE_VOLUMES } = {}) {
-  const host = createHost({ tables: tablesWith([]), link });
+async function setup({ inject = 'worldbook', mode = 'clue', outline = OUTLINE_VOLUMES } = {}) {
+  const host = createHost({ tables: tablesWith([]) });
   const inst = host.load();
   await inst.ready;
   const project = await inst.data.createProject('测试项目');
@@ -33,27 +33,18 @@ const allText = (x) => JSON.stringify(x);
 
 test('minimal loop: fact → node → single temporary injection → commit → next round; nothing stored in chat', async () => {
   const { host, inst } = await setup();
-  const LINK = !process.env.PI_OFFICIAL;
-  assert.deepEqual(host.db.providers.size, LINK ? 1 : 0, LINK ? 'provider registered' : 'official database: no provider');
 
   // Round 1: node A available and auto-focused; clue material only via temporary world info.
   const r1 = await host.send('我想调查一下', { reply: '你在档案室翻到一份记录，显示设备来自仓库。' });
   assert.match(r1.text, /档案室里堆满旧档案/);
   assert.match(r1.text, /尚未发生/);
-  if (LINK) {
-    assert.ok(!r1.round.finalMessage.includes('档案室里堆满'), 'link does not append clue material to finalMessage (R4)');
-    assert.match(r1.round.preContext, /去档案室查记录/);
-    assert.ok(!r1.round.preContext.includes('设备来自仓库'), 'pre-task context has no discovery content');
-  }
-  for (const text of [allText(r1.lore), r1.round ? r1.round.finalMessage : '', r1.round ? r1.round.preContext : '']) assert.ok(!text.includes(SECRET), 'locked material leaked');
+  assert.equal(r1.lore.filter((e) => e.content.includes('档案室里堆满旧档案')).length, 1, 'clue material injected exactly once');
+  assert.ok(!allText(r1.lore).includes(SECRET), 'locked material leaked');
   assert.ok(r1.lore.some((e) => e.content.includes('公开设定')), 'setting still injected');
   assert.ok(!allText(host.state.chat).includes('档案室里堆满'), 'clue material is never written into chat history (R4)');
 
-  // Fill runs and commits FA.
-  host.db.fill('start');
+  // The database fills and commits FA (official table-update callback).
   host.db.setTables(tablesWith([['FA', '已核实', '记录显示设备来自仓库']]));
-  host.db.commit(1);
-  host.db.fill('end', { success: true });
 
   // Round 2: A done → stage 1 ends → stage 2 opens → nC focused.
   const c = inst.runtime.clue.compute();
@@ -67,7 +58,6 @@ test('minimal loop: fact → node → single temporary injection → commit → 
   // No model calls were made by the plugin during the loop.
   assert.equal(host.llmCalls.length, 0, 'no extra model calls');
   await inst.destroy();
-  assert.equal(host.db.providers.size, 0, 'provider unregistered on destroy');
   assert.equal(host.db.tableCallbackCount(), 0, 'table callback unregistered on destroy');
 });
 
@@ -76,16 +66,28 @@ test('R4: legacy inject=link projects also inject via temporary world info only,
   const r = await host.send('开始');
   const hits = r.lore.filter((e) => e.content.includes('档案室里堆满旧档案')).length;
   assert.equal(hits, 1);
-  assert.ok(!r.round.finalMessage.includes('档案室里堆满旧档案'));
+  assert.ok(!allText(host.state.chat).includes('档案室里堆满旧档案'), 'nothing written into the chat');
   await inst.destroy();
 });
 
-test('no link API in database: clue still injected via world info; no whole-stage fallback', async () => {
-  const { host, inst } = await setup({ link: false });
-  const r = await host.send('开始', { plot: false });
+// 删实验联动接口第 4 步：旧项目里的 inject: "link"、waitFill 读进来不报错、照常只注入一次；归一化后不再输出这两个旧值。
+test('legacy project fields (inject: link, waitFill) still load and inject once; normalized away', async () => {
+  const { host, inst, project } = await setup();
+  inst.data.updateProject(project.id, (p) => ({ ...p, clue: { ...p.clue, inject: 'link', waitFill: false } }));
+  const r = await host.send('开始');
+  assert.equal(r.lore.filter((e) => e.content.includes('档案室里堆满旧档案')).length, 1);
+  const C = (await import('./load.mjs')).loadCore();
+  const n = C.normalizeClue({ mode: 'clue', inject: 'link', waitFill: false });
+  assert.equal(n.inject, 'worldbook');
+  assert.equal('waitFill' in n, false);
+  await inst.destroy();
+});
+
+test('clue injected via world info only; no whole-stage fallback', async () => {
+  const { host, inst } = await setup();
+  const r = await host.send('开始');
   assert.match(r.text, /档案室里堆满旧档案/);
   assert.ok(!r.lore.some((e) => /阶段一_开端|主线节点/.test(e.content)), 'no whole-stage fallback');
-  assert.ok(inst.runtime.clue.diagnose().linkApi === false);
   await inst.destroy();
 });
 
@@ -97,9 +99,6 @@ test('outline mode unchanged: whole-stage detail injected, clue fields stripped,
   assert.ok(detail, 'outline mode injects current stage detail');
   assert.ok(!detail.content.includes('完成条件') && !detail.content.includes('场景:'), 'clue fields stripped in outline mode');
   assert.ok(!allText(lore).includes(SECRET), 'author block in setting stripped; next stage not injected');
-  const round = await host.db.runPlotRound('开始');
-  assert.ok(!round.finalMessage.includes('档案室'), 'outline mode does not use link');
-  assert.equal(round.preContext, '', 'outline mode provides no pre-task context');
   await inst.destroy();
 });
 
@@ -146,22 +145,13 @@ test('focus: manual focus on a locked node is rejected', async () => {
   await inst.destroy();
 });
 
-test('scope: provider refuses context for a different chat', { skip: process.env.PI_OFFICIAL ? 'experimental plot-link only' : false }, async () => {
-  const { host, inst } = await setup();
-  const p = host.db.providers.get('plot-injector');
-  assert.equal(p.provideContext({ chatId: 'other-chat' }), '');
-  assert.equal(p.finalize, undefined, 'no finalize hook any more (R4)');
-  assert.equal(p.fillCandidates({ chatId: 'other-chat' }, { messageIndices: [1] }), null);
-  await inst.destroy();
-});
-
-test('reload: re-loading the script does not stack listeners or providers', async () => {
+test('reload: re-loading the script does not stack listeners or table callbacks', async () => {
   const { host } = await setup();
   const before = host.eventSource.count(host.eventTypes.MESSAGE_RECEIVED);
   const inst2 = host.load();
   await inst2.ready;
   await host.settle();
   assert.equal(host.eventSource.count(host.eventTypes.MESSAGE_RECEIVED), before);
-  assert.ok(host.db.providers.size <= 1);
+  assert.equal(host.db.tableCallbackCount() <= 1, true, 'table callback not stacked');
   await inst2.destroy();
 });

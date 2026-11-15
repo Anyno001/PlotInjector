@@ -46,7 +46,7 @@ async function setup() {
   const inst = host.load();
   await inst.ready;
   const p = await inst.data.createProject('P');
-  inst.data.updateProject(p.id, (x) => ({ ...x, setting: { ...x.setting, text: SETTING }, outline: { volumes: VOLS }, clue: { mode: 'clue', inject: 'link', waitFill: false, bindings: { facts: [{ 表: '事实表', 编号列: '编号', 状态列: '状态', 已核实值: '已核实' }] } } }));
+  inst.data.updateProject(p.id, (x) => ({ ...x, setting: { ...x.setting, text: SETTING }, outline: { volumes: VOLS }, clue: { mode: 'clue', bindings: { facts: [{ 表: '事实表', 编号列: '编号', 状态列: '状态', 已核实值: '已核实' }] } } }));
   await inst.runtime.switchProject(p.id);
   await host.eventSource.emit(host.eventTypes.CHAT_CHANGED);
   await host.settle();
@@ -55,9 +55,10 @@ async function setup() {
 
 test('audit runtime: real round passes; a leak from another worldbook is reported; dryRun ignored', async () => {
   const { host, inst } = await setup();
-  const lore = await host.generate();
-  const round = await host.db.runPlotRound('去档案室');
-  const chat = [{ role: 'system', content: lore.map((e) => e.content).join('\n') }, { role: 'user', content: round.finalMessage }];
+  await host.addMessage('去档案室', true);
+  await host.eventSource.emit(host.eventTypes.GENERATION_STARTED, 'normal', {}, false);
+  const lore = await host.worldInfo();
+  const chat = [{ role: 'system', content: lore.map((e) => e.content).join('\n') }, { role: 'user', content: '去档案室' }];
   await host.promptReady(chat);
   let a = inst.runtime.clue.diagnose().lastAudit;
   assert.ok(a, 'audit recorded');

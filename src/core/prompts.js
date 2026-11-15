@@ -1,4 +1,17 @@
-import { changeLines, flattenUnits, outlineToText, stageLabel, stageToText, volumeLabel, volumesFromValue } from './outline.js';
+import {
+    isPlainObject,
+    changeLines,
+    flattenUnits,
+    outlineToText,
+    stageLabel,
+    stageToText,
+    volumeLabel,
+    volumesFromValue,
+} from './outline.js';
+import { CLUE_TPL_MARK_BEGIN, CLUE_TPL_MARK_END } from './clue-template.js';
+
+import { sheetList, sheetRows } from './clue-tables.js';
+
 import { parseYaml, yamlErrorLine } from './yaml.js';
 
 export const SAMPLE_STAGE = `剧情_卷一_示例:
@@ -205,12 +218,13 @@ export function outlineMessages({
     clueIndex = '',
     progress = '',
     recent = '',
+    tableCatalog = '',
 }) {
     let clue = mode === 'clue',
         known = knownVolumesText(volumes),
         system = clue
             ? `你按用户的设定写线索推进模式的剧情大纲，格式必须与样例一致。
-${CLUE_OUTLINE_RULES}
+${CLUE_OUTLINE_RULES_WITH_LINES}
 
 【格式样例】
 ${CLUE_SAMPLE_STAGE}`
@@ -228,8 +242,13 @@ ${setting}`
                 ? `【讨论摘要】
 ${talk}`
                 : '',
-            clue ? refsBlock(refs) : refs.length ? '【世界书参考】\n' + refsBlock(refs) : '',
-            ...(!clue ? [changesBlock(flattenUnits(volumes), '已有大纲中的状态变化')] : []),
+            clue
+                ? refsBlock(refs)
+                : refs.length
+                  ? `【世界书参考】
+` + refsBlock(refs)
+                  : '',
+            ...(clue ? [] : [changesBlock(flattenUnits(volumes), '已有大纲中的状态变化')]),
             known.length
                 ? `【已有的卷】
 ${known.join(`
@@ -239,12 +258,17 @@ ${known.join(`
                 ? `【已有节点与事实编号（新节点的 id 和事实编号不要与这些重复；可以引用其中已有的事实）】
 ${clueIndex}`
                 : '',
+            clue ? tableCatalog : '',
             progress,
             recent
                 ? `【最近正文】
 ${recent}`
                 : '',
-            `只写第 ${volumeNo} 卷。${request || ''}`,
+            // 线索模式：请求放在一大段表格目录后面时，模型偶尔会忽略请求、接着写已有的主线（2026-11-14 DeepSeek 30 次里 2 次）。写明这一卷就是这个要求。
+            clue && request
+                ? `只写第 ${volumeNo} 卷（一条线），这一卷的内容就是下面这个要求（不要续写、重写、改动已有的卷，编号不要和已有的线重复）：
+${request}`
+                : `只写第 ${volumeNo} 卷。${request || ''}`,
         ].filter(Boolean).join(`
 
 `);
@@ -310,18 +334,35 @@ ${text}`,
 }
 
 // 从回复里取 YAML：优先 ```yaml 代码块，其次任意代码块，最后整篇。
-// all：一次回了多卷、每卷一个 yaml 代码块时，把所有块接起来（卷名不同，顶层键不会冲突）；只给多卷相关的入口用，其余只取第一个块。
-export function extractYaml(text, { all = false } = {}) {
+// 多个合法且顶层键不同的 YAML 块自动合并，避免丢卷。all=true 时严格解析所有块，坏块报错。
+export function extractYaml(text, { all = !1 } = {}) {
     if (all) {
         const blocks = [...String(text || '').matchAll(/```ya?ml\s*\n([\s\S]*?)```/gi)].map((m) => extractYaml(m[1]));
-        if (blocks.length) return blocks.join('\n\n');
+        if (blocks.length)
+            return blocks.join(`
+
+`);
     }
     let raw = String(text || ''),
         fenced = /```ya?ml\s*\n([\s\S]*?)```/i.exec(raw) || /```\s*\n([\s\S]*?)```/.exec(raw),
-        body = (fenced ? fenced[1] : raw)
-            .replace(/^﻿/, '')
-            .replace(/^([ \t]*(?:- )?)[​-‍⁠﻿]+/gm, '$1')
-            .trim();
+        blocks = [...raw.matchAll(/```ya?ml\s*\n([\s\S]*?)```/gi)].map((m) => m[1].replace(/^﻿/, '').trim()).filter(Boolean);
+    if (blocks.length > 1)
+        try {
+            let keys = [];
+            if (
+                blocks.every((b) => {
+                    let v = parseYaml(b);
+                    return isPlainObject(v) && (keys.push(...Object.keys(v)), !0);
+                }) &&
+                new Set(keys).size === keys.length
+            )
+                return blocks.join(`
+`);
+        } catch {}
+    let body = (fenced ? fenced[1] : raw)
+        .replace(/^﻿/, '')
+        .replace(/^([ \t]*(?:- )?)[​-‍⁠﻿]+/gm, '$1')
+        .trim();
     try {
         return (parseYaml(body), body);
     } catch {}
@@ -507,6 +548,7 @@ export const CLUE_OUTLINE_RULES = [
     '节点字段：id、名称、入口、地点、场景、发现、完成条件，可选 开放条件、提前条件、相关事实、必需、作者备注。',
     '· id：英文字母开头的稳定编号（如 n05_archive），全大纲唯一。已有节点的 id 不要改。',
     '· 名称、作者备注只给作者看；入口是节点开放后告诉正文「可以去做这件事」的一句话，不能含答案。',
+    '· 地点写具体的地方（如「码头仓库值夜棚」），不写「附近」「街上」。一段剧情要用到几个地方时都列出来：地点: [码头仓库, 值夜棚]。',
     '· 场景写进入时看到的情况，不写调查结果。',
     '· 发现：列表，每项是 {事实, 内容, 记录}。事实是事实编号（如 F05）；内容是查到时可以揭示的结果；记录是给填表模型的判断标准，写清「正文出现什么才算拿到」，不要复述答案。',
     '· 一个事实编号只记一件能单独揭示的事；能分开知道的两件事拆成两个编号。',
@@ -632,3 +674,93 @@ export function fixFullWidthKeys(yaml) {
 }
 
 export { OUTLINE_RULES };
+
+export const CLUE_LINE_RULES = [
+    '一卷可以是一条独立的剧情线（主线或支线）：在卷的第一个键写「线」，其余键照旧是阶段。多条线可以同时进行，各自推进。',
+    '· 线的字段：编号（M1、S07 这样，全大纲唯一）、类型（主线 / 支线）、简介（公开的一句话，正文看得到，不含答案）、开启条件、开启时段（可选）、入口提示（一句话，线可以开始时给正文一个由头，不含答案）。',
+    '· 线怎么开始：主线的开启条件满足就开始（同一时间只有一条主线，按顺序）；支线的开启条件满足后，正文会在空闲时提一句入口，玩家走进第一个阶段的场景才开始。所以支线第一个阶段要有一个不需要别的条件就能开始的节点，它的入口写成玩家能主动去做的事。',
+    '· 开启时段：支线只在某条主线的某几个阶段里能开时写，{主线: M1, 从: 阶段2, 到: 阶段3}（阶段写短名）。过了还没开始就不再出现。不限就不写。它是线的一个单独字段「开启时段:」，和「开启条件:」并列，不要写进开启条件里。',
+    '· 开启方式（可选，一般不写）：要求没法用条件写准时（表里没有能代表它的列，如「和大家一起出过任务」「单独来往过」），写「开启方式: 人工」，开启条件不写，把原来的要求写成一句话放在「原开启条件」里；玩家自己点「进入」开始。能用条件写准的不要写人工。',
+    '· 开启条件用上面的条件写法，另外可以用：{线: S07 == 完成}（另一条线的状态：未触发 / 可开启 / 进行中 / 暂停 / 完成 / 放弃，或「开过」「开着」）、{表: 表名/行/列 >= 2}（读数据库表格的一格，和数据库剧情推进的写法一样）、{计数: {表: 表名, 条件: 列 >= 2, 至少: 3}}（满足条件的行数）。',
+    '· 「某条线做完以后再开」写 {线: 编号 == 完成}，不要写成那条线里某个节点的条件（那条线以后可能还会加阶段）。',
+    '· 开启条件保持要求的原意：表里有对应的列，用表格条件；要求本身就是正文里会发生的一件事（「收到报社的信」），写 {事实: 新编号}；两样都写不准（例：要求「声望到 50」，表里没有声望），不要换成别的门槛（别的列、自己想的一件事），按上面写「开启方式: 人工」并保留原要求。',
+    '· 读表格的条件：表名、列名必须是【当前数据库的表格】里列出的；要读的那个人暂时没有行可以照写（有了行才开始判断），但不能拿别人的行代替。',
+    '· 开启条件里的事实可以不由任何节点产出：插件会把它作为一条线索加进表格，正文里发生了就由填表记下。但不能由这条线自己的节点产出（线没开始，它的节点都打不开，会互相等）。',
+];
+
+export const CLUE_OUTLINE_RULES_WITH_LINES = `${CLUE_OUTLINE_RULES}
+${CLUE_LINE_RULES.join(`
+`)}
+· 上面说的「只引用有节点产出的事实编号」，线的开启条件例外：它里面的事实可以不需要节点产出。
+· 【当前数据库的表格】里已经有某个地方时（地点表、全局表的当前地点、角色表的所在地点），节点的地点用表里已有的叫法。`;
+
+export const CATALOG_NOTE_HINT = /只能|格式|阶段|档|等级|顺序|分隔|→|升|降|之一|[^\s/]\s*\/\s*[^\s/]/;
+
+export const CLUE_OWN_SHEETS = ['线索控制表', '关键事实表', '知情表'];
+
+export function catalogNote(note, head, cap = 900) {
+    let text = String(note || '').replace(new RegExp(`${CLUE_TPL_MARK_BEGIN}[\\s\\S]*?${CLUE_TPL_MARK_END}`, 'g'), ''),
+        out = [],
+        used = 0;
+    for (let line of text
+        .split(/\r?\n/)
+        .map((l) => l.trim())
+        .filter(Boolean)) {
+        if (
+            /^[×✗❌]/.test(line) ||
+            !(head.some((h) => h.length > 1 && line.includes(h)) || CATALOG_NOTE_HINT.test(line) || /^\d+\s*\S/.test(line))
+        )
+            continue;
+        let l = line.length > 160 ? `${line.slice(0, 160)}…` : line;
+        if (used + l.length > cap) {
+            out.push('……');
+            break;
+        }
+        (out.push(l), (used += l.length));
+    }
+    return out;
+}
+
+export function tableCatalogText(tables) {
+    let list = sheetList(tables || {}).map((s) => {
+        let all = /地点/.test(s.name),
+            limit = all ? 200 : 8,
+            head = (Array.isArray(s.content[0]) ? s.content[0] : [])
+                .slice(1)
+                .map((c) => String(c ?? '').trim())
+                .filter(Boolean),
+            data = sheetRows(s),
+            rows = data.rows
+                .map((r) => String(r[1] ?? '').trim())
+                .filter(Boolean)
+                .slice(0, limit),
+            line = `- ${s.name}：列 ${head.join('、') || '（无）'}${rows.length ? `；现有行 ${rows.join('、')}${data.rows.length > limit ? '……' : ''}` : ''}`;
+        if (all || CLUE_OWN_SHEETS.includes(s.name)) return line;
+        let samples = head
+                .map((h) => {
+                    let c = data.col(h),
+                        vals = c < 0 ? [] : [...new Set(data.rows.map((r) => String(r[c] ?? '').trim()).filter(Boolean))].slice(0, 2);
+                    return vals.length ? `  · ${h}：${vals.map((v) => `「${v.length > 40 ? `${v.slice(0, 40)}…` : v}」`).join(' ')}` : '';
+                })
+                .filter(Boolean),
+            note = catalogNote(s.note, head);
+        return [
+            line,
+            ...(samples.length ? ['  现有的值：', ...samples] : []),
+            ...(note.length ? ['  表格说明（摘录）：', ...note.map((x) => `    ${x}`)] : []),
+        ].join(`
+`);
+    });
+    return list.length
+        ? `【当前数据库的表格（读表格的条件只能用这些表名、列名和现有的行）】
+${list.join(`
+`)}
+写 {表: …} 或 {计数: …} 之前先核对：要求里说的那个数值（关系、声望、金钱……），上面的表里真的有这一列吗？没有就不要用表格条件，也不要拿意思不同的列（比如用关系阶段代替声望）凑数，也不要自己换成等某件事——写「开启方式: 人工」，原要求放进「原开启条件」。
+这个人暂时没有行时，可以照同一列别的行的写法写（有了行才开始判断）；不能拿别人的行代替。
+文字列照表格说明里规定的词写（说明里写了「只能填 …」就只用那几个词），不要自己造词。
+一格里写了好几个人（如「主角:认识;艾莉丝:室友」）时，必须加「取: 名字」只读那个人的那一项，并给一个样例，例：{表: 重要角色表/巴基/人际关系 包含 朋友, 取: 彼得, 样例: {原文: 主角:认识;艾莉丝:室友, 取: 艾莉丝, 得: 室友}}。不要写成「包含 彼得:朋友」（那样「彼得:队友,朋友」就对不上）。样例原文必须从上面「现有的值」或表格说明里照抄一格，不能自己编；「得」写这个人冒号后面的全部内容。原文和得都用英文双引号括起来（里面有逗号）。
+要比「到某一档以上」时写：{表: 表/行/列 >= 友好, 档位: [敌视, 陌生, 友好, 亲密, 相恋]}，档位一律从低到高写全（说明里是从高到低列的，要反过来）。说明里没写先后时也这样写，按常理从低到高排：插件会请玩家确认一次顺序。不要因为没写先后就改成 == 某一档，也不要换成等别的事。
+说明里规定的格式是「数字 + 阶段名」（如「2 熟悉」）时，也用档位写法，档位写阶段名。
+要数好几个人时：表里有能数的列，就用 {计数: …}，例：「至少三个人关系到 2 以上」、关系表有「阶段」列 → {计数: {表: 关系表, 条件: 阶段 >= 2, 至少: 3}}，这种不要写成人工。表里没有能代表它的列（如「和几个人单独来往过」，表里没有记单独来往的列），不要硬凑，开启条件不写，写「开启方式: 人工」，把原来的要求写进「原开启条件」（一句话）。`
+        : '';
+}

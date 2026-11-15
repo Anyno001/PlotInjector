@@ -42,7 +42,7 @@ async function setup({ tables: given } = {}) {
   const doc = host.w.document;
   const click = async (sel) => { const el = doc.querySelector(sel); assert.ok(el, `missing ${sel}`); el.click(); await tick(); };
   const set = (sheet, key, col, v) => { const s = Object.values(tables).find((x) => x && x.name === sheet); s.content.find((r, i) => i > 0 && r[1] === key)[s.content[0].indexOf(col)] = v; };
-  const commit = () => { host.db.setTables(tables); host.db.commit(host.state.chat.length - 1); };
+  const commit = () => { host.db.setTables(tables); };
   await click(`[data-act="project"][data-id="${p.id}"]`);
   return { host, inst, doc, click, set, commit, tables, pid: p.id };
 }

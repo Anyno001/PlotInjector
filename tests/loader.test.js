@@ -67,6 +67,28 @@ test('加载器：指定版本格式不对（只填了半截）时直接用最�
     assert.ok(host.toasts.some(msg => /格式不对/.test(msg)));
 });
 
+test('加载器：本构建尚未打标签时使用 main，正式新标签出现后使用标签', async () => {
+    const host = makeHost('');
+    const fetch = host.win.fetch;
+    host.win.fetch = async url => {
+        const u = String(url);
+        if (u.includes('api.github.com')) return { ok: true, json: async () => [{ name: 'v0.1.34' }] };
+        if (u.includes('data.jsdelivr.com')) return { ok: true, json: async () => ({ version: '0.1.34' }) };
+        if (/@main\/dist|PlotInjector\/main\/dist/.test(u)) {
+            host.requested.push(u);
+            return { ok: true, text: async () => '// PlotInjector v0.2.0\nwindow.parent.__plotInjector = {open() {}, version: "v0.2.0"};' };
+        }
+        return fetch(url);
+    };
+    host.win.eval(loader);
+    for (let i = 0; i < 50 && !host.win.__plotInjector; i++) await new Promise(r => setTimeout(r, 10));
+    assert.equal(host.win.__plotInjector.version, 'v0.2.0');
+    assert.equal(host.win.__plotInjectorLoader.ref, 'main');
+    assert.ok(!host.requested.some(u => /@v0\.2\.0\/|PlotInjector\/v0\.2\.0\//.test(u)));
+    const released = await boot('');
+    assert.equal(released.win.__plotInjector.version, LATEST);
+});
+
 test('加载器：指定了能下载但打开后看不见的旧版本时，点按钮弹出诊断框，可一键清空指定版本', async () => {
     const host = makeHost('v0.1.0');
     const uploads = [];

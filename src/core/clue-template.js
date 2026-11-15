@@ -1,3 +1,4 @@
+import { LINE_CATALOG_COL } from './lines.js';
 import { isPlainObject } from './outline.js';
 export const CLUE_TPL_MARK_BEGIN = '【线索主线附加规则·剧情注入器】';
 
@@ -41,26 +42,35 @@ export function clueControlSheet() {
         name: '线索控制表',
         sourceData: {
             note: [
-                '主线当前所在的场景。此表有且仅有一行，「标识」固定为「主线」。',
+                '主角眼下正在做哪一段剧情的事。此表有且仅有一行，「标识」固定为「主线」（代表全局的当前剧情活动）。',
                 '- 标识：固定写「主线」，不要修改。',
-                '- 当前场景：以本批最后一楼结束时主角的位置和行动为准。',
-                '    · 主角实际到达并开始做某件事：照抄下面【场景编号对照】里列出的编号。对照只用于对号，不表示那件事已经开放或已经发生。',
-                '    · 主角明确离开调查、转去做无关的事：写「离场」。',
-                '    · 只是提议、约定、打算，或者正文没写转场：保持原值。',
-                '    · 看到、记下、指给别人看、路过、远远听见，都不算开始做那件事：保持原值。',
-                '      例：主角在街上路过邮局、说「回头再来」，然后继续往车站走 → 当前场景保持原来的编号，不改成邮局。',
-                '    · 同一楼里换了几个地方：以最后实际在做的那件事为准。',
-                '    · 不得自造编号；对照里没有的场景不要写。',
+                '- 场景目录：由剧情注入器维护，填表时不要修改。列的是现在可以去做的剧情的编号、要做的事和地点；只用于对号，不表示那件事已经发生。',
+                '- 当前场景：以本批最后一楼结束时，主角实际在做的事为准。叙述跟着主角走，这一列记的不是主角在不在场，而是他在不在做某一段剧情的事。只能写「场景目录」里的编号，或者写「无」。',
+                '    · 主角开始做「场景目录」里某一件事：照抄那一件的编号。开始做的那一楼就写，不用等事情有结果。',
+                '    · 别人只是提起、主角没有去做，不算；路过不算。',
+                '      看的是主角在为什么而忙，不是具体动作，也不是站在哪：为了同一个目的换个做法、换个地方继续（边走边接着谈、到隔壁房间找能打开那把锁的钥匙、去别处取查这件事要用的东西），都还是这一段，仍写原来的编号。地点只用来帮助对号（列了几个地点时任何一处都算）。',
+                '    · 这件事已经结束、搁置，或者主角转去做别的事了：写「无」，人还在原地、对面还是同一个人也一样（和同一个人聊起了不相干的事，也算转去做别的）。',
+                '      例：在值夜棚问完话，改成和老韩吃饭闲聊 → 写「无」。离开仓库去车站，路上经过邮局没进去 → 写「无」（旧的那件事已经不做了，邮局也没开始）。',
+                '    · 只是说要走、约好、打算，实际还没动：保持原值。',
+                '    · 看到、记下、指给别人看、路过、远远听见，都不算开始做新的那件事。',
+                '    · 同一楼里做了几件事：以最后实际在做的那件事为准。以本批正文为准，全局表里还没更新的地点不能否定正文里已经发生的转场。',
+                '    · 不得自造编号；「场景目录」里没有的场景不要写。',
                 CLUE_TPL_EVIDENCE,
-            ].join('\n'),
+            ].join(`
+`),
             initNode: '已有「主线」行就沿用，不要再插入。只有表里没有任何行时才插入一行：标识=主线，当前场景留空。',
             deleteNode: '禁止删除。',
-            updateNode:
-                "按列说明更新。例：主角走进裁缝铺开始问话 → 当前场景改为对照里裁缝铺对应的编号；主角说「先回家睡觉」并离开 → 当前场景改为「离场」。\nSQL示例: UPDATE clue_control SET cur_scene = '<场景编号>' WHERE tag = '主线';",
+            updateNode: `只更新「当前场景」，不改「场景目录」。例：主角走进裁缝铺开始问话 → 当前场景改为场景目录里裁缝铺对应的编号；主角说「先回家睡觉」并离开 → 当前场景改为「无」。
+SQL示例: UPDATE clue_control SET cur_scene = '<场景编号>' WHERE tag = '主线';`,
             insertNode: '禁止插入（只有一行）。',
-            ddl: 'CREATE TABLE clue_control ( -- 线索控制表\n  row_id INTEGER PRIMARY KEY, -- 行号\n  tag TEXT NOT NULL UNIQUE, -- 标识\n  cur_scene TEXT -- 当前场景\n);',
+            ddl: `CREATE TABLE clue_control ( -- 线索控制表
+  row_id INTEGER PRIMARY KEY, -- 行号
+  tag TEXT NOT NULL UNIQUE, -- 标识
+  cur_scene TEXT, -- 当前场景
+  scene_catalog TEXT -- 场景目录
+);`,
         },
-        content: [['row_id', '标识', '当前场景']],
+        content: [['row_id', '标识', '当前场景', '场景目录']],
         updateConfig: { ...CLUE_TPL_REALTIME },
         exportConfig: clueTplExport('线索控制表', { injectIntoWorldbook: !1 }),
         orderNo: 0,
@@ -144,26 +154,16 @@ export function clueKnowSheet() {
     };
 }
 
-export function sceneCatalogText(scenes = []) {
-    let list = (scenes || []).filter((s) => s && s.uid);
-    return list.length
-        ? [
-              '【场景编号对照】（只用于对号；不表示已经开放或已经发生）',
-              ...list.map((s) => `- ${s.uid}：${[s.entry, s.place && `地点：${s.place}`].filter(Boolean).join('；')}`),
-          ].join('\n')
-        : '';
-}
-
 export const CLUE_SCENE_CATALOG_HEAD = '\n【场景编号对照】（只用于对号';
 
-export function clueSheets({ factRows = [], knowRows = [], controlRow = null, scenes = [] } = {}) {
+export function clueSheets({ factRows = [], knowRows = [], controlRow = null, scenes = [], placeTables = [] } = {}) {
     let ctrl = clueControlSheet(),
         facts = clueFactSheet(),
-        know = clueKnowSheet(),
-        catalog = sceneCatalogText(scenes);
-    catalog && (ctrl.sourceData.note += `\n${catalog}`);
-    // 预建行：row_id 由数据库导入时规范化，这里用 null 占位。
-    controlRow && ctrl.content.push([null, ...controlRow]);
+        know = clueKnowSheet();
+    (placeTables.length &&
+        (ctrl.sourceData.note += `
+地点名称以${placeTables.map((n) => `《${n}》`).join('、')}里的为准。`),
+        controlRow && ctrl.content.push([null, ...controlRow, '', ''].slice(0, 4)));
     for (let r of factRows) facts.content.push([null, r.code, r.label, r.criterion || '', '未获得', '', '']);
     for (let r of knowRows) know.content.push([null, `${r.fact}@${r.actor}`, r.fact, r.actor, '未知', '未核实', '']);
     return [ctrl, facts, know];
@@ -311,14 +311,17 @@ export function synthesizeClueTemplate(base, { clue = {} } = {}) {
         byName.has(name) ? dups.add(name) : byName.set(name, { key, sheet });
     }
     for (let name of dups) (byName.delete(name), problems.push(`有两张以上的表都叫「${name}」，没有改动它们`));
-    // 1. 线索三表：不存在才新建（含预建行）；已存在就保留原表和原有行，只更新说明里的场景对照和更新频率。
     let maxOrder = Math.max(
-        -1,
-        ...sheetEntries(tpl)
-            .map(([, s]) => Number(s.orderNo))
-            .filter(Number.isFinite),
-    );
-    let fresh = clueSheets(clue);
+            -1,
+            ...sheetEntries(tpl)
+                .map(([, s]) => Number(s.orderNo))
+                .filter(Number.isFinite),
+        ),
+        placeTables = sheetEntries(tpl)
+            .map(([, s]) => s)
+            .filter((s) => /地点/.test(String(s.name || '')) && /(^|,)(地点名称|名称)(,|$)/.test(clueTplHeader(s).join(',')))
+            .map((s) => String(s.name)),
+        fresh = clueSheets({ ...clue, placeTables });
     for (let sheet of fresh) {
         if (dups.has(sheet.name)) {
             blocked.push(sheet.name);
@@ -336,104 +339,143 @@ export function synthesizeClueTemplate(base, { clue = {} } = {}) {
         let wantHead = clueTplHeader(sheet),
             head = clueTplHeader(have.sheet),
             missing = wantHead.filter((c) => !head.includes(c));
+        if (
+            sheet.name === '线索控制表' &&
+            missing.length === 1 &&
+            missing[0] === LINE_CATALOG_COL &&
+            head.includes('标识') &&
+            head.includes('当前场景')
+        ) {
+            let oldDdl = String((have.sheet.sourceData && have.sheet.sourceData.ddl) || ''),
+                ddl = oldDdl.trim() ? ddlAddColumns(oldDdl, [{ sql: 'scene_catalog', label: LINE_CATALOG_COL }]) : { ok: !0, ddl: '' };
+            if (!ddl.ok) {
+                problems.push(
+                    `「线索控制表」的 DDL ${ddl.why || '无法解析'}，没有加「${LINE_CATALOG_COL}」列；多线的场景目录写不进去，需要的话请在数据库里手动加`,
+                );
+                continue;
+            }
+            (ddl.ddl && (have.sheet.sourceData = { ...have.sheet.sourceData, ddl: ddl.ddl }), have.sheet.content[0].push(LINE_CATALOG_COL));
+            for (let row of have.sheet.content.slice(1)) Array.isArray(row) && row.push('');
+            (Array.isArray(have.sheet.seedRows) && have.sheet.seedRows.forEach((row) => Array.isArray(row) && row.push('')),
+                changes.push(`「线索控制表」新增列：${LINE_CATALOG_COL}（由插件写入现在可去做的剧情；原有列和行不动）`),
+                (missing.length = 0));
+        }
         if (missing.length) {
             problems.push(`已有的「${sheet.name}」缺少列：${missing.join('、')}。没有改动这张表，请检查是否是别的用途的同名表`);
             continue;
         }
-        // 已有线索表：不在模板里追加行（官方 seed 不会落进非空表）；新事实请用「按大纲补预建行」。
         if (sheet.name === '线索控制表') {
             let note = String((have.sheet.sourceData && have.sheet.sourceData.note) || ''),
                 i = note.lastIndexOf(CLUE_SCENE_CATALOG_HEAD),
-                catalog = sceneCatalogText(clue.scenes);
-            let next = (i < 0 ? note : note.slice(0, i).replace(/\s+$/, '')) + (catalog ? `\n${catalog}` : '');
+                base0 = i < 0 ? note : note.slice(0, i).replace(/\s+$/, ''),
+                fresh0 = clueControlSheet().sourceData,
+                oldStart = base0.indexOf('主角眼下正在做哪一段剧情的事。'),
+                oldEnd = base0.indexOf(CLUE_TPL_EVIDENCE),
+                next =
+                    oldStart >= 0 && oldEnd > oldStart
+                        ? base0.slice(0, oldStart) + fresh0.note + base0.slice(oldEnd + CLUE_TPL_EVIDENCE.length)
+                        : base0;
             next !== note &&
-                ((have.sheet.sourceData = { ...have.sheet.sourceData, note: next }),
-                changes.push('更新「线索控制表」说明里的场景编号对照'));
+                ((have.sheet.sourceData = { ...have.sheet.sourceData, note: next, updateNode: fresh0.updateNode }),
+                changes.push(
+                    i >= 0
+                        ? '「线索控制表」说明：去掉旧的场景编号对照（改由「场景目录」列提供），更新填表规则'
+                        : '「线索控制表」说明：更新填表规则（只写当前场景、不改场景目录）',
+                ));
         }
         sameRealtime(have.sheet.updateConfig) ||
             ((have.sheet.updateConfig = { ...(have.sheet.updateConfig || {}), ...CLUE_TPL_REALTIME }),
             changes.push(`「${sheet.name}」改为每楼更新（与全局数据表同组）`));
     }
-    // 2. 全局数据表：每楼更新，和线索表同组。
     let g = byName.get('全局数据表');
-    if (!g) problems.push('当前模板里没有「全局数据表」：大纲里的时间条件会是未知。可以在表格绑定里把 time 指向别的时间格');
-    else if (!clueTplHeader(g.sheet).includes('当前时间'))
-        problems.push('「全局数据表」没有「当前时间」列：时间条件会是未知，请在表格绑定里指定时间格');
-    else
-        sameRealtime(g.sheet.updateConfig) ||
-            ((g.sheet.updateConfig = { ...(g.sheet.updateConfig || {}), ...CLUE_TPL_REALTIME }),
-            changes.push('「全局数据表」改为每楼更新（与线索表同组）'));
-    // 3. 重要角色表：加两列、替换冲突的初始化句、追加规则。
-    patchDefault('重要角色表', (sheet) => {
-        let head = sheet.content[0],
-            have = clueTplHeader(sheet),
-            add = CLUE_TPL_CHAR_COLS.filter((c) => !have.includes(c.label));
-        if (add.length) {
-            let ddl = ddlAddColumns(sheet.sourceData && sheet.sourceData.ddl, add);
-            if (!ddl.ok)
-                return problems.push(
-                    `「重要角色表」的 DDL ${ddl.why || '无法解析'}，没有加列（剧情身份、当前动向）；需要的话请在数据库里手动加`,
-                );
-            sheet.sourceData = { ...sheet.sourceData, ddl: ddl.ddl };
-            head.push(...add.map((c) => c.label));
-            // 模板里已有的初始行补空位，保持列宽一致。
-            for (let row of sheet.content.slice(1)) Array.isArray(row) && row.push(...add.map(() => ''));
-            Array.isArray(sheet.seedRows) && sheet.seedRows.forEach((row) => Array.isArray(row) && row.push(...add.map(() => '')));
-            changes.push(`「重要角色表」新增列：${add.map((c) => c.label).join('、')}（原有列不动）`);
+    return (
+        g
+            ? clueTplHeader(g.sheet).includes('当前时间')
+                ? sameRealtime(g.sheet.updateConfig) ||
+                  ((g.sheet.updateConfig = { ...(g.sheet.updateConfig || {}), ...CLUE_TPL_REALTIME }),
+                  changes.push('「全局数据表」改为每楼更新（与线索表同组）'))
+                : problems.push('「全局数据表」没有「当前时间」列：时间条件会是未知，请在表格绑定里指定时间格')
+            : problems.push('当前模板里没有「全局数据表」：大纲里的时间条件会是未知。可以在表格绑定里把 time 指向别的时间格'),
+        patchDefault('重要角色表', (sheet) => {
+            let head = sheet.content[0],
+                have = clueTplHeader(sheet),
+                add = CLUE_TPL_CHAR_COLS.filter((c) => !have.includes(c.label));
+            if (add.length) {
+                let ddl = ddlAddColumns(sheet.sourceData && sheet.sourceData.ddl, add);
+                if (!ddl.ok)
+                    return problems.push(
+                        `「重要角色表」的 DDL ${ddl.why || '无法解析'}，没有加列（剧情身份、当前动向）；需要的话请在数据库里手动加`,
+                    );
+                ((sheet.sourceData = { ...sheet.sourceData, ddl: ddl.ddl }), head.push(...add.map((c) => c.label)));
+                for (let row of sheet.content.slice(1)) Array.isArray(row) && row.push(...add.map(() => ''));
+                (Array.isArray(sheet.seedRows) && sheet.seedRows.forEach((row) => Array.isArray(row) && row.push(...add.map(() => ''))),
+                    changes.push(`「重要角色表」新增列：${add.map((c) => c.label).join('、')}（原有列不动）`));
+            }
+        }),
+        patchDefault('任务与事件表'),
+        patchDefault('选项表'),
+        {
+            template: tpl,
+            changes,
+            problems,
+            created,
+            // 线索三表有重名（R10）：不新建、不自动绑定，调用方应停止。
+            blocked,
+            binding: {
+                facts: [
+                    {
+                        表: '关键事实表',
+                        编号列: '编号',
+                        状态列: '状态',
+                        已核实值: '已核实',
+                        说法值: '存疑',
+                        内容列: '内容',
+                        来源列: '依据',
+                    },
+                ],
+                knowledge: [
+                    {
+                        表: '知情表',
+                        事实列: '事实',
+                        角色列: '角色',
+                        方式列: '获知方式',
+                        可信度列: '可信度',
+                        已核实值: '已核实',
+                        来源列: '依据',
+                        有效值: ['亲见', '被告知', '听说', '推测'],
+                    },
+                ],
+                scene: { 路径: '线索控制表/主线/当前场景', 离场值: '无' },
+                time: { 路径: ['全局数据表/全局状态/当前时间', '线索控制表/主线/当前时间'] },
+            },
         }
-    });
-    patchDefault('任务与事件表');
-    patchDefault('选项表');
-    return {
-        template: tpl,
-        changes,
-        problems,
-        created,
-        // 线索三表有重名（R10）：不新建、不自动绑定，调用方应停止。
-        blocked,
-        binding: {
-            facts: [
-                { 表: '关键事实表', 编号列: '编号', 状态列: '状态', 已核实值: '已核实', 说法值: '存疑', 内容列: '内容', 来源列: '依据' },
-            ],
-            knowledge: [
-                {
-                    表: '知情表',
-                    事实列: '事实',
-                    角色列: '角色',
-                    方式列: '获知方式',
-                    可信度列: '可信度',
-                    已核实值: '已核实',
-                    来源列: '依据',
-                    有效值: ['亲见', '被告知', '听说', '推测'],
-                },
-            ],
-            scene: { 路径: '线索控制表/主线/当前场景', 离场值: '离场' },
-            time: { 路径: ['全局数据表/全局状态/当前时间', '线索控制表/主线/当前时间'] },
-        },
-    };
+    );
     function sameRealtime(cfg) {
         return !!cfg && cfg.updateFrequency === 1 && cfg.skipFloors === 0 && cfg.groupId === 0;
     }
-    // 认得出的默认表：替换冲突句（原文一致时）、追加规则块。表头和默认不一致就只报告。
     function patchDefault(name, extra) {
         let hit = byName.get(name);
         if (!hit) return;
         let sheet = hit.sheet,
             head = clueTplHeader(sheet),
-            want = CLUE_TPL_DEFAULTS[name],
-            known = want.every((c) => head.includes(c));
-        if (!known)
+            want = CLUE_TPL_DEFAULTS[name];
+        if (!want.every((c) => head.includes(c)))
             return problems.push(
                 `「${name}」的列和数据库默认不一致（缺 ${want.filter((c) => !head.includes(c)).join('、')}），没有改它的规则；需要的话请手动加上防剧透要求`,
             );
-        sheet.sourceData = { ...(sheet.sourceData || {}) };
-        extra && extra(sheet);
+        ((sheet.sourceData = { ...(sheet.sourceData || {}) }), extra && extra(sheet));
         for (let [field, rep] of Object.entries(CLUE_TPL_REPLACE[name] || {})) {
             let cur = String(sheet.sourceData[field] || '');
             if (cur.includes(rep.to)) continue;
-            // 只在整段规则和数据库默认一字不差时替换（GPT 第四轮 R10）：作者在前后加了自己的内容，就不动它，只提醒。
             let official = rep.whole || rep.from,
-                norm = (t) => t.replace(/\r\n?/g, '\n').trim();
+                norm = (t) =>
+                    t
+                        .replace(
+                            /\r\n?/g,
+                            `
+`,
+                        )
+                        .trim();
             norm(cur) === norm(official)
                 ? ((sheet.sourceData[field] = cur.replace(rep.from, rep.to)),
                   changes.push(`「${name}」的${field === 'initNode' ? '初始化' : '新增'}规则：「${rep.from}」改为「${rep.to}」`))

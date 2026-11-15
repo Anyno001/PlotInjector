@@ -60,7 +60,7 @@ test('closing with × or Esc also counts as seen; other pages never auto-play', 
 
 test('the ? button plays the current page; steps whose button is not on screen are skipped', async () => {
   const { inst, doc, pid } = await boot({ withProject: true });
-  inst.data.updateSettings({ tourState: { revision: 1, done: ['core'] } });
+  inst.data.updateSettings({ tourState: { revision: 2, done: ['core'] } });
   inst.open(); await tick();
   doc.querySelector(`[data-act="project"][data-id="${pid}"]`).click(); await tick();
   doc.querySelector('[data-act="tab"][data-tab="run"]').click(); await tick();
@@ -83,7 +83,7 @@ test('the ? button plays the current page; steps whose button is not on screen a
 
 test('settings: 重新播放全部教程 clears what was seen and replays the overview; a revision bump re-shows it', async () => {
   const { inst, doc } = await boot();
-  inst.data.updateSettings({ tourState: { revision: 1, done: ['core', 'run'] } });
+  inst.data.updateSettings({ tourState: { revision: 2, done: ['core', 'run'] } });
   inst.open(); await tick();
   doc.querySelector('[data-act="page"][data-page="settings"]').click(); await tick();
   doc.querySelector('[data-act="tour-reset"]').click(); await tick();
@@ -97,7 +97,7 @@ test('settings: 重新播放全部教程 clears what was seen and replays the ov
 
 test('a page whose buttons are not shown says so instead of opening an empty tour', async () => {
   const { inst, doc } = await boot();
-  inst.data.updateSettings({ tourState: { revision: 1, done: ['core'] } });
+  inst.data.updateSettings({ tourState: { revision: 2, done: ['core'] } });
   inst.open(); await tick();
   // no project selected: the ? button plays the overview (its welcome step is centred, always available)
   doc.querySelector('[data-act="tour"]').click(); await tick();

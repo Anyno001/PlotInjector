@@ -90,7 +90,13 @@ test('dialog: 自动填写 fills only empty boxes, flags rows that need a look, 
   // the author already typed one label: auto-fill must not overwrite it
   dlg.querySelector(`[data-gt-label="${idx('F_han')}"]`).value = '我自己写的';
   host.llm.reply = undefined;
+  // first call writes the labels; the second call reviews every auto-filled row, and rewrites the leaking one
+  const reviewed = [];
   host.llm.respond = (body) => {
+    if (/有没有剧透/.test(body)) {
+      reviewed.push(body);
+      return yamlReply(['- {编号: F_doc, 透露: 是, 透露了什么: 写出了出货的时间, 改成口径: 主角打开抽屉、读到出货单时登记；只看到锁着的抽屉不算}']);
+    }
     assert.match(body, /发现内容（答案/);
     return yamlReply([
       '- {编号: F_han, 标签: 看守的证词, 口径: 看守当面说出那晚看到了什么时登记，记为存疑；推托没开口不算}',
@@ -99,18 +105,31 @@ test('dialog: 自动填写 fills only empty boxes, flags rows that need a look, 
     ]);
   };
   dlg.querySelector('[data-fr-auto]').click();
-  for (let i = 0; i < 20 && !/已填好/.test(dlg.querySelector('[data-fr-status]').textContent); i++) await tick();
+  for (let i = 0; i < 30 && !/已填好/.test(dlg.querySelector('[data-fr-status]').textContent); i++) await tick();
   assert.match(dlg.querySelector('[data-fr-status]').textContent, /已填好 3 条，1 条没生成（F_key）/);
-  assert.match(dlg.querySelector('[data-fr-status]').textContent, /标黄不会挡住导入/);
+  assert.match(dlg.querySelector('[data-fr-status]').textContent, /1 条原来的写法会透露答案，已经自动改好/);
+  assert.equal(reviewed.length, 1, 'one review call');
+  assert.match(reviewed[0], /F_doc/);
+  assert.match(reviewed[0], /F_mark/, 'every auto-filled row is reviewed, not only the ones the script flagged');
+  assert.match(reviewed[0], /编号: F_han/, 'F_han had its criterion auto-filled, so it is reviewed (with the label the author typed)');
   assert.equal(dlg.querySelector(`[data-gt-label="${idx('F_han')}"]`).value, '我自己写的', 'author text kept');
   assert.match(dlg.querySelector(`[data-gt-crit="${idx('F_han')}"]`).value, /推托没开口不算/, 'empty criterion filled');
-  const warnOf = (code) => dlg.querySelector(`[data-fr-warn="${idx(code)}"]`).textContent;
-  assert.match(warnOf('F_doc'), /口径里有答案的片段/);
-  assert.match(warnOf('F_mark'), /模型拿不准：发现写得含糊/);
+  const warnOf = (code) => dlg.querySelector(`[data-fr-warn="${idx(code)}"] .pi-warn-line`)?.textContent || '';
+  const noteOf = (code) => [...dlg.querySelectorAll(`[data-fr-warn="${idx(code)}"] .pi-note-line`)].map((x) => x.textContent).join();
+  assert.equal(dlg.querySelector(`[data-gt-crit="${idx('F_doc')}"]`).value, '主角打开抽屉、读到出货单时登记；只看到锁着的抽屉不算', 'leaking criterion rewritten');
+  assert.equal(warnOf('F_doc'), '');
+  assert.match(noteOf('F_doc'), /已自动改写/);
+  // the model's own advice is a grey note, not a yellow warning
+  assert.equal(warnOf('F_mark'), '');
+  assert.match(noteOf('F_mark'), /发现写得含糊/);
+  assert.ok(!dlg.querySelector(`[data-fr-row="${idx('F_mark')}"]`).classList.contains('is-warn'));
   assert.equal(warnOf('F_han'), '');
   assert.match(warnOf('F_key'), /还没有标签/);
-  // editing a flagged row re-checks it
+  // editing a row by hand re-checks it with the script only (no model call); a literal overlap is yellow again
   const crit = dlg.querySelector(`[data-gt-crit="${idx('F_doc')}"]`);
+  crit.value = '读到出货单是白天签的时登记；没读到不算';
+  crit.dispatchEvent(new host.w.Event('input', { bubbles: true }));
+  assert.match(warnOf('F_doc'), /口径里有答案的片段/);
   crit.value = '主角打开抽屉、读到单据内容时登记；只看到锁着的抽屉不算';
   crit.dispatchEvent(new host.w.Event('input', { bubbles: true }));
   assert.equal(warnOf('F_doc'), '');
@@ -120,7 +139,7 @@ test('dialog: 自动填写 fills only empty boxes, flags rows that need a look, 
   const byCode = Object.fromEntries(facts.map((r) => [r[1], r]));
   assert.equal(byCode.F_han[2], '我自己写的');
   assert.equal(byCode.F_doc[3], '主角打开抽屉、读到单据内容时登记；只看到锁着的抽屉不算');
-  assert.equal(host.llmCalls.length, 1, 'one model call');
+  assert.equal(host.llmCalls.length, 2, 'one call to write, one to review the flagged rows');
   await inst.destroy();
 });
 
@@ -151,4 +170,98 @@ test('第五轮 5: a fact produced by two nodes sends both ways of getting it to
   assert.match(body, /物流单/); assert.match(body, /另一种取得方式 1: 阶段1 x · 证人/); assert.match(body, /马特奥当面说出地址/);
   assert.match(C.factLabelMessages([ctx])[0].content, /口径要把每种方式都包括进去/);
   assert.match(C.factLabelWarnings({ label: '地址', criterion: '听到城东旧冰厂时登记；没听到不算' }, ctx).join(), /口径里有答案的片段/, 'second route answer is checked too');
+});
+
+test('review: a literal overlap the review clears stays grey; a failed review falls back to the script warning', async () => {
+  const host = createHost({ tables: JSON.parse(JSON.stringify(DEFAULT)) });
+  const inst = host.load(); await inst.ready;
+  const p = await inst.data.createProject('旧码头');
+  inst.data.updateProject(p.id, (x) => ({ ...x, outline: { volumes: VOLS() }, clue: { mode: 'clue', bindings: { facts: [], knowledge: [] } } }));
+  await inst.runtime.switchProject(p.id);
+  await host.eventSource.emit(host.eventTypes.CHAT_CHANGED); await host.settle();
+  inst.open(); await tick();
+  const doc = host.w.document;
+  doc.querySelector(`[data-act="project"][data-id="${p.id}"]`).click(); await tick();
+  doc.querySelector('[data-act="tab"][data-tab="run"]').click(); await tick();
+  const open = async () => { doc.querySelector('[data-act="clue-gen-template"]').click(); await tick(); return doc.querySelector('.pi-dialog'); };
+  const write = yamlReply([
+    '- {编号: F_han, 标签: 看守的证词, 口径: 看守当面说出那晚看到了什么时登记，记为存疑；推托没开口不算}',
+    '- {编号: F_mark, 标签: 后门外的痕迹, 口径: 看清痕迹时登记；没看清不算}',
+    '- {编号: F_doc, 标签: 抽屉里的单据, 口径: 读到出货单是白天签的时登记；没读到不算}',
+    '- {编号: F_key, 标签: 钥匙, 口径: 拿到钥匙时登记；没拿到不算}',
+  ]);
+  let dlg = await open();
+  const idx = (code) => [...dlg.querySelectorAll('[data-fr-row]')].findIndex((r) => r.querySelector('.pi-fr-hd .pi-meta').textContent === code);
+  host.llm.respond = (body) => (/有没有剧透/.test(body) ? yamlReply(['- {编号: F_doc, 透露: 否}']) : write);
+  dlg.querySelector('[data-fr-auto]').click();
+  for (let i = 0; i < 30 && !/已填好/.test(dlg.querySelector('[data-fr-status]').textContent); i++) await tick();
+  const row = dlg.querySelector(`[data-fr-row="${idx('F_doc')}"]`);
+  assert.equal(row.querySelector('.pi-warn-line'), null, 'review said no leak: no yellow');
+  assert.ok(!row.classList.contains('is-warn'));
+  assert.match(dlg.querySelector('[data-fr-status]').textContent, /1 条标黄/, 'only F_key (no node produces it) stays yellow');
+  [...dlg.querySelectorAll('.pi-btn')].find((b) => b.textContent === '取消').click(); await tick();
+  // the review call fails: the script's literal overlap is shown in yellow, and the status says the check did not finish
+  dlg = await open();
+  host.llm.respond = (body) => { if (/有没有剧透/.test(body)) throw new Error('超时'); return write; };
+  dlg.querySelector('[data-fr-auto]').click();
+  for (let i = 0; i < 30 && !/已填好/.test(dlg.querySelector('[data-fr-status]').textContent); i++) await tick();
+  assert.match(dlg.querySelector('[data-fr-status]').textContent, /检查没完成（超时）/);
+  assert.match(dlg.querySelector(`[data-fr-row="${idx('F_doc')}"] .pi-warn-line`).textContent, /口径里有答案的片段/);
+  await inst.destroy();
+});
+
+test('review prompt and parser: three-step rule, pieces passed in; 是/否 parsed, unknown values are null', () => {
+  const m = C.factLabelReviewMessages([{ code: 'F_a', label: '抽屉里的单据', criterion: '读到时登记', answer: '签字的是主管', entry: '去账房', scene: '', pieces: ['签字的是'] }]);
+  assert.match(m[0].content, /拆成具体的信息点/);
+  assert.match(m[0].content, /缩小了范围/);
+  assert.match(m[1].content, /和答案字面重合的片段: 签字的是/);
+  const r = C.parseFactLabelReview(yamlReply(['- {编号: F_a, 透露: 是, 透露了什么: 写出签字人, 改成标签: 单据}', '- {编号: F_b, 透露: 否}', '- {编号: F_c, 透露: 也许}', '- {编号: F_x, 透露: 是}']), ['F_a', 'F_b', 'F_c']);
+  assert.deepEqual({ ...r.get('F_a') }, { leak: true, what: '写出签字人', label: '单据', criterion: '' });
+  assert.equal(r.get('F_b').leak, false);
+  assert.equal(r.get('F_c').leak, null);
+  assert.equal(r.has('F_x'), false, 'unknown codes ignored');
+});
+
+// ---------- GPT 代码审阅（9c4e216）R5：复审结果只用在送审时那份文字上 ----------
+test('R5: editing a row while the review is pending keeps the edit; the old verdict neither clears the warning nor overwrites the text', async () => {
+  const host = createHost({ tables: JSON.parse(JSON.stringify(DEFAULT)) });
+  const inst = host.load(); await inst.ready;
+  const p = await inst.data.createProject('旧码头');
+  inst.data.updateProject(p.id, (x) => ({ ...x, outline: { volumes: VOLS() }, clue: { mode: 'clue', bindings: { facts: [], knowledge: [] } } }));
+  await inst.runtime.switchProject(p.id);
+  await host.eventSource.emit(host.eventTypes.CHAT_CHANGED); await host.settle();
+  inst.open(); await tick();
+  const doc = host.w.document;
+  doc.querySelector(`[data-act="project"][data-id="${p.id}"]`).click(); await tick();
+  doc.querySelector('[data-act="tab"][data-tab="run"]').click(); await tick();
+  doc.querySelector('[data-act="clue-gen-template"]').click(); await tick();
+  const dlg = doc.querySelector('.pi-dialog');
+  const idx = (code) => [...dlg.querySelectorAll('[data-fr-row]')].findIndex((r) => r.querySelector('.pi-fr-hd .pi-meta').textContent === code);
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  host.llm.respond = async (body) => {
+    if (/有没有剧透/.test(body)) {
+      await gate;
+      return yamlReply(['- {编号: F_doc, 透露: 否}', '- {编号: F_han, 透露: 是, 透露了什么: x, 改成口径: 改写后的口径；没说不算}']);
+    }
+    return yamlReply([
+      '- {编号: F_han, 标签: 看守的证词, 口径: 看守当面说出那晚看到了什么时登记；推托没开口不算}',
+      '- {编号: F_mark, 标签: 后门外的痕迹, 口径: 看清痕迹时登记；没看清不算}',
+      '- {编号: F_doc, 标签: 抽屉里的单据, 口径: 读到单据时登记；没读到不算}',
+      '- {编号: F_key, 标签: 钥匙, 口径: 拿到钥匙时登记；没拿到不算}',
+    ]);
+  };
+  dlg.querySelector('[data-fr-auto]').click();
+  for (let i = 0; i < 30 && !/正在检查/.test(dlg.querySelector('[data-fr-status]').textContent); i++) await tick();
+  // while the review is pending, the author edits two rows
+  const crit = (code) => dlg.querySelector(`[data-gt-crit="${idx(code)}"]`);
+  crit('F_doc').value = '读到出货单是白天签的时登记；没读到不算';
+  crit('F_doc').dispatchEvent(new host.w.Event('input', { bubbles: true }));
+  crit('F_han').value = '我自己改的口径；没说不算';
+  crit('F_han').dispatchEvent(new host.w.Event('input', { bubbles: true }));
+  release();
+  for (let i = 0; i < 30 && !/已填好/.test(dlg.querySelector('[data-fr-status]').textContent); i++) await tick();
+  assert.match(dlg.querySelector(`[data-fr-row="${idx('F_doc')}"] .pi-warn-line`)?.textContent || '', /口径里有答案的片段/, 'the old 透露:否 does not clear the new text');
+  assert.equal(crit('F_han').value, '我自己改的口径；没说不算', 'the old rewrite does not overwrite the edit');
+  await inst.destroy();
 });

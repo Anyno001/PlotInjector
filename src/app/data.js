@@ -97,8 +97,8 @@ export function createDataStore({ onChange = () => {}, onError = () => {} } = {}
     function updateProject(id, fn) {
         const current = projects.get(id);
         if (!current) throw new Error('项目尚未载入');
-        const value = fn(current);
-        const next = value && value !== current ? normalizeProject(value, id) : value;
+        const value = fn(current),
+            next = value && value !== current ? normalizeProject(value, id) : value;
         return (next && next !== current && saveProject(next), next);
     }
     async function createProject(name, group = '', mode = 'normal') {
@@ -229,7 +229,10 @@ export function createDataStore({ onChange = () => {}, onError = () => {} } = {}
         forgetFiles,
         resetAll,
         failedFiles: () => [...failed],
-        retryFailed: () => writer.flush(),
+        retryFailed: async () => {
+            await writer.flush();
+            await imports.flush();
+        },
         flush: async () => {
             (await writer.flush(), await imports.flush());
         },

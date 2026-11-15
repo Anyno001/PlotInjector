@@ -32,7 +32,12 @@ test('default template: 3 clue tables added with seed rows; nothing removed; inp
   }
   assert.equal(byName(r.template, '关键事实表').content.length, 3);
   assert.equal(byName(r.template, '知情表').content.length, 3);
-  assert.match(byName(r.template, '线索控制表').sourceData.note, /【场景编号对照】[\s\S]*n1：去甲处；地点：甲地/);
+  // 多线第 B 步：场景对照不再写进说明，改由插件写进「场景目录」列。
+  const ctrl0 = byName(r.template, '线索控制表');
+  assert.deepEqual(head(ctrl0), ['标识', '当前场景', '场景目录']);
+  assert.ok(!/【场景编号对照】/.test(ctrl0.sourceData.note), 'no catalog in the note');
+  assert.match(ctrl0.sourceData.note, /场景目录：由剧情注入器维护，填表时不要修改/);
+  assert.match(ctrl0.sourceData.ddl, /scene_catalog TEXT -- 场景目录/);
   assert.deepEqual(JSON.parse(JSON.stringify(r.problems)), [], 'default template is fully recognised');
 });
 
@@ -79,8 +84,7 @@ test('idempotent: generating twice gives the same template; existing clue rows a
   // second mainline: more facts in the outline → template does NOT append rows to an existing clue table
   const more = C.synthesizeClueTemplate(once, { clue: { ...CLUE, factRows: [...CLUE.factRows, { code: 'F3', label: '丙' }], scenes: [...CLUE.scenes, { uid: 'n2', entry: '去乙处' }] } });
   assert.equal(byName(more.template, '关键事实表').content.length, 3, 'no new rows via template');
-  assert.match(byName(more.template, '线索控制表').sourceData.note, /n2：去乙处/, 'scene catalog refreshed');
-  assert.equal(byName(more.template, '线索控制表').sourceData.note.split('\n【场景编号对照】（只用于对号').length, 2, 'catalog not duplicated');
+  assert.ok(!/【场景编号对照】/.test(byName(more.template, '线索控制表').sourceData.note), 'scene catalog is not in the note any more (it is the 场景目录 column)');
 });
 
 test('unknown / customised tables are left alone and reported, not rewritten', () => {
@@ -107,9 +111,10 @@ test('old five-table companion template (our previous one) → clue tables kept 
   };
   const r = C.synthesizeClueTemplate(old, { clue: CLUE });
   assert.deepEqual(byName(r.template, '关键事实表').content, old.sheet_ClueFact01.content, 'existing fact rows untouched');
-  assert.deepEqual(head(byName(r.template, '线索控制表')), ['标识', '启用', '当前场景', '当前时间'], 'old control columns kept (no deletion)');
-  assert.match(byName(r.template, '线索控制表').sourceData.note, /^旧说明\n【场景编号对照】[\s\S]*n1：去甲处/);
-  assert.ok(!/n0：旧/.test(byName(r.template, '线索控制表').sourceData.note), 'old catalog replaced');
+  assert.deepEqual(head(byName(r.template, '线索控制表')), ['标识', '启用', '当前场景', '当前时间', '场景目录'], 'old control columns kept; 场景目录 added at the end');
+  assert.deepEqual(byName(r.template, '线索控制表').content[1], ['1', '主线', '1', 'n1', '2026-03-15 18:00', ''], 'old row kept, new cell empty');
+  assert.equal(byName(r.template, '线索控制表').sourceData.note, '旧说明', 'old catalog removed; the author note is kept');
+  assert.match(r.changes.join('\n'), /新增列：场景目录/);
   assert.deepEqual(r.created, ['知情表']);
   assert.match(r.problems.join('\n'), /没有「全局数据表」/);
 });

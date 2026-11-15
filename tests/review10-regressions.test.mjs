@@ -18,7 +18,7 @@ const SETTING = ['港口：', '雾浓。', '<仅作者>', '幕后真相：', SEC
 async function bootUi() {
   const host = createHost({ tables: {} });
   const inst = host.load(); await inst.ready;
-  inst.data.updateSettings({ tourState: { revision: 1, done: ['core'] } });
+  inst.data.updateSettings({ tourState: { revision: 2, done: ['core'] } });
   const a = await inst.data.createProject('A');
   const b = await inst.data.createProject('B');
   await inst.runtime.switchProject(a.id);
@@ -79,7 +79,7 @@ test('P1: switching project while 从讨论整理 is still reading the discussio
   let slowed = 0, slow = false;
   host.w.fetch = async (u, init) => { if (slow && String(u).startsWith('/user/files/pi-c-')) { slowed++; await tick(250); } return origFetch(u, init); };
   const inst2 = host.load(); await inst2.ready;
-  inst2.data.updateSettings({ tourState: { revision: 1, done: ['core'] } });
+  inst2.data.updateSettings({ tourState: { revision: 2, done: ['core'] } });
   await inst2.runtime.switchProject(a);
   inst2.open(); await tick();
   host.llm.reply = '世界观正文：\nA 的设定：\n只属于 A。\n补定：\n速查：PASS';

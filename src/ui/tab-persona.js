@@ -36,7 +36,7 @@ export function stageInfo(view, line) {
     const project = view.project();
     const active = view.runtime.activeId() === view.projectId;
     const progress = active ? view.runtime.progress() : emptyProgress(view.projectId);
-    return currentStage(line, progress, personaEnv(project, progress, active ? view.runtime.fame() : []));
+    return currentStage(line, progress, personaEnv(project, progress, active ? view.runtime.fame() : [], active ? view.runtime.personaStates() : null));
 }
 
 const keyText = line => line.keys.join('，');

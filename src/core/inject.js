@@ -180,7 +180,7 @@ function carriedText(carried) {
 }
 
 // next：下一阶段，快速时写在说明末尾，让正文知道往哪里收。threads：钩子与进度钟的注入文字，带新键的节点不再原样写进阶段 YAML。
-export function buildDetailText(unit, off, settings, { pace = 'normal', next = null, carried = [], threads = '', withGuide = true } = {}) {
+export function buildDetailText(unit, off, settings, { pace = 'normal', next = null, carried = [], threads = '', withGuide = !0, stay = '' } = {}) {
     const tag = String(settings.tagName || '剧情参考').trim() || '剧情参考',
         data = filterStageData(unit.stage.data, [
             ...off,
@@ -205,7 +205,12 @@ ${
 `
         : ''
 }${note}
-${body}${carriedText(carried)}${threads}
+${
+    stay
+        ? `${stay}
+`
+        : ''
+}${body}${carriedText(carried)}${threads}
 </${tag}>`;
 }
 
@@ -219,14 +224,15 @@ export function changesText(units, states, live = null) {
 }
 
 // 执行页与注入共用：返回本轮要注入的条目（含停用的，UI 需要显示），注入时只取 enabled。
-// personaOpts：{ recentText, globals, fame }，只用于人设线；recentText 给出时有关键词的线要命中才出现，不给就全部列出（执行页、预览用）。
+// options：人设的 recentText/globals/fame/stageStates，以及剧情承接 stayOf；也兼容开发版直接传入 stayOf 回调。
 export function buildEntries(project, progress, settings, personaOpts = {}) {
-    const base = buildOutlineEntries(project, progress, settings);
-    const persona = project ? buildPersonaEntries(project, progress, personaOpts) : [];
+    const options = typeof personaOpts === 'function' ? { stayOf: personaOpts } : (personaOpts || {});
+    const base = buildOutlineEntries(project, progress, settings, options.stayOf),
+        persona = project ? buildPersonaEntries(project, progress, options) : [];
     return persona.length ? [...base, ...persona] : base;
 }
 
-function buildOutlineEntries(project, progress, settings) {
+function buildOutlineEntries(project, progress, settings, stayOf = () => '') {
     const defaults = { ...DEFAULT_PARAMS, ...(project && project.defaults) };
     const entries = [];
     if (!project) return entries;
@@ -284,6 +290,7 @@ function buildOutlineEntries(project, progress, settings) {
                     next,
                     carried,
                     threads: own,
+                    stay: stayOf(unit),
                     withGuide: !guided && params.enabled,
                 }),
                 ...params,

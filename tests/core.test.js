@@ -663,13 +663,13 @@ test('玩家自开的线：收录为当前阶段的对象支线并标来源；�
     assert.deepEqual([normalizeSettings({}).hookCap, normalizeSettings({}).newThreadMode, normalizeSettings({ hookCap: 99, newThreadMode: 'x' }).hookCap], [2, 'ask', 6]);
 });
 
-test('AI 一次回多卷（all）：多个 yaml 代码块合并解析成多卷，默认只取第一块，坏块报错', () => {
+test('AI 一次回多卷（all）：多个不同卷的 yaml 代码块自动合并，坏块报错', () => {
     const block = key => `\`\`\`yaml\n${key}:\n  阶段一_甲:\n    时间范围: 一天\n    主线节点:\n      - 名称: 甲\n\`\`\``;
     const reply = `先写两卷\n${block('剧情_卷一_甲')}\n再写\n${block('剧情_卷二_乙')}`;
     const parsed = parseOutlineReply(reply, undefined, { all: true });
     assert.equal(parsed.ok, true);
     assert.deepEqual(parsed.volumes.map(volume => volume.key), ['剧情_卷一_甲', '剧情_卷二_乙']);
-    assert.deepEqual(parseOutlineReply(reply).volumes.map(volume => volume.key), ['剧情_卷一_甲'], '默认只取第一个块（改写后续、修复格式、单阶段操作）');
+    assert.deepEqual(parseOutlineReply(reply).volumes.map(volume => volume.key), ['剧情_卷一_甲', '剧情_卷二_乙'], '默认合并不同卷，防止批量导入丢线');
     assert.equal(parseOutlineReply('```yaml\na: [\n```').ok, false);
 });
 

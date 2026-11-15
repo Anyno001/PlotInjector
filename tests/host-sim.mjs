@@ -1,7 +1,7 @@
 import { afterEach } from 'node:test';
 // Minimal simulated SillyTavern host for running the BUILT script (dist/plot-injector.js) end-to-end.
 // Simulates: SillyTavern.getContext (chat, chatMetadata, eventSource, eventTypes), /api/files via fetch,
-// TavernHelper-less button wiring, and a fake AutoCardUpdaterAPI with the plot-link provider interface.
+// TavernHelper-less button wiring, and a fake AutoCardUpdaterAPI with the OFFICIAL shujuku public API only (spv8.9.2).
 // Every LLM request goes through fetch to a URL we count, so "no extra model calls" is checkable.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -14,7 +14,7 @@ afterEach(async()=>{for(const w of testWindows){try{await w.__plotInjector?.dest
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-export function createHost({ tables = {}, link = process.env.PI_OFFICIAL ? false : true, linkVersion = 3 } = {}) {
+export function createHost({ tables = {} } = {}) {
   const dom = new JSDOM('<!doctype html><html><head></head><body></body></html>', { url: 'http://localhost/', runScripts: 'outside-only' });
   const w = dom.window; testWindows.add(w);
   // jsdom window lacks a few globals real browsers have.
@@ -75,8 +75,7 @@ export function createHost({ tables = {}, link = process.env.PI_OFFICIAL ? false
     return ok({ choices: [{ message: { content: '{}' } }] });
   };
 
-  // Fake database API: tables snapshot + plot-link provider registry (same contract as shujuku's plotLinkVersion 2).
-  const providers = new Map();
+  // Fake database API: tables snapshot, official table-update callbacks, CRUD / SQL / template APIs.
   const tableCallbacks = [];
   let currentTables = JSON.parse(JSON.stringify(tables));
   const api = {
@@ -96,6 +95,37 @@ export function createHost({ tables = {}, link = process.env.PI_OFFICIAL ? false
       return sheet.content.length - 1;
     },
     inserted: [],
+    // Official updateCell (spv8.9.2 table-crud-api): ({tableName, rowIndex, colIdentifier, value}); rowIndex is the content index.
+    updateCell: async (a) => {
+      const sheet = Object.values(currentTables).find((s) => s && s.name === a.tableName);
+      if (!sheet || !sheet.content[a.rowIndex]) return false;
+      const c = sheet.content[0].indexOf(a.colIdentifier);
+      if (c < 1) return false;
+      sheet.content[a.rowIndex][c] = a.value; api.updated.push({ ...a });
+      if (!a.skipNotify) for (const fn of tableCallbacks) fn(currentTables);
+      return true;
+    },
+    updated: [],
+    // Official SQL API (spv8.9.2 sql-api.ts), minimal: only `UPDATE <表> SET <列> = ?[, <列> = ?] WHERE <列> = ?` with display
+    // names (the real one rebinds them to physical names). querySql exists only in SQLite mode once the runtime is ready
+    // (installRuntimeGatedSqlReadApi_ACU); tests set api.sqlite = false to simulate native storage.
+    // api.beforeSql(sql, params): optional async hook run before each mutation (tests interleave reorders / chat switches here).
+    sqlite: true,
+    sqlCalls: [],
+    executeSqlMutation: async (sql, params = []) => {
+      if (api.beforeSql) await api.beforeSql(sql, params);
+      api.sqlCalls.push({ sql, params: [...params], chat: state.chatId });
+      if (api.sqlFails) return { changes: 0, errors: [api.sqlFails] };
+      const m = /^UPDATE (\S+) SET (.+) WHERE (\S+) = \?$/.exec(sql);
+      if (!m) return { changes: 0, errors: ['unsupported sql in host-sim'] };
+      const sheet = Object.values(currentTables).find((s) => s && s.name === m[1]);
+      if (!sheet) return { changes: 0, errors: [`no such table: ${m[1]}`] };
+      const head = sheet.content[0], sets = m[2].split(',').map((x) => x.trim().replace(/ = \?$/, '')), where = head.indexOf(m[3]);
+      if (where < 1 || sets.some((c) => head.indexOf(c) < 1)) return { changes: 0, errors: ['no such column'] };
+      let changes = 0;
+      for (const row of sheet.content.slice(1)) if (String(row[where]) === String(params[sets.length])) { sets.forEach((c, i) => { row[head.indexOf(c)] = params[i]; }); changes++; }
+      return { changes, errors: [], saved: true, messageIndex: -1 };
+    },
     // Official template API (spv8.9.2 template-preset-api): getTableTemplate returns the chat template object
     // (headers + rules, no runtime rows); importTemplateFromData(tpl, {scope:'chat', dataMode:'seed'}) reconciles:
     // new sheets are introduced; existing sheets get sourceData/updateConfig/exportConfig and appended columns;
@@ -132,42 +162,20 @@ export function createHost({ tables = {}, link = process.env.PI_OFFICIAL ? false
       return { success: true, scope: options.scope, dataMode: options.dataMode, runtimeReady: true };
     },
   };
-  if (link) {
-    Object.assign(api, {
-      plotLinkVersion: linkVersion,
-      registerPlotLinkProvider: (p) => { providers.set(p.id, p); return () => providers.delete(p.id); },
-      unregisterPlotLinkProvider: (id) => providers.delete(id),
-      listPlotLinkProviders: () => [...providers.keys()],
-    });
-  }
+  Object.defineProperty(api, 'querySql', { enumerable: true, get: () => (api.sqlite ? () => ({ columns: [], rows: [] }) : undefined) });
   w.AutoCardUpdaterAPI = api;
 
   const db = {
-    providers,
     setTables(next) { currentTables = JSON.parse(JSON.stringify(next)); for (const fn of tableCallbacks) fn(currentTables); },
     get tables() { return currentTables; },
     tableCallbackCount: () => tableCallbacks.length,
-    // Simulates shujuku's plot runtime for one round: pre-task context, final assembly.
-    async runPlotRound(userInput) {
-      const scope = { chatId: state.chatId, characterId: 0, isolationKey: '', roundId: 'r' + Date.now(), userInput };
-      const ready = [];
-      for (const p of providers.values()) if (p.awaitReady) ready.push(await p.awaitReady(scope));
-      const contexts = [];
-      for (const p of providers.values()) if (p.provideContext) { const c = await p.provideContext(scope); if (c) contexts.push(c); }
-      let finalMessage = `以下是用户的本轮输入：\n${userInput}`;
-      for (const p of providers.values()) if (p.finalize) { const r = await p.finalize(scope, { finalMessage }); if (r && r.append) finalMessage += '\n\n' + r.append; }
-      return { preContext: contexts.join('\n\n'), finalMessage, ready };
+    // Official V2 per-floor fill record (TavernDB_ACU_IsolatedData[''].storageFrame.logEntries): marks that the fill
+    // committed these sheet keys on that AI floor. error: simulate a failed group.
+    markFill(messageIndex, sheetKeys, { error = '', source = 'group_fill' } = {}) {
+      const msg = state.chat[messageIndex];
+      const iso = msg.TavernDB_ACU_IsolatedData || (msg.TavernDB_ACU_IsolatedData = { '': { storageFrame: { version: 2, logEntries: [] } } });
+      iso[''].storageFrame.logEntries.push({ seq: iso[''].storageFrame.logEntries.length + 1, source, targetMessageIndex: messageIndex, filledSheetKeys: sheetKeys, changedSheetKeys: sheetKeys, groupKeys: sheetKeys, ...(error ? { error } : {}) });
     },
-    fill(phase, extra = {}) { for (const p of providers.values()) p.onFillEvent && p.onFillEvent({ phase, source: 'auto', chatKey: state.chatId, isolationKey: '', ...extra }); },
-    // v3 queued/settled
-    queue(id) { db.fill('queued', { pipelineId: id }); },
-    settled(id, outcome = 'done') { db.fill('settled', { pipelineId: id, outcome }); },
-    fillCandidates(indices) {
-      const out = [];
-      for (const p of providers.values()) if (p.fillCandidates) { const r = p.fillCandidates({ chatId: state.chatId }, { messageIndices: indices }); if (r && r.text) out.push(r.text); }
-      return out.join('\n');
-    },
-    commit(messageIndex) { for (const p of providers.values()) p.onTableCommitted && p.onTableCommitted({ chatKey: state.chatId, isolationKey: '', messageIndex, saved: true }); },
   };
 
   // code: optional script source (e.g. the v0.1.13 baseline, for rollback tests); default is the built dist.
@@ -195,18 +203,15 @@ export function createHost({ tables = {}, link = process.env.PI_OFFICIAL ? false
     await eventSource.emit(eventTypes.GENERATION_ENDED);
     return lore;
   }
-  // Full "send" as the real host does it with shujuku plot enabled: plot round (wait + $P) → generation → world info → end.
-  // Returns { lore, round, text } where text is the clue content that actually reached the request via world info.
-  async function send(userInput, { reply = null, plot = true } = {}) {
+  // Full "send" as the real host does it: user message → GENERATION_STARTED → world info → reply → GENERATION_ENDED.
+  // Returns { lore, text } where text is the clue content that actually reached the request via world info.
+  async function send(userInput, { reply = null } = {}) {
     await addMessage(userInput, true);
-    const round = plot ? await db.runPlotRound(userInput) : null;
-    // shujuku strategy 1: the plot finalMessage overwrites the user message in chat history (persisted).
-    if (round) state.chat[state.chat.length - 1].mes = round.finalMessage;
     await eventSource.emit(eventTypes.GENERATION_STARTED, 'normal', {}, false);
     const lore = await worldInfo();
     if (reply != null) await addMessage(reply, false);
     await eventSource.emit(eventTypes.GENERATION_ENDED);
-    return { lore, round, text: lore.map((e) => e.content).join('\n') };
+    return { lore, text: lore.map((e) => e.content).join('\n') };
   }
   return { w, dom, state, ctx: ctxObj, eventSource, eventTypes, files, llmCalls, llm, db, load, worldInfo, addMessage, generate, send, promptReady,
     settle: () => new Promise((r) => setTimeout(r, 30)) };

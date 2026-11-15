@@ -48,7 +48,7 @@ async function setup(mode, { names = ['小镇'] } = {}) {
   const click = async (sel) => { const el = doc.querySelector(sel); assert.ok(el, `missing ${sel}`); el.click(); await tick(); };
   const dlgBtn = async (label) => { const b = [...doc.querySelectorAll('.pi-dialog .pi-btn')].find((x) => x.textContent === label); assert.ok(b, `dialog button ${label}`); b.click(); await tick(); };
   const set = (sheet, key, col, v) => { const s = Object.values(tables).find((x) => x && x.name === sheet); s.content.find((r, i) => i > 0 && r[1] === key)[s.content[0].indexOf(col)] = v; };
-  const commit = () => { host.db.setTables(tables); host.db.commit(host.state.chat.length - 1); };
+  const commit = () => { host.db.setTables(tables); };
   await click(`[data-act="project"][data-id="${ids[0]}"]`);
   return { host, inst, doc, click, dlgBtn, set, commit, ids };
 }

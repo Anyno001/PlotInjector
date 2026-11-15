@@ -42,7 +42,8 @@ export function writeProgress(progress) {
 export function bindChat(projectId) {
     const m = meta();
     const c = ctx();
-    if (!m || !c.chatId) return false;
+    const chatId = c && (typeof c.getCurrentChatId === 'function' ? c.getCurrentChatId() : c.chatId);
+    if (!m || chatId === undefined || chatId === null || chatId === '') return false;
     m[KEY] = { ...readChatState(), projectId };
     save();
     return true;

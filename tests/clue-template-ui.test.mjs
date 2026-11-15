@@ -6,6 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import YAML from 'yaml';
 import { createHost } from './host-sim.mjs';
+import { loadCore } from './load.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const storyText = fs.readFileSync(path.join(here, '../templates/clue-tables/示例_小镇失窃案.yaml'), 'utf8');
@@ -80,7 +81,7 @@ test('chat with daily data: existing rows survive the import; only new columns p
   await ctx.inst.destroy();
 });
 
-test('second run (clue tables already exist): no fact rows in the template; points to 按大纲补预建行', async () => {
+test('second run (clue tables already exist): no fact rows in the template; points to 按大纲补表格行', async () => {
   const ctx = await setup(dailyTables());
   let dlg = await openGen(ctx); fillLabels(dlg); await confirm(dlg);
   dlg = await openGen(ctx);
@@ -125,4 +126,35 @@ test('template changed while the preview was open → not imported', async () =>
   await confirm(dlg);
   assert.equal(ctx.api.templateCalls.length, 0);
   await ctx.inst.destroy();
+});
+
+// 实测 2026-11-15：导入后到第一次填表前，预建行还是数据库的种子行，插件改不了「场景目录」，第一轮正文拿不到入口；
+// 生成模板时确认过的标签也没存进项目，执行页误报「标签还没准备好」。
+test('multi-line outline: the scene catalog is written into the control seed row; confirmed labels are kept; no pending-label warning', async () => {
+  const multiText = fs.readFileSync(path.join(here, './fixtures/雾港旧案_多线实测大纲.yaml'), 'utf8');
+  const host = createHost({ tables: dailyTables() });
+  const inst = host.load(); await inst.ready;
+  const volumes = loadCore().parseOutlineText(multiText);
+  const p = await inst.data.createProject('雾港多线');
+  inst.data.updateProject(p.id, (x) => ({ ...x, outline: { volumes }, clue: { mode: 'clue', bindings: { facts: [], knowledge: [] } } }));
+  await inst.runtime.switchProject(p.id);
+  await host.eventSource.emit(host.eventTypes.CHAT_CHANGED); await host.settle();
+  inst.open(); await tick();
+  const doc = host.w.document, api = host.w.AutoCardUpdaterAPI;
+  doc.querySelector(`[data-act="project"][data-id="${p.id}"]`).click(); await tick();
+  doc.querySelector('[data-act="tab"][data-tab="run"]').click(); await tick();
+  const dlg = await openGen({ doc }); fillLabels(dlg); await confirm(dlg);
+  const ctrl = byName(api.templateCalls[0].tpl, '线索控制表');
+  assert.equal(ctrl.content.length, 2);
+  const cat = ctrl.content[1][ctrl.content[0].indexOf('场景目录')];
+  assert.match(cat, /m1_request：去报社门口见委托人/, 'running main line entry listed');
+  assert.match(cat, /s01_photo：/, 'open side line entry listed');
+  assert.doesNotMatch(cat, /s02_address|m2_pawnshop|m1_watchman/, 'nothing that is not open yet');
+  const labels = inst.data.project(p.id).clue.labels;
+  assert.equal(labels.F_ticket.label, '标签0');
+  assert.equal(Object.keys(labels).length, 6);
+  inst.runtime.clue.invalidate(); inst.renderBody ? inst.renderBody() : null; await tick();
+  doc.querySelector('[data-act="tab"][data-tab="run"]').click(); await tick();
+  assert.doesNotMatch(doc.body.textContent, /标签还没准备好/);
+  await inst.destroy();
 });

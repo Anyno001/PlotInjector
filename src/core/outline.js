@@ -38,22 +38,25 @@ function looksLikeVolume(value) {
 // 接受整份大纲（卷→阶段）、单卷内容（阶段→字段）或单个阶段。
 export function volumesFromValue(value, idOf = makeId) {
     if (!isPlainObject(value)) throw new Error('大纲顶层应是「卷名: 阶段」的映射');
-    const entries = Object.entries(value);
-    if (entries.length && entries.every(([, v]) => looksLikeStage(v))) {
+    let entries = Object.entries(value),
+        tagged = entries.some(([, v]) => isPlainObject(v) && isPlainObject(v[VOLUME_LINE_KEY]));
+    if (
+        (tagged && ((value = Object.fromEntries(entries.map(([k, v]) => [k, liftVolumeStageKeys(v)]))), (entries = Object.entries(value))),
+        entries.length && !tagged && entries.every(([, v]) => looksLikeStage(v)))
+    )
         return [{ id: idOf('v'), key: '剧情_导入', stages: entries.map(([key, data]) => ({ id: idOf('s'), key, data })) }];
-    }
-    if (looksLikeStage(value)) {
-        return [{ id: idOf('v'), key: '剧情_导入', stages: [{ id: idOf('s'), key: '阶段一_导入', data: value }] }];
-    }
-    const volumes = [];
-    for (const [key, stages] of entries) {
-        if (!looksLikeVolume(stages)) throw new Error(`「${key}」下没有可识别的阶段（需要 时间范围 / 主线节点 等字段）`);
+    if (looksLikeStage(value)) return [{ id: idOf('v'), key: '剧情_导入', stages: [{ id: idOf('s'), key: '阶段一_导入', data: value }] }];
+    let volumes = [];
+    for (let [key, stages] of entries) {
+        let { line, rest } = splitVolumeLine(stages);
+        if (!looksLikeVolume(rest)) throw new Error(`「${key}」下没有可识别的阶段（需要 时间范围 / 主线节点 等字段）`);
         volumes.push({
             id: idOf('v'),
             key,
-            stages: Object.entries(stages)
+            ...(line ? { line } : {}),
+            stages: Object.entries(rest)
                 .filter(([, data]) => isPlainObject(data))
-                .map(([stageKey, data]) => ({ id: idOf('s'), key: stageKey, data })),
+                .map(([stageKey, data]) => ({ id: idOf('s'), key: stageKey, data: nodeMapsToLists(data) })),
         });
     }
     if (!volumes.length) throw new Error('没有读到任何卷');
@@ -74,8 +77,9 @@ export function parseOutlineText(text, idOf = makeId) {
 }
 
 export function volumeValue(volume) {
-    const out = {};
-    for (const stage of volume.stages) out[stage.key] = stage.data;
+    let out = {};
+    isPlainObject(volume.line) && (out[VOLUME_LINE_KEY] = volume.line);
+    for (let stage of volume.stages) out[stage.key] = stage.data;
     return out;
 }
 
@@ -422,4 +426,41 @@ export function preserveStageNodeIds(original, incoming) {
         }
         return { ...stage, data };
     });
+}
+
+export function nodeMapsToLists(data) {
+    let out = data;
+    for (let { field } of NODE_FIELDS) {
+        let v = data[field];
+        !isPlainObject(v) ||
+            !Object.values(v).length ||
+            !Object.values(v).every(isPlainObject) ||
+            (out === data && (out = { ...data }),
+            (out[field] = Object.entries(v).map(([k, item]) => (item.id ? item : { id: k, ...item }))));
+    }
+    return out;
+}
+
+export const VOLUME_LINE_KEY = '线';
+
+export function liftVolumeStageKeys(v) {
+    if (!isPlainObject(v) || !isPlainObject(v[VOLUME_LINE_KEY])) return v;
+    let loose = Object.entries(v).filter(([k, x]) => k !== VOLUME_LINE_KEY && !isPlainObject(x)),
+        first = Object.keys(v).find((k) => k !== VOLUME_LINE_KEY && looksLikeStage(v[k]));
+    if (!first) {
+        let { [VOLUME_LINE_KEY]: line, ...rest } = v;
+        return looksLikeStage(rest) ? { [VOLUME_LINE_KEY]: line, 阶段1_经过: rest } : v;
+    }
+    if (!loose.length) return v;
+    let out = {};
+    for (let [k, x] of Object.entries(v))
+        (k === VOLUME_LINE_KEY || isPlainObject(x)) &&
+            (out[k] = k === first ? { ...Object.fromEntries(loose.filter(([lk]) => !(lk in x))), ...x } : x);
+    return out;
+}
+
+export function splitVolumeLine(value) {
+    if (!isPlainObject(value) || !isPlainObject(value[VOLUME_LINE_KEY])) return { line: null, rest: value };
+    let { [VOLUME_LINE_KEY]: line, ...rest } = value;
+    return { line, rest };
 }

@@ -1,16 +1,12 @@
 import { isPlainObject, NODE_FIELDS, nodeProgressId, makeId, STABLE_PREFIX, flattenUnits, stageNodes } from './outline.js';
 
-export const SCHEMA_VERSION = 2;
+
 
 export const PLOT_MODES = [
     { value: 'outline', label: '大纲推进' },
     { value: 'clue', label: '线索推进' },
 ];
 
-export const CLUE_INJECT_MODES = [
-    { value: 'worldbook', label: '临时世界书' },
-    { value: 'link', label: '（旧选项，已统一为临时世界书）' },
-];
 
 export const CLUE_NODE_KEYS = ['id', '必需', '开放条件', '提前条件', '完成条件', '入口', '场景', '发现', '场景值', '作者备注', '相关事实'];
 
@@ -240,15 +236,7 @@ export function clueNodes(volumes) {
     return out;
 }
 
-export function duplicateNodeIds(volumes) {
-    let seen = /* @__PURE__ */ new Map(),
-        dups = /* @__PURE__ */ new Map();
-    for (let node of clueNodes(volumes)) {
-        if (!node.uid) continue;
-        seen.has(node.uid) ? dups.set(node.uid, [...(dups.get(node.uid) || [seen.get(node.uid)]), node]) : seen.set(node.uid, node);
-    }
-    return [...dups].map(([uid, nodes]) => ({ uid, nodes }));
-}
+
 
 export const NODE_COND_KEYS = ['开放条件', '提前条件', '完成条件'];
 
@@ -334,10 +322,12 @@ export function normalizeClue(value) {
             (Array.isArray(v) ? v : v ? [v] : []).map((item) => normalizeBinding(item, keys)).filter((item) => item && item.表);
     return {
         mode: PLOT_MODES.some((item) => item.value === src.mode) ? src.mode : DEFAULT_CLUE.mode,
-        inject: CLUE_INJECT_MODES.some((item) => item.value === src.inject) ? src.inject : DEFAULT_CLUE.inject,
-        // 联动路径下，本轮开始前等待上一轮填表提交（默认开）。
-        waitFill: src.waitFill !== !1,
+        // inject 只有临时世界书一种（旧项目里的 "link" 也归成它）；旧的 waitFill 不再输出，下次保存时自然消失。
+        inject: DEFAULT_CLUE.inject,
         autoFocusSingle: src.autoFocusSingle !== !1,
+        // 多线：同时进行的支线最多几条（1 或 2，默认 1）；顶端小条提示开没开（默认开）。
+        sideLimit: src.sideLimit === 2 ? 2 : 1,
+        lineToast: src.lineToast !== !1,
         bindings: {
             switch: normalizeBinding(b.switch, CELL_BINDING_KEYS),
             facts: list(b.facts, FACT_BINDING_KEYS),
@@ -348,6 +338,9 @@ export function normalizeClue(value) {
         facts: (Array.isArray(src.facts) ? src.facts : [])
             .filter((item) => isPlainObject(item) && String(item.id || '').trim())
             .map((item) => ({ id: String(item.id).trim(), 说明: String(item.说明 || '') })),
+        // 事实的标签和登记口径（采用大纲时生成、复审后存下，多线自动补行用）：{ 编号: { label, criterion, sig } }。
+        // sig 是生成时依据的内容签名：大纲里这条事实的内容变了，签名对不上，就要重新生成（GPT 七题审阅 §5.1）。
+        labels: normalizeLabels(src.labels),
     };
 }
 
@@ -359,4 +352,14 @@ export function normalizeTimeBinding(value) {
 
 export function isClueMode(project) {
     return !!(project && project.clue && project.clue.mode === 'clue');
+}
+
+export function normalizeLabels(value) {
+    let out = {};
+    if (!isPlainObject(value)) return out;
+    for (let [code, v] of Object.entries(value))
+        isPlainObject(v) &&
+            String(v.label || '').trim() &&
+            (out[code] = { label: String(v.label).trim(), criterion: String(v.criterion || '').trim(), sig: String(v.sig || '') });
+    return out;
 }

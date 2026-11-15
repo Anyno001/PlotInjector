@@ -2,7 +2,7 @@ import { hostDocument, hostWindow } from '../host/st.js';
 
 import { el } from './dom.js';
 import { ICONS } from './styles.js';
-export const TOUR_REVISION = 1;
+export const TOUR_REVISION = 2;
 
 export const TOUR_STEPS = {
     core: [
@@ -25,7 +25,7 @@ export const TOUR_STEPS = {
         {
             target: '.pi-tabs',
             title: '四个页签',
-            body: '一般的顺序：在「讨论」里和 AI 把剧情想清楚，写成「大纲」，到「执行」页开始注入。「设定」页可选，给没有世界观的卡用。',
+            body: '一般的顺序：在「讨论」里和 AI 把剧情想清楚，写成「大纲」，到「执行」页开始注入。「设定」页可选，给没有世界观的卡用。线索推进还能同时跑主线和几条支线，到「大纲」「执行」页点问号看说明。',
             side: 'bottom',
         },
         {
@@ -98,13 +98,19 @@ export const TOUR_STEPS = {
         {
             target: ['[data-act=import-file]', '[data-act=import-paste]'],
             title: '其他导入方式',
-            body: '手上已经有现成格式的大纲时，用「导入YAML」「粘贴」或「从世界书」。',
+            body: '手上已经有插件导出的大纲文件时，用「导入文件」「粘贴」或「从世界书」。',
             side: 'bottom',
         },
         {
             target: ['[data-act=ai-volume]', '[data-ai-request]'],
             title: 'AI 写一卷',
-            body: '在旁边的输入框里写要求，AI 会参考讨论和设定写一卷新大纲，先给你看草稿，确认后才写进大纲。',
+            body: '在旁边的输入框里写要求，AI 会参考讨论和设定写一卷新大纲，先给你看草稿，确认后才写进大纲。线索推进时可以直接说「加一条巴基的支线，等关系到熟悉再开」，AI 会写成一条单独的线。',
+            side: 'bottom',
+        },
+        {
+            target: '[data-act=lines-open]',
+            title: '剧情线',
+            body: '主线和支线一页一条地看：改简介、入口、开启时段；想改开启条件或剧情，就写一句意见让 AI 改，改之前会先给你看改了什么。',
             side: 'bottom',
         },
         {
@@ -136,7 +142,7 @@ export const TOUR_STEPS = {
         },
         { target: '.pi-pace', title: '推进速度', body: '告诉正文这一段该细写还是一笔带过。', side: 'bottom' },
         {
-            target: ['[data-act=check]', '[data-act=rewrite]'],
+            target: '[data-act=check]',
             title: '检测与改写',
             body: '插件每隔几楼会让 AI 检查进度，也可以手动「立即检测」。剧情偏离大纲太多时，用「改写后续」让 AI 按现在的走向重写之后的阶段，已经演完的部分不动。',
             side: 'bottom',
@@ -151,26 +157,44 @@ export const TOUR_STEPS = {
         },
         {
             target: '[data-act=clue-prebuild]',
-            title: '按大纲补预建行',
-            body: '大纲里新加了线索以后，用它把缺的部分补进表格，已有的不动。',
+            title: '按大纲补表格行',
+            body: '大纲里新加了线索以后，用它把缺的部分补进表格，已有的不动。多条线时插件会在线开始后自动补，一般用不着手动点。',
             side: 'bottom',
         },
         {
             target: '[data-act=clue-pause]',
-            title: '暂停主线',
-            body: '想先玩一段日常时暂停，不再注入线索内容，进度保留。主线走完后，这里会出现「开始下一段主线」。',
+            title: '暂停剧情',
+            body: '想先玩一段日常时暂停，不再注入线索内容，进度保留。只有一条主线时，主线走完这里会出现「开始下一段主线」。',
             side: 'bottom',
+        },
+        {
+            target: '.pi-line-row',
+            title: '剧情线',
+            body: '每条主线、支线现在的状态和在等什么。条件满足后，正文会找机会提一句入口；主角走进去就自动开始，屏幕顶端会出现提示：看过点「确认」，插件认错了点「取消」（要点两次，防误触）；支线满了时那个按钮叫「切换」。没认出来时点这里的「进入」。',
+            side: 'top',
+        },
+        {
+            target: '[data-clue-sidelimit]',
+            title: '同时几条支线',
+            body: '默认一次只进行一条支线，其余排队。可以改成两条。「暂停全部支线」让所有支线先停下，主线照常；单条的「暂停」用来腾出名额、换别的支线。',
+            side: 'top',
         },
         {
             target: '[data-act=clue-refresh]',
             title: '本轮场景',
-            body: '这一轮主角在哪个调查、可能拿到什么。点「预览」看实际发给正文的内容；表格刚改过时点「重新读表」。',
+            body: '这一轮主角在做哪件事、可能拿到什么。点「预览」看实际发给正文的内容；表格刚改过时点「重新读表」。主角已经走开了而插件没认出来，点「已离开」。',
             side: 'bottom',
+        },
+        {
+            target: '.pi-unoffered',
+            title: '正文可能自己编了',
+            body: '表格记成拿到了，但插件没有提供过这条发现的记录，多半是正文自己编的，请按实际剧情决定。点「保留」就当发生了；点「作废」就当没发生，相关表格改回未获得。之后重新查到了，要点「解除作废」才会恢复按表格判断。',
+            side: 'top',
         },
         {
             target: ['.pi-clue-hd', '.pi-clue-stage'],
             title: '节点',
-            body: '每个调查当前的状态。点节点右边的菜单，可以手动开放、标记完成或确认一条线索，填表漏记时用。',
+            body: '每件事当前的状态，点一下看条件。点右边的「⋯」可以手动开放、标记完成，或者确认、作废一条线索，填表记错时用。剧情偏离太多时，用上面的「改写后续」让 AI 重写还没演的部分。',
             side: 'top',
         },
     ],
@@ -211,7 +235,7 @@ export const TOUR_STEPS = {
     diag: [
         {
             title: '诊断',
-            body: '插件没反应、注入内容不对时，先到这里看：自动检测会列出发现的问题，下面有酒馆事件和最近的记录。反馈问题时可以复制这一页的内容。',
+            body: '插件没反应、注入内容不对时，先到这里看：自动检测会列出发现的问题，下面有酒馆事件和最近的记录。线索推进时还会显示数据库是否连上、上次注入了什么，以及每次请求的核验结果。反馈问题时点「复制诊断」。',
         },
     ],
 };

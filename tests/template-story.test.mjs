@@ -8,13 +8,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import YAML from 'yaml';
 import { createHost } from './host-sim.mjs';
+import { loadCore } from './load.mjs';
 import { buildTemplate, BINDING_YAML } from '../templates/clue-tables/build-template.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
+const C = loadCore();
 const storyText = fs.readFileSync(path.join(here, '../templates/clue-tables/示例_小镇失窃案.yaml'), 'utf8');
 const SECRET = '真正的小偷是老板娘的侄子阿伟';
-// Tests of the experimental plot-link fill-candidate hook ($L): skipped when running against the official-API host (PI_OFFICIAL=1).
-const LINK_ONLY = { skip: process.env.PI_OFFICIAL ? 'experimental plot-link only' : false };
 
 // Simulate the database's live table data after importing the template: row_id assigned, rows as content.
 function liveTables(t) {
@@ -49,7 +49,7 @@ async function setup() {
   return { host, inst, tables, pid: p.id };
 }
 const statusOf = (inst) => Object.fromEntries(inst.runtime.clue.compute().state.nodeStates.map((s) => [s.node.uid, s.status]));
-const commit = (host, tables) => { host.db.setTables(tables); host.db.commit(host.state.chat.length - 1); };
+const commit = (host, tables) => { host.db.setTables(tables); };
 
 test('template + binding: no binding problems, first node active, secret never injected', async () => {
   const { host, inst } = await setup();
@@ -59,7 +59,7 @@ test('template + binding: no binding problems, first node active, secret never i
   assert.equal(statusOf(inst).n_report, 'active');
   const r = await host.send('去杂货店');
   assert.match(r.text, /钱箱被撬开/);
-  assert.ok(!r.text.includes(SECRET) && !r.round.preContext.includes(SECRET));
+  assert.ok(!r.text.includes(SECRET));
   await inst.destroy();
 });
 
@@ -117,41 +117,31 @@ test('rollback: deleting the floor whose fill set F_box restores the earlier tab
   await inst.destroy();
 });
 
-test('fill candidates for the sample: record rules reach the fill request; answers do not', LINK_ONLY, async () => {
+// 删实验联动接口第 2 步：原来断言实验接口给填表的 $L 文字；官方路径下填表靠表里的标签 / 登记口径和场景编号，
+// 插件自己保留逐楼候选记录（「正文可能自己编了」用）。这里核对记录本身：带记录要求、不带答案，编号和实际节点对应。
+test('candidate records for the sample: floor keeps the record rule, never the answer text', async () => {
   const { host, inst } = await setup();
   await host.send('去杂货店', { reply: '你和老板娘聊了几句。' });
-  const cand = host.db.fillCandidates([1]);
-  assert.match(cand, /F_box：主角亲自查看钱箱并看出撬痕方向时，记 F_box 为已核实/);
-  assert.ok(!cand.includes('从里面被撬开'), 'discovery answer text is not repeated in the fill request');
+  const rec = (inst.runtime.progress().clueCandidates || []).find((x) => x.i === 1);
+  assert.ok(rec, 'floor 1 recorded');
+  assert.deepEqual(JSON.parse(JSON.stringify(rec.candidates)), [{ fact: 'F_box', record: '主角亲自查看钱箱并看出撬痕方向时，记 F_box 为已核实。' }]);
+  assert.ok(!JSON.stringify(rec).includes('从里面被撬开'), 'discovery answer text is not stored');
   await inst.destroy();
 });
 
-test('parallel nodes, no focus: fill request lists scene ids so the fill model can write 当前场景 (regression)', LINK_ONLY, async () => {
+test('parallel nodes, no focus: the floor records the scene ids it offered (no discovery text); the fill model copying an id moves the focus', async () => {
   const { host, inst, tables } = await setup();
   setCell(tables, '关键事实表', 'F_box', '状态', '已核实'); commit(host, tables);
   assert.equal(inst.runtime.clue.compute().state.focus.uid, '', 'two parallel nodes, nobody chose → no focus');
   const r = await host.send('先去隔壁问问', { reply: '你走进裁缝铺，老人抬起头。' });
   assert.match(r.text, /去问问隔壁裁缝铺的邻居/);
-  const idx = host.state.chat.length - 1;
-  const cand = host.db.fillCandidates([idx]);
-  assert.match(cand, /只能照抄下面列出的编号/);
-  assert.match(cand, /明确离开调查、转去做无关的事，填「离场」/);
-  assert.match(cand, /n_witness：去问问隔壁裁缝铺的邻居；地点：裁缝铺/);
-  assert.match(cand, /n_ledger：翻一翻店里的账本/);
-  assert.ok(!cand.includes('年轻人') && !cand.includes('赊账') && !cand.includes('问邻居'), 'no discovery text, no node titles');
+  const rec = (inst.runtime.progress().clueCandidates || []).find((x) => x.i === host.state.chat.length - 1);
+  const ids = rec.scenes.map((x) => x.uid);
+  assert.ok(ids.includes('n_witness') && ids.includes('n_ledger'), JSON.stringify(ids));
+  assert.ok(!JSON.stringify(rec).includes('年轻人') && !JSON.stringify(rec).includes('赊账'), 'no discovery text');
   // fill model copies the id → focus follows
   setCell(tables, '线索控制表', '主线', '当前场景', 'n_witness'); commit(host, tables);
   assert.equal(inst.runtime.clue.compute().state.focus.uid, 'n_witness');
-  await inst.destroy();
-});
-
-test('no scene binding → no scene ids in the fill request', LINK_ONLY, async () => {
-  const { host, inst, tables, pid } = await setup();
-  const b = YAML.parse(BINDING_YAML); delete b.scene;
-  inst.data.updateProject(pid, (x) => ({ ...x, clue: { ...x.clue, bindings: b } }));
-  setCell(tables, '关键事实表', 'F_box', '状态', '已核实'); commit(host, tables);
-  await host.send('先去隔壁问问', { reply: '你走进裁缝铺。' });
-  assert.equal(host.db.fillCandidates([host.state.chat.length - 1]), '', 'only leads, no scene cell to fill → nothing to say');
   await inst.destroy();
 });
 
@@ -186,11 +176,17 @@ test('T4: an aborted generation does not leave its candidates for the next floor
   await host.eventSource.emit(host.eventTypes.GENERATION_STARTED, 'normal', {}, false);
   assert.match((await host.worldInfo()).map((e) => e.content).join(''), /年轻人/);
   await host.eventSource.emit(host.eventTypes.GENERATION_STOPPED);
+  // a message that arrives right after the stop without a new assembly (e.g. a quick reply / extension message) gets nothing
+  await host.addMessage('（系统消息）', false);
+  assert.equal((inst.runtime.progress().clueCandidates || []).filter((x) => x.i === host.state.chat.length - 1).length, 0, 'aborted candidates discarded on stop');
   // main paused, then a normal floor: no clue material → no candidates for this floor
   inst.runtime.clue.setPaused(true);
   const r = await host.send('随便聊聊', { reply: '你们聊了天气。' });
   assert.ok(!r.text.includes('年轻人'));
-  assert.equal(host.db.fillCandidates([host.state.chat.length - 1]), '');
+  // 逐楼候选记录（正式功能：「正文可能自己编了」靠它）：被中止那次的 F_seen 没有落到这一楼
+  const idx = host.state.chat.length - 1, recs = inst.runtime.progress().clueCandidates || [];
+  assert.equal(recs.filter((x) => x.i === idx).length, 0, 'nothing bound to the paused floor');
+  assert.ok(!recs.some((x) => (x.candidates || []).some((c) => c.fact === 'F_seen')), 'aborted F_seen never bound');
   await inst.destroy();
 });
 
@@ -203,18 +199,8 @@ test('T4: an empty projection also clears the pending candidates (no stop event)
   inst.runtime.clue.setPaused(true);
   await host.worldInfo(); // re-assembled, now empty
   await host.addMessage('回复', false);
-  assert.equal(host.db.fillCandidates([host.state.chat.length - 1]), '');
-  await inst.destroy();
-});
-
-test('T5: no floor list → nothing; outline mode → nothing', LINK_ONLY, async () => {
-  const { host, inst, pid } = await setup();
-  await host.send('去杂货店', { reply: '你和老板娘聊了几句。' });
-  assert.match(host.db.fillCandidates([1]), /F_box/);
-  assert.equal(host.db.fillCandidates([]), '');
-  inst.data.updateProject(pid, (x) => ({ ...x, clue: { ...x.clue, mode: 'outline' } }));
-  inst.runtime.clue.invalidate();
-  assert.equal(host.db.fillCandidates([1]), '');
+  const idx = host.state.chat.length - 1;
+  assert.equal((inst.runtime.progress().clueCandidates || []).filter((x) => x.i === idx).length, 0, 'empty projection → nothing bound to this reply');
   await inst.destroy();
 });
 
@@ -295,7 +281,7 @@ test('T3: leaving the investigation suppresses auto focus on the single remainin
 test('prebuilt-row check: conditions that reference missing fact / knowledge rows are reported', async () => {
   const { host, inst } = await setup();
   const t = liveTables(buildTemplate({ controlRow: ['主线', ''], factRows: [{ code: 'F_box', label: 'x' }], knowRows: [] }));
-  host.db.setTables(t); host.db.commit(0);
+  host.db.setTables(t);
   const p = inst.runtime.clue.compute().snap.problems.join('\n');
   assert.match(p, /事实表里没有这些编号的行：.*F_ledger/);
   await inst.destroy();
@@ -303,7 +289,7 @@ test('prebuilt-row check: conditions that reference missing fact / knowledge row
   const core = (await import('./load.mjs')).loadCore();
   const vols = [{ id: 'v', key: '剧情_卷一', stages: [{ id: 's', key: '阶段一_x', data: { 主线节点: [{ id: 'n1', 名称: 'a', 开放条件: { 知情: 'F1@甲' }, 完成条件: { 核实: 'F1@乙' } }] } }] }];
   const gaps = core.prebuiltGaps(core.compileClue(vols), { facts: new Map([['F1', {}]]), knowPresent: new Set(['F1@甲']) });
-  assert.deepEqual(gaps, ['知情表里没有这些「事实@角色」的预建行：F1@乙']);
+  assert.deepEqual(gaps, ['知情表里还没有这些「事实@角色」的行：F1@乙']);
 });
 
 test('two-table hint: fact recorded as 存疑 but nobody in the knowledge table knows it', async () => {
@@ -351,7 +337,7 @@ test('template: 关键事实表 has a 登记口径 column; scene catalog goes in
   assert.deepEqual(f.content[1], [null, 'F1', '钱箱', '亲自查看时登记', '未获得', '', '']);
   assert.match(f.sourceData.ddl, /criterion TEXT, -- 登记口径/);
   const ctrl = Object.values(t).find((s) => s && s.name === '线索控制表');
-  assert.match(ctrl.sourceData.note, /【场景编号对照】[\s\S]*- n_a：去杂货店；地点：杂货店/);
+  assert.deepEqual(ctrl.content[0], ['row_id', '标识', '当前场景', '场景目录']);
 });
 
 test('prebuild plan: facts from discoveries, knowledge rows from conditions (incl. cell conditions), risky criteria flagged', async () => {
@@ -411,18 +397,51 @@ test('prebuild through the run page: only missing rows are inserted via the offi
 
 test('hint: a fact confirmed without ever being offered as a candidate is flagged (GPT §13.2 F_talk case); offered ones are not', async () => {
   const { host, inst, tables } = await setup();
+  const flagged = () => [...inst.runtime.clue.compute().unoffered.filter((x) => !x.revoked).map((x) => x.id)];
   // the reported mis-fill: future F_talk marked 已核实 out of nowhere
   setCell(tables, '关键事实表', 'F_talk', '状态', '已核实'); commit(host, tables);
-  let hints = inst.runtime.clue.compute().hints.join('\n');
-  assert.match(hints, /从没把它们作为可能发现给过正文：F_talk/);
+  assert.deepEqual(flagged(), ['F_talk']);
   // F_box is offered in the first round (n_report focus) → after confirming it, no hint for F_box
   await host.send('去杂货店', { reply: '你仔细看了钱箱。' });
   setCell(tables, '关键事实表', 'F_box', '状态', '已核实'); commit(host, tables);
-  hints = inst.runtime.clue.compute().hints.join('\n');
-  assert.ok(!/给过正文：[^。]*F_box/.test(hints), 'offered candidate not flagged');
-  // manual confirm silences it
+  assert.ok(!flagged().includes('F_box'), 'offered candidate not flagged');
+  // 保留 = manual confirm silences it
   inst.runtime.clue.act({ kind: 'fact', target: 'F_talk', value: 'confirmed', note: '作者确认' });
-  assert.ok(!inst.runtime.clue.compute().hints.some((h) => h.includes('F_talk')));
+  assert.ok(!flagged().includes('F_talk'));
+  await inst.destroy();
+});
+
+// 实测 2026-11-15：S01 那次正文自己编了照片背面的字。执行页一行「正文可能自己编了」，保留 / 作废 / 恢复。
+test('unoffered fact line: keep silences it; void revokes, writes the tables back to 未获得 / 未知 and survives a refill; restore undoes', async () => {
+  const { host, inst, tables } = await setup();
+  setCell(tables, '关键事实表', 'F_talk', '状态', '已核实'); setCell(tables, '关键事实表', 'F_talk', '内容', '修车铺老板说那晚看见一辆车'); commit(host, tables);
+  inst.open(); await new Promise((r) => setTimeout(r, 20));
+  const doc = host.w.document, click = async (sel) => { const el = doc.querySelector(sel); assert.ok(el, `missing ${sel}`); el.click(); await new Promise((r) => setTimeout(r, 30)); };
+  await click('[data-act="tab"][data-tab="run"]');
+  let line = doc.querySelector('.pi-unoffered');
+  assert.ok(line, 'one line in 本轮场景');
+  assert.match(line.textContent, /正文可能自己编了：修车铺老板说那晚看见一辆车/);
+  assert.doesNotMatch(doc.body.textContent, /两表核对：这些事实被记为已核实/, 'old wording gone');
+  // void
+  await click('[data-act="clue-fact-void"][data-id="F_talk"]');
+  // 作废会改表格：先确认一次（桌面、手机都问）
+  await click('.pi-dialog .pi-btn.is-primary');
+  const live = () => host.db.tables, row = (name, key) => { const s = Object.values(live()).find((x) => x && x.name === name); return { head: s.content[0], row: s.content.find((r, i) => i > 0 && (r[1] === key)) }; };
+  const f = row('关键事实表', 'F_talk');
+  assert.equal(f.row[f.head.indexOf('状态')], '未获得', 'fact table written back');
+  const eff = inst.runtime.clue.compute();
+  assert.equal(C.effectiveFact('F_talk', eff.snap, eff.prog).confirmed, false, 'plugin treats it as not obtained');
+  assert.match(doc.querySelector('.pi-unoffered').textContent, /已作废/);
+  // the fill writes 已核实 again → still revoked
+  const t2 = JSON.parse(JSON.stringify(live())); setCell(t2, '关键事实表', 'F_talk', '状态', '已核实'); commit(host, t2);
+  const again = inst.runtime.clue.compute();
+  assert.equal(C.effectiveFact('F_talk', again.snap, again.prog).confirmed, false, 'a later refill does not bring it back');
+  // restore
+  await click('[data-act="clue-fact-restore"][data-id="F_talk"]');
+  const back = inst.runtime.clue.compute();
+  assert.equal(C.effectiveFact('F_talk', back.snap, back.prog).confirmed, true, 'restore: back to what the table says');
+  await click('[data-act="clue-fact-keep"][data-id="F_talk"]');
+  assert.equal(doc.querySelector('.pi-unoffered'), null, 'kept → line gone');
   await inst.destroy();
 });
 
@@ -445,7 +464,7 @@ test('§14.2-4: a fact offered long ago (beyond the 40-floor record) is still re
   setCell(tables, '关键事实表', 'F_box', '状态', '已核实'); commit(host, tables);
   const pr = inst.runtime.progress();
   assert.ok(!(pr.clueCandidates || []).some((x) => (x.candidates || []).some((c) => c.fact === 'F_box')), 'F_box has dropped out of the 40-entry per-floor record');
-  assert.ok(!inst.runtime.clue.compute().hints.some((h) => /给过正文：[^。]*F_box/.test(h)), 'no false "never offered" hint');
+  assert.ok(!inst.runtime.clue.compute().unoffered.some((x) => x.id === 'F_box'), 'no false "never offered" hint');
   await inst.destroy();
 });
 

@@ -181,6 +181,7 @@ export function normalizeProject(value, id) {
                 .map((vol) => ({
                     id: vol.id || makeId('v'),
                     key: String(vol.key || '剧情_未命名'),
+                    ...(vol.line && typeof vol.line == 'object' && !Array.isArray(vol.line) ? { line: vol.line } : {}),
                     stages: vol.stages
                         .filter((stage) => stage && stage.data && typeof stage.data == 'object')
                         .map((stage) => ({ id: stage.id || makeId('s'), key: String(stage.key || '阶段'), data: stage.data })),
@@ -188,14 +189,18 @@ export function normalizeProject(value, id) {
         },
         defaults: normalizeDefaults(src.defaults),
         clue: normalizeClue(src.clue),
-        ...(src.outlineIdMap && typeof src.outlineIdMap === 'object' ? { outlineIdMap: src.outlineIdMap } : {}),
-        imports: Array.isArray(src.imports) ? src.imports.filter((x) => typeof x === 'string') : [],
-        importAdopted: Array.isArray(src.importAdopted) ? src.importAdopted.filter((x) => typeof x === 'string') : [],
+        ...(src.outlineIdMap && typeof src.outlineIdMap == 'object' ? { outlineIdMap: src.outlineIdMap } : {}),
+        imports: Array.isArray(src.imports) ? src.imports.filter((x) => typeof x == 'string') : [],
+        importAdopted: Array.isArray(src.importAdopted) ? src.importAdopted.filter((x) => typeof x == 'string') : [],
         genRefs: normalizeGenRefs(src.genRefs),
         personas: normalizePersonas(src.personas),
-        threads: { sideOn: !(src.threads && src.threads.sideOn === false), worldOn: !(src.threads && src.threads.worldOn === false) },
+        threads: { sideOn: !(src.threads && src.threads.sideOn === !1), worldOn: !(src.threads && src.threads.worldOn === !1) },
         mode: src.mode === 'infinite' ? 'infinite' : 'normal',
         ...(src.infinite && typeof src.infinite == 'object' ? { infinite: normalizeInfinite(src.infinite) } : {}),
+        // 批量导入支线采用后的对应（GPT 代码审阅 R4）：{ "任务id:原编号": 卷id }。之后再采用同一任务的线，引用照这个改到实际的新编号。
+        ...(src.importLineMap && typeof src.importLineMap == 'object' && !Array.isArray(src.importLineMap)
+            ? { importLineMap: Object.fromEntries(Object.entries(src.importLineMap).filter(([, v]) => typeof v == 'string')) }
+            : {}),
     };
 }
 

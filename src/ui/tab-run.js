@@ -181,7 +181,7 @@ export function activateCard(view, project) {
 function personaCard(view, project, progress, st) {
     if (!hasPersonas(project)) return '';
     const all = project.personas;
-    const env = personaEnv(project, progress, view.runtime.fame());
+    const env = personaEnv(project, progress, view.runtime.fame(), view.runtime.personaStates());
     const muted = new Set((progress.personas && progress.personas.muted) || []);
     const collapsed = new Set(st.personaFold || []);
     const line = (item) => {

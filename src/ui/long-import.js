@@ -1,4 +1,11 @@
 import {
+    mergeLineIdentity,
+    importLineIndexMessages,
+    mainLinesText,
+    importLineBatches,
+    mergeImportByLine,
+    importLineDraftMessages,
+    lineIdsMissing,
     splitLongText,
     mergeImportIndex,
     importIndexMessages,
@@ -13,12 +20,17 @@ import {
     importReachIssues,
     IMPORT_NEEDS_EXAMPLE,
 } from '../core/long-import.js';
+
+import { lineReviewFromJob, openLineReview } from './line-review.js';
+
+import { afterAdopt, currentTables, st } from './tab-outline.js';
+
+import { tableCatalogText, extractYaml, fixYamlMessages, parseOutlineReply } from '../core/prompts.js';
+
 import { isPlainObject, stageLabel, stageNodes, makeId } from '../core/outline.js';
 import { stringifyYaml, parseYaml } from '../core/yaml.js';
 
 import { ask, runTask } from './ai.js';
-
-import { extractYaml, fixYamlMessages, parseOutlineReply } from '../core/prompts.js';
 
 import { isClueMode, nodeUid, reidConflicts } from '../core/clue-model.js';
 
@@ -28,8 +40,6 @@ import { esc, options, pickFiles, confirmDialog } from './dom.js';
 
 import { toast } from '../host/st.js';
 import { adoptKey } from '../app/import-store.js';
-
-import { st } from './tab-outline.js';
 
 export const IMPORT_PART_CHARS = 8e3;
 
@@ -59,26 +69,33 @@ export async function runImportJob(view, jobId) {
         task = { projectId: view.projectId };
     if (!job) throw new Error('找不到这个导入任务');
     if (job.projectId !== task.projectId) throw new Error('这个导入任务不属于当前项目');
-    let still = () => view.projectId === task.projectId && store.get(jobId);
-    let parts =
-        job.parts && job.parts.length ? job.parts : splitLongText(text, { target: IMPORT_PART_CHARS }).map(({ text: _t, ...p }) => p);
+    let still = () => view.projectId === task.projectId && store.get(jobId),
+        parts =
+            job.parts && job.parts.length ? job.parts : splitLongText(text, { target: IMPORT_PART_CHARS }).map(({ text: _t, ...p }) => p);
     (job.parts && job.parts.length) || (await store.update(jobId, (j) => ({ ...j, parts, step: 'index' })));
     let partText = (p) => text.slice(Math.max(0, p.start - p.lead), p.end),
         ok = (x) => isPlainObject(x) && !x.error,
         local = [...(store.get(jobId).localIndex || [])];
-    // 1. 索引
     for (let p of parts) {
         if (!still()) return;
         if (ok(local[p.i])) continue;
-        let prev = local.filter(ok).length ? stringifyYaml(mergeImportIndex(local.filter(ok))) : '',
-            msgs = importIndexMessages({ part: { ...p, text: partText(p) }, total: parts.length, prev, needs: job.needs }),
+        let lines = job.mode === 'lines',
+            prevIdx = local.filter(ok).length
+                ? {
+                      ...mergeImportIndex(local.filter(ok)),
+                      ...(lines ? { 支线: mergeLineIdentity(local.filter(ok)).lines.map(({ parts: _p, ...l }) => l) } : {}),
+                  }
+                : null,
+            prev = prevIdx ? stringifyYaml(prevIdx) : '',
+            base = importIndexMessages({ part: { ...p, text: partText(p) }, total: parts.length, prev, needs: job.needs }),
+            msgs = lines ? importLineIndexMessages(base) : base,
             reply2 = await ask(view, 'outline', msgs),
-            parsed = null;
-        let read = (t) => {
-            let v = parseYaml(extractYaml(t));
-            if (!isPlainObject(v)) throw new Error('没有读到索引内容');
-            return v;
-        };
+            parsed = null,
+            read = (t) => {
+                let v = parseYaml(extractYaml(t));
+                if (!isPlainObject(v)) throw new Error('没有读到索引内容');
+                return v;
+            };
         try {
             parsed = read(reply2);
         } catch {
@@ -88,7 +105,6 @@ export async function runImportJob(view, jobId) {
                 parsed = { error: `第 ${p.i + 1} 段的索引读不出来：${error.message}` };
             }
         }
-        // 索引里一个事实都没有：补问一次（实测：短材料只有一段时模型会漏掉「事实」一节）。补问失败就用原来的。
         let miss = ok(parsed) ? importIndexMissing(parsed) : [];
         if (miss.length)
             try {
@@ -98,8 +114,16 @@ export async function runImportJob(view, jobId) {
         ((local[p.i] = parsed), await store.update(jobId, (j) => ({ ...j, localIndex: local, step: 'index' })), view.renderBody());
     }
     let index = mergeImportIndex(local.filter(ok));
-    await store.update(jobId, (j) => ({ ...j, index, step: 'draft' }));
-    // 2. 转写
+    if ((await store.update(jobId, (j) => ({ ...j, index, step: 'draft' })), job.mode === 'lines'))
+        return runLineDrafts(
+            view,
+            jobId,
+            parts,
+            partText,
+            local.map((x) => (ok(x) ? x : {})),
+            index,
+            still,
+        );
     for (let p of parts) {
         if (!still()) return;
         let cur = store.get(jobId);
@@ -109,11 +133,14 @@ export async function runImportJob(view, jobId) {
             prevTail =
                 p.i && cur.drafts[p.i - 1] && !cur.drafts[p.i - 1].error
                     ? String(cur.drafts[p.i - 1].yaml || '')
-                          .split('\n')
-                          .slice(-25)
-                          .join('\n')
-                    : '';
-        let reply2 = await ask(
+                          .split(
+                              `
+`,
+                          )
+                          .slice(-25).join(`
+`)
+                    : '',
+            reply2 = await ask(
                 view,
                 'outline',
                 importDraftMessages({
@@ -145,14 +172,17 @@ export function importFailedParts(job) {
         drafts = job.drafts || {};
     return parts
         .map((p) => {
-            let why =
-                local[p.i] && local[p.i].error
-                    ? local[p.i].error
-                    : drafts[p.i] && drafts[p.i].error
-                      ? `第 ${p.i + 1} 段转写失败：${drafts[p.i].error}`
-                      : !drafts[p.i]
-                        ? `第 ${p.i + 1} 段还没整理`
-                        : '';
+            let bad = drafts[p.i] && (drafts[p.i].list || []).find((x) => x && x.error),
+                why =
+                    local[p.i] && local[p.i].error
+                        ? local[p.i].error
+                        : drafts[p.i] && drafts[p.i].error
+                          ? `第 ${p.i + 1} 段转写失败：${drafts[p.i].error}`
+                          : bad
+                            ? `第 ${p.i + 1} 段的 ${bad.only.join('、')} 转写失败：${bad.error}`
+                            : drafts[p.i]
+                              ? ''
+                              : `第 ${p.i + 1} 段还没整理`;
             return why ? { i: p.i, title: p.title, why } : null;
         })
         .filter(Boolean);
@@ -203,16 +233,14 @@ export function renderImport(view) {
         project = view.project(),
         ids = importJobIds(project),
         busy = view.busy[`import:${view.projectId}`];
-    s.jobId && !importJobOf(view, s.jobId) && view.data.imports.get(s.jobId) && (s.jobId = '');
-    if (!s.jobId) {
-        // 重新打开酒馆后，之前的任务还没读进内存：先读一次再显示列表（实测：重载后列表是空的）。读不到的只读一次，不反复重试（R11）。
+    if ((s.jobId && !importJobOf(view, s.jobId) && view.data.imports.get(s.jobId) && (s.jobId = ''), !s.jobId)) {
         let missing = ids.filter((id) => !view.data.imports.get(id) && !(s.unreadable || []).includes(id));
         if (missing.length && !s.loadingList)
             return (
                 (s.loadingList = !0),
                 Promise.all(missing.map((id) => view.data.imports.load(id).catch(() => null)))
                     .then((got) => {
-                        s.unreadable = [...new Set([...(s.unreadable || []), ...missing.filter((_, k) => !got[k])])];
+                        s.unreadable = [.../* @__PURE__ */ new Set([...(s.unreadable || []), ...missing.filter((_, k) => !got[k])])];
                     })
                     .finally(() => ((s.loadingList = !1), view.renderBody())),
                 '<div class="pi-empty"><span class="pi-spin"></span> 正在读取导入记录…</div>'
@@ -223,42 +251,50 @@ export function renderImport(view) {
         <label class="pi-field"><span>原文（粘贴，或选择 txt / md 文件）</span><textarea class="pi-ta is-tall" data-imp-text></textarea></label>
         <div class="pi-tools is-c1"><button type="button" class="pi-btn is-sm" data-act="import-pick-file">选择文件…</button></div>
         <label class="pi-field"><span>要求</span><textarea class="pi-ta" rows="4" data-imp-needs placeholder="${esc(IMPORT_NEEDS_EXAMPLE)}"></textarea></label>
-        <label class="pi-field"><span>整理成</span><select class="pi-sel" data-imp-mode>${options(
-            [
-                { value: 'clue', label: '线索推进的大纲' },
-                { value: 'outline', label: '按阶段推进的大纲' },
-            ],
-            isClueMode(project) ? 'clue' : 'outline',
-        )}</select></label>
+        <label class="pi-field"><span>整理成</span><select class="pi-sel" data-imp-mode>${options([{ value: 'clue', label: '线索推进的大纲' }, { value: 'outline', label: '按阶段推进的大纲' }, ...(isClueMode(project) ? [{ value: 'lines', label: '好几条支线（每条单独一条线）' }] : [])], isClueMode(project) ? 'clue' : 'outline')}</select></label>
+        ${isClueMode(project) ? '<p class="pi-hint">文档是好几条支线（比如「## 1 叶莲娜：……」「## 2 ……」）时选「好几条支线」：每条支线单独成一条线，整理完一页一条审阅，可以写意见、不要哪条，再一起采用。主线建议先导入，支线的开启时段要引用主线的阶段。</p>' : ''}
         <div class="pi-tools is-end"><button type="button" class="pi-btn is-primary is-sm" data-act="import-start">开始整理</button></div></div>
         ${list.length || lost.length ? `<div class="pi-card"><h3>之前的导入</h3>${list.map((j) => `<div class="pi-set-row"><span>${esc(new Date(j.createdAt).toLocaleString('zh-CN', { hour12: !1 }))} · ${j.chars} 字 · ${j.step === 'review' ? '可以审阅' : '未完成'}</span><span class="pi-spacer"></span><button type="button" class="pi-btn is-sm" data-act="import-open" data-id="${esc(j.id)}">打开</button><button type="button" class="pi-btn is-sm is-ghost is-danger" data-act="import-drop" data-id="${esc(j.id)}">删除</button></div>`).join('')}${lost.map((id) => `<div class="pi-set-row"><span class="is-warn">读不到这条导入记录的文件</span><span class="pi-spacer"></span><button type="button" class="pi-btn is-sm is-ghost is-danger" data-act="import-drop" data-id="${esc(id)}">移除</button></div>`).join('')}</div>` : ''}`;
     }
     let job = importJobOf(view, s.jobId);
     if (!job)
-        return s.loadingJob
-            ? '<div class="pi-empty"><span class="pi-spin"></span> 正在读取导入任务…</div>'
-            : ((s.loadingJob = !0),
-              view.data.imports
-                  .load(s.jobId)
-                  .catch(() => null)
-                  .then((j) => {
-                      (j && j.projectId === view.projectId) || ((s.jobId = ''), toast('warning', '读不到这个导入任务。'));
-                  })
-                  .finally(() => ((s.loadingJob = !1), view.renderBody())),
-              '<div class="pi-empty"><span class="pi-spin"></span> 正在读取导入任务…</div>');
+        return (
+            s.loadingJob ||
+                ((s.loadingJob = !0),
+                view.data.imports
+                    .load(s.jobId)
+                    .catch(() => null)
+                    .then((j) => {
+                        (j && j.projectId === view.projectId) || ((s.jobId = ''), toast('warning', '读不到这个导入任务。'));
+                    })
+                    .finally(() => ((s.loadingJob = !1), view.renderBody()))),
+            '<div class="pi-empty"><span class="pi-spin"></span> 正在读取导入任务…</div>'
+        );
     let parts = job.parts || [],
         indexed = (job.localIndex || []).filter((x) => isPlainObject(x) && !x.error).length,
         drafted = Object.values(job.drafts || {}).filter((d) => !d.error).length,
         total = parts.length,
-        failed = importFailedParts(job).filter((f) => !/还没整理/.test(f.why));
-    let progress = `<p class="pi-hint">共 ${total || '?'} 段 · 已读 ${indexed} 段 · 已整理 ${drafted} 段${job.step === 'review' ? ' · 已完成' : ''}</p>${failed.map((f) => `<p class="pi-hint is-warn">· ${esc(f.why)}</p>`).join('')}`;
+        failed = importFailedParts(job).filter((f) => !/还没整理/.test(f.why)),
+        progress = `<p class="pi-hint">共 ${total || '?'} 段 · 已读 ${indexed} 段 · 已整理 ${drafted} 段${job.step === 'review' ? ' · 已完成' : ''}</p>${failed.map((f) => `<p class="pi-hint is-warn">· ${esc(f.why)}</p>`).join('')}`;
     if (job.step !== 'review')
         return `<div class="pi-card"><h3>导入长文<span class="pi-spacer"></span><button type="button" class="pi-btn is-sm is-ghost" data-act="import-back">返回</button></h3>${progress}
         <div class="pi-tools is-end"><button type="button" class="pi-btn is-primary is-sm" data-act="import-run"${busy ? ' disabled' : ''}>${busy ? '<span class="pi-spin"></span>整理中' : failed.length ? '重试失败的段' : drafted || indexed ? '继续' : '开始'}</button></div></div>`;
+    if (job.mode === 'lines')
+        return `<div class="pi-card"><h3>导入的支线<span class="pi-spacer"></span><button type="button" class="pi-btn is-sm is-ghost" data-act="import-back">返回</button></h3>${progress}
+        <p class="pi-hint">整理好了 ${job.lineReview ? job.lineReview.order.length : 0} 条支线。</p>${
+            job.lineReview && job.lineReview.conflicts && job.lineReview.conflicts.length
+                ? job.lineReview.conflicts
+                      .slice(0, 8)
+                      .map((t) => `<p class="pi-hint">· ${esc(t)}</p>`)
+                      .join('')
+                : ''
+        }
+        ${((job.lineIdent && job.lineIdent.notes) || []).map((t) => `<p class="pi-hint is-warn">· ${esc(t)}</p>`).join('')}
+        <div class="pi-tools is-end"><button type="button" class="pi-btn is-primary is-sm" data-act="import-lines-review">一条一条审阅</button></div></div>`;
     let cand = importCandidate(job),
         adopted = projectAdopted(project),
-        stages = cand.volumes[0] ? cand.volumes[0].stages : [];
-    let errs = cand.issues.filter((x) => x.level === 'error'),
+        stages = cand.volumes[0] ? cand.volumes[0].stages : [],
+        errs = cand.issues.filter((x) => x.level === 'error'),
         warns = cand.issues.filter((x) => x.level !== 'error'),
         pending = (cand.index && cand.index.待确认) || [];
     return `<div class="pi-card"><h3>审阅导入结果<span class="pi-spacer"></span><button type="button" class="pi-btn is-sm is-ghost" data-act="import-back">返回</button></h3>${progress}
@@ -288,6 +324,13 @@ export const importActions = {
     'import-open-panel'(view) {
         ((st(view).importing = view.projectId), (sti(view).jobId = ''), view.renderBody());
     },
+    async 'import-lines-review'(view) {
+        let jobId = sti(view).jobId,
+            job = importJobOf(view, jobId);
+        job &&
+            (job.lineReview || (await view.data.imports.update(jobId, (j) => ({ ...j, lineReview: lineReviewFromJob(j) }))),
+            openLineReview(view, 'import', jobId));
+    },
     'import-close'(view) {
         ((st(view).importing = ''), view.renderBody());
     },
@@ -308,19 +351,19 @@ export const importActions = {
             projectId = view.projectId;
         if (!text.trim()) return toast('warning', '先粘贴原文，或选择一个文件。');
         let job = await view.data.imports.create({ projectId, text, mode, needs });
-        // 创建期间切了项目：任务仍记在发起它的项目下。
-        view.data.updateProject(projectId, (p) => ({ ...p, imports: [...importJobIds(p), job.id] }));
-        if (view.projectId !== projectId) return toast('info', '导入任务已建好，记在原来的项目里。');
+        if ((view.data.updateProject(projectId, (p) => ({ ...p, imports: [...importJobIds(p), job.id] })), view.projectId !== projectId))
+            return toast('info', '导入任务已建好，记在原来的项目里。');
         ((sti(view).jobId = job.id), view.renderBody(), importActions['import-run'](view));
     },
     async 'import-open'(view, target) {
         let id = target.dataset.id,
             projectId = view.projectId,
             job = await view.data.imports.load(id).catch(() => null);
-        if (view.projectId !== projectId) return;
-        if (!job || job.projectId !== projectId || !importJobIds(view.project()).includes(id))
-            return toast('warning', '这个导入任务不属于当前项目。');
-        ((sti(view).jobId = id), view.renderBody());
+        if (view.projectId === projectId) {
+            if (!job || job.projectId !== projectId || !importJobIds(view.project()).includes(id))
+                return toast('warning', '这个导入任务不属于当前项目。');
+            ((sti(view).jobId = id), view.renderBody());
+        }
     },
     async 'import-drop'(view, target) {
         if (
@@ -334,17 +377,18 @@ export const importActions = {
             return;
         let id = target.dataset.id,
             projectId = view.projectId;
-        if (!importJobIds(view.project()).includes(id)) return;
-        (await view.data.imports.drop(id),
+        importJobIds(view.project()).includes(id) &&
+            (await view.data.imports.drop(id),
             view.data.updateProject(projectId, (p) => ({ ...p, imports: importJobIds(p).filter((x) => x !== id) })),
             view.renderBody());
     },
     async 'import-run'(view) {
         let jobId = sti(view).jobId;
-        if (!jobId || !importJobOf(view, jobId)) return;
-        (await runTask(view, `import:${view.projectId}`, () => runImportJob(view, jobId)).catch((error) =>
-            toast('error', `整理中断：${error.message}。已完成的部分已保存，点「继续」接着做。`),
-        ),
+        !jobId ||
+            !importJobOf(view, jobId) ||
+            (await runTask(view, `import:${view.projectId}`, () => runImportJob(view, jobId)).catch((error) =>
+                toast('error', `整理中断：${error.message}。已完成的部分已保存，点「继续」接着做。`),
+            ),
             view.renderBody());
     },
     // 采用：勾选的阶段合成一卷追加到大纲（R3）。
@@ -358,14 +402,14 @@ export const importActions = {
             projectId = view.projectId,
             job = importJobOf(view, jobId);
         if (!job) return toast('warning', '这个导入任务不属于当前项目。');
-        let same = () => view.projectId === projectId && importJobOf(view, jobId);
-        let picked = new Set(
+        let same = () => view.projectId === projectId && importJobOf(view, jobId),
+            picked = new Set(
                 [...target.closest('.pi-card').querySelectorAll('[data-imp-pick]')].filter((x) => x.checked).map((x) => x.dataset.impPick),
             ),
             adopted = projectAdopted(view.project()),
-            cand = importCandidate(job);
-        let vol = cand.volumes[0],
-            take = vol ? vol.stages.filter((st) => picked.has(st.key) && !adopted.has(adoptKey(job.id, 0, st.key))) : [];
+            cand = importCandidate(job),
+            vol = cand.volumes[0],
+            take = vol ? vol.stages.filter((st2) => picked.has(st2.key) && !adopted.has(adoptKey(job.id, 0, st2.key))) : [];
         if (!take.length) return toast('info', '没有新勾选的阶段（已采用的不会重复写入）。');
         let { issues, basis } = importAdoptIssues(view, vol, take, cand.index),
             errs = issues.filter((x) => x.level === 'error'),
@@ -382,34 +426,105 @@ export const importActions = {
         )
             return;
         if (!same()) return toast('warning', '确认期间切换了项目，没有追加。');
-        let keys = take.map((st) => adoptKey(job.id, 0, st.key)),
+        let keys = take.map((st2) => adoptKey(job.id, 0, st2.key)),
             project = view.project();
         if (keys.some((k) => projectAdopted(project).has(k))) return (toast('info', '这些阶段刚刚已经采用过了。'), view.renderBody());
-        let incoming = [{ ...vol, id: makeId('v'), stages: take.map((st) => ({ ...st, id: makeId('s') })) }],
+        let incoming = [{ ...vol, id: makeId('v'), stages: take.map((st2) => ({ ...st2, id: makeId('s') })) }],
             fresh;
         try {
             let [reid, renamed] = reidConflicts(incoming, project.outline.volumes),
                 existing = new Set(project.outline.volumes.map((v) => v.key));
-            fresh = reid.map((v) => (existing.has(v.key) ? { ...v, key: `${v.key}_导入${Date.now().toString(36).slice(-3)}` } : v));
-            renamed.length &&
-                toast(
-                    'warning',
-                    `有 ${renamed.length} 个节点 ID 与现有节点重复，已换成新 ID：${renamed.slice(0, 5).join('、')}${renamed.length > 5 ? '……' : ''}。`,
-                );
+            ((fresh = reid.map((v) => (existing.has(v.key) ? { ...v, key: `${v.key}_导入${Date.now().toString(36).slice(-3)}` } : v))),
+                renamed.length &&
+                    toast(
+                        'warning',
+                        `有 ${renamed.length} 个节点 ID 与现有节点重复，已换成新 ID：${renamed.slice(0, 5).join('、')}${renamed.length > 5 ? '……' : ''}。`,
+                    ));
         } catch (error) {
             return toast('error', `没有追加：${error.message}`);
         }
-        view.data.updateProject(projectId, (p) => ({
+        (view.data.updateProject(projectId, (p) => ({
             ...p,
             outline: { ...p.outline, volumes: [...p.outline.volumes, ...fresh] },
             importAdopted: [...projectAdopted(p), ...keys],
-        }));
-        ((st(view).sel = fresh[0] && fresh[0].id),
+        })),
+            (st(view).sel = fresh[0] && fresh[0].id),
             view.runtime.refresh && view.runtime.refresh(),
             toast('success', `已追加 ${take.length} 个阶段。`),
-            view.renderBody());
-        await store
-            .update(jobId, (j) => ({ ...j, adopted: [.../* @__PURE__ */ new Set([...(j.adopted || []), ...keys])] }))
-            .catch(() => {});
+            view.renderBody(),
+            afterAdopt(view),
+            await store
+                .update(jobId, (j) => ({ ...j, adopted: [.../* @__PURE__ */ new Set([...(j.adopted || []), ...keys])] }))
+                .catch(() => {}));
     },
 };
+
+export async function runLineDrafts(view, jobId, parts, partText, local, index, still) {
+    let store = view.data.imports,
+        ident = mergeLineIdentity(local),
+        tables = currentTables(),
+        catalog = tables ? tableCatalogText(tables) : '',
+        mains = mainLinesText(view.project().outline.volumes);
+    await store.update(jobId, (j) => ({ ...j, lineIdent: ident }));
+    for (let p of parts) {
+        let groups = importLineBatches(ident.lines, p.i);
+        for (let [g, only] of (groups.length ? groups : []).entries()) {
+            if (!still()) return;
+            let cur = store.get(jobId),
+                slot = (cur.drafts[p.i] && cur.drafts[p.i].list) || [];
+            if (slot[g] && !slot[g].error) continue;
+            let done = importDoneText(
+                    mergeImportByLine(
+                        Object.values(cur.drafts).flatMap((d) => (d.list || []).filter((x) => !x.error).flatMap((x) => x.volumes || [])),
+                    ),
+                ),
+                draft = (ids) =>
+                    ask(
+                        view,
+                        'outline',
+                        importLineDraftMessages({
+                            part: { ...p, text: partText(p) },
+                            index: stringifyYaml(index),
+                            lines: ident.lines,
+                            only: ids,
+                            mainLines: mains,
+                            tableCatalog: catalog,
+                            needs: cur.needs,
+                            done,
+                        }),
+                    ),
+                r = parseOutlineReply(await draft(only));
+            (r.ok && r.volumes.length) ||
+                (r = parseOutlineReply(await ask(view, 'outline', fixYamlMessages(r.yaml, r.error || '没有读到任何卷', 'clue'))));
+            let lost = r.ok ? lineIdsMissing(r.volumes, only) : [];
+            if (lost.length && still()) {
+                let r2 = parseOutlineReply(await draft(lost));
+                (r2.ok &&
+                    (r = {
+                        ...r,
+                        yaml: `${r.yaml}
+${r2.yaml}`,
+                        volumes: [...r.volumes, ...r2.volumes],
+                    }),
+                    (lost = lineIdsMissing(r.volumes, only)));
+            }
+            let entry =
+                r.ok && r.volumes.length && !lost.length
+                    ? { only, yaml: r.yaml, volumes: r.volumes, notes: splitImportAuthorFields(r.volumes, p).notes }
+                    : { only, error: lost.length ? `AI 没写 ${lost.join('、')}` : r.error || '没有读到任何卷', yaml: r.yaml };
+            (await store.update(jobId, (j) => {
+                let list = [...((j.drafts[p.i] && j.drafts[p.i].list) || [])];
+                return ((list[g] = entry), { ...j, drafts: { ...j.drafts, [p.i]: { list } } });
+            }),
+                view.renderBody());
+        }
+        groups.length ||
+            store.get(jobId).drafts[p.i] ||
+            (await store.update(jobId, (j) => ({ ...j, drafts: { ...j.drafts, [p.i]: { list: [] } } })));
+    }
+    let fin = store.get(jobId);
+    if (importFailedParts(fin).length) return void (await store.update(jobId, (j) => ({ ...j, step: 'draft' })));
+    let review = fin.lineReview || lineReviewFromJob(fin);
+    (await store.update(jobId, (j) => ({ ...j, step: 'review', lineReview: review })),
+        view.projectId === fin.projectId && openLineReview(view, 'import', jobId));
+}
