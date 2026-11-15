@@ -1,0 +1,765 @@
+{
+  "sheet_dCudvUnH": {
+    "uid": "sheet_dCudvUnH",
+    "name": "全局数据表",
+    "sourceData": {
+      "note": "记录当前主角所在地点及时间相关参数。此表有且仅有一行。\n\n【列定义】\n- 列1: 全局状态 story_state\n- 列2: 当前详细地点 current_location\n- 列3: 当前次要地区 current_minor_region\n- 列4: 当前主要地区 current_major_region\n- 列5: 上轮场景时间 prev_scene_time（初始化时为NULL）\n- 列6: 经过的时间 elapsed_time\n- 列7: 当前时间 cur_time\n\n【强制约束】\n全局状态为固定字符串`全局状态`，标题性质。\n\n地点层级从小到大：详细地点 < 次要地区 < 主要地区。\n每个字段只写本级名称，不拼上级前缀。\n√ 当前详细地点填 “御苑”\n× 当前详细地点填 “东京-新宿区-御苑”\n\n时间格式：\nprev_scene_time / cur_time: YYYY-MM-DD HH:MM\nelapsed_time: {数值}{单位}，多单位用空格连。\n单位集合：[纪元,千年,百年,年,月,周,天,小时,分]\n示例：\"3小时20分\" | \"2天\" | \"3年6月\"\n\n时间计算公式：cur_time = prev_scene_time + elapsed_time\n- 初始化时prev_scene_time为NULL，cur_time直接填写初始时间，无需计算\n- 每轮推进时，将上一轮的cur_time赋值给prev_scene_time，然后填写本次的elapsed_time，最后计算得到新的cur_time",
+      "initNode": "故事初始化时，插入唯一条目，记录用户开局初始时间与初始地点。禁止直接照搬示例中的地点和日期。\n\nSQL示例: INSERT INTO global_state (story_state, current_location, current_minor_region, current_major_region, prev_scene_time, elapsed_time, cur_time)\nVALUES ('全局状态', '御苑', '新宿区', '东京都', NULL, '0分', '2026-02-03 09:00');",
+      "deleteNode": "禁止。",
+      "updateNode": "每轮推进时更新 prev_scene_time、elapsed_time 和 cur_time；若地点变动则同步更新三级地点字段。\n\n【更新约束】\n除初始化时 prev_scene_time 可为 NULL 外，其余字段均不可写 NULL 或空串。\n\n【更新SQL示例（同日+跨日+位置变动综合覆盖）】\nSQL示例(同日推进): UPDATE global_state SET prev_scene_time = '2026-02-03 09:00', elapsed_time = '3小时', cur_time = '2026-02-03 12:00' WHERE row_id = 1;\n\nSQL示例(跨日推进): UPDATE global_state SET prev_scene_time = '2026-02-03 23:55', elapsed_time = '20分', cur_time = '2026-02-04 00:15' WHERE row_id = 1;\n\nSQL示例(含位置变动): UPDATE global_state SET current_location = '新宿车站', current_minor_region = '新宿区', current_major_region = '东京都', prev_scene_time = '2026-02-03 12:00', elapsed_time = '30分', cur_time = '2026-02-03 12:30' WHERE row_id = 1;",
+      "insertNode": "禁止。",
+      "ddl": "CREATE TABLE global_state ( -- 全局数据表\n  row_id INTEGER PRIMARY KEY, -- 行号\n  story_state TEXT, -- 全局状态\n  current_location TEXT, -- 当前详细地点\n  current_minor_region TEXT, -- 当前次要地区\n  current_major_region TEXT, -- 当前主要地区\n  prev_scene_time TEXT, -- 上轮场景时间\n  elapsed_time TEXT, -- 经过的时间\n  cur_time TEXT -- 当前时间\n);"
+    },
+    "content": [
+      [
+        "row_id",
+        "全局状态",
+        "当前详细地点",
+        "当前次要地区",
+        "当前主要地区",
+        "上轮场景时间",
+        "经过的时间",
+        "当前时间"
+      ]
+    ],
+    "updateConfig": {
+      "uiSentinel": -1,
+      "contextDepth": -1,
+      "updateFrequency": 1,
+      "batchSize": -1,
+      "skipFloors": 0,
+      "groupId": 0
+    },
+    "exportConfig": {
+      "enabled": false,
+      "splitByRow": false,
+      "entryName": "全局数据表",
+      "entryType": "constant",
+      "keywords": "",
+      "preventRecursion": true,
+      "injectionTemplate": "",
+      "extraIndexEnabled": false,
+      "extraIndexEntryName": "全局数据表-索引",
+      "extraIndexColumns": [],
+      "extraIndexColumnModes": {},
+      "extraIndexInjectionTemplate": "",
+      "entryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 10000
+      },
+      "extraIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 10010
+      },
+      "fixedEntryPlacement": {
+        "position": "before_character_definition",
+        "depth": 2,
+        "order": 99981
+      },
+      "fixedIndexPlacement": {
+        "position": "before_character_definition",
+        "depth": 2,
+        "order": 99982
+      }
+    },
+    "orderNo": 0
+  },
+  "sheet_DpKcVGqg": {
+    "uid": "sheet_DpKcVGqg",
+    "name": "主角信息表",
+    "sourceData": {
+      "note": "记录主角的核心身份信息。此表有且仅有一行。\n\n【列定义】\n- 列1: 姓名 name\n- 列2: 性别 gender\n- 列3: 年龄 age\n- 列4: 外貌特征 appearance（含日常穿衣风格，写出整体印象，避免罗列数据）\n- 列5: 身份 identity_text（逗号分隔）\n- 列6: 近况 current_condition\n- 列7: 所在地点 location_name\n- 列8: 随身财物 belongings（可NULL）\n\n【强制约束】\n1. 所在地点只写地点名不带层级前缀。位置变化时同步更新。\n\n2. 近况用一句话描述主角当前的身体感觉、情绪状态或心头惦记的事。\n正常时期填\"一切如常\"，有异常时直接写具体感受，不用标签堆叠。\n√ 昨晚没睡好，脑子有点沉\n√ 刚从雨里跑回来，衣服还湿着\n\n3. 随身财物只写当前身上带着的有意义物品，不写游戏化资源。\n√ 钱包里夹着第一次看电影的票根\n√ 口袋里剩两颗橘子糖",
+      "initNode": "故事初始化时，插入主角的唯一条目。",
+      "deleteNode": "禁止。",
+      "updateNode": "已存在的这一行，字段值变化时更新：年龄、外貌、身份、近况、所在地点、随身财物。\n\n【更新SQL示例（近况+位置变化）】\n更新SQL示例(近况变化): UPDATE protagonist_info SET current_condition = '疲劳，左膝擦伤', location_name = '御苑' WHERE row_id = 1;\n\n更新SQL示例(随身财物变化): UPDATE protagonist_info SET belongings = '钱包里夹着第一次看电影的票根，口袋里剩两颗橘子糖' WHERE row_id = 1;",
+      "insertNode": "禁止。",
+      "ddl": "CREATE TABLE protagonist_info ( -- 主角信息\n  row_id INTEGER PRIMARY KEY, -- 行号，仅允许为 1\n  name TEXT, -- 姓名\n  gender TEXT, -- 性别\n  age TEXT, -- 年龄\n  appearance TEXT, -- 外貌特征\n  identity_text TEXT, -- 身份\n  current_condition TEXT, -- 近况\n  location_name TEXT, -- 所在地点\n  belongings TEXT -- 随身财物\n);"
+    },
+    "content": [
+      [
+        "row_id",
+        "姓名",
+        "性别",
+        "年龄",
+        "外貌特征",
+        "身份",
+        "近况",
+        "所在地点",
+        "随身财物"
+      ]
+    ],
+    "updateConfig": {
+      "uiSentinel": -1,
+      "contextDepth": -1,
+      "updateFrequency": -1,
+      "batchSize": -1,
+      "skipFloors": -1,
+      "groupId": -1
+    },
+    "exportConfig": {
+      "enabled": false,
+      "splitByRow": false,
+      "entryName": "主角信息",
+      "entryType": "constant",
+      "keywords": "",
+      "preventRecursion": true,
+      "injectionTemplate": "",
+      "extraIndexEnabled": false,
+      "extraIndexEntryName": "主角信息-索引",
+      "extraIndexColumns": [],
+      "extraIndexColumnModes": {},
+      "extraIndexInjectionTemplate": "",
+      "entryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 10000
+      },
+      "extraIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 10010
+      },
+      "fixedEntryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 99990
+      },
+      "fixedIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 99991
+      }
+    },
+    "orderNo": 1
+  },
+  "sheet_NcBlYRH5": {
+    "uid": "sheet_NcBlYRH5",
+    "name": "重要角色表",
+    "sourceData": {
+      "note": "记录所有对当前剧情产生作用的重要角色。\n\n【列定义】\n- 列1: 姓名 name（全表唯一）\n- 列2: 性别 gender\n- 列3: 年龄 age\n- 列4: 一句话介绍 brief_intro\n- 列5: 外貌特征 appearance\n- 列6: 穿着打扮 outfit_text\n- 列7: 所在地点 location_name\n- 列8: 在场状态 presence_status（在场/离场）\n- 列9: 人际关系 relation_text\n- 列10: 过往经历 past_experience\n- 列11: 交互选项 interaction_options\n\n【强制约束】\nbrief_intro仅允许客观事实类内容，严禁出现任何性格标签概述，如\"开朗\"\"冷漠\"\"温柔\"等；客观内容范畴包括但不限于：角色核心身份、与剧情强相关的客观行为、与关键人物的客观关联、非性格类核心特征。\n√ 经营城南杂货铺 / 曾救过主角的性命 / 艾莉丝的亲生兄长\n× 性格孤僻的杂货铺老板 / 温柔且救过主角 / 偏执的艾莉丝兄长\n\noutfit_text仅写外在可见的服饰、饰品、妆容、持握物等可视元素，禁止写固有的长相特征、气质、气场等非视觉内容。\n√ 深灰立领风衣配黑皮手套 / 左手无名指戴着一枚银色蛇纹戒\n× 散发出高贵的气场、看起来像个军人\n\ninteraction_options必须同时遵循下述要求\n1.不使用第一人称\"我\"\n2.动作发起方为主角，接收方为角色\n3.必须是具体、有代入感的实际行动，避免干瘪的单词\n√ 向他打听失踪案线索 / 假装偶遇并搭话套取信息 / 故意打翻水杯制造冲突\n× 交谈 / 打听\n\n【relation_text 格式规则】（强制）\n1. 格式必须是：角色名:关系描述\n   - 必须显式写出\"角色名:\"前缀，禁止省略角色名直接写关系内容。\n   - 同一角色有多个关系标签/描述时，标签之间用英文逗号 , 分隔。\n   - 不同角色之间用英文分号 ; 分隔。\n   - 关系描述去除人称，使用简短陈述。\n2. 主要记录该角色与主角及其他重要角色之间的客观关联，至少包含与主角的关系。\n   √ 主角:曾帮其修过自行车,旧识\n   √ 主角:认识;艾莉丝:室友兼闺蜜\n   √ 主角:校长身份,从未直接交谈;艾莉丝:监护人\n   × 曾帮主角修过自行车                    ← 缺少角色名前缀\n   × 主角:认识;室友兼闺蜜                  ← 第二段缺少角色名\n   × 主角:旧识,艾莉丝:室友                 ← 不同角色错用逗号\n   × 主角:曾帮其修过自行车;旧识            ← 同一角色多标签错用分号\n\n【线索主线附加规则·剧情注入器】\n- 建行：本批正文中实际登场，或有人明确提到、且对当前事件有作用的人，才建行。沿用当时可辨认的称呼；姓名还没揭示就用正文里的称呼，以后确认是同一人时更新原行，不另建一行。\n- 背景设定里写了、但正文还没有展示的身份、关系、秘密和未来安排，不写进任何一列。关系和经历只补正文已经展示的部分。\n- 剧情身份：写成「谁在第几楼如何称呼或自述」，如「第3楼自称本地商人」。之后被核实或推翻时，在后面追加证据和楼层，不删原来的说法。\n- 当前动向：分清「说打算去」「已出发」「已到达」。正文没有交代新的动向就保持原值；离开场景后在做什么，正文写了才记。\n- 一句话介绍只写公开特征；交互选项只写主角目前有依据尝试的行动。\n【附加规则结束】",
+      "initNode": "故事开始时，只为开场正文里实际登场、或被明确提到且对当前事件有作用的重要角色插入条目；只写正文已经展示的内容。\n\n【格式约束】\nrelation_text 必须写\"角色名:关系描述\"；同一角色多项描述用英文逗号 , 分隔；不同角色之间用英文分号 ; 分隔。\n\nSQL示例: INSERT INTO important_non_romance (name, gender, age, brief_intro, appearance, outfit_text, location_name, presence_status, relation_text, past_experience, interaction_options) VALUES ('校长', '男', 60, '学院校长', '白发，手持手杖，目光深邃', '深灰立领风衣配黑皮手套', '校长室', '离场', '主角:曾帮其修过自行车,旧识;艾莉丝:监护人', '据说知晓学院的许多秘密，很少露面。', '向他打听失踪案线索');",
+      "deleteNode": "默认禁止删除。已出场但暂时无剧情、暂时离场、关系状态变化、身份变化的角色，都必须保留在本表，只更新 presence_status、relation_text、past_experience、interaction_options 等字段。仅当角色明确永久离开当前剧情，且后续不再需要追踪时，才允许删除。\nSQL示例(永久离开且不再追踪):DELETE FROM important_non_romance WHERE name = '艾莉丝';",
+      "updateNode": "已存在的重要角色，字段变化时更新。\n\n【格式约束】\nrelation_text 必须写\"角色名:关系描述\"；同一角色多项描述用英文逗号 , 分隔；不同角色之间用英文分号 ; 分隔。\n\nSQL示例(普通字段更新): UPDATE important_non_romance SET presence_status = '离场', interaction_options = '向他打听失踪案线索' WHERE name = '校长';\nSQL示例(单角色多描述): UPDATE important_non_romance SET relation_text = '主角:曾帮其修过自行车,近期开始留意主角动向' WHERE name = '校长';\nSQL示例(多角色关系): UPDATE important_non_romance SET relation_text = '主角:旧识,旧情人;艾莉丝:监护人;神田:旧部下' WHERE name = '校长';",
+      "insertNode": "新重要角色登场时新增。\n\n【格式约束】\nrelation_text 必须写\"角色名:关系描述\"；同一角色多项描述用英文逗号 , 分隔；不同角色之间用英文分号 ; 分隔。至少包含与主角的关系。\n\nSQL示例: INSERT INTO important_non_romance (name, gender, age, brief_intro, appearance, outfit_text, location_name, presence_status, relation_text, past_experience, interaction_options) VALUES ('黑市商人', '男', 45, '经营城南杂货铺', '左眼带有刀疤', '深灰立领风衣配黑皮手套', '城南杂货铺', '在场', '主角:曾救过其性命,长期供货人', '长期在地下黑市进行交易。', '假装偶遇并搭话套取信息');",
+      "ddl": "CREATE TABLE important_non_romance ( -- 重要角色表\n  row_id INTEGER PRIMARY KEY, -- 行号\n  name TEXT, -- 姓名\n  gender TEXT, -- 性别\n  age TEXT, -- 年龄\n  brief_intro TEXT, -- 一句话介绍\n  appearance TEXT, -- 外貌特征\n  outfit_text TEXT, -- 穿着打扮\n  location_name TEXT, -- 所在地点\n  presence_status TEXT, -- 在场状态\n  relation_text TEXT, -- 人际关系\n  past_experience TEXT, -- 过往经历\n  interaction_options TEXT, -- 交互选项\n  plot_identity TEXT, -- 剧情身份\n  current_intent TEXT -- 当前动向\n);"
+    },
+    "content": [
+      [
+        "row_id",
+        "姓名",
+        "性别",
+        "年龄",
+        "一句话介绍",
+        "外貌特征",
+        "穿着打扮",
+        "所在地点",
+        "在场状态",
+        "人际关系",
+        "过往经历",
+        "交互选项",
+        "剧情身份",
+        "当前动向"
+      ]
+    ],
+    "updateConfig": {
+      "uiSentinel": -1,
+      "contextDepth": -1,
+      "updateFrequency": -1,
+      "batchSize": -1,
+      "skipFloors": -1,
+      "groupId": -1
+    },
+    "exportConfig": {
+      "enabled": true,
+      "splitByRow": true,
+      "entryName": "重要角色表",
+      "entryType": "keyword",
+      "keywords": "姓名",
+      "preventRecursion": true,
+      "injectionTemplate": "",
+      "extraIndexEnabled": true,
+      "extraIndexEntryName": "重要角色表-索引",
+      "extraIndexColumns": [
+        "姓名",
+        "一句话介绍"
+      ],
+      "extraIndexColumnModes": {
+        "姓名": "both",
+        "一句话介绍": "index_only"
+      },
+      "extraIndexInjectionTemplate": "以下为已经登场过的重要角色：\n<重要角色索引>\n$1\n</重要角色索引>",
+      "entryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 10000,
+        "order": 10000
+      },
+      "extraIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 10000,
+        "order": 8010
+      },
+      "fixedEntryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 10000,
+        "order": 99985
+      },
+      "fixedIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 10000,
+        "order": 99986
+      }
+    },
+    "orderNo": 2
+  },
+  "sheet_lEARaBa8": {
+    "uid": "sheet_lEARaBa8",
+    "name": "主角技能表",
+    "sourceData": {
+      "note": "记录主角获得的所有技能项目。\n- 列1: 技能名称 - 技能的名称。\n- 列2: 技能类型 - 技能的类别（如：“被动”、“主动”）。\n- 列3: 等级/阶段 - 技能的当前等级或阶段。\n- 列4: 效果描述 - 技能在当前等级下的具体效果。",
+      "initNode": "游戏初始化时，根据设定为主角添加初始技能。",
+      "deleteNode": "技能因剧情被剥夺或替换时删除。\nSQL示例: DELETE FROM protagonist_skills WHERE skill_name = '被剥夺的技能';",
+      "updateNode": "已有技能被升级时更新其等级/阶段和效果描述。\nSQL示例: UPDATE protagonist_skills SET skill_level = 'Lv.3', effect_desc = '新效果描述' WHERE skill_name = '火球术';",
+      "insertNode": "主角获得新的技能时添加。\nSQL示例: INSERT INTO protagonist_skills (skill_name, skill_type, skill_level, effect_desc) VALUES ('新技能', '主动', 'Lv.1', '效果描述');",
+      "ddl": "CREATE TABLE protagonist_skills ( -- 主角技能表\n  row_id INTEGER PRIMARY KEY, -- 行号\n  skill_name TEXT, -- 技能名称\n  skill_type TEXT, -- 技能类型\n  skill_level TEXT, -- 等级/阶段\n  effect_desc TEXT -- 效果描述\n);"
+    },
+    "content": [
+      [
+        "row_id",
+        "技能名称",
+        "技能类型",
+        "等级/阶段",
+        "效果描述"
+      ]
+    ],
+    "updateConfig": {
+      "uiSentinel": -1,
+      "contextDepth": -1,
+      "updateFrequency": -1,
+      "batchSize": -1,
+      "skipFloors": -1
+    },
+    "exportConfig": {
+      "enabled": false,
+      "splitByRow": false,
+      "entryName": "主角技能表",
+      "entryType": "constant",
+      "keywords": "",
+      "preventRecursion": true,
+      "injectionTemplate": "",
+      "extraIndexEnabled": false,
+      "extraIndexEntryName": "主角技能表-索引",
+      "extraIndexColumns": [],
+      "extraIndexColumnModes": {},
+      "extraIndexInjectionTemplate": "",
+      "entryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 10000
+      },
+      "extraIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 10010
+      },
+      "fixedEntryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 99990
+      },
+      "fixedIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 99991
+      }
+    },
+    "orderNo": 3
+  },
+  "sheet_in05z9vz": {
+    "uid": "sheet_in05z9vz",
+    "name": "背包物品表",
+    "sourceData": {
+      "note": "记录主角拥有的所有物品、装备。\n- 列1: 物品名称 - 物品的名称。\n- 列2: 数量 - 拥有的数量。\n- 列3: 描述/效果 - 物品的功能或背景描述。\n- 列4: 类别 - 物品的类别（如：“武器”、“消耗品”、“杂物”）。",
+      "initNode": "游戏初始化时，根据剧情与设定添加主角的初始携带物品。",
+      "deleteNode": "物品被完全消耗、丢弃或摧毁时删除。\nSQL示例: DELETE FROM inventory WHERE item_name = '已消耗物品';\nSQL示例(批量): DELETE FROM inventory WHERE quantity <= 0;",
+      "updateNode": "获得已有的物品，使其数量增加时更新，已有物品状态变化时更新。\nSQL示例: UPDATE inventory SET quantity = quantity + 3 WHERE item_name = '治疗药水';\nSQL示例(多列): UPDATE inventory SET quantity = quantity - 1, description = '已损坏' WHERE item_name = '铁剑';",
+      "insertNode": "主角获得背包中没有的全新物品时添加。\nSQL示例: INSERT INTO inventory (item_name, quantity, description, category) VALUES ('新物品', 1, '物品描述', '杂物');",
+      "ddl": "CREATE TABLE inventory ( -- 背包物品表\n  row_id INTEGER PRIMARY KEY, -- 行号\n  item_name TEXT, -- 物品名称\n  quantity TEXT, -- 数量\n  description TEXT, -- 描述/效果\n  category TEXT -- 类别\n);"
+    },
+    "content": [
+      [
+        "row_id",
+        "物品名称",
+        "数量",
+        "描述/效果",
+        "类别"
+      ]
+    ],
+    "updateConfig": {
+      "uiSentinel": -1,
+      "contextDepth": -1,
+      "updateFrequency": -1,
+      "batchSize": -1,
+      "skipFloors": -1
+    },
+    "exportConfig": {
+      "enabled": false,
+      "splitByRow": false,
+      "entryName": "背包物品表",
+      "entryType": "constant",
+      "keywords": "",
+      "preventRecursion": true,
+      "injectionTemplate": "",
+      "extraIndexEnabled": false,
+      "extraIndexEntryName": "背包物品表-索引",
+      "extraIndexColumns": [],
+      "extraIndexColumnModes": {},
+      "extraIndexInjectionTemplate": "",
+      "entryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 10000
+      },
+      "extraIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 10010
+      },
+      "fixedEntryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 99990
+      },
+      "fixedIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 99991
+      }
+    },
+    "orderNo": 4
+  },
+  "sheet_etak47Ve": {
+    "uid": "sheet_etak47Ve",
+    "name": "任务与事件表",
+    "sourceData": {
+      "note": "记录所有当前正在进行的任务。\n- 列1: 任务名称 - 任务的标题。\n- 列2: 任务类型 - “主线任务”或“支线任务”。\n- 列3: 发布者 - 发布该任务的角色或势力。\n- 列4: 详细描述 - 任务的目标和要求。\n- 列5: 当前进度 - 对任务完成度的简要描述。\n- 列6: 任务时限 - 完成任务的剩余时间。\n- 列7: 奖励 - 完成任务可获得的奖励。\n- 列8: 惩罚 - 任务失败的后果。\n\n【线索主线附加规则·剧情注入器】\n- 从本批正文找主角已经接下的委托、已触发的差事，或主角明确立下的目标；当面交谈、书信和已经发生的行动都可以作依据。本批没有，就不新增。\n- 设定里写了、但正文还没有出现的目标、真相和幕后人物，不写进任何一列。主线剧情由剧情注入器按进度提供，不要预写主线任务。\n- 详细描述记已知的要求及其来源；当前进度只写实际完成的步骤。期限、奖励、后果只有正文明确时才填。完成、失败、过期沿用本表原有规则。\n【附加规则结束】",
+      "initNode": "游戏初始化时，只记录开场正文里主角已经接下的委托或明确立下的目标；没有就不添加。不要根据设定预写主线任务。",
+      "deleteNode": "任务完成、失败或过期时删除。\nSQL示例: DELETE FROM quests_events WHERE quest_name = '已完成的任务';",
+      "updateNode": "任务取得关键进展时进行更新。\nSQL示例: UPDATE quests_events SET current_progress = '已完成第一阶段', time_limit = '剩余3天' WHERE quest_name = '拯救公主';",
+      "insertNode": "主角接取或触发新的主线或支线任务时添加。\nSQL示例: INSERT INTO quests_events (quest_name, quest_type, issuer, detail_desc, current_progress, time_limit, reward, penalty) VALUES ('新任务', '支线任务', '村长', '任务描述', '刚接取', '7天', '金币100', '声望降低');",
+      "ddl": "CREATE TABLE quests_events ( -- 任务与事件表\n  row_id INTEGER PRIMARY KEY, -- 行号\n  quest_name TEXT, -- 任务名称\n  quest_type TEXT, -- 任务类型\n  issuer TEXT, -- 发布者\n  detail_desc TEXT, -- 详细描述\n  current_progress TEXT, -- 当前进度\n  time_limit TEXT, -- 任务时限\n  reward TEXT, -- 奖励\n  penalty TEXT -- 惩罚\n);"
+    },
+    "content": [
+      [
+        "row_id",
+        "任务名称",
+        "任务类型",
+        "发布者",
+        "详细描述",
+        "当前进度",
+        "任务时限",
+        "奖励",
+        "惩罚"
+      ]
+    ],
+    "updateConfig": {
+      "uiSentinel": -1,
+      "contextDepth": -1,
+      "updateFrequency": -1,
+      "batchSize": -1,
+      "skipFloors": -1
+    },
+    "exportConfig": {
+      "enabled": false,
+      "splitByRow": false,
+      "entryName": "任务与事件表",
+      "entryType": "constant",
+      "keywords": "",
+      "preventRecursion": true,
+      "injectionTemplate": "",
+      "extraIndexEnabled": false,
+      "extraIndexEntryName": "任务与事件表-索引",
+      "extraIndexColumns": [],
+      "extraIndexColumnModes": {},
+      "extraIndexInjectionTemplate": "",
+      "entryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 10000
+      },
+      "extraIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 10010
+      },
+      "fixedEntryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 99990
+      },
+      "fixedIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 99991
+      }
+    },
+    "orderNo": 5
+  },
+  "sheet_3NoMc1wI": {
+    "uid": "sheet_3NoMc1wI",
+    "name": "纪要表",
+    "sourceData": {
+      "note": "轮次日志。每轮交互结束后立刻插入一条新记录。\n\n【列定义】\n- 列1: 编码索引 code_index（AM0001起递增，全表唯一）\n- 列2: 时间跨度 time_span\n- 列3: 概览 summary（≤30字）\n- 列4: 纪要 chronicle_text（240-480字）\n- 列5: 重要对话 key_dialogue（可NULL）\n\n【强制约束】\n1.编码索引格式 AMXXXX，从0001开始递增。\n2.时间跨度格式为 \"YYYY-MM-DD HH:MM ~ YYYY-MM-DD HH:MM\"，覆盖本轮事件的实际时间范围。\n3.概览一句话概括本轮纪要内容，≤30字。\n\n4.纪要规范：\n- 以第三方视角中立客观记录正文发生的一切，移除所有修辞与对话。不滥用环境描写、不进行动作细节分析、不加评论，不抒情，不升华。\n- 用词直白生活化，避免正式措辞（如“达成协议”“确立计划”）。\n- 结尾必须开放，在事件自然流动中结束，不得归纳状态或做出封闭式收束。\n违例：故事仍在继续 / 新的篇章开启 / 二人关系迈入新阶段 / 未来等待着他们。\n- 多轮交互整合为一条记录。\n- 禁止内容：极端情绪（崩溃、狂喜、绝望等）、夸张、比喻、升华、情绪总结、支配欲、掌控欲、总结性收尾。\n\n5.重要对话仅摘录直接推动剧情转折、揭示关键信息、改变人物关系/决策或构成承诺/誓约/约定的原文台词，标明说话人。排除寒暄、重复、情绪感叹。通常3句，最多5句，总token不超过150。",
+      "initNode": "故事初始化时，插入一条新记录用于记录剧情。",
+      "deleteNode": "禁止。",
+      "updateNode": "禁止。",
+      "insertNode": "每轮交互结束后插入一条新记录。\n\n【强制约束】\ncode_index、time_span、summary、chronicle_text 均 NOT NULL，不可写 NULL 或空串。\ntime_span 格式必须为 YYYY-MM-DD HH:MM ~ YYYY-MM-DD HH:MM。\ncode_index 格式必须为 AM0001 这种四位编号，且全表唯一。\n\nSQL示例：INSERT INTO chronicle (code_index, time_span, summary, chronicle_text, key_dialogue) VALUES ('AM0036', '2026-02-04 08:00 ~ 2026-02-04 08:30', '一句话概括', '本轮纪要内容...', NULL);",
+      "ddl": "CREATE TABLE chronicle ( -- 纪要表\n  row_id INTEGER PRIMARY KEY, -- 行号\n  code_index TEXT, -- 编码索引\n  time_span TEXT, -- 时间跨度\n  summary TEXT, -- 概览\n  chronicle_text TEXT, -- 纪要\n  key_dialogue TEXT -- 重要对话\n);"
+    },
+    "content": [
+      [
+        "row_id",
+        "编码索引",
+        "时间跨度",
+        "概览",
+        "纪要",
+        "重要对话"
+      ]
+    ],
+    "updateConfig": {
+      "uiSentinel": -1,
+      "contextDepth": -1,
+      "updateFrequency": -1,
+      "batchSize": -1,
+      "skipFloors": -1,
+      "groupId": -1
+    },
+    "exportConfig": {
+      "enabled": true,
+      "splitByRow": true,
+      "entryName": "纪要",
+      "entryType": "keyword",
+      "keywords": "编码索引",
+      "preventRecursion": true,
+      "injectionTemplate": "<记忆回溯>\n$1\n</记忆回溯>",
+      "extraIndexEnabled": true,
+      "extraIndexEntryName": "纪要索引",
+      "extraIndexColumns": [
+        "编码索引",
+        "时间跨度",
+        "概览"
+      ],
+      "extraIndexColumnModes": {
+        "编码索引": "both",
+        "时间跨度": "both",
+        "概览": "index_only"
+      },
+      "extraIndexInjectionTemplate": "<已发生的事件概览>\n$1\n</已发生的事件概览>",
+      "entryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 999,
+        "order": 10000
+      },
+      "extraIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 1000,
+        "order": 10010
+      },
+      "fixedEntryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 9999,
+        "order": 99987
+      },
+      "fixedIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 9999,
+        "order": 99988
+      }
+    },
+    "orderNo": 6
+  },
+  "sheet_OptionsNew": {
+    "uid": "sheet_OptionsNew",
+    "name": "选项表",
+    "sourceData": {
+      "note": "记录每轮主角可以进行的动作选项。此表有且仅有一行。\n- 列1: 选项一 – 以第三人称描述主角可采取的合理行动，偏向策略或推进剧情。\n- 列2: 选项二 – 以第三人称描述主角可采取的中立行动，不偏向任何立场。\n- 列3: 选项三 – 以第三人称描述主角可采取的善意行动，体现帮助、保护或安抚。\n- 列4: 选项四 – 以第三人称描述主角可采取的 NSFW 相关行动，但必须符合剧情逻辑，不得代替主角说话。\n所有选项必须使用第三人称（如“主角尝试…”，“主角决定…”），不得代替主角发言；必须紧扣当前剧情；四个选项需风格明确、互不重复。\n\n【线索主线附加规则·剧情注入器】\n- 四个选项写主角基于此刻所见、所闻或已有记忆，下一步可以尝试的行动。保留本表原有的第三人称和四类选项的要求。\n- 允许提问、闲聊、暂时离开和继续日常。写「去档案室查有没有签收记录」这样的尝试，结果留给正文；即使知道某个地点，也不能预写那里一定有某项证据。\n- 不要提出主角在正文里还没听说过的地点、人物或真相。生成选项不会更新任务、事实或人物知情。\n【附加规则结束】",
+      "initNode": "游戏初始化时，生成四个初始选项。",
+      "deleteNode": "禁止删除。",
+      "updateNode": "每轮交互后必须更新此表，根据当前剧情生成新的四个选项覆盖原有内容。\nSQL示例: UPDATE options SET option_1 = '新选项一', option_2 = '新选项二', option_3 = '新选项三', option_4 = '新选项四' WHERE row_id = 1;",
+      "insertNode": "禁止操作。",
+      "ddl": "CREATE TABLE options ( -- 选项表\n  row_id INTEGER PRIMARY KEY, -- 行号\n  option_1 TEXT, -- 选项一\n  option_2 TEXT, -- 选项二\n  option_3 TEXT, -- 选项三\n  option_4 TEXT -- 选项四\n);"
+    },
+    "content": [
+      [
+        "row_id",
+        "选项一",
+        "选项二",
+        "选项三",
+        "选项四"
+      ]
+    ],
+    "updateConfig": {
+      "uiSentinel": -1,
+      "contextDepth": -1,
+      "updateFrequency": -1,
+      "batchSize": -1,
+      "skipFloors": -1
+    },
+    "exportConfig": {
+      "enabled": false,
+      "splitByRow": false,
+      "entryName": "选项表",
+      "entryType": "constant",
+      "keywords": "",
+      "preventRecursion": true,
+      "injectionTemplate": "",
+      "extraIndexEnabled": false,
+      "extraIndexEntryName": "选项表-索引",
+      "extraIndexColumns": [],
+      "extraIndexColumnModes": {},
+      "extraIndexInjectionTemplate": "",
+      "entryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 10000
+      },
+      "extraIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 10010
+      },
+      "fixedEntryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 99990
+      },
+      "fixedIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 99991
+      },
+      "injectIntoWorldbook": false
+    },
+    "orderNo": 7
+  },
+  "mate": {
+    "type": "chatSheets",
+    "version": 1,
+    "updateConfigUiSentinel": -1,
+    "globalInjectionConfig": {
+      "readableEntryPlacement": {
+        "position": "before_char",
+        "depth": 2,
+        "order": 99981
+      },
+      "wrapperPlacement": {
+        "position": "before_char",
+        "depth": 2,
+        "order": 99980
+      }
+    }
+  },
+  "sheet_ClueCtrl01": {
+    "uid": "sheet_ClueCtrl01",
+    "name": "线索控制表",
+    "sourceData": {
+      "note": "主线当前所在的场景。此表有且仅有一行，「标识」固定为「主线」。\n- 标识：固定写「主线」，不要修改。\n- 当前场景：以本批最后一楼结束时主角的位置和行动为准。\n    · 主角实际到达并开始做某件事：照抄下面【场景编号对照】里列出的编号。对照只用于对号，不表示那件事已经开放或已经发生。\n    · 主角明确离开调查、转去做无关的事：写「离场」。\n    · 只是提议、约定、打算，或者正文没写转场：保持原值。\n    · 看到、记下、指给别人看、路过、远远听见，都不算开始做那件事：保持原值。\n      例：主角在街上路过邮局、说「回头再来」，然后继续往车站走 → 当前场景保持原来的编号，不改成邮局。\n    · 同一楼里换了几个地方：以最后实际在做的那件事为准。\n    · 不得自造编号；对照里没有的场景不要写。\n【依据规则】只按 AI 回复（正文）里实际发生的事填写。用户消息里出现的计划、提议、打算、「准备去做」「预计会发现」都不算发生。\n    反例：用户消息写「去后屋找账本，会找到被撕掉的那页」，正文写主角翻了几本旧账、什么也没找到就离开了 → 不记录任何发现，状态保持原值。\n    拿不准正文有没有写出某项结果、某个角色有没有得知时，保持原值：宁可晚一批登记，不要提前登记。",
+      "initNode": "已有「主线」行就沿用，不要再插入。只有表里没有任何行时才插入一行：标识=主线，当前场景留空。",
+      "deleteNode": "禁止删除。",
+      "updateNode": "按列说明更新。例：主角走进裁缝铺开始问话 → 当前场景改为对照里裁缝铺对应的编号；主角说「先回家睡觉」并离开 → 当前场景改为「离场」。\nSQL示例: UPDATE clue_control SET cur_scene = '<场景编号>' WHERE tag = '主线';",
+      "insertNode": "禁止插入（只有一行）。",
+      "ddl": "CREATE TABLE clue_control ( -- 线索控制表\n  row_id INTEGER PRIMARY KEY, -- 行号\n  tag TEXT NOT NULL UNIQUE, -- 标识\n  cur_scene TEXT -- 当前场景\n);"
+    },
+    "content": [
+      [
+        "row_id",
+        "标识",
+        "当前场景"
+      ],
+      [
+        null,
+        "主线",
+        ""
+      ]
+    ],
+    "updateConfig": {
+      "uiSentinel": -1,
+      "contextDepth": -1,
+      "updateFrequency": 1,
+      "batchSize": -1,
+      "skipFloors": 0,
+      "groupId": 0
+    },
+    "exportConfig": {
+      "enabled": false,
+      "splitByRow": false,
+      "entryName": "线索控制表",
+      "entryType": "constant",
+      "keywords": "",
+      "preventRecursion": true,
+      "injectionTemplate": "",
+      "extraIndexEnabled": false,
+      "extraIndexEntryName": "线索控制表-索引",
+      "extraIndexColumns": [],
+      "extraIndexColumnModes": {},
+      "extraIndexInjectionTemplate": "",
+      "entryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 10000
+      },
+      "extraIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 10010
+      },
+      "fixedEntryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 99990
+      },
+      "fixedIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 99991
+      },
+      "injectIntoWorldbook": false
+    },
+    "orderNo": 8
+  },
+  "sheet_ClueFact01": {
+    "uid": "sheet_ClueFact01",
+    "name": "关键事实表",
+    "sourceData": {
+      "note": "剧情需要追踪的关键发现。每行一条，由卡作者预先建好；填表时只改「状态」「内容」「依据」，不新增、不删除，不改「编号」「标签」「登记口径」。\n- 编号：事实编号，不要修改。\n- 标签：中性的简短名称，不要修改，也不要据此推断答案。\n- 登记口径：正文里出现什么才算取得这一项（不含答案）。不要修改。\n- 状态：只能是 未获得 / 已核实 / 存疑。\n    · 已核实：正文里主角实际取得了这项结果，而且有可靠依据（亲眼看到实物、读到原件、得到明确验证）。\n    · 存疑：正文里确实出现了这项内容，但来源只是某人的说法、传闻或推测，还没有可靠依据。「内容」要写明是谁说的。拿不准正文有没有写出这项内容时不要记为存疑，保持原值。\n    · 未获得：其余情况。到达地点、尝试调查、对方答应提供、中途离开，都仍是未获得。\n- 内容：一句话写出正文里实际出现的内容，只写正文写出来的部分，不补充正文没有的细节。例：只承认拿了钱、没说原因，就只写拿了钱。\n- 依据：写明正文哪一楼、哪个情节。\n怎么找编号：\n    · 首次获得：按各行的「登记口径」判断正文写出的结果对应哪个编号、是否已经取得。附有【线索编号对照】时也可以参考。口径和对照都只用于对号，不代表已经发生。\n    · 维护已有记录：已经是已核实或存疑的行，正文出现新证据推翻或证实它时，可以按这一行已有的「内容」匹配并更新。无法确定是哪一行时保持原值。\n    · 已有记录又出现佐证（不推翻、也不改变状态）：「内容」保持不变；只有带来新信息时，才在「依据」原文后面追加「；后续：<楼层 新情节>」。没有新信息、或同一楼的情节已经追加过，就不改。不要用新情节覆盖第一次取得时的内容和依据。\n      例：之前已核实「第一次签收的回执」，这一楼主角在另一份收据上看到同样的签名 → 内容不变，依据追加「；后续：第<N>楼 另一份收据上的签名相同」。\n    · 正文没写出对应结果时，不要改任何行。\n【依据规则】只按 AI 回复（正文）里实际发生的事填写。用户消息里出现的计划、提议、打算、「准备去做」「预计会发现」都不算发生。\n    反例：用户消息写「去后屋找账本，会找到被撕掉的那页」，正文写主角翻了几本旧账、什么也没找到就离开了 → 不记录任何发现，状态保持原值。\n    拿不准正文有没有写出某项结果、某个角色有没有得知时，保持原值：宁可晚一批登记，不要提前登记。",
+      "initNode": "保留模板里预先建好的行，不要清空、不要新增。",
+      "deleteNode": "禁止删除。",
+      "updateNode": "只有正文明确写出结果时，才把对应编号的状态改为已核实或存疑，并填写内容和依据。已核实的事实后来被正文推翻时改为存疑，在依据里写明新证据和楼层；存疑的说法后来得到可靠证实时改为已核实。\nSQL示例(首次登记说法): UPDATE clue_facts SET status = '存疑', content = '<谁>说<正文里的原意>', evidence = '第<N>楼 <情节>' WHERE code = '<编号>';\nSQL示例(纯佐证，只追加依据): UPDATE clue_facts SET evidence = evidence || '；后续：第<N>楼 <新情节>' WHERE code = '<编号>';\nSQL示例(原说法被推翻或证实): UPDATE clue_facts SET status = '<已核实或存疑>', evidence = evidence || '；第<N>楼 <新证据>' WHERE code = '<编号>';",
+      "insertNode": "禁止插入。只修改已有行。",
+      "ddl": "CREATE TABLE clue_facts ( -- 关键事实表\n  row_id INTEGER PRIMARY KEY, -- 行号\n  code TEXT NOT NULL UNIQUE, -- 编号\n  label TEXT NOT NULL, -- 标签\n  criterion TEXT, -- 登记口径\n  status TEXT NOT NULL DEFAULT '未获得' CHECK(status IN ('未获得', '已核实', '存疑')), -- 状态\n  content TEXT, -- 内容\n  evidence TEXT -- 依据\n);"
+    },
+    "content": [
+      [
+        "row_id",
+        "编号",
+        "标签",
+        "登记口径",
+        "状态",
+        "内容",
+        "依据"
+      ]
+    ],
+    "updateConfig": {
+      "uiSentinel": -1,
+      "contextDepth": -1,
+      "updateFrequency": 1,
+      "batchSize": -1,
+      "skipFloors": 0,
+      "groupId": 0
+    },
+    "exportConfig": {
+      "enabled": false,
+      "splitByRow": false,
+      "entryName": "关键事实表",
+      "entryType": "constant",
+      "keywords": "",
+      "preventRecursion": true,
+      "injectionTemplate": "",
+      "extraIndexEnabled": false,
+      "extraIndexEntryName": "关键事实表-索引",
+      "extraIndexColumns": [],
+      "extraIndexColumnModes": {},
+      "extraIndexInjectionTemplate": "",
+      "entryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 10000
+      },
+      "extraIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 10010
+      },
+      "fixedEntryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 99990
+      },
+      "fixedIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 99991
+      },
+      "injectIntoWorldbook": false
+    },
+    "orderNo": 9
+  },
+  "sheet_ClueKnow01": {
+    "uid": "sheet_ClueKnow01",
+    "name": "知情表",
+    "sourceData": {
+      "note": "关键角色是否知道某条关键事实。每行是「一条事实 × 一个角色」，由卡作者预先建好；填表时只改「获知方式」「可信度」「依据」，不新增、不删除行。\n- 键 / 事实 / 角色：不要修改。主角按模板已有写法（如 user）。\n- 获知方式：只能是 未知 / 亲见 / 被告知 / 听说 / 推测。逐个角色判断：\n    · 亲见：这个角色自己看清了实物或原件内容。\n    · 被告知：有人明确把这件事告诉了这个角色本人，或者展示给他看。\n    · 听说：这个角色听到了转述、传闻。\n    · 推测：这个角色自己提出了猜想或怀疑，手里还没有证据。\n      这个角色亲眼看了实物或原件、再据此得出的判断（如读了单据后判断证词对不上），记为「亲见」，不是推测。推测不配「已核实」。\n    · 未知：其余情况。【在场不等于知道】：只是在场、没听清、别人私下得知时他在附近，都保持原值，除非正文写出他看到或听到了内容。\n- 可信度：只能是 已核实 / 未核实。跟着这个角色手里的证据走：亲见通常是已核实；被告知、听说、推测通常是未核实，除非正文写出他确认了真假。\n- 依据：写明正文哪一楼、哪个情节。\n【先看事实表】某条事实在关键事实表里仍是「未获得」、本次也没有把它登记成已核实或存疑时，它的知情行全部保持原值。\n    知情的对象是关键事实表里那一行的「登记口径」所说的结果，不是标签字面上的东西。\n    例：口径是「在抽屉里找到那封信并读到内容」，正文只写主角看见了上锁的抽屉、没打开 → 事实表保持未获得，知情行也保持未知。\n获知方式只升级、不降级：已经是亲见的，不因旁人又提起改成听说。出现反证时，可以更新可信度和依据，但保留原来是怎么得知的。\n已有记录的「依据」不要覆盖：再次见到或听到时，在原文后面追加「；后续：<新情节>」。\n【依据规则】只按 AI 回复（正文）里实际发生的事填写。用户消息里出现的计划、提议、打算、「准备去做」「预计会发现」都不算发生。\n    反例：用户消息写「去后屋找账本，会找到被撕掉的那页」，正文写主角翻了几本旧账、什么也没找到就离开了 → 不记录任何发现，状态保持原值。\n    拿不准正文有没有写出某项结果、某个角色有没有得知时，保持原值：宁可晚一批登记，不要提前登记。",
+      "initNode": "保留模板里预先建好的行，不要清空、不要新增。",
+      "deleteNode": "禁止删除。",
+      "updateNode": "只有正文明确写出某个角色看到、被告知、听到、猜到某条事实时，才更新对应行。例：老人当面对主角说看见了人 → 主角那一行改为「被告知 / 未核实」；老板娘当时不在场 → 她那一行保持原值。\nSQL示例: UPDATE clue_knowledge SET way = '被告知', credibility = '未核实', evidence = '第<N>楼 <情节>' WHERE key = '<事实编号>@<角色>';",
+      "insertNode": "禁止插入。只修改已有行。",
+      "ddl": "CREATE TABLE clue_knowledge ( -- 知情表\n  row_id INTEGER PRIMARY KEY, -- 行号\n  key TEXT NOT NULL UNIQUE, -- 键\n  fact TEXT NOT NULL, -- 事实\n  actor TEXT NOT NULL, -- 角色\n  way TEXT NOT NULL DEFAULT '未知' CHECK(way IN ('未知', '亲见', '被告知', '听说', '推测')), -- 获知方式\n  credibility TEXT NOT NULL DEFAULT '未核实' CHECK(credibility IN ('已核实', '未核实')), -- 可信度\n  evidence TEXT -- 依据\n);"
+    },
+    "content": [
+      [
+        "row_id",
+        "键",
+        "事实",
+        "角色",
+        "获知方式",
+        "可信度",
+        "依据"
+      ]
+    ],
+    "updateConfig": {
+      "uiSentinel": -1,
+      "contextDepth": -1,
+      "updateFrequency": 1,
+      "batchSize": -1,
+      "skipFloors": 0,
+      "groupId": 0
+    },
+    "exportConfig": {
+      "enabled": false,
+      "splitByRow": false,
+      "entryName": "知情表",
+      "entryType": "constant",
+      "keywords": "",
+      "preventRecursion": true,
+      "injectionTemplate": "",
+      "extraIndexEnabled": false,
+      "extraIndexEntryName": "知情表-索引",
+      "extraIndexColumns": [],
+      "extraIndexColumnModes": {},
+      "extraIndexInjectionTemplate": "",
+      "entryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 10000
+      },
+      "extraIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 10010
+      },
+      "fixedEntryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 99990
+      },
+      "fixedIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 99991
+      },
+      "injectIntoWorldbook": false
+    },
+    "orderNo": 10
+  }
+}

@@ -1,4 +1,13 @@
-import { changeLines, filterStageData, flattenUnits, splitStageKey, splitVolumeKey, stageLabel, stageNodes, volumeLabel } from './outline.js';
+import {
+    changeLines,
+    filterStageData,
+    flattenUnits,
+    splitStageKey,
+    splitVolumeKey,
+    stageLabel,
+    stageNodes,
+    volumeLabel,
+} from './outline.js';
 import { INFINITE_SLOT } from './infinite.js';
 import { buildInfiniteDetail, emptyInfinite } from './infinite-flow.js';
 import { NO_LINKS, outlineLinks } from './align.js';
@@ -35,10 +44,10 @@ export const OLD_DEFAULT_PARAMS = {
 };
 
 export function positionLabel(entry) {
-    const pos = POSITIONS.find(item => item.value === Number(entry.position));
+    const pos = POSITIONS.find((item) => item.value === Number(entry.position));
     if (!pos) return '?';
     if (pos.value !== 4) return pos.short;
-    const role = ROLES.find(item => item.value === Number(entry.role));
+    const role = ROLES.find((item) => item.value === Number(entry.role));
     return `@D${Number(entry.depth) || 0}${role && role.value ? `·${role.label}` : ''}`;
 }
 
@@ -62,7 +71,9 @@ function stagePlace(unit) {
 
 function nodeNames(unit, off) {
     const hidden = new Set(off);
-    return stageNodes(unit.stage.data).filter(node => node.kind === 'main' && !hidden.has(node.id)).map(node => node.name);
+    return stageNodes(unit.stage.data)
+        .filter((node) => node.kind === 'main' && !hidden.has(node.id))
+        .map((node) => node.name);
 }
 
 function rangeOf(unit) {
@@ -82,14 +93,16 @@ function nodeLine(node, mark) {
 // links：大纲对照表（core/align.js），已演标记、钟、钩子按名称与改名链对回当前节点。
 export function buildIndexText(units, states, progress, { carryOver = true, hookCap, links = NO_LINKS } = {}) {
     const lines = [];
-    const done = units.filter(unit => states[unit.id] === 'done');
-    const active = units.filter(unit => states[unit.id] === 'active');
-    const next = units.filter(unit => states[unit.id] === 'next');
-    const later = units.filter(unit => states[unit.id] === 'todo');
+    const done = units.filter((unit) => states[unit.id] === 'done');
+    const active = units.filter((unit) => states[unit.id] === 'active');
+    const next = units.filter((unit) => states[unit.id] === 'next');
+    const later = units.filter((unit) => states[unit.id] === 'todo');
     if (done.length) {
         lines.push('【已过】');
         for (const unit of done) {
-            const names = stageNodes(unit.stage.data).filter(node => node.kind === 'main').map(node => node.name);
+            const names = stageNodes(unit.stage.data)
+                .filter((node) => node.kind === 'main')
+                .map((node) => node.name);
             lines.push(`- ${stagePlace(unit)}${names.length ? `（${names.join('／')}）` : ''}`);
         }
     }
@@ -97,8 +110,11 @@ export function buildIndexText(units, states, progress, { carryOver = true, hook
         const off = new Set(offNodes(progress, unit, links));
         const range = rangeOf(unit);
         lines.push('【当前】', `- ${stagePlace(unit)}${range ? `｜时间范围：${range}` : ''}`);
-        for (const node of stageNodes(unit.stage.data).filter(item => item.kind !== 'world' && !isThreadNode(item))) lines.push(nodeLine(node, off.has(node.id) ? '已演' : '未演'));
-        if (carryOver) for (const { node } of carriedNodes(units, states, progress, { links })) if (node.kind !== 'world') lines.push(nodeLine(node, '未演·延续'));
+        for (const node of stageNodes(unit.stage.data).filter((item) => item.kind !== 'world' && !isThreadNode(item)))
+            lines.push(nodeLine(node, off.has(node.id) ? '已演' : '未演'));
+        if (carryOver)
+            for (const { node } of carriedNodes(units, states, progress, { links }))
+                if (node.kind !== 'world') lines.push(nodeLine(node, '未演·延续'));
     }
     if (active.length) lines.push(...threadIndexLines(liveThreads(units, states, progress, { carryOver, hookCap, links })));
     for (const unit of next) {
@@ -106,7 +122,7 @@ export function buildIndexText(units, states, progress, { carryOver = true, hook
         const instr = unit.stage.data && unit.stage.data.AI指令;
         lines.push('【下一段】', `- ${stagePlace(unit)}${range ? `｜时间范围：${range}` : ''}`);
         if (instr) lines.push(`  AI指令：${String(instr).trim()}`);
-        for (const node of stageNodes(unit.stage.data).filter(item => item.kind === 'main')) lines.push(nodeLine(node, ''));
+        for (const node of stageNodes(unit.stage.data).filter((item) => item.kind === 'main')) lines.push(nodeLine(node, ''));
     }
     if (later.length) {
         lines.push('【之后】');
@@ -154,78 +170,117 @@ function carriedText(carried) {
     if (!carried.length) return '';
     const lines = carried.map(({ unit, node }) => {
         const item = node.item && typeof node.item === 'object' ? node.item : {};
-        const parts = [item.地点, item.事件 || item.内容, item.触发 ? `触发：${item.触发}` : ''].filter(Boolean).map(value => String(value).trim());
+        const parts = [item.地点, item.事件 || item.内容, item.触发 ? `触发：${item.触发}` : '']
+            .filter(Boolean)
+            .map((value) => String(value).trim());
         return `- ${node.label}｜${node.name}（来自${splitStageKey(unit.stage.key).short}）${parts.length ? `：${parts.join('；')}` : ''}`;
     });
     return `\n延续自前面阶段、尚未发生的支线与世界动态（可在合适时机自然安排，不必强行发生）：\n${lines.join('\n')}`;
 }
 
 // next：下一阶段，快速时写在说明末尾，让正文知道往哪里收。threads：钩子与进度钟的注入文字，带新键的节点不再原样写进阶段 YAML。
-export function buildDetailText(unit, off, settings, { pace = 'normal', next = null, carried = [], threads = '' } = {}) {
-    const tag = String(settings.tagName || '剧情参考').trim() || '剧情参考';
-    const data = filterStageData(unit.stage.data, [...off, ...stageNodes(unit.stage.data).filter(isThreadNode).map(node => node.id)]);
-    const body = stringifyYaml({ [unit.stage.key]: data }).trimEnd();
-    const vol = splitVolumeKey(unit.volume.key).short;
+export function buildDetailText(unit, off, settings, { pace = 'normal', next = null, carried = [], threads = '', withGuide = true } = {}) {
+    const tag = String(settings.tagName || '剧情参考').trim() || '剧情参考',
+        data = filterStageData(unit.stage.data, [
+            ...off,
+            ...stageNodes(unit.stage.data)
+                .filter(isThreadNode)
+                .map((node) => node.id),
+        ]),
+        body = stringifyYaml({ [unit.stage.key]: data }).trimEnd(),
+        vol = splitVolumeKey(unit.volume.key).short;
     let note = paceText(settings, pace);
     if (pace === 'fast' && next) {
         const range = rangeOf(next);
-        note += `\n下一阶段：${stagePlace(next)}${range ? `（${range}）` : ''}`;
+        note += `
+下一阶段：${stagePlace(next)}${range ? `（${range}）` : ''}`;
     }
-    return `<${tag} 卷="${vol}" 阶段="${unit.stage.key}">\n${note}\n${body}${carriedText(carried)}${threads}\n</${tag}>`;
+    let guide = withGuide ? bodyGuideText(settings) : '';
+    return `<${tag} 卷="${vol}" 阶段="${unit.stage.key}">
+${
+    guide
+        ? `${guide}
+
+`
+        : ''
+}${note}
+${body}${carriedText(carried)}${threads}
+</${tag}>`;
 }
 
 // 已演完阶段的状态变化，接在设定后面注入；live 给出时再接上已发生的世界动态后果与错过支线的后果。
 export function changesText(units, states, live = null) {
-    const lines = units.filter(unit => states[unit.id] === 'done')
-        .flatMap(unit => changeLines(unit.stage.data).map(text => `- ${text}（${stagePlace(unit)}）`))
+    const lines = units
+        .filter((unit) => states[unit.id] === 'done')
+        .flatMap((unit) => changeLines(unit.stage.data).map((text) => `- ${text}（${stagePlace(unit)}）`))
         .concat(threadChangeLines(live));
     return lines.length ? `已演完的剧情带来的变化（设定里对应的开局状态以这里为准）：\n${lines.join('\n')}` : '';
 }
 
 // 执行页与注入共用：返回本轮要注入的条目（含停用的，UI 需要显示），注入时只取 enabled。
 export function buildEntries(project, progress, settings) {
-    const defaults = { ...DEFAULT_PARAMS, ...(project && project.defaults) };
-    const entries = [];
+    const defaults = { ...DEFAULT_PARAMS, ...(project && project.defaults) },
+        entries = [];
     if (!project) return entries;
-    const infinite = project.mode === 'infinite';
-    const allUnits = infinite ? [] : flattenUnits(project.outline && project.outline.volumes);
-    const units = maskUnits(allUnits, threadSwitches(project));
-    const links = infinite ? NO_LINKS : outlineLinks(project.outline, allUnits);
-    const states = unitStates(units, progress, links);
-    const threadOpts = { carryOver: settings.carryOver !== false, hookCap: settings.hookCap, links };
-    const live = infinite ? null : liveThreads(units, states, progress, threadOpts);
-    // 关掉支线或世界动态后，已经发生的后果仍是既成事实，按完整大纲取。
-    const done = infinite || units === allUnits ? live : liveThreads(allUnits, states, progress, threadOpts);
-    const settingText = [injectedSetting(project.setting), changesText(units, states, done)].filter(Boolean).join('\n\n');
-    if (settingText) {
-        entries.push({
-            slotId: SETTING_SLOT, kind: 'setting', title: '设定',
-            content: settingText, ...pickParams(defaults.setting, progress.slots[SETTING_SLOT]),
-        });
-    }
-    if (infinite) {
+    const infinite = project.mode === 'infinite',
+        allUnits = infinite ? [] : flattenUnits(project.outline && project.outline.volumes),
+        units = maskUnits(allUnits, threadSwitches(project)),
+        links = infinite ? NO_LINKS : outlineLinks(project.outline, allUnits),
+        states = unitStates(units, progress, links),
+        threadOpts = { carryOver: settings.carryOver !== !1, hookCap: settings.hookCap, links },
+        live = infinite ? null : liveThreads(units, states, progress, threadOpts),
+        done = infinite || units === allUnits ? live : liveThreads(allUnits, states, progress, threadOpts),
+        settingText = [injectedSetting(project.setting), changesText(units, states, done)].filter(Boolean).join(`
+
+`);
+    if (
+        (settingText &&
+            entries.push({
+                slotId: SETTING_SLOT,
+                kind: 'setting',
+                title: '设定',
+                content: settingText,
+                ...pickParams(defaults.setting, progress.slots[SETTING_SLOT]),
+            }),
+        infinite)
+    ) {
         const inf = progress.infinite || emptyInfinite();
-        entries.push({
-            slotId: INFINITE_SLOT, kind: 'detail', title: '无限流状态',
-            content: buildInfiniteDetail(inf, project.infinite && project.infinite.config), ...pickParams(defaults.detail, progress.slots[INFINITE_SLOT]),
-        });
-        return entries;
+        return (
+            entries.push({
+                slotId: INFINITE_SLOT,
+                kind: 'detail',
+                title: '无限流状态',
+                content: buildInfiniteDetail(inf, project.infinite && project.infinite.config),
+                ...pickParams(defaults.detail, progress.slots[INFINITE_SLOT]),
+            }),
+            entries
+        );
     }
     if (units.length) {
-        const next = units.find(unit => states[unit.id] === 'next') || null;
-        const carried = settings.carryOver === false ? [] : carriedNodes(units, states, progress, { links });
+        const next = units.find((unit) => states[unit.id] === 'next') || null,
+            carried = settings.carryOver === !1 ? [] : carriedNodes(units, states, progress, { links });
         let threads = threadsText(live);
+        let guided = false;
         for (const unit of units) {
             if (states[unit.id] !== 'active') continue;
-            const off = offNodes(progress, unit, links);
-            const params = pickParams(defaults.detail, progress.slots[unit.id]);
-            // 支线与进度钟的文字接在第一个启用的进行中阶段条目上；都停用时不注入。
-            const own = params.enabled ? threads : '';
-            entries.push({
-                slotId: unit.id, kind: 'detail', title: `${volumeLabel(unit.volume.key)}·${splitStageKey(unit.stage.key).short}`,
-                unit, content: buildDetailText(unit, off, settings, { pace: progress.pace, next, carried, threads: own }), ...params,
-            });
-            if (params.enabled) threads = '';
+            const off = offNodes(progress, unit, links),
+                params = pickParams(defaults.detail, progress.slots[unit.id]),
+                own = params.enabled ? threads : '';
+            (entries.push({
+                slotId: unit.id,
+                kind: 'detail',
+                title: `${volumeLabel(unit.volume.key)}·${splitStageKey(unit.stage.key).short}`,
+                unit,
+                content: buildDetailText(unit, off, settings, {
+                    pace: progress.pace,
+                    next,
+                    carried,
+                    threads: own,
+                    withGuide: !guided && params.enabled,
+                }),
+                ...params,
+            }),
+                params.enabled && ((threads = ''), (guided = true)));
         }
     }
     return entries;
@@ -283,3 +338,22 @@ export function toWorldInfoEntry(entry, index, world) {
         triggers: [],
     };
 }
+
+export const BODY_GUIDE = [
+    '<knowledge>',
+    '每个角色都按自己亲历、听说或有理由推断的事情行动。角色不知道的事，不会无缘无故去暗示、试探，也不会话里有话。角色可以起疑、猜错、隐瞒自己的心事；这些反应要能从他自己的经历、性格和眼前的处境里找到理由。有人说出一个猜测时，角色按自己掌握的信息回应。即使猜测碰巧说中，旁白也不替任何人确认。',
+    '</knowledge>',
+    '',
+    '<progression>',
+    '从人物眼前正在做的事接着写，让这一步自然产生的反应和结果发生。一次交谈可以只改变两个人之间的气氛，也可以因为一句话说开，当场改变关系。事情已经有了结果，就让结果落地；下一步需要用户表态或选择时，把那一步留给用户。',
+    '如果用户的选择或人物已经做出的行动改变了原定情节，就沿着实际发生的变化继续写。原先安排的一幕可以换个时机、换种方式，也可以就此错过。',
+    '</progression>',
+].join('\n');
+
+export function bodyGuideText(settings) {
+    if (settings && settings.bodyGuide === !1) return '';
+    let custom = settings && String(settings.bodyGuideText || '').trim();
+    return custom || BODY_GUIDE;
+}
+
+export { pickParams };

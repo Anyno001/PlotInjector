@@ -1,3 +1,5 @@
+import { createTour, tourState, tourScopeOf, TOUR_REVISION } from './tour.js';
+
 import { normalizeInfinite } from '../core/infinite.js';
 import { groupProjects } from '../core/store.js';
 import { cardKey, cardName, hostDocument, hostWindow, toast } from '../host/st.js';
@@ -33,17 +35,25 @@ const SEARCH_FROM = 6;
 const LONG_PRESS_MS = 500;
 
 function readUi() {
-    try { return JSON.parse(hostWindow().localStorage.getItem(UI_KEY) || '{}') || {}; } catch { return {}; }
+    try {
+        return JSON.parse(hostWindow().localStorage.getItem(UI_KEY) || '{}') || {};
+    } catch {
+        return {};
+    }
 }
 
 export function writeUi(patch) {
-    try { hostWindow().localStorage.setItem(UI_KEY, JSON.stringify({ ...readUi(), ...patch })); } catch { /* 存储不可用就不记 */ }
+    try {
+        hostWindow().localStorage.setItem(UI_KEY, JSON.stringify({ ...readUi(), ...patch }));
+    } catch {
+        /* 存储不可用就不记 */
+    }
 }
 
 export function createApp({ data, runtime, version }) {
     const doc = hostDocument();
-    let root = null;
-    let busyTimer = 0;
+    let root = null,
+        busyTimer = 0;
     setNight(readUi().night);
     const view = {
         data,
@@ -52,52 +62,56 @@ export function createApp({ data, runtime, version }) {
         projectId: '',
         tab: 'run',
         page: '',
-        drawer: false,
+        drawer: !1,
         search: '',
         collapsed: new Set(readUi().collapsed || []),
         state: {},
         busy: {},
         loadError: {},
-        restored: false,
+        restored: !1,
         render,
         renderBody,
         renderSide,
         project: () => (view.projectId ? data.project(view.projectId) : null),
         setBusy(key, value) {
-            view.busy = { ...view.busy, [key]: value };
-            hostWindow().clearTimeout(busyTimer);
-            busyTimer = hostWindow().setTimeout(renderBody, 0);
+            ((view.busy = { ...view.busy, [key]: value }),
+                hostWindow().clearTimeout(busyTimer),
+                (busyTimer = hostWindow().setTimeout(renderBody, 0)));
         },
         selectProject,
         go,
     };
-
     function tabState(key) {
-        if (!view.state[key]) view.state[key] = {};
-        return view.state[key];
+        return (view.state[key] || (view.state[key] = {}), view.state[key]);
     }
     view.tabState = tabState;
-
-    const isInfinite = () => Boolean(view.project() && view.project().mode === 'infinite');
-    const tabOf = tab => ({ ...tab, ...(isInfinite() ? INFINITE_TABS[tab.key] : null) });
-
+    const isInfinite = () => !!(view.project() && view.project().mode === 'infinite'),
+        tabOf = (tab) => ({ ...tab, ...(isInfinite() ? INFINITE_TABS[tab.key] : null) });
     function current() {
-        if (view.page) return PAGES[view.page].mod;
-        return tabOf(TABS.find(tab => tab.key === view.tab) || TABS[3]).mod;
+        return view.page ? PAGES[view.page].mod : tabOf(TABS.find((tab) => tab.key === view.tab) || TABS[3]).mod;
     }
-
     function sideHtml() {
-        const index = data.index();
-        const activeId = runtime.activeId();
-        const groups = groupProjects(index.projects);
-        const list = groups.map(group => {
-            const collapsed = view.collapsed.has(group.name);
-            const items = group.items.map(item => `<button type="button" class="pi-pitem${item.id === view.projectId && !view.page ? ' is-sel' : ''}" data-act="project" data-id="${esc(item.id)}" data-name="${esc(`${item.group} ${item.name}`.toLowerCase())}" title="长按或右键：设为当前、编辑">
-                <span class="pi-pname">${esc(item.name)}</span>${item.id === activeId ? '<span class="pi-dot" title="当前聊天使用"></span>' : ''}</button>`).join('');
-            const head = group.name ? `<button type="button" class="pi-group-hd" data-act="group" data-group="${esc(group.name)}">${collapsed ? ICONS.caret : ICONS.caretDown}${esc(group.name)}<small>${group.items.length}</small></button>` : '';
-            return `<div class="pi-group${collapsed ? ' is-collapsed' : ''}">${head}${items}</div>`;
-        }).join('');
-        const page = key => `<button type="button" class="pi-btn is-ghost is-block${view.page === key ? ' is-sel' : ''}" data-act="page" data-page="${key}">${ICONS[PAGES[key].icon]}${PAGES[key].label}</button>`;
+        const index = data.index(),
+            activeId = runtime.activeId(),
+            list = groupProjects(index.projects)
+                .map((group) => {
+                    const collapsed = view.collapsed.has(group.name),
+                        items = group.items
+                            .map(
+                                (
+                                    item,
+                                ) => `<button type="button" class="pi-pitem${item.id === view.projectId && !view.page ? ' is-sel' : ''}" data-act="project" data-id="${esc(item.id)}" data-name="${esc(`${item.group} ${item.name}`.toLowerCase())}" title="长按或右键：设为当前、编辑">
+                <span class="pi-pname">${esc(item.name)}</span>${item.id === activeId ? '<span class="pi-dot" title="当前聊天使用"></span>' : ''}</button>`,
+                            )
+                            .join(''),
+                        head = group.name
+                            ? `<button type="button" class="pi-group-hd" data-act="group" data-group="${esc(group.name)}">${collapsed ? ICONS.caret : ICONS.caretDown}${esc(group.name)}<small>${group.items.length}</small></button>`
+                            : '';
+                    return `<div class="pi-group${collapsed ? ' is-collapsed' : ''}">${head}${items}</div>`;
+                })
+                .join(''),
+            page = (key) =>
+                `<button type="button" class="pi-btn is-ghost is-block${view.page === key ? ' is-sel' : ''}" data-act="page" data-page="${key}">${ICONS[PAGES[key].icon]}${PAGES[key].label}</button>`;
         return `<div class="pi-side-hd">剧情注入器 <small>v${esc(version)}</small><span class="pi-spacer"></span><button type="button" class="pi-icon-btn" data-act="new-project" title="新项目">${ICONS.plus}</button></div>
             ${index.projects.length > SEARCH_FROM ? `<div class="pi-psearch">${ICONS.search}<input class="pi-inp" data-psearch placeholder="搜索项目" value="${esc(view.search)}"></div>` : ''}
             <div class="pi-plist">${list || '<p class="pi-hint">还没有项目</p>'}</div>
@@ -105,418 +119,431 @@ export function createApp({ data, runtime, version }) {
                 ${page('books')}${page('data')}${page('diag')}
             </div>`;
     }
-
-    // 搜索时无视分组折叠，只留名称或分组名匹配的项目。
     function applySearch() {
         const listBox = root && root.querySelector('.pi-plist');
         if (!listBox) return;
         const q = view.search.trim().toLowerCase();
-        listBox.classList.toggle('is-searching', Boolean(q));
+        listBox.classList.toggle('is-searching', !!q);
         for (const group of listBox.querySelectorAll('.pi-group')) {
             let shown = 0;
             for (const item of group.querySelectorAll('.pi-pitem')) {
                 const hit = !q || item.dataset.name.includes(q);
-                item.hidden = !hit;
-                if (hit) shown += 1;
+                ((item.hidden = !hit), hit && (shown += 1));
             }
-            group.hidden = Boolean(q) && !shown;
+            group.hidden = !!q && !shown;
         }
     }
-
     function topHtml() {
-        const project = view.project();
-        const title = view.page ? PAGES[view.page].label : project ? project.name : '剧情注入器';
-        const tabs = view.page || !project ? '' : `<div class="pi-tabs">${TABS.map(tabOf).map(tab => `<button type="button" class="pi-tab${tab.key === view.tab ? ' is-sel' : ''}" data-act="tab" data-tab="${tab.key}">${tab.label}</button>`).join('')}</div>`;
-        const rename = !view.page && project ? `<button type="button" class="pi-icon-btn" data-act="rename" title="编辑项目名称">${ICONS.pencil}</button>` : '';
+        const project = view.project(),
+            title = view.page ? PAGES[view.page].label : project ? project.name : '剧情注入器',
+            tabs =
+                view.page || !project
+                    ? ''
+                    : `<div class="pi-tabs">${TABS.map(tabOf)
+                          .map(
+                              (tab) =>
+                                  `<button type="button" class="pi-tab${tab.key === view.tab ? ' is-sel' : ''}" data-act="tab" data-tab="${tab.key}">${tab.label}</button>`,
+                          )
+                          .join('')}</div>`,
+            rename =
+                !view.page && project
+                    ? `<button type="button" class="pi-icon-btn" data-act="rename" title="编辑项目名称">${ICONS.pencil}</button>`
+                    : '';
         return `<div class="pi-top-lead"><button type="button" class="pi-icon-btn pi-menu" data-act="drawer" title="项目列表">${ICONS.menu}</button>
                 <span class="pi-top-title">${esc(title)}</span>${rename}</div>${tabs}
-            <div class="pi-top-end"><button type="button" class="pi-icon-btn${view.page === 'settings' ? ' is-on' : ''}" data-act="page" data-page="settings" title="设置">${ICONS.gear}</button><button type="button" class="pi-icon-btn" data-act="theme" title="${isNight() ? '日间配色' : '夜间配色'}">${isNight() ? ICONS.sun : ICONS.moon}</button>
+            <div class="pi-top-end"><button type="button" class="pi-icon-btn" data-act="tour" title="当前页帮助">?</button><button type="button" class="pi-icon-btn${view.page === 'settings' ? ' is-on' : ''}" data-act="page" data-page="settings" title="设置">${ICONS.gear}</button><button type="button" class="pi-icon-btn" data-act="theme" title="${isNight() ? '日间配色' : '夜间配色'}">${isNight() ? ICONS.sun : ICONS.moon}</button>
             <button type="button" class="pi-close" data-act="close" title="关闭">${ICONS.close}</button></div>`;
     }
-
-    function setDrawer(open) {
-        view.drawer = open;
-        root?.querySelector('.pi-panel').classList.toggle('is-drawer', open);
+    function setDrawer(open2) {
+        ((view.drawer = open2), root?.querySelector('.pi-panel').classList.toggle('is-drawer', open2));
     }
-
     function bodyHtml() {
         if (!data.isReady()) return '<div class="pi-empty"><span class="pi-spin"></span> 正在读取酒馆本地数据…</div>';
         if (view.page) return current().render(view);
         const project = view.project();
-        if (!view.projectId) {
-            return `<div class="pi-empty">${data.index().projects.length ? '从项目列表选择一个项目。' : '一个项目就是一条 if 线：讨论 → 设定 → 大纲 → 执行。'}<br><br>
+        if (!view.projectId)
+            return `<div class="pi-empty">${data.index().projects.length ? '从项目列表选择一个项目。' : '一个项目就是一段剧情（一条主线或一条 if 线）：在讨论页想清楚，写成大纲，到执行页开始注入。设定页可选，给没有世界观的卡用。'}<br><br>
                 <button type="button" class="pi-btn is-primary" data-act="new-project">${ICONS.plus}新项目</button></div>`;
-        }
         if (!project) {
             const failed = view.loadError[view.projectId];
-            if (failed) return `<div class="pi-empty">读取项目失败：${esc(failed)}<br><br><button type="button" class="pi-btn is-primary" data-act="retry-project">重试</button></div>`;
-            return '<div class="pi-empty"><span class="pi-spin"></span> 正在读取项目…</div>';
+            return failed
+                ? `<div class="pi-empty">读取项目失败：${esc(failed)}<br><br><button type="button" class="pi-btn is-primary" data-act="retry-project">重试</button></div>`
+                : '<div class="pi-empty"><span class="pi-spin"></span> 正在读取项目…</div>';
         }
         return current().render(view);
     }
-
-    // 某一页渲染出错时显示原因和重试，不留一片空白；错误同时记进诊断页。
     function safeBodyHtml() {
         try {
             return bodyHtml();
         } catch (error) {
-            console.error('[剧情注入器] 页面渲染失败', error);
-            runtime.note(`页面渲染失败（${view.page || view.tab}）：${error.message}`);
-            return `<div class="pi-empty">这一页显示出错：${esc(error.message)}<br><br><button type="button" class="pi-btn is-primary" data-act="retry-render">重试</button></div>`;
+            return (
+                console.error('[剧情注入器] 页面渲染失败', error),
+                runtime.note(`页面渲染失败（${view.page || view.tab}）：${error.message}`),
+                `<div class="pi-empty">这一页显示出错：${esc(error.message)}<br><br><button type="button" class="pi-btn is-primary" data-act="retry-render">重试</button></div>`
+            );
         }
     }
-
-    // 每次改设定、大纲都会更新索引并调到这里；内容没变就不重建侧栏和顶栏的节点。
-    let lastSide = '';
-    let lastTop = '';
+    let lastSide = '',
+        lastTop = '';
     function renderSide() {
         if (!root) return;
-        const side = sideHtml();
-        const top = topHtml();
-        if (side !== lastSide) {
-            root.querySelector('.pi-side').innerHTML = side;
-            lastSide = side;
-            applySearch();
-        }
-        if (top !== lastTop) {
-            root.querySelector('.pi-top').innerHTML = top;
-            lastTop = top;
-        }
+        const side = sideHtml(),
+            top = topHtml();
+        (side !== lastSide && ((root.querySelector('.pi-side').innerHTML = side), (lastSide = side), applySearch()),
+            top !== lastTop && ((root.querySelector('.pi-top').innerHTML = top), (lastTop = top)));
     }
-
     function renderBody() {
         if (!root) return;
-        const body = root.querySelector('.pi-body');
-        const keepScroll = body.scrollTop;
-        const chat = body.querySelector('.pi-chat');
-        const chatScroll = chat ? chat.scrollTop : null;
-        const chatAtEnd = chat ? chat.scrollHeight - chat.scrollTop - chat.clientHeight < 30 : true;
-        const focused = doc.activeElement && body.contains(doc.activeElement) ? doc.activeElement : null;
-        const compose = focused && focused.matches('[data-compose],[data-setting],[data-search]') ? { sel: ['[data-compose]', '[data-setting]'].find(sel => focused.matches(sel)) || `[data-search="${focused.dataset.search}"]`, start: focused.selectionStart, end: focused.selectionEnd } : null;
-        body.className = `pi-body${!view.page && view.tab === 'discuss' && view.project() ? ' is-chat' : ''}`;
-        body.innerHTML = safeBodyHtml();
-        body.scrollTop = keepScroll;
+        const body = root.querySelector('.pi-body'),
+            keepScroll = body.scrollTop,
+            chat = body.querySelector('.pi-chat'),
+            chatScroll = chat ? chat.scrollTop : null,
+            chatAtEnd = chat ? chat.scrollHeight - chat.scrollTop - chat.clientHeight < 30 : !0,
+            focused = doc.activeElement && body.contains(doc.activeElement) ? doc.activeElement : null,
+            compose =
+                focused && focused.matches('[data-compose],[data-setting],[data-search]')
+                    ? {
+                          sel:
+                              ['[data-compose]', '[data-setting]'].find((sel) => focused.matches(sel)) ||
+                              `[data-search="${focused.dataset.search}"]`,
+                          start: focused.selectionStart,
+                          end: focused.selectionEnd,
+                      }
+                    : null;
+        ((body.className = `pi-body${!view.page && view.tab === 'discuss' && view.project() ? ' is-chat' : ''}`),
+            (body.innerHTML = safeBodyHtml()),
+            (body.scrollTop = keepScroll));
         const nextChat = body.querySelector('.pi-chat');
-        if (nextChat) nextChat.scrollTop = chatAtEnd || chatScroll == null ? nextChat.scrollHeight : chatScroll;
-        if (compose) {
+        if ((nextChat && (nextChat.scrollTop = chatAtEnd || chatScroll == null ? nextChat.scrollHeight : chatScroll), compose)) {
             const box = body.querySelector(compose.sel);
-            if (box) { box.focus(); box.setSelectionRange(compose.start, compose.end); }
+            box && (box.focus(), box.setSelectionRange(compose.start, compose.end));
         }
     }
-
     function render() {
-        renderSide();
-        renderBody();
+        (renderSide(), renderBody());
     }
-
-    // 读取失败时正文显示原因和重试按钮，不再一直转圈。
+    let tour = createTour({ getRoot: () => root, data });
+    view.tour = tour;
+    function startTour(scope, opts) {
+        tour.start(scope, opts) || (opts && opts.auto) || toast('info', '这一页现在没有可以讲解的内容。');
+    }
+    function maybeAutoTour() {
+        let tries = 0,
+            tick = () => {
+                if (!(!root || tour.isOpen() || tourState(data).done.includes('core'))) {
+                    if (!data.isReady() || doc.querySelector('.pi-dialog')) return ++tries < 30 && hostWindow().setTimeout(tick, 200);
+                    tour.start('core', { auto: !0 }) || (++tries < 30 && hostWindow().setTimeout(tick, 200));
+                }
+            };
+        hostWindow().setTimeout(tick, 300);
+    }
     async function selectProject(id, tab) {
-        view.page = '';
-        setDrawer(false);
-        view.projectId = id;
-        delete view.loadError[id];
-        writeUi({ projectId: id, page: '' });
-        render();
-        if (!id) return;
-        try {
-            const project = await data.loadProject(id);
-            if (view.projectId !== id) return;
-            if (!project) {
-                view.loadError[id] = '项目文件丢失，可在数据管理里查看';
-                render();
-                return;
+        if (
+            ((view.page = ''),
+            setDrawer(!1),
+            (view.projectId = id),
+            delete view.loadError[id],
+            writeUi({ projectId: id, page: '' }),
+            render(),
+            !!id)
+        )
+            try {
+                const project = await data.loadProject(id);
+                if (view.projectId !== id) return;
+                if (!project) {
+                    ((view.loadError[id] = '项目文件丢失，可在数据管理里查看'), render());
+                    return;
+                }
+                ((view.tab = tab || (project.outline.volumes.length ? 'run' : 'discuss')), writeUi({ tab: view.tab }), render());
+            } catch (error) {
+                if (view.projectId !== id) return;
+                ((view.loadError[id] = error.message), render());
             }
-            view.tab = tab || (project.outline.volumes.length ? 'run' : 'discuss');
-            writeUi({ tab: view.tab });
-            render();
-        } catch (error) {
-            if (view.projectId !== id) return;
-            view.loadError[id] = error.message;
-            render();
-        }
     }
-
-    // 打开面板时定位到上次的位置：当前聊天使用的项目优先，其次上次看的项目；设置等页面也记住。
-    // 数据还没读完时先显示读取中，读完由 refresh('index') 再调一次。
     function restore() {
-        const ui = readUi();
-        const activeId = runtime.activeId();
-        const remembered = data.index().projects.some(item => item.id === ui.projectId) ? ui.projectId : '';
-        const id = activeId || remembered || (data.index().projects[0] && data.index().projects[0].id) || '';
-        view.restored = true;
-        render();
+        const ui = readUi(),
+            activeId = runtime.activeId(),
+            remembered = data.index().projects.some((item) => item.id === ui.projectId) ? ui.projectId : '',
+            id = activeId || remembered || (data.index().projects[0] && data.index().projects[0].id) || '';
+        ((view.restored = !0), render());
         const page = PAGES[ui.page] ? ui.page : '';
-        if (id) selectProject(id, TABS.some(tab => tab.key === ui.tab) ? ui.tab : undefined);
-        if (page) {
-            view.page = page;
-            writeUi({ page });
-            render();
-        }
+        (id && selectProject(id, TABS.some((tab) => tab.key === ui.tab) ? ui.tab : void 0),
+            page && ((view.page = page), writeUi({ page }), render()));
     }
-
+    view.switchTab = go;
     function go(tab) {
-        view.page = '';
-        view.tab = tab;
-        writeUi({ tab, page: '' });
-        render();
+        ((view.page = ''), (view.tab = tab), writeUi({ tab, page: '' }), render());
     }
-
-    // 分组下拉：不分组、已有分组、新建分组（选中后出现分组名输入框）。新项目和编辑项目共用。
     const NEW_GROUP = '::new';
     function groupField(preset) {
-        const groups = [...new Set(data.index().projects.map(item => item.group).filter(Boolean))];
-        const list = [{ value: '', label: '不分组' }, ...groups.map(name => ({ value: name, label: name })), { value: NEW_GROUP, label: '新建分组' }];
+        const groups = [
+                ...new Set(
+                    data
+                        .index()
+                        .projects.map((item) => item.group)
+                        .filter(Boolean),
+                ),
+            ],
+            list = [
+                { value: '', label: '不分组' },
+                ...groups.map((name) => ({ value: name, label: name })),
+                { value: NEW_GROUP, label: '新建分组' },
+            ];
         return `<label class="pi-field"><span>分组</span><select class="pi-sel" data-f="group">${options(list, preset)}</select></label>
                 <label class="pi-field" data-f="new-group-row" hidden><span>新分组名</span><input class="pi-inp" data-f="new-group" placeholder="如：龙宫篇"></label>`;
     }
     function mountGroupField(box) {
-        const select = box.querySelector('[data-f=group]');
-        const row = box.querySelector('[data-f=new-group-row]');
+        const select = box.querySelector('[data-f=group]'),
+            row = box.querySelector('[data-f=new-group-row]');
         select.addEventListener('change', () => {
-            row.hidden = select.value !== NEW_GROUP;
-            if (!row.hidden) box.querySelector('[data-f=new-group]').focus();
+            ((row.hidden = select.value !== NEW_GROUP), row.hidden || box.querySelector('[data-f=new-group]').focus());
         });
     }
     function readGroupField(box) {
         const picked = box.querySelector('[data-f=group]').value;
         return picked === NEW_GROUP ? box.querySelector('[data-f=new-group]').value.trim() : picked;
     }
-
     async function newProject() {
-        setDrawer(false);
-        // 默认沿用当前项目的分组，方便在同一组里连续新建。
-        const current = data.index().projects.find(item => item.id === view.projectId);
-        const result = await openDialog({
-            title: '新项目',
-            html: `<label class="pi-field"><span>项目名（一条 if 线）</span><input class="pi-inp" data-f="name" placeholder="如：龙宫温养"></label>
-                ${groupField(current && current.group ? current.group : '')}
+        setDrawer(!1);
+        const current2 = data.index().projects.find((item) => item.id === view.projectId),
+            result = await openDialog({
+                title: '新项目',
+                html: `<label class="pi-field"><span>项目名（一条 if 线）</span><input class="pi-inp" data-f="name" placeholder="如：龙宫温养"></label>
+                ${groupField(current2 && current2.group ? current2.group : '')}
                 <label class="pi-check"><input type="checkbox" data-f="infinite"><span>无限流模式（主空间出发、世界库、污染）</span></label>`,
-            onMount: mountGroupField,
-            actions: [
-                { label: '取消', value: null },
-                { label: '确定', primary: true, value: box => ({ name: box.querySelector('[data-f=name]').value, group: readGroupField(box), mode: box.querySelector('[data-f=infinite]').checked ? 'infinite' : 'normal' }) },
-            ],
-        });
+                onMount: mountGroupField,
+                actions: [
+                    { label: '取消', value: null },
+                    {
+                        label: '确定',
+                        primary: !0,
+                        value: (box) => ({
+                            name: box.querySelector('[data-f=name]').value,
+                            group: readGroupField(box),
+                            mode: box.querySelector('[data-f=infinite]').checked ? 'infinite' : 'normal',
+                        }),
+                    },
+                ],
+            });
         if (!result) return;
         const name = result.name;
         try {
             const project = await data.createProject(name, result.group, result.mode);
-            if (!runtime.activeId() && cardKey()) await runtime.switchProject(project.id);
-            await selectProject(project.id, 'discuss');
+            (!runtime.activeId() && cardKey() && (await runtime.switchProject(project.id)), await selectProject(project.id, 'discuss'));
         } catch (error) {
             toast('error', `新建失败：${error.message}`);
         }
     }
-
-    // 长按/右键项目名：设为当前聊天使用、设为本卡默认、编辑。
     async function projectMenu(id) {
-        const meta = data.index().projects.find(item => item.id === id);
+        const meta = data.index().projects.find((item) => item.id === id);
         if (!meta) return;
         const items = [];
-        if (cardKey()) {
-            if (runtime.activeId() !== id) items.push({ label: '设为当前聊天使用', value: 'chat', icon: ICONS.chat });
-            if (data.activeIdFor(cardKey()) !== id) items.push({ label: '设为本卡默认（新聊天也用）', value: 'card', icon: ICONS.card });
-        }
-        items.push({ label: '编辑名称、分组', value: 'edit', icon: ICONS.pencil });
+        (cardKey() &&
+            (runtime.activeId() !== id && items.push({ label: '设为当前聊天使用', value: 'chat', icon: ICONS.chat }),
+            data.activeIdFor(cardKey()) !== id && items.push({ label: '设为本卡默认（新聊天也用）', value: 'card', icon: ICONS.card })),
+            items.push({ label: '编辑名称、分组', value: 'edit', icon: ICONS.pencil }));
         const pick = await menuDialog({ title: meta.name, items });
-        if (!pick) return;
-        if (pick === 'edit') return editProject(id);
-        try {
-            await runtime.switchProject(id, pick);
-            toast('success', pick === 'card' ? `「${meta.name}」已设为本卡默认，当前聊天也已换用。` : `当前聊天改用「${meta.name}」。`);
-            render();
-        } catch (error) {
-            toast('error', `切换失败：${error.message}`);
+        if (pick) {
+            if (pick === 'edit') return editProject(id);
+            try {
+                (await runtime.switchProject(id, pick),
+                    toast(
+                        'success',
+                        pick === 'card' ? `「${meta.name}」已设为本卡默认，当前聊天也已换用。` : `当前聊天改用「${meta.name}」。`,
+                    ),
+                    render());
+            } catch (error) {
+                toast('error', `切换失败：${error.message}`);
+            }
         }
     }
-
     async function editProject(id) {
-        const meta = data.index().projects.find(item => item.id === id);
+        const meta = data.index().projects.find((item) => item.id === id);
         if (!meta) return;
-        if (!data.project(id)) await data.loadProject(id);
-        const mode = data.project(id) ? data.project(id).mode : 'normal';
-        const result = await openDialog({
-            title: '编辑项目',
-            html: `<label class="pi-field"><span>名称</span><input class="pi-inp" data-f="name" value="${esc(meta.name)}"></label>
+        data.project(id) || (await data.loadProject(id));
+        const mode = data.project(id) ? data.project(id).mode : 'normal',
+            result = await openDialog({
+                title: '编辑项目',
+                html: `<label class="pi-field"><span>名称</span><input class="pi-inp" data-f="name" value="${esc(meta.name)}"></label>
                 ${groupField(meta.group || '')}
                 <label class="pi-check"><input type="checkbox" data-f="infinite"${mode === 'infinite' ? ' checked' : ''}><span>无限流模式</span></label>`,
-            onMount: mountGroupField,
-            actions: [
-                { label: '删除项目', danger: true, value: 'delete' },
-                { label: '取消', value: null },
-                { label: '保存', primary: true, value: box => ({ name: box.querySelector('[data-f=name]').value.trim(), group: readGroupField(box), mode: box.querySelector('[data-f=infinite]').checked ? 'infinite' : 'normal' }) },
-            ],
-        });
-        if (!result) return;
-        if (result === 'delete') {
-            const ok = await confirmDialog({ title: `删除「${meta.name}」`, body: '将删除以下文件，聊天里记录的该项目进度保留。', list: [`pi-p-${id}.json`, `pi-c-${id}.json`], okLabel: '删除', danger: true });
-            if (!ok) return;
-            try {
-                await data.deleteProject(id);
-                if (view.projectId === id) view.projectId = '';
-                runtime.refresh();
-                render();
-            } catch (error) {
-                toast('error', `删除失败：${error.message}`);
+                onMount: mountGroupField,
+                actions: [
+                    { label: '删除项目', danger: !0, value: 'delete' },
+                    { label: '取消', value: null },
+                    {
+                        label: '保存',
+                        primary: !0,
+                        value: (box) => ({
+                            name: box.querySelector('[data-f=name]').value.trim(),
+                            group: readGroupField(box),
+                            mode: box.querySelector('[data-f=infinite]').checked ? 'infinite' : 'normal',
+                        }),
+                    },
+                ],
+            });
+        if (result) {
+            if (result === 'delete') {
+                if (
+                    !(await confirmDialog({
+                        title: `删除「${meta.name}」`,
+                        body: '将删除以下文件，聊天里记录的该项目进度保留。',
+                        list: [`pi-p-${id}.json`, `pi-c-${id}.json`],
+                        okLabel: '删除',
+                        danger: !0,
+                    }))
+                )
+                    return;
+                try {
+                    (await data.deleteProject(id), view.projectId === id && (view.projectId = ''), runtime.refresh(), render());
+                } catch (error) {
+                    toast('error', `删除失败：${error.message}`);
+                }
+                return;
             }
-            return;
+            (data.project(id) || (await data.loadProject(id)),
+                data.renameProject(id, result.name, result.group),
+                result.mode !== mode &&
+                    data.updateProject(id, (project) => ({ ...project, mode: result.mode, infinite: normalizeInfinite(project.infinite) })),
+                runtime.refresh(),
+                render());
         }
-        if (!data.project(id)) await data.loadProject(id);
-        data.renameProject(id, result.name, result.group);
-        if (result.mode !== mode) data.updateProject(id, project => ({ ...project, mode: result.mode, infinite: normalizeInfinite(project.infinite) }));
-        runtime.refresh();
-        render();
     }
-
     function onClick(event) {
         if (event.target.closest('.pi-pitem') && swallowAfterPress(event)) return;
         const target = event.target.closest('[data-act]');
         if (!target || !root.contains(target)) return;
         const act = target.dataset.act;
         if (act === 'close') return close();
+        if (act === 'tour') return startTour(tourScopeOf(view));
+        if (act === 'tour-reset') return (data.updateSettings({ tourState: { revision: TOUR_REVISION, done: [] } }), startTour('core'));
         if (act === 'project') return selectProject(target.dataset.id);
         if (act === 'new-project') return newProject();
         if (act === 'tab') return go(target.dataset.tab);
-        if (act === 'page') { view.page = target.dataset.page; writeUi({ page: view.page }); setDrawer(false); return render(); }
+        if (act === 'page') return ((view.page = target.dataset.page), writeUi({ page: view.page }), setDrawer(!1), render());
         if (act === 'drawer') return setDrawer(!view.drawer);
-        if (act === 'theme') {
-            setNight(!isNight());
-            writeUi({ night: isNight() });
-            return renderSide();
-        }
+        if (act === 'theme') return (setNight(!isNight()), writeUi({ night: isNight() }), renderSide());
         if (act === 'rename') return editProject(view.projectId);
         if (act === 'retry-project') return selectProject(view.projectId, view.tab);
         if (act === 'retry-render') return render();
         if (act === 'group') {
             const name = target.dataset.group;
-            if (view.collapsed.has(name)) view.collapsed.delete(name);
-            else view.collapsed.add(name);
-            writeUi({ collapsed: [...view.collapsed] });
-            return renderSide();
+            return (
+                view.collapsed.has(name) ? view.collapsed.delete(name) : view.collapsed.add(name),
+                writeUi({ collapsed: [...view.collapsed] }),
+                renderSide()
+            );
         }
-        const handler = current().actions?.[act];
-        if (handler) {
-            event.preventDefault();
-            Promise.resolve(handler(view, target, event)).catch(error => toast('error', error.message || String(error)));
-        }
+        let handler = current().actions?.[act],
+            native = event.target.closest && event.target.closest('input,select,textarea,label');
+        handler &&
+            ((native && native !== target && target.contains(native)) || event.preventDefault(),
+            Promise.resolve(handler(view, target, event)).catch((error) => toast('error', error.message || String(error))));
     }
-
-    // 长按项目名弹菜单。安卓长按还会再发 contextmenu，iOS 不发，所以自己计时，并吞掉随后的 click/contextmenu。
-    let press = null;
-    let pressedAt = 0;
-
+    let press = null,
+        pressedAt = 0;
     function cancelPress() {
-        if (press) hostWindow().clearTimeout(press.timer);
-        press = null;
+        (press && hostWindow().clearTimeout(press.timer), (press = null));
     }
-
     function onPointerDown(event) {
         const item = event.target.closest('.pi-pitem');
-        if (!item || !root.contains(item) || event.button > 0) return;
-        cancelPress();
-        press = { x: event.clientX, y: event.clientY, timer: hostWindow().setTimeout(() => {
-            press = null;
-            pressedAt = Date.now();
-            projectMenu(item.dataset.id);
-        }, LONG_PRESS_MS) };
+        !item ||
+            !root.contains(item) ||
+            event.button > 0 ||
+            (cancelPress(),
+            (press = {
+                x: event.clientX,
+                y: event.clientY,
+                timer: hostWindow().setTimeout(() => {
+                    ((press = null), (pressedAt = Date.now()), projectMenu(item.dataset.id));
+                }, LONG_PRESS_MS),
+            }));
     }
-
     function onPointerMove(event) {
-        if (press && Math.hypot(event.clientX - press.x, event.clientY - press.y) > 10) cancelPress();
+        press && Math.hypot(event.clientX - press.x, event.clientY - press.y) > 10 && cancelPress();
     }
-
     function swallowAfterPress(event) {
-        if (Date.now() - pressedAt > 800) return false;
-        event.preventDefault();
-        event.stopPropagation();
-        return true;
+        return Date.now() - pressedAt > 800 ? !1 : (event.preventDefault(), event.stopPropagation(), !0);
     }
-
     function onContext(event) {
         const item = event.target.closest('.pi-pitem');
-        if (!item || !root.contains(item)) return;
-        event.preventDefault();
-        cancelPress();
-        if (swallowAfterPress(event)) return;
-        projectMenu(item.dataset.id);
+        !item || !root.contains(item) || (event.preventDefault(), cancelPress(), !swallowAfterPress(event) && projectMenu(item.dataset.id));
     }
-
     function onChange(event) {
         const target = event.target;
-        if (target.dataset.psearch !== undefined) return;
+        if (target.dataset.psearch !== void 0) return;
         const handler = current().onChange;
-        if (handler) Promise.resolve(handler(view, target, event)).catch(error => toast('error', error.message || String(error)));
+        handler && Promise.resolve(handler(view, target, event)).catch((error) => toast('error', error.message || String(error)));
     }
-
     function onInput(event) {
-        if (event.target.dataset.psearch !== undefined) {
-            view.search = event.target.value;
-            return applySearch();
-        }
+        if (event.target.dataset.psearch !== void 0) return ((view.search = event.target.value), applySearch());
         const handler = current().onInput;
-        if (handler) handler(view, event.target, event);
+        handler && handler(view, event.target, event);
     }
-
     function onKey(event) {
-        if (event.key === 'Escape' && root && !doc.querySelector('.pi-dialog')) {
-            event.stopPropagation();
-            if (view.drawer) setDrawer(false);
-            else close();
-        }
-        if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) current().onSubmit?.(view, event.target, event);
+        tour.isOpen() ||
+            (event.key === 'Escape' &&
+                root &&
+                !doc.querySelector('.pi-dialog') &&
+                (event.stopPropagation(), view.drawer ? setDrawer(!1) : close()),
+            event.key === 'Enter' && (event.ctrlKey || event.metaKey) && current().onSubmit?.(view, event.target, event));
     }
-
     function open() {
-        ensureStyle();
-        if (root) return;
-        view.drawer = false;
-        lastSide = '';
-        lastTop = '';
-        root = el(`<div class="pi-root pi-overlay"><div class="pi-panel"><aside class="pi-side"></aside>
+        (ensureStyle(),
+            !root &&
+                ((view.drawer = !1),
+                (lastSide = ''),
+                (lastTop = ''),
+                (root = el(`<div class="pi-root pi-overlay"><div class="pi-panel"><aside class="pi-side"></aside>
             <div class="pi-scrim" data-act="drawer"></div>
-            <section class="pi-main"><header class="pi-top"></header><div class="pi-body"></div></section></div></div>`);
-        root.addEventListener('click', onClick);
-        root.addEventListener('contextmenu', onContext);
-        root.addEventListener('pointerdown', onPointerDown);
-        root.addEventListener('pointermove', onPointerMove);
-        root.addEventListener('pointerup', cancelPress);
-        root.addEventListener('pointercancel', cancelPress);
-        root.addEventListener('scroll', cancelPress, true);
-        root.addEventListener('change', onChange);
-        root.addEventListener('input', onInput);
-        // 搜索框输入法选字时不重画（会打断拼音），选完字再补一次。
-        root.addEventListener('compositionend', event => { if (event.target.dataset.search) onInput(event); });
-        root.addEventListener('focusout', event => current().onBlur?.(view, event.target, event));
-        root.addEventListener('mousedown', event => { if (event.target === root) root.dataset.down = '1'; });
-        root.addEventListener('mouseup', event => { if (event.target === root && root.dataset.down) close(); delete root.dataset.down; });
-        doc.addEventListener('keydown', onKey, true);
-        doc.body.appendChild(root);
-        view.restored = false;
-        if (data.isReady()) restore();
-        else render();
+            <section class="pi-main"><header class="pi-top"></header><div class="pi-body"></div></section></div></div>`)),
+                root.addEventListener('click', onClick),
+                root.addEventListener('contextmenu', onContext),
+                root.addEventListener('pointerdown', onPointerDown),
+                root.addEventListener('pointermove', onPointerMove),
+                root.addEventListener('pointerup', cancelPress),
+                root.addEventListener('pointercancel', cancelPress),
+                root.addEventListener('scroll', cancelPress, !0),
+                root.addEventListener('change', onChange),
+                root.addEventListener('input', onInput),
+                root.addEventListener('compositionend', (event) => {
+                    event.target.dataset.search && onInput(event);
+                }),
+                root.addEventListener('focusout', (event) => current().onBlur?.(view, event.target, event)),
+                root.addEventListener('mousedown', (event) => {
+                    event.target === root && (root.dataset.down = '1');
+                }),
+                root.addEventListener('mouseup', (event) => {
+                    (event.target === root && root.dataset.down && close(), delete root.dataset.down);
+                }),
+                doc.addEventListener('keydown', onKey, !0),
+                doc.body.appendChild(root),
+                (view.restored = !1),
+                data.isReady() ? restore() : render(),
+                maybeAutoTour()));
     }
-
     function close() {
-        if (!root) return;
-        current().unmount?.(view);
-        doc.removeEventListener('keydown', onKey, true);
-        root.remove();
-        root = null;
-        data.flush().catch(() => {});
+        (tour.stop(!1),
+            root &&
+                (current().unmount?.(view),
+                doc.removeEventListener('keydown', onKey, !0),
+                root.remove(),
+                (root = null),
+                data.flush().catch(() => {})));
     }
-
-    // 外部变化（存盘、检测、换聊天）只在没有正在输入时重画正文，避免打断输入。
     function refresh(reason) {
         if (!root) return;
         if (!view.restored && data.isReady()) return restore();
-        if (reason === 'index' || reason === 'switch' || reason === 'chat') renderSide();
-        const focused = doc.activeElement;
-        const typing = focused && root.contains(focused) && (focused.tagName === 'TEXTAREA' || (focused.tagName === 'INPUT' && !['checkbox', 'radio', 'button'].includes(focused.type)));
+        (reason === 'index' || reason === 'switch' || reason === 'chat') && renderSide();
+        const focused = doc.activeElement,
+            typing =
+                focused &&
+                root.contains(focused) &&
+                (focused.tagName === 'TEXTAREA' ||
+                    (focused.tagName === 'INPUT' && !['checkbox', 'radio', 'button'].includes(focused.type)));
         if (reason === 'saved' || reason === 'save-failed') return current().onStatus?.(view, root);
         const only = current().refreshOn;
-        if (only && !only.includes(reason)) return;
-        if (!typing) renderBody();
+        (only && !only.includes(reason)) || typing || renderBody();
     }
-
-    return { open, close, refresh, isOpen: () => Boolean(root), view, cardName };
+    return { open, close, refresh, isOpen: () => !!root, view, cardName };
 }

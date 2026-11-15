@@ -1,3 +1,4 @@
+import { normalizeClue } from './clue-model.js';
 import { DEFAULT_PARAMS, OLD_DEFAULT_PARAMS } from './inject.js';
 import { normalizeInfinite } from './infinite.js';
 import { normalizeAlias, normalizeRenames } from './align.js';
@@ -5,8 +6,8 @@ import { makeId } from './outline.js';
 import { DEFAULT_MEMO, DEFAULT_WB_RULE, migrateOc, normalizeWbRule } from './refs.js';
 
 export const INDEX_FILE = 'pi-index.json';
-export const projectFile = id => `pi-p-${id}.json`;
-export const chatFile = id => `pi-c-${id}.json`;
+export const projectFile = (id) => `pi-p-${id}.json`;
+export const chatFile = (id) => `pi-c-${id}.json`;
 export const FILE_PREFIX = 'pi-';
 
 export const LLM_ROLES = [
@@ -33,11 +34,11 @@ function normalizePreset(value) {
 
 // v0.1.5 的用途存的是 { source: 'preset', presetId }，读入时展开回独立接口。
 function normalizeLlm(src) {
-    const presets = (Array.isArray(src.presets) ? src.presets : []).map(normalizePreset).filter(item => item.id);
+    const presets = (Array.isArray(src.presets) ? src.presets : []).map(normalizePreset).filter((item) => item.id);
     const llm = {};
     for (const { key } of LLM_ROLES) {
         const role = src.llm && src.llm[key] && typeof src.llm[key] === 'object' ? src.llm[key] : {};
-        const linked = role.source === 'preset' && presets.find(item => item.id === role.presetId);
+        const linked = role.source === 'preset' && presets.find((item) => item.id === role.presetId);
         if (linked) llm[key] = { source: 'custom', ...pickConn(linked) };
         else if (role.source === 'custom') llm[key] = { source: 'custom', ...pickConn(role) };
         else llm[key] = { ...DEFAULT_LLM, ...pickConn(role), source: 'tavern' };
@@ -52,13 +53,20 @@ export function resolveLlm(settings, role) {
 
 export const DEFAULT_SETTINGS = {
     tagName: '剧情参考',
+    // 正文通用提示（角色知情、剧情推进，GPT §20.1）：随本轮剧情材料注入一次；没有材料时不出现。
+    bodyGuide: !0,
+    bodyGuideText: '',
     offTrackMode: 'ask',
-    carryOver: true,
+    carryOver: !0,
     handleMode: 'ask',
     hookCap: 2,
     newThreadMode: 'ask',
     checkEvery: 3,
     checkFloors: 3,
+    // 写作基准：generic（通用，默认）/ fanfic（同人世界观速成）/ custom（用 guide 里的自定义文本）。
+    guidePreset: 'generic',
+    // 新手教程看过哪些页（41a_ui_tour.js）：{ revision, done: [页名] }。revision 不等于 TOUR_REVISION 时视为都没看过。
+    tourState: null,
     guide: '',
     persona: '',
     paceText: { slow: '', normal: '', fast: '' },
@@ -72,20 +80,29 @@ const OFF_MODES = ['ask', 'auto', 'off'];
 const THREAD_MODES = ['ask', 'auto', 'off'];
 
 export function normalizeSettings(value) {
-    const src = value && typeof value === 'object' ? value : {};
-    const { llm, presets } = normalizeLlm(src);
+    const src = value && typeof value == 'object' ? value : {},
+        { llm, presets } = normalizeLlm(src);
     return {
         ...DEFAULT_SETTINGS,
         ...src,
         offTrackMode: OFF_MODES.includes(src.offTrackMode) ? src.offTrackMode : DEFAULT_SETTINGS.offTrackMode,
-        carryOver: src.carryOver !== false,
+        carryOver: src.carryOver !== !1,
+        bodyGuide: src.bodyGuide !== !1,
+        bodyGuideText: String(src.bodyGuideText || ''),
+        // 以前改过写作基准的（只有 guide、没有 guidePreset）算作自定义。
+        guidePreset: ['generic', 'fanfic', 'custom'].includes(src.guidePreset)
+            ? src.guidePreset
+            : String(src.guide || '').trim()
+              ? 'custom'
+              : 'generic',
+        guide: String(src.guide || ''),
         handleMode: HANDLE_MODES.includes(src.handleMode) ? src.handleMode : DEFAULT_SETTINGS.handleMode,
         hookCap: Math.max(1, Math.min(6, Math.round(Number(src.hookCap)) || DEFAULT_SETTINGS.hookCap)),
         newThreadMode: THREAD_MODES.includes(src.newThreadMode) ? src.newThreadMode : DEFAULT_SETTINGS.newThreadMode,
         checkEvery: Math.max(1, Math.min(50, Number(src.checkEvery) || DEFAULT_SETTINGS.checkEvery)),
         checkFloors: Math.max(1, Math.min(20, Number(src.checkFloors) || DEFAULT_SETTINGS.checkFloors)),
-        persona: typeof src.persona === 'string' ? src.persona : '',
-        paceText: Object.fromEntries(['slow', 'normal', 'fast'].map(key => [key, String((src.paceText && src.paceText[key]) || '')])),
+        persona: typeof src.persona == 'string' ? src.persona : '',
+        paceText: Object.fromEntries(['slow', 'normal', 'fast'].map((key) => [key, String((src.paceText && src.paceText[key]) || '')])),
         llm,
         presets,
     };
@@ -96,13 +113,20 @@ export function emptyIndex() {
 }
 
 export function normalizeIndex(value) {
-    const src = value && typeof value === 'object' ? value : {};
-    const projects = Array.isArray(src.projects) ? src.projects.filter(item => item && typeof item.id === 'string') : [];
+    let src = value && typeof value == 'object' ? value : {},
+        projects = Array.isArray(src.projects) ? src.projects.filter((item) => item && typeof item.id == 'string') : [];
     return {
         version: 1,
-        active: src.active && typeof src.active === 'object' ? src.active : {},
-        projects: projects.map(item => ({ id: item.id, name: String(item.name || '未命名'), group: String(item.group || ''), updatedAt: Number(item.updatedAt) || 0, bytes: item.bytes && typeof item.bytes === 'object' ? item.bytes : {} })),
-        files: Array.isArray(src.files) ? src.files.filter(name => typeof name === 'string' && name.startsWith(FILE_PREFIX)) : [],
+        active: src.active && typeof src.active == 'object' ? src.active : {},
+        projects: projects.map((item) => ({
+            id: item.id,
+            name: String(item.name || '未命名'),
+            group: String(item.group || ''),
+            updatedAt: Number(item.updatedAt) || 0,
+            bytes: item.bytes && typeof item.bytes == 'object' ? item.bytes : {},
+            ...(Array.isArray(item.imports) ? { imports: item.imports.filter((x) => typeof x == 'string') } : {}),
+        })),
+        files: Array.isArray(src.files) ? src.files.filter((name) => typeof name == 'string' && name.startsWith(FILE_PREFIX)) : [],
         settings: normalizeSettings(src.settings),
     };
 }
@@ -113,6 +137,7 @@ export function newProject(name, now = Date.now(), mode = 'normal') {
         id: makeId('p'),
         name: String(name || '').trim() || '新项目',
         createdAt: now,
+        clue: normalizeClue({}),
         setting: { text: '', history: [], check: '', fixes: [], mute: [] },
         outline: { volumes: [], history: [], renames: [], idAlias: {} },
         defaults: JSON.parse(JSON.stringify(DEFAULT_PARAMS)),
@@ -123,9 +148,9 @@ export function newProject(name, now = Date.now(), mode = 'normal') {
 }
 
 export function normalizeProject(value, id) {
-    const src = value && typeof value === 'object' ? value : {};
-    const setting = src.setting && typeof src.setting === 'object' ? src.setting : {};
-    const volumes = src.outline && Array.isArray(src.outline.volumes) ? src.outline.volumes : [];
+    const src = value && typeof value == 'object' ? value : {},
+        setting = src.setting && typeof src.setting == 'object' ? src.setting : {},
+        volumes = src.outline && Array.isArray(src.outline.volumes) ? src.outline.volumes : [];
     return {
         version: 1,
         id: src.id || id,
@@ -139,21 +164,32 @@ export function normalizeProject(value, id) {
             mute: Array.isArray(setting.mute) ? setting.mute.map(String) : [],
         },
         outline: {
-            history: src.outline && Array.isArray(src.outline.history) ? src.outline.history.filter(item => item && typeof item.text === 'string') : [],
+            history:
+                src.outline && Array.isArray(src.outline.history)
+                    ? src.outline.history.filter((item) => item && typeof item.text == 'string')
+                    : [],
             // 跨聊天对照表（见 core/align.js）：节点改名最多 200 条，阶段 id 别名最多 300 条。
             renames: normalizeRenames(src.outline && src.outline.renames),
             idAlias: normalizeAlias(src.outline && src.outline.idAlias),
-            volumes: volumes.filter(vol => vol && Array.isArray(vol.stages)).map(vol => ({
-                id: vol.id || makeId('v'),
-                key: String(vol.key || '剧情_未命名'),
-                stages: vol.stages.filter(stage => stage && stage.data && typeof stage.data === 'object').map(stage => ({ id: stage.id || makeId('s'), key: String(stage.key || '阶段'), data: stage.data })),
-            })),
+            volumes: volumes
+                .filter((vol) => vol && Array.isArray(vol.stages))
+                .map((vol) => ({
+                    id: vol.id || makeId('v'),
+                    key: String(vol.key || '剧情_未命名'),
+                    stages: vol.stages
+                        .filter((stage) => stage && stage.data && typeof stage.data == 'object')
+                        .map((stage) => ({ id: stage.id || makeId('s'), key: String(stage.key || '阶段'), data: stage.data })),
+                })),
         },
         defaults: normalizeDefaults(src.defaults),
+        clue: normalizeClue(src.clue),
+        ...(src.outlineIdMap && typeof src.outlineIdMap === 'object' ? { outlineIdMap: src.outlineIdMap } : {}),
+        imports: Array.isArray(src.imports) ? src.imports.filter((x) => typeof x === 'string') : [],
+        importAdopted: Array.isArray(src.importAdopted) ? src.importAdopted.filter((x) => typeof x === 'string') : [],
         genRefs: normalizeGenRefs(src.genRefs),
-        threads: { sideOn: !(src.threads && src.threads.sideOn === false), worldOn: !(src.threads && src.threads.worldOn === false) },
+        threads: { sideOn: !(src.threads && src.threads.sideOn === !1), worldOn: !(src.threads && src.threads.worldOn === !1) },
         mode: src.mode === 'infinite' ? 'infinite' : 'normal',
-        ...(src.infinite && typeof src.infinite === 'object' ? { infinite: normalizeInfinite(src.infinite) } : {}),
+        ...(src.infinite && typeof src.infinite == 'object' ? { infinite: normalizeInfinite(src.infinite) } : {}),
     };
 }
 
@@ -175,14 +211,19 @@ function normalizeDefaults(value) {
         const saved = value && value[kind];
         if (!saved || typeof saved !== 'object') continue;
         const old = OLD_DEFAULT_PARAMS[kind];
-        const untouched = Object.keys(old).every(key => Number(saved[key]) === old[key]);
+        const untouched = Object.keys(old).every((key) => Number(saved[key]) === old[key]);
         out[kind] = untouched ? { ...out[kind], enabled: saved.enabled !== false } : { ...out[kind], ...saved };
     }
     return out;
 }
 
 export function emptyChat() {
-    return { version: 1, summary: '', messages: [], refs: { setting: true, outline: false, progress: true, floors: 10, memo: DEFAULT_MEMO, wb: DEFAULT_WB_RULE } };
+    return {
+        version: 1,
+        summary: '',
+        messages: [],
+        refs: { setting: true, outline: false, progress: true, floors: 10, memo: DEFAULT_MEMO, wb: DEFAULT_WB_RULE },
+    };
 }
 
 // 讨论页附带参考：设定、大纲、剧情进度三个开关，正文楼数，世界书条目选择规则。
@@ -205,7 +246,17 @@ export function normalizeChat(value) {
     return {
         version: 1,
         summary: String(src.summary || ''),
-        messages: Array.isArray(src.messages) ? src.messages.filter(msg => msg && typeof msg.content === 'string').map(msg => ({ id: msg.id || makeId('m'), role: msg.role === 'user' ? 'user' : 'assistant', content: msg.content, at: Number(msg.at) || 0, folded: Boolean(msg.folded) })) : [],
+        messages: Array.isArray(src.messages)
+            ? src.messages
+                  .filter((msg) => msg && typeof msg.content === 'string')
+                  .map((msg) => ({
+                      id: msg.id || makeId('m'),
+                      role: msg.role === 'user' ? 'user' : 'assistant',
+                      content: msg.content,
+                      at: Number(msg.at) || 0,
+                      folded: Boolean(msg.folded),
+                  }))
+            : [],
         refs: normalizeRefs(src.refs),
     };
 }
@@ -218,7 +269,9 @@ export function groupProjects(projects) {
         if (!groups.has(key)) groups.set(key, []);
         groups.get(key).push(project);
     }
-    return [...groups.entries()].sort(([a], [b]) => (a === '' ? -1 : b === '' ? 1 : a.localeCompare(b, 'zh'))).map(([name, items]) => ({ name, items }));
+    return [...groups.entries()]
+        .sort(([a], [b]) => (a === '' ? -1 : b === '' ? 1 : a.localeCompare(b, 'zh')))
+        .map(([name, items]) => ({ name, items }));
 }
 
 export function byteLength(text) {

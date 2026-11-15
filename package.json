@@ -1,11 +1,12 @@
 {
   "name": "plot-injector",
-  "version": "0.1.26",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
     "build": "node scripts/build.js",
-    "test": "node --test tests/*.test.js"
+    "test": "npm run build && node --test --test-concurrency=3 tests/*.test.js tests/*.test.mjs && npm run test:official",
+    "test:official": "node scripts/test-official.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.28.2",

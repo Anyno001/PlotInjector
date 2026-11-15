@@ -1,0 +1,221 @@
+{
+  "sheet_ClueCtrl01": {
+    "uid": "sheet_ClueCtrl01",
+    "name": "线索控制表",
+    "sourceData": {
+      "note": "主线当前所在的场景。此表有且仅有一行，「标识」固定为「主线」。\n- 标识：固定写「主线」，不要修改。\n- 当前场景：以本批最后一楼结束时主角的位置和行动为准。\n    · 主角实际到达并开始做某件事：照抄下面【场景编号对照】里列出的编号。对照只用于对号，不表示那件事已经开放或已经发生。\n    · 主角明确离开调查、转去做无关的事：写「离场」。\n    · 只是提议、约定、打算，或者正文没写转场：保持原值。\n    · 看到、记下、指给别人看、路过、远远听见，都不算开始做那件事：保持原值。\n      例：主角在街上路过邮局、说「回头再来」，然后继续往车站走 → 当前场景保持原来的编号，不改成邮局。\n    · 同一楼里换了几个地方：以最后实际在做的那件事为准。\n    · 不得自造编号；对照里没有的场景不要写。\n【依据规则】只按 AI 回复（正文）里实际发生的事填写。用户消息里出现的计划、提议、打算、「准备去做」「预计会发现」都不算发生。\n    反例：用户消息写「去后屋找账本，会找到被撕掉的那页」，正文写主角翻了几本旧账、什么也没找到就离开了 → 不记录任何发现，状态保持原值。\n    拿不准正文有没有写出某项结果、某个角色有没有得知时，保持原值：宁可晚一批登记，不要提前登记。",
+      "initNode": "已有「主线」行就沿用，不要再插入。只有表里没有任何行时才插入一行：标识=主线，当前场景留空。",
+      "deleteNode": "禁止删除。",
+      "updateNode": "按列说明更新。例：主角走进裁缝铺开始问话 → 当前场景改为对照里裁缝铺对应的编号；主角说「先回家睡觉」并离开 → 当前场景改为「离场」。\nSQL示例: UPDATE clue_control SET cur_scene = '<场景编号>' WHERE tag = '主线';",
+      "insertNode": "禁止插入（只有一行）。",
+      "ddl": "CREATE TABLE clue_control ( -- 线索控制表\n  row_id INTEGER PRIMARY KEY, -- 行号\n  tag TEXT NOT NULL UNIQUE, -- 标识\n  cur_scene TEXT -- 当前场景\n);"
+    },
+    "content": [
+      [
+        "row_id",
+        "标识",
+        "当前场景"
+      ],
+      [
+        null,
+        "主线",
+        ""
+      ]
+    ],
+    "updateConfig": {
+      "uiSentinel": -1,
+      "contextDepth": -1,
+      "updateFrequency": 1,
+      "batchSize": -1,
+      "skipFloors": 0,
+      "groupId": 0
+    },
+    "exportConfig": {
+      "enabled": false,
+      "splitByRow": false,
+      "entryName": "线索控制表",
+      "entryType": "constant",
+      "keywords": "",
+      "preventRecursion": true,
+      "injectionTemplate": "",
+      "extraIndexEnabled": false,
+      "extraIndexEntryName": "线索控制表-索引",
+      "extraIndexColumns": [],
+      "extraIndexColumnModes": {},
+      "extraIndexInjectionTemplate": "",
+      "entryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 10000
+      },
+      "extraIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 10010
+      },
+      "fixedEntryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 99990
+      },
+      "fixedIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 99991
+      },
+      "injectIntoWorldbook": false
+    },
+    "orderNo": 0
+  },
+  "sheet_ClueFact01": {
+    "uid": "sheet_ClueFact01",
+    "name": "关键事实表",
+    "sourceData": {
+      "note": "剧情需要追踪的关键发现。每行一条，由卡作者预先建好；填表时只改「状态」「内容」「依据」，不新增、不删除，不改「编号」「标签」「登记口径」。\n- 编号：事实编号，不要修改。\n- 标签：中性的简短名称，不要修改，也不要据此推断答案。\n- 登记口径：正文里出现什么才算取得这一项（不含答案）。不要修改。\n- 状态：只能是 未获得 / 已核实 / 存疑。\n    · 已核实：正文里主角实际取得了这项结果，而且有可靠依据（亲眼看到实物、读到原件、得到明确验证）。\n    · 存疑：正文里确实出现了这项内容，但来源只是某人的说法、传闻或推测，还没有可靠依据。「内容」要写明是谁说的。拿不准正文有没有写出这项内容时不要记为存疑，保持原值。\n    · 未获得：其余情况。到达地点、尝试调查、对方答应提供、中途离开，都仍是未获得。\n- 内容：一句话写出正文里实际出现的内容，只写正文写出来的部分，不补充正文没有的细节。例：只承认拿了钱、没说原因，就只写拿了钱。\n- 依据：写明正文哪一楼、哪个情节。\n怎么找编号：\n    · 首次获得：按各行的「登记口径」判断正文写出的结果对应哪个编号、是否已经取得。附有【线索编号对照】时也可以参考。口径和对照都只用于对号，不代表已经发生。\n    · 维护已有记录：已经是已核实或存疑的行，正文出现新证据推翻或证实它时，可以按这一行已有的「内容」匹配并更新。无法确定是哪一行时保持原值。\n    · 已有记录又出现佐证（不推翻、也不改变状态）：「内容」保持不变；只有带来新信息时，才在「依据」原文后面追加「；后续：<楼层 新情节>」。没有新信息、或同一楼的情节已经追加过，就不改。不要用新情节覆盖第一次取得时的内容和依据。\n      例：之前已核实「第一次签收的回执」，这一楼主角在另一份收据上看到同样的签名 → 内容不变，依据追加「；后续：第<N>楼 另一份收据上的签名相同」。\n    · 正文没写出对应结果时，不要改任何行。\n【依据规则】只按 AI 回复（正文）里实际发生的事填写。用户消息里出现的计划、提议、打算、「准备去做」「预计会发现」都不算发生。\n    反例：用户消息写「去后屋找账本，会找到被撕掉的那页」，正文写主角翻了几本旧账、什么也没找到就离开了 → 不记录任何发现，状态保持原值。\n    拿不准正文有没有写出某项结果、某个角色有没有得知时，保持原值：宁可晚一批登记，不要提前登记。",
+      "initNode": "保留模板里预先建好的行，不要清空、不要新增。",
+      "deleteNode": "禁止删除。",
+      "updateNode": "只有正文明确写出结果时，才把对应编号的状态改为已核实或存疑，并填写内容和依据。已核实的事实后来被正文推翻时改为存疑，在依据里写明新证据和楼层；存疑的说法后来得到可靠证实时改为已核实。\nSQL示例(首次登记说法): UPDATE clue_facts SET status = '存疑', content = '<谁>说<正文里的原意>', evidence = '第<N>楼 <情节>' WHERE code = '<编号>';\nSQL示例(纯佐证，只追加依据): UPDATE clue_facts SET evidence = evidence || '；后续：第<N>楼 <新情节>' WHERE code = '<编号>';\nSQL示例(原说法被推翻或证实): UPDATE clue_facts SET status = '<已核实或存疑>', evidence = evidence || '；第<N>楼 <新证据>' WHERE code = '<编号>';",
+      "insertNode": "禁止插入。只修改已有行。",
+      "ddl": "CREATE TABLE clue_facts ( -- 关键事实表\n  row_id INTEGER PRIMARY KEY, -- 行号\n  code TEXT NOT NULL UNIQUE, -- 编号\n  label TEXT NOT NULL, -- 标签\n  criterion TEXT, -- 登记口径\n  status TEXT NOT NULL DEFAULT '未获得' CHECK(status IN ('未获得', '已核实', '存疑')), -- 状态\n  content TEXT, -- 内容\n  evidence TEXT -- 依据\n);"
+    },
+    "content": [
+      [
+        "row_id",
+        "编号",
+        "标签",
+        "登记口径",
+        "状态",
+        "内容",
+        "依据"
+      ]
+    ],
+    "updateConfig": {
+      "uiSentinel": -1,
+      "contextDepth": -1,
+      "updateFrequency": 1,
+      "batchSize": -1,
+      "skipFloors": 0,
+      "groupId": 0
+    },
+    "exportConfig": {
+      "enabled": false,
+      "splitByRow": false,
+      "entryName": "关键事实表",
+      "entryType": "constant",
+      "keywords": "",
+      "preventRecursion": true,
+      "injectionTemplate": "",
+      "extraIndexEnabled": false,
+      "extraIndexEntryName": "关键事实表-索引",
+      "extraIndexColumns": [],
+      "extraIndexColumnModes": {},
+      "extraIndexInjectionTemplate": "",
+      "entryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 10000
+      },
+      "extraIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 10010
+      },
+      "fixedEntryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 99990
+      },
+      "fixedIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 99991
+      },
+      "injectIntoWorldbook": false
+    },
+    "orderNo": 1
+  },
+  "sheet_ClueKnow01": {
+    "uid": "sheet_ClueKnow01",
+    "name": "知情表",
+    "sourceData": {
+      "note": "关键角色是否知道某条关键事实。每行是「一条事实 × 一个角色」，由卡作者预先建好；填表时只改「获知方式」「可信度」「依据」，不新增、不删除行。\n- 键 / 事实 / 角色：不要修改。主角按模板已有写法（如 user）。\n- 获知方式：只能是 未知 / 亲见 / 被告知 / 听说 / 推测。逐个角色判断：\n    · 亲见：这个角色自己看清了实物或原件内容。\n    · 被告知：有人明确把这件事告诉了这个角色本人，或者展示给他看。\n    · 听说：这个角色听到了转述、传闻。\n    · 推测：这个角色自己提出了猜想或怀疑，手里还没有证据。\n      这个角色亲眼看了实物或原件、再据此得出的判断（如读了单据后判断证词对不上），记为「亲见」，不是推测。推测不配「已核实」。\n    · 未知：其余情况。【在场不等于知道】：只是在场、没听清、别人私下得知时他在附近，都保持原值，除非正文写出他看到或听到了内容。\n- 可信度：只能是 已核实 / 未核实。跟着这个角色手里的证据走：亲见通常是已核实；被告知、听说、推测通常是未核实，除非正文写出他确认了真假。\n- 依据：写明正文哪一楼、哪个情节。\n【先看事实表】某条事实在关键事实表里仍是「未获得」、本次也没有把它登记成已核实或存疑时，它的知情行全部保持原值。\n    知情的对象是关键事实表里那一行的「登记口径」所说的结果，不是标签字面上的东西。\n    例：口径是「在抽屉里找到那封信并读到内容」，正文只写主角看见了上锁的抽屉、没打开 → 事实表保持未获得，知情行也保持未知。\n获知方式只升级、不降级：已经是亲见的，不因旁人又提起改成听说。出现反证时，可以更新可信度和依据，但保留原来是怎么得知的。\n已有记录的「依据」不要覆盖：再次见到或听到时，在原文后面追加「；后续：<新情节>」。\n【依据规则】只按 AI 回复（正文）里实际发生的事填写。用户消息里出现的计划、提议、打算、「准备去做」「预计会发现」都不算发生。\n    反例：用户消息写「去后屋找账本，会找到被撕掉的那页」，正文写主角翻了几本旧账、什么也没找到就离开了 → 不记录任何发现，状态保持原值。\n    拿不准正文有没有写出某项结果、某个角色有没有得知时，保持原值：宁可晚一批登记，不要提前登记。",
+      "initNode": "保留模板里预先建好的行，不要清空、不要新增。",
+      "deleteNode": "禁止删除。",
+      "updateNode": "只有正文明确写出某个角色看到、被告知、听到、猜到某条事实时，才更新对应行。例：老人当面对主角说看见了人 → 主角那一行改为「被告知 / 未核实」；老板娘当时不在场 → 她那一行保持原值。\nSQL示例: UPDATE clue_knowledge SET way = '被告知', credibility = '未核实', evidence = '第<N>楼 <情节>' WHERE key = '<事实编号>@<角色>';",
+      "insertNode": "禁止插入。只修改已有行。",
+      "ddl": "CREATE TABLE clue_knowledge ( -- 知情表\n  row_id INTEGER PRIMARY KEY, -- 行号\n  key TEXT NOT NULL UNIQUE, -- 键\n  fact TEXT NOT NULL, -- 事实\n  actor TEXT NOT NULL, -- 角色\n  way TEXT NOT NULL DEFAULT '未知' CHECK(way IN ('未知', '亲见', '被告知', '听说', '推测')), -- 获知方式\n  credibility TEXT NOT NULL DEFAULT '未核实' CHECK(credibility IN ('已核实', '未核实')), -- 可信度\n  evidence TEXT -- 依据\n);"
+    },
+    "content": [
+      [
+        "row_id",
+        "键",
+        "事实",
+        "角色",
+        "获知方式",
+        "可信度",
+        "依据"
+      ]
+    ],
+    "updateConfig": {
+      "uiSentinel": -1,
+      "contextDepth": -1,
+      "updateFrequency": 1,
+      "batchSize": -1,
+      "skipFloors": 0,
+      "groupId": 0
+    },
+    "exportConfig": {
+      "enabled": false,
+      "splitByRow": false,
+      "entryName": "知情表",
+      "entryType": "constant",
+      "keywords": "",
+      "preventRecursion": true,
+      "injectionTemplate": "",
+      "extraIndexEnabled": false,
+      "extraIndexEntryName": "知情表-索引",
+      "extraIndexColumns": [],
+      "extraIndexColumnModes": {},
+      "extraIndexInjectionTemplate": "",
+      "entryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 10000
+      },
+      "extraIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 10010
+      },
+      "fixedEntryPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 99990
+      },
+      "fixedIndexPlacement": {
+        "position": "at_depth_as_system",
+        "depth": 2,
+        "order": 99991
+      },
+      "injectIntoWorldbook": false
+    },
+    "orderNo": 2
+  },
+  "mate": {
+    "type": "chatSheets",
+    "version": 1,
+    "updateConfigUiSentinel": -1,
+    "globalInjectionConfig": {
+      "readableEntryPlacement": {
+        "position": "before_char",
+        "depth": 2,
+        "order": 99981
+      },
+      "wrapperPlacement": {
+        "position": "before_char",
+        "depth": 2,
+        "order": 99980
+      }
+    }
+  }
+}

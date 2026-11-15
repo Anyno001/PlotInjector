@@ -94,8 +94,8 @@ function run(name, text) {
     };
     const out = {};
     for (const [key, progress] of Object.entries(progresses)) {
-        out[`${name}/${key}`] = outputs(project, progress, normalizeSettings({}));
-        out[`${name}/${key}/noCarry`] = outputs(project, progress, normalizeSettings({ carryOver: false }));
+        out[`${name}/${key}`] = outputs(project, progress, normalizeSettings({bodyGuide:false}));
+        out[`${name}/${key}/noCarry`] = outputs(project, progress, normalizeSettings({ carryOver: false,bodyGuide:false }));
     }
     return out;
 }

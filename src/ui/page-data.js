@@ -1,3 +1,5 @@
+import { importSrcFile, importJobFile } from '../app/import-store.js';
+
 import { INDEX_FILE, chatFile, formatBytes, projectFile } from '../core/store.js';
 import { buildZip } from '../core/zip.js';
 import { clearChatProgress } from '../app/progress-store.js';
@@ -7,7 +9,7 @@ import { compareVersions, fetchLatestVersion } from '../host/update.js';
 import { confirmDialog, esc } from './dom.js';
 import { writeUi } from './app.js';
 
-const st = view => view.tabState('data');
+const st = (view) => view.tabState('data');
 
 // 最新版本每次打开页面只查一次，结果留到刷新酒馆页面为止。
 const latest = { state: '', version: '', error: '' };
@@ -30,16 +32,20 @@ async function checkLatest(view) {
 function versionCard(view, settings) {
     if (!latest.state) checkLatest(view);
     const newer = latest.state === 'done' && compareVersions(latest.version, view.version) > 0;
-    const status = {
-        checking: '<span class="pi-spin"></span>正在检测最新版本…',
-        done: newer ? `最新版本 v${esc(latest.version)}，可以更新。` : '已是最新版本。',
-        error: `检测失败：${esc(latest.error)}`,
-    }[latest.state] || '';
+    const status =
+        {
+            checking: '<span class="pi-spin"></span>正在检测最新版本…',
+            done: newer ? `最新版本 v${esc(latest.version)}，可以更新。` : '已是最新版本。',
+            error: `检测失败：${esc(latest.error)}`,
+        }[latest.state] || '';
     const pinned = settings.loaderRef;
     let note = '';
     if (newer && !viaLoader()) note = '当前是单文件版，需重新导入新版 JSON 才能更新。';
     else if (newer && pinned) note = `已指定 ${esc(pinned)}，清空指定版本后才会更新。`;
-    const updateBtn = newer && viaLoader() ? `<button type="button" class="pi-btn is-sm is-primary" data-act="update-now">更新到 v${esc(latest.version)}</button>` : '';
+    const updateBtn =
+        newer && viaLoader()
+            ? `<button type="button" class="pi-btn is-sm is-primary" data-act="update-now">更新到 v${esc(latest.version)}</button>`
+            : '';
     return `<div class="pi-card"><h3>版本更新</h3>
         <p class="pi-hint">当前版本 v${esc(view.version)}。${status}</p>
         ${note ? `<p class="pi-hint is-warn">${note}</p>` : ''}
@@ -48,8 +54,11 @@ function versionCard(view, settings) {
 }
 
 function referenced(index) {
-    const names = new Set([INDEX_FILE]);
-    for (const item of index.projects) { names.add(projectFile(item.id)); names.add(chatFile(item.id)); }
+    let names = /* @__PURE__ */ new Set([INDEX_FILE]);
+    for (let item of index.projects) {
+        (names.add(projectFile(item.id)), names.add(chatFile(item.id)));
+        for (let id of item.imports || []) (names.add(importSrcFile(id)), names.add(importJobFile(id)));
+    }
     return names;
 }
 
@@ -65,15 +74,19 @@ function fileCell(view, name, bytes) {
 
 function filesTable(view) {
     const index = view.data.index();
-    const rows = index.projects.map(item => `<tr><td>${esc(item.group ? `${item.group}／` : '')}${esc(item.name)}</td>
-        ${fileCell(view, projectFile(item.id), item.bytes.project)}${fileCell(view, chatFile(item.id), item.bytes.chat)}</tr>`).join('');
+    const rows = index.projects
+        .map(
+            (item) => `<tr><td>${esc(item.group ? `${item.group}／` : '')}${esc(item.name)}</td>
+        ${fileCell(view, projectFile(item.id), item.bytes.project)}${fileCell(view, chatFile(item.id), item.bytes.chat)}</tr>`,
+        )
+        .join('');
     return `<table class="pi-files"><thead><tr><th>项目</th><th>设定+大纲</th><th>讨论记录</th></tr></thead><tbody>${rows || '<tr><td colspan="3" class="pi-hint">没有项目</td></tr>'}</tbody></table>`;
 }
 
 export function render(view) {
     const s = st(view);
     if (!s.verified && !s.verifying) verify(view);
-    const orphans = s.verified ? Object.keys(s.verified).filter(name => !referenced(view.data.index()).has(name)) : [];
+    const orphans = s.verified ? Object.keys(s.verified).filter((name) => !referenced(view.data.index()).has(name)) : [];
     const settings = view.data.settings();
     return `<div class="pi-card"><h3>本地文件</h3>
         ${filesTable(view)}
@@ -143,7 +156,16 @@ export const actions = {
     },
     async 'delete-file'(view, target) {
         const name = target.dataset.name;
-        if (!(await confirmDialog({ title: '删除文件', list: [name], body: name.startsWith('pi-p-') ? '这是项目的设定和大纲，删除后项目无法打开。' : '', okLabel: '删除', danger: true }))) return;
+        if (
+            !(await confirmDialog({
+                title: '删除文件',
+                list: [name],
+                body: name.startsWith('pi-p-') ? '这是项目的设定和大纲，删除后项目无法打开。' : '',
+                okLabel: '删除',
+                danger: true,
+            }))
+        )
+            return;
         const id = /^pi-[pc]-(.+)\.json$/.exec(name)?.[1];
         if (name.startsWith('pi-c-')) await view.data.clearChat(id);
         else if (name.startsWith('pi-p-')) await view.data.deleteProject(id);
@@ -151,21 +173,26 @@ export const actions = {
         view.render();
     },
     async orphans(view) {
-        const names = Object.keys(st(view).verified || {}).filter(name => !referenced(view.data.index()).has(name) && st(view).verified[name]);
-        const gone = Object.keys(st(view).verified || {}).filter(name => !referenced(view.data.index()).has(name) && !st(view).verified[name]);
+        const names = Object.keys(st(view).verified || {}).filter(
+            (name) => !referenced(view.data.index()).has(name) && st(view).verified[name],
+        );
+        const gone = Object.keys(st(view).verified || {}).filter(
+            (name) => !referenced(view.data.index()).has(name) && !st(view).verified[name],
+        );
         if (!names.length && gone.length) {
             view.data.forgetFiles(gone);
             st(view).verified = null;
             return view.renderBody();
         }
-        if (!(await confirmDialog({ title: '清理孤立文件', body: '这些文件不属于任何项目：', list: names, okLabel: '删除', danger: true }))) return;
+        if (!(await confirmDialog({ title: '清理孤立文件', body: '这些文件不属于任何项目：', list: names, okLabel: '删除', danger: true })))
+            return;
         for (const name of names) await deleteFile(name);
         view.data.forgetFiles([...names, ...gone]);
         st(view).verified = null;
         view.renderBody();
     },
     async 'clear-chats'(view) {
-        const ids = view.data.index().projects.map(item => item.id);
+        const ids = view.data.index().projects.map((item) => item.id);
         if (!(await confirmDialog({ title: '清空全部讨论记录', list: ids.map(chatFile), okLabel: '清空', danger: true }))) return;
         for (const id of ids) await view.data.clearChat(id);
         st(view).verified = null;
@@ -181,7 +208,13 @@ export const actions = {
         }
         if (!files.length) throw new Error('没有可清除的文件');
         downloadBlob(`剧情注入器备份-${new Date().toISOString().slice(0, 10)}.zip`, buildZip(files), 'application/zip');
-        const ok = await confirmDialog({ title: '重置插件', body: '备份已下载。确认后删除以下文件和当前聊天的进度，无法撤销。', list: files.map(file => file.name), okLabel: '全部删除', danger: true });
+        const ok = await confirmDialog({
+            title: '重置插件',
+            body: '备份已下载。确认后删除以下文件和当前聊天的进度，无法撤销。',
+            list: files.map((file) => file.name),
+            okLabel: '全部删除',
+            danger: true,
+        });
         if (!ok) return;
         for (const file of files) await deleteFile(file.name);
         await clearChatProgress();

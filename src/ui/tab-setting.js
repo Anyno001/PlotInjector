@@ -1,5 +1,16 @@
+import { wrapAuthorText } from '../core/clue-model.js';
+import { settingPiecesFromEntries, afterImport, pickWorldbookEntries } from './wb-import.js';
 import { settingMessages, rewriteBlockMessages, syncSettingMessages } from '../core/prompts.js';
-import { changedBlockKeys, diffLines, injectedSetting, joinBlocks, mergeBlocks, parseSettingReply, pushHistory, splitBlocks } from '../core/setting.js';
+import {
+    changedBlockKeys,
+    diffLines,
+    injectedSetting,
+    joinBlocks,
+    mergeBlocks,
+    parseSettingReply,
+    pushHistory,
+    splitBlocks,
+} from '../core/setting.js';
 import { flattenUnits } from '../core/outline.js';
 import { currentIndex } from '../core/progress.js';
 import { estimateTokens } from '../core/tokens.js';
@@ -8,12 +19,17 @@ import { ask, guideText, runTask } from './ai.js';
 import { confirmDialog, esc, openDialog, options } from './dom.js';
 import { ICONS } from './styles.js';
 import { genActions, genRefTexts, genRefsBar } from './gen-refs.js';
-import { afterImport, pickWorldbookEntries } from './wb-import.js';
 
-const st = view => view.tabState('setting');
+const st = (view) => {
+    let s = view.tabState('setting'),
+        id = view.projectId || '';
+    return (s.byProject || (s.byProject = {}), s.byProject[id] || (s.byProject[id] = {}));
+};
 
 function diffHtml(a, b) {
-    return `<div class="pi-diff">${diffLines(a, b).map(line => `<div class="${line.op === '+' ? 'is-add' : line.op === '-' ? 'is-del' : ''}">${esc(line.text) || ' '}</div>`).join('')}</div>`;
+    return `<div class="pi-diff">${diffLines(a, b)
+        .map((line) => `<div class="${line.op === '+' ? 'is-add' : line.op === '-' ? 'is-del' : ''}">${esc(line.text) || ' '}</div>`)
+        .join('')}</div>`;
 }
 
 function checkBadge(check) {
@@ -23,23 +39,33 @@ function checkBadge(check) {
 
 function fixesHtml(fixes, where) {
     if (!fixes.length) return '';
-    return `<p class="pi-hint">补定（替你补齐的项）：</p>${fixes.map((fix, i) => `<div class="pi-fix"><span class="pi-fix-text">· ${esc(fix)}</span>
+    return `<p class="pi-hint">补定（替你补齐的项）：</p>${fixes
+        .map(
+            (fix, i) => `<div class="pi-fix"><span class="pi-fix-text">· ${esc(fix)}</span>
         <span class="pi-fix-acts"><button type="button" class="pi-btn is-sm" data-act="fix-ok" data-where="${where}" data-i="${i}">确认</button>
         <button type="button" class="pi-btn is-sm" data-act="fix-edit" data-where="${where}" data-i="${i}">修改</button>
-        <button type="button" class="pi-btn is-sm is-danger" data-act="fix-drop" data-where="${where}" data-i="${i}">丢弃</button></span></div>`).join('')}`;
+        <button type="button" class="pi-btn is-sm is-danger" data-act="fix-drop" data-where="${where}" data-i="${i}">丢弃</button></span></div>`,
+        )
+        .join('')}`;
 }
 
 function draftHtml(view, project, draft) {
-    const oldBlocks = new Map(splitBlocks(project.setting.text).map(block => [block.key, block]));
-    const rows = splitBlocks(draft.body).map(block => {
-        const old = oldBlocks.get(block.key);
-        const status = !old ? '<span class="pi-badge is-ok">新增</span>' : old.text === block.text ? '<span class="pi-badge">未变</span>' : '<span class="pi-badge is-warn">改动</span>';
-        const open = st(view).openBlock === block.key;
-        return `<div class="pi-entry"><div class="pi-entry-hd" data-act="draft-block" data-key="${esc(block.key)}">
+    const oldBlocks = new Map(splitBlocks(project.setting.text).map((block) => [block.key, block]));
+    const rows = splitBlocks(draft.body)
+        .map((block) => {
+            const old = oldBlocks.get(block.key);
+            const status = !old
+                ? '<span class="pi-badge is-ok">新增</span>'
+                : old.text === block.text
+                  ? '<span class="pi-badge">未变</span>'
+                  : '<span class="pi-badge is-warn">改动</span>';
+            const open = st(view).openBlock === block.key;
+            return `<div class="pi-entry"><div class="pi-entry-hd" data-act="draft-block" data-key="${esc(block.key)}">
             <input type="checkbox" data-pick-block="${esc(block.key)}"${draft.keys.includes(block.key) ? ' checked' : ''}>
             <span class="pi-etitle">${esc(block.title)}</span>${status}</div>
             ${open ? `<div class="pi-entry-bd">${diffHtml(old ? old.text : '', block.text)}</div>` : ''}</div>`;
-    }).join('');
+        })
+        .join('');
     return `<div class="pi-card"><h3>新稿对比 ${checkBadge(draft.check)}</h3>
         <p class="pi-hint">勾选的分块替换旧稿，新分块追加到末尾。</p>${rows}
         ${fixesHtml(draft.fixes, 'draft')}
@@ -51,25 +77,30 @@ function draftHtml(view, project, draft) {
 function historyHtml(project, at) {
     const list = project.setting.history;
     if (!list.length) return '<div class="pi-card"><h3>历史版本</h3><p class="pi-hint">还没有历史版本。</p></div>';
-    const fmt = time => new Date(time).toLocaleString();
+    const fmt = (time) => new Date(time).toLocaleString();
     const chosen = list[at];
     return `<div class="pi-card"><h3>历史版本</h3>
-        ${list.map((item, i) => `<div class="pi-row"><span class="pi-grow">${esc(fmt(item.at))} · ${item.text.length} 字</span>
+        ${list
+            .map(
+                (item, i) => `<div class="pi-row"><span class="pi-grow">${esc(fmt(item.at))} · ${item.text.length} 字</span>
             <button type="button" class="pi-btn is-sm" data-act="hist-diff" data-i="${i}">对比当前</button>
-            <button type="button" class="pi-btn is-sm" data-act="hist-restore" data-i="${i}">回退到此版</button></div>`).join('')}
+            <button type="button" class="pi-btn is-sm" data-act="hist-restore" data-i="${i}">回退到此版</button></div>`,
+            )
+            .join('')}
         ${chosen ? `<p class="pi-hint">${esc(fmt(chosen.at))} → 当前</p>${diffHtml(chosen.text, project.setting.text)}` : ''}</div>`;
 }
 
 export function render(view) {
-    const project = view.project();
-    const s = st(view);
-    const text = project.setting.text;
-    const blocks = splitBlocks(text).filter(block => block.title !== '开头');
-    const mute = new Set(project.setting.mute);
-    const muted = blocks.some(block => mute.has(block.key));
-    const busy = view.busy.setting;
-    const hasOutline = project.outline.volumes.some(volume => volume.stages.length);
-    const chip = block => `<span class="pi-chip pi-block-chip${mute.has(block.key) ? ' is-mute' : ''}"><button type="button" data-act="jump" data-key="${esc(block.key)}" title="跳到这一块">${esc(block.title)}</button><button type="button" class="pi-block-eye" data-act="block-mute" data-key="${esc(block.key)}" title="${mute.has(block.key) ? '已设为不注入，点击恢复注入' : '注入正文，点击设为不注入'}">${mute.has(block.key) ? ICONS.eyeOff : ICONS.eye}</button><button type="button" class="pi-block-del" data-act="block-del" data-key="${esc(block.key)}" title="删除整个分块">${ICONS.close}</button></span>`;
+    const project = view.project(),
+        s = st(view),
+        text = project.setting.text,
+        blocks = splitBlocks(text).filter((block) => block.title !== '开头'),
+        mute = new Set(project.setting.mute),
+        muted = blocks.some((block) => mute.has(block.key)),
+        busy = view.busy.setting,
+        hasOutline = project.outline.volumes.some((volume) => volume.stages.length),
+        chip = (block) =>
+            `<span class="pi-chip pi-block-chip${mute.has(block.key) ? ' is-mute' : ''}"><button type="button" data-act="jump" data-key="${esc(block.key)}" title="跳到这一块">${esc(block.title)}</button><button type="button" class="pi-block-eye" data-act="block-mute" data-key="${esc(block.key)}" title="${mute.has(block.key) ? '已设为不注入，点击恢复注入' : '注入正文，点击设为不注入'}">${mute.has(block.key) ? ICONS.eyeOff : ICONS.eye}</button><button type="button" class="pi-block-del" data-act="block-del" data-key="${esc(block.key)}" title="删除整个分块">${ICONS.close}</button></span>`;
     return `${s.draft ? draftHtml(view, project, s.draft) : ''}
         <div class="pi-card"><h3>设定 ${checkBadge(project.setting.check)}<span class="pi-spacer"></span><button type="button" class="pi-btn is-primary is-sm" data-act="setting-save">保存</button></h3>
         <div class="pi-tools is-c4">
@@ -80,14 +111,14 @@ export function render(view) {
             <label class="pi-check"><input type="checkbox" data-append${s.append ? ' checked' : ''}><span>只追加，不改动已有分块</span></label></div>
         ${genRefsBar(view, 'setting')}
         ${blocks.length ? `<div class="pi-toc">${blocks.map(chip).join('')}</div>` : ''}
-        <textarea class="pi-ta is-tall" data-setting placeholder="世界观正文。执行时作为常驻条目注入（角色定义后），取代世界书里手改的剧情设定条目。">${esc(text)}</textarea>
+        <textarea class="pi-ta is-tall" data-setting placeholder="世界观正文。执行时作为常驻条目注入（角色定义后），作者资料可用 &lt;仅作者&gt; 包裹。">${esc(text)}</textarea>
         <div class="pi-row"><span class="pi-hint pi-grow">≈<span data-tokens>${estimateTokens(text)}</span> token${muted ? `，注入 ≈${estimateTokens(injectedSetting(project.setting))}` : ''}</span><span class="pi-status" data-save-status></span></div>
         ${fixesHtml(project.setting.fixes, 'saved')}</div>
         ${s.history ? historyHtml(project, s.historyAt) : ''}`;
 }
 
 function setSetting(view, patch) {
-    view.data.updateProject(view.projectId, project => ({ ...project, setting: { ...project.setting, ...patch } }));
+    view.data.updateProject(view.projectId, (project) => ({ ...project, setting: { ...project.setting, ...patch } }));
 }
 
 function commit(view, text, extra = {}) {
@@ -104,8 +135,11 @@ function guessBlock(blocks, fix) {
     let best = blocks[0];
     let score = -1;
     for (const block of blocks) {
-        const hit = [...new Set(block.text.replace(/\s/g, ''))].filter(ch => chars.has(ch)).length;
-        if (hit > score) { best = block; score = hit; }
+        const hit = [...new Set(block.text.replace(/\s/g, ''))].filter((ch) => chars.has(ch)).length;
+        if (hit > score) {
+            best = block;
+            score = hit;
+        }
     }
     return best && best.key;
 }
@@ -118,164 +152,225 @@ function removeFix(view, where, index) {
 }
 
 // 改：按用户说明让 AI 重写所在分块。丢弃：让 AI 从所在分块里删掉这条补定的内容，或只从列表移除。
-async function editFix(view, where, index, drop = false) {
-    const s = st(view);
-    const project = view.project();
-    const fixes = where === 'draft' ? s.draft.fixes : project.setting.fixes;
-    const source = where === 'draft' ? s.draft.body : project.setting.text;
-    const blocks = splitBlocks(source);
-    const pick = `<label class="pi-field"><span>${drop ? '写在哪个分块' : '改哪个分块'}</span><select class="pi-sel" data-f="block">${options(blocks.map(block => ({ value: block.key, label: block.title })), guessBlock(blocks, fixes[index]))}</select></label>`;
-    const readKey = box => box.querySelector('[data-f=block]').value;
-    const result = await openDialog({
-        title: drop ? '丢弃补定' : '修改补定',
-        html: `<p class="pi-hint">${esc(fixes[index])}</p>${blocks.length ? pick : ''}
+async function editFix(view, where, index, drop = !1) {
+    const s = st(view),
+        project = view.project(),
+        fixes = where === 'draft' ? s.draft.fixes : project.setting.fixes,
+        source = where === 'draft' ? s.draft.body : project.setting.text,
+        blocks = splitBlocks(source),
+        pick = `<label class="pi-field"><span>${drop ? '写在哪个分块' : '改哪个分块'}</span><select class="pi-sel" data-f="block">${options(
+            blocks.map((block2) => ({ value: block2.key, label: block2.title })),
+            guessBlock(blocks, fixes[index]),
+        )}</select></label>`,
+        readKey = (box) => box.querySelector('[data-f=block]').value,
+        result = await openDialog({
+            title: drop ? '丢弃补定' : '修改补定',
+            html: `<p class="pi-hint">${esc(fixes[index])}</p>${blocks.length ? pick : ''}
             ${drop ? '' : '<label class="pi-field"><span>怎么改</span><textarea class="pi-ta" data-f="text"></textarea></label>'}`,
-        actions: drop
-            ? [{ label: '取消', value: null }, { label: '只从列表移除', value: { listOnly: true } }, { label: '让 AI 从正文删掉', primary: true, danger: true, value: box => (blocks.length ? { key: readKey(box), drop: true } : { listOnly: true }) }]
-            : [{ label: '取消', value: null }, { label: '让 AI 重写该分块', primary: true, value: box => ({ key: readKey(box), text: box.querySelector('[data-f=text]').value.trim() }) }],
-    });
+            actions: drop
+                ? [
+                      { label: '取消', value: null },
+                      { label: '只从列表移除', value: { listOnly: !0 } },
+                      {
+                          label: '让 AI 从正文删掉',
+                          primary: !0,
+                          danger: !0,
+                          value: (box) => (blocks.length ? { key: readKey(box), drop: !0 } : { listOnly: !0 }),
+                      },
+                  ]
+                : [
+                      { label: '取消', value: null },
+                      {
+                          label: '让 AI 重写该分块',
+                          primary: !0,
+                          value: (box) => ({ key: readKey(box), text: box.querySelector('[data-f=text]').value.trim() }),
+                      },
+                  ],
+        });
     if (!result) return;
     if (result.listOnly) return removeFix(view, where, index);
     if (!result.drop && !result.text) return;
-    const block = blocks.find(item => item.key === result.key);
-    const note = result.drop ? `${fixes[index]}\n改为：删除这一条，正文里不再保留它的内容，其余不变。` : `${fixes[index]}\n改为：${result.text}`;
-    const reply = await runTask(view, 'setting', () => ask(view, 'outline', rewriteBlockMessages({ guide: guideText(view), current: source, blockText: block.text, fixes: note })));
-    if (!reply) return;
-    const rewritten = splitBlocks(parseSettingReply(reply).body)[0];
+    const block = blocks.find((item) => item.key === result.key),
+        note = result.drop
+            ? `${fixes[index]}
+改为：删除这一条，正文里不再保留它的内容，其余不变。`
+            : `${fixes[index]}
+改为：${result.text}`,
+        reply2 = await runTask(view, 'setting', () =>
+            ask(view, 'outline', rewriteBlockMessages({ guide: guideText(view), current: source, blockText: block.text, fixes: note })),
+        );
+    if (!reply2) return;
+    let body = parseSettingReply(reply2).body,
+        parts = splitBlocks(body),
+        rewritten;
+    if (block.author) rewritten = { text: body.trim() ? wrapAuthorText(body) : '' };
+    else {
+        let tail = parts.slice(1).findIndex((b) => !b.author && !b.cont);
+        rewritten = parts[0] && { text: joinBlocks(parts.slice(0, tail < 0 ? parts.length : tail + 1)) };
+    }
     if (!rewritten) throw new Error('AI 没有返回分块内容');
-    const merged = joinBlocks(blocks.map(item => (item.key === block.key ? { ...item, text: rewritten.text } : item)));
-    const rest = fixes.filter((_, i) => i !== index);
-    if (where === 'draft') s.draft = { ...s.draft, body: merged, fixes: rest };
-    else commit(view, merged, { fixes: rest });
+    let merged = joinBlocks(
+            blocks.map((item) => (item.key === block.key ? { ...item, text: rewritten.text } : item)).filter((item) => item.text.trim()),
+        ),
+        rest = fixes.filter((_, i) => i !== index);
+    if (where === 'draft') {
+        let was = new Set(s.draft.keys),
+            keptText = new Set(blocks.filter((b) => was.has(b.key)).map((b) => b.text)),
+            fresh = new Set(splitBlocks(rewritten.text).map((b) => b.text)),
+            keys = splitBlocks(merged)
+                .filter((b) => keptText.has(b.text) || (was.has(block.key) && fresh.has(b.text)))
+                .map((b) => b.key);
+        s.draft = { ...s.draft, body: merged, fixes: rest, keys };
+    } else commit(view, merged, { fixes: rest });
     view.renderBody();
 }
 
 export const actions = {
     ...genActions,
     async 'from-talk'(view) {
-        const project = view.project();
-        const { talk, wb } = await genRefTexts(view);
+        const projectId = view.projectId,
+            project = view.project(),
+            { talk, wb } = await genRefTexts(view);
+        if (view.projectId !== projectId) return;
         if (!talk.trim() && !wb.length) throw new Error('没有可参考的内容：在讨论页聊一聊，或点「世界书」选择条目。');
-        const append = Boolean(st(view).append && project.setting.text.trim());
-        const reply = await runTask(view, 'setting', () => ask(view, 'outline', settingMessages({ guide: guideText(view), talk, current: project.setting.text, append, refs: wb })));
+        const append = !!(st(view).append && project.setting.text.trim()),
+            reply = await runTask(view, 'setting', () =>
+                ask(view, 'outline', settingMessages({ guide: guideText(view), talk, current: project.setting.text, append, refs: wb })),
+            );
         if (!reply) return;
         const parsed = parseSettingReply(reply);
         if (!parsed.body) throw new Error('AI 回复里没有世界观正文');
-        const body = append ? `${project.setting.text.trim()}\n\n${parsed.body}` : parsed.body;
-        st(view).draft = { ...parsed, body, keys: splitBlocks(body).map(block => block.key) };
-        view.renderBody();
+        const body = append
+            ? `${project.setting.text.trim()}
+
+${parsed.body}`
+            : parsed.body;
+        ((st(view).draft = { ...parsed, body, keys: splitBlocks(body).map((block) => block.key) }), view.renderBody());
     },
     // 对照当前及之后的大纲找出冲突或写死的句子，结果进新稿对比，只勾选有改动的分块。
     async 'sync-outline'(view) {
-        const project = view.project();
-        const units = flattenUnits(project.outline.volumes);
-        const from = view.runtime.activeId() === view.projectId ? Math.max(0, currentIndex(units, view.runtime.progress())) : 0;
-        const reply = await runTask(view, 'setting', () => ask(view, 'outline', syncSettingMessages({ guide: guideText(view), setting: project.setting.text, units, fromUnitIndex: from })));
+        const project = view.project(),
+            units = flattenUnits(project.outline.volumes),
+            from = view.runtime.activeId() === view.projectId ? Math.max(0, currentIndex(units, view.runtime.progress())) : 0,
+            reply = await runTask(view, 'setting', () =>
+                ask(
+                    view,
+                    'outline',
+                    syncSettingMessages({ guide: guideText(view), setting: project.setting.text, units, fromUnitIndex: from }),
+                ),
+            );
         if (!reply) return;
-        const parsed = parseSettingReply(reply);
-        const keys = parsed.body ? changedBlockKeys(project.setting.text, parsed.body) : [];
+        const parsed = parseSettingReply(reply),
+            keys = parsed.body ? changedBlockKeys(project.setting.text, parsed.body) : [];
         if (!keys.length) {
             toast('info', '设定与大纲没有冲突，不需要修改。');
             return;
         }
-        st(view).draft = { body: mergeBlocks(project.setting.text, parsed.body, keys), check: parsed.check, fixes: [], keys, sync: true };
-        view.renderBody();
+        ((st(view).draft = { body: mergeBlocks(project.setting.text, parsed.body, keys), check: parsed.check, fixes: [], keys, sync: !0 }),
+            view.renderBody());
     },
     // 手动保存：把编辑框内容再写一遍、记进历史、立即落盘，并刷新注入内容（不用等失焦）。
     async 'setting-save'(view, target) {
         const box = target.closest('.pi-card')?.querySelector('[data-setting]');
-        if (box) {
-            onInput(view, box);
-            onBlur(view, box);
-        }
-        view.runtime.refresh();
+        (box && (onInput(view, box), onBlur(view, box)), view.runtime.refresh());
         try {
-            await view.data.flush();
-            toast('success', '设定已保存，注入内容已刷新。');
+            (await view.data.flush(), toast('success', '设定已保存，注入内容已刷新。'));
         } catch (error) {
             toast('error', `保存失败：${error.message}`);
         }
     },
     'block-mute'(view, target) {
-        const key = target.dataset.key;
-        const mute = new Set(view.project().setting.mute);
-        if (mute.has(key)) mute.delete(key);
-        else mute.add(key);
-        setSetting(view, { mute: [...mute] });
-        view.runtime.refresh();
-        view.renderBody();
+        const key = target.dataset.key,
+            mute = new Set(view.project().setting.mute);
+        (mute.has(key) ? mute.delete(key) : mute.add(key),
+            setSetting(view, { mute: [...mute] }),
+            view.runtime.refresh(),
+            view.renderBody());
     },
     'draft-block'(view, target, event) {
-        if (event.target.closest('input')) return;
-        st(view).openBlock = st(view).openBlock === target.dataset.key ? '' : target.dataset.key;
-        view.renderBody();
+        event.target.closest('input,label') ||
+            ((st(view).openBlock = st(view).openBlock === target.dataset.key ? '' : target.dataset.key), view.renderBody());
     },
     'draft-drop'(view) {
-        st(view).draft = null;
-        view.renderBody();
+        ((st(view).draft = null), view.renderBody());
     },
     'draft-all'(view) {
         const draft = st(view).draft;
-        commit(view, draft.body, { check: draft.check, ...(draft.sync ? {} : { fixes: draft.fixes }) });
-        st(view).draft = null;
-        view.renderBody();
+        (commit(view, draft.body, { check: draft.check, ...(draft.sync ? {} : { fixes: draft.fixes }) }),
+            (st(view).draft = null),
+            view.renderBody());
     },
     'draft-pick'(view) {
         const draft = st(view).draft;
         if (!draft.keys.length) throw new Error('没有勾选分块');
-        commit(view, mergeBlocks(view.project().setting.text, draft.body, draft.keys), { check: draft.check, ...(draft.sync ? {} : { fixes: draft.fixes }) });
-        st(view).draft = null;
-        view.renderBody();
+        (commit(view, mergeBlocks(view.project().setting.text, draft.body, draft.keys), {
+            check: draft.check,
+            ...(draft.sync ? {} : { fixes: draft.fixes }),
+        }),
+            (st(view).draft = null),
+            view.renderBody());
     },
     'fix-ok'(view, target) {
         const index = Number(target.dataset.i);
-        if (target.dataset.where === 'draft') st(view).draft.fixes = st(view).draft.fixes.filter((_, i) => i !== index);
-        else setSetting(view, { fixes: view.project().setting.fixes.filter((_, i) => i !== index) });
-        view.renderBody();
+        (target.dataset.where === 'draft'
+            ? (st(view).draft.fixes = st(view).draft.fixes.filter((_, i) => i !== index))
+            : setSetting(view, { fixes: view.project().setting.fixes.filter((_, i) => i !== index) }),
+            view.renderBody());
     },
     'fix-edit': (view, target) => editFix(view, target.dataset.where, Number(target.dataset.i)),
-    'fix-drop': (view, target) => editFix(view, target.dataset.where, Number(target.dataset.i), true),
+    'fix-drop': (view, target) => editFix(view, target.dataset.where, Number(target.dataset.i), !0),
     async 'import-wb'(view) {
         const picked = await pickWorldbookEntries('从世界书导入设定');
         if (!picked.length) return;
-        const project = view.project();
-        commit(view, [project.setting.text, ...picked.map(entry => entry.content)].filter(item => item.trim()).join('\n\n'));
-        view.renderBody();
-        await afterImport(picked);
+        let projectId = view.projectId,
+            chosen = await settingPiecesFromEntries(picked);
+        if (!chosen || view.projectId !== projectId) return;
+        let project = view.project();
+        (commit(
+            view,
+            [project.setting.text, ...chosen.pieces].filter((item) => item.trim()).join(`
+
+`),
+        ),
+            toast('success', `${picked.length - chosen.authorCount} 条进公开设定，${chosen.authorCount} 条作为仅作者资料（不注入）。`),
+            view.renderBody(),
+            await afterImport(picked, { authorCount: chosen.authorCount }));
     },
     history(view) {
-        st(view).history = !st(view).history;
-        st(view).historyAt = undefined;
-        view.renderBody();
+        ((st(view).history = !st(view).history), (st(view).historyAt = void 0), view.renderBody());
     },
     'hist-diff'(view, target) {
-        st(view).historyAt = Number(target.dataset.i);
-        view.renderBody();
+        ((st(view).historyAt = Number(target.dataset.i)), view.renderBody());
     },
     async 'hist-restore'(view, target) {
         const item = view.project().setting.history[Number(target.dataset.i)];
-        if (!item || !(await confirmDialog({ title: '回退设定', body: '当前正文会先存进历史，再换成这一版。' }))) return;
-        commit(view, item.text);
-        view.renderBody();
+        !item ||
+            !(await confirmDialog({ title: '回退设定', body: '当前正文会先存进历史，再换成这一版。' })) ||
+            (commit(view, item.text), view.renderBody());
     },
     // 删掉整个分块（标题和内容一起），删前的版本留在历史版本里，可回退。
     async 'block-del'(view, target) {
-        const text = view.project().setting.text;
-        const blocks = splitBlocks(text);
-        const block = blocks.find(item => item.key === target.dataset.key);
-        if (!block) return;
-        if (!(await confirmDialog({ title: `删除分块「${block.title}」`, body: '删除前的版本保存在历史版本里，可以回退。', okLabel: '删除', danger: true }))) return;
-        commit(view, joinBlocks(blocks.filter(item => item.key !== block.key)));
-        view.renderBody();
+        const text = view.project().setting.text,
+            blocks = splitBlocks(text),
+            block = blocks.find((item) => item.key === target.dataset.key);
+        block &&
+            (await confirmDialog({
+                title: `删除分块「${block.title}」`,
+                body: '删除前的版本保存在历史版本里，可以回退。',
+                okLabel: '删除',
+                danger: !0,
+            })) &&
+            (commit(view, joinBlocks(blocks.filter((item) => item.key !== block.key))), view.renderBody());
     },
     jump(view, target) {
-        const box = target.closest('.pi-card').querySelector('[data-setting]');
-        const block = splitBlocks(box.value).find(item => item.key === target.dataset.key);
+        const box = target.closest('.pi-card').querySelector('[data-setting]'),
+            block = splitBlocks(box.value).find((item) => item.key === target.dataset.key);
         if (!block) return;
         const at = box.value.indexOf(block.text);
-        box.focus();
-        box.setSelectionRange(at, at);
-        const line = box.value.slice(0, at).split('\n').length - 1;
+        (box.focus(), box.setSelectionRange(at, at));
+        const line =
+            box.value.slice(0, at).split(`
+`).length - 1;
         box.scrollTop = Math.max(0, line * parseFloat(getComputedStyle(box).lineHeight || '20') - 8);
     },
 };

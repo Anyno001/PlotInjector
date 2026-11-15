@@ -14,7 +14,11 @@ const BUTTON = '剧情注入';
 function boot() {
     const host = hostWindow();
     if (host[KEY] && typeof host[KEY].destroy === 'function') {
-        try { host[KEY].destroy(); } catch (error) { console.warn('[剧情注入器] 旧实例销毁失败', error); }
+        try {
+            host[KEY].destroy();
+        } catch (error) {
+            console.warn('[剧情注入器] 旧实例销毁失败', error);
+        }
     }
     host.__plotInjectorBootError = '';
     const yaml = libs().yaml;
@@ -29,25 +33,33 @@ function boot() {
     let app = null;
     const notice = createNotices();
     const data = createDataStore({
-        onChange: reason => app && app.refresh(reason),
-        onError: error => toast('error', `保存失败，内容仍在内存里：${error.message}`),
+        onChange: (reason) => app && app.refresh(reason),
+        onError: (error) => toast('error', `保存失败，内容仍在内存里：${error.message}`),
     });
-    const askReason = reason => promptDialog({ title: '改写后续阶段', label: '偏离说明（可修改或留空）', value: reason, multiline: true });
+    const askReason = (reason) =>
+        promptDialog({ title: '改写后续阶段', label: '偏离说明（可修改或留空）', value: reason, multiline: true });
     // 界面刷新出错只记日志，不能打断检测、存进度这些后台流程。
-    const emit = reason => {
-        try { if (app) app.refresh(reason); } catch (error) { console.error('[剧情注入器] 界面刷新失败', error); }
+    const emit = (reason) => {
+        try {
+            if (app) app.refresh(reason);
+        } catch (error) {
+            console.error('[剧情注入器] 界面刷新失败', error);
+        }
     };
     const runtime = createRuntime({ data, notice, emit, askReason });
     app = createApp({ data, runtime, version: VERSION });
 
     let started = false;
-    const ready = data.init().then(() => {
-        runtime.start();
-        started = true;
-        emit('index');
-    }).catch(error => {
-        toast('error', `读取本地数据失败：${error.message}`);
-    });
+    const ready = data
+        .init()
+        .then(() => {
+            runtime.start();
+            started = true;
+            emit('index');
+        })
+        .catch((error) => {
+            toast('error', `读取本地数据失败：${error.message}`);
+        });
 
     let subscription = null;
     // 自动更新版的加载器已经绑了按钮，这里只在单文件版里绑。
@@ -63,9 +75,14 @@ function boot() {
         ready,
         data,
         runtime,
+        __view: app.view,
         async destroy() {
             if (host[KEY] === instance) delete host[KEY];
-            try { subscription && typeof subscription.stop === 'function' && subscription.stop(); } catch { /* 酒馆助手已卸载 */ }
+            try {
+                subscription && typeof subscription.stop === 'function' && subscription.stop();
+            } catch {
+                /* 酒馆助手已卸载 */
+            }
             app.close();
             if (started) runtime.stop();
             notice.destroy();
@@ -82,6 +99,10 @@ try {
     boot();
 } catch (error) {
     console.error('[剧情注入器] 启动失败', error);
-    try { hostWindow().__plotInjectorBootError = `启动失败：${error && error.message}`; } catch { /* 父窗口不可写 */ }
+    try {
+        hostWindow().__plotInjectorBootError = `启动失败：${error && error.message}`;
+    } catch {
+        /* 父窗口不可写 */
+    }
     toast('error', `启动失败：${error.message}`);
 }

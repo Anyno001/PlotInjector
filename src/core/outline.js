@@ -16,8 +16,8 @@ export function changeLines(data) {
     const value = data && data[CHANGE_FIELD];
     const list = Array.isArray(value) ? value : String(value || '').split('\n');
     return list
-        .map(item => (item && typeof item === 'object' ? Object.values(item).join('：') : String(item || '')))
-        .map(text => text.replace(/^\s*(?:[-*•]|\d+[.、])\s*/, '').trim())
+        .map((item) => (item && typeof item === 'object' ? Object.values(item).join('：') : String(item || '')))
+        .map((text) => text.replace(/^\s*(?:[-*•]|\d+[.、])\s*/, '').trim())
         .filter(Boolean);
 }
 
@@ -25,10 +25,10 @@ export function makeId(prefix = 'u') {
     return `${prefix}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 }
 
-const isPlainObject = value => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+const isPlainObject = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 
 export function looksLikeStage(value) {
-    return isPlainObject(value) && STAGE_HINT_KEYS.some(key => key in value);
+    return isPlainObject(value) && STAGE_HINT_KEYS.some((key) => key in value);
 }
 
 function looksLikeVolume(value) {
@@ -51,7 +51,9 @@ export function volumesFromValue(value, idOf = makeId) {
         volumes.push({
             id: idOf('v'),
             key,
-            stages: Object.entries(stages).filter(([, data]) => isPlainObject(data)).map(([stageKey, data]) => ({ id: idOf('s'), key: stageKey, data })),
+            stages: Object.entries(stages)
+                .filter(([, data]) => isPlainObject(data))
+                .map(([stageKey, data]) => ({ id: idOf('s'), key: stageKey, data })),
         });
     }
     if (!volumes.length) throw new Error('没有读到任何卷');
@@ -141,37 +143,45 @@ export function stageNodes(data) {
 
 // 去掉已取消勾选的节点；空列表整段省略。
 export function filterStageData(data, offIds = []) {
-    const off = new Set(offIds);
-    const out = {};
+    const off = new Set(offIds),
+        out = {};
     for (const [key, value] of Object.entries(data || {})) {
-        const meta = NODE_FIELDS.find(item => item.field === key);
+        const meta = NODE_FIELDS.find((item) => item.field === key);
         if (!meta || !Array.isArray(value)) {
             out[key] = value;
             continue;
         }
-        const kept = value.filter((_, index) => !off.has(`${meta.prefix}${index}`));
-        if (kept.length) out[key] = kept;
+        const kept = value
+            .filter((_, index) => !off.has(`${meta.prefix}${index}`))
+            .map((item) => {
+                if (!isPlainObject(item) || !('id' in item)) return item;
+                const { id, ...publicItem } = item;
+                return Object.keys(publicItem).length === 1 && typeof publicItem.名称 === 'string' ? publicItem.名称 : publicItem;
+            });
+        kept.length && (out[key] = kept);
     }
     return out;
 }
 
 export function mainNodeNames(data) {
-    return stageNodes(data).filter(node => node.kind === 'main').map(node => node.name);
+    return stageNodes(data)
+        .filter((node) => node.kind === 'main')
+        .map((node) => node.name);
 }
 
 // 从 fromStageId 这一段起（含）换成 incoming 里的卷与阶段：同名卷接在后面，新卷追加；返回新的卷列表。
 export function replaceRest(volumes, fromStageId, incoming) {
     const units = flattenUnits(volumes);
-    const from = units.findIndex(unit => unit.stage.id === fromStageId);
+    const from = units.findIndex((unit) => unit.stage.id === fromStageId);
     if (from < 0) throw new Error('原来的阶段已不存在');
-    const drop = new Set(units.slice(from).map(unit => unit.stage.id));
-    let next = volumes.map(volume => ({ ...volume, stages: volume.stages.filter(stage => !drop.has(stage.id)) }));
+    const drop = new Set(units.slice(from).map((unit) => unit.stage.id));
+    let next = volumes.map((volume) => ({ ...volume, stages: volume.stages.filter((stage) => !drop.has(stage.id)) }));
     for (const volume of incoming) {
-        const same = next.find(item => item.key === volume.key);
-        if (same) next = next.map(item => (item === same ? { ...item, stages: [...item.stages, ...volume.stages] } : item));
+        const same = next.find((item) => item.key === volume.key);
+        if (same) next = next.map((item) => (item === same ? { ...item, stages: [...item.stages, ...volume.stages] } : item));
         else next.push(volume);
     }
-    return next.filter(volume => volume.stages.length);
+    return next.filter((volume) => volume.stages.length);
 }
 
 // outline v0.1.23：历史版本、移动、单阶段替换、大纲检查。
@@ -189,7 +199,7 @@ function queueByKey(list) {
         if (!queues.has(item.key)) queues.set(item.key, []);
         queues.get(item.key).push(item);
     }
-    return key => {
+    return (key) => {
         const queue = queues.get(key);
         return queue && queue.length ? queue.shift() : null;
     };
@@ -203,20 +213,22 @@ export function restoreOutline(text, current = [], idOf = makeId) {
     const old = current || [];
     const takeVolume = queueByKey(old);
     const used = new Set();
-    const parsed = parseOutlineText(text, idOf).map(volume => {
+    const parsed = parseOutlineText(text, idOf).map((volume) => {
         const match = takeVolume(volume.key);
         const takeStage = queueByKey(match ? match.stages : []);
         return {
             volume,
             match,
-            stages: volume.stages.map(stage => {
+            stages: volume.stages.map((stage) => {
                 const same = takeStage(stage.key);
                 if (same) used.add(same.id);
                 return { stage, same };
             }),
         };
     });
-    const leftovers = old.flatMap(volume => volume.stages.filter(stage => !used.has(stage.id)).map(stage => ({ key: stage.key, stage, volume })));
+    const leftovers = old.flatMap((volume) =>
+        volume.stages.filter((stage) => !used.has(stage.id)).map((stage) => ({ key: stage.key, stage, volume })),
+    );
     const takeAny = queueByKey(leftovers);
     for (const row of parsed) {
         for (const item of row.stages) {
@@ -229,20 +241,21 @@ export function restoreOutline(text, current = [], idOf = makeId) {
             }
         }
     }
-    const usedVolumes = new Set(parsed.filter(row => row.match).map(row => row.match.id));
+    const usedVolumes = new Set(parsed.filter((row) => row.match).map((row) => row.match.id));
     const alias = [];
-    const volumes = parsed.map(row => {
+    const volumes = parsed.map((row) => {
         let id = row.match ? row.match.id : row.volume.id;
         if (!row.match) {
             const votes = new Map();
-            for (const item of row.stages) if (item.from && !usedVolumes.has(item.from.id)) votes.set(item.from, (votes.get(item.from) || 0) + 1);
+            for (const item of row.stages)
+                if (item.from && !usedVolumes.has(item.from.id)) votes.set(item.from, (votes.get(item.from) || 0) + 1);
             const best = [...votes.entries()].sort((a, b) => b[1] - a[1])[0];
             if (best) {
                 id = best[0].id;
                 usedVolumes.add(id);
             }
         }
-        const source = row.match || old.find(volume => volume.id === id) || null;
+        const source = row.match || old.find((volume) => volume.id === id) || null;
         const stages = row.stages.map((item, index) => {
             if (item.same) return { ...item.stage, id: item.same.id };
             const spot = source && source.stages[index];
@@ -265,8 +278,8 @@ export function volumesFromHistory(text, current = [], idOf = makeId) {
 export function nearestUnitId(oldVolumes, newVolumes, currentId) {
     const before = flattenUnits(oldVolumes);
     const after = flattenUnits(newVolumes);
-    if (!after.length || after.some(unit => unit.id === currentId)) return null;
-    const at = before.findIndex(unit => unit.id === currentId);
+    if (!after.length || after.some((unit) => unit.id === currentId)) return null;
+    const at = before.findIndex((unit) => unit.id === currentId);
     if (at < 0) return null;
     return after[Math.min(at, after.length - 1)].id;
 }
@@ -281,12 +294,12 @@ export function moveItem(list, index, delta) {
 
 // 阶段移到目标卷末尾，stage.id 不变。
 export function moveStageToVolume(volumes, stageId, targetVolumeId) {
-    const source = volumes.find(volume => volume.stages.some(stage => stage.id === stageId));
-    const target = volumes.find(volume => volume.id === targetVolumeId);
+    const source = volumes.find((volume) => volume.stages.some((stage) => stage.id === stageId));
+    const target = volumes.find((volume) => volume.id === targetVolumeId);
     if (!source || !target || source.id === target.id) return volumes;
-    const stage = source.stages.find(item => item.id === stageId);
-    return volumes.map(volume => {
-        if (volume.id === source.id) return { ...volume, stages: volume.stages.filter(item => item.id !== stageId) };
+    const stage = source.stages.find((item) => item.id === stageId);
+    return volumes.map((volume) => {
+        if (volume.id === source.id) return { ...volume, stages: volume.stages.filter((item) => item.id !== stageId) };
         if (volume.id === target.id) return { ...volume, stages: [...volume.stages, stage] };
         return volume;
     });
@@ -295,12 +308,14 @@ export function moveStageToVolume(volumes, stageId, targetVolumeId) {
 // 卷内把 stageIds 指向的阶段换成 incoming：新阶段放在第一个被换阶段的位置，其余被换阶段删除。
 // incoming 第一段沿用第一个被换阶段的 id（合并时即前一段），进度靠这个 id 接上。返回 { volumes, stages, keepId }，stages 为带最终 id 的新阶段。
 export function replaceStages(volumes, volumeId, stageIds, incoming) {
+    const original = volumes.find((v) => v.id === volumeId)?.stages.filter((s) => stageIds.includes(s.id)) || [];
+    incoming = preserveStageNodeIds(original, incoming);
     const drop = new Set(stageIds);
     let placed = null;
     let keepId = '';
-    const next = volumes.map(volume => {
+    const next = volumes.map((volume) => {
         if (volume.id !== volumeId) return volume;
-        const at = volume.stages.findIndex(stage => drop.has(stage.id));
+        const at = volume.stages.findIndex((stage) => drop.has(stage.id));
         if (at < 0) throw new Error('原来的阶段已不存在');
         keepId = volume.stages[at].id;
         placed = incoming.map((stage, index) => (index === 0 ? { ...stage, id: keepId } : stage));
@@ -327,9 +342,17 @@ export function outlineIssues(volumes) {
         for (const stage of volume.stages) seen.set(stage.key, (seen.get(stage.key) || 0) + 1);
         for (const stage of volume.stages) {
             const label = stageLabel(stage.key);
-            if (!String(stage.data && stage.data.时间范围 || '').trim()) issues.push({ kind: 'no-time', volumeId: volume.id, stageId: stage.id, text: `「${label}」没有写时间范围` });
-            if (!mainNodeNames(stage.data).length) issues.push({ kind: 'no-main', volumeId: volume.id, stageId: stage.id, text: `「${label}」没有主线节点` });
-            if (seen.get(stage.key) > 1) issues.push({ kind: 'dup-name', volumeId: volume.id, stageId: stage.id, text: `阶段名「${label}」在「${volumeLabel(volume.key)}」中重名` });
+            if (!String((stage.data && stage.data.时间范围) || '').trim())
+                issues.push({ kind: 'no-time', volumeId: volume.id, stageId: stage.id, text: `「${label}」没有写时间范围` });
+            if (!mainNodeNames(stage.data).length)
+                issues.push({ kind: 'no-main', volumeId: volume.id, stageId: stage.id, text: `「${label}」没有主线节点` });
+            if (seen.get(stage.key) > 1)
+                issues.push({
+                    kind: 'dup-name',
+                    volumeId: volume.id,
+                    stageId: stage.id,
+                    text: `阶段名「${label}」在「${volumeLabel(volume.key)}」中重名`,
+                });
         }
     }
     return [...issues, ...threadNameIssues(volumes)];
@@ -352,7 +375,7 @@ function threadNameIssues(volumes) {
         const what = kind === 'side' ? '支线' : '进度钟';
         for (const [name, list] of map) {
             if (list.length < 2) continue;
-            const places = [...new Set(list.map(unit => stageLabel(unit.stage.key)))].join('、');
+            const places = [...new Set(list.map((unit) => stageLabel(unit.stage.key)))].join('、');
             const where = places.includes('、') ? places : `${places}的不同节点`;
             const seen = new Set();
             for (const unit of list) {
@@ -363,4 +386,40 @@ function threadNameIssues(volumes) {
         }
     }
     return issues;
+}
+
+export const STABLE_PREFIX = '@';
+
+export function nodeProgressId(item, prefix, index) {
+    let id = isPlainObject(item) && typeof item.id == 'string' ? item.id.trim() : '';
+    return id ? `${STABLE_PREFIX}${id}` : `${prefix}${index}`;
+}
+
+export { isPlainObject, STAGE_HINT_KEYS };
+
+// Stage tools may omit internal node IDs. Keep the IDs of unique, unchanged events.
+export function preserveStageNodeIds(original, incoming) {
+    const ids = new Map(),
+        used = new Set();
+    for (const stage of original)
+        for (const node of stageNodes(stage.data)) {
+            const key = node.field + '\n' + node.name;
+            if (node.item && node.item.id) ids.set(key, ids.has(key) ? null : node.item.id);
+        }
+    for (const stage of incoming) for (const node of stageNodes(stage.data)) if (node.item && node.item.id) used.add(node.item.id);
+    return incoming.map((stage) => {
+        const data = { ...stage.data };
+        for (const meta of NODE_FIELDS) {
+            if (!Array.isArray(data[meta.field])) continue;
+            data[meta.field] = data[meta.field].map((item, index) => {
+                if (isPlainObject(item) && item.id) return item;
+                const node = stageNodes({ [meta.field]: [item] })[0],
+                    uid = ids.get(meta.field + '\n' + node.name);
+                if (!uid || used.has(uid)) return item;
+                used.add(uid);
+                return isPlainObject(item) ? { ...item, id: uid } : { 名称: String(item), id: uid };
+            });
+        }
+        return { ...stage, data };
+    });
 }

@@ -1,4 +1,3 @@
-
 // 检测只看正文：去掉思维链、代码块、状态栏一类的标签块。
 export function cleanFloorText(text, limit = 3000) {
     let out = String(text || '');
@@ -18,15 +17,21 @@ function threadRules(threads) {
     const rules = [];
     if (clocks.length) {
         keys.push('"clocks":[{"name":"进度钟名称","tick":推进格数,"happened":true或false}]');
-        rules.push(`clocks 对照剧情索引里的【世界进度钟】（${clocks.map(clock => `${clock.name} ${clock.filled}/${clock.total}`).join('、')}）：正文里有推动这件事的进展就填正数，每次最多 2 格；玩家出手阻止、使局势缓和就填负数；没有变化就省略。只有正文已经写出这件事发生时，happened 才填 true。`);
+        rules.push(
+            `clocks 对照剧情索引里的【世界进度钟】（${clocks.map((clock) => `${clock.name} ${clock.filled}/${clock.total}`).join('、')}）：正文里有推动这件事的进展就填正数，每次最多 2 格；玩家出手阻止、使局势缓和就填负数；没有变化就省略。只有正文已经写出这件事发生时，happened 才填 true。`,
+        );
     }
     if (threads.hooks) {
         keys.push('"hooks":["支线名"]');
-        rules.push('hooks 填【支线钩子】里标为「待触发」、出现条件已在正文中满足的支线名。支线已经在正文里演出时，把支线名填进 done；支线链只在当前这一步演出时填。');
+        rules.push(
+            'hooks 填【支线钩子】里标为「待触发」、出现条件已在正文中满足的支线名。支线已经在正文里演出时，把支线名填进 done；支线链只在当前这一步演出时填。',
+        );
     }
     if (threads.newThread) {
         keys.push('"newThread":{"name":"线名","summary":"一句话概括"}');
-        rules.push('玩家在正文里主动开了一条大纲和剧情索引里都没有的线（例如接下新的委托、追查新的线索、发展新的关系）时填 newThread，没有就填 null。');
+        rules.push(
+            '玩家在正文里主动开了一条大纲和剧情索引里都没有的线（例如接下新的委托、追查新的线索、发展新的关系）时填 newThread，没有就填 null。',
+        );
         const ignored = Array.isArray(threads.ignored) ? threads.ignored.slice(-10) : [];
         if (ignored.length) rules.push(`以下线已被忽略，不要再填进 newThread：${ignored.join('、')}。`);
     }
@@ -38,12 +43,19 @@ function threadRules(threads) {
 
 // newThread 的占位值：AI 没有新线时常写成这些。比对前去掉首尾空白与末尾标点。
 const EMPTY_NAMES = /^(?:无|没有|暂无|空|none|null|nil|n\/a|na|undefined|-|—|无新线|没有新线|没有新的线)$/i;
-const isEmptyName = name => EMPTY_NAMES.test(String(name).trim().replace(/[。．.！!？?；;，,、\s]+$/, '').trim());
+const isEmptyName = (name) =>
+    EMPTY_NAMES.test(
+        String(name)
+            .trim()
+            .replace(/[。．.！!？?；;，,、\s]+$/, '')
+            .trim(),
+    );
 
 // index 是 buildIndexText 生成的剧情索引，里面已有当前段各节点的已演/未演。threads 见 threadRules。
 export function buildCheckMessages(unit, index, floors, threads = null) {
     const extra = threadRules(threads);
-    const format = '{"done":["节点名"],"stageDone":true或false,"offTrack":true或false,"offReason":"偏离说明，没有就留空","reason":"一句话"}';
+    const format =
+        '{"done":["节点名"],"stageDone":true或false,"offTrack":true或false,"offReason":"偏离说明，没有就留空","reason":"一句话"}';
     const system = [
         '你是剧情进度核对员。根据最近的正文，对照剧情索引判断进度。',
         '只认正文里已经写出的事件，计划、预告、角色设想不算发生。',
@@ -59,9 +71,12 @@ export function buildCheckMessages(unit, index, floors, threads = null) {
         `【剧情索引】\n${index}`,
         '',
         '【最近正文】',
-        ...floors.map(floor => `【第 ${floor.index} 楼${readTo > 0 && floor.index < readTo ? '·已读' : ''}】\n${floor.text}`),
+        ...floors.map((floor) => `【第 ${floor.index} 楼${readTo > 0 && floor.index < readTo ? '·已读' : ''}】\n${floor.text}`),
     ].join('\n');
-    return [{ role: 'system', content: system }, { role: 'user', content: user }];
+    return [
+        { role: 'system', content: system },
+        { role: 'user', content: user },
+    ];
 }
 
 export function parseCheckReply(text) {
@@ -75,33 +90,70 @@ export function parseCheckReply(text) {
     } catch {
         throw new Error('检测结果 JSON 无法解析');
     }
-    const done = Array.isArray(value.done) ? value.done.map(item => String(item).trim()).filter(Boolean) : [];
-    const flag = item => item === true || item === 'true';
+    const done = Array.isArray(value.done) ? value.done.map((item) => String(item).trim()).filter(Boolean) : [];
+    const flag = (item) => item === true || item === 'true';
     return {
-        done, stageDone: flag(value.stageDone), offTrack: flag(value.offTrack), offReason: String(value.offReason || '').trim(), reason: String(value.reason || '').trim(),
-        clocks: parseClocks(value.clocks, flag), hooks: names(value.hooks), newThread: parseThread(value.newThread),
+        done,
+        stageDone: flag(value.stageDone),
+        offTrack: flag(value.offTrack),
+        offReason: String(value.offReason || '').trim(),
+        reason: String(value.reason || '').trim(),
+        clocks: parseClocks(value.clocks, flag),
+        hooks: names(value.hooks),
+        newThread: parseThread(value.newThread),
     };
 }
 
 const CLOCK_TICK_MAX = 2;
-const names = list => (Array.isArray(list) ? list.map(item => String(item ?? '').trim()).filter(Boolean) : []);
+const names = (list) => (Array.isArray(list) ? list.map((item) => String(item ?? '').trim()).filter(Boolean) : []);
 
 // clocks 可写成数组 [{name,tick,happened}] 或映射 {名称: 格数 或 {tick,happened}}；缺字段按 0。推进夹在 -总格..+2，合并时再夹到 0..总格。
 function parseClocks(raw, flag) {
-    const list = Array.isArray(raw) ? raw
-        : raw && typeof raw === 'object' ? Object.entries(raw).map(([name, item]) => (item && typeof item === 'object' ? { name, ...item } : { name, tick: item }))
-            : [];
-    return list.filter(item => item && typeof item === 'object').map(item => {
-        const tick = Math.round(Number(item.tick ?? item.advance ?? item.推进));
-        return { name: String(item.name ?? item.名称 ?? '').trim(), tick: Number.isFinite(tick) ? Math.min(CLOCK_TICK_MAX, tick) : 0, happened: flag(item.happened ?? item.发生) };
-    }).filter(item => item.name);
+    const list = Array.isArray(raw)
+        ? raw
+        : raw && typeof raw === 'object'
+          ? Object.entries(raw).map(([name, item]) => (item && typeof item === 'object' ? { name, ...item } : { name, tick: item }))
+          : [];
+    return list
+        .filter((item) => item && typeof item === 'object')
+        .map((item) => {
+            const tick = Math.round(Number(item.tick ?? item.advance ?? item.推进));
+            return {
+                name: String(item.name ?? item.名称 ?? '').trim(),
+                tick: Number.isFinite(tick) ? Math.min(CLOCK_TICK_MAX, tick) : 0,
+                happened: flag(item.happened ?? item.发生),
+            };
+        })
+        .filter((item) => item.name);
 }
 
 function parseThread(raw) {
     if (!raw) return null;
     const item = typeof raw === 'string' ? { name: raw } : raw;
     if (typeof item !== 'object') return null;
-    const name = String(item.name ?? item.名称 ?? '').trim().slice(0, 40);
-    return name && !isEmptyName(name) ? { name, summary: String(item.summary ?? item.概括 ?? '').trim().slice(0, 200) } : null;
+    const name = String(item.name ?? item.名称 ?? '')
+        .trim()
+        .slice(0, 40);
+    return name && !isEmptyName(name)
+        ? {
+              name,
+              summary: String(item.summary ?? item.概括 ?? '')
+                  .trim()
+                  .slice(0, 200),
+          }
+        : null;
 }
 
+export function buildClueCheckMessages(material, floors) {
+    let system = [
+            '你是剧情核对员。根据最近的正文，判断下面这个场景里列出的发现是否已经在正文中实际发生。',
+            '只认正文里已经写出的事件：到了地点不等于找到证据，答应提供不等于已经拿到，计划和猜测都不算。',
+            '只输出一个 JSON 对象，不加说明：{"done":["已发生的发现原文"],"stageDone":true或false,"offTrack":false,"offReason":"","reason":"一句话说明依据"}',
+            'done 只能照抄下面【可能的发现】里的条目；stageDone 表示这个场景已经结束。',
+        ].join('\n'),
+        user = ['【场景】', material, '', '【最近正文】', ...floors.map((floor) => `【第 ${floor.index} 楼】\n${floor.text}`)].join('\n');
+    return [
+        { role: 'system', content: system },
+        { role: 'user', content: user },
+    ];
+}

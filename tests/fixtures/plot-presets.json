@@ -1,0 +1,43 @@
+{
+  "timeRecall": {
+    "name": "时间召回",
+    "extractTags": "recall",
+    "extractInjectTags": "",
+    "plotTasks": [
+      {
+        "id": "defaultPlotTask",
+        "name": "默认任务",
+        "enabled": true,
+        "extractTags": "recall",
+        "extractInjectTags": "",
+        "stage": 1,
+        "order": 0
+      }
+    ]
+  },
+  "huizhencheng": {
+    "name": "Stitches_RebornV_东方辉针城",
+    "extractTags": "recall",
+    "extractInjectTags": "",
+    "plotTasks": [
+      {
+        "id": "plotTask2",
+        "name": "召回",
+        "enabled": true,
+        "extractTags": "recall",
+        "extractInjectTags": "",
+        "stage": 1,
+        "order": 0
+      },
+      {
+        "id": "defaultPlotTask",
+        "name": "推进",
+        "enabled": true,
+        "extractTags": "act,scene",
+        "extractInjectTags": "inner,file,scene,dm_track,dm_story",
+        "stage": 1,
+        "order": 1
+      }
+    ]
+  }
+}

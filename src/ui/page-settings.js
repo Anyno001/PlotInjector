@@ -1,5 +1,7 @@
-import { BUILTIN_GUIDE } from '../core/guide.js';
-import { PACES, PACE_TEXT, paceText } from '../core/inject.js';
+import { resolveGuide, GUIDE_PRESETS, BUILTIN_GUIDE } from '../core/guide.js';
+
+import { bodyGuideText, BODY_GUIDE, PACES, PACE_TEXT, paceText } from '../core/inject.js';
+
 import { makeId } from '../core/outline.js';
 import { LLM_ROLES } from '../core/store.js';
 import { fetchModels } from '../host/llm.js';
@@ -7,9 +9,9 @@ import { toast } from '../host/st.js';
 import { confirmDialog, esc, openDialog, options, promptDialog } from './dom.js';
 import { ICONS } from './styles.js';
 
-const st = view => view.tabState('settings');
+const st = (view) => view.tabState('settings');
 
-const currentRole = view => (LLM_ROLES.some(item => item.key === st(view).role) ? st(view).role : LLM_ROLES[0].key);
+const currentRole = (view) => (LLM_ROLES.some((item) => item.key === st(view).role) ? st(view).role : LLM_ROLES[0].key);
 
 // 拉到模型列表后用下拉框直接选；列表里没有的模型可切到手动输入。
 function modelField(view, role, llm) {
@@ -19,7 +21,10 @@ function modelField(view, role, llm) {
     const input = manual
         ? `<input class="pi-inp" data-llm="${role}" data-k="model" value="${esc(llm.model)}" placeholder="模型名称">`
         : `<select class="pi-sel" data-llm="${role}" data-k="model">${llm.model && !models.includes(llm.model) ? `<option value="${esc(llm.model)}" selected>${esc(llm.model)}</option>` : ''}
-            ${!llm.model ? '<option value="" selected disabled>选择模型</option>' : ''}${options(models.map(model => ({ value: model, label: model })), llm.model)}
+            ${!llm.model ? '<option value="" selected disabled>选择模型</option>' : ''}${options(
+                models.map((model) => ({ value: model, label: model })),
+                llm.model,
+            )}
             <option value="__manual">手动输入…</option></select>`;
     return `<div class="pi-field"><span>模型</span><div class="pi-inline">${input}
         <button type="button" class="pi-btn" data-act="models" data-role="${role}">${s.loading === role ? '<span class="pi-spin"></span>' : ''}获取列表</button></div></div>`;
@@ -29,15 +34,27 @@ function llmCard(view, s) {
     const role = currentRole(view);
     const llm = s.llm[role];
     const custom = llm.source === 'custom';
-    const seg = LLM_ROLES.map(item => `<button type="button" class="pi-seg-btn${item.key === role ? ' is-sel' : ''}" data-act="llm-role" data-role="${item.key}">${esc(item.label)}</button>`).join('');
+    const seg = LLM_ROLES.map(
+        (item) =>
+            `<button type="button" class="pi-seg-btn${item.key === role ? ' is-sel' : ''}" data-act="llm-role" data-role="${item.key}">${esc(item.label)}</button>`,
+    ).join('');
     return `<div class="pi-card"><h3>模型接口</h3>
         <div class="pi-seg">${seg}</div>
-        <label class="pi-field"><span>接口来源</span><select class="pi-sel" data-llm="${role}" data-k="source">${options([{ value: 'tavern', label: '酒馆当前连接' }, { value: 'custom', label: '独立接口（OpenAI兼容）' }], llm.source)}</select></label>
-        ${custom ? `<label class="pi-field"><span>接口地址</span><input class="pi-inp" data-llm="${role}" data-k="endpoint" value="${esc(llm.endpoint)}" placeholder="https://api.example.com/v1"></label>
+        <label class="pi-field"><span>接口来源</span><select class="pi-sel" data-llm="${role}" data-k="source">${options(
+            [
+                { value: 'tavern', label: '酒馆当前连接' },
+                { value: 'custom', label: '独立接口（OpenAI兼容）' },
+            ],
+            llm.source,
+        )}</select></label>
+        ${
+            custom
+                ? `<label class="pi-field"><span>接口地址</span><input class="pi-inp" data-llm="${role}" data-k="endpoint" value="${esc(llm.endpoint)}" placeholder="https://api.example.com/v1"></label>
         <label class="pi-field"><span>API密钥</span><input class="pi-inp" type="password" autocomplete="off" data-llm="${role}" data-k="apiKey" value="${esc(llm.apiKey)}"></label>
         ${modelField(view, role, llm)}
         <label class="pi-field"><span>温度</span><input class="pi-inp" data-llm="${role}" data-k="temperature" value="${esc(llm.temperature)}" placeholder="默认"></label>`
-        : ''}
+                : ''
+        }
         <div class="pi-tools is-c2 is-end"><button type="button" class="pi-btn is-sm" data-act="preset-load"${s.presets.length ? '' : ' disabled'}>载入预设</button>
             <button type="button" class="pi-btn is-sm" data-act="preset-save"${custom ? '' : ' disabled'}>保存为预设</button></div>
         </div>`;
@@ -45,45 +62,82 @@ function llmCard(view, s) {
 
 // 载入预设：列出全部预设，点名称载入，垃圾桶删除。
 function pickPreset(presets) {
-    const html = presets.map(preset => `<div class="pi-preset">
+    const html = presets
+        .map(
+            (preset) => `<div class="pi-preset">
             <button type="button" class="pi-preset-pick" data-dlg-value="load:${esc(preset.id)}">
                 <span class="pi-preset-name">${esc(preset.name)}</span><span class="pi-preset-model">${esc(preset.model || '未选模型')}</span></button>
-            <button type="button" class="pi-icon-btn is-danger" data-dlg-value="del:${esc(preset.id)}" title="删除">${ICONS.trash}</button></div>`).join('');
+            <button type="button" class="pi-icon-btn is-danger" data-dlg-value="del:${esc(preset.id)}" title="删除">${ICONS.trash}</button></div>`,
+        )
+        .join('');
     return openDialog({ title: '载入接口预设', html: `<div class="pi-presets">${html}</div>`, actions: [{ label: '取消', value: null }] });
 }
 
 // 编辑框里直接给出当前生效的全文（未自定义时就是内置版本），改了才存成自定义；改回与内置一致视为未自定义。
 function guideCard(view, s) {
-    const open = st(view).guideOpen;
-    const status = s.guide ? '自定义版本' : '内置版本';
+    let open = st(view).guideOpen,
+        g = resolveGuide(s),
+        preset = GUIDE_PRESETS.find((x) => x.value === s.guidePreset) || GUIDE_PRESETS[0],
+        custom = s.guidePreset === 'custom';
     return `<div class="pi-card"><h3>写作基准<span class="pi-spacer"></span>
-            <button type="button" class="pi-btn is-sm is-ghost" data-act="guide-toggle">${open ? '收起' : '编辑'}</button></h3>
-        <p class="pi-hint">当前使用：${status}</p>
-        ${open ? `<div class="pi-row pi-acts-top"><button type="button" class="pi-btn is-sm is-ghost" data-act="guide-reset"${s.guide ? '' : ' disabled'}>恢复内置版本</button></div>
-        <textarea class="pi-ta is-mono is-tall" data-guide>${esc(s.guide || BUILTIN_GUIDE)}</textarea>` : ''}</div>`;
+            <button type="button" class="pi-btn is-sm is-ghost" data-act="guide-toggle">${open ? '收起' : '查看'}</button></h3>
+        <p class="pi-hint">在讨论页聊设定和剧情、在设定页整理设定时，AI 按这份基准来写。正文模型看不到它。</p>
+        <label class="pi-field"><span>使用哪一份</span><select class="pi-sel" data-guide-preset>${options(
+            GUIDE_PRESETS.map((x) => ({ value: x.value, label: x.value === 'generic' ? '通用（默认）' : x.label })),
+            preset.value,
+        )}</select></label>
+        ${custom && !String(s.guide || '').trim() ? '<p class="pi-hint is-warn">自定义的内容还是空的，现在实际用的是通用版。</p>' : ''}
+        ${open ? (custom ? `<textarea class="pi-ta is-mono is-tall" data-guide>${esc(s.guide || '')}</textarea>` : `<p class="pi-hint">内置版本不能直接改。想改的话，选「自定义」，会以这一份为底稿。</p><pre class="pi-pre">${esc(g.text)}</pre>`) : ''}</div>`;
 }
 
 // 推进速度说明并在「阶段推进」里：平时只占一行，展开后用下拉框选要编辑的档。用哪一档在执行页按聊天选。
 function paceRow(view, s) {
     const open = st(view).paceOpen;
-    const changed = PACES.filter(item => s.paceText[item.value]).map(item => item.label);
+    const changed = PACES.filter((item) => s.paceText[item.value]).map((item) => item.label);
     const current = view.runtime.activeId() ? view.runtime.progress().pace : '';
-    const pace = PACES.some(item => item.value === st(view).pace) ? st(view).pace : current || 'normal';
-    const pick = PACES.map(item => ({ value: item.value, label: `${item.label}${item.value === current ? '（当前聊天使用）' : ''}${s.paceText[item.value] ? '·已改' : ''}` }));
+    const pace = PACES.some((item) => item.value === st(view).pace) ? st(view).pace : current || 'normal';
+    const pick = PACES.map((item) => ({
+        value: item.value,
+        label: `${item.label}${item.value === current ? '（当前聊天使用）' : ''}${s.paceText[item.value] ? '·已改' : ''}`,
+    }));
     return `<div class="pi-set-row"><span>推进速度说明</span>${changed.length ? `<span class="pi-badge">已修改 ${changed.join('、')}</span>` : ''}<span class="pi-spacer"></span>
             <button type="button" class="pi-btn is-sm is-ghost" data-act="pace-toggle">${open ? '收起' : '编辑'}</button></div>
-        ${open ? `<div class="pi-set-sub"><label class="pi-field"><span>编辑哪一档的说明</span><select class="pi-sel" data-pace-pick>${options(pick, pace)}</select></label>
+        ${
+            open
+                ? `<div class="pi-set-sub"><label class="pi-field"><span>编辑哪一档的说明</span><select class="pi-sel" data-pace-pick>${options(pick, pace)}</select></label>
         <textarea class="pi-ta" rows="3" data-pace-text="${pace}">${esc(paceText(s, pace))}</textarea>
-        <div class="pi-tools is-c1 is-end"><button type="button" class="pi-btn is-sm" data-act="pace-reset" data-pace="${pace}"${s.paceText[pace] ? '' : ' disabled'}>恢复默认</button></div></div>` : ''}`;
+        <div class="pi-tools is-c1 is-end"><button type="button" class="pi-btn is-sm" data-act="pace-reset" data-pace="${pace}"${s.paceText[pace] ? '' : ' disabled'}>恢复默认</button></div></div>`
+                : ''
+        }`;
 }
 
 export function render(view) {
-    const s = view.data.settings();
-    const modes = [{ value: 'ask', label: '弹出确认' }, { value: 'auto', label: '自动推进（可撤销）' }, { value: 'nodes', label: '仅勾选节点，不推进阶段' }];
-    const offModes = [{ value: 'ask', label: '弹出提醒' }, { value: 'auto', label: '自动改写后续阶段（可撤销）' }, { value: 'off', label: '不检查偏离' }];
-    const threadModes = [{ value: 'ask', label: '弹出确认' }, { value: 'auto', label: '自动收录为支线' }, { value: 'off', label: '不识别' }];
+    const s = view.data.settings(),
+        modes = [
+            { value: 'ask', label: '弹出确认' },
+            { value: 'auto', label: '自动推进（可撤销）' },
+            { value: 'nodes', label: '仅勾选节点，不推进阶段' },
+        ],
+        offModes = [
+            { value: 'ask', label: '弹出提醒' },
+            { value: 'auto', label: '自动改写后续阶段（可撤销）' },
+            { value: 'off', label: '不检查偏离' },
+        ],
+        threadModes = [
+            { value: 'ask', label: '弹出确认' },
+            { value: 'auto', label: '自动收录为支线' },
+            { value: 'off', label: '不识别' },
+        ];
     return `<div class="pi-card"><h3>注入内容</h3>
-        <label class="pi-field"><span>详细条目的标签名</span><input class="pi-inp" data-set="tagName" value="${esc(s.tagName)}"></label></div>
+        <label class="pi-field"><span>详细条目的标签名</span><input class="pi-inp" data-set="tagName" value="${esc(s.tagName)}"></label>
+        <div class="pi-set-row"><label class="pi-check"><input type="checkbox" data-set="bodyGuide"${s.bodyGuide ? ' checked' : ''}><span>正文通用提示</span></label>${s.bodyGuideText ? '<span class="pi-badge">已修改</span>' : ''}<span class="pi-spacer"></span>
+            <button type="button" class="pi-btn is-sm is-ghost" data-act="body-guide-toggle">${st(view).bodyGuideOpen ? '收起' : '编辑'}</button></div>
+        ${
+            st(view).bodyGuideOpen
+                ? `<div class="pi-set-sub"><textarea class="pi-ta is-tall" data-body-guide>${esc(bodyGuideText({ ...s, bodyGuide: !0 }))}</textarea>
+        <div class="pi-tools is-c1 is-end"><button type="button" class="pi-btn is-sm" data-act="body-guide-reset"${s.bodyGuideText ? '' : ' disabled'}>恢复默认</button></div></div>`
+                : ''
+        }</div>
         <div class="pi-card"><h3>阶段推进</h3>
         <div class="pi-pair"><label class="pi-field"><span>检测间隔（楼）</span><input class="pi-inp" type="number" min="1" data-set="checkEvery" value="${s.checkEvery}"></label>
             <label class="pi-field"><span>每次读取楼数</span><input class="pi-inp" type="number" min="1" data-set="checkFloors" value="${s.checkFloors}"></label></div>
@@ -94,7 +148,10 @@ export function render(view) {
             <label class="pi-field"><span>正文出现大纲外的新线时</span><select class="pi-sel" data-set="newThreadMode">${options(threadModes, s.newThreadMode)}</select></label></div>
         ${paceRow(view, s)}</div>
         ${llmCard(view, s)}
-        ${guideCard(view, s)}`;
+        ${guideCard(view, s)}
+        <div class="pi-card"><h3>新手教程</h3>
+        <p class="pi-hint">每个页面右上角的「?」可以播放这一页的教程。想从头再看一遍时，点下面的按钮：先播放总览，之后第一次打开插件时也会再播一次。</p>
+        <div class="pi-tools is-c1"><button type="button" class="pi-btn is-sm" data-act="tour-reset">重新播放全部教程</button></div></div>`;
 }
 
 const NUMERIC = new Set(['checkEvery', 'checkFloors', 'hookCap']);
@@ -111,115 +168,133 @@ function setRole(view, role, patch) {
 
 export function onInput(view, target) {
     if (target.dataset.paceText) {
-        const key = target.dataset.paceText;
-        const text = target.value.trim() === PACE_TEXT[key] ? '' : target.value;
-        view.data.updateSettings({ paceText: { ...view.data.settings().paceText, [key]: text } });
-        view.runtime.refresh();
+        let key = target.dataset.paceText,
+            text = target.value.trim() === PACE_TEXT[key] ? '' : target.value;
+        (view.data.updateSettings({ paceText: { ...view.data.settings().paceText, [key]: text } }), view.runtime.refresh());
         return;
     }
-    if (target.dataset.guide !== undefined) {
-        const text = target.value;
-        view.data.updateSettings({ guide: text.trim() === BUILTIN_GUIDE.trim() ? '' : text });
+    if (target.dataset.bodyGuide !== void 0) {
+        let text = target.value;
+        (view.data.updateSettings({ bodyGuideText: text.trim() === BODY_GUIDE.trim() ? '' : text }), view.runtime.refresh());
         return;
     }
-    if (target.dataset.set && target.type !== 'checkbox' && target.tagName !== 'SELECT') view.data.updateSettings({ [target.dataset.set]: readValue(target) });
-    if (target.dataset.llm && target.tagName === 'INPUT') setRole(view, target.dataset.llm, { [target.dataset.k]: target.value.trim() });
+    if (target.dataset.guide !== void 0) {
+        view.data.updateSettings({ guide: target.value });
+        return;
+    }
+    (target.dataset.set &&
+        target.type !== 'checkbox' &&
+        target.tagName !== 'SELECT' &&
+        view.data.updateSettings({ [target.dataset.set]: readValue(target) }),
+        target.dataset.llm && target.tagName === 'INPUT' && setRole(view, target.dataset.llm, { [target.dataset.k]: target.value.trim() }));
 }
 
 export function onChange(view, target) {
-    if (target.dataset.pacePick !== undefined) {
-        st(view).pace = target.value;
-        view.renderBody();
+    if (target.dataset.guidePreset !== void 0) {
+        let s = view.data.settings(),
+            next = target.value,
+            patch = { guidePreset: next };
+        // 切到自定义、框里还空着：以刚才在用的那份为底稿。
+        next === 'custom' && !String(s.guide || '').trim() && (patch.guide = resolveGuide(s).text);
+        (view.data.updateSettings(patch), next === 'custom' && (st(view).guideOpen = !0), view.renderBody());
         return;
     }
-    if (target.dataset.set && (target.type === 'checkbox' || target.tagName === 'SELECT')) {
-        view.data.updateSettings({ [target.dataset.set]: readValue(target) });
-        view.runtime.refresh();
-        view.renderBody();
+    if (target.dataset.pacePick !== void 0) {
+        ((st(view).pace = target.value), view.renderBody());
+        return;
     }
-    if (target.dataset.llm && target.tagName === 'SELECT') {
-        if (target.value === '__manual') st(view).manual = { ...st(view).manual, [target.dataset.llm]: true };
-        else setRole(view, target.dataset.llm, { [target.dataset.k]: target.value });
-        view.renderBody();
-    }
-    if (target.dataset.set && target.tagName !== 'SELECT' && target.type !== 'checkbox') view.runtime.refresh();
+    (target.dataset.set &&
+        (target.type === 'checkbox' || target.tagName === 'SELECT') &&
+        (view.data.updateSettings({ [target.dataset.set]: readValue(target) }), view.runtime.refresh(), view.renderBody()),
+        target.dataset.llm &&
+            target.tagName === 'SELECT' &&
+            (target.value === '__manual'
+                ? (st(view).manual = { ...st(view).manual, [target.dataset.llm]: !0 })
+                : setRole(view, target.dataset.llm, { [target.dataset.k]: target.value }),
+            view.renderBody()),
+        target.dataset.set && target.tagName !== 'SELECT' && target.type !== 'checkbox' && view.runtime.refresh());
 }
 
 const CONN_KEYS = ['endpoint', 'apiKey', 'model', 'temperature'];
 
 export const actions = {
     async models(view, target) {
-        const role = target.dataset.role;
-        const s = st(view);
-        if (s.loading) return;
-        s.loading = role;
-        view.renderBody();
-        try {
-            const models = await fetchModels(view.data.settings().llm[role]);
-            s.models = { ...s.models, [role]: models };
-            s.manual = { ...s.manual, [role]: false };
-            toast('success', `获取到${models.length}个模型，可在下拉框中选择。`);
-        } finally {
-            s.loading = '';
-            view.renderBody();
+        let role = target.dataset.role,
+            s = st(view);
+        if (!s.loading) {
+            ((s.loading = role), view.renderBody());
+            try {
+                let models = await fetchModels(view.data.settings().llm[role]);
+                ((s.models = { ...s.models, [role]: models }),
+                    (s.manual = { ...s.manual, [role]: !1 }),
+                    toast('success', `获取到${models.length}个模型，可在下拉框中选择。`));
+            } finally {
+                ((s.loading = ''), view.renderBody());
+            }
         }
     },
     'llm-role'(view, target) {
-        st(view).role = target.dataset.role;
-        view.renderBody();
+        ((st(view).role = target.dataset.role), view.renderBody());
     },
     // 同名预设直接覆盖，不同名新建一份。
     async 'preset-save'(view) {
-        const s = view.data.settings();
-        const llm = s.llm[currentRole(view)];
+        let s = view.data.settings(),
+            llm = s.llm[currentRole(view)];
         if (!llm.endpoint) throw new Error('请先填写接口地址');
-        const name = await promptDialog({ title: '保存为预设', label: '预设名称', value: llm.model, placeholder: '如：DeepSeek' });
+        let name = await promptDialog({ title: '保存为预设', label: '预设名称', value: llm.model, placeholder: '如：DeepSeek' });
         if (name == null || !name.trim()) return;
-        const conn = Object.fromEntries(CONN_KEYS.map(key => [key, llm[key]]));
-        const same = s.presets.find(item => item.name === name.trim());
-        const presets = same ? s.presets.map(item => (item === same ? { ...item, ...conn } : item)) : [...s.presets, { id: makeId('api'), name: name.trim(), ...conn }];
-        view.data.updateSettings({ presets });
-        toast('success', same ? `已更新预设「${name.trim()}」。` : `已保存预设「${name.trim()}」。`);
-        view.renderBody();
+        let conn = Object.fromEntries(CONN_KEYS.map((key) => [key, llm[key]])),
+            same = s.presets.find((item) => item.name === name.trim()),
+            presets = same
+                ? s.presets.map((item) => (item === same ? { ...item, ...conn } : item))
+                : [...s.presets, { id: makeId('api'), name: name.trim(), ...conn }];
+        (view.data.updateSettings({ presets }),
+            toast('success', same ? `已更新预设「${name.trim()}」。` : `已保存预设「${name.trim()}」。`),
+            view.renderBody());
     },
     async 'preset-load'(view) {
-        const role = currentRole(view);
+        let role = currentRole(view);
         for (;;) {
-            const presets = view.data.settings().presets;
+            let presets = view.data.settings().presets;
             if (!presets.length) return view.renderBody();
-            const result = await pickPreset(presets);
+            let result = await pickPreset(presets);
             if (!result) return;
-            const [act, id] = [result.slice(0, result.indexOf(':')), result.slice(result.indexOf(':') + 1)];
-            const preset = presets.find(item => item.id === id);
+            let [act, id] = [result.slice(0, result.indexOf(':')), result.slice(result.indexOf(':') + 1)],
+                preset = presets.find((item) => item.id === id);
             if (!preset) return;
             if (act === 'del') {
-                if (await confirmDialog({ title: `删除预设「${preset.name}」`, body: '已载入这个预设的用途不受影响。', okLabel: '删除', danger: true })) {
-                    view.data.updateSettings({ presets: presets.filter(item => item.id !== id) });
-                }
+                (await confirmDialog({
+                    title: `删除预设「${preset.name}」`,
+                    body: '已载入这个预设的用途不受影响。',
+                    okLabel: '删除',
+                    danger: !0,
+                })) && view.data.updateSettings({ presets: presets.filter((item) => item.id !== id) });
                 continue;
             }
-            setRole(view, role, { source: 'custom', ...Object.fromEntries(CONN_KEYS.map(key => [key, preset[key]])) });
-            st(view).manual = { ...st(view).manual, [role]: false };
-            toast('success', `已为「${LLM_ROLES.find(item => item.key === role).label}」载入预设「${preset.name}」。`);
-            return view.renderBody();
+            return (
+                setRole(view, role, { source: 'custom', ...Object.fromEntries(CONN_KEYS.map((key) => [key, preset[key]])) }),
+                (st(view).manual = { ...st(view).manual, [role]: !1 }),
+                toast('success', `已为「${LLM_ROLES.find((item) => item.key === role).label}」载入预设「${preset.name}」。`),
+                view.renderBody()
+            );
         }
     },
+    'body-guide-toggle'(view) {
+        ((st(view).bodyGuideOpen = !st(view).bodyGuideOpen), view.renderBody());
+    },
+    'body-guide-reset'(view) {
+        (view.data.updateSettings({ bodyGuideText: '' }), view.runtime.refresh(), view.renderBody());
+    },
     'pace-toggle'(view) {
-        st(view).paceOpen = !st(view).paceOpen;
-        view.renderBody();
+        ((st(view).paceOpen = !st(view).paceOpen), view.renderBody());
     },
     'pace-reset'(view, target) {
-        view.data.updateSettings({ paceText: { ...view.data.settings().paceText, [target.dataset.pace]: '' } });
-        view.runtime.refresh();
-        view.renderBody();
+        (view.data.updateSettings({ paceText: { ...view.data.settings().paceText, [target.dataset.pace]: '' } }),
+            view.runtime.refresh(),
+            view.renderBody());
     },
     'guide-toggle'(view) {
-        st(view).guideOpen = !st(view).guideOpen;
-        view.renderBody();
-    },
-    'guide-reset'(view) {
-        view.data.updateSettings({ guide: '' });
-        view.renderBody();
+        ((st(view).guideOpen = !st(view).guideOpen), view.renderBody());
     },
 };
 

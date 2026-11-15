@@ -96,7 +96,7 @@ test('正文只注入设定与当前阶段详细；详细标明是尚未发生�
     const progress = emptyProgress(project.id);
     const entries = buildEntries(project, progress, normalizeSettings({}));
     assert.deepEqual(entries.map(entry => entry.kind), ['detail']);
-    assert.match(entries[0].content, /^<剧情参考 卷="卷一" 阶段="阶段一_开端">\n以下是当前正在进行、尚未演完的剧情规划/);
+    assert.match(entries[0].content, /^<剧情参考 卷="卷一" 阶段="阶段一_开端">[\s\S]*以下是当前正在进行、尚未演完的剧情规划/);
     assert.equal(entries[0].position, 0);
     const units = flattenUnits(project.outline.volumes);
     const index = buildIndexText(units, unitStates(units, progress), progress);
@@ -289,7 +289,7 @@ test('讨论参考默认：手写条目全选（世界书里关闭的除外）�
 
 test('推进速度：慢速/正常/快速换详细条目开头的说明，快速附下一阶段，自定义文字优先', () => {
     const project = projectWith(MINI);
-    const detail = (progress, settings = {}) => buildEntries(project, progress, normalizeSettings(settings)).find(entry => entry.kind === 'detail').content;
+    const detail = (progress, settings = {}) => buildEntries(project, progress, normalizeSettings({bodyGuide:false,...settings})).find(entry => entry.kind === 'detail').content;
     const base = emptyProgress(project.id);
     assert.equal(base.pace, 'normal');
     assert.match(detail(base), /按正文进展自然推进/);

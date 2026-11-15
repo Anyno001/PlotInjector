@@ -1,9 +1,13 @@
+import { afterEach } from 'node:test';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { JSDOM } from 'jsdom';
 import YAML from 'yaml';
+
+const testWindows = new Set();
+afterEach(async()=>{for(const w of testWindows){try{await w.__plotInjector?.destroy();}finally{w.close();}}testWindows.clear();});
 
 // 用假的酒馆环境执行真实发布文件 dist/plot-injector.js：启动、注入、报信、检测、各页签渲染。
 const root = path.resolve(import.meta.dirname, '..');
@@ -28,7 +32,7 @@ const OUTLINE = `剧情_卷一_测试:
 
 function makeHost() {
     const dom = new JSDOM('<!doctype html><html><head></head><body><div id="chat"></div></body></html>', { url: 'http://localhost:8000/', pretendToBeVisual: true, runScripts: 'outside-only' });
-    const win = dom.window;
+    const win = dom.window; testWindows.add(win);
     const files = new Map();
     const listeners = new Map();
     const llmCalls = [];
@@ -667,7 +671,7 @@ test('讨论页附带参考：世界书只显示条数；默认带手写条目�
     doc.querySelector('[data-act="tab"][data-tab="discuss"]').click();
     await tick(30);
     assert.match(doc.querySelector('[data-act="ref-wb"]').textContent, /世界书 12 条/);
-    assert.equal(doc.querySelectorAll('.pi-refs .pi-chip').length, 6, '顶栏不逐条列出条目（人格+五项参考）');
+    assert.equal(doc.querySelectorAll('.pi-refs .pi-chip').length, 7, '顶栏不逐条列出条目（人格、改大纲及五项参考）');
     doc.querySelector('[data-compose]').value = '接下来第三章怎么走';
     doc.querySelector('[data-act="send"]').click();
     await tick(40);

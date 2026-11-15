@@ -1,4 +1,5 @@
-import { BUILTIN_GUIDE } from '../core/guide.js';
+import { resolveGuide, BUILTIN_GUIDE } from '../core/guide.js';
+
 import { transcript } from '../core/prompts.js';
 import { resolveLlm } from '../core/store.js';
 import { requestLlm } from '../host/llm.js';
@@ -8,7 +9,7 @@ export function ask(view, role, messages, { signal } = {}) {
 }
 
 export function guideText(view) {
-    return String(view.data.settings().guide || '').trim() || BUILTIN_GUIDE;
+    return guideInfo(view).text;
 }
 
 export async function talkText(view, limit = 30000) {
@@ -27,4 +28,8 @@ export async function runTask(view, key, job) {
     } finally {
         view.setBusy(key, false);
     }
+}
+
+export function guideInfo(view) {
+    return resolveGuide(view.data.settings());
 }

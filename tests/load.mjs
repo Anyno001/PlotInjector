@@ -1,0 +1,20 @@
+import * as M0 from '../src/core/yaml.js';
+import * as M1 from '../src/core/outline.js';
+import * as M2 from '../src/core/progress.js';
+import * as M3 from '../src/core/clue-model.js';
+import * as M4 from '../src/core/clue-tables.js';
+import * as M5 from '../src/core/clue-rules.js';
+import * as M6 from '../src/core/clue-project.js';
+import * as M7 from '../src/core/clue-progress.js';
+import * as M8 from '../src/core/clue-audit.js';
+import * as M9 from '../src/core/clue-template.js';
+import * as M10 from '../src/core/outline-proposal.js';
+import * as M11 from '../src/core/inject.js';
+import * as M12 from '../src/core/prompts.js';
+import * as M13 from '../src/core/long-import.js';
+import * as M14 from '../src/core/fact-labels.js';
+import * as M15 from '../src/core/store.js';
+import * as M16 from '../src/core/guide.js';
+import * as M17 from '../src/core/setting.js';
+import YAML from 'yaml';
+export function loadCore(){ const api={...M0,...M1,...M2,...M3,...M4,...M5,...M6,...M7,...M8,...M9,...M10,...M11,...M12,...M13,...M14,...M15,...M16,...M17};api.setYamlLib(YAML);return api;}

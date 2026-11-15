@@ -39,10 +39,10 @@ export function checkBase(progress) {
 // links 见 core/align.js：current 是旧阶段 id（合并等操作换掉的）时沿别名表解析成新 id。
 export function currentIndex(units, progress, links = NO_LINKS) {
     if (!units.length) return -1;
-    const found = units.findIndex(unit => unit.id === progress.current);
+    const found = units.findIndex((unit) => unit.id === progress.current);
     if (found >= 0) return found;
     const to = progress.current ? links.resolve(progress.current) : '';
-    const aliased = to ? units.findIndex(unit => unit.id === to) : -1;
+    const aliased = to ? units.findIndex((unit) => unit.id === to) : -1;
     return aliased >= 0 ? aliased : 0;
 }
 
@@ -90,9 +90,12 @@ export function setNodeChecked(progress, unitId, nodeId, checked, name = '') {
 
 // 只按节点名取消勾选；未知名称忽略。
 export function uncheckByNames(progress, unitId, nodes, names) {
-    const wanted = new Set((names || []).map(name => String(name).trim()).filter(Boolean));
+    const wanted = new Set((names || []).map((name) => String(name).trim()).filter(Boolean));
+    const counts = new Map();
+    for (const node of nodes) counts.set(node.name, (counts.get(node.name) || 0) + 1);
     let next = progress;
-    for (const node of nodes) if (wanted.has(node.name)) next = setNodeChecked(next, unitId, node.id, false, node.name);
+    for (const node of nodes)
+        if (wanted.has(node.name) && counts.get(node.name) === 1) next = setNodeChecked(next, unitId, node.id, false, node.name);
     return next;
 }
 
@@ -123,3 +126,5 @@ export function isMuted(progress, unitId) {
 export function mute(progress, unitId) {
     return isMuted(progress, unitId) ? progress : { ...progress, muted: [...progress.muted, unitId] };
 }
+
+export const CLUE_SLOT = '@clue';

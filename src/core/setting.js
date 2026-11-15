@@ -1,28 +1,56 @@
+import { stripAuthorBlocks } from './clue-model.js';
 // 设定正文按速成骨架分块：行首、以冒号结尾的行是分块标题（如「铁则:」），「[追加]」也单独成块。
 const HEADING = /^(?:#{1,4}\s*)?([^\s\-*#\[][^:：]{0,30})[:：]\s*$|^(?:#{1,4}\s+)(.{1,30})$|^(\[追加\])\s*$/;
 
 export function splitBlocks(text) {
-    const lines = String(text || '').replace(/\r\n/g, '\n').split('\n');
-    const blocks = [];
-    let current = { key: '', lines: [] };
-    const counts = {};
-    for (const line of lines) {
-        const match = HEADING.exec(line);
-        if (match) {
-            if (current.key || current.lines.some(item => item.trim())) blocks.push(current);
-            const title = (match[1] || match[2] || match[3]).trim();
-            counts[title] = (counts[title] || 0) + 1;
-            current = { key: counts[title] > 1 ? `${title}#${counts[title]}` : title, title, lines: [line] };
-        } else {
-            current.lines.push(line);
-        }
+    let lines = String(text || '').replace(
+            /\r\n/g,
+            `
+`,
+        ).split(`
+`),
+        blocks = [],
+        current = { key: '', lines: [] },
+        counts = {},
+        depth = 0,
+        closed = !1,
+        lastPublic = '开头',
+        open = (title2, line, flag = {}) => {
+            (current.key || current.lines.some((item) => item.trim())) && blocks.push(current);
+            ((counts[title2] = (counts[title2] || 0) + 1),
+                (current = { key: counts[title2] > 1 ? `${title2}#${counts[title2]}` : title2, title: title2, lines: [line], ...flag }));
+        };
+    for (let line of lines) {
+        let match = depth === 0 && !/^\s*<仅作者>/.test(line) && HEADING.exec(line);
+        if (depth === 0 && /^\s*<仅作者>/.test(line)) open(AUTHOR_BLOCK_TITLE, line, { author: !0 });
+        else if (match) open((lastPublic = (match[1] || match[2] || match[3]).trim()), line);
+        else if (closed && line.trim()) open(`${lastPublic}·续`, line, { cont: !0 });
+        else current.lines.push(line);
+        for (let m of line.matchAll(/<(\/?)仅作者>/g)) depth = m[1] ? Math.max(0, depth - 1) : depth + 1;
+        closed = !!current.author && depth === 0;
     }
-    if (current.key || current.lines.some(item => item.trim())) blocks.push(current);
-    return blocks.map(block => ({ key: block.key || '开头', title: block.title || '开头', text: block.lines.join('\n').replace(/\n+$/, '') }));
+    return (
+        (current.key || current.lines.some((item) => item.trim())) && blocks.push(current),
+        blocks.map((block) => ({
+            key: block.key || '开头',
+            title: block.title || '开头',
+            text: block.lines
+                .join(
+                    `
+`,
+                )
+                .replace(/\n+$/, ''),
+            author: !!block.author,
+            cont: !!block.cont,
+        }))
+    );
 }
 
 export function joinBlocks(blocks) {
-    return blocks.map(block => block.text).join('\n\n').trim();
+    return blocks
+        .map((block) => block.text)
+        .join('\n\n')
+        .trim();
 }
 
 // 按分块采用：keys 内的分块换成新稿，旧稿没有的新分块追加到末尾。
@@ -30,25 +58,27 @@ export function mergeBlocks(oldText, newText, keys) {
     const pick = new Set(keys);
     const oldBlocks = splitBlocks(oldText);
     const newBlocks = splitBlocks(newText);
-    const newMap = new Map(newBlocks.map(block => [block.key, block]));
-    const out = oldBlocks.map(block => (pick.has(block.key) && newMap.has(block.key) ? newMap.get(block.key) : block));
-    const oldKeys = new Set(oldBlocks.map(block => block.key));
+    const newMap = new Map(newBlocks.map((block) => [block.key, block]));
+    const out = oldBlocks.map((block) => (pick.has(block.key) && newMap.has(block.key) ? newMap.get(block.key) : block));
+    const oldKeys = new Set(oldBlocks.map((block) => block.key));
     for (const block of newBlocks) if (pick.has(block.key) && !oldKeys.has(block.key)) out.push(block);
     return joinBlocks(out);
 }
 
 // 注入用的设定正文：去掉设为不注入的分块（只给写大纲、讨论当参考）。
 export function injectedSetting(setting) {
-    const text = String(setting && setting.text || '').trim();
+    const text = String((setting && setting.text) || '').trim();
     const mute = new Set(setting && Array.isArray(setting.mute) ? setting.mute : []);
-    if (!mute.size) return text;
-    return joinBlocks(splitBlocks(text).filter(block => !mute.has(block.key)));
+    if (!mute.size) return stripAuthorBlocks(text);
+    return stripAuthorBlocks(joinBlocks(splitBlocks(text).filter((block) => !mute.has(block.key))));
 }
 
 // 按大纲校对的结果只替换旧稿里已有、且文字有改动的分块；AI 漏写或新加的分块不动。
 export function changedBlockKeys(oldText, newText) {
-    const old = new Map(splitBlocks(oldText).map(block => [block.key, block.text]));
-    return splitBlocks(newText).filter(block => old.has(block.key) && old.get(block.key) !== block.text).map(block => block.key);
+    const old = new Map(splitBlocks(oldText).map((block) => [block.key, block.text]));
+    return splitBlocks(newText)
+        .filter((block) => old.has(block.key) && old.get(block.key) !== block.text)
+        .map((block) => block.key);
 }
 
 const SECTION = /^\s*(?:#{1,4}\s*|\d+\s*[.、．]\s*|\*\*)*\s*(世界观正文|补定|速查)\s*(?:\*\*)?\s*[:：]?\s*(?:\*\*)?\s*/;
@@ -60,7 +90,9 @@ function stripFence(text) {
 
 // 速成输出三段：世界观正文 / 补定 / 速查。没有段标题时整篇当正文。
 export function parseSettingReply(text) {
-    const lines = String(text || '').replace(/\r\n/g, '\n').split('\n');
+    const lines = String(text || '')
+        .replace(/\r\n/g, '\n')
+        .split('\n');
     const sections = { 世界观正文: [], 补定: [], 速查: [] };
     let current = '世界观正文';
     let sawHeading = false;
@@ -76,7 +108,7 @@ export function parseSettingReply(text) {
         sections[current].push(line);
     }
     const body = stripFence(sections.世界观正文.join('\n'));
-    const fixes = sections.补定.map(line => line.replace(/^\s*(?:[-*•]|\d+[.、])\s*/, '').trim()).filter(Boolean);
+    const fixes = sections.补定.map((line) => line.replace(/^\s*(?:[-*•]|\d+[.、])\s*/, '').trim()).filter(Boolean);
     const verdict = /(PASS|FAIL)/i.exec([...sections.速查, ...(sawHeading ? [] : lines.slice(-3))].join(' '));
     return { body, fixes, check: verdict ? verdict[1].toUpperCase() : '' };
 }
@@ -90,7 +122,7 @@ export function pushHistory(history, text, limit = 10, now = Date.now(), label =
 export function diffLines(a, b) {
     const x = String(a || '').split('\n');
     const y = String(b || '').split('\n');
-    if (x.length * y.length > 4e6) return [...x.map(text => ({ op: '-', text })), ...y.map(text => ({ op: '+', text }))];
+    if (x.length * y.length > 4e6) return [...x.map((text) => ({ op: '-', text })), ...y.map((text) => ({ op: '+', text }))];
     const n = x.length;
     const m = y.length;
     const dp = Array.from({ length: n + 1 }, () => new Uint32Array(m + 1));
@@ -101,11 +133,21 @@ export function diffLines(a, b) {
     let i = 0;
     let j = 0;
     while (i < n && j < m) {
-        if (x[i] === y[j]) { out.push({ op: '=', text: x[i] }); i += 1; j += 1; }
-        else if (dp[i + 1][j] >= dp[i][j + 1]) { out.push({ op: '-', text: x[i] }); i += 1; }
-        else { out.push({ op: '+', text: y[j] }); j += 1; }
+        if (x[i] === y[j]) {
+            out.push({ op: '=', text: x[i] });
+            i += 1;
+            j += 1;
+        } else if (dp[i + 1][j] >= dp[i][j + 1]) {
+            out.push({ op: '-', text: x[i] });
+            i += 1;
+        } else {
+            out.push({ op: '+', text: y[j] });
+            j += 1;
+        }
     }
     while (i < n) out.push({ op: '-', text: x[i++] });
     while (j < m) out.push({ op: '+', text: y[j++] });
     return out;
 }
+
+export const AUTHOR_BLOCK_TITLE = '仅作者资料';
