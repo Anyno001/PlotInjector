@@ -121,7 +121,9 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
         try {
             const igs = view.IGS;
             const list = igs && igs.stats && typeof igs.stats.fame === 'function' ? igs.stats.fame() : [];
-            return Array.isArray(list) ? list : [];
+            // 好感读数并进同一个数组，kind 标 favor；旧版 IGS 没有 favor 接口就只有声望。
+            const favor = igs && igs.stats && typeof igs.stats.favor === 'function' ? igs.stats.favor() : [];
+            return [...(Array.isArray(list) ? list : []), ...(Array.isArray(favor) ? favor.map(row => ({ ...row, kind: 'favor' })) : [])];
         } catch {
             return [];
         }

@@ -58,7 +58,7 @@ test('旧进度不带 personas 字段时不凭空多出来', () => {
     const progress = normalizeProgress({ projectId: 'p', current: 'a' }, 'p');
     assert.equal('personas' in progress, false);
     const withP = normalizeProgress({ projectId: 'p', personas: { l1: 's1', fixed: { f: '他' } } }, 'p');
-    assert.deepEqual(withP.personas, { l1: 's1', muted: [], manual: [], auto: {}, names: {} });
+    assert.deepEqual(withP.personas, { l1: 's1', muted: [], manual: [], auto: {}, names: {}, unlocked: [] });
 });
 
 test('没有人设线时 buildEntries 与旧输出一致（不多条目）', () => {

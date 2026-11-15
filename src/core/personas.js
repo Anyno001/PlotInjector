@@ -1,7 +1,7 @@
 import { NO_LINKS, outlineLinks } from './align.js';
 import { flattenUnits, makeId } from './outline.js';
 import { unitStates } from './progress.js';
-import { normalizePersonaProgress } from './persona-progress.js';
+import { normalizePersonaProgress, PERSONA_RESERVED } from './persona-progress.js';
 import { matchesAny } from './wbtools.js';
 
 // 分阶段人设：写在注入器里的人设线，一条线若干阶段，按四种方式之一决定当前阶段。数据结构见计划文档第 1 节。
@@ -9,7 +9,7 @@ import { matchesAny } from './wbtools.js';
 export const PERSONA_MODES = [
     { value: 'check', label: '条件检测' },
     { value: 'outline', label: '跟随大纲' },
-    { value: 'fame', label: '读声望' },
+    { value: 'fame', label: '读声望/好感' },
     { value: 'manual', label: '手动' },
 ];
 const MODE_KEYS = PERSONA_MODES.map(item => item.value);
@@ -31,7 +31,7 @@ export function newStage(name = '新阶段') {
 export function newLine(name = '新人设', group = '') {
     return {
         id: makeId('pl'), group, name, keys: [], constant: true, position: 0, depth: 4, role: 0, order: 100, enabled: true,
-        common: '', mode: 'manual', fame: { bar: '', partner: '' }, stages: [newStage('阶段一')], source: null,
+        common: '', mode: 'manual', fame: { source: 'fame', bar: '', partner: '' }, stages: [newStage('阶段一')], source: null,
     };
 }
 
@@ -60,7 +60,7 @@ function normalizeLine(value) {
         enabled: src.enabled !== false,
         common: text(src.common),
         mode: MODE_KEYS.includes(src.mode) ? src.mode : 'check',
-        fame: { bar: text(fame.bar).trim(), partner: text(fame.partner).trim() },
+        fame: { source: fame.source === 'favor' ? 'favor' : 'fame', bar: text(fame.bar).trim(), partner: text(fame.partner).trim() },
         stages: (Array.isArray(src.stages) ? src.stages : []).filter(isObj).map(normalizeStage),
         source: source ? { book: text(source.book), uid: text(source.uid), varPath: text(source.varPath) } : null,
         // 一条线可能由几个条目的片段合并而成，恢复原条目时按它找回（比计划多存的字段）。
@@ -99,7 +99,9 @@ export function rangeHas(range, value) {
 
 // 声望读数里找这条线绑定的条：名字对上；有对象时取 pairs 里对应的一项。读不到返回 null。
 export function fameReading(line, fame) {
-    const bar = (Array.isArray(fame) ? fame : []).find(item => item && item.name === line.fame.bar);
+    // 读数里声望行没有 kind，好感行 kind 为 'favor'（由运行时合并进同一个数组）。
+    const kind = line.fame.source === 'favor' ? 'favor' : 'fame';
+    const bar = (Array.isArray(fame) ? fame : []).find(item => item && item.name === line.fame.bar && (item.kind || 'fame') === kind);
     if (!bar) return null;
     if (line.fame.partner) {
         const pair = (Array.isArray(bar.pairs) ? bar.pairs : []).find(item => item.partner === line.fame.partner);
@@ -127,10 +129,22 @@ export function outlineIndex(line, env) {
     return at;
 }
 
-export function fameIndex(line, env) {
+// 数值落在哪个阶段的区间（不管条件）。
+function rangeIndex(line, env) {
     const value = fameReading(line, env.fame);
-    if (value === null) return -1;
-    return line.stages.findIndex(stage => rangeHas(stage.range, value));
+    return value === null ? -1 : line.stages.findIndex(stage => rangeHas(stage.range, value));
+}
+
+// 读数值：区间选出候选阶段；候选阶段写了进入条件时，要检测确认过（pp.unlocked）才算到达，否则退到更前一个已满足的阶段。
+export function fameIndex(line, env, pp = null) {
+    const raw = rangeIndex(line, env);
+    if (raw <= 0) return raw;
+    const unlocked = pp ? pp.unlocked : [];
+    for (let i = raw; i > 0; i--) {
+        const stage = line.stages[i];
+        if (!stage.cond.trim() || unlocked.includes(stage.id)) return i;
+    }
+    return 0;
 }
 
 // 返回 { stage, index, source, lost }：source 为 manual/check/outline/fame；lost 表示读声望读不到值、退回了手动值。
@@ -141,7 +155,7 @@ export function currentStage(line, progress, env = {}) {
     const pick = (index, source, lost = false) => ({ stage: line.stages[index], index, source, lost });
     if (line.mode === 'outline' && !manualHeld) return pick(outlineIndex(line, env), 'outline');
     if (line.mode === 'fame' && !manualHeld) {
-        const index = fameIndex(line, env);
+        const index = fameIndex(line, env, pp);
         return index >= 0 ? pick(index, 'fame') : pick(stored, 'manual', fameReading(line, env.fame) === null);
     }
     return pick(stored, manualHeld ? 'manual' : line.mode === 'check' ? 'check' : 'manual');
@@ -192,7 +206,7 @@ export function syncPersonas(project, progress, fame = []) {
     let next = pp;
     for (const line of project.personas.lines) {
         if (line.mode !== 'outline' && line.mode !== 'fame') continue;
-        const index = line.mode === 'outline' ? outlineIndex(line, env) : fameIndex(line, env);
+        const index = line.mode === 'outline' ? outlineIndex(line, env) : fameIndex(line, env, pp);
         if (index < 0) continue;
         const stage = line.stages[index];
         if (next.auto[line.id] === stage.id) continue;
@@ -223,7 +237,7 @@ export function alignPersonaProgress(progress, personas) {
         changed = true;
     }
     for (const key of Object.keys(next)) {
-        if (['muted', 'manual', 'auto', 'names'].includes(key) || alive.has(key)) continue;
+        if (PERSONA_RESERVED.includes(key) || alive.has(key)) continue;
         delete next[key];
         changed = true;
     }
@@ -275,12 +289,20 @@ export function checkItems(project, progress, recentText, { globals = {}, fame =
     const env = personaEnv(project, progress, fame);
     const out = [];
     for (const line of project.personas.lines) {
-        if (!line.enabled || line.mode !== 'check' || pp.muted.includes(line.id)) continue;
+        if (!line.enabled || (line.mode !== 'check' && line.mode !== 'fame') || pp.muted.includes(line.id)) continue;
         if (!lineTriggered(line, recentText, globals)) continue;
         const { stage, index } = currentStage(line, progress, env);
-        const next = line.stages[index + 1];
+        let next = line.stages[index + 1];
+        let unlock = false;
+        if (line.mode === 'fame') {
+            // 读数值：只检测「数值已到、条件还没确认」的阶段，从前往后一格一格确认。
+            const raw = rangeIndex(line, env);
+            if (raw < 0 || pp.manual.includes(line.id)) continue;
+            next = line.stages.slice(index + 1, raw + 1).find(item => item.cond.trim() && !pp.unlocked.includes(item.id));
+            unlock = true;
+        }
         if (!next) continue;
-        out.push({ lineId: line.id, group: line.group, name: line.name, from: stage.name, fromId: stage.id, to: next.name, toId: next.id, cond: next.cond.trim(), wasManual: pp.manual.includes(line.id) });
+        out.push({ lineId: line.id, group: line.group, name: line.name, from: stage.name, fromId: stage.id, to: next.name, toId: next.id, cond: next.cond.trim(), wasManual: pp.manual.includes(line.id), unlock });
     }
     return out;
 }
@@ -308,6 +330,12 @@ export function applyMoves(progress, project, moves) {
     for (const move of moves) {
         const line = project.personas.lines.find(item => item.id === move.item.lineId);
         if (!line) continue;
+        if (move.item.unlock) {
+            // 读数值线：条件确认过，记进已确认列表，阶段由数值与区间自动算出。
+            const pp = normalizePersonaProgress(next.personas);
+            next = releasePersona(withPersonas(next, { unlocked: [...new Set([...pp.unlocked, move.item.toId])] }), line.id);
+            continue;
+        }
         next = releasePersona(setPersonaStage(next, line, move.item.toId), line.id);
     }
     return next;
@@ -320,6 +348,10 @@ export function undoMoves(progress, project, moves) {
         const line = project.personas.lines.find(item => item.id === move.item.lineId);
         if (!line) continue;
         const pp = normalizePersonaProgress(next.personas);
+        if (move.item.unlock) {
+            next = withPersonas(next, { unlocked: pp.unlocked.filter(id => id !== move.item.toId) });
+            continue;
+        }
         const manual = move.item.wasManual ? [...new Set([...pp.manual, line.id])] : pp.manual.filter(id => id !== line.id);
         next = withPersonas(next, { [line.id]: move.item.fromId, manual, names: { ...pp.names, [line.id]: move.item.from } });
     }

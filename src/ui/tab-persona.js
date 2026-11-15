@@ -47,7 +47,7 @@ function stageHtml(view, line, stage, index, current, units) {
     const act = (name, icon, title, disabled = false) => `<button type="button" class="pi-icon-btn${name === 'ps-del' ? ' is-danger' : ''}" data-act="${name}" data-line="${esc(line.id)}" data-stage="${esc(stage.id)}" title="${title}"${disabled ? ' disabled' : ''}>${icon}</button>`;
     const extra = line.mode === 'check' ? field('进入条件', input(attrs('cond'), stage.cond, ' placeholder="如：主角出手帮了她，她开始动摇"')) : line.mode === 'outline'
         ? field('跟随大纲阶段', `<select class="pi-sel" ${attrs('unitId')}>${options([{ value: '', label: '不绑定（跳过）' }, ...units.map(unit => ({ value: unit.id, label: `${volumeLabel(unit.volume.key)}·${stageLabel(unit.stage.key)}` }))], stage.unitId)}</select>`)
-        : line.mode === 'fame' ? `<div class="pi-pair">${field('声望下限', input(`${attrs('min')} type="number"`, stage.range.min ?? ''))}${field('声望上限', input(`${attrs('max')} type="number"`, stage.range.max ?? ''))}</div>` : '';
+        : line.mode === 'fame' ? `<div class="pi-pair">${field(line.fame.source === 'favor' ? '好感下限' : '声望下限', input(`${attrs('min')} type="number"`, stage.range.min ?? ''))}${field(line.fame.source === 'favor' ? '好感上限' : '声望上限', input(`${attrs('max')} type="number"`, stage.range.max ?? ''))}</div>${field('进入条件（可空，写了要检测确认后才进）', input(attrs('cond'), stage.cond, ' placeholder="如：已经发生过表白"'))}` : '';
     return `<div class="pi-node pi-ps">
         <div class="pi-node-hd">${index === current ? '<span class="pi-badge is-accent">当前</span>' : ''}${input(attrs('name'), stage.name)}
             ${act('ps-up', ICONS.arrowUp, '上移', index === 0)}${act('ps-down', ICONS.arrowDown, '下移', index === line.stages.length - 1)}${act('ps-del', ICONS.trash, '删除阶段', line.stages.length <= 1)}</div>
@@ -59,9 +59,11 @@ function lineBody(view, line, units) {
     const attrs = name => `data-pl="${esc(line.id)}" data-f="${name}"`;
     const atDepth = line.position === 4;
     const info = stageInfo(view, line);
-    const fameBody = line.mode === 'fame' ? `<datalist id="pi-fame-list">${view.runtime.fame().map(bar => `<option value="${esc(bar.name)}"></option>`).join('')}</datalist>
-        <div class="pi-pair">${field('声望条名称', input(`${attrs('fameBar')} list="pi-fame-list"`, line.fame.bar))}${field('对象（可空）', input(attrs('famePartner'), line.fame.partner))}</div>
-        <p class="pi-hint">读不到声望值时沿用手动选择的阶段。</p>` : '';
+    const isFavor = line.fame.source === 'favor';
+    const fameBody = line.mode === 'fame' ? `<datalist id="pi-fame-list">${view.runtime.fame().filter(bar => (bar.kind || 'fame') === (isFavor ? 'favor' : 'fame')).map(bar => `<option value="${esc(bar.name)}"></option>`).join('')}</datalist>
+        <label class="pi-field"><span>数据来源</span><select class="pi-sel" ${attrs('fameSource')}>${options([{ value: 'fame', label: '声望' }, { value: 'favor', label: '好感' }], line.fame.source)}</select></label>
+        <div class="pi-pair">${field(isFavor ? '角色名' : '声望条名称', input(`${attrs('fameBar')} list="pi-fame-list"`, line.fame.bar))}${isFavor ? '' : field('对象（可空）', input(attrs('famePartner'), line.fame.partner))}</div>
+        <p class="pi-hint">读不到数值时沿用手动选择的阶段。</p>` : '';
     return `<div class="pi-entry-bd">
         <div class="pi-pair">${field('线名', input(attrs('name'), line.name))}${field('角色（分组）', input(attrs('group'), line.group))}</div>
         <label class="pi-field"><span>切换方式</span><select class="pi-sel" ${attrs('mode')}>${options(PERSONA_MODES, line.mode)}</select></label>
@@ -150,8 +152,9 @@ export function onChange(view, target) {
     if (!d.pl) return undefined;
     if (d.ps) {
         patchStage(view, d.pl, d.ps, stage => ({ ...stage, ...(d.f === 'min' || d.f === 'max' ? rangePatch(stage, d.f, target.value) : (STAGE_PATCH[d.f] || (() => ({})))(target.value)) }));
-    } else if (d.f === 'fameBar' || d.f === 'famePartner') {
-        patchLine(view, d.pl, line => ({ ...line, fame: { ...line.fame, [d.f === 'fameBar' ? 'bar' : 'partner']: target.value.trim() } }));
+    } else if (d.f === 'fameBar' || d.f === 'famePartner' || d.f === 'fameSource') {
+        const key = { fameBar: 'bar', famePartner: 'partner', fameSource: 'source' }[d.f];
+        patchLine(view, d.pl, line => ({ ...line, fame: { ...line.fame, [key]: target.value.trim(), ...(d.f === 'fameSource' ? { bar: '', partner: '' } : {}) } }));
     } else if (LINE_PATCH[d.f]) {
         patchLine(view, d.pl, line => ({ ...line, ...LINE_PATCH[d.f](target.value) }));
     }

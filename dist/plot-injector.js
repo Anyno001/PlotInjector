@@ -1,4 +1,4 @@
-// PlotInjector v0.1.28
+// PlotInjector v0.1.29
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -752,14 +752,14 @@ ${value.name}`);
   }
 
   // src/core/persona-progress.js
-  var PERSONA_RESERVED = ["muted", "manual", "auto", "names"], isObj2 = (value) => !!value && typeof value == "object" && !Array.isArray(value), strMap = (value) => Object.fromEntries(Object.entries(isObj2(value) ? value : {}).filter(([, item]) => typeof item == "string")), strList = (value) => Array.isArray(value) ? [...new Set(value.filter((item) => typeof item == "string"))] : [];
+  var PERSONA_RESERVED = ["muted", "manual", "auto", "names", "unlocked"], isObj2 = (value) => !!value && typeof value == "object" && !Array.isArray(value), strMap = (value) => Object.fromEntries(Object.entries(isObj2(value) ? value : {}).filter(([, item]) => typeof item == "string")), strList = (value) => Array.isArray(value) ? [...new Set(value.filter((item) => typeof item == "string"))] : [];
   function emptyPersonaProgress() {
-    return { muted: [], manual: [], auto: {}, names: {} };
+    return { muted: [], manual: [], auto: {}, names: {}, unlocked: [] };
   }
   function normalizePersonaProgress(value) {
     let src = isObj2(value) ? value : {}, out = emptyPersonaProgress();
     for (let [key, item] of Object.entries(src)) !PERSONA_RESERVED.includes(key) && typeof item == "string" && (out[key] = item);
-    return out.muted = strList(src.muted), out.manual = strList(src.manual), out.auto = strMap(src.auto), out.names = strMap(src.names), out;
+    return out.muted = strList(src.muted), out.manual = strList(src.manual), out.auto = strMap(src.auto), out.names = strMap(src.names), out.unlocked = strList(src.unlocked), out;
   }
 
   // src/core/progress.js
@@ -977,7 +977,7 @@ ${value.name}`);
   var PERSONA_MODES = [
     { value: "check", label: "条件检测" },
     { value: "outline", label: "跟随大纲" },
-    { value: "fame", label: "读声望" },
+    { value: "fame", label: "读声望/好感" },
     { value: "manual", label: "手动" }
   ], MODE_KEYS = PERSONA_MODES.map((item) => item.value), PERSONA_SLOT_PREFIX = "@persona:", isObj3 = (value) => !!value && typeof value == "object" && !Array.isArray(value), text = (value) => String(value ?? ""), intOr = (value, fallback) => Number.isFinite(Number(value)) && value !== "" && value !== null ? Math.round(Number(value)) : fallback, num = (value) => value == null || value === "" || !Number.isFinite(Number(value)) ? void 0 : Number(value);
   function emptyPersonas() {
@@ -1000,7 +1000,7 @@ ${value.name}`);
       enabled: !0,
       common: "",
       mode: "manual",
-      fame: { bar: "", partner: "" },
+      fame: { source: "fame", bar: "", partner: "" },
       stages: [newStage("阶段一")],
       source: null
     };
@@ -1024,7 +1024,7 @@ ${value.name}`);
       enabled: src.enabled !== !1,
       common: text(src.common),
       mode: MODE_KEYS.includes(src.mode) ? src.mode : "check",
-      fame: { bar: text(fame.bar).trim(), partner: text(fame.partner).trim() },
+      fame: { source: fame.source === "favor" ? "favor" : "fame", bar: text(fame.bar).trim(), partner: text(fame.partner).trim() },
       stages: (Array.isArray(src.stages) ? src.stages : []).filter(isObj3).map(normalizeStage),
       source: source ? { book: text(source.book), uid: text(source.uid), varPath: text(source.varPath) } : null,
       // 一条线可能由几个条目的片段合并而成，恢复原条目时按它找回（比计划多存的字段）。
@@ -1051,7 +1051,7 @@ ${value.name}`);
     return Number.isFinite(value) ? (range.min === void 0 || value >= range.min) && (range.max === void 0 || value <= range.max) : !1;
   }
   function fameReading(line, fame) {
-    let bar = (Array.isArray(fame) ? fame : []).find((item) => item && item.name === line.fame.bar);
+    let kind = line.fame.source === "favor" ? "favor" : "fame", bar = (Array.isArray(fame) ? fame : []).find((item) => item && item.name === line.fame.bar && (item.kind || "fame") === kind);
     if (!bar) return null;
     if (line.fame.partner) {
       let pair = (Array.isArray(bar.pairs) ? bar.pairs : []).find((item) => item.partner === line.fame.partner);
@@ -1068,15 +1068,25 @@ ${value.name}`);
       pos === void 0 || !["done", "active"].includes(env.states && env.states[id]) || pos >= best && (best = pos, at = i);
     }), at;
   }
-  function fameIndex(line, env) {
+  function rangeIndex(line, env) {
     let value = fameReading(line, env.fame);
     return value === null ? -1 : line.stages.findIndex((stage) => rangeHas(stage.range, value));
+  }
+  function fameIndex(line, env, pp = null) {
+    let raw = rangeIndex(line, env);
+    if (raw <= 0) return raw;
+    let unlocked = pp ? pp.unlocked : [];
+    for (let i = raw; i > 0; i--) {
+      let stage = line.stages[i];
+      if (!stage.cond.trim() || unlocked.includes(stage.id)) return i;
+    }
+    return 0;
   }
   function currentStage(line, progress, env = {}) {
     let pp = normalizePersonaProgress(progress && progress.personas), manualHeld = pp.manual.includes(line.id), stored = storedIndex(line, pp), pick = (index, source, lost = !1) => ({ stage: line.stages[index], index, source, lost });
     if (line.mode === "outline" && !manualHeld) return pick(outlineIndex(line, env), "outline");
     if (line.mode === "fame" && !manualHeld) {
-      let index = fameIndex(line, env);
+      let index = fameIndex(line, env, pp);
       return index >= 0 ? pick(index, "fame") : pick(stored, "manual", fameReading(line, env.fame) === null);
     }
     return pick(stored, manualHeld ? "manual" : line.mode === "check" ? "check" : "manual");
@@ -1107,7 +1117,7 @@ ${value.name}`);
     let pp = normalizePersonaProgress(progress.personas), env = personaEnv(project, progress, fame), next = pp;
     for (let line of project.personas.lines) {
       if (line.mode !== "outline" && line.mode !== "fame") continue;
-      let index = line.mode === "outline" ? outlineIndex(line, env) : fameIndex(line, env);
+      let index = line.mode === "outline" ? outlineIndex(line, env) : fameIndex(line, env, pp);
       if (index < 0) continue;
       let stage = line.stages[index];
       if (next.auto[line.id] === stage.id) continue;
@@ -1131,7 +1141,7 @@ ${value.name}`);
       byName ? next[line.id] = byName.id : (delete next[line.id], delete next.names[line.id]), changed = !0;
     }
     for (let key of Object.keys(next))
-      ["muted", "manual", "auto", "names"].includes(key) || alive.has(key) || (delete next[key], changed = !0);
+      PERSONA_RESERVED.includes(key) || alive.has(key) || (delete next[key], changed = !0);
     return changed ? { ...progress, personas: next } : progress;
   }
   function personaContent(line, stage) {
@@ -1167,9 +1177,14 @@ ${value.name}`);
     if (!hasPersonas(project) || !progress) return [];
     let pp = normalizePersonaProgress(progress.personas), env = personaEnv(project, progress, fame), out = [];
     for (let line of project.personas.lines) {
-      if (!line.enabled || line.mode !== "check" || pp.muted.includes(line.id) || !lineTriggered(line, recentText, globals)) continue;
-      let { stage, index } = currentStage(line, progress, env), next = line.stages[index + 1];
-      next && out.push({ lineId: line.id, group: line.group, name: line.name, from: stage.name, fromId: stage.id, to: next.name, toId: next.id, cond: next.cond.trim(), wasManual: pp.manual.includes(line.id) });
+      if (!line.enabled || line.mode !== "check" && line.mode !== "fame" || pp.muted.includes(line.id) || !lineTriggered(line, recentText, globals)) continue;
+      let { stage, index } = currentStage(line, progress, env), next = line.stages[index + 1], unlock = !1;
+      if (line.mode === "fame") {
+        let raw = rangeIndex(line, env);
+        if (raw < 0 || pp.manual.includes(line.id)) continue;
+        next = line.stages.slice(index + 1, raw + 1).find((item) => item.cond.trim() && !pp.unlocked.includes(item.id)), unlock = !0;
+      }
+      next && out.push({ lineId: line.id, group: line.group, name: line.name, from: stage.name, fromId: stage.id, to: next.name, toId: next.id, cond: next.cond.trim(), wasManual: pp.manual.includes(line.id), unlock });
     }
     return out;
   }
@@ -1187,7 +1202,14 @@ ${value.name}`);
     let next = progress;
     for (let move of moves) {
       let line = project.personas.lines.find((item) => item.id === move.item.lineId);
-      line && (next = releasePersona(setPersonaStage(next, line, move.item.toId), line.id));
+      if (line) {
+        if (move.item.unlock) {
+          let pp = normalizePersonaProgress(next.personas);
+          next = releasePersona(withPersonas(next, { unlocked: [.../* @__PURE__ */ new Set([...pp.unlocked, move.item.toId])] }), line.id);
+          continue;
+        }
+        next = releasePersona(setPersonaStage(next, line, move.item.toId), line.id);
+      }
     }
     return next;
   }
@@ -1196,7 +1218,12 @@ ${value.name}`);
     for (let move of moves) {
       let line = project.personas.lines.find((item) => item.id === move.item.lineId);
       if (!line) continue;
-      let pp = normalizePersonaProgress(next.personas), manual = move.item.wasManual ? [.../* @__PURE__ */ new Set([...pp.manual, line.id])] : pp.manual.filter((id) => id !== line.id);
+      let pp = normalizePersonaProgress(next.personas);
+      if (move.item.unlock) {
+        next = withPersonas(next, { unlocked: pp.unlocked.filter((id) => id !== move.item.toId) });
+        continue;
+      }
+      let manual = move.item.wasManual ? [.../* @__PURE__ */ new Set([...pp.manual, line.id])] : pp.manual.filter((id) => id !== line.id);
       next = withPersonas(next, { [line.id]: move.item.fromId, manual, names: { ...pp.names, [line.id]: move.item.from } });
     }
     return next;
@@ -3380,8 +3407,8 @@ ${horrorGuide}` : "",
     }
     function fameNow() {
       try {
-        let igs = view.IGS, list = igs && igs.stats && typeof igs.stats.fame == "function" ? igs.stats.fame() : [];
-        return Array.isArray(list) ? list : [];
+        let igs = view.IGS, list = igs && igs.stats && typeof igs.stats.fame == "function" ? igs.stats.fame() : [], favor = igs && igs.stats && typeof igs.stats.favor == "function" ? igs.stats.favor() : [];
+        return [...Array.isArray(list) ? list : [], ...Array.isArray(favor) ? favor.map((row2) => ({ ...row2, kind: "favor" })) : []];
       } catch {
         return [];
       }
@@ -6211,14 +6238,14 @@ ${suffix.trim()}` : body;
       if (!line.sources.some((source) => !blocked.has(`${source.book}\0${source.key}`))) continue;
       let base = { group: line.group, name: line.name, keys: line.entry.keys, constant: line.entry.constant, position: line.entry.position, depth: line.entry.depth, role: line.entry.role, order: line.entry.order, common: line.common, source: { book: line.entry.book, uid: String(line.entry.uid), varPath: line.path }, sources: line.sources };
       if (line.kind === "num")
-        out.push({ ...base, mode: "fame", fame: { bar: line.name, partner: "" }, stages: numericStages([...line.stages.values()]) });
+        out.push({ ...base, mode: "fame", fame: { source: "fame", bar: line.name, partner: "" }, stages: numericStages([...line.stages.values()]) });
       else {
         let stages = [...line.stages.values()].map((item) => ({ ...newStage(item.value), cond: stateLine(item.text), text: item.text }));
-        out.push({ ...base, mode: "check", fame: { bar: "", partner: "" }, stages });
+        out.push({ ...base, mode: "check", fame: { source: "fame", bar: "", partner: "" }, stages });
       }
     }
     for (let { entry, text: text2 } of plainLines)
-      text2 && out.push({ group: "", name: entryName(entry.title), keys: entry.keys, constant: entry.constant, position: entry.position, depth: entry.depth, role: entry.role, order: entry.order, common: "", mode: "manual", fame: { bar: "", partner: "" }, stages: [{ ...newStage("默认"), text: text2 }], source: { book: entry.book, uid: String(entry.uid), varPath: "" }, sources: [{ book: entry.book, uid: String(entry.uid), key: String(entry.key) }] });
+      text2 && out.push({ group: "", name: entryName(entry.title), keys: entry.keys, constant: entry.constant, position: entry.position, depth: entry.depth, role: entry.role, order: entry.order, common: "", mode: "manual", fame: { source: "fame", bar: "", partner: "" }, stages: [{ ...newStage("默认"), text: text2 }], source: { book: entry.book, uid: String(entry.uid), varPath: "" }, sources: [{ book: entry.book, uid: String(entry.uid), key: String(entry.key) }] });
     let varList = [...info.values()].map((item) => ({ path: item.path, name: pathNames(item.path).name, group: pathNames(item.path).group, kind: kinds.get(item.path), values: item.values, pick: pickMap.get(item.path), entries: item.entries.size, canFix: !(item.ops.has("<=") || item.ops.has(">=")), canLine: !item.nested }));
     return { lines: out, issues, blocked, vars: varList };
   }
@@ -6366,7 +6393,7 @@ ${suffix.trim()}` : body;
   }
   var keyText = (line) => line.keys.join("，"), splitKeys = (value) => String(value || "").split(/[,，、\n]/).map((item) => item.trim()).filter(Boolean), field = (label, body) => `<label class="pi-field"><span>${label}</span>${body}</label>`, input = (attrs, value, extra = "") => `<input class="pi-inp" ${attrs} value="${esc(value)}"${extra}>`;
   function stageHtml(view, line, stage, index, current, units) {
-    let attrs = (name) => `data-pl="${esc(line.id)}" data-ps="${esc(stage.id)}" data-f="${name}"`, act = (name, icon, title2, disabled = !1) => `<button type="button" class="pi-icon-btn${name === "ps-del" ? " is-danger" : ""}" data-act="${name}" data-line="${esc(line.id)}" data-stage="${esc(stage.id)}" title="${title2}"${disabled ? " disabled" : ""}>${icon}</button>`, extra = line.mode === "check" ? field("进入条件", input(attrs("cond"), stage.cond, ' placeholder="如：主角出手帮了她，她开始动摇"')) : line.mode === "outline" ? field("跟随大纲阶段", `<select class="pi-sel" ${attrs("unitId")}>${options([{ value: "", label: "不绑定（跳过）" }, ...units.map((unit) => ({ value: unit.id, label: `${volumeLabel(unit.volume.key)}·${stageLabel(unit.stage.key)}` }))], stage.unitId)}</select>`) : line.mode === "fame" ? `<div class="pi-pair">${field("声望下限", input(`${attrs("min")} type="number"`, stage.range.min ?? ""))}${field("声望上限", input(`${attrs("max")} type="number"`, stage.range.max ?? ""))}</div>` : "";
+    let attrs = (name) => `data-pl="${esc(line.id)}" data-ps="${esc(stage.id)}" data-f="${name}"`, act = (name, icon, title2, disabled = !1) => `<button type="button" class="pi-icon-btn${name === "ps-del" ? " is-danger" : ""}" data-act="${name}" data-line="${esc(line.id)}" data-stage="${esc(stage.id)}" title="${title2}"${disabled ? " disabled" : ""}>${icon}</button>`, extra = line.mode === "check" ? field("进入条件", input(attrs("cond"), stage.cond, ' placeholder="如：主角出手帮了她，她开始动摇"')) : line.mode === "outline" ? field("跟随大纲阶段", `<select class="pi-sel" ${attrs("unitId")}>${options([{ value: "", label: "不绑定（跳过）" }, ...units.map((unit) => ({ value: unit.id, label: `${volumeLabel(unit.volume.key)}·${stageLabel(unit.stage.key)}` }))], stage.unitId)}</select>`) : line.mode === "fame" ? `<div class="pi-pair">${field(line.fame.source === "favor" ? "好感下限" : "声望下限", input(`${attrs("min")} type="number"`, stage.range.min ?? ""))}${field(line.fame.source === "favor" ? "好感上限" : "声望上限", input(`${attrs("max")} type="number"`, stage.range.max ?? ""))}</div>${field("进入条件（可空，写了要检测确认后才进）", input(attrs("cond"), stage.cond, ' placeholder="如：已经发生过表白"'))}` : "";
     return `<div class="pi-node pi-ps">
         <div class="pi-node-hd">${index === current ? '<span class="pi-badge is-accent">当前</span>' : ""}${input(attrs("name"), stage.name)}
             ${act("ps-up", ICONS.arrowUp, "上移", index === 0)}${act("ps-down", ICONS.arrowDown, "下移", index === line.stages.length - 1)}${act("ps-del", ICONS.trash, "删除阶段", line.stages.length <= 1)}</div>
@@ -6374,9 +6401,10 @@ ${suffix.trim()}` : body;
         ${field(`人设内容 ≈${estimateTokens(stage.text)}`, `<textarea class="pi-ta" rows="6" ${attrs("text")}>${esc(stage.text)}</textarea>`)}</div>`;
   }
   function lineBody(view, line, units) {
-    let attrs = (name) => `data-pl="${esc(line.id)}" data-f="${name}"`, atDepth = line.position === 4, info = stageInfo(view, line), fameBody = line.mode === "fame" ? `<datalist id="pi-fame-list">${view.runtime.fame().map((bar) => `<option value="${esc(bar.name)}"></option>`).join("")}</datalist>
-        <div class="pi-pair">${field("声望条名称", input(`${attrs("fameBar")} list="pi-fame-list"`, line.fame.bar))}${field("对象（可空）", input(attrs("famePartner"), line.fame.partner))}</div>
-        <p class="pi-hint">读不到声望值时沿用手动选择的阶段。</p>` : "";
+    let attrs = (name) => `data-pl="${esc(line.id)}" data-f="${name}"`, atDepth = line.position === 4, info = stageInfo(view, line), isFavor = line.fame.source === "favor", fameBody = line.mode === "fame" ? `<datalist id="pi-fame-list">${view.runtime.fame().filter((bar) => (bar.kind || "fame") === (isFavor ? "favor" : "fame")).map((bar) => `<option value="${esc(bar.name)}"></option>`).join("")}</datalist>
+        <label class="pi-field"><span>数据来源</span><select class="pi-sel" ${attrs("fameSource")}>${options([{ value: "fame", label: "声望" }, { value: "favor", label: "好感" }], line.fame.source)}</select></label>
+        <div class="pi-pair">${field(isFavor ? "角色名" : "声望条名称", input(`${attrs("fameBar")} list="pi-fame-list"`, line.fame.bar))}${isFavor ? "" : field("对象（可空）", input(attrs("famePartner"), line.fame.partner))}</div>
+        <p class="pi-hint">读不到数值时沿用手动选择的阶段。</p>` : "";
     return `<div class="pi-entry-bd">
         <div class="pi-pair">${field("线名", input(attrs("name"), line.name))}${field("角色（分组）", input(attrs("group"), line.group))}</div>
         <label class="pi-field"><span>切换方式</span><select class="pi-sel" ${attrs("mode")}>${options(PERSONA_MODES, line.mode)}</select></label>
@@ -6442,8 +6470,15 @@ ${suffix.trim()}` : body;
     let d = target.dataset;
     if (d.plOn)
       return patchLine(view, d.plOn, (line) => ({ ...line, enabled: target.checked })), view.renderBody();
-    if (d.pl)
-      return d.ps ? patchStage(view, d.pl, d.ps, (stage) => ({ ...stage, ...d.f === "min" || d.f === "max" ? rangePatch(stage, d.f, target.value) : (STAGE_PATCH[d.f] || (() => ({})))(target.value) })) : d.f === "fameBar" || d.f === "famePartner" ? patchLine(view, d.pl, (line) => ({ ...line, fame: { ...line.fame, [d.f === "fameBar" ? "bar" : "partner"]: target.value.trim() } })) : LINE_PATCH[d.f] && patchLine(view, d.pl, (line) => ({ ...line, ...LINE_PATCH[d.f](target.value) })), view.renderBody();
+    if (d.pl) {
+      if (d.ps)
+        patchStage(view, d.pl, d.ps, (stage) => ({ ...stage, ...d.f === "min" || d.f === "max" ? rangePatch(stage, d.f, target.value) : (STAGE_PATCH[d.f] || (() => ({})))(target.value) }));
+      else if (d.f === "fameBar" || d.f === "famePartner" || d.f === "fameSource") {
+        let key = { fameBar: "bar", famePartner: "partner", fameSource: "source" }[d.f];
+        patchLine(view, d.pl, (line) => ({ ...line, fame: { ...line.fame, [key]: target.value.trim(), ...d.f === "fameSource" ? { bar: "", partner: "" } : {} } }));
+      } else LINE_PATCH[d.f] && patchLine(view, d.pl, (line) => ({ ...line, ...LINE_PATCH[d.f](target.value) }));
+      return view.renderBody();
+    }
   }
   function moveStage(view, lineId, stageId, step) {
     patchLine(view, lineId, (line) => {
@@ -8196,7 +8231,7 @@ ${suffix.trim()}` : body;
   }
 
   // src/index.js
-  var VERSION = "0.1.28", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.1.29", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")
