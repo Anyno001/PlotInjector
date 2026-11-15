@@ -42,12 +42,19 @@ import { splitKeys } from '../core/wbtools.js';
 const field = (label, body) => `<label class="pi-field"><span>${label}</span>${body}</label>`;
 const input = (attrs, value, extra = '') => `<input class="pi-inp" ${attrs} value="${esc(value)}"${extra}>`;
 
+// 附加数值条件：同时满足才进该阶段；只在读角色关系数值时可用。
+function extraHtml(attrs, line, stage) {
+    if (line.fame.source !== 'favor') return '';
+    const rows = (stage.extra || []).map((item, i) => `<div class="pi-pair is-c4"><select class="pi-sel" ${attrs('extraDim')} data-i="${i}">${options(FAVOR_DIMS.map(value => ({ value, label: value })), item.dim)}</select>${input(`${attrs('extraMin')} data-i="${i}" type="number" placeholder="下限"`, item.min ?? '')}${input(`${attrs('extraMax')} data-i="${i}" type="number" placeholder="上限"`, item.max ?? '')}<button type="button" class="pi-icon-btn is-danger" data-act="extra-del" data-line="${esc(line.id)}" data-stage="${esc(stage.id)}" data-i="${i}" title="删除这条">${ICONS.trash}</button></div>`).join('');
+    return `${rows}<div class="pi-tools"><button type="button" class="pi-btn" data-act="extra-add" data-line="${esc(line.id)}" data-stage="${esc(stage.id)}">同时满足另一项数值</button></div>`;
+}
+
 function stageHtml(view, line, stage, index, current, units) {
     const attrs = name => `data-pl="${esc(line.id)}" data-ps="${esc(stage.id)}" data-f="${name}"`;
     const act = (name, icon, title, disabled = false) => `<button type="button" class="pi-icon-btn${name === 'ps-del' ? ' is-danger' : ''}" data-act="${name}" data-line="${esc(line.id)}" data-stage="${esc(stage.id)}" title="${title}"${disabled ? ' disabled' : ''}>${icon}</button>`;
     const extra = line.mode === 'check' ? field('进入条件', input(attrs('cond'), stage.cond, ' placeholder="如：主角出手帮了她，她开始动摇"')) : line.mode === 'outline'
         ? field('跟随大纲阶段', `<select class="pi-sel" ${attrs('unitId')}>${options([{ value: '', label: '不绑定（跳过）' }, ...units.map(unit => ({ value: unit.id, label: `${volumeLabel(unit.volume.key)}·${stageLabel(unit.stage.key)}` }))], stage.unitId)}</select>`)
-        : line.mode === 'fame' ? `<div class="pi-pair">${field(line.fame.source === 'favor' ? `${line.fame.dim}下限` : '声望下限', input(`${attrs('min')} type="number"`, stage.range.min ?? ''))}${field(line.fame.source === 'favor' ? `${line.fame.dim}上限` : '声望上限', input(`${attrs('max')} type="number"`, stage.range.max ?? ''))}</div>${field('进入条件（可空，写了要检测确认后才进）', input(attrs('cond'), stage.cond, ' placeholder="如：已经发生过表白"'))}` : '';
+        : line.mode === 'fame' ? `<div class="pi-pair">${field(line.fame.source === 'favor' ? `${line.fame.dim}下限` : '声望下限', input(`${attrs('min')} type="number"`, stage.range.min ?? ''))}${field(line.fame.source === 'favor' ? `${line.fame.dim}上限` : '声望上限', input(`${attrs('max')} type="number"`, stage.range.max ?? ''))}</div>${extraHtml(attrs, line, stage)}${field('进入条件（可空，写了要检测确认后才进）', input(attrs('cond'), stage.cond, ' placeholder="如：已经发生过表白"'))}` : '';
     return `<div class="pi-node pi-ps">
         <div class="pi-node-hd">${index === current ? '<span class="pi-badge is-accent">当前</span>' : ''}${input(attrs('name'), stage.name)}
             ${act('ps-up', ICONS.arrowUp, '上移', index === 0)}${act('ps-down', ICONS.arrowDown, '下移', index === line.stages.length - 1)}${act('ps-del', ICONS.trash, '删除阶段', line.stages.length <= 1)}</div>
@@ -139,6 +146,13 @@ const STAGE_PATCH = {
     text: value => ({ text: value }),
 };
 
+function rangePatchOf(item, which, value) {
+    const next = { ...item };
+    if (String(value).trim() === '' || !Number.isFinite(Number(value))) delete next[which];
+    else next[which] = Number(value);
+    return next;
+}
+
 function rangePatch(stage, which, value) {
     const range = { ...stage.range };
     if (String(value).trim() === '' || !Number.isFinite(Number(value))) delete range[which];
@@ -153,7 +167,10 @@ export function onChange(view, target) {
         return view.renderBody();
     }
     if (!d.pl) return undefined;
-    if (d.ps) {
+    if (d.ps && (d.f === 'extraDim' || d.f === 'extraMin' || d.f === 'extraMax')) {
+        const at = Number(d.i);
+        patchStage(view, d.pl, d.ps, stage => ({ ...stage, extra: (stage.extra || []).map((item, i) => (i !== at ? item : d.f === 'extraDim' ? { ...item, dim: target.value } : rangePatchOf(item, d.f === 'extraMin' ? 'min' : 'max', target.value))) }));
+    } else if (d.ps) {
         patchStage(view, d.pl, d.ps, stage => ({ ...stage, ...(d.f === 'min' || d.f === 'max' ? rangePatch(stage, d.f, target.value) : (STAGE_PATCH[d.f] || (() => ({})))(target.value)) }));
     } else if (d.f === 'fameBar' || d.f === 'famePartner' || d.f === 'fameSource' || d.f === 'fameDim') {
         const key = { fameBar: 'bar', famePartner: 'partner', fameSource: 'source', fameDim: 'dim' }[d.f];
@@ -211,6 +228,14 @@ export const actions = {
     },
     'ps-del'(view, target) {
         patchLine(view, target.dataset.line, line => ({ ...line, stages: line.stages.length > 1 ? line.stages.filter(stage => stage.id !== target.dataset.stage) : line.stages }));
+        view.renderBody();
+    },
+    'extra-add'(view, target) {
+        patchStage(view, target.dataset.line, target.dataset.stage, stage => ({ ...stage, extra: [...(stage.extra || []), { dim: '信任' }] }));
+        view.renderBody();
+    },
+    'extra-del'(view, target) {
+        patchStage(view, target.dataset.line, target.dataset.stage, stage => ({ ...stage, extra: (stage.extra || []).filter((_, i) => i !== Number(target.dataset.i)) }));
         view.renderBody();
     },
     'ps-up': (view, target) => moveStage(view, target.dataset.line, target.dataset.stage, -1),

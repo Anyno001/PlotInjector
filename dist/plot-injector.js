@@ -1,4 +1,4 @@
-// PlotInjector v0.1.31
+// PlotInjector v0.1.32
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -1008,7 +1008,7 @@ ${value.name}`);
     return { lines: [], imported: [] };
   }
   function newStage(name = "新阶段") {
-    return { id: makeId("ps"), name, cond: "", unitId: "", range: {}, text: "" };
+    return { id: makeId("ps"), name, cond: "", unitId: "", range: {}, extra: [], text: "" };
   }
   function newLine(name = "新人设", group = "") {
     return {
@@ -1030,9 +1030,15 @@ ${value.name}`);
       source: null
     };
   }
+  function normalizeExtra(value) {
+    return (Array.isArray(value) ? value : []).filter(isObj3).map((item) => {
+      let min = num(item.min), max = num(item.max);
+      return { dim: FAVOR_DIMS.includes(item.dim) ? item.dim : "好感", ...min !== void 0 ? { min } : {}, ...max !== void 0 ? { max } : {} };
+    });
+  }
   function normalizeStage(value) {
     let src = isObj3(value) ? value : {}, range = isObj3(src.range) ? src.range : {}, min = num(range.min), max = num(range.max);
-    return { id: text(src.id) || makeId("ps"), name: text(src.name).trim() || "阶段", cond: text(src.cond), unitId: text(src.unitId), range: { ...min !== void 0 ? { min } : {}, ...max !== void 0 ? { max } : {} }, text: text(src.text) };
+    return { id: text(src.id) || makeId("ps"), name: text(src.name).trim() || "阶段", cond: text(src.cond), unitId: text(src.unitId), extra: normalizeExtra(src.extra), range: { ...min !== void 0 ? { min } : {}, ...max !== void 0 ? { max } : {} }, text: text(src.text) };
   }
   function normalizeLine(value) {
     let src = isObj3(value) ? value : {}, stages = (Array.isArray(src.stages) ? src.stages : []).filter(isObj3).map(normalizeStage), fame = isObj3(src.fame) ? src.fame : {}, source = isObj3(src.source) ? src.source : null;
@@ -1077,11 +1083,11 @@ ${value.name}`);
   function rangeHas(range, value) {
     return Number.isFinite(value) ? (range.min === void 0 || value >= range.min) && (range.max === void 0 || value <= range.max) : !1;
   }
-  function fameReading(line, fame) {
+  function fameReading(line, fame, dimOverride = "") {
     let kind = line.fame.source === "favor" ? "favor" : "fame", name = line.fame.bar, bar = (Array.isArray(fame) ? fame : []).find((item) => item && (item.kind || "fame") === kind && (item.name === name || kind === "favor" && Array.isArray(item.aliases) && item.aliases.includes(name)));
     if (!bar) return null;
     if (kind === "favor") {
-      let value = bar.dims && line.fame.dim in bar.dims ? Number(bar.dims[line.fame.dim]) : line.fame.dim === "好感" ? Number(bar.value) : NaN;
+      let dim = dimOverride || line.fame.dim, value = bar.dims && dim in bar.dims ? Number(bar.dims[dim]) : dim === "好感" ? Number(bar.value) : NaN;
       return Number.isFinite(value) ? value : null;
     }
     if (line.fame.partner) {
@@ -1104,7 +1110,15 @@ ${value.name}`);
   }
   function rangeIndex(line, env) {
     let value = fameReading(line, env.fame);
-    return value === null ? -1 : line.stages.findIndex((stage) => rangeHas(stage.range, value));
+    if (value === null) return -1;
+    let hit = -1;
+    return line.stages.forEach((stage, i) => {
+      let extra = stage.extra || [];
+      stage.range.min === void 0 && stage.range.max === void 0 && !extra.length || rangeHas(stage.range, value) && extra.every((item) => {
+        let other = fameReading(line, env.fame, item.dim);
+        return other !== null && rangeHas(item, other);
+      }) && (hit = i);
+    }), hit;
   }
   function fameIndex(line, env, pp = null) {
     let raw = rangeIndex(line, env);
@@ -6426,8 +6440,11 @@ ${suffix.trim()}` : body;
     return currentStage(line, progress, personaEnv(project, progress, active ? view.runtime.fame() : []));
   }
   var keyText = (line) => line.keys.join("，"), field = (label, body) => `<label class="pi-field"><span>${label}</span>${body}</label>`, input = (attrs, value, extra = "") => `<input class="pi-inp" ${attrs} value="${esc(value)}"${extra}>`;
+  function extraHtml(attrs, line, stage) {
+    return line.fame.source !== "favor" ? "" : `${(stage.extra || []).map((item, i) => `<div class="pi-pair is-c4"><select class="pi-sel" ${attrs("extraDim")} data-i="${i}">${options(FAVOR_DIMS.map((value) => ({ value, label: value })), item.dim)}</select>${input(`${attrs("extraMin")} data-i="${i}" type="number" placeholder="下限"`, item.min ?? "")}${input(`${attrs("extraMax")} data-i="${i}" type="number" placeholder="上限"`, item.max ?? "")}<button type="button" class="pi-icon-btn is-danger" data-act="extra-del" data-line="${esc(line.id)}" data-stage="${esc(stage.id)}" data-i="${i}" title="删除这条">${ICONS.trash}</button></div>`).join("")}<div class="pi-tools"><button type="button" class="pi-btn" data-act="extra-add" data-line="${esc(line.id)}" data-stage="${esc(stage.id)}">同时满足另一项数值</button></div>`;
+  }
   function stageHtml(view, line, stage, index, current, units) {
-    let attrs = (name) => `data-pl="${esc(line.id)}" data-ps="${esc(stage.id)}" data-f="${name}"`, act = (name, icon, title2, disabled = !1) => `<button type="button" class="pi-icon-btn${name === "ps-del" ? " is-danger" : ""}" data-act="${name}" data-line="${esc(line.id)}" data-stage="${esc(stage.id)}" title="${title2}"${disabled ? " disabled" : ""}>${icon}</button>`, extra = line.mode === "check" ? field("进入条件", input(attrs("cond"), stage.cond, ' placeholder="如：主角出手帮了她，她开始动摇"')) : line.mode === "outline" ? field("跟随大纲阶段", `<select class="pi-sel" ${attrs("unitId")}>${options([{ value: "", label: "不绑定（跳过）" }, ...units.map((unit) => ({ value: unit.id, label: `${volumeLabel(unit.volume.key)}·${stageLabel(unit.stage.key)}` }))], stage.unitId)}</select>`) : line.mode === "fame" ? `<div class="pi-pair">${field(line.fame.source === "favor" ? `${line.fame.dim}下限` : "声望下限", input(`${attrs("min")} type="number"`, stage.range.min ?? ""))}${field(line.fame.source === "favor" ? `${line.fame.dim}上限` : "声望上限", input(`${attrs("max")} type="number"`, stage.range.max ?? ""))}</div>${field("进入条件（可空，写了要检测确认后才进）", input(attrs("cond"), stage.cond, ' placeholder="如：已经发生过表白"'))}` : "";
+    let attrs = (name) => `data-pl="${esc(line.id)}" data-ps="${esc(stage.id)}" data-f="${name}"`, act = (name, icon, title2, disabled = !1) => `<button type="button" class="pi-icon-btn${name === "ps-del" ? " is-danger" : ""}" data-act="${name}" data-line="${esc(line.id)}" data-stage="${esc(stage.id)}" title="${title2}"${disabled ? " disabled" : ""}>${icon}</button>`, extra = line.mode === "check" ? field("进入条件", input(attrs("cond"), stage.cond, ' placeholder="如：主角出手帮了她，她开始动摇"')) : line.mode === "outline" ? field("跟随大纲阶段", `<select class="pi-sel" ${attrs("unitId")}>${options([{ value: "", label: "不绑定（跳过）" }, ...units.map((unit) => ({ value: unit.id, label: `${volumeLabel(unit.volume.key)}·${stageLabel(unit.stage.key)}` }))], stage.unitId)}</select>`) : line.mode === "fame" ? `<div class="pi-pair">${field(line.fame.source === "favor" ? `${line.fame.dim}下限` : "声望下限", input(`${attrs("min")} type="number"`, stage.range.min ?? ""))}${field(line.fame.source === "favor" ? `${line.fame.dim}上限` : "声望上限", input(`${attrs("max")} type="number"`, stage.range.max ?? ""))}</div>${extraHtml(attrs, line, stage)}${field("进入条件（可空，写了要检测确认后才进）", input(attrs("cond"), stage.cond, ' placeholder="如：已经发生过表白"'))}` : "";
     return `<div class="pi-node pi-ps">
         <div class="pi-node-hd">${index === current ? '<span class="pi-badge is-accent">当前</span>' : ""}${input(attrs("name"), stage.name)}
             ${act("ps-up", ICONS.arrowUp, "上移", index === 0)}${act("ps-down", ICONS.arrowDown, "下移", index === line.stages.length - 1)}${act("ps-del", ICONS.trash, "删除阶段", line.stages.length <= 1)}</div>
@@ -6499,6 +6516,10 @@ ${suffix.trim()}` : body;
     unitId: (value) => ({ unitId: value }),
     text: (value) => ({ text: value })
   };
+  function rangePatchOf(item, which, value) {
+    let next = { ...item };
+    return String(value).trim() === "" || !Number.isFinite(Number(value)) ? delete next[which] : next[which] = Number(value), next;
+  }
   function rangePatch(stage, which, value) {
     let range = { ...stage.range };
     return String(value).trim() === "" || !Number.isFinite(Number(value)) ? delete range[which] : range[which] = Number(value), { range };
@@ -6508,7 +6529,10 @@ ${suffix.trim()}` : body;
     if (d.plOn)
       return patchLine(view, d.plOn, (line) => ({ ...line, enabled: target.checked })), view.renderBody();
     if (d.pl) {
-      if (d.ps)
+      if (d.ps && (d.f === "extraDim" || d.f === "extraMin" || d.f === "extraMax")) {
+        let at = Number(d.i);
+        patchStage(view, d.pl, d.ps, (stage) => ({ ...stage, extra: (stage.extra || []).map((item, i) => i !== at ? item : d.f === "extraDim" ? { ...item, dim: target.value } : rangePatchOf(item, d.f === "extraMin" ? "min" : "max", target.value)) }));
+      } else if (d.ps)
         patchStage(view, d.pl, d.ps, (stage) => ({ ...stage, ...d.f === "min" || d.f === "max" ? rangePatch(stage, d.f, target.value) : (STAGE_PATCH[d.f] || (() => ({})))(target.value) }));
       else if (d.f === "fameBar" || d.f === "famePartner" || d.f === "fameSource" || d.f === "fameDim") {
         let key = { fameBar: "bar", famePartner: "partner", fameSource: "source", fameDim: "dim" }[d.f];
@@ -6550,6 +6574,12 @@ ${suffix.trim()}` : body;
     },
     "ps-del"(view, target) {
       patchLine(view, target.dataset.line, (line) => ({ ...line, stages: line.stages.length > 1 ? line.stages.filter((stage) => stage.id !== target.dataset.stage) : line.stages })), view.renderBody();
+    },
+    "extra-add"(view, target) {
+      patchStage(view, target.dataset.line, target.dataset.stage, (stage) => ({ ...stage, extra: [...stage.extra || [], { dim: "信任" }] })), view.renderBody();
+    },
+    "extra-del"(view, target) {
+      patchStage(view, target.dataset.line, target.dataset.stage, (stage) => ({ ...stage, extra: (stage.extra || []).filter((_, i) => i !== Number(target.dataset.i)) })), view.renderBody();
     },
     "ps-up": (view, target) => moveStage(view, target.dataset.line, target.dataset.stage, -1),
     "ps-down": (view, target) => moveStage(view, target.dataset.line, target.dataset.stage, 1),
@@ -8267,7 +8297,7 @@ ${suffix.trim()}` : body;
   }
 
   // src/index.js
-  var VERSION = "0.1.31", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.1.32", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")

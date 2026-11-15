@@ -26,7 +26,7 @@ export function emptyPersonas() {
 }
 
 export function newStage(name = '新阶段') {
-    return { id: makeId('ps'), name, cond: '', unitId: '', range: {}, text: '' };
+    return { id: makeId('ps'), name, cond: '', unitId: '', range: {}, extra: [], text: '' };
 }
 
 export function newLine(name = '新人设', group = '') {
@@ -36,12 +36,21 @@ export function newLine(name = '新人设', group = '') {
     };
 }
 
+// 附加数值条件（读角色关系数值时用）：[{ dim, min?, max? }]，与主区间同时满足才算进入该阶段。
+function normalizeExtra(value) {
+    return (Array.isArray(value) ? value : []).filter(isObj).map(item => {
+        const min = num(item.min);
+        const max = num(item.max);
+        return { dim: FAVOR_DIMS.includes(item.dim) ? item.dim : '好感', ...(min !== undefined ? { min } : {}), ...(max !== undefined ? { max } : {}) };
+    });
+}
+
 function normalizeStage(value) {
     const src = isObj(value) ? value : {};
     const range = isObj(src.range) ? src.range : {};
     const min = num(range.min);
     const max = num(range.max);
-    return { id: text(src.id) || makeId('ps'), name: text(src.name).trim() || '阶段', cond: text(src.cond), unitId: text(src.unitId), range: { ...(min !== undefined ? { min } : {}), ...(max !== undefined ? { max } : {}) }, text: text(src.text) };
+    return { id: text(src.id) || makeId('ps'), name: text(src.name).trim() || '阶段', cond: text(src.cond), unitId: text(src.unitId), extra: normalizeExtra(src.extra), range: { ...(min !== undefined ? { min } : {}), ...(max !== undefined ? { max } : {}) }, text: text(src.text) };
 }
 
 function normalizeLine(value) {
@@ -102,7 +111,7 @@ export function rangeHas(range, value) {
 }
 
 // 声望读数里找这条线绑定的条：名字对上；有对象时取 pairs 里对应的一项。读不到返回 null。
-export function fameReading(line, fame) {
+export function fameReading(line, fame, dimOverride = '') {
     // 读数里声望行没有 kind，好感行 kind 为 'favor'（由运行时合并进同一个数组）。
     const kind = line.fame.source === 'favor' ? 'favor' : 'fame';
     const name = line.fame.bar;
@@ -110,7 +119,8 @@ export function fameReading(line, fame) {
     const bar = (Array.isArray(fame) ? fame : []).find(item => item && (item.kind || 'fame') === kind && (item.name === name || (kind === 'favor' && Array.isArray(item.aliases) && item.aliases.includes(name))));
     if (!bar) return null;
     if (kind === 'favor') {
-        const value = bar.dims && line.fame.dim in bar.dims ? Number(bar.dims[line.fame.dim]) : line.fame.dim === '好感' ? Number(bar.value) : NaN;
+        const dim = dimOverride || line.fame.dim;
+        const value = bar.dims && dim in bar.dims ? Number(bar.dims[dim]) : dim === '好感' ? Number(bar.value) : NaN;
         return Number.isFinite(value) ? value : null;
     }
     if (line.fame.partner) {
@@ -147,7 +157,17 @@ export function outlineIndex(line, env) {
 // 数值落在哪个阶段的区间（不管条件）。
 function rangeIndex(line, env) {
     const value = fameReading(line, env.fame);
-    return value === null ? -1 : line.stages.findIndex(stage => rangeHas(stage.range, value));
+    if (value === null) return -1;
+    // 主区间满足，且每条附加数值条件也满足（读不到的项算不满足）。
+    // 没写任何数值条件的阶段不参与匹配（只作兜底）；多个都满足时取靠后的，条件更严的阶段请排在后面。
+    let hit = -1;
+    line.stages.forEach((stage, i) => {
+        const extra = stage.extra || [];
+        if (stage.range.min === undefined && stage.range.max === undefined && !extra.length) return;
+        if (!rangeHas(stage.range, value)) return;
+        if (extra.every(item => { const other = fameReading(line, env.fame, item.dim); return other !== null && rangeHas(item, other); })) hit = i;
+    });
+    return hit;
 }
 
 // 读数值：区间选出候选阶段；候选阶段写了进入条件时，要检测确认过（pp.unlocked）才算到达，否则退到更前一个已满足的阶段。

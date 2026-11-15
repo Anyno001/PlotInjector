@@ -461,3 +461,15 @@ test('默认阶段：没推进过、数值不在任何区间时用默认阶段�
     const check = normalizePersonas({ lines: [{ ...base, mode: 'check', defaultStage: 'b' }] }).lines[0];
     assert.equal(currentStage(check, emptyProgress('p'), {}).index, 1);
 });
+
+test('同时读多个数值：好感>=10 且 芥蒂<=50 才进阶段', () => {
+    const line = normalizePersonas({ lines: [{ id: 'l', mode: 'fame', defaultStage: 'a', fame: { source: 'favor', dim: '好感', bar: '雪' }, stages: [
+        { id: 'a', name: 'A' },
+        { id: 'b', name: 'B', range: { min: 10 }, extra: [{ dim: '芥蒂', max: 50 }] },
+    ] }] }).lines[0];
+    const row = (love, grudge) => [{ kind: 'favor', name: '雪', value: love, dims: { 好感: love, 信任: 0, 了解: 0, 芥蒂: grudge, 欲望: 0 } }];
+    assert.equal(fameIndex(line, { fame: row(20, 40) }), 1);
+    assert.equal(fameIndex(line, { fame: row(20, 60) }), -1);
+    assert.equal(fameIndex(line, { fame: row(5, 0) }), -1);
+    assert.equal(normalizePersonas({ lines: [{ stages: [{ extra: [{ dim: '乱写', min: 'x' }] }] }] }).lines[0].stages[0].extra[0].dim, '好感');
+});
