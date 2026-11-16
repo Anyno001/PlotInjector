@@ -1,4 +1,4 @@
-// PlotInjector v0.2.1
+// PlotInjector v0.2.2
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -1647,8 +1647,8 @@ ${value.name}`);
       let dim = dimOverride || line.fame.dim, value = bar.dims && dim in bar.dims ? Number(bar.dims[dim]) : dim === "好感" ? Number(bar.value) : NaN;
       return Number.isFinite(value) ? value : null;
     }
-    if (line.fame.partner) {
-      let pair = (Array.isArray(bar.pairs) ? bar.pairs : []).find((item) => item.partner === line.fame.partner);
+    if (line.fame.partner && Array.isArray(bar.pairs)) {
+      let pair = bar.pairs.find((item) => item.partner === line.fame.partner);
       return pair ? Number(pair.value) : null;
     }
     return Number.isFinite(Number(bar.value)) ? Number(bar.value) : null;
@@ -16960,7 +16960,7 @@ ${suffix.trim()}` : body;
   }
 
   // src/index.js
-  var VERSION = "0.2.1", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.2.2", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")

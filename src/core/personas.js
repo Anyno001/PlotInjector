@@ -123,8 +123,9 @@ export function fameReading(line, fame, dimOverride = '') {
         const value = bar.dims && dim in bar.dims ? Number(bar.dims[dim]) : dim === '好感' ? Number(bar.value) : NaN;
         return Number.isFinite(value) ? value : null;
     }
-    if (line.fame.partner) {
-        const pair = (Array.isArray(bar.pairs) ? bar.pairs : []).find(item => item.partner === line.fame.partner);
+    // 只有按搭档分别记的条才带 pairs；普通条忽略线上残留的搭档名，直接读整体。
+    if (line.fame.partner && Array.isArray(bar.pairs)) {
+        const pair = bar.pairs.find(item => item.partner === line.fame.partner);
         return pair ? Number(pair.value) : null;
     }
     return Number.isFinite(Number(bar.value)) ? Number(bar.value) : null;

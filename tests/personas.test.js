@@ -162,6 +162,14 @@ test('读声望：按区间取阶段，读不到值退回手动值并标 lost，
     assert.equal(currentStage(pair, emptyProgress('p'), { fame: [{ name: '组合热度', value: 5, pairs: [{ partner: '林北', value: 70 }] }] }).stage.name, '高');
 });
 
+test('读声望：普通条（没有搭档记录）忽略线上残留的搭档名，仍读到整体数值', () => {
+    const line = { fame: { source: 'fame', dim: '好感', bar: '敖丙唯粉', partner: '哪吒' } };
+    const fame = [{ name: '敖丙唯粉', owner: '敖丙', cls: '口碑', value: 70, tier: '' }];
+    assert.equal(fameReading(line, fame), 70);
+    const pairBar = [{ name: '组合热度', value: 5, pairs: [{ partner: '林北', value: 70 }] }];
+    assert.equal(fameReading({ fame: { source: 'fame', bar: '组合热度', partner: '哪吒' } }, pairBar), null, '搭档条里没有这个搭档仍读不到');
+});
+
 test('syncPersonas 没有变化时原样返回同一对象；没有人设线时原样返回', () => {
     const progress = emptyProgress('p');
     assert.equal(syncPersonas(newProject('x'), progress, []), progress);
