@@ -1,4 +1,4 @@
-// PlotInjector v0.2.2
+// PlotInjector v0.2.3
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -9075,6 +9075,17 @@ label.pi-wb-row{cursor:pointer}
 .pi-pl-name{flex:1;min-width:0;font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pi-pl-row.is-lost .pi-pl-name{color:var(--pi-txt2)}
 .pi-pl-row .pi-refs{margin-bottom:2px}
+.pi-pl-row+.pi-pl-row{margin-top:6px;padding-top:10px;border-top:1px solid var(--pi-line)}
+.pi-pl-tag{flex:none;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:600;white-space:nowrap;background:var(--pi-fill2);color:var(--pi-txt2)}
+.pi-pl-tag.is-ok{background:var(--pi-ok-soft);color:var(--pi-ok)}
+.pi-pl-tag.is-warn{background:var(--pi-warn-soft);color:var(--pi-warn)}
+.pi-pl-tag.is-accent{background:var(--pi-accent-soft);color:var(--pi-accent)}
+.pi-pl-row .pi-chip.is-past{color:var(--pi-txt)}
+.pi-pl-row .pi-chip.is-next{background:transparent;color:var(--pi-txt2);box-shadow:inset 0 0 0 1px var(--pi-rule)}
+.pi-pl-row .pi-chip.is-on{background:var(--pi-accent);color:var(--pi-on-dark);font-weight:600;box-shadow:none}
+.pi-group.is-persona .pi-group-hd{color:var(--pi-txt);font-size:13px;font-weight:600;padding:6px 6px}
+.pi-group.is-persona .pi-group-hd small{min-width:18px;padding:0 6px;border-radius:9px;text-align:center;font-size:11px;font-weight:600;background:var(--pi-fill2);color:var(--pi-txt2)}
+.pi-group.is-persona+.pi-group.is-persona{margin-top:10px}
 .pi-ps .pi-node-hd .pi-inp{flex:1;min-width:0}
 .pi-ps{background:var(--pi-fill)}
 .pi-icon-btn:disabled{opacity:.35;cursor:not-allowed}
@@ -15063,18 +15074,17 @@ ${suffix.trim()}` : body;
                 <button type="button" class="pi-btn is-primary" data-act="activate">设为当前聊天使用</button>
                 <button type="button" class="pi-btn" data-act="activate-card">设为本卡默认</button></div></div>`;
   }
+  var PERSONA_TAG_TONE = { 读声望中: "is-ok", 读不到声望: "is-warn", 数值不在任何区间: "is-warn", 手动: "is-accent" };
   function personaCard(view, project, progress, st9) {
     if (!hasPersonas(project)) return "";
     let all = project.personas, env = personaEnv(project, progress, view.runtime.fame(), view.runtime.personaStates()), muted = new Set(progress.personas && progress.personas.muted || []), collapsed = new Set(st9.personaFold || []), line = (item) => {
-      let info = currentStage(item, progress, env), note = [personaNote(item, progress, info), muted.has(item.id) ? "不提醒" : ""].filter(Boolean).join(" · "), caps = item.stages.map(
-        (stage, index) => `<button type="button" class="pi-chip${index === info.index ? " is-on" : ""}" data-act="persona-pick" data-line="${esc(item.id)}" data-stage="${esc(stage.id)}">${esc(stage.name)}</button>`
-      ).join("");
-      return `<div class="pi-pl-row${info.lost ? " is-lost" : ""}"><div class="pi-pl-hd"><span class="pi-pl-name">${esc(item.name)}</span>${note ? `<span class="pi-tl-state">${esc(note)}</span>` : ""}
+      let info = currentStage(item, progress, env), tags = [personaNote(item, progress, info), muted.has(item.id) ? "不提醒" : ""].filter(Boolean).map((text2) => `<span class="pi-pl-tag ${PERSONA_TAG_TONE[text2] || ""}">${esc(text2)}</span>`).join(""), caps = item.stages.map((stage, index) => `<button type="button" class="pi-chip${index === info.index ? " is-on" : index < info.index ? " is-past" : " is-next"}" data-act="persona-pick" data-line="${esc(item.id)}" data-stage="${esc(stage.id)}"${index === info.index ? ' aria-current="true"' : ""}>${esc(stage.name)}</button>`).join("");
+      return `<div class="pi-pl-row${info.lost ? " is-lost" : ""}"><div class="pi-pl-hd"><span class="pi-pl-name">${esc(item.name)}</span>${tags}
             <button type="button" class="pi-icon-btn" data-act="persona-menu" data-line="${esc(item.id)}" title="更多">${ICONS.more}</button></div><div class="pi-refs">${caps}</div></div>`;
     };
     return `<div class="pi-card"><h3>人设阶段</h3>${groupLines(all.lines.filter((item) => item.enabled)).map((group) => {
       let key = group.name || "::none", shut = collapsed.has(key);
-      return `<div class="pi-group${shut ? " is-collapsed" : ""}"><button type="button" class="pi-group-hd" data-act="persona-fold" data-group="${esc(key)}">${shut ? ICONS.caret : ICONS.caretDown}${esc(group.name || "未分组")}<small>${group.lines.length}</small></button>${shut ? "" : group.lines.map(line).join("")}</div>`;
+      return `<div class="pi-group is-persona${shut ? " is-collapsed" : ""}"><button type="button" class="pi-group-hd" data-act="persona-fold" data-group="${esc(key)}">${shut ? ICONS.caret : ICONS.caretDown}${esc(group.name || "未分组")}<small>${group.lines.length}</small></button>${shut ? "" : group.lines.map(line).join("")}</div>`;
     }).join("") || '<p class="pi-hint">没有启用的人设线。</p>'}</div>`;
   }
   function render5(view) {
@@ -16960,7 +16970,7 @@ ${suffix.trim()}` : body;
   }
 
   // src/index.js
-  var VERSION = "0.2.2", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.2.3", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")

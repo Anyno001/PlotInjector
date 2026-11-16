@@ -177,7 +177,10 @@ export function activateCard(view, project) {
                 <button type="button" class="pi-btn" data-act="activate-card">设为本卡默认</button></div></div>`;
 }
 
-// 人设阶段卡：每个角色一组，每条线一行阶段胶囊，粉色标当前，「⋯」里改提醒与自动判断。
+// 线标题旁状态标签的颜色：读到声望绿，读不到或不在区间黄，手动锁定粉，其余灰。
+const PERSONA_TAG_TONE = { 读声望中: 'is-ok', 读不到声望: 'is-warn', 数值不在任何区间: 'is-warn', 手动: 'is-accent' };
+
+// 人设阶段卡：每个角色一组，每条线一行阶段胶囊，实心粉底标当前，「⋯」里改提醒与自动判断。
 function personaCard(view, project, progress, st) {
     if (!hasPersonas(project)) return '';
     const all = project.personas;
@@ -186,23 +189,25 @@ function personaCard(view, project, progress, st) {
     const collapsed = new Set(st.personaFold || []);
     const line = (item) => {
         const info = currentStage(item, progress, env);
-        const note = [personaNote(item, progress, info), muted.has(item.id) ? '不提醒' : '']
+        const tags = [personaNote(item, progress, info), muted.has(item.id) ? '不提醒' : '']
             .filter(Boolean)
-            .join(' · ');
-        const caps = item.stages
-            .map(
-                (stage, index) =>
-                    `<button type="button" class="pi-chip${index === info.index ? ' is-on' : ''}" data-act="persona-pick" data-line="${esc(item.id)}" data-stage="${esc(stage.id)}">${esc(stage.name)}</button>`,
-            )
+            .map((text) => `<span class="pi-pl-tag ${PERSONA_TAG_TONE[text] || ''}">${esc(text)}</span>`)
             .join('');
-        return `<div class="pi-pl-row${info.lost ? ' is-lost' : ''}"><div class="pi-pl-hd"><span class="pi-pl-name">${esc(item.name)}</span>${note ? `<span class="pi-tl-state">${esc(note)}</span>` : ''}
+        // 当前阶段实心粉底，已过的阶段正常字色，未到的阶段虚线框加淡字。
+        const caps = item.stages
+            .map((stage, index) => {
+                const tone = index === info.index ? ' is-on' : index < info.index ? ' is-past' : ' is-next';
+                return `<button type="button" class="pi-chip${tone}" data-act="persona-pick" data-line="${esc(item.id)}" data-stage="${esc(stage.id)}"${index === info.index ? ' aria-current="true"' : ''}>${esc(stage.name)}</button>`;
+            })
+            .join('');
+        return `<div class="pi-pl-row${info.lost ? ' is-lost' : ''}"><div class="pi-pl-hd"><span class="pi-pl-name">${esc(item.name)}</span>${tags}
             <button type="button" class="pi-icon-btn" data-act="persona-menu" data-line="${esc(item.id)}" title="更多">${ICONS.more}</button></div><div class="pi-refs">${caps}</div></div>`;
     };
     const groups = groupLines(all.lines.filter((item) => item.enabled))
         .map((group) => {
             const key = group.name || '::none';
             const shut = collapsed.has(key);
-            return `<div class="pi-group${shut ? ' is-collapsed' : ''}"><button type="button" class="pi-group-hd" data-act="persona-fold" data-group="${esc(key)}">${shut ? ICONS.caret : ICONS.caretDown}${esc(group.name || '未分组')}<small>${group.lines.length}</small></button>${shut ? '' : group.lines.map(line).join('')}</div>`;
+            return `<div class="pi-group is-persona${shut ? ' is-collapsed' : ''}"><button type="button" class="pi-group-hd" data-act="persona-fold" data-group="${esc(key)}">${shut ? ICONS.caret : ICONS.caretDown}${esc(group.name || '未分组')}<small>${group.lines.length}</small></button>${shut ? '' : group.lines.map(line).join('')}</div>`;
         })
         .join('');
     return `<div class="pi-card"><h3>人设阶段</h3>${groups || '<p class="pi-hint">没有启用的人设线。</p>'}</div>`;
