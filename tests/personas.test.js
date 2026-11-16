@@ -10,7 +10,7 @@ import { buildEntries } from '../src/core/inject.js';
 import { buildCheckMessages, buildPersonaCheckMessages, parseCheckReply } from '../src/core/check.js';
 import { newProject, normalizeProject, normalizeSettings } from '../src/core/store.js';
 import { flattenUnits } from '../src/core/outline.js';
-import { applyMoves, alignPersonaProgress, buildPersonaEntries, checkItems, currentStage, fameIndex, fameReading, emptyPersonas, newLine, newStage, normalizePersonas, resolveMoves, setPersonaStage, syncPersonas, undoMoves } from '../src/core/personas.js';
+import { applyMoves, alignPersonaProgress, buildPersonaEntries, checkItems, currentStage, fameIndex, fameReading, emptyPersonas, newLine, newStage, normalizePersonas, personaNote, resolveMoves, setPersonaStage, syncPersonas, undoMoves } from '../src/core/personas.js';
 import { applyPlan, buildPlan, parseCond, parseEntry, releaseImported } from '../src/core/persona-import.js';
 import { flattenUnits as flat } from '../src/core/outline.js';
 
@@ -497,4 +497,25 @@ test('人设单独导出导入：往返不丢字段，换新 id，来源与大�
     assert.equal(rep.lines.length, 1);
     assert.equal(rep.lines[0].id, 'l1');
     assert.equal(mergePersonaLines(src.lines, back.lines, 'skip').skipped, 1);
+});
+
+test('读声望：读到数值但不在任何区间时显示默认阶段，状态字区分三种情况', () => {
+    const base = { id: 'l', mode: 'fame', fame: { source: 'fame', bar: 'x' }, stages: [{ id: 'a', name: 'A', range: {} }, { id: 'b', name: 'B', range: { min: 50 } }, { id: 'c', name: 'C', range: { min: 20, max: 30 } }] };
+    const line = normalizePersonas({ lines: [{ ...base, defaultStage: 'c' }] }).lines[0];
+    const progress = emptyProgress('p');
+    const row = value => ({ fame: [{ name: 'x', value }] });
+    const miss = currentStage(line, progress, row(5));
+    assert.equal(miss.stage.name, 'C', '数值 5 不在任何区间，用默认阶段');
+    assert.equal(miss.miss, true);
+    assert.equal(personaNote(line, progress, miss), '数值不在任何区间');
+    const hit = currentStage(line, progress, row(60));
+    assert.equal(hit.stage.name, 'B');
+    assert.equal(personaNote(line, progress, hit), '读声望中');
+    const lost = currentStage(line, progress, { fame: [] });
+    assert.equal(lost.lost, true);
+    assert.equal(personaNote(line, progress, lost), '读不到声望');
+    const held = setPersonaStage(progress, line, 'a');
+    assert.equal(personaNote(line, held, currentStage(line, held, row(60))), '手动');
+    const manual = normalizePersonas({ lines: [{ ...base, mode: 'manual' }] }).lines[0];
+    assert.equal(personaNote(manual, progress, currentStage(manual, progress, {})), '');
 });

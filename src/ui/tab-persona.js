@@ -1,6 +1,6 @@
 import { POSITIONS, ROLES } from '../core/inject.js';
 import { flattenUnits, stageLabel, volumeLabel } from '../core/outline.js';
-import { FAVOR_DIMS, PERSONA_MODES, currentStage, groupLines, newLine, newStage, personaEnv } from '../core/personas.js';
+import { FAVOR_DIMS, PERSONA_MODES, currentStage, fameReading, groupLines, newLine, newStage, personaEnv, personaNote } from '../core/personas.js';
 import { emptyProgress } from '../core/progress.js';
 import { estimateTokens } from '../core/tokens.js';
 import { buildPersonaFile, mergePersonaLines, parsePersonaFile } from '../core/persona-file.js';
@@ -12,7 +12,6 @@ import { openImport, restoreImported } from './persona-import.js';
 // 人设页签：按角色折叠，每条线一张卡，展开后编辑注入参数、公共文字与阶段列表。
 const st = view => view.tabState('persona');
 const modeLabel = value => (PERSONA_MODES.find(item => item.value === value) || PERSONA_MODES[0]).label;
-const SOURCE_NOTE = { manual: '手动', check: '', outline: '', fame: '' };
 
 function personas(view) {
     return view.project().personas;
@@ -36,7 +35,8 @@ export function stageInfo(view, line) {
     const project = view.project();
     const active = view.runtime.activeId() === view.projectId;
     const progress = active ? view.runtime.progress() : emptyProgress(view.projectId);
-    return currentStage(line, progress, personaEnv(project, progress, active ? view.runtime.fame() : [], active ? view.runtime.personaStates() : null));
+    const info = currentStage(line, progress, personaEnv(project, progress, active ? view.runtime.fame() : [], active ? view.runtime.personaStates() : null));
+    return { ...info, active, note: active ? personaNote(line, progress, info) : '' };
 }
 
 const keyText = line => line.keys.join('，');
@@ -64,21 +64,48 @@ function stageHtml(view, line, stage, index, current, units) {
         ${field(`人设内容 ≈${estimateTokens(stage.text)}`, `<textarea class="pi-ta" rows="6" ${attrs('text')}>${esc(stage.text)}</textarea>`)}</div>`;
 }
 
+// 对象：只有这条声望按搭档分别记、且已有搭档记录时才出现，直接从 IGS 已记下的搭档里选；留空读整体（取数值最高的一对）。
+function partnerField(attrs, line, bar) {
+    if (!bar || !Array.isArray(bar.pairs)) return '';
+    const names = bar.pairs.map(pair => pair.partner);
+    if (line.fame.partner && !names.includes(line.fame.partner)) names.push(line.fame.partner);
+    if (!names.length) return '';
+    const list = [{ value: '', label: '整体（取数值最高的一对）' }, ...names.map(name => ({ value: name, label: name }))];
+    return field('搭档', `<select class="pi-sel" ${attrs('famePartner')}>${options(list, line.fame.partner)}</select>`);
+}
+
+// 读声望线的状态说明：读到几、落在哪、没读到该查什么。
+function fameHint(view, line, info, bar) {
+    if (!info.active) return '当前聊天没有使用本项目，这里不读声望。';
+    if (info.lost) return `没有读到这条${line.fame.source === 'favor' ? '角色数据' : '声望'}，请检查名称是否和 IGS 里的一致。读不到时沿用手动选的阶段。`;
+    const value = fameReading(line, view.runtime.fame());
+    const base = value === null ? '' : `当前读到的数值：${value}。`;
+    if (info.miss) return `${base}这个数值不在任何阶段的区间内，现在显示「${info.stage.name}」。请给每个阶段填上下限。`;
+    const noPairs = line.fame.source !== 'favor' && bar && Array.isArray(bar.pairs) && !bar.pairs.length ? '这条声望还没有搭档记录，现在按整体读。' : '';
+    return `${base}${noPairs}`.trim();
+}
+
 function lineBody(view, line, units) {
     const attrs = name => `data-pl="${esc(line.id)}" data-f="${name}"`;
     const atDepth = line.position === 4;
     const info = stageInfo(view, line);
     const isFavor = line.fame.source === 'favor';
+    const fameBar = isFavor ? null : view.runtime.fame().find(bar => (bar.kind || 'fame') === 'fame' && bar.name === line.fame.bar);
+    const hint = line.mode === 'fame' ? fameHint(view, line, info, fameBar) : '';
     const fameBody = line.mode === 'fame' ? `<datalist id="pi-fame-list">${view.runtime.fame().filter(bar => (bar.kind || 'fame') === (isFavor ? 'favor' : 'fame')).flatMap(bar => [bar.name, ...(isFavor && Array.isArray(bar.aliases) ? bar.aliases : [])]).map(name => `<option value="${esc(name)}"></option>`).join('')}</datalist>
         <label class="pi-field"><span>数据来源</span><select class="pi-sel" ${attrs('fameSource')}>${options([{ value: 'fame', label: '声望' }, { value: 'favor', label: '角色对主角的关系数值' }], line.fame.source)}</select></label>
         ${isFavor ? `<label class="pi-field"><span>读哪一项</span><select class="pi-sel" ${attrs('fameDim')}>${options(FAVOR_DIMS.map(value => ({ value, label: value })), line.fame.dim)}</select></label>` : ''}
-        <div class="pi-pair">${field(isFavor ? '角色名' : '声望条名称', input(`${attrs('fameBar')} list="pi-fame-list"`, line.fame.bar))}${isFavor ? '' : field('对象（可空）', input(attrs('famePartner'), line.fame.partner))}</div>
-        <p class="pi-hint">读不到数值时沿用手动选择的阶段，没选过就用默认阶段。</p>` : '';
+        ${field(isFavor ? '角色名' : '声望条名称', input(`${attrs('fameBar')} list="pi-fame-list"`, line.fame.bar))}
+        ${isFavor ? '' : partnerField(attrs, line, fameBar)}
+        ${hint ? `<p class="pi-hint">${esc(hint)}</p>` : ''}
+        ${isFavor ? '' : `<div class="pi-tools is-c1"><button type="button" class="pi-btn is-sm" data-act="ps-spread" data-line="${esc(line.id)}">按阶段数平均分配区间</button></div>`}` : '';
+    const defaultStage = line.mode === 'fame' || line.mode === 'outline'
+        ? `<label class="pi-field"><span>${line.mode === 'fame' ? '数值不在任何阶段区间时显示' : '还没到任何绑定的大纲阶段时显示'}</span><select class="pi-sel" ${attrs('defaultStage')}>${options(line.stages.map(stage => ({ value: stage.id, label: stage.name })), line.defaultStage || line.stages[0].id)}</select></label>` : '';
     return `<div class="pi-entry-bd">
         <div class="pi-pair">${field('线名', input(attrs('name'), line.name))}${field('角色（分组）', input(attrs('group'), line.group))}</div>
-        <label class="pi-field"><span>默认阶段（条件都不符合时用）</span><select class="pi-sel" ${attrs('defaultStage')}>${options([{ value: '', label: '第一阶段' }, ...line.stages.map(stage => ({ value: stage.id, label: stage.name }))], line.defaultStage)}</select></label>
         <label class="pi-field"><span>切换方式</span><select class="pi-sel" ${attrs('mode')}>${options(PERSONA_MODES, line.mode)}</select></label>
         ${fameBody}
+        ${defaultStage}
         <div class="pi-pair">${field('触发方式', `<select class="pi-sel" ${attrs('constant')}>${options([{ value: '1', label: '常驻' }, { value: '0', label: '关键词触发' }], line.constant ? '1' : '0')}</select>`)}
             ${line.constant ? '' : field('关键词（逗号分隔）', input(attrs('keys'), keyText(line)))}</div>
         <div class="pi-pair ${atDepth ? 'is-c4' : ''}">
@@ -94,7 +121,7 @@ function lineBody(view, line, units) {
 
 function lineRow(view, line, open, units) {
     const info = stageInfo(view, line);
-    const note = info.source === 'manual' && line.mode !== 'manual' ? '手动' : SOURCE_NOTE[info.source] || '';
+    const note = info.note;
     return `<div class="pi-entry${line.enabled ? '' : ' is-off'}">
         <div class="pi-entry-hd" data-act="pl-open" data-line="${esc(line.id)}">${open ? ICONS.caretDown : ICONS.caret}
             <span class="pi-etitle">${esc(line.name)}</span><span class="pi-badge">${esc(modeLabel(line.mode))}</span>
@@ -267,6 +294,16 @@ export const actions = {
     },
     'extra-del'(view, target) {
         patchStage(view, target.dataset.line, target.dataset.stage, stage => ({ ...stage, extra: (stage.extra || []).filter((_, i) => i !== Number(target.dataset.i)) }));
+        view.renderBody();
+    },
+    async 'ps-spread'(view, target) {
+        const line = personas(view).lines.find(item => item.id === target.dataset.line);
+        if (!line) return;
+        if (line.stages.some(stage => stage.range.min !== undefined || stage.range.max !== undefined)
+            && !(await confirmDialog({ title: '平均分配区间', body: '会覆盖各阶段已填的声望下限和上限。', okLabel: '覆盖' }))) return;
+        const count = line.stages.length;
+        const edge = i => Math.round((i * 100) / count);
+        patchLine(view, line.id, item => ({ ...item, stages: item.stages.map((stage, i) => ({ ...stage, range: { min: i === 0 ? 0 : edge(i) + 1, max: i === count - 1 ? 100 : edge(i + 1) } })) }));
         view.renderBody();
     },
     'ps-up': (view, target) => moveStage(view, target.dataset.line, target.dataset.stage, -1),

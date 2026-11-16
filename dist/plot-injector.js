@@ -1,4 +1,4 @@
-// PlotInjector v0.2.0
+// PlotInjector v0.2.1
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -1685,13 +1685,16 @@ ${value.name}`);
     return baseIndex(line);
   }
   function currentStage(line, progress, env = {}) {
-    let pp = normalizePersonaProgress(progress && progress.personas), manualHeld = pp.manual.includes(line.id), stored = storedIndex(line, pp), pick = (index, source, lost = !1) => ({ stage: line.stages[index], index, source, lost });
+    let pp = normalizePersonaProgress(progress && progress.personas), manualHeld = pp.manual.includes(line.id), stored = storedIndex(line, pp), pick = (index, source, lost = !1, miss = !1) => ({ stage: line.stages[index], index, source, lost, miss });
     if (line.mode === "outline" && !manualHeld) return pick(outlineIndex(line, env), "outline");
     if (line.mode === "fame" && !manualHeld) {
       let index = fameIndex(line, env, pp);
-      return index >= 0 ? pick(index, "fame") : pick(stored, "manual", fameReading(line, env.fame) === null);
+      return index >= 0 ? pick(index, "fame") : fameReading(line, env.fame) === null ? pick(stored, "manual", !0) : pick(baseIndex(line), "fame", !1, !0);
     }
     return pick(stored, manualHeld ? "manual" : line.mode === "check" ? "check" : "manual");
+  }
+  function personaNote(line, progress, info) {
+    return line.mode === "manual" ? "" : normalizePersonaProgress(progress && progress.personas).manual.includes(line.id) ? "手动" : line.mode !== "fame" ? "" : info.lost ? "读不到声望" : info.miss ? "数值不在任何区间" : "读声望中";
   }
   function personaEnv(project, progress, fame = [], stageStates = null) {
     let infinite = project && project.mode === "infinite", units = infinite || !project ? [] : flattenUnits(project.outline && project.outline.volumes), links = infinite || !units.length ? NO_LINKS : outlineLinks(project.outline, units);
@@ -9111,6 +9114,8 @@ label.pi-wb-row{cursor:pointer}
     more: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="3.5" cy="8" r="1.3"/><circle cx="8" cy="8" r="1.3"/><circle cx="12.5" cy="8" r="1.3"/></svg>',
     pulse: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M1.5 8.5h3l1.8-4 3 8 1.9-4h3.3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     file: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M4 1h5.5L13 4.5V14a1 1 0 01-1 1H4a1 1 0 01-1-1V2a1 1 0 011-1z" stroke="currentColor" stroke-width="1.2"/><path d="M9 1v4h4" stroke="currentColor" stroke-width="1.2"/></svg>',
+    arrowUp: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 13V3M4 7l4-4 4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    arrowDown: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 3v10M4 9l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     undo: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M5.5 3L2.5 6l3 3M2.5 6h6.2a4.3 4.3 0 010 8.5H6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>'
   };
 
@@ -14741,7 +14746,7 @@ ${suffix.trim()}` : body;
   }
 
   // src/ui/tab-persona.js
-  var st4 = (view) => view.tabState("persona"), modeLabel = (value) => (PERSONA_MODES.find((item) => item.value === value) || PERSONA_MODES[0]).label, SOURCE_NOTE = { manual: "手动", check: "", outline: "", fame: "" };
+  var st4 = (view) => view.tabState("persona"), modeLabel = (value) => (PERSONA_MODES.find((item) => item.value === value) || PERSONA_MODES[0]).label;
   function personas(view) {
     return view.project().personas;
   }
@@ -14755,8 +14760,8 @@ ${suffix.trim()}` : body;
     patchLine(view, lineId, (line) => ({ ...line, stages: line.stages.map((stage) => stage.id === stageId ? fn(stage) : stage) }));
   }
   function stageInfo(view, line) {
-    let project = view.project(), active = view.runtime.activeId() === view.projectId, progress = active ? view.runtime.progress() : emptyProgress(view.projectId);
-    return currentStage(line, progress, personaEnv(project, progress, active ? view.runtime.fame() : [], active ? view.runtime.personaStates() : null));
+    let project = view.project(), active = view.runtime.activeId() === view.projectId, progress = active ? view.runtime.progress() : emptyProgress(view.projectId), info = currentStage(line, progress, personaEnv(project, progress, active ? view.runtime.fame() : [], active ? view.runtime.personaStates() : null));
+    return { ...info, active, note: active ? personaNote(line, progress, info) : "" };
   }
   var keyText = (line) => line.keys.join("，"), field = (label, body) => `<label class="pi-field"><span>${label}</span>${body}</label>`, input = (attrs, value, extra = "") => `<input class="pi-inp" ${attrs} value="${esc(value)}"${extra}>`;
   function extraHtml(attrs, line, stage) {
@@ -14770,17 +14775,34 @@ ${suffix.trim()}` : body;
         ${extra}
         ${field(`人设内容 ≈${estimateTokens(stage.text)}`, `<textarea class="pi-ta" rows="6" ${attrs("text")}>${esc(stage.text)}</textarea>`)}</div>`;
   }
+  function partnerField(attrs, line, bar) {
+    if (!bar || !Array.isArray(bar.pairs)) return "";
+    let names2 = bar.pairs.map((pair) => pair.partner);
+    if (line.fame.partner && !names2.includes(line.fame.partner) && names2.push(line.fame.partner), !names2.length) return "";
+    let list = [{ value: "", label: "整体（取数值最高的一对）" }, ...names2.map((name) => ({ value: name, label: name }))];
+    return field("搭档", `<select class="pi-sel" ${attrs("famePartner")}>${options(list, line.fame.partner)}</select>`);
+  }
+  function fameHint(view, line, info, bar) {
+    if (!info.active) return "当前聊天没有使用本项目，这里不读声望。";
+    if (info.lost) return `没有读到这条${line.fame.source === "favor" ? "角色数据" : "声望"}，请检查名称是否和 IGS 里的一致。读不到时沿用手动选的阶段。`;
+    let value = fameReading(line, view.runtime.fame()), base = value === null ? "" : `当前读到的数值：${value}。`;
+    if (info.miss) return `${base}这个数值不在任何阶段的区间内，现在显示「${info.stage.name}」。请给每个阶段填上下限。`;
+    let noPairs = line.fame.source !== "favor" && bar && Array.isArray(bar.pairs) && !bar.pairs.length ? "这条声望还没有搭档记录，现在按整体读。" : "";
+    return `${base}${noPairs}`.trim();
+  }
   function lineBody(view, line, units) {
-    let attrs = (name) => `data-pl="${esc(line.id)}" data-f="${name}"`, atDepth = line.position === 4, info = stageInfo(view, line), isFavor = line.fame.source === "favor", fameBody = line.mode === "fame" ? `<datalist id="pi-fame-list">${view.runtime.fame().filter((bar) => (bar.kind || "fame") === (isFavor ? "favor" : "fame")).flatMap((bar) => [bar.name, ...isFavor && Array.isArray(bar.aliases) ? bar.aliases : []]).map((name) => `<option value="${esc(name)}"></option>`).join("")}</datalist>
+    let attrs = (name) => `data-pl="${esc(line.id)}" data-f="${name}"`, atDepth = line.position === 4, info = stageInfo(view, line), isFavor = line.fame.source === "favor", fameBar = isFavor ? null : view.runtime.fame().find((bar) => (bar.kind || "fame") === "fame" && bar.name === line.fame.bar), hint = line.mode === "fame" ? fameHint(view, line, info, fameBar) : "", fameBody = line.mode === "fame" ? `<datalist id="pi-fame-list">${view.runtime.fame().filter((bar) => (bar.kind || "fame") === (isFavor ? "favor" : "fame")).flatMap((bar) => [bar.name, ...isFavor && Array.isArray(bar.aliases) ? bar.aliases : []]).map((name) => `<option value="${esc(name)}"></option>`).join("")}</datalist>
         <label class="pi-field"><span>数据来源</span><select class="pi-sel" ${attrs("fameSource")}>${options([{ value: "fame", label: "声望" }, { value: "favor", label: "角色对主角的关系数值" }], line.fame.source)}</select></label>
         ${isFavor ? `<label class="pi-field"><span>读哪一项</span><select class="pi-sel" ${attrs("fameDim")}>${options(FAVOR_DIMS.map((value) => ({ value, label: value })), line.fame.dim)}</select></label>` : ""}
-        <div class="pi-pair">${field(isFavor ? "角色名" : "声望条名称", input(`${attrs("fameBar")} list="pi-fame-list"`, line.fame.bar))}${isFavor ? "" : field("对象（可空）", input(attrs("famePartner"), line.fame.partner))}</div>
-        <p class="pi-hint">读不到数值时沿用手动选择的阶段，没选过就用默认阶段。</p>` : "";
+        ${field(isFavor ? "角色名" : "声望条名称", input(`${attrs("fameBar")} list="pi-fame-list"`, line.fame.bar))}
+        ${isFavor ? "" : partnerField(attrs, line, fameBar)}
+        ${hint ? `<p class="pi-hint">${esc(hint)}</p>` : ""}
+        ${isFavor ? "" : `<div class="pi-tools is-c1"><button type="button" class="pi-btn is-sm" data-act="ps-spread" data-line="${esc(line.id)}">按阶段数平均分配区间</button></div>`}` : "", defaultStage = line.mode === "fame" || line.mode === "outline" ? `<label class="pi-field"><span>${line.mode === "fame" ? "数值不在任何阶段区间时显示" : "还没到任何绑定的大纲阶段时显示"}</span><select class="pi-sel" ${attrs("defaultStage")}>${options(line.stages.map((stage) => ({ value: stage.id, label: stage.name })), line.defaultStage || line.stages[0].id)}</select></label>` : "";
     return `<div class="pi-entry-bd">
         <div class="pi-pair">${field("线名", input(attrs("name"), line.name))}${field("角色（分组）", input(attrs("group"), line.group))}</div>
-        <label class="pi-field"><span>默认阶段（条件都不符合时用）</span><select class="pi-sel" ${attrs("defaultStage")}>${options([{ value: "", label: "第一阶段" }, ...line.stages.map((stage) => ({ value: stage.id, label: stage.name }))], line.defaultStage)}</select></label>
         <label class="pi-field"><span>切换方式</span><select class="pi-sel" ${attrs("mode")}>${options(PERSONA_MODES, line.mode)}</select></label>
         ${fameBody}
+        ${defaultStage}
         <div class="pi-pair">${field("触发方式", `<select class="pi-sel" ${attrs("constant")}>${options([{ value: "1", label: "常驻" }, { value: "0", label: "关键词触发" }], line.constant ? "1" : "0")}</select>`)}
             ${line.constant ? "" : field("关键词（逗号分隔）", input(attrs("keys"), keyText(line)))}</div>
         <div class="pi-pair ${atDepth ? "is-c4" : ""}">
@@ -14794,7 +14816,7 @@ ${suffix.trim()}` : body;
             <button type="button" class="pi-btn is-sm is-danger" data-act="pl-del" data-line="${esc(line.id)}">删除这条线</button></div></div>`;
   }
   function lineRow(view, line, open, units) {
-    let info = stageInfo(view, line), note = info.source === "manual" && line.mode !== "manual" ? "手动" : SOURCE_NOTE[info.source] || "";
+    let info = stageInfo(view, line), note = info.note;
     return `<div class="pi-entry${line.enabled ? "" : " is-off"}">
         <div class="pi-entry-hd" data-act="pl-open" data-line="${esc(line.id)}">${open ? ICONS.caretDown : ICONS.caret}
             <span class="pi-etitle">${esc(line.name)}</span><span class="pi-badge">${esc(modeLabel(line.mode))}</span>
@@ -14925,6 +14947,12 @@ ${suffix.trim()}` : body;
     "extra-del"(view, target) {
       patchStage(view, target.dataset.line, target.dataset.stage, (stage) => ({ ...stage, extra: (stage.extra || []).filter((_, i) => i !== Number(target.dataset.i)) })), view.renderBody();
     },
+    async "ps-spread"(view, target) {
+      let line = personas(view).lines.find((item) => item.id === target.dataset.line);
+      if (!line || line.stages.some((stage) => stage.range.min !== void 0 || stage.range.max !== void 0) && !await confirmDialog({ title: "平均分配区间", body: "会覆盖各阶段已填的声望下限和上限。", okLabel: "覆盖" })) return;
+      let count = line.stages.length, edge = (i) => Math.round(i * 100 / count);
+      patchLine(view, line.id, (item) => ({ ...item, stages: item.stages.map((stage, i) => ({ ...stage, range: { min: i === 0 ? 0 : edge(i) + 1, max: i === count - 1 ? 100 : edge(i + 1) } })) })), view.renderBody();
+    },
     "ps-up": (view, target) => moveStage(view, target.dataset.line, target.dataset.stage, -1),
     "ps-down": (view, target) => moveStage(view, target.dataset.line, target.dataset.stage, 1),
     async "imp-open"(view) {
@@ -15038,11 +15066,7 @@ ${suffix.trim()}` : body;
   function personaCard(view, project, progress, st9) {
     if (!hasPersonas(project)) return "";
     let all = project.personas, env = personaEnv(project, progress, view.runtime.fame(), view.runtime.personaStates()), muted = new Set(progress.personas && progress.personas.muted || []), collapsed = new Set(st9.personaFold || []), line = (item) => {
-      let info = currentStage(item, progress, env), note = [
-        info.source === "manual" && item.mode !== "manual" ? "手动" : "",
-        info.lost ? "读不到声望" : "",
-        muted.has(item.id) ? "不提醒" : ""
-      ].filter(Boolean).join(" · "), caps = item.stages.map(
+      let info = currentStage(item, progress, env), note = [personaNote(item, progress, info), muted.has(item.id) ? "不提醒" : ""].filter(Boolean).join(" · "), caps = item.stages.map(
         (stage, index) => `<button type="button" class="pi-chip${index === info.index ? " is-on" : ""}" data-act="persona-pick" data-line="${esc(item.id)}" data-stage="${esc(stage.id)}">${esc(stage.name)}</button>`
       ).join("");
       return `<div class="pi-pl-row${info.lost ? " is-lost" : ""}"><div class="pi-pl-hd"><span class="pi-pl-name">${esc(item.name)}</span>${note ? `<span class="pi-tl-state">${esc(note)}</span>` : ""}
@@ -16936,7 +16960,7 @@ ${suffix.trim()}` : body;
   }
 
   // src/index.js
-  var VERSION = "0.2.0", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.2.1", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")

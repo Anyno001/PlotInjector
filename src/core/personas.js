@@ -180,18 +180,29 @@ export function fameIndex(line, env, pp = null) {
     return baseIndex(line);
 }
 
-// 返回 { stage, index, source, lost }：source 为 manual/check/outline/fame；lost 表示读声望读不到值、退回了手动值。
+// 返回 { stage, index, source, lost, miss }：source 为 manual/check/outline/fame。
+// lost：读声望读不到值，退回了手动值。miss：读到了数值，但不落在任何阶段的区间里，显示默认阶段。
 export function currentStage(line, progress, env = {}) {
     const pp = normalizePersonaProgress(progress && progress.personas);
     const manualHeld = pp.manual.includes(line.id);
     const stored = storedIndex(line, pp);
-    const pick = (index, source, lost = false) => ({ stage: line.stages[index], index, source, lost });
+    const pick = (index, source, lost = false, miss = false) => ({ stage: line.stages[index], index, source, lost, miss });
     if (line.mode === 'outline' && !manualHeld) return pick(outlineIndex(line, env), 'outline');
     if (line.mode === 'fame' && !manualHeld) {
         const index = fameIndex(line, env, pp);
-        return index >= 0 ? pick(index, 'fame') : pick(stored, 'manual', fameReading(line, env.fame) === null);
+        if (index >= 0) return pick(index, 'fame');
+        return fameReading(line, env.fame) === null ? pick(stored, 'manual', true) : pick(baseIndex(line), 'fame', false, true);
     }
     return pick(stored, manualHeld ? 'manual' : line.mode === 'check' ? 'check' : 'manual');
+}
+
+// 线标题旁的状态字：手动锁定、读声望的三种情况。其他情况不写。
+export function personaNote(line, progress, info) {
+    if (line.mode === 'manual') return '';
+    if (normalizePersonaProgress(progress && progress.personas).manual.includes(line.id)) return '手动';
+    if (line.mode !== 'fame') return '';
+    if (info.lost) return '读不到声望';
+    return info.miss ? '数值不在任何区间' : '读声望中';
 }
 
 // 注入环境：大纲阶段与状态（跟随大纲用）、声望读数（读声望用）。

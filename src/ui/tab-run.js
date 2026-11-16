@@ -4,7 +4,7 @@ import { renderClueRun, modeCard, clueActions, clueOnChange } from './clue-run.j
 import { DEFAULT_PARAMS, PACES, POSITIONS, ROLES, buildIndexText, carriedNodes, positionLabel } from '../core/inject.js';
 import { flattenUnits, stageLabel, stageNodes, volumeLabel } from '../core/outline.js';
 import { STATE_LABELS, checkBase, goTo, offNodes, patchSlot, setNodeChecked, unitStates } from '../core/progress.js';
-import { currentStage, groupLines, hasPersonas, mutePersona, personaEnv, releasePersona, setPersonaStage } from '../core/personas.js';
+import { currentStage, groupLines, hasPersonas, mutePersona, personaEnv, personaNote, releasePersona, setPersonaStage } from '../core/personas.js';
 import { clockPhase, isThreadNode, liveThreads, maskUnits, patchLive, threadSwitches } from '../core/threads.js';
 import { estimateTokens } from '../core/tokens.js';
 import { cardKey, cardName } from '../host/st.js';
@@ -186,11 +186,7 @@ function personaCard(view, project, progress, st) {
     const collapsed = new Set(st.personaFold || []);
     const line = (item) => {
         const info = currentStage(item, progress, env);
-        const note = [
-            info.source === 'manual' && item.mode !== 'manual' ? '手动' : '',
-            info.lost ? '读不到声望' : '',
-            muted.has(item.id) ? '不提醒' : '',
-        ]
+        const note = [personaNote(item, progress, info), muted.has(item.id) ? '不提醒' : '']
             .filter(Boolean)
             .join(' · ');
         const caps = item.stages
