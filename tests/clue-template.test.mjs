@@ -98,7 +98,7 @@ test('unknown / customised tables are left alone and reported, not rewritten', (
   assert.deepEqual(byName(r.template, '任务与事件表'), q, 'customised quest table untouched');
   assert.equal(byName(r.template, '重要角色表').sourceData.initNode, '我自己的初始化规则');
   const p = r.problems.join('\n');
-  assert.match(p, /没有「全局数据表」/);
+  assert.match(p, /没找到记时间、地点的全局表/);
   assert.match(p, /「任务与事件表」的列和数据库默认不一致/);
   assert.match(p, /「重要角色表」的初始化规则和数据库默认不同，没有替换/);
 });
@@ -116,7 +116,7 @@ test('old five-table companion template (our previous one) → clue tables kept 
   assert.equal(byName(r.template, '线索控制表').sourceData.note, '旧说明', 'old catalog removed; the author note is kept');
   assert.match(r.changes.join('\n'), /新增列：场景目录/);
   assert.deepEqual(r.created, ['知情表']);
-  assert.match(r.problems.join('\n'), /没有「全局数据表」/);
+  assert.match(r.problems.join('\n'), /没找到记时间、地点的全局表/);
 });
 
 test('generated template: every DDL runs in SQLite together (11 tables), header matches DDL columns', () => {
@@ -149,4 +149,36 @@ test('plot preset: a story-driving task (act/scene/dm_story) is flagged; its rec
   assert.deepEqual(r[0].tags, ['act', 'scene', 'inner', 'file', 'scene', 'dm_track', 'dm_story']);
   const off = JSON.parse(JSON.stringify(PRESETS.huizhencheng)); off.plotTasks[1].enabled = false;
   assert.deepEqual(JSON.parse(JSON.stringify(C.plotPresetConflicts(off))), [], 'disabled task → no hint');
+});
+
+// ---------- 用户反馈 2026-11-17：全局表改了名、列也不一样 ----------
+test('a renamed global table with its own columns is found, set to every floor, and used for time and place; nothing else in it changes', () => {
+  const gsheet = {
+    uid: 'sheet_g', name: '全局状态表', orderNo: 0,
+    sourceData: { note: '作者自己的全局表规则', initNode: '作者的初始化', ddl: 'x' },
+    content: [['row_id', '全局状态', '当前时间', '上轮场景时间', '经过的时间', '当前位置', '天气', '金钱']],
+    updateConfig: { uiSentinel: -1, contextDepth: -1, updateFrequency: 3, batchSize: -1, skipFloors: 0, groupId: 2 },
+  };
+  const base = { mate: { type: 'chatSheets', version: 1 }, sheet_g: gsheet };
+  const r = C.synthesizeClueTemplate(base, { clue: CLUE });
+  const g = Object.values(r.template).find((s) => s && s.name === '全局状态表');
+  assert.equal(g.updateConfig.updateFrequency, 1, 'every floor');
+  assert.equal(g.updateConfig.groupId, 0, 'same group as the clue tables');
+  assert.deepEqual(g.content[0], gsheet.content[0], 'columns untouched, extra ones kept');
+  assert.equal(g.sourceData.note, '作者自己的全局表规则', 'its rules untouched');
+  assert.match(r.changes.join('\n'), /「全局状态表」改为每楼更新/);
+  assert.equal(r.binding.time.路径[0], '全局状态表/全局状态/当前时间', 'time reads from it');
+  assert.ok(!r.problems.some((x) => /全局表|时间列/.test(x)), 'no global-table problem');
+});
+
+test('findGlobalTable: official names first, then a 全局 table with a time column; columns found by common names', () => {
+  const sh = (name, head, rows = []) => ({ name, content: [['row_id', ...head], ...rows] });
+  assert.equal(C.findGlobalTable([sh('全局表', ['全局状态', '时间'])]).time, '时间');
+  const g = C.findGlobalTable([sh('其他', ['a']), sh('我的全局信息', ['状态', '游戏时间', '所在地点'], [['1', '主角状态', 'x', 'y']])]);
+  assert.deepEqual([g.name, g.row, g.time, g.place], ['我的全局信息', '主角状态', '游戏时间', '所在地点']);
+  assert.equal(C.findGlobalTable([sh('全局备注', ['说明'])]), null, 'a 全局 table without a time column is not guessed');
+  const none = C.synthesizeClueTemplate({ mate: {}, sheet_a: { uid: 'sheet_a', name: '杂项', content: [['row_id', '说明']] } }, { clue: CLUE });
+  assert.match(none.problems.join('\n'), /没找到记时间、地点的全局表.*表格绑定/);
+  const noTime = C.synthesizeClueTemplate({ mate: {}, sheet_g: { uid: 'sheet_g', name: '全局状态表', content: [['row_id', '全局状态', '当前位置']] } }, { clue: CLUE });
+  assert.match(noTime.problems.join('\n'), /「全局状态表」里没找到时间列/);
 });

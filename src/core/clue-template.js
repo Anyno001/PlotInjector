@@ -169,6 +169,32 @@ export function clueSheets({ factRows = [], knowRows = [], controlRow = null, sc
     return [ctrl, facts, know];
 }
 
+// 全局表（记时间、地点的那张单行表）：卡作者常改名、加列（用户 2026-11-17 反馈：叫「全局状态表」，没被认出来，更新频率还是 3）。
+// 按名字认：官方认的「全局数据表」「全局表」，常见的「全局状态表」；都没有就找名字带「全局」、有时间列的表。
+// 列按名字找，列多列少都不影响；插件只改它的更新频率，读时间、地点两格，不增删列、不改它的填表规则。
+export const GLOBAL_TABLE_NAMES = ['全局数据表', '全局表', '全局状态表'];
+export const GLOBAL_TIME_COLS = ['当前时间', '时间', '当前日期时间', '游戏时间'];
+export const GLOBAL_PLACE_COLS = ['当前详细地点', '当前位置', '当前地点', '所在地点', '地点'];
+export function findGlobalTable(sheets) {
+    let list = (sheets || []).filter((s) => s && s.name),
+        head = (s) => clueTplHeader(s),
+        byName = GLOBAL_TABLE_NAMES.map((n) => list.find((s) => String(s.name).trim() === n)).find(Boolean),
+        sheet = byName || list.find((s) => /全局/.test(String(s.name)) && GLOBAL_TIME_COLS.some((c) => head(s).includes(c)));
+    if (!sheet) return null;
+    let h = head(sheet),
+        rows = Array.isArray(sheet.content) ? sheet.content.slice(1).filter(Array.isArray) : [],
+        seeds = Array.isArray(sheet.seedRows) ? sheet.seedRows.filter(Array.isArray) : [],
+        first = (rows[0] || seeds[0] || [])[1];
+    return {
+        sheet,
+        name: String(sheet.name).trim(),
+        // 行标识：第一行第一列的值（默认模板是「全局状态」）；还没有行时用默认的「全局状态」
+        row: String(first ?? '').trim() || '全局状态',
+        time: GLOBAL_TIME_COLS.find((c) => h.includes(c)) || '',
+        place: GLOBAL_PLACE_COLS.find((c) => h.includes(c)) || '',
+    };
+}
+
 export const CLUE_TPL_DEFAULTS = {
     全局数据表: ['全局状态', '当前详细地点', '当前次要地区', '当前主要地区', '上轮场景时间', '经过的时间', '当前时间'],
     重要角色表: ['姓名', '性别', '年龄', '一句话介绍', '外貌特征', '穿着打扮', '所在地点', '在场状态', '人际关系', '过往经历', '交互选项'],
@@ -385,17 +411,16 @@ export function synthesizeClueTemplate(base, { clue = {} } = {}) {
         }
         sameRealtime(have.sheet.updateConfig) ||
             ((have.sheet.updateConfig = { ...(have.sheet.updateConfig || {}), ...CLUE_TPL_REALTIME }),
-            changes.push(`「${sheet.name}」改为每楼更新（与全局数据表同组）`));
+            changes.push(`「${sheet.name}」改为每楼更新（与全局表同组）`));
     }
-    let g = byName.get('全局数据表');
+    let g = findGlobalTable([...byName.values()].map((x) => x.sheet));
     return (
         g
-            ? clueTplHeader(g.sheet).includes('当前时间')
-                ? sameRealtime(g.sheet.updateConfig) ||
+            ? (sameRealtime(g.sheet.updateConfig) ||
                   ((g.sheet.updateConfig = { ...(g.sheet.updateConfig || {}), ...CLUE_TPL_REALTIME }),
-                  changes.push('「全局数据表」改为每楼更新（与线索表同组）'))
-                : problems.push('「全局数据表」没有「当前时间」列：时间条件会是未知，请在表格绑定里指定时间格')
-            : problems.push('当前模板里没有「全局数据表」：大纲里的时间条件会是未知。可以在表格绑定里把 time 指向别的时间格'),
+                  changes.push(`「${g.name}」改为每楼更新（与线索表同组，时间、地点每楼都准；填表次数会相应变多）`)),
+              g.time || problems.push(`「${g.name}」里没找到时间列（${GLOBAL_TIME_COLS.join('、')}）：时间条件会是未知，可以在表格绑定里把 time 指向记时间的那一格`))
+            : problems.push('没找到记时间、地点的全局表：大纲里的时间条件会是未知。可以在表格绑定里把 time 指向记时间的那一格'),
         patchDefault('重要角色表', (sheet) => {
             let head = sheet.content[0],
                 have = clueTplHeader(sheet),
@@ -446,7 +471,7 @@ export function synthesizeClueTemplate(base, { clue = {} } = {}) {
                     },
                 ],
                 scene: { 路径: '线索控制表/主线/当前场景', 离场值: '无' },
-                time: { 路径: ['全局数据表/全局状态/当前时间', '线索控制表/主线/当前时间'] },
+                time: { 路径: [...(g && g.time ? [`${g.name}/${g.row}/${g.time}`] : []), '全局数据表/全局状态/当前时间', '线索控制表/主线/当前时间'].filter((x, i, a) => a.indexOf(x) === i) },
             },
         }
     );

@@ -143,6 +143,7 @@ export function factLabelMessages(items, { secrets = [] } = {}) {
                 '   · 写取得的动作和看到的程度（当面听到、亲手打开读到、看清是什么），不写看到的内容本身。',
                 '   · 写清什么不算：只是到了地方、看到上了锁、对方推托没开口、远远看见还没看清、主角自己猜的，都不算。',
                 '   · 证词、传闻、某人的说法：写「对方当面说出时登记，记为存疑」。实物、痕迹、原件、亲眼验证：写「亲眼看清 / 读到时登记」，不写存疑——实物本身看不出是谁的、说明不了什么，也照样是亲眼看到的，不是存疑。',
+                '   · 表格的状态只有「已核实」「存疑」两种可写。材料里写的「传闻」「推测」「听说」「证词」，口径里一律写成「记为存疑」，不要写「记为传闻」「记为推测」。',
                 '   · 判断、结论类的（如「证词被推翻」）：口径写「读到某样东西之后，正文里明确说出这个判断时登记」，不要把判断的具体内容写进去（不写推翻了谁、跟什么无关）。',
                 '   · 一条事实有「另一种取得方式」的：口径要把每种方式都包括进去（如「读到物流单上的地址，或证人当面说出地址时登记」），不要只写一种，否则走另一条路的玩家永远登记不上。一种是说法、一种是实物时，可以写「先记为存疑，拿到实物后改为已核实」。',
                 '   · 被条件用作「核实」的，口径要写到被证实的那一步；只用作「事实」的，写到正文里出现即可。',
@@ -199,6 +200,8 @@ export function answerMinusPublic(answer, publicText) {
     return [...a].map((ch, i) => (mark[i] ? '|' : ch)).join('');
 }
 
+// 「记为 X」里 X 不是表格认的状态（已核实 / 存疑 / 未获得）
+const STATUS_WORD = /记为[「“"]?(?!已核实|存疑|未获得)([一-鿿]{2,4}?)(?=[」”"，,。；;、）)]|$)/;
 export function factLabelCheck({ label = '', criterion = '', unsure = '' }, ctx = {}, { secrets = [] } = {}) {
     let routes = [ctx, ...(ctx.routes || [])].filter((r) => r && r.answer),
         answers = routes.map((r) =>
@@ -222,6 +225,10 @@ export function factLabelCheck({ label = '', criterion = '', unsure = '' }, ctx 
         criterion &&
             !/不算|不计|不登记|不记|不能算|不能登记|没.{0,4}[开说读看到]|未.{0,2}[读看开]/.test(criterion) &&
             warns.push('口径没写清楚什么情况不算（容易登记得太早）'),
+        // 表格的状态只有「未获得 / 已核实 / 存疑」：口径写成「记为传闻 / 推测」，填表模型可能写错或干脆不登记（用户 2026-11-17 实测）
+        criterion &&
+            (STATUS_WORD.exec(criterion) || [])[1] &&
+            warns.push(`口径写了「记为${STATUS_WORD.exec(criterion)[1]}」，表格只有「已核实」「存疑」两种，请改成「记为存疑」`),
         unsure && notes.push(unsure),
         ctx.orphan && warns.push('大纲里没有节点产出这个事实'),
         { warns, suspects, notes }

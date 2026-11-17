@@ -385,3 +385,67 @@ test('F3: the write landed but the scope changed before the read-back; retrying 
   assert.doesNotMatch(x.$('.pi-dialog').textContent, /上次有/, 'draft cleared');
   await x.inst.destroy();
 });
+
+// ---------- 实测 2026-11-17：新聊天还没填过表，表格只有模板初始行（seedRows） ----------
+test('fresh chat with only seed rows: edits go into the project, the table is not touched; after the first fill they are offered and written', async () => {
+  const seedSheet = { name: '关键事实表', content: [['row_id', '编号', '状态', '标签', '登记口径']], seedRows: [['1', 'F7', '未获得', 'A标签7', 'A口径7'], ['2', 'F8', '未获得', 'A标签8', 'A口径8']] };
+  const ctx = await boot({ sheet_f: seedSheet });
+  ctx.inst.data.updateProject(ctx.pid, (x) => ({ ...x, outline: { ...x.outline, volumes: [{ id: 'v', key: '剧情_M1_案子', line: { 编号: 'M1', 类型: '主线' }, stages: [{ id: 's1', key: '阶段1', data: { 主线节点: [{ id: 'n1', 名称: 'a', 入口: 'a', 发现: [{ 事实: 'F7', 内容: '甲' }, { 事实: 'F8', 内容: '乙' }], 完成条件: { 事实: 'F7' } }] } }] }] } }));
+  ctx.inst.runtime.clue.invalidate();
+  await ctx.click('[data-act="tab"][data-tab="run"]');
+  for (const sel of ['[data-act="run-set-toggle"][aria-expanded="false"]', '[data-act="clue-bind-toggle"]'])
+    !ctx.$('[data-act="clue-labels-edit"]') && ctx.$(sel) && (ctx.$(sel).click(), await tick(), await tick());
+  const msgs = [];
+  for (const level of ['info', 'success', 'warning', 'error']) ctx.host.w.toastr[level] = (text) => msgs.push({ level, text });
+  const api = ctx.host.w.AutoCardUpdaterAPI;
+  await ctx.click('[data-act="clue-labels-edit"]');
+  assert.equal(ctx.$('[data-le-label="0"]').value, 'A标签7', 'seed rows are shown');
+  assert.match(ctx.$('.pi-dialog').textContent, /这个聊天还没填过表/);
+  ctx.$('[data-le-crit="0"]').value = '新口径7';
+  ctx.$$('.pi-dialog .pi-btn').find((b) => b.textContent === '保存').click(); for (let i = 0; i < 8; i++) await tick();
+  assert.deepEqual(api.updated, [], 'the table is not written');
+  assert.equal(ctx.inst.data.project(ctx.pid).clue.labels.F7.criterion, '新口径7', 'saved into the project');
+  assert.equal(msgs.at(-1).level, 'info');
+  assert.match(msgs.at(-1).text, /已存进项目 1 条/);
+  // 第一次填表：初始行变成真正的行
+  ctx.host.db.setTables({ sheet_f: { name: '关键事实表', content: [['row_id', '编号', '状态', '标签', '登记口径'], ['1', 'F7', '未获得', 'A标签7', 'A口径7'], ['2', 'F8', '未获得', 'A标签8', 'A口径8']] } });
+  ctx.inst.runtime.clue.invalidate();
+  await ctx.click('[data-act="clue-labels-edit"]');
+  assert.equal(ctx.$('[data-le-crit="0"]').value, '新口径7', 'the pending edit is offered');
+  ctx.$$('.pi-dialog .pi-btn').find((b) => b.textContent === '保存').click(); for (let i = 0; i < 8; i++) await tick();
+  const live = Object.values(api.exportTableAsJson()).find((t) => t.name === '关键事实表').content;
+  assert.deepEqual(live.find((r) => r[1] === 'F7').slice(3), ['A标签7', '新口径7']);
+  assert.deepEqual(live.find((r) => r[1] === 'F8').slice(3), ['A标签8', 'A口径8']);
+  assert.equal(msgs.at(-1).level, 'success');
+  await ctx.inst.destroy();
+});
+
+test('after a reload the in-memory draft is gone, but a project label that differs from this chat is still offered', async () => {
+  const facts = sheet('关键事实表', ['编号', '状态', '标签', '登记口径'], [['F7', '未获得', '旧标签7', '旧口径7'], ['F8', '未获得', '标签8', '口径8']]);
+  const ctx = await boot({ sheet_f: facts });
+  const vols = [{ id: 'v', key: '剧情_M1_案子', line: { 编号: 'M1', 类型: '主线' }, stages: [{ id: 's1', key: '阶段1', data: { 主线节点: [{ id: 'n1', 名称: 'a', 入口: 'a', 发现: [{ 事实: 'F7', 内容: '甲' }, { 事实: 'F8', 内容: '乙' }], 完成条件: { 事实: 'F7' } }] } }] }];
+  const sig = C.factLabelSig(C.factLabelContext(vols, ['F7'])[0]);
+  ctx.inst.data.updateProject(ctx.pid, (x) => ({ ...x, outline: { ...x.outline, volumes: vols }, clue: { ...x.clue, labels: { F7: { label: '项目标签7', criterion: '项目口径7', sig } } } }));
+  ctx.inst.runtime.clue.invalidate();
+  await ctx.click('[data-act="tab"][data-tab="run"]');
+  for (const sel of ['[data-act="run-set-toggle"][aria-expanded="false"]', '[data-act="clue-bind-toggle"]'])
+    !ctx.$('[data-act="clue-labels-edit"]') && ctx.$(sel) && (ctx.$(sel).click(), await tick(), await tick());
+  await ctx.click('[data-act="clue-labels-edit"]');
+  assert.equal(ctx.$('[data-le-label="0"]').value, '项目标签7');
+  assert.equal(ctx.$('[data-le-label="1"]').value, '标签8', 'rows without a project label show the table value');
+  assert.match(ctx.$('.pi-dialog').textContent, /有 1 条和项目里存的不一样/);
+  await ctx.inst.destroy();
+});
+
+// ---------- 实测 2026-11-17：口径写成「记为传闻 / 推测」，表格不认 ----------
+test('label check flags status words the table does not have; the generation prompt says to write 存疑', () => {
+  const w = (c) => C.factLabelCheck({ label: '标签', criterion: c }, {}).warns.filter((x) => /记为/.test(x));
+  assert.match(w('老太太当面讲述时登记，记为传闻；只提到旧事不算。')[0], /「记为传闻」.*改成「记为存疑」/);
+  assert.match(w('正文写出判断时登记，记为推测；只听到描述不算。')[0], /「记为推测」/);
+  assert.deepEqual(w('对方当面说出时登记，记为存疑；没开口不算。'), []);
+  assert.deepEqual(w('亲手读到时登记；没读到不算。'), []);
+  assert.deepEqual(w('读到后记为“已核实”；没看到不算。'), []);
+  const prompt = JSON.stringify(C.factLabelMessages([{ code: 'F1', answer: 'x', usedBy: [] }], {}));
+  assert.match(prompt, /表格的状态只有「已核实」「存疑」两种可写/);
+  assert.match(prompt, /不要写「记为传闻」「记为推测」/);
+});

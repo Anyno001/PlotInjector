@@ -34,7 +34,7 @@ import { importSecretNames } from '../core/long-import.js';
 
 import { ask } from './ai.js';
 
-import { clueTplMismatch, synthesizeClueTemplate, clueTplHeader } from '../core/clue-template.js';
+import { clueTplMismatch, synthesizeClueTemplate, clueTplHeader, findGlobalTable } from '../core/clue-template.js';
 
 export const CLUE_STATUS_BADGE = { locked: '', available: 'is-accent', active: 'is-ok', done: 'is-dark' };
 
@@ -739,22 +739,33 @@ export const clueActions = {
         let found = findSheet(c.snap.tables || {}, fb.表);
         if (found.error) return toast('warning', `当前聊天没有「${fb.表}」。`);
         let { col, rows } = sheetRows(found.sheet),
-            ci = { code: col(fb.编号列), label: col('标签'), crit: col('登记口径') };
+            ci = { code: col(fb.编号列), label: col('标签'), crit: col('登记口径') },
+            // 新聊天还没填过表：表格里只有模板带的初始行（seedRows），没有真正的行可写。这时只存进项目，
+            // 等数据库第一次填表、初始行变成真正的行以后再写表格（用户 2026-11-17 实测：6 条全报「没写进表格」）
+            seedOnly = !found.sheet.content.slice(1).some(Array.isArray) && rows.length > 0;
         if (ci.code < 0 || ci.label < 0 || ci.crit < 0) return toast('warning', `「${fb.表}」缺少编号、标签或登记口径列，改不了。`);
         let scope = prebuildScope(view),
             s0 = view.runtime.clue.opScope(),
             dkey = draftKey(scope, s0.iso, fb.表),
+            labelCtx = new Map(factLabelContext(project.outline.volumes, rows.map((r) => cellText(r[ci.code]))).map((x) => [x.code, x])),
             inPlan = new Set(prebuildPlan(project.outline.volumes).facts.map((f) => f.code)),
             drafts = labelDrafts.get(dkey) || {},
             facts = rows
                 .map((r) => ({ code: cellText(r[ci.code]), table: { label: cellText(r[ci.label]), criterion: cellText(r[ci.crit]) } }))
                 .filter((f) => f.code && inPlan.has(f.code))
-                .map((f) => ({ ...f, now: drafts[f.code] || f.table, retry: !!drafts[f.code], draft: drafts[f.code] || null }));
+                .map((f) => {
+                    // 项目里存的版本和这个聊天的表格不一样（没填过表时先存进了项目、刷新后草稿没了；或这个聊天的表是旧版）：带出项目的版本
+                    let stored = storedLabel(project.clue.labels, f.code, labelCtx.get(f.code)),
+                        fromProject = !drafts[f.code] && stored && (stored.label !== f.table.label || stored.criterion !== f.table.criterion) ? { label: stored.label, criterion: stored.criterion } : null,
+                        pend = drafts[f.code] || fromProject;
+                    return { ...f, now: pend || f.table, retry: !!drafts[f.code], newer: !!fromProject, draft: pend || null };
+                });
         if (!facts.length) return toast('info', '表格里还没有这个项目的线索行。先用「生成线索模板」或「按大纲补表格行」建好。');
         let retry = facts.filter((f) => f.retry).length,
+            newer = facts.filter((f) => f.newer).length,
             picked = await openDialog({
                 title: '改线索标签',
-                html: `<p class="pi-hint">改的是当前聊天「${esc(fb.表)}」里的标签和登记口径。改宽了，主角还没查到就可能被算作拿到。</p>${retry ? `<p class="pi-hint is-warn">上次有 ${retry} 条没写进表格，下面是你当时填的内容，点保存再试一次。</p>` : ''}${factRowsHtml(facts, 'le', project.outline.volumes, {}, { intro: !1 })}`,
+                html: `<p class="pi-hint">改的是当前聊天「${esc(fb.表)}」里的标签和登记口径。改宽了，主角还没查到就可能被算作拿到。</p>${seedOnly ? '<p class="pi-hint is-warn">这个聊天还没填过表，表格里现在是模板的初始行。改动先存进项目；聊一轮、数据库第一次填表后，再打开这里点保存，写进表格。</p>' : ''}${retry ? `<p class="pi-hint is-warn">上次有 ${retry} 条没写进表格，下面是你当时填的内容，点保存再试一次。</p>` : ''}${newer && !seedOnly ? `<p class="pi-hint is-warn">有 ${newer} 条和项目里存的不一样，下面填的是项目里的版本，点保存写进这个聊天的表格。</p>` : ''}${factRowsHtml(facts, 'le', project.outline.volumes, {}, { intro: !1 })}`,
                 onMount: (root) => mountFactRows(view, root, facts, 'le', project.outline.volumes),
                 actions: [
                     { label: '取消', value: null },
@@ -782,6 +793,13 @@ export const clueActions = {
             // 上次的结果没核实（写表途中切走了），回来一看表格已经是草稿的值：表格不用再写，只补存进项目（GPT 第六轮复核 F3）
             synced = picked.filter((f) => !changed.includes(f) && f.draft && f.draft.label === f.label && f.draft.criterion === f.criterion);
         if (!live()) return toast('warning', '确认期间切换了聊天、项目、推进方式或数据隔离，没有写入。请回到原聊天重新操作。');
+        if (seedOnly && changed.length) {
+            // 不碰表格（官方 updateRow 会按行号补出空行，把初始行盖掉）；存进项目，输入留作这个聊天的草稿，填表后带出来写表
+            keepLabels(view, changed, pid);
+            labelDrafts.set(dkey, { ...(labelDrafts.get(dkey) || {}), ...Object.fromEntries(changed.map((f) => [f.code, { label: f.label, criterion: f.criterion }])) });
+            view.renderBody();
+            return toast('info', `已存进项目 ${changed.length} 条。这个聊天还没填过表，表格要等第一次填表后再写：到时打开「改线索标签」点保存。`);
+        }
         synced.length && keepLabels(view, synced, pid);
         // 没改动的条目：表格已经是这个值，残留的草稿清掉
         dropLabelDrafts(dkey, picked.filter((f) => !changed.includes(f)).map((f) => f.code));
@@ -1371,7 +1389,8 @@ export function lineCard(c, project) {
 }
 
 export function hereText(c) {
-    let cell = readCell(c.snap.tables || {}, '全局数据表/全局状态/当前详细地点'),
+    let g = findGlobalTable(Object.values(c.snap.tables || {})),
+        cell = g && g.place ? readCell(c.snap.tables || {}, `${g.name}/${g.row}/${g.place}`) : { state: 'unknown' },
         here = cell.state === 'ok' ? cellText(cell.value) : '',
         focus = c.state.nodeStates.find((s) => s.node.uid && s.node.uid === c.state.focus.uid),
         place = focus ? clueText(isPlainObject(focus.node.item) ? focus.node.item.地点 : '') : '';

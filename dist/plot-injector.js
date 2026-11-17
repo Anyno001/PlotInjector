@@ -1,4 +1,4 @@
-// PlotInjector v0.3.2
+// PlotInjector v0.3.3
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -5971,6 +5971,20 @@ SQL示例: UPDATE clue_knowledge SET way = '被告知', credibility = '未核实
     for (let r of knowRows) know.content.push([null, `${r.fact}@${r.actor}`, r.fact, r.actor, "未知", "未核实", ""]);
     return [ctrl, facts, know];
   }
+  var GLOBAL_TABLE_NAMES = ["全局数据表", "全局表", "全局状态表"], GLOBAL_TIME_COLS = ["当前时间", "时间", "当前日期时间", "游戏时间"], GLOBAL_PLACE_COLS = ["当前详细地点", "当前位置", "当前地点", "所在地点", "地点"];
+  function findGlobalTable(sheets) {
+    let list = (sheets || []).filter((s) => s && s.name), head = (s) => clueTplHeader(s), byName = GLOBAL_TABLE_NAMES.map((n) => list.find((s) => String(s.name).trim() === n)).find(Boolean), sheet = byName || list.find((s) => /全局/.test(String(s.name)) && GLOBAL_TIME_COLS.some((c) => head(s).includes(c)));
+    if (!sheet) return null;
+    let h = head(sheet), rows2 = Array.isArray(sheet.content) ? sheet.content.slice(1).filter(Array.isArray) : [], seeds = Array.isArray(sheet.seedRows) ? sheet.seedRows.filter(Array.isArray) : [], first = (rows2[0] || seeds[0] || [])[1];
+    return {
+      sheet,
+      name: String(sheet.name).trim(),
+      // 行标识：第一行第一列的值（默认模板是「全局状态」）；还没有行时用默认的「全局状态」
+      row: String(first ?? "").trim() || "全局状态",
+      time: GLOBAL_TIME_COLS.find((c) => h.includes(c)) || "",
+      place: GLOBAL_PLACE_COLS.find((c) => h.includes(c)) || ""
+    };
+  }
   var CLUE_TPL_DEFAULTS = {
     全局数据表: ["全局状态", "当前详细地点", "当前次要地区", "当前主要地区", "上轮场景时间", "经过的时间", "当前时间"],
     重要角色表: ["姓名", "性别", "年龄", "一句话介绍", "外貌特征", "穿着打扮", "所在地点", "在场状态", "人际关系", "过往经历", "交互选项"],
@@ -6128,10 +6142,10 @@ ${tail}` };
           i >= 0 ? "「线索控制表」说明：去掉旧的场景编号对照（改由「场景目录」列提供），更新填表规则" : "「线索控制表」说明：更新填表规则（只写当前场景、不改场景目录）"
         ));
       }
-      sameRealtime(have.sheet.updateConfig) || (have.sheet.updateConfig = { ...have.sheet.updateConfig || {}, ...CLUE_TPL_REALTIME }, changes.push(`「${sheet.name}」改为每楼更新（与全局数据表同组）`));
+      sameRealtime(have.sheet.updateConfig) || (have.sheet.updateConfig = { ...have.sheet.updateConfig || {}, ...CLUE_TPL_REALTIME }, changes.push(`「${sheet.name}」改为每楼更新（与全局表同组）`));
     }
-    let g = byName.get("全局数据表");
-    return g ? clueTplHeader(g.sheet).includes("当前时间") ? sameRealtime(g.sheet.updateConfig) || (g.sheet.updateConfig = { ...g.sheet.updateConfig || {}, ...CLUE_TPL_REALTIME }, changes.push("「全局数据表」改为每楼更新（与线索表同组）")) : problems2.push("「全局数据表」没有「当前时间」列：时间条件会是未知，请在表格绑定里指定时间格") : problems2.push("当前模板里没有「全局数据表」：大纲里的时间条件会是未知。可以在表格绑定里把 time 指向别的时间格"), patchDefault("重要角色表", (sheet) => {
+    let g = findGlobalTable([...byName.values()].map((x) => x.sheet));
+    return g ? (sameRealtime(g.sheet.updateConfig) || (g.sheet.updateConfig = { ...g.sheet.updateConfig || {}, ...CLUE_TPL_REALTIME }, changes.push(`「${g.name}」改为每楼更新（与线索表同组，时间、地点每楼都准；填表次数会相应变多）`)), g.time || problems2.push(`「${g.name}」里没找到时间列（${GLOBAL_TIME_COLS.join("、")}）：时间条件会是未知，可以在表格绑定里把 time 指向记时间的那一格`)) : problems2.push("没找到记时间、地点的全局表：大纲里的时间条件会是未知。可以在表格绑定里把 time 指向记时间的那一格"), patchDefault("重要角色表", (sheet) => {
       let head = sheet.content[0], have = clueTplHeader(sheet), add = CLUE_TPL_CHAR_COLS.filter((c) => !have.includes(c.label));
       if (add.length) {
         let ddl = ddlAddColumns(sheet.sourceData && sheet.sourceData.ddl, add);
@@ -6175,7 +6189,7 @@ ${tail}` };
           }
         ],
         scene: { 路径: "线索控制表/主线/当前场景", 离场值: "无" },
-        time: { 路径: ["全局数据表/全局状态/当前时间", "线索控制表/主线/当前时间"] }
+        time: { 路径: [...g && g.time ? [`${g.name}/${g.row}/${g.time}`] : [], "全局数据表/全局状态/当前时间", "线索控制表/主线/当前时间"].filter((x, i, a) => a.indexOf(x) === i) }
       }
     };
     function sameRealtime(cfg) {
@@ -10349,6 +10363,7 @@ ${floor.text}`).join(`
           "   · 写取得的动作和看到的程度（当面听到、亲手打开读到、看清是什么），不写看到的内容本身。",
           "   · 写清什么不算：只是到了地方、看到上了锁、对方推托没开口、远远看见还没看清、主角自己猜的，都不算。",
           "   · 证词、传闻、某人的说法：写「对方当面说出时登记，记为存疑」。实物、痕迹、原件、亲眼验证：写「亲眼看清 / 读到时登记」，不写存疑——实物本身看不出是谁的、说明不了什么，也照样是亲眼看到的，不是存疑。",
+          "   · 表格的状态只有「已核实」「存疑」两种可写。材料里写的「传闻」「推测」「听说」「证词」，口径里一律写成「记为存疑」，不要写「记为传闻」「记为推测」。",
           "   · 判断、结论类的（如「证词被推翻」）：口径写「读到某样东西之后，正文里明确说出这个判断时登记」，不要把判断的具体内容写进去（不写推翻了谁、跟什么无关）。",
           "   · 一条事实有「另一种取得方式」的：口径要把每种方式都包括进去（如「读到物流单上的地址，或证人当面说出地址时登记」），不要只写一种，否则走另一条路的玩家永远登记不上。一种是说法、一种是实物时，可以写「先记为存疑，拿到实物后改为已核实」。",
           "   · 被条件用作「核实」的，口径要写到被证实的那一步；只用作「事实」的，写到正文里出现即可。",
@@ -10396,6 +10411,7 @@ ${block}`
       for (let i = 0; i + len <= a.length; i++) pub.includes(a.slice(i, i + len)) && mark.fill(!0, i, i + len);
     return [...a].map((ch, i) => mark[i] ? "|" : ch).join("");
   }
+  var STATUS_WORD = /记为[「“"]?(?!已核实|存疑|未获得)([一-鿿]{2,4}?)(?=[」”"，,。；;、）)]|$)/;
   function factLabelCheck({ label = "", criterion = "", unsure = "" }, ctx2 = {}, { secrets = [] } = {}) {
     let routes = [ctx2, ...ctx2.routes || []].filter((r) => r && r.answer), answers = routes.map(
       (r) => answerMinusPublic(
@@ -10406,7 +10422,8 @@ ${block}`
     ), warns = [], suspects = [], notes = [], hit = (t) => answers.map((a) => answerOverlap(t, a)).find(Boolean) || "";
     !label && warns.push("还没有标签"), !criterion && warns.push("还没有登记口径"), label && hit(label) && suspects.push({ where: "标签", piece: hit(label) }), criterion && hit(criterion) && suspects.push({ where: "口径", piece: hit(criterion) });
     for (let s of secrets) s && s.length >= 2 && `${label} ${criterion}`.includes(s) && warns.push(`出现了保密的名字「${s}」`);
-    return label && label.length > 12 && warns.push("标签有点长，最好十个字以内"), criterion && !/不算|不计|不登记|不记|不能算|不能登记|没.{0,4}[开说读看到]|未.{0,2}[读看开]/.test(criterion) && warns.push("口径没写清楚什么情况不算（容易登记得太早）"), unsure && notes.push(unsure), ctx2.orphan && warns.push("大纲里没有节点产出这个事实"), { warns, suspects, notes };
+    return label && label.length > 12 && warns.push("标签有点长，最好十个字以内"), criterion && !/不算|不计|不登记|不记|不能算|不能登记|没.{0,4}[开说读看到]|未.{0,2}[读看开]/.test(criterion) && warns.push("口径没写清楚什么情况不算（容易登记得太早）"), // 表格的状态只有「未获得 / 已核实 / 存疑」：口径写成「记为传闻 / 推测」，填表模型可能写错或干脆不登记（用户 2026-11-17 实测）
+    criterion && (STATUS_WORD.exec(criterion) || [])[1] && warns.push(`口径写了「记为${STATUS_WORD.exec(criterion)[1]}」，表格只有「已核实」「存疑」两种，请改成「记为存疑」`), unsure && notes.push(unsure), ctx2.orphan && warns.push("大纲里没有节点产出这个事实"), { warns, suspects, notes };
   }
   function factLabelReviewMessages(items) {
     let fence = "```", block = items.map(
@@ -11906,13 +11923,16 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
       if (!fb) return toast("warning", "还没有绑定事实表。");
       let found = findSheet(c.snap.tables || {}, fb.表);
       if (found.error) return toast("warning", `当前聊天没有「${fb.表}」。`);
-      let { col, rows: rows2 } = sheetRows(found.sheet), ci = { code: col(fb.编号列), label: col("标签"), crit: col("登记口径") };
+      let { col, rows: rows2 } = sheetRows(found.sheet), ci = { code: col(fb.编号列), label: col("标签"), crit: col("登记口径") }, seedOnly = !found.sheet.content.slice(1).some(Array.isArray) && rows2.length > 0;
       if (ci.code < 0 || ci.label < 0 || ci.crit < 0) return toast("warning", `「${fb.表}」缺少编号、标签或登记口径列，改不了。`);
-      let scope = prebuildScope(view), s0 = view.runtime.clue.opScope(), dkey = draftKey(scope, s0.iso, fb.表), inPlan = new Set(prebuildPlan(project.outline.volumes).facts.map((f) => f.code)), drafts = labelDrafts.get(dkey) || {}, facts = rows2.map((r) => ({ code: cellText(r[ci.code]), table: { label: cellText(r[ci.label]), criterion: cellText(r[ci.crit]) } })).filter((f) => f.code && inPlan.has(f.code)).map((f) => ({ ...f, now: drafts[f.code] || f.table, retry: !!drafts[f.code], draft: drafts[f.code] || null }));
+      let scope = prebuildScope(view), s0 = view.runtime.clue.opScope(), dkey = draftKey(scope, s0.iso, fb.表), labelCtx = new Map(factLabelContext(project.outline.volumes, rows2.map((r) => cellText(r[ci.code]))).map((x) => [x.code, x])), inPlan = new Set(prebuildPlan(project.outline.volumes).facts.map((f) => f.code)), drafts = labelDrafts.get(dkey) || {}, facts = rows2.map((r) => ({ code: cellText(r[ci.code]), table: { label: cellText(r[ci.label]), criterion: cellText(r[ci.crit]) } })).filter((f) => f.code && inPlan.has(f.code)).map((f) => {
+        let stored = storedLabel(project.clue.labels, f.code, labelCtx.get(f.code)), fromProject = !drafts[f.code] && stored && (stored.label !== f.table.label || stored.criterion !== f.table.criterion) ? { label: stored.label, criterion: stored.criterion } : null, pend = drafts[f.code] || fromProject;
+        return { ...f, now: pend || f.table, retry: !!drafts[f.code], newer: !!fromProject, draft: pend || null };
+      });
       if (!facts.length) return toast("info", "表格里还没有这个项目的线索行。先用「生成线索模板」或「按大纲补表格行」建好。");
-      let retry = facts.filter((f) => f.retry).length, picked = await openDialog({
+      let retry = facts.filter((f) => f.retry).length, newer = facts.filter((f) => f.newer).length, picked = await openDialog({
         title: "改线索标签",
-        html: `<p class="pi-hint">改的是当前聊天「${esc(fb.表)}」里的标签和登记口径。改宽了，主角还没查到就可能被算作拿到。</p>${retry ? `<p class="pi-hint is-warn">上次有 ${retry} 条没写进表格，下面是你当时填的内容，点保存再试一次。</p>` : ""}${factRowsHtml(facts, "le", project.outline.volumes, {}, { intro: !1 })}`,
+        html: `<p class="pi-hint">改的是当前聊天「${esc(fb.表)}」里的标签和登记口径。改宽了，主角还没查到就可能被算作拿到。</p>${seedOnly ? '<p class="pi-hint is-warn">这个聊天还没填过表，表格里现在是模板的初始行。改动先存进项目；聊一轮、数据库第一次填表后，再打开这里点保存，写进表格。</p>' : ""}${retry ? `<p class="pi-hint is-warn">上次有 ${retry} 条没写进表格，下面是你当时填的内容，点保存再试一次。</p>` : ""}${newer && !seedOnly ? `<p class="pi-hint is-warn">有 ${newer} 条和项目里存的不一样，下面填的是项目里的版本，点保存写进这个聊天的表格。</p>` : ""}${factRowsHtml(facts, "le", project.outline.volumes, {}, { intro: !1 })}`,
         onMount: (root) => mountFactRows(view, root, facts, "le", project.outline.volumes),
         actions: [
           { label: "取消", value: null },
@@ -11934,6 +11954,8 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
       if (empty.length) return toast("warning", `标签不能为空：${empty.map((f) => f.code).join("、")}`);
       let live = () => prebuildScopeValid(view, scope) && view.runtime.clue.opScope().iso === s0.iso, pid = project.id, changed = picked.filter((f) => f.label !== f.table.label || f.criterion !== f.table.criterion), synced = picked.filter((f) => !changed.includes(f) && f.draft && f.draft.label === f.label && f.draft.criterion === f.criterion);
       if (!live()) return toast("warning", "确认期间切换了聊天、项目、推进方式或数据隔离，没有写入。请回到原聊天重新操作。");
+      if (seedOnly && changed.length)
+        return keepLabels(view, changed, pid), labelDrafts.set(dkey, { ...labelDrafts.get(dkey) || {}, ...Object.fromEntries(changed.map((f) => [f.code, { label: f.label, criterion: f.criterion }])) }), view.renderBody(), toast("info", `已存进项目 ${changed.length} 条。这个聊天还没填过表，表格要等第一次填表后再写：到时打开「改线索标签」点保存。`);
       if (synced.length && keepLabels(view, synced, pid), dropLabelDrafts(dkey, picked.filter((f) => !changed.includes(f)).map((f) => f.code)), !changed.length) return toast(synced.length ? "success" : "info", synced.length ? `表格里已经是新的值，已同步 ${synced.length} 条到项目。` : "没有改动。");
       let done = [], failed = [], unsure = [], stopped = !1, tableNow = () => {
         let now = view.runtime.clue.compute(), sh = findSheet(now && now.snap.tables || {}, fb.表);
@@ -12301,7 +12323,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
         <p class="pi-hint pi-line-foot">条件满足后，正文会找机会提一句入口，主角走进去才算开始。你点的「进入」「跳过」「暂停」记在当前这一楼，删楼或重新生成会一起撤回。</p></div>`;
   }
   function hereText(c) {
-    let cell = readCell(c.snap.tables || {}, "全局数据表/全局状态/当前详细地点"), here = cell.state === "ok" ? cellText(cell.value) : "", focus = c.state.nodeStates.find((s) => s.node.uid && s.node.uid === c.state.focus.uid), place = focus ? clueText(isPlainObject(focus.node.item) ? focus.node.item.地点 : "") : "";
+    let g = findGlobalTable(Object.values(c.snap.tables || {})), cell = g && g.place ? readCell(c.snap.tables || {}, `${g.name}/${g.row}/${g.place}`) : { state: "unknown" }, here = cell.state === "ok" ? cellText(cell.value) : "", focus = c.state.nodeStates.find((s) => s.node.uid && s.node.uid === c.state.focus.uid), place = focus ? clueText(isPlainObject(focus.node.item) ? focus.node.item.地点 : "") : "";
     return here || place ? `主角当前位置：${esc(here || "（表格没记）")}${focus ? `；这一场的地点：${esc(place || "（大纲没写）")}` : ""}<br>` : "";
   }
   function stayNotice(view, c) {
@@ -18712,7 +18734,7 @@ ${suffix.trim()}` : body;
   }
 
   // src/index.js
-  var VERSION = "0.3.2", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.3.3", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")
