@@ -468,9 +468,9 @@ export function appendComment(comment, line) {
 }
 // 要确认的问题写成一个问句（审阅页用；不做选项按钮，回答写进意见）。
 export function issueQuestion(x) {
-    if (x.kind === 'secret-reveal') return { q: `${x.plain.replace(/查到时会揭晓/, '查到时，正文会拿到').replace(/。$/, '这个名字。')}这里就是揭晓真名的地方吗？`, how: '是的话不用管；不是的话在意见里说一声。' };
-    if (x.kind === 'secret-short') return { q: `${x.plain.replace(/。$/, '')}。是同一个人吗？`, how: '是的话在意见里说一声；只是碰巧同字就不用管。' };
-    return { q: x.plain || x.text, how: x.fix || '没问题就不用管；要改的话在意见里说一声。' };
+    if (x.kind === 'secret-reveal') return { q: `${x.plain.replace(/查到时会揭晓/, '查到时，正文会拿到').replace(/。$/, '这个名字。')}这里就是揭晓真名的地方吗？`, how: '不是的话，在意见里写明在哪里揭晓。' };
+    if (x.kind === 'secret-short') return { q: `${x.plain.replace(/。$/, '')}。是同一个人吗？`, how: '' };
+    return { q: x.plain || x.text, how: x.fix || '要改的话，在意见里写明。' };
 }
 
 export const IMPORT_STAGE_KEYS = [...STAGE_HINT_KEYS, ...CLUE_STAGE_KEYS];
@@ -608,13 +608,17 @@ export const IMPORT_LAYER_TEXT = {
     reveal: '到场就交给正文的「可能的发现」',
 };
 
-export function checkImportDraft(volumes, { index = null, secrets = null, mode = 'clue' } = {}) {
+export function checkImportDraft(volumes, { index = null, secrets = null, mode = 'clue', shortsSure = [], shortsNot = [] } = {}) {
     let out = [],
         clue = mode === 'clue',
         compiled = clue ? compileClue(volumes || []) : { errors: [] };
     out.push(...compiled.errors.map((t) => ({ level: 'error', text: t })));
     // 秘密名字：按运行时可见层检查。正文层、填表层出现就报错；「可能的发现」里出现提醒作者确认它确实是这个节点当场揭示的。
-    let names = secrets || importSecretNames(index),
+    // shortsSure：作者在审阅页点了「是同一人」的短名，当作保密名字检查（会报成要改的问题）；shortsNot：点了「不是」的，不再提示
+    let base = secrets || importSecretNames(index),
+        names = base && [...new Set([...base, ...shortsSure])],
+        fullsOf = new Map(shortsSure.map((sh) => [sh, (base || []).filter((f) => f !== sh && f.includes(sh))])),
+        bare = (sh, t) => (fullsOf.get(sh) || []).reduce((acc, f) => acc.split(f).join(''), t),
         hits = /* @__PURE__ */ new Map();
     names ||
         ((names = []),
@@ -625,7 +629,12 @@ export function checkImportDraft(volumes, { index = null, secrets = null, mode =
     for (let x of importVisibleText(volumes, mode)) {
         if (x.layer === 'author') continue;
         for (let s of names)
-            s && s.length >= 2 && x.text.includes(s) && hits.set(`${x.layer}|${s}`, [...(hits.get(`${x.layer}|${s}`) || []), x]);
+            s &&
+                s.length >= 2 &&
+                // 确认过的短名：先去掉包含它的全名再找，只有单独出现才算。同一处写了全名，全名那条已经报过；
+                // 别的地方单独写了短名（比如更早的阶段），照样报（GPT 第六轮 R4）
+                bare(s, x.text).includes(s) &&
+                hits.set(`${x.layer}|${s}`, [...(hits.get(`${x.layer}|${s}`) || []), x]);
     }
     // 同一个名字出现在几个阶段：每个阶段各报一条（每条落在自己那一页，按意见修改时各阶段都收到意见）。
     for (let [k, all] of hits)
@@ -641,7 +650,7 @@ export function checkImportDraft(volumes, { index = null, secrets = null, mode =
                   spots: w.map(spotOf),
                   text: `保密的名字「${s}」写在「可能的发现」里（${list}）：玩家到场时正文就会拿到它（标明尚未发生）。确认这是这个节点当场就能揭示的；不是的话移到作者备注的 <仅作者> 里`,
                   plain: `${[...new Set(w.map((x) => `「${x.where}」`))].join('、')}查到时会揭晓「${s}」。`,
-                  fix: '如果这里就是揭晓这个名字的地方，不用改；如果不是，把名字换成称呼（比如「掮客」「技术员」）。',
+                  fix: '如果这里就是揭晓这个名字的地方，不用改；如果不是，把名字换成身份称呼，比如「店主」「那名技术员」。',
               })
             : out.push({
                   level: 'error',
@@ -654,10 +663,10 @@ export function checkImportDraft(volumes, { index = null, secrets = null, mode =
                       layer === 'fill'
                           ? `${placeText(w)}写了「${s}」：填表的模型会看到这个名字，可能提前把它记进表格。`
                           : `${placeText(w)}写了「${s}」：正文每一轮都会看到这个名字，玩家还没查到就泄露了。`,
-                  fix: `把「${s}」换成不点名的称呼（比如「掮客」「改装器材的技术员」）。名字只留在揭晓它的那条发现的「内容」里。`,
+                  fix: `把「${s}」换成不点名的身份称呼，比如「店主」「那名技术员」。名字只留在揭晓它的那条发现的内容里。`,
               });
         }
-    let shorts = secrets ? [] : importSecretShorts(index, names),
+    let shorts = secrets ? [] : importSecretShorts(index, base).filter((x) => !shortsSure.includes(x.short) && !shortsNot.includes(x.short)),
         shortHits = new Map();
     for (let x of importVisibleText(volumes, mode)) {
         if (x.layer !== 'body' && x.layer !== 'fill') continue;
@@ -674,7 +683,7 @@ export function checkImportDraft(volumes, { index = null, secrets = null, mode =
             spots: w.map(spotOf),
             text: `疑似保密名字「${short}」（「${w[0].full}」的一部分）出现在${[...new Set(w.map((x) => IMPORT_LAYER_TEXT[x.layer]))].join('、')}里（${[...new Set(w.map((x) => x.where))].join('、')}）`,
             plain: `${placeText(w)}出现了「${short}」，它可能就是保密的「${w[0].full}」。`,
-            fix: `是同一个人的话，按保密名字处理（换成称呼）；只是碰巧同字（比如别的人物、普通词），点「不是」就不再提醒。`,
+            fix: `是同一个人的话，按保密名字处理，换成称呼；只是碰巧同字，比如别的人物、普通词，就不用改。`,
         });
     // 作者侧字段残留：只查主线、支线节点（世界动态的「来源」是正常字段）。
     let left = /* @__PURE__ */ new Set();

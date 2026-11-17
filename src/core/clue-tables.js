@@ -380,6 +380,16 @@ export function tierCompare(op, cell, wanted, tiers) {
                   : a < b;
 }
 
+// 表格说明里给档位编了号（「0 陌生：…」「3 信任：…」）时，查一个档位名对应的数字；没写或写了不止一个数字就返回 null。
+// 审阅页的表格条件用它：作者填「≥ 信任」，提示按说明改成「≥ 3」（用户 2026-11-17）。
+export function tierNumberInNote(note, word) {
+    let w = cellText(word);
+    if (!w || Number.isFinite(Number(w))) return null;
+    let re = new RegExp(`^\\s*[-·•*]?\\s*(\\d+)\\s*[.、:：)）]?\\s*${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![^\\s:：（(，,。])`),
+        nums = [...new Set(String(note || '').split(/\r?\n/).map((l) => re.exec(l)).filter(Boolean).map((m) => Number(m[1])))];
+    return nums.length === 1 ? nums[0] : null;
+}
+
 export const TIER_UP_WORDS = /从低到高|由低到高|从弱到强|由弱到强|从浅到深|由浅入深|升序|[<＜→]|->/;
 
 export const TIER_DOWN_WORDS = /从高到低|由高到低|从强到弱|由强到弱|从深到浅|降序|[>＞]/;

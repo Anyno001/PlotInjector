@@ -102,7 +102,10 @@ export function createDataStore({ onChange = () => {}, onError = () => {} } = {}
         return (next && next !== current && saveProject(next), next);
     }
     async function createProject(name, group = '', mode = 'normal') {
-        const project = newProject(name, Date.now(), mode);
+        return addProject(newProject(name, Date.now(), mode), group);
+    }
+    // 加入一个已经建好的项目（新建、从项目文件导入共用）。
+    async function addProject(project, group = '') {
         projects.set(project.id, project);
         const bytes = await writeJsonFile(projectFile(project.id), project);
         return (
@@ -213,6 +216,7 @@ export function createDataStore({ onChange = () => {}, onError = () => {} } = {}
         saveProject,
         updateProject,
         createProject,
+        addProject,
         deleteProject,
         renameProject: (id, name, group) => {
             const project = projects.get(id);

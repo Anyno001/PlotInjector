@@ -334,7 +334,7 @@ export function renderImport(view) {
                 { value: 'outline', label: '按阶段推进' },
             ],
             clue0 ? 'clue' : 'outline',
-        )}</select><span class="pi-hint">${clue0 ? '按查到的线索推进剧情。' : '按时间顺序一段段推进，整份文档整理成一卷。'}${clue0 === isClueMode(project) ? '' : '和项目现在的推进方式不同，保存时会询问是否切换。'}</span></label>
+        )}</select><span class="pi-hint">${clue0 ? '按查到的线索推进剧情。' : '按时间顺序一段段推进，整份文档整理成一卷。'}${clue0 === isClueMode(project) ? '' : '和项目现在的推进方式不同。保存后到执行页切换推进方式，剧情才会按这种方式推进。'}</span></label>
         ${
             clue0
                 ? `<div class="pi-field"><span>文档内容</span><div class="pi-imp-kind">${IMPORT_KINDS.map((k) => `<button type="button" class="pi-imp-kind-btn${kind0 === k.value ? ' is-sel' : ''}" data-act="import-kind" data-kind="${k.value}"><b>${k.label}</b><span>${k.note}</span></button>`).join('')}</div></div>`
@@ -721,7 +721,11 @@ async function adoptLinesReview(view, jobId) {
         let w = commitOutline(p, prep);
         if (!w.ok) return p;
         written = !0;
-        let sec = secrets && secrets.length ? { ...(p.secretNames || {}), ...Object.fromEntries(fresh.map((v) => [v.id, { names: secrets, confirmed: [], denied: [] }])) } : p.secretNames;
+        let sec = withShortAnswers(
+            secrets && secrets.length ? { ...(p.secretNames || {}), ...Object.fromEntries(fresh.map((v) => [v.id, { names: secrets, confirmed: [], denied: [] }])) } : p.secretNames,
+            fresh.map((v) => v.id),
+            review,
+        );
         return { ...p, outline: w.outline, importAdopted: [...projectAdopted(p), ...keys], importLineMap: { ...(p.importLineMap || {}), ...lineMap }, ...(sec ? { secretNames: sec } : {}) };
     });
     if (!written) return toast('warning', '确认期间大纲又被改过了，没有写入。请再点一次「保存到大纲」。');
@@ -742,6 +746,23 @@ async function adoptLinesReview(view, jobId) {
         .catch(() => {});
     (view.runtime.refresh && view.runtime.refresh(), toast('success', `已保存 ${take.length} 条支线到大纲。`), view.renderBody(), afterAdopt(view));
 }
+// 审阅里回答过的疑似短名（是同一人 / 不是）写进这几条线的保密名单（用户 2026-11-17），以后审阅修改、检查、发给 AI 都按它。
+function withShortAnswers(sec, ids, review) {
+    let sure = (review && review.shortsSure) || [],
+        not = (review && review.shortsNot) || [];
+    if (!sure.length && !not.length) return sec;
+    let out = { ...(sec || {}) };
+    for (let id of ids) {
+        let cur = out[id] || { names: [], confirmed: [], denied: [] };
+        out[id] = {
+            ...cur,
+            confirmed: [...new Set([...(cur.confirmed || []).filter((n) => !not.includes(n)), ...sure])],
+            denied: [...new Set([...(cur.denied || []).filter((n) => !sure.includes(n)), ...not])],
+        };
+    }
+    return out;
+}
+
 async function adoptReview(view, jobId) {
     let projectId = view.projectId,
         job = importJobOf(view, jobId),
@@ -863,7 +884,11 @@ async function adoptReview(view, jobId) {
         if (!w.ok) return p;
         written = w;
         let keys = reopen || isEdit ? [] : [adoptKey(jobId, 'review', 0), ...draft[0].stages.map((st0) => adoptKey(jobId, 0, st0.key))],
-            sec = secretNames && secretNames.length ? { ...(p.secretNames || {}), [draft[0].id]: { names: secretNames, confirmed: [], denied: [] } } : p.secretNames;
+            sec = withShortAnswers(
+                secretNames && secretNames.length ? { ...(p.secretNames || {}), [draft[0].id]: { names: secretNames, confirmed: [], denied: [] } } : p.secretNames,
+                draft.map((v) => v.id),
+                review,
+            );
         return { ...p, outline: w.outline, importAdopted: [...projectAdopted(p), ...keys], ...(sec ? { secretNames: sec } : {}) };
     });
     if (!written) return toast('warning', '确认期间大纲又被改过了，没有写入。请再点一次「保存到大纲」。');

@@ -105,6 +105,14 @@ export function createHost({ tables = {} } = {}) {
       if (!a.skipNotify) for (const fn of tableCallbacks) fn(currentTables);
       return true;
     },
+    // Official updateRow (spv8.9.2): (tableName, rowIndex, {列名: 值}); rowIndex is the content index (0 = header).
+    updateRow: async (tableName, rowIndex, data) => {
+      const sheet = Object.values(currentTables).find((s) => s && s.name === tableName);
+      if (!sheet || rowIndex < 1 || !sheet.content[rowIndex]) return false;
+      for (const [k, v] of Object.entries(data || {})) { const c = sheet.content[0].indexOf(k); if (c >= 1) sheet.content[rowIndex][c] = v; }
+      api.updated.push({ tableName, rowIndex, row: { ...data } });
+      return true;
+    },
     updated: [],
     // Official SQL API (spv8.9.2 sql-api.ts), minimal: only `UPDATE <表> SET <列> = ?[, <列> = ?] WHERE <列> = ?` with display
     // names (the real one rebinds them to physical names). querySql exists only in SQLite mode once the runtime is ready

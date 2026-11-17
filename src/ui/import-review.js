@@ -44,7 +44,7 @@ import { stringifyYaml } from '../core/yaml.js';
 import { tableCatalogText } from '../core/prompts.js';
 import { isClueMode, nodeUid, reidConflicts } from '../core/clue-model.js';
 import { compileClue, parseCondition, confirmTierOrder, evalAtom, splitCompare } from '../core/clue-rules.js';
-import { sheetList, sheetRows } from '../core/clue-tables.js';
+import { sheetList, sheetRows, tierNumberInNote } from '../core/clue-tables.js';
 import { chatFactSets, discoveryList, clueText, cellCondCheck } from '../core/clue-project.js';
 import { reidLines, mainLinesText } from '../core/long-import.js';
 import { esc, openDialog, menuDialog } from './dom.js';
@@ -112,9 +112,10 @@ export function reviewIssues(view, review, index) {
         known0 = compileClue(others),
         exists = new Set([...known0.nodes.map((n) => n.uid), ...known0.lines.map((l) => l.id)].filter(Boolean)),
         secrets = review.source && review.source !== 'import' ? projectSecretNames(project) || [] : null,
+        shorts = reviewShorts(project, review),
         // 保密名字看「运行时正文能看到什么」，由项目的推进方式决定：按线索写的内容放进按阶段推进的项目，节点名称等也会交给正文
-        runSecrets = clue && !isClueMode(project) ? checkImportDraft(draft, { index, secrets, mode: 'outline' }).filter((x) => /^secret-/.test(x.kind || '')) : [],
-        own0 = checkImportDraft(draft, { index, secrets, mode: clue ? 'clue' : 'outline' }),
+        runSecrets = clue && !isClueMode(project) ? checkImportDraft(draft, { index, secrets, mode: 'outline', ...shorts }).filter((x) => /^secret-/.test(x.kind || '')) : [],
+        own0 = checkImportDraft(draft, { index, secrets, mode: clue ? 'clue' : 'outline', ...shorts }),
         own = [...own0, ...runSecrets.filter((x) => !own0.some((y) => y.kind === x.kind && y.name === x.name && y.stageId === x.stageId))].filter(
             (x) => !/^(route|reach|reach-unknown)$/.test(x.kind || '') && !/按大纲推演|替代途径/.test(x.text) && !((/引用了不存在的(?:节点|线)「([^」]+)」/.exec(x.text) || [])[1] && exists.has(/引用了不存在的(?:节点|线)「([^」]+)」/.exec(x.text)[1])),
         ),
@@ -133,6 +134,15 @@ export function reviewIssues(view, review, index) {
     }
     for (let k of Object.keys(by)) by[k] = mergeSameIssues(by[k]);
     return by;
+}
+
+// 疑似短名的回答（用户 2026-11-17）：「是同一人」的当保密名字检查、发给 AI；「不是」的不再提示。
+// 导入审阅记在这份审阅里，保存到大纲时写进项目的保密名单；审阅修改（已有的线）直接读项目的保密名单。
+export function reviewShorts(project, review) {
+    let own = (k) => (Array.isArray(review && review[k]) ? review[k] : []),
+        lists = review && review.source && review.source !== 'import' ? Object.values((project && project.secretNames) || {}) : [],
+        from = (k) => lists.flatMap((x) => x[k] || []);
+    return { shortsSure: [...new Set([...own('shortsSure'), ...from('confirmed')])], shortsNot: [...new Set([...own('shortsNot'), ...from('denied')])] };
 }
 
 // ---------------- 渲染 ----------------
@@ -168,9 +178,14 @@ function issueCard(x, unit, filled) {
         return `<div class="pi-rv-issue"><p>${esc(x.plain || x.text)}</p>${x.names ? `<ul class="pi-rv-names">${x.names.map((n) => `<li>${esc(n)}</li>`).join('')}</ul>` : ''}${x.fix ? `<span class="pi-rv-fix"><b>建议：</b>${esc(x.fix)}</span>` : ''}
             <div class="pi-row">${filled ? '<span class="pi-badge is-ok">已加入意见</span>' : `<button type="button" class="pi-btn is-sm" data-act="rv-fill" data-unit="${esc(unit)}" data-issue="${esc(x.id)}">加入意见</button>`}
             <details><summary class="pi-hint">详情</summary><p class="pi-hint pi-rv-tech">${esc(x.text)}</p></details></div></div>`;
-    let { q, how } = issueQuestion(x);
-    return `<div class="pi-rv-issue is-ask"><p>${esc(q)}</p><span class="pi-rv-fix">${esc(how)}</span>
-        <div class="pi-row">${filled ? '<span class="pi-badge is-ok">已加入意见</span>' : `<button type="button" class="pi-btn is-sm" data-act="rv-fill" data-unit="${esc(unit)}" data-issue="${esc(x.id)}">加入意见</button>`}</div></div>`;
+    let { q, how } = issueQuestion(x),
+        // 是不是同一个人：两个按钮直接回答（用户 2026-11-17）。揭晓的地方：确认后收起；不是的话写意见。
+        acts =
+            x.kind === 'secret-short'
+                ? `<button type="button" class="pi-btn is-sm" data-act="rv-short" data-name="${esc(x.name)}" data-v="yes">是同一人</button><button type="button" class="pi-btn is-sm is-ghost" data-act="rv-short" data-name="${esc(x.name)}" data-v="no">不是</button>`
+                : `<button type="button" class="pi-btn is-sm" data-act="rv-dismiss" data-issue="${esc(x.id)}">${x.kind === 'secret-reveal' ? '是，收起' : '没问题，收起'}</button>${filled ? '<span class="pi-badge is-ok">已加入意见</span>' : `<button type="button" class="pi-btn is-sm is-ghost" data-act="rv-fill" data-unit="${esc(unit)}" data-issue="${esc(x.id)}">加入意见</button>`}`;
+    return `<div class="pi-rv-issue is-ask"><p>${esc(q)}</p>${how ? `<span class="pi-rv-fix">${esc(how)}</span>` : ''}
+        <div class="pi-row">${acts}</div></div>`;
 }
 function whenText(line, volumes) {
     if (!isPlainObject(line)) return '';
@@ -259,7 +274,8 @@ function tableForm(vol, locked = !1) {
         field = (k, list, ph) =>
             tables ? `<select class="pi-sel is-sm" ${attr(k)}>${pickOf(list, t[k], ph)}</select>` : `<input class="pi-inp is-sm" ${attr(k)} value="${esc(t[k])}" placeholder="${ph}">`,
         status = '',
-        badge = '';
+        badge = '',
+        tierFix = null;
     if (t.table && t.row && t.col) {
         if (!tables) status = '读不到当前的表格（数据库没打开或这张卡没绑表格），保存后到执行页核对。';
         else {
@@ -267,7 +283,15 @@ function tableForm(vol, locked = !1) {
                 c = t.value !== '' ? parseCondition(tableCondOf(t), errs) : null,
                 r = !errs.length && c ? cellCondCheck(c, tables) : null,
                 v = r && r.now ? evalAtom(c, { tables }).v : '';
-            status = t.value === '' ? '填上比较的值。' : r ? `${r.now ? `现在：${r.now}` : '现在：表里还没有这一格的值'}${r.notes.length ? `。${r.notes[0]}` : ''}` : errs.join('；');
+            // 填了档位名、比的是大小，而表格说明给档位编了号：提示改成数字（用户 2026-11-17：「≥ 信任」→「≥ 3」）
+            let num = ['>=', '<=', '>', '<'].includes(t.op) ? tierNumberInNote(sheet ? sheet.note : '', t.value) : null;
+            num != null && (tierFix = { vol: vol.id, value: String(num) });
+            status =
+                t.value === ''
+                    ? '填上比较的值。'
+                    : r
+                      ? `${r.now ? `现在：${r.now}` : '现在：表里还没有这一格的值'}${num != null ? `。表格说明里「${t.value}」是 ${num}，比大小请填数字` : r.notes.length ? `。${r.notes[0]}` : ''}`
+                      : errs.join('；');
             // 满足 / 未满足：胶囊小标签（用户 2026-11-16：中性表述，带背景色）
             badge = v === 'true' ? '<span class="pi-badge is-ok">已满足</span>' : v === 'false' ? '<span class="pi-badge is-warn">未满足</span>' : '';
         }
@@ -276,7 +300,7 @@ function tableForm(vol, locked = !1) {
       ${field('table', sheets.map((x) => x.name), '选择表')}
       <div class="pi-row pi-rv-tbl-row">${field('row', rows, '选择行')}${field('col', cols, '选择列')}</div>
       <div class="pi-row pi-rv-tbl-row is-cmp"><select class="pi-sel is-sm" ${attr('op')}>${opt(TABLE_OPS, t.op)}</select><input class="pi-inp is-sm" ${attr('value')} value="${esc(t.value)}" placeholder="值，如 2 或 熟悉"></div>
-      ${isPlainObject(l.表格条件草稿) ? '<p class="pi-hint is-warn">条件还没填完，保存前要补全。</p>' : ''}${status ? `<p class="pi-hint pi-rv-tbl-now">${esc(status)}${badge}</p>` : '<p class="pi-hint">选好表、行、列，填比较的值。</p>'}
+      ${isPlainObject(l.表格条件草稿) ? '<p class="pi-hint is-warn">条件还没填完，保存前要补全。</p>' : ''}${status ? `<p class="pi-hint pi-rv-tbl-now">${esc(status)}${badge}</p>` : '<p class="pi-hint">选好表、行、列，填比较的值。</p>'}${tierFix && !locked ? `<div class="pi-row"><button type="button" class="pi-btn is-sm" data-act="rv-tbl-num" data-vol="${esc(tierFix.vol)}" data-value="${esc(tierFix.value)}">改成 ${esc(tierFix.value)}</button></div>` : ''}
     </div>`;
 }
 // 开启时段（只给支线）：限定在某条主线的某几个阶段里才能开始。
@@ -402,7 +426,8 @@ export function renderReview(view, job, review, index, crumb, notes = []) {
         let s = unitValue(review.draft, u.key),
             nodes = stageNodes(s.data).filter((n) => n.kind !== 'world'),
             errs = mine.filter((x) => x.level === 'error'),
-            asks = mine.filter((x) => x.level !== 'error');
+            asks = mine.filter((x) => x.level !== 'error'),
+            answered = (review.dismissed || []).length + (review.shortsSure || []).length + (review.shortsNot || []).length;
         let main = nodes.filter((n) => n.kind === 'main'),
             side = nodes.filter((n) => n.kind !== 'main'),
             time = !clueOn && clueText(s.data && s.data.时间范围);
@@ -415,7 +440,8 @@ export function renderReview(view, job, review, index, crumb, notes = []) {
           ${nodes.length ? '' : '<p class="pi-hint is-warn">本阶段没有读到节点。</p>'}
           ${last && last.length ? `<div class="pi-rv-sec">本次修改</div>${last.map((t) => `<div class="pi-rv-chg">${esc(t)}</div>`).join('')}` : ''}
           ${errs.length ? `<div class="pi-rv-sec">问题（${errs.length}）${fillAll}</div>${errs.map((x) => issueCard(x, u.key, filled(x))).join('')}` : ''}
-          ${asks.length ? `<div class="pi-rv-sec">待确认（${asks.length}）${errs.length ? '' : fillAll}</div>${asks.map((x) => issueCard(x, u.key, filled(x))).join('')}` : ''}`;
+          ${asks.length ? `<div class="pi-rv-sec">待确认（${asks.length}）${errs.length ? '' : fillAll}</div>${asks.map((x) => issueCard(x, u.key, filled(x))).join('')}` : ''}
+          ${answered ? `<div class="pi-row pi-rv-answered"><span class="pi-hint">已确认 ${answered} 项</span><button type="button" class="pi-btn is-sm is-ghost" data-act="rv-undismiss">撤回</button></div>` : ''}`;
     }
     let yamlText = u.kind === 'line' ? stringifyYaml({ [VOLUME_LINE_KEY]: vol.line }) : stringifyYaml({ [unitValue(review.draft, u.key).key]: unitValue(review.draft, u.key).data }),
         canUndo = review.history && review.history.length;
@@ -512,6 +538,50 @@ export function reviewActions({ jobOf, crumbBack, redraftLine, openSaved = null 
             x && (await saveReview(view, c.jobId, (r) => ({ ...r, comments: { ...r.comments, [key]: appendComment(r.comments[key], issueCommentLine(x)) } })), view.renderBody());
             let box = [...hostDocument().querySelectorAll('[data-rv-comment]')].find((b) => b.dataset.rvComment === key);
             box && x && x.level !== 'error' && (box.focus(), box.setSelectionRange(box.value.length, box.value.length));
+        },
+        // 疑似短名：是同一人 → 当保密名字（下一次检查报成要改的问题）；不是 → 不再提示。都可以在「已确认」里撤回。
+        async 'rv-short'(view, target) {
+            let c = current(view);
+            if (!c) return;
+            let name = target.dataset.name,
+                yes = target.dataset.v === 'yes';
+            await saveReview(view, c.jobId, (r) => ({
+                ...r,
+                shortsSure: yes ? [...new Set([...(r.shortsSure || []), name])] : (r.shortsSure || []).filter((n) => n !== name),
+                shortsNot: yes ? (r.shortsNot || []).filter((n) => n !== name) : [...new Set([...(r.shortsNot || []), name])],
+            }));
+            view.renderBody();
+            yes && toast('info', `「${name}」按保密名字检查，出现的地方会列进问题，可以一键加入意见。`);
+        },
+        // 待确认收起（用户 2026-11-17）：记在这份审阅里，「已确认」里可以撤回
+        async 'rv-dismiss'(view, target) {
+            let c = current(view);
+            c && (await saveReview(view, c.jobId, (r) => ({ ...r, dismissed: [...new Set([...(r.dismissed || []), target.dataset.issue])] })), view.renderBody());
+        },
+        async 'rv-undismiss'(view) {
+            let c = current(view);
+            c && (await saveReview(view, c.jobId, (r) => ({ ...r, dismissed: [], shortsSure: [], shortsNot: [] })), view.renderBody());
+        },
+        // 表格条件的档位名换成说明里的数字（只改值，表、行、列、比较方式不动）
+        async 'rv-tbl-num'(view, target) {
+            let c = current(view);
+            if (!c) return;
+            let vid = target.dataset.vol,
+                value = target.dataset.value;
+            await saveReview(view, c.jobId, (r) =>
+                editDraft(r, '改表格条件', (d) =>
+                    d.map((v) => {
+                        if (v.id !== vid) return v;
+                        let line = { ...(v.line || {}) },
+                            t = isPlainObject(line.表格条件草稿) ? { op: '>=', ...line.表格条件草稿 } : simpleTableCond(line.开启条件);
+                        if (!t) return v;
+                        t = { ...t, value };
+                        t.table && t.row && t.col ? ((line.开启条件 = tableCondOf(t)), delete line.表格条件草稿) : (line.表格条件草稿 = t);
+                        return { ...v, line };
+                    }),
+                ),
+            );
+            view.renderBody();
         },
         // 标题上的「问题 N」：跳到下一个有问题的页（从当前页往后找，到底再从头）
         async 'rv-first-issue'(view) {
@@ -744,7 +814,7 @@ async function reviseUnits(view, jobId, c, index, jobOf, opts = {}) {
     if (!want.length) return;
     let project = view.project(),
         clue = reviewIsClue(project, review),
-        secrets = (review.source && review.source !== 'import' ? projectSecretNames(project) : importSecretNames(index)) || [],
+        secrets = [...new Set([...((review.source && review.source !== 'import' ? projectSecretNames(project) : importSecretNames(index)) || []), ...reviewShorts(project, review).shortsSure])],
         notes = review.notes || {},
         src = await view.data.imports.source(jobId).catch(() => ''),
         sourceOf = (key) => {

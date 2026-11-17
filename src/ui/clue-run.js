@@ -22,6 +22,7 @@ import { acuApi } from '../app/clue-runtime.js';
 import { NODE_STATUS_LABELS, AWAY_PREFIX } from '../core/clue-rules.js';
 import { ICONS } from './styles.js';
 import { stageLabel, isPlainObject } from '../core/outline.js';
+import { projectSecretNames } from '../core/store.js';
 import { CLUE_SLOT } from '../core/progress.js';
 
 import { estimateTokens } from '../core/tokens.js';
@@ -86,7 +87,7 @@ export function bindingCard(project, st7, tables = null, inner = !1) {
                 : ''
         }
         <div class="pi-tools"><button type="button" class="pi-btn is-sm is-primary is-wide" data-act="clue-gen-template" title="在当前聊天的表格上加入三张线索表（带上大纲要用的行），并调整默认表的规则；先预览，确认后才导入">生成线索模板…</button></div>
-        <div class="pi-tools is-c${hasCatalog ? 1 : 2}"><button type="button" class="pi-btn is-sm" data-act="clue-prebuild" title="大纲里加了新线索以后，把缺的行补进关键事实表、知情表；已有的行不动">按大纲补表格行…</button>
+        <div class="pi-tools is-c${hasCatalog ? 2 : 3}"><button type="button" class="pi-btn is-sm" data-act="clue-prebuild" title="大纲里加了新线索以后，把缺的行补进关键事实表、知情表；已有的行不动">按大纲补表格行…</button><button type="button" class="pi-btn is-sm" data-act="clue-labels-edit" title="改关键事实表里已有线索的标签和登记口径">改线索标签…</button>
         ${hasCatalog ? '' : '<button type="button" class="pi-btn is-sm" data-act="clue-catalog" title="旧聊天的线索表没有「场景目录」列、又不想重新生成模板时用：复制一段对照文字，手动贴进表格说明">手动贴场景目录…</button>'}</div></div>`;
 }
 
@@ -292,7 +293,8 @@ export function clueLogCard(runtime) {
         : '';
 }
 
-export function factRowsHtml(facts, prefix, volumes) {
+// stored：项目里存着的标签（导入项目文件带来的、以前生成过的）。大纲里这条线索的内容没变（签名对得上）就直接填好，不用再生成。
+export function factRowsHtml(facts, prefix, volumes, stored = {}, { intro = !0 } = {}) {
     let ctx = new Map(
         factLabelContext(
             volumes,
@@ -301,23 +303,29 @@ export function factRowsHtml(facts, prefix, volumes) {
     );
     let row = (f, i) => {
         let c = ctx.get(f.code) || {},
+            have = f.now || storedLabel(stored, f.code, c),
             where = [c.stage, c.nodeName].filter(Boolean).join('，');
         return `<div class="pi-prebuild-row" data-fr-row="${i}">
           <div class="pi-fr-hd"><b>${esc(where || f.code)}</b><span class="pi-meta">${esc(f.code)}</span>${f.orphan || c.orphan ? '<span class="pi-badge is-warn">大纲里没有节点产出它</span>' : ''}</div>
           ${c.answer ? `<p class="pi-fr-answer">这条线索查到的是：${esc(c.answer)}<span class="pi-meta">（只给你看，不会写进表格）</span></p>` : ''}
-          <label class="pi-field"><span>标签：给它起个不透露答案的名字</span><input class="pi-inp" data-${prefix}-label="${i}" value=""></label>
-          <label class="pi-field"><span>正文写到哪一步，才算主角拿到了它</span><textarea class="pi-ta" rows="2" data-${prefix}-crit="${i}"></textarea></label>
+          <label class="pi-field"><span>标签：给它起个不透露答案的名字</span><input class="pi-inp" data-${prefix}-label="${i}" value="${esc(have ? have.label : '')}"></label>
+          <label class="pi-field"><span>正文写到哪一步，才算主角拿到了它</span><textarea class="pi-ta" rows="2" data-${prefix}-crit="${i}">${esc(have ? have.criterion : '')}</textarea></label>
           <div class="pi-fr-warn" data-fr-warn="${i}"></div></div>`;
     };
     return `<div class="pi-fr" data-fr="${prefix}">
-          <div class="pi-fr-intro"><p><b>这一步在做什么</b></p>
+          <div class="pi-fr-intro"${intro ? '' : ' hidden'}><p><b>这一步在做什么</b></p>
           <p>每轮正文写完后，数据库的填表模型会对照这里的说明，判断主角有没有拿到某条线索；拿到了，后面的剧情才会开放。</p>
           <p>所以每条线索要两样东西：一个<b>标签</b>，让填表模型认出是哪一条；一句<b>「写到哪一步才算拿到」</b>。这句写得太宽，主角还没真正查到就会被算作拿到，剧情会提前推进。</p>
           <p>这两样每一轮都会发给填表模型，所以<b>不能写出答案</b>：写「打开抽屉、读到单据时」，不写单据上写了什么。</p>
           <p class="is-example">例　标签：抽屉里的单据　｜　写到哪一步：主角打开抽屉、读到单据内容时算拿到；只看到锁着的抽屉不算</p></div>
-          <div class="pi-tools is-c1"><button type="button" class="pi-btn is-sm" data-fr-auto>自动填写</button></div>
-          <p class="pi-hint" data-fr-status>建议先点「自动填写」，由 AI 按大纲写好，你只需要检查标黄的地方。也可以自己填。</p>
+          <div class="pi-tools is-c1"${intro ? '' : ' hidden'}><button type="button" class="pi-btn is-sm" data-fr-auto>自动填写</button></div>
+          <p class="pi-hint" data-fr-status>${intro ? '建议先点「自动填写」，由 AI 按大纲写好，你只需要检查标黄的地方。也可以自己填。' : '标黄的地方是插件检查出的问题，照着改框里的字就行。'}</p>
           ${facts.map(row).join('')}</div>`;
+}
+
+function storedLabel(stored, code, c) {
+    let have = stored && stored[code];
+    return have && have.label && have.sig === factLabelSig(c && c.code ? c : { code, usedBy: [] }) ? have : null;
 }
 
 export function mountFactRows(view, root, facts, prefix, volumes) {
@@ -342,7 +350,8 @@ export function mountFactRows(view, root, facts, prefix, volumes) {
             ),
         ).then((jobs) => {
             let missing = jobs.filter((j) => !j).length;
-            ((secrets = [...new Set(jobs.filter(Boolean).flatMap((j) => importSecretNames(j.index) || []))]),
+            // 导入任务里的人物索引 + 项目自己存的保密名单（导入的项目文件没有导入任务，只有后者）
+            ((secrets = [...new Set([...jobs.filter(Boolean).flatMap((j) => importSecretNames(j.index) || []), ...(projectSecretNames(project) || [])])]),
                 (secretsNote = missing ? `有 ${missing} 份导入记录读不到，这次没有核对其中的保密名字。` : ''),
                 secretsNote && (status.textContent = `${status.textContent} ${secretsNote}`),
                 facts.forEach((_, i) => (field(i, 'label').value.trim() || field(i, 'crit').value.trim()) && check(i)));
@@ -714,6 +723,140 @@ export const clueActions = {
     'clue-unfocus'(view) {
         (view.runtime.clue.setFocus(''), view.renderBody());
     },
+    // 改线索标签（用户 2026-11-17）：导入后发现口径写宽了，在这里改。读关键事实表里现在的标签和口径，改完写回表格。
+    // 写表（GPT 第六轮 R1 / R2）：
+    // · 作用域连同数据隔离一起核对（clue.opScope），弹窗期间或写入途中换了聊天、项目、推进方式、隔离就停；
+    // · 一条线索的标签和口径用官方 updateRow 一次写入；每条写之前按编号重新找行号，写完按编号回读核对；
+    // · 只有回读对上的条目才存进项目（下次新聊天建表、导出项目用它）；没写进去的保留输入，下次打开直接带出来重试。
+    async 'clue-labels-edit'(view) {
+        let c = view.runtime.clue.compute(),
+            project = view.project(),
+            api = acuApi(),
+            fb = project && (project.clue.bindings.facts || [])[0];
+        if (!c || !c.snap.api || !api || (typeof api.updateRow != 'function' && typeof api.updateCell != 'function'))
+            return toast('warning', '没有检测到数据库插件，改不了表格里的标签。');
+        if (!fb) return toast('warning', '还没有绑定事实表。');
+        let found = findSheet(c.snap.tables || {}, fb.表);
+        if (found.error) return toast('warning', `当前聊天没有「${fb.表}」。`);
+        let { col, rows } = sheetRows(found.sheet),
+            ci = { code: col(fb.编号列), label: col('标签'), crit: col('登记口径') };
+        if (ci.code < 0 || ci.label < 0 || ci.crit < 0) return toast('warning', `「${fb.表}」缺少编号、标签或登记口径列，改不了。`);
+        let scope = prebuildScope(view),
+            s0 = view.runtime.clue.opScope(),
+            dkey = draftKey(scope, s0.iso, fb.表),
+            inPlan = new Set(prebuildPlan(project.outline.volumes).facts.map((f) => f.code)),
+            drafts = labelDrafts.get(dkey) || {},
+            facts = rows
+                .map((r) => ({ code: cellText(r[ci.code]), table: { label: cellText(r[ci.label]), criterion: cellText(r[ci.crit]) } }))
+                .filter((f) => f.code && inPlan.has(f.code))
+                .map((f) => ({ ...f, now: drafts[f.code] || f.table, retry: !!drafts[f.code], draft: drafts[f.code] || null }));
+        if (!facts.length) return toast('info', '表格里还没有这个项目的线索行。先用「生成线索模板」或「按大纲补表格行」建好。');
+        let retry = facts.filter((f) => f.retry).length,
+            picked = await openDialog({
+                title: '改线索标签',
+                html: `<p class="pi-hint">改的是当前聊天「${esc(fb.表)}」里的标签和登记口径。改宽了，主角还没查到就可能被算作拿到。</p>${retry ? `<p class="pi-hint is-warn">上次有 ${retry} 条没写进表格，下面是你当时填的内容，点保存再试一次。</p>` : ''}${factRowsHtml(facts, 'le', project.outline.volumes, {}, { intro: !1 })}`,
+                onMount: (root) => mountFactRows(view, root, facts, 'le', project.outline.volumes),
+                actions: [
+                    { label: '取消', value: null },
+                    {
+                        label: '保存',
+                        primary: !0,
+                        value: (root) =>
+                            facts.map((f, i) => ({
+                                code: f.code,
+                                label: root.querySelector(`[data-le-label="${i}"]`).value.trim(),
+                                criterion: root.querySelector(`[data-le-crit="${i}"]`).value.trim(),
+                                table: f.table,
+                                draft: f.draft,
+                            })),
+                    },
+                ],
+            });
+        if (!picked) return;
+        let empty = picked.filter((f) => !f.label);
+        if (empty.length) return toast('warning', `标签不能为空：${empty.map((f) => f.code).join('、')}`);
+        let live = () => prebuildScopeValid(view, scope) && view.runtime.clue.opScope().iso === s0.iso,
+            pid = project.id,
+            // 和表格现值比：上次没写进去的条目，表格还是旧值，会算作改动
+            changed = picked.filter((f) => f.label !== f.table.label || f.criterion !== f.table.criterion),
+            // 上次的结果没核实（写表途中切走了），回来一看表格已经是草稿的值：表格不用再写，只补存进项目（GPT 第六轮复核 F3）
+            synced = picked.filter((f) => !changed.includes(f) && f.draft && f.draft.label === f.label && f.draft.criterion === f.criterion);
+        if (!live()) return toast('warning', '确认期间切换了聊天、项目、推进方式或数据隔离，没有写入。请回到原聊天重新操作。');
+        synced.length && keepLabels(view, synced, pid);
+        // 没改动的条目：表格已经是这个值，残留的草稿清掉
+        dropLabelDrafts(dkey, picked.filter((f) => !changed.includes(f)).map((f) => f.code));
+        if (!changed.length) return toast(synced.length ? 'success' : 'info', synced.length ? `表格里已经是新的值，已同步 ${synced.length} 条到项目。` : '没有改动。');
+        let done = [],
+            failed = [],
+            unsure = [],
+            stopped = !1,
+            tableNow = () => {
+                let now = view.runtime.clue.compute(),
+                    sh = findSheet((now && now.snap.tables) || {}, fb.表);
+                if (sh.error) return null;
+                let r = sheetRows(sh.sheet);
+                return { sheet: sh.sheet, col: r.col };
+            },
+            rowOf = (t, code) => (t ? t.sheet.content.findIndex((r, k) => k > 0 && cellText(r[t.col(fb.编号列)]) === code) : -1),
+            readBack = (code) => {
+                view.runtime.clue.invalidate();
+                let t = tableNow(),
+                    at = rowOf(t, code);
+                return at < 1 ? null : { label: cellText(t.sheet.content[at][t.col('标签')]), criterion: cellText(t.sheet.content[at][t.col('登记口径')]) };
+            };
+        for (let f of changed) {
+            if (!live()) {
+                stopped = !0;
+                break;
+            }
+            view.runtime.clue.invalidate();
+            let t = tableNow(),
+                at = rowOf(t, f.code);
+            if (at < 1 || t.col('标签') < 0 || t.col('登记口径') < 0) {
+                failed.push(f);
+                continue;
+            }
+            let data = { 标签: f.label, 登记口径: f.criterion };
+            if (typeof api.updateRow == 'function') await Promise.resolve(api.updateRow(fb.表, at, data)).catch(() => !1);
+            else
+                // 没有 updateRow 的旧版数据库：逐格写，每格之前重新核对作用域和行号
+                for (let [k, v] of Object.entries(data)) {
+                    if (!live()) break;
+                    view.runtime.clue.invalidate();
+                    let t2 = tableNow(),
+                        at2 = rowOf(t2, f.code);
+                    if (at2 < 1) break;
+                    await Promise.resolve(api.updateCell({ tableName: fb.表, rowIndex: at2, colIdentifier: k, value: v, skipNotify: !0 })).catch(() => !1);
+                }
+            if (!live()) {
+                // 写了但没法核实（切走了）：留作草稿，回原聊天时会核对表格，必要时只补同步
+                stopped = !0;
+                unsure.push(f);
+                break;
+            }
+            let back = readBack(f.code);
+            back && back.label === f.label && back.criterion === f.criterion ? done.push(f) : failed.push(f);
+        }
+        // 只有写进表格、回读对上的，才存进开始时的那个项目；其余留作这个聊天、隔离、表的草稿，下次打开带出来
+        let saved = done.length ? keepLabels(view, done, pid) : !0;
+        dropLabelDrafts(dkey, done.map((f) => f.code));
+        let notWritten = [...failed, ...changed.filter((f) => !done.includes(f) && !failed.includes(f) && !unsure.includes(f))],
+            left = [...notWritten, ...unsure];
+        left.length && labelDrafts.set(dkey, { ...(labelDrafts.get(dkey) || {}), ...Object.fromEntries(left.map((f) => [f.code, { label: f.label, criterion: f.criterion }])) });
+        (view.runtime.clue.invalidate(), view.renderBody());
+        let parts = [
+            `已改 ${done.length} 条`,
+            notWritten.length ? `${notWritten.length} 条没写进表格：${notWritten.map((f) => f.code).join('、')}` : '',
+            unsure.length ? `${unsure.map((f) => f.code).join('、')} 写入途中切换了聊天、项目或数据隔离，结果待核实` : '',
+            saved ? '' : '原项目已经不在了，没有存进项目',
+        ].filter(Boolean);
+        !left.length && saved
+            ? toast('success', `已改 ${done.length} 条线索的标签和口径。`)
+            : toast(
+                  stopped || !saved ? 'warning' : 'error',
+                  `${parts.join('；')}。${left.length ? '你填的内容已保留，回到原聊天再打开「改线索标签」，点保存重试。' : ''}`,
+              );
+    },
     // 按大纲补表格行：预览 → 作者逐条确认标签和登记口径 → 通过官方 insertRow 只插入缺的行（已有行不动，不覆盖已演进度）。
     // W1：点击时记下聊天 / 项目 / 模式，确认后按当前表重新算缺哪些行，每插入一行前核对一次，变了就停下并说明已写入哪些。
     // 登记口径不直接拿「记录」预填（GPT §14.2-3，记录常含答案）：作者自己写，或点「自动填写」由模型参考记录写出不含答案的版本，插件再检查。
@@ -742,7 +885,7 @@ export const clueActions = {
           ${diff.newKnows.length && diff.knowTable ? `<p class="pi-hint">「${esc(diff.knowTable)}」新增 ${diff.newKnows.length} 行：${esc(diff.newKnows.map((k) => k.key).join('、'))}</p>` : ''}
           ${diff.kept.length ? `<p class="pi-hint">已有、不改动：${esc(diff.kept.join('、'))}</p>` : ''}
           <p class="pi-hint">确认时会再核对一次，表格在这期间变了就不写入。补完以后如果对线索表重新「手动填表」，补的行可能被清掉，请检查一次。</p></details>
-          ${diff.newFacts.length ? `<h4 class="pi-fr-title">要补的线索：${diff.newFacts.length} 条</h4>${factRowsHtml(diff.newFacts, 'pb', project.outline.volumes)}` : ''}`,
+          ${diff.newFacts.length ? `<h4 class="pi-fr-title">要补的线索：${diff.newFacts.length} 条</h4>${factRowsHtml(diff.newFacts, 'pb', project.outline.volumes, project.clue.labels)}` : ''}`,
             picked = await openDialog({
                 title: '按大纲补表格行',
                 html,
@@ -860,7 +1003,7 @@ export const clueActions = {
           <p>原有的表和数据都会保留，不会删除任何东西，也不影响别的聊天。</p></div>
           ${preview.problems.length ? `<p class="pi-hint is-warn"><b>需要你注意：</b></p><ul>${preview.problems.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
           <details class="pi-fr-more"><summary class="pi-hint">具体会改哪些地方（${preview.changes.length} 处）</summary><p class="pi-hint">目标聊天：${esc(scope.chatLabel || '当前聊天')}</p><ul>${preview.changes.map((x) => `<li>${esc(x)}</li>`).join('') || '<li>没有需要改动的地方</li>'}</ul></details>
-          ${hasFacts ? '<p class="pi-hint">这个聊天已经有关键事实表，不在模板里追加行。新线索请在导入后用「按大纲补表格行」。</p>' : plan.facts.length ? `<h4 class="pi-fr-title">这份大纲里有 ${plan.facts.length} 条要追踪的线索</h4>${factRowsHtml(plan.facts, 'gt', project.outline.volumes)}` : '<p class="pi-hint">大纲里还没有线索编号，线索表先建成空表。</p>'}`,
+          ${hasFacts ? '<p class="pi-hint">这个聊天已经有关键事实表，不在模板里追加行。新线索请在导入后用「按大纲补表格行」。</p>' : plan.facts.length ? `<h4 class="pi-fr-title">这份大纲里有 ${plan.facts.length} 条要追踪的线索</h4>${factRowsHtml(plan.facts, 'gt', project.outline.volumes, project.clue.labels)}` : '<p class="pi-hint">大纲里还没有线索编号，线索表先建成空表。</p>'}`,
             picked = await openDialog({
                 title: '生成线索模板',
                 html,
@@ -1245,9 +1388,10 @@ export function stayNotice(view, c) {
         : '';
 }
 
-export function keepLabels(view, picked) {
-    let p = view.project();
-    if (!p) return;
+// pid：写到哪个项目。改线索标签写表途中用户可能切去看别的项目，收尾时必须写回开始时的项目（GPT 第六轮复核 F1）
+export function keepLabels(view, picked, pid = view.projectId) {
+    let p = pid ? view.data.project(pid) : null;
+    if (!p) return !1;
     let ctx = new Map(
             factLabelContext(
                 p.outline.volumes,
@@ -1262,6 +1406,17 @@ export function keepLabels(view, picked) {
             ...cur,
             clue: normalizeClue({ ...cur.clue, labels: { ...(cur.clue.labels || {}), ...add } }),
         }));
+    return !0;
+}
+
+// 改线索标签没写进表格的输入（按项目、按编号）：下次打开弹窗带出来重试（GPT 第六轮 R2）。只在本次页面里保留。
+// 键是来源：项目、聊天、数据隔离、事实表。换了聊天、隔离或表绑定，就不把别处的输入当成这里的重试（GPT 第六轮复核 F2）。
+const labelDrafts = /* @__PURE__ */ new Map();
+const draftKey = (scope, iso, table) => JSON.stringify([scope.projectId, scope.chatId, iso, table]);
+function dropLabelDrafts(key, codes) {
+    let d = { ...(labelDrafts.get(key) || {}) };
+    for (let code of codes) delete d[code];
+    Object.keys(d).length ? labelDrafts.set(key, d) : labelDrafts.delete(key);
 }
 
 let labelJob = null;

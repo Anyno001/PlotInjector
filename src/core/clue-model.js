@@ -324,11 +324,11 @@ export function isClueMode(project) {
 }
 
 export function normalizeLabels(value) {
-    let out = {};
-    if (!isPlainObject(value)) return out;
-    for (let [code, v] of Object.entries(value))
-        isPlainObject(v) &&
-            String(v.label || '').trim() &&
-            (out[code] = { label: String(v.label).trim(), criterion: String(v.criterion || '').trim(), sig: String(v.sig || '') });
-    return out;
+    if (!isPlainObject(value)) return {};
+    // Object.fromEntries：键名是 __proto__ 也只是普通的自有键（项目文件来自别处，GPT 第六轮）
+    return Object.fromEntries(
+        Object.entries(value)
+            .filter(([, v]) => isPlainObject(v) && String(v.label || '').trim())
+            .map(([code, v]) => [code, { label: String(v.label).trim(), criterion: String(v.criterion || '').trim(), sig: String(v.sig || '') }]),
+    );
 }

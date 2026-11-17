@@ -110,9 +110,18 @@ export function compareValues(a, b) {
     return 0;
 }
 
+// 「编号 + 档位名」的格子（如「3 信任」「2 熟悉」，用户的卡 2026-11-17）：条件写整数时按编号比，「== 3」成立。
+// 只认「整数、空格、汉字开头的名字」这一种写法；本身就是数字的（1e3、3,000）和日期（2026年11月17日）不算（GPT 第六轮 R5）。
+const TIER_CELL = /^\s*(\d+)\s+[\u4e00-\u9fff][^\d]*$/;
+function sameOrLead(cell, wanted) {
+    if (sameValue(cell, wanted)) return !0;
+    let w = cellText(wanted),
+        m = TIER_CELL.exec(cellText(cell));
+    return !!m && /^\d+$/.test(w) && Number(m[1]) === Number(w);
+}
 export function applyOp(op, cell, wanted) {
-    if (op === '==') return sameValue(cell, wanted);
-    if (op === '!=') return !sameValue(cell, wanted);
+    if (op === '==') return sameOrLead(cell, wanted);
+    if (op === '!=') return !sameOrLead(cell, wanted);
     let diff = compareValues(cell, wanted);
     return diff === null ? null : op === '>=' ? diff >= 0 : op === '<=' ? diff <= 0 : op === '>' ? diff > 0 : diff < 0;
 }

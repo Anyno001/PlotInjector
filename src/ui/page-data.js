@@ -7,7 +7,9 @@ import { clearChatProgress } from '../app/progress-store.js';
 import { deleteFile, readRawFile, verifyFiles } from '../host/files.js';
 import { downloadBlob, hostWindow, toast } from '../host/st.js';
 import { compareVersions, fetchLatestVersion } from '../host/update.js';
-import { confirmDialog, esc } from './dom.js';
+import { confirmDialog, esc, openDialog, options } from './dom.js';
+import { buildProjectFile, projectSummary, PROJECT_FILE_EXT } from '../core/project-file.js';
+import { outlineToText } from '../core/outline.js';
 import { writeUi } from './app.js';
 
 const st = (view) => view.tabState('data');
@@ -94,6 +96,7 @@ export function render(view) {
         <div class="pi-equal pi-acts"><button type="button" class="pi-btn is-sm" data-act="verify">${s.verifying ? '<span class="pi-spin"></span>' : ''}重新核对</button>
             <button type="button" class="pi-btn is-sm" data-act="orphans"${orphans.length ? '' : ' disabled'}>清理孤立文件${orphans.length ? `（${orphans.length}）` : ''}</button>
             <button type="button" class="pi-btn is-sm" data-act="clear-chats">清空全部讨论记录</button></div></div>
+        ${exportCard(view)}
         <div class="pi-card"><h3>人设备份</h3>
         <p class="pi-hint">只导出各项目的人设线，不含大纲、设定和讨论。导入在项目的「人设」页。</p>
         <div class="pi-equal is-one pi-acts"><button type="button" class="pi-btn is-sm" data-act="export-personas">导出全部项目的人设</button></div></div>
@@ -103,8 +106,32 @@ export function render(view) {
         <div class="pi-equal is-one pi-acts"><button type="button" class="pi-btn is-sm is-danger" data-act="wipe">备份并删除</button></div></div>`;
 }
 
+// 导出（用户 2026-11-17）：选一个项目，导出大纲或完整项目。导入完整项目在「新项目」里。
+function exportCard(view) {
+    const projects = view.data.index().projects;
+    if (!projects.length) return '';
+    const s = st(view),
+        pick = projects.some((p) => p.id === s.exportId) ? s.exportId : projects.some((p) => p.id === view.projectId) ? view.projectId : projects[0].id;
+    s.exportId = pick;
+    return `<div class="pi-card"><h3>导出项目</h3>
+        <label class="pi-field"><span>项目</span><select class="pi-sel" data-export-pick>${options(
+            projects.map((p) => ({ value: p.id, label: `${p.group ? `${p.group}／` : ''}${p.name}` })),
+            pick,
+        )}</select></label>
+        <p class="pi-hint">完整项目可以在别的酒馆用「新项目」导入，带上线索标签、保密名单和推进设置；不含讨论记录和聊天进度。</p>
+        <div class="pi-equal pi-acts"><button type="button" class="pi-btn is-sm" data-act="export-outline">导出大纲</button><button type="button" class="pi-btn is-sm is-primary" data-act="export-project">导出完整项目</button></div></div>`;
+}
+
+async function exportTarget(view) {
+    const id = st(view).exportId;
+    const project = view.data.project(id) || (await view.data.loadProject(id).catch(() => null));
+    if (!project) throw new Error('读不到这个项目的文件');
+    return project;
+}
+
 // 输完离开输入框或按回车才保存，避免存下「v0.1」这类半截版本号；只填数字时自动补 v。
 export function onChange(view, target) {
+    if (target.matches('[data-export-pick]')) return void (st(view).exportId = target.value);
     if (target.dataset.set !== 'loaderRef') return;
     let ref = target.value.trim();
     if (/^\d+\.\d+\.\d+$/.test(ref)) ref = `v${ref}`;
@@ -154,6 +181,44 @@ export const actions = {
         let text = await readRawFile(target.dataset.name);
         if (text == null) throw new Error('文件读取失败');
         downloadBlob(target.dataset.name, text);
+    },
+    async 'export-outline'(view) {
+        const project = await exportTarget(view);
+        if (!project.outline.volumes.length) throw new Error('这个项目的大纲还是空的');
+        downloadBlob(`${project.name}-大纲.yaml`, outlineToText(project.outline.volumes), 'text/yaml');
+    },
+    async 'export-project'(view) {
+        await view.data.flush().catch(() => {});
+        const project = await exportTarget(view),
+            sum = projectSummary(project),
+            parts = [
+                sum.lines ? `${sum.lines} 条剧情线` : '',
+                sum.labels ? `${sum.labels} 条线索标签` : '',
+                project.secretNames ? '保密名单' : '',
+                `推进方式（${sum.clue ? '线索推进' : '按阶段推进'}）和注入设置`,
+            ].filter(Boolean),
+            pick = await openDialog({
+                title: `导出「${project.name}」`,
+                html: `<p class="pi-hint">包含：${esc(parts.join('、'))}。</p>
+                ${sum.personas ? `<label class="pi-check"><input type="checkbox" data-f="personas" checked><span>人设（${sum.personas} 条）</span></label>` : ''}
+                ${sum.setting ? '<label class="pi-check"><input type="checkbox" data-f="setting" checked><span>设定</span></label>' : ''}
+                ${sum.personas || sum.setting ? '<p class="pi-hint">人设、设定已经写进世界书的，可以不勾。</p>' : ''}
+                <p class="pi-hint">不含讨论记录、聊天进度和导入草稿。</p>`,
+                actions: [
+                    { label: '取消', value: null },
+                    {
+                        label: '导出',
+                        primary: !0,
+                        value: (box) => ({
+                            personas: !!(box.querySelector('[data-f=personas]') || {}).checked,
+                            setting: !!(box.querySelector('[data-f=setting]') || {}).checked,
+                        }),
+                    },
+                ],
+            });
+        if (!pick) return;
+        downloadBlob(`${project.name}${PROJECT_FILE_EXT}`, JSON.stringify(buildProjectFile(project, { ...pick, version: view.version }), null, 2), 'application/json');
+        toast('success', `已导出「${project.name}」。`);
     },
     async 'export-personas'(view) {
         const files = [];

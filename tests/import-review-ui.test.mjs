@@ -84,7 +84,7 @@ test('start page: document type and plotting mode are separate; the job remember
   await pickMode('outline');
   assert.ok(!ctx.$('[data-act="import-kind"]'), 'stage-based import has no line types');
   assert.equal(ctx.$('[data-imp-modesel]').value, 'outline');
-  assert.match(ctx.$('.pi-card').textContent, /保存时会询问是否切换/);
+  assert.match(ctx.$('.pi-card').textContent, /和项目现在的推进方式不同。保存后到执行页切换推进方式/);
   assert.equal(ctx.$('[data-imp-text]').value, '保留我写的字', 'switching the mode keeps the pasted text');
   await pickMode('clue');
   await ctx.click('[data-act="import-kind"][data-kind="side"]');

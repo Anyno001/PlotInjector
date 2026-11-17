@@ -3,7 +3,8 @@ import { createTour, tourState, tourScopeOf, TOUR_REVISION } from './tour.js';
 import { normalizeInfinite } from '../core/infinite.js';
 import { groupProjects } from '../core/store.js';
 import { cardKey, cardName, hostDocument, hostWindow, toast } from '../host/st.js';
-import { confirmDialog, el, ensureStyle, esc, isNight, menuDialog, openDialog, options, setNight } from './dom.js';
+import { confirmDialog, el, ensureStyle, esc, isNight, menuDialog, openDialog, options, pickFiles, setNight } from './dom.js';
+import { parseProjectFile, importedName, missingBoundTables } from '../core/project-file.js';
 import { ICONS } from './styles.js';
 import * as discuss from './tab-discuss.js';
 import * as setting from './tab-setting.js';
@@ -332,7 +333,8 @@ export function createApp({ data, runtime, version }) {
                 html: `<label class="pi-field"><span>项目名</span><input class="pi-inp" data-f="name" placeholder="如：龙宫温养"></label>
                 <p class="pi-hint">一个项目保存一个故事的设定、人设、大纲和进度。每个聊天同时使用一个项目；当前聊天还没有项目时，会直接使用新项目。主线、支线都写在同一个项目的大纲里。</p>
                 ${groupField(current2 && current2.group ? current2.group : '')}
-                <label class="pi-check"><input type="checkbox" data-f="infinite"><span>无限流模式（主空间出发、世界库、污染）</span></label>`,
+                <label class="pi-check"><input type="checkbox" data-f="infinite"><span>无限流模式（主空间出发、世界库、污染）</span></label>
+                <div class="pi-row"><span class="pi-hint">已有导出的项目文件：</span><button type="button" class="pi-btn is-sm" data-dlg-value="import-file">从文件导入</button></div>`,
                 onMount: mountGroupField,
                 actions: [
                     { label: '取消', value: null },
@@ -348,12 +350,54 @@ export function createApp({ data, runtime, version }) {
                 ],
             });
         if (!result) return;
+        if (result === 'import-file') return importProjectFile(current2 && current2.group ? current2.group : '');
         const name = result.name;
         try {
             const project = await data.createProject(name, result.group, result.mode);
             (!runtime.activeId() && cardKey() && (await runtime.switchProject(project.id)), await selectProject(project.id, 'discuss'));
         } catch (error) {
             toast('error', `新建失败：${error.message}`);
+        }
+    }
+    // 从项目文件导入（用户 2026-11-17）：总是建成新项目，重名加「（导入）」，不覆盖原项目。
+    async function importProjectFile(group = '') {
+        const [file] = await pickFiles({ accept: '.json,application/json' });
+        if (!file) return;
+        let parsed;
+        try {
+            parsed = parseProjectFile(await file.text());
+        } catch (error) {
+            return toast('error', `导入失败：${error.message}`);
+        }
+        const { project, summary } = parsed,
+            name = importedName(project.name, data.index().projects.map((p) => p.name)),
+            // 确认框只留要紧的：名字、里面有什么、要不要先建表（用户 2026-11-17：字太多，要简洁）
+            what = [
+                summary.clue ? '线索推进' : '按阶段推进',
+                summary.lines ? `${summary.lines} 条剧情线` : '',
+                summary.labels ? `${summary.labels} 条标签` : '',
+                summary.personas ? `${summary.personas} 条人设` : '',
+                summary.setting ? '设定' : '',
+            ].filter(Boolean),
+            // 当前聊天读得到表格时，核对项目绑定的表在不在
+            missing = summary.clue ? missingBoundTables(project, outline.currentTables()) : [],
+            ok = await openDialog({
+                // 排法 A（用户 2026-11-17 选定）：灰色小标题、大号项目名、一排小标签、细线下一句提示
+                html: `<div><p class="pi-pf-imp-ttl">导入项目</p><p class="pi-pf-imp-name">${esc(name)}</p>
+                <div class="pi-pf-imp-pills">${what.map((w) => `<span class="pi-badge">${esc(w)}</span>`).join('')}</div>
+                ${summary.clue ? `<p class="pi-pf-imp-note${missing && missing.length ? ' is-warn' : ''}">${missing && missing.length ? `当前聊天缺少${esc(missing.join('、'))}。` : ''}游玩前在执行页点「生成线索模板」。</p>` : ''}</div>`,
+                actions: [
+                    { label: '取消', value: null },
+                    { label: '导入', primary: !0, value: !0 },
+                ],
+            });
+        if (!ok) return;
+        try {
+            const added = await data.addProject({ ...project, name }, group);
+            (!runtime.activeId() && cardKey() && (await runtime.switchProject(added.id)), await selectProject(added.id, summary.clue ? 'run' : 'outline'));
+            toast('success', `已导入「${name}」。`);
+        } catch (error) {
+            toast('error', `导入失败：${error.message}`);
         }
     }
     async function projectMenu(id) {
