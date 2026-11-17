@@ -17,6 +17,16 @@ export function atomString(key, value) {
     return key === '时间' ? `时间 ${v}` : `${key}: ${v}`;
 }
 
+// 列名、行名里常有 <user> 这类标签：拆比较符号前先换成占位，免得其中的 < > 被当成比较符号
+// （实测 2026-11-17：「重要角色表/彼得·帕克/对<user>阶段 >= 信任」被拆成列「对」、值「user>阶段 >= 信任」）。
+const TAG_RE = /<[A-Za-z_][\w-]*>/g;
+export function splitCompare(text, re) {
+    let tags = [],
+        masked = String(text ?? '').replace(TAG_RE, (t) => (tags.push(t), `\u0000${tags.length - 1}\u0000`)),
+        m = re.exec(masked);
+    return m && [...m].map((x) => (x == null ? x : x.replace(/\u0000(\d+)\u0000/g, (_, i) => tags[+i])));
+}
+
 export function parseAtom(text) {
     let raw = String(text || '').trim(),
         m;
@@ -30,7 +40,7 @@ export function parseAtom(text) {
     if ((m = /^(知情|核实)\s*[:：]\s*([^@\s]+)\s*@\s*(.+)$/.exec(raw)))
         return { kind: 'know', fact: m[2], actor: m[3].trim(), verified: m[1] === '核实', raw };
     if ((m = /^节点\s*[:：]\s*(\S+)$/.exec(raw))) return { kind: 'node', node: m[1], raw };
-    if ((m = /^表\s*[:：]\s*(.+?)\s*(==|!=|>=|<=|>|<|不包含|包含)\s*(.*)$/.exec(raw)))
+    if ((m = splitCompare(raw, /^表\s*[:：]\s*(.+?)\s*(==|!=|>=|<=|>|<|不包含|包含)\s*(.*)$/)))
         return { kind: 'cell', path: m[1].trim(), op: m[2], value: m[3].trim(), raw };
     if ((m = /^时间\s*(==|!=|>=|<=|>|<)\s*(.+)$/.exec(raw))) return { kind: 'time', op: m[1], value: m[2].trim(), raw };
     if ((m = /^线\s*[:：]\s*(\S+?)\s*(==|!=)\s*(\S+)$/.exec(raw))) {
@@ -721,7 +731,7 @@ export function parseCountAtom(value, errors) {
             { kind: 'bad', raw, error: '计数格式错误' }
         );
     let table = String(value.表 || '').trim(),
-        m = /^(.+?)\s*(==|!=|>=|<=|>|<)\s*(.*)$/.exec(normalizeOps(value.条件)),
+        m = splitCompare(normalizeOps(value.条件), /^(.+?)\s*(==|!=|>=|<=|>|<)\s*(.*)$/),
         cmp = ['至少', '至多', '等于'].find((k) => value[k] !== void 0 && value[k] !== ''),
         n = cmp ? Number(value[cmp]) : NaN;
     return !table || !m || !cmp || !Number.isFinite(n)

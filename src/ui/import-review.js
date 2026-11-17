@@ -43,7 +43,7 @@ import { isPlainObject, stageLabel, stageNodes, makeId, volumeLabel, VOLUME_LINE
 import { stringifyYaml } from '../core/yaml.js';
 import { tableCatalogText } from '../core/prompts.js';
 import { isClueMode, nodeUid, reidConflicts } from '../core/clue-model.js';
-import { compileClue, parseCondition, confirmTierOrder, evalAtom } from '../core/clue-rules.js';
+import { compileClue, parseCondition, confirmTierOrder, evalAtom, splitCompare } from '../core/clue-rules.js';
 import { sheetList, sheetRows } from '../core/clue-tables.js';
 import { chatFactSets, discoveryList, clueText, cellCondCheck } from '../core/clue-project.js';
 import { reidLines, mainLinesText } from '../core/long-import.js';
@@ -204,7 +204,7 @@ const TABLE_OPS = [
 // 开启条件是不是一条简单的表格条件：是就拆成 { table, row, col, op, value }，表单能显示和编辑。
 export function simpleTableCond(cond) {
     let raw = isPlainObject(cond) && Object.keys(cond).length === 1 && typeof cond.表 === 'string' ? cond.表 : null,
-        m = raw && /^\s*([^/]+)\/([^/]+)\/(.+?)\s*(==|!=|>=|<=|不包含|包含|>|<)\s*(.*)$/.exec(raw);
+        m = raw && splitCompare(raw, /^\s*([^/]+)\/([^/]+)\/(.+?)\s*(==|!=|>=|<=|不包含|包含|>|<)\s*(.*)$/);
     return m ? { table: m[1].trim(), row: m[2].trim(), col: m[3].trim(), op: m[4], value: m[5].trim() } : null;
 }
 // 表单编辑不了的开启条件（几个条件组合、线的状态等）：「保留现有条件」选项给它用

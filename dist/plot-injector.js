@@ -1,4 +1,4 @@
-// PlotInjector v0.3.0
+// PlotInjector v0.3.1
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -3936,6 +3936,11 @@ ${guide ? `${guide}
     let v = String(value ?? "").trim();
     return key === "时间" ? `时间 ${v}` : `${key}: ${v}`;
   }
+  var TAG_RE = /<[A-Za-z_][\w-]*>/g;
+  function splitCompare(text2, re) {
+    let tags = [], masked = String(text2 ?? "").replace(TAG_RE, (t) => (tags.push(t), `\0${tags.length - 1}\0`)), m = re.exec(masked);
+    return m && [...m].map((x) => x == null ? x : x.replace(/\u0000(\d+)\u0000/g, (_, i) => tags[+i]));
+  }
   function parseAtom(text2) {
     let raw = String(text2 || "").trim(), m;
     if ((m = /^<if\s+cell\s*=\s*["“]([^"”]+)["”]\s*>?/i.exec(raw)) && (raw = `表: ${m[1].trim()}`), raw = normalizeOps(raw), m = /^事实\s*[:：]\s*(\S+)$/.exec(raw))
@@ -3944,7 +3949,7 @@ ${guide ? `${guide}
     if (m = /^(知情|核实)\s*[:：]\s*([^@\s]+)\s*@\s*(.+)$/.exec(raw))
       return { kind: "know", fact: m[2], actor: m[3].trim(), verified: m[1] === "核实", raw };
     if (m = /^节点\s*[:：]\s*(\S+)$/.exec(raw)) return { kind: "node", node: m[1], raw };
-    if (m = /^表\s*[:：]\s*(.+?)\s*(==|!=|>=|<=|>|<|不包含|包含)\s*(.*)$/.exec(raw))
+    if (m = splitCompare(raw, /^表\s*[:：]\s*(.+?)\s*(==|!=|>=|<=|>|<|不包含|包含)\s*(.*)$/))
       return { kind: "cell", path: m[1].trim(), op: m[2], value: m[3].trim(), raw };
     if (m = /^时间\s*(==|!=|>=|<=|>|<)\s*(.+)$/.exec(raw)) return { kind: "time", op: m[1], value: m[2].trim(), raw };
     if (m = /^线\s*[:：]\s*(\S+?)\s*(==|!=)\s*(\S+)$/.exec(raw)) {
@@ -4365,7 +4370,7 @@ ${guide ? `${guide}
     let raw = JSON.stringify(value);
     if (!isPlainObject(value))
       return errors.push(`计数条件应写成 {表: 表名, 条件: 列 >= 值, 至少: N}：${raw.slice(0, 60)}`), { kind: "bad", raw, error: "计数格式错误" };
-    let table = String(value.表 || "").trim(), m = /^(.+?)\s*(==|!=|>=|<=|>|<)\s*(.*)$/.exec(normalizeOps(value.条件)), cmp = ["至少", "至多", "等于"].find((k) => value[k] !== void 0 && value[k] !== ""), n = cmp ? Number(value[cmp]) : NaN;
+    let table = String(value.表 || "").trim(), m = splitCompare(normalizeOps(value.条件), /^(.+?)\s*(==|!=|>=|<=|>|<)\s*(.*)$/), cmp = ["至少", "至多", "等于"].find((k) => value[k] !== void 0 && value[k] !== ""), n = cmp ? Number(value[cmp]) : NaN;
     return !table || !m || !cmp || !Number.isFinite(n) ? (errors.push(`计数条件缺少表名、条件（列 运算 值）或数量（至少 / 至多 / 等于）：${raw.slice(0, 60)}`), { kind: "bad", raw, error: "计数格式错误" }) : {
       kind: "count",
       table,
@@ -12631,7 +12636,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
     { v: "不包含", label: "不包含" }
   ];
   function simpleTableCond(cond) {
-    let raw = isPlainObject(cond) && Object.keys(cond).length === 1 && typeof cond.表 == "string" ? cond.表 : null, m = raw && /^\s*([^/]+)\/([^/]+)\/(.+?)\s*(==|!=|>=|<=|不包含|包含|>|<)\s*(.*)$/.exec(raw);
+    let raw = isPlainObject(cond) && Object.keys(cond).length === 1 && typeof cond.表 == "string" ? cond.表 : null, m = raw && splitCompare(raw, /^\s*([^/]+)\/([^/]+)\/(.+?)\s*(==|!=|>=|<=|不包含|包含|>|<)\s*(.*)$/);
     return m ? { table: m[1].trim(), row: m[2].trim(), col: m[3].trim(), op: m[4], value: m[5].trim() } : null;
   }
   var complexCond = (c) => c != null && c !== "" && !simpleTableCond(c), tableCondOf = (t) => ({ 表: `${t.table}/${t.row}/${t.col} ${t.op} ${t.value}` });
@@ -18349,7 +18354,7 @@ ${suffix.trim()}` : body;
   }
 
   // src/index.js
-  var VERSION = "0.3.0", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.3.1", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")
