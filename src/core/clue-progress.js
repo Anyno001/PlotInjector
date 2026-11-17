@@ -27,7 +27,7 @@ export function normalizeClueOps(value) {
 }
 
 export function effectiveClueProgress(clueOps, chat) {
-    let out = { focus: '', paused: !1, sidePaused: !1, overrides: {}, factOverrides: {}, lines: {}, log: [] },
+    let out = { focus: '', paused: !1, sidePaused: !1, mainPaused: !1, overrides: {}, factOverrides: {}, lines: {}, log: [] },
         valid = (clueOps.ops || []).filter((op) => anchorValid(op.at, chat));
     for (let [seq, op] of valid.entries()) {
         if (op.kind === 'line') {
@@ -54,7 +54,8 @@ export function effectiveClueProgress(clueOps, chat) {
             continue;
         }
         if (op.kind === 'pause') {
-            op.target === 'side' ? (out.sidePaused = !!op.value) : (out.paused = !!op.value);
+            // target: side = 暂停全部支线；mains = 暂停全部主线（新）；其他（含旧记录的 main）= 暂停整个剧情（GPT 审阅 R6：旧记录的含义不变）
+            op.target === 'side' ? (out.sidePaused = !!op.value) : op.target === 'mains' ? (out.mainPaused = !!op.value) : (out.paused = !!op.value);
             continue;
         }
         if (op.kind === 'focus') {
@@ -96,7 +97,7 @@ export function opSlot(op) {
     return op.kind === 'focus'
         ? op.kind
         : op.kind === 'pause'
-          ? `pause:${op.target === 'side' ? 'side' : 'main'}`
+          ? `pause:${op.target === 'side' ? 'side' : op.target === 'mains' ? 'mains' : 'main'}`
           : op.kind === 'line'
             ? `line:${op.target}:${['start', 'deny', 'skip'].includes(op.value) ? op.value : 'state'}`
             : `${op.kind}:${op.target}`;

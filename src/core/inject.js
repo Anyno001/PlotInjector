@@ -301,10 +301,6 @@ function buildOutlineEntries(project, progress, settings, stayOf = () => '') {
     return entries;
 }
 
-export function stageMainNames(unit, progress) {
-    return nodeNames(unit, offNodes(progress, unit));
-}
-
 const VIRTUAL_BASE_UID = 990000;
 
 // 世界书管线要求的完整字段；constant + ignoreBudget，不进定时效果、不参与关键词。

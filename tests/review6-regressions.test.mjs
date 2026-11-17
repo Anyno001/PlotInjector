@@ -61,6 +61,7 @@ test('17.1 P1: clicking 填入示例 → 应用 keeps clue material flowing (no 
   const { inst, click, doc, set, commit } = await setup();
   set('关键事实表', 'F_box', '状态', '已核实'); set('线索控制表', '主线', '当前场景', 'n_witness'); commit();
   await click('[data-act="tab"][data-tab="run"]');
+  (() => { const t = doc.querySelector('[data-act="run-set-toggle"][aria-expanded="false"]'); t && t.click(); })(); await tick();
   await click('[data-act="clue-bind-toggle"]');
   await click('[data-act="clue-bind-example"]');
   await click('[data-act="clue-bind-apply"]');
@@ -76,6 +77,7 @@ test('17.1 P1: prebuild preview on branch A, confirm on branch B (same F_box cod
   const branch = (label) => liveTables(buildTemplate({ controlRow: ['主线', ''], factRows: [{ code: 'F_box', label }], knowRows: [] }));
   const { host, inst, doc, click } = await setup({ tables: branch('A的标签') });
   await click('[data-act="tab"][data-tab="run"]');
+  (() => { const t = doc.querySelector('[data-act="run-set-toggle"][aria-expanded="false"]'); t && t.click(); })(); await tick();
   doc.querySelector('[data-act="clue-prebuild"]').click(); await tick();
   const dlg = doc.querySelector('.pi-dialog');
   assert.ok(dlg, 'preview open');

@@ -1,16 +1,14 @@
-import { hasOutlineProposal, outlineMapText, parseOutlineProposal, outlineStamp, applyOutlineProposal } from '../core/outline-proposal.js';
 
-import { guideInfo, ask, guideText } from './ai.js';
+import { guideInfo, ask } from './ai.js';
 
-import { isClueMode, nodeUid } from '../core/clue-model.js';
+import { isClueMode } from '../core/clue-model.js';
 
-import { chatFactSets, checkClueDraft } from '../core/clue-project.js';
-import { NODE_FIELDS, makeId } from '../core/outline.js';
+import { makeId, isPlainObject, volumeName } from '../core/outline.js';
 
 import { chatRequest, discussSystemPrompt, foldCandidates, foldMessages, hasYamlBlock, needsFold } from '../core/prompts.js';
 import { downloadBlob, toast } from '../host/st.js';
 
-import { choiceDialog, confirmDialog, esc, openDialog, promptDialog } from './dom.js';
+import { choiceDialog, confirmDialog, esc, openDialog, promptDialog, menuDialog } from './dom.js';
 import { ICONS } from './styles.js';
 import { pickRefs, progressText, resolveRefs, wbSummary } from './discuss-refs.js';
 import { renderMarkdown } from './markdown.js';
@@ -33,43 +31,40 @@ export function render(view) {
         refs = chat.refs,
         folded = chat.messages.filter((msg) => msg.folded).length,
         live = chat.messages.filter((msg) => !msg.folded),
-        lastAi = [...live].reverse().find((msg) => msg.role !== 'user'),
+        clueWord = isClueMode(view.project()),
         unanswered = live.length && live[live.length - 1].role === 'user' ? live[live.length - 1] : null,
         wb = wbSummary(view, chat.refs, () => view.renderBody()),
         canProgress = !!progressText(view),
         persona = view.data.settings().persona.trim(),
-        chips = `<div class="pi-refs"><button type="button" class="pi-chip${persona ? ' is-on' : ''}" data-act="persona" title="${esc(persona || '指定 AI 讨论时的说话人格')}">人格${persona ? '' : '：未设置'}</button>
-        <span class="pi-hint">附带参考：</span>
+        refsOn = [refs.setting && '设定', refs.outline && '大纲', refs.progress && canProgress && '剧情进度', refs.floors && `正文 ${refs.floors} 楼`, wb && wb.count && `世界书 ${wb.count} 条`].filter(Boolean),
+        open = !!st(view).refsOpen,
+        chips = `<div class="pi-dc-bar"><button type="button" class="pi-dc-refs" data-act="refs-toggle" aria-expanded="${open}">参考 <i>${refsOn.length}</i><small>${esc(refsOn.join('、') || '无')}</small><span class="pi-dc-caret">${open ? '▴' : '▾'}</span></button>
+        <button type="button" class="pi-dc-act" data-act="review-pick" title="选一条剧情线，逐页查看各阶段，在对应页填写意见后统一发送">${ICONS.pencil}<span>审阅修改</span></button></div>
+        ${open ? `<div class="pi-dc-refs-open">
+        <button type="button" class="pi-chip${persona ? ' is-on' : ''}" data-act="persona" title="${esc(persona || '指定 AI 讨论时的说话人格')}">人格${persona ? '' : '：未设置'}</button>
         <button type="button" class="pi-chip${refs.setting ? ' is-on' : ''}" data-act="ref" data-ref="setting">设定</button>
         <button type="button" class="pi-chip${refs.outline ? ' is-on' : ''}" data-act="ref" data-ref="outline">大纲</button>
         <button type="button" class="pi-chip${refs.progress && canProgress ? ' is-on' : ''}" data-act="ref" data-ref="progress"${canProgress ? '' : ' disabled title="本项目不是当前聊天启用的项目"'}>剧情进度</button>
         <button type="button" class="pi-chip${refs.floors ? ' is-on' : ''}" data-act="ref-floors">正文 ${refs.floors} 楼</button>
-        <button type="button" class="pi-chip${wb && wb.count ? ' is-on' : ''}" data-act="ref-wb">世界书 ${wb ? `${wb.count} 条` : '…'}</button>
-        <button type="button" class="pi-chip${st(view).edit ? ' is-on' : ''}" data-act="edit-mode" title="开启后，你说想怎么改大纲，AI 会在回复末尾附上一份改动提案；回复下面出现「审阅并应用」按钮，勾选后插进大纲。目前只支持加新节点和同一阶段里调整顺序。只是聊天时关掉就行。">改大纲</button></div>
-        ${st(view).edit ? '<p class="pi-hint pi-edit-tip">「改大纲」已开启：说出你想怎么改，AI 会附上可以勾选插入大纲的提案。目前只能加新节点、调整同一阶段里的顺序；修改、删除请到大纲页手动改。</p>' : ''}`,
+        <button type="button" class="pi-chip${wb && wb.count ? ' is-on' : ''}" data-act="ref-wb">世界书 ${wb ? `${wb.count} 条` : '…'}</button></div>` : ''}`,
         messages = live
             .map((msg) => {
                 let isUser = msg.role === 'user',
-                    tools = `<div class="pi-msg-tools">
-            <button type="button" class="pi-btn is-sm is-ghost" data-act="msg-edit" data-id="${esc(msg.id)}">编辑</button>
-            <button type="button" class="pi-btn is-sm is-ghost" data-act="msg-del" data-id="${esc(msg.id)}">删除</button>
-            ${msg === lastAi && !busy ? '<button type="button" class="pi-btn is-sm is-ghost" data-act="regen">重新生成</button>' : ''}
-            ${msg === unanswered && !busy ? '<button type="button" class="pi-btn is-sm is-ghost" data-act="resend">重新发送</button>' : ''}
-            ${
-                isUser
-                    ? ''
-                    : `<button type="button" class="pi-btn is-sm is-ghost" data-act="to-setting">整理成设定</button>
-            <button type="button" class="pi-btn is-sm is-ghost" data-act="to-outline">据此写大纲</button>
-            ${hasOutlineProposal(msg.content) ? `<button type="button" class="pi-btn is-sm is-primary" data-act="proposal-apply" data-id="${esc(msg.id)}">审阅并应用…</button>` : hasYamlBlock(msg.content) ? `<button type="button" class="pi-btn is-sm is-ghost" data-act="use-yaml" data-id="${esc(msg.id)}">把 YAML 送到大纲</button>` : ''}`
-            }</div>`;
+                    // 回复下的按钮排成一行（用户 2026-11-16 选 B）：常用的放外面，编辑、删除此条消息、重新生成收进「⋯」
+                    tools = `<div class="pi-msg-tools">${
+                        isUser
+                            ? ''
+                            : `<button type="button" class="pi-btn is-sm is-ghost" data-act="to-setting">整理成设定</button>
+            <button type="button" class="pi-btn is-sm is-ghost" data-act="to-outline">${clueWord ? '写新剧情线' : '写新卷'}</button>`
+                    }${msg === unanswered && !busy ? '<button type="button" class="pi-btn is-sm is-ghost" data-act="resend">重新发送</button>' : ''}<span class="pi-msg-gap"></span><button type="button" class="pi-icon-btn pi-msg-more" data-act="msg-more" data-id="${esc(msg.id)}" title="更多">⋯</button></div>`;
                 return `<div class="pi-msg ${isUser ? 'is-user' : 'is-ai'}"><div class="pi-md">${renderMarkdown(msg.content)}</div>${tools}</div>`;
             })
             .join(''),
         empty = chat.messages.length
             ? ''
-            : '<div class="pi-empty">说说你想写的剧情或设定，一句话也行。<br>AI 会帮你把世界观、人物和剧情走向想清楚；想好了，可以在 AI 的回复下面点「据此写大纲」。</div>';
+            : '<div class="pi-empty">说说你想写的剧情或设定，一句话也行。<br>AI 会帮你把世界观、人物和剧情走向想清楚；想好了，可以在 AI 的回复下面点「写新剧情线」。</div>';
     return `${chips}<div class="pi-chat">
-        ${folded ? `<button type="button" class="pi-msg-fold" data-act="summary">更早的 ${folded} 条已折成摘要 · 查看</button>` : ''}
+        ${folded ? `<button type="button" class="pi-msg-fold" data-act="summary">更早的 ${folded} 条已折成摘要，查看</button>` : ''}
         ${empty}${messages}${busy ? '<div class="pi-msg is-ai"><span class="pi-spin"></span></div>' : ''}</div>
         <div class="pi-compose">${chat.messages.length ? `<button type="button" class="pi-compose-side" data-act="clear-talk" title="清空讨论">${ICONS.trash}</button>` : ''}<textarea class="pi-ta" data-compose placeholder="Ctrl+Enter 发送">${esc(st(view).draft || '')}</textarea>
         ${busy ? `<button type="button" class="pi-send" data-act="stop" title="停止回复">${ICONS.close}</button>` : `<button type="button" class="pi-send" data-act="send" title="发送（Ctrl+Enter）">${ICONS.send}</button>`}</div>`;
@@ -101,11 +96,7 @@ async function reply(view) {
             }),
                 view.data.saveChat(projectId, chat));
         }
-        const edit = st(view).edit
-            ? { clue: isClueMode(project), map: outlineMapText(project.outline.volumes, { focusStageId: st(view).editStage || '' }) }
-            : null;
         const system = discussSystemPrompt({
-                edit,
                 guide: guideInfo(view),
                 refs: await resolveRefs(view, chat, project),
                 persona: view.data.settings().persona,
@@ -122,7 +113,6 @@ async function reply(view) {
                     role: 'assistant',
                     content: text,
                     at: Date.now(),
-                    ...(hasOutlineProposal(text) ? { outlineAt: outlineStamp(project.outline.volumes) } : {}),
                 },
             ],
         });
@@ -203,6 +193,22 @@ export const actions = {
             reply(view)
         );
     },
+    async 'msg-more'(view, target) {
+        const chat = view.data.chat(view.projectId),
+            msg = chat.messages.find((item) => item.id === target.dataset.id);
+        if (!msg) return;
+        const live = chat.messages.filter((item) => !item.folded),
+            lastAi = [...live].reverse().find((item) => item.role !== 'user'),
+            busy = view.busy[`discuss:${view.projectId}`],
+            items = [
+                { value: 'msg-edit', label: '编辑' },
+                ...(msg === lastAi && !busy ? [{ value: 'regen', label: '重新生成' }] : []),
+                ...(msg.role !== 'user' && hasYamlBlock(msg.content) ? [{ value: 'use-yaml', label: '把 YAML 送到大纲' }] : []),
+                { value: 'msg-del', label: '删除此条消息', danger: !0 },
+            ],
+            pick = await menuDialog({ title: '这条消息', items });
+        pick && actions[pick](view, target);
+    },
     async 'msg-edit'(view, target) {
         const msg = view.data.chat(view.projectId).messages.find((item) => item.id === target.dataset.id),
             text = await promptDialog({ title: '编辑消息', value: msg.content, multiline: !0 });
@@ -214,7 +220,7 @@ export const actions = {
             view.renderBody());
     },
     async 'msg-del'(view, target) {
-        (await confirmDialog({ title: '删除这条消息', okLabel: '删除', danger: !0 })) &&
+        (await confirmDialog({ title: '删除此条消息', body: '只删这一条，其他消息不动。', okLabel: '删除', danger: !0 })) &&
             (updateChat(view, (chat) => ({ ...chat, messages: chat.messages.filter((item) => item.id !== target.dataset.id) })),
             view.renderBody());
     },
@@ -275,100 +281,23 @@ export const actions = {
     'to-outline'(view) {
         return (view.go('outline'), outlineTab.actions['ai-volume'](view, null, { withTalk: !0 }));
     },
-    'edit-mode'(view) {
-        ((st(view).edit = !st(view).edit), view.renderBody());
+    'refs-toggle'(view) {
+        ((st(view).refsOpen = !st(view).refsOpen), view.renderBody());
     },
-    // 审阅讨论里的改动提案：逐项列出（定位失败的直接标出），勾选后合成候选大纲、检查，一次写入。
-    async 'proposal-apply'(view, target) {
-        let msg = view.data.chat(view.projectId).messages.find((item) => item.id === target.dataset.id),
-            project = view.project();
-        if (!msg || !project) return;
-        let parsed = parseOutlineProposal(msg.content);
-        if (parsed.error) return toast('error', parsed.error);
+    // 审阅修改（导入审阅总方案第五节 J，用户 2026-11-16 第三版）：选一条剧情线 → 逐页审阅（和导入同一个页面）。
+    // 讨论只用来聊，不直接改大纲；讨论记录在审阅页发送意见时作为参考带上。
+    async 'review-pick'(view) {
+        let project = view.project();
+        if (!project || !project.outline.volumes.length) return toast('info', '大纲里还没有内容。');
         let clue = isClueMode(project),
-            changedSince = msg.outlineAt && msg.outlineAt !== outlineStamp(project.outline.volumes),
-            all = ((picked2) =>
-                applyOutlineProposal(project.outline.volumes, parsed.items, {
-                    picked: picked2,
-                    isClue: clue,
-                    idOf: /* @__PURE__ */ (() => {
-                        let n = 0;
-                        return () => `preview${++n}`;
-                    })(),
-                }))(null),
-            html = `${changedSince ? '<p class="pi-hint is-warn">这份提案生成之后，大纲又被改过。下面按现在的大纲重新定位；位置不对的会标出来。</p>' : ''}
-          <p class="pi-hint">下面是 AI 根据你的话提出的大纲改动，每一行是一处。勾选你同意的，点「应用勾选的改动」写进大纲；不同意的取消勾选就行。</p>
-          <p class="pi-hint">这份大纲所有用它的聊天都会用到。已经演过的部分不会被改掉，每个聊天的进度照旧。</p>
-          ${parsed.items
-              .map((it) => {
-                  let ch = all.changes.find((c) => c.i === it.i),
-                      err = it.error || all.errors.find((e) => e.startsWith(`第 ${it.i + 1} 项`));
-                  return `<label class="pi-check"><input type="checkbox" data-pp="${it.i}"${err ? ' disabled' : ' checked'}><span>${esc(ch ? ch.text : `${it.action}（${it.stageId}）`)}${it.reason ? `<span class="pi-hint">　${esc(it.reason)}</span>` : ''}${err ? `<br><span class="pi-hint is-warn">${esc(err.replace(/^第 \d+ 项：/, ''))}</span>` : ''}</span></label>`;
-              })
-              .join('')}`,
-            picked = await openDialog({
-                title: '审阅大纲改动',
-                html,
-                actions: [
-                    { label: '取消', value: null },
-                    {
-                        label: '应用勾选的改动',
-                        primary: !0,
-                        value: (root) => [...root.querySelectorAll('[data-pp]')].filter((x) => x.checked).map((x) => Number(x.dataset.pp)),
-                    },
-                ],
+            name = (v) => (isPlainObject(v.line) && v.line.编号 && !volumeName(v.key).startsWith(v.line.编号) ? `${v.line.编号} ${volumeName(v.key)}` : volumeName(v.key)),
+            id = await menuDialog({
+                title: '审阅修改',
+                items: project.outline.volumes.map((v) => ({ value: v.id, label: `${name(v)}　${v.stages.length} 个阶段` })),
             });
-        if (!picked || !picked.length) return;
-        let now = view.project(),
-            result = applyOutlineProposal(now.outline.volumes, parsed.items, { picked, isClue: clue });
-        if (!result.ok) return toast('error', `没有写入：${result.errors.join('；') || '没有可应用的改动'}`);
-        let issues = [];
-        if (clue) {
-            let c = view.runtime.activeId() === view.projectId ? view.runtime.clue.compute() : null,
-                { known, claimed } = chatFactSets(c),
-                addedSet = new Set(result.added || []),
-                newOnly = result.volumes.map((v) => ({
-                    ...v,
-                    stages: v.stages.map((s) => ({
-                        ...s,
-                        data: Object.fromEntries(
-                            Object.entries(s.data || {}).map(([k, x]) => [
-                                k,
-                                NODE_FIELDS.some((f) => f.field === k) && Array.isArray(x)
-                                    ? x.filter((n) => addedSet.has(nodeUid(n)))
-                                    : NODE_FIELDS.some((f) => f.field === k)
-                                      ? []
-                                      : x,
-                            ]),
-                        ),
-                    })),
-                }));
-            issues = [
-                ...(addedSet.size
-                    ? checkClueDraft(newOnly, now.outline.volumes, { isObtained: (id) => known.includes(id) }).filter((x) =>
-                          /^事实编号 /.test(x),
-                      )
-                    : []),
-                ...checkClueDraft([], [], { applied: result.volumes, obtainedFacts: known, claimedFacts: claimed }).filter((x) =>
-                    /走不通|判断不了/.test(x),
-                ),
-            ];
-        }
-        (issues.length &&
-            !(await confirmDialog({
-                title: '改动后的大纲有问题',
-                body: '按改动后的大纲推演，发现：',
-                list: issues,
-                okLabel: '仍然应用',
-                danger: !0,
-            }))) ||
-            (view.data.updateProject(view.projectId, (p) =>
-                p.outline.volumes === now.outline.volumes ? { ...p, outline: { ...p.outline, volumes: result.volumes } } : p,
-            ) === now
-                ? toast('warning', '写入时大纲又变了，没有应用。请重新打开审阅。')
-                : (view.runtime.refresh && view.runtime.refresh(),
-                  toast('success', `已应用 ${result.changes.length} 处改动。`),
-                  view.renderBody()));
+        if (!id || view.projectId !== project.id) return;
+        let jobId = await outlineTab.openEditReview(view, id, {}, { note: clue ? '剧情线' : '卷' });
+        (outlineTab.showEditReview(view, jobId), view.go('outline'));
     },
     'use-yaml'(view, target) {
         const msg = view.data.chat(view.projectId).messages.find((item) => item.id === target.dataset.id);

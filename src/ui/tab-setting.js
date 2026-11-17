@@ -41,7 +41,7 @@ function fixesHtml(fixes, where) {
     if (!fixes.length) return '';
     return `<p class="pi-hint">补定（替你补齐的项）：</p>${fixes
         .map(
-            (fix, i) => `<div class="pi-fix"><span class="pi-fix-text">· ${esc(fix)}</span>
+            (fix, i) => `<div class="pi-fix"><span class="pi-fix-text">${esc(fix)}</span>
         <span class="pi-fix-acts"><button type="button" class="pi-btn is-sm" data-act="fix-ok" data-where="${where}" data-i="${i}">确认</button>
         <button type="button" class="pi-btn is-sm" data-act="fix-edit" data-where="${where}" data-i="${i}">修改</button>
         <button type="button" class="pi-btn is-sm is-danger" data-act="fix-drop" data-where="${where}" data-i="${i}">丢弃</button></span></div>`,
@@ -82,7 +82,7 @@ function historyHtml(project, at) {
     return `<div class="pi-card"><h3>历史版本</h3>
         ${list
             .map(
-                (item, i) => `<div class="pi-row"><span class="pi-grow">${esc(fmt(item.at))} · ${item.text.length} 字</span>
+                (item, i) => `<div class="pi-row"><span class="pi-grow">${esc(fmt(item.at))}，${item.text.length} 字</span>
             <button type="button" class="pi-btn is-sm" data-act="hist-diff" data-i="${i}">对比当前</button>
             <button type="button" class="pi-btn is-sm" data-act="hist-restore" data-i="${i}">回退到此版</button></div>`,
             )

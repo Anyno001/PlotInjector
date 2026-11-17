@@ -88,21 +88,6 @@ function withState(progress, patch) {
     return { ...progress, threads: { ...threadState(progress), ...patch } };
 }
 
-function patchMap(progress, field, key, patch) {
-    const map = threadState(progress)[field];
-    if (patch === null) {
-        const { [key]: _drop, ...rest } = map;
-        return withState(progress, { [field]: rest });
-    }
-    const next = { ...(map[key] || {}), ...patch };
-    for (const name of Object.keys(next)) if (next[name] === undefined) delete next[name];
-    return withState(progress, { [field]: { ...map, [key]: next } });
-}
-
-// patch 为 null 时删掉这一项（重置）。
-export const patchClock = (progress, key, patch) => patchMap(progress, 'clocks', key, patch);
-export const patchHook = (progress, key, patch) => patchMap(progress, 'hooks', key, patch);
-
 const mapOf = node => (node.kind === 'world' ? 'clocks' : 'hooks');
 const unitOfKey = key => key.slice(0, key.indexOf(':'));
 const nodeOfKey = key => key.slice(key.indexOf(':') + 1);

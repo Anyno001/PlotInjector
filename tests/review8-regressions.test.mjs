@@ -50,7 +50,8 @@ test('1a: a clue draft whose node NAME holds a secret name, adopted into an outl
   ctx.doc.querySelector('[data-act="import-adopt"]').click(); await tick();
   const dlg = [...ctx.doc.querySelectorAll('.pi-dialog')].pop();
   assert.ok(dlg, 'adopt asks for confirmation');
-  assert.match(dlg.textContent, new RegExp(`保密的名字「${SECRET}」出现在正文每楼都可能看到的字段`));
+  // 导入审阅总方案 A：确认框里是人话（哪一处写了名字、为什么不行），不再是技术说明
+  assert.match(dlg.textContent, new RegExp(`写了「${SECRET}」：正文每一轮都会看到这个名字`));
   await ctx.inst.destroy();
 });
 
@@ -109,6 +110,7 @@ test('3a: after a reload (import job not in memory), the fact-label dialog still
   const doc = host.w.document;
   doc.querySelector(`[data-act="project"][data-id="${p.id}"]`).click(); await tick();
   doc.querySelector('[data-act="tab"][data-tab="run"]').click(); await tick();
+  (() => { const t = doc.querySelector('[data-act="run-set-toggle"][aria-expanded="false"]'); t && t.click(); })(); await tick();
   doc.querySelector('[data-act="clue-gen-template"]').click(); await tick(); await tick();
   const dlg = doc.querySelector('.pi-dialog');
   const label = dlg.querySelector('[data-gt-label="0"]');

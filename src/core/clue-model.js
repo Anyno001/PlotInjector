@@ -1,4 +1,4 @@
-import { isPlainObject, NODE_FIELDS, nodeProgressId, makeId, STABLE_PREFIX, flattenUnits, stageNodes } from './outline.js';
+import { isPlainObject, NODE_FIELDS, nodeProgressId, makeId, flattenUnits, stageNodes } from './outline.js';
 
 
 
@@ -196,37 +196,6 @@ export function ensureOutlineIds(volumes, legacyMap, idOf = () => makeId('n')) {
         return volChanged ? ((changed = !0), { ...volume, stages }) : volume;
     });
     return { volumes: changed ? next : volumes, legacyMap: mapChanged ? newMap : map, changed: changed || mapChanged };
-}
-
-export const LEGACY_NODE_ID = /^[msw]\d+$/;
-
-export function migrateOutlineProgress(progress, legacyMap) {
-    let map = isPlainObject(legacyMap) ? legacyMap : {},
-        slots = (progress && progress.slots) || {},
-        out = {},
-        migrated = 0,
-        dropped = 0,
-        touched = !1;
-    for (let [unitId, slot] of Object.entries(slots)) {
-        if (!slot || !Array.isArray(slot.off) || !slot.off.some((x) => LEGACY_NODE_ID.test(String(x)))) {
-            out[unitId] = slot;
-            continue;
-        }
-        touched = !0;
-        let m = map[unitId] || {},
-            off = [];
-        for (let id of slot.off) {
-            if (!LEGACY_NODE_ID.test(String(id))) {
-                off.push(id);
-                continue;
-            }
-            m[id] ? (off.push(`${STABLE_PREFIX}${m[id]}`), migrated++) : dropped++;
-        }
-        out[unitId] = { ...slot, off: [...new Set(off)] };
-    }
-    return touched
-        ? { progress: { ...progress, slots: out, droppedLegacy: (Number(progress.droppedLegacy) || 0) + dropped }, migrated, dropped }
-        : { progress, migrated: 0, dropped: 0 };
 }
 
 export function clueNodes(volumes) {

@@ -269,6 +269,7 @@ test('W1: prebuild confirmed after switching to chat B writes nothing into B', a
   const t = liveTables(buildTemplate({ controlRow: ['主线', ''], factRows: [{ code: 'F_box', label: 'a' }], knowRows: [] }));
   host.db.setTables(t);
   await tick();
+  (() => { const t = doc.querySelector('[data-act="run-set-toggle"][aria-expanded="false"]'); t && t.click(); })(); await tick();
   doc.querySelector('[data-act="clue-prebuild"]').click(); await tick();
   const dlg = doc.querySelector('.pi-dialog');
   assert.ok(dlg, 'prebuild dialog in A');
@@ -286,6 +287,7 @@ test('W1/§14.3: a failed fact insert does not create its knowledge rows; column
   const api = host.w.AutoCardUpdaterAPI, orig = api.insertRow;
   api.insertRow = async (a, b) => ((typeof a === 'object' ? a.data : b)['编号'] === 'F_seen' ? -1 : orig(a, b));
   await tick();
+  (() => { const t = doc.querySelector('[data-act="run-set-toggle"][aria-expanded="false"]'); t && t.click(); })(); await tick();
   doc.querySelector('[data-act="clue-prebuild"]').click(); await tick();
   const dlg = doc.querySelector('.pi-dialog');
   dlg.querySelectorAll('[data-pb-label]').forEach((el, i) => { el.value = `标签${i}`; });
@@ -301,6 +303,7 @@ test('W1/§14.3: a failed fact insert does not create its knowledge rows; column
   fs2.content[0].splice(ci, 1);
   host.db.setTables(bad);
   const before = api.inserted.length;
+  (() => { const t = doc.querySelector('[data-act="run-set-toggle"][aria-expanded="false"]'); t && t.click(); })(); await tick();
   doc.querySelector('[data-act="clue-prebuild"]').click(); await tick();
   assert.equal(doc.querySelector('.pi-dialog'), null, 'no dialog when the table structure does not match');
   assert.equal(api.inserted.length, before);

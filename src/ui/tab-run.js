@@ -2,7 +2,7 @@ import { isClueMode } from '../core/clue-model.js';
 import { renderClueRun, modeCard, clueActions, clueOnChange } from './clue-run.js';
 
 import { DEFAULT_PARAMS, PACES, POSITIONS, ROLES, buildIndexText, carriedNodes, positionLabel } from '../core/inject.js';
-import { flattenUnits, stageLabel, stageNodes, volumeLabel } from '../core/outline.js';
+import { flattenUnits, stageLabel, stageNodes, volumeShowName } from '../core/outline.js';
 import { STATE_LABELS, checkBase, goTo, offNodes, patchSlot, setNodeChecked, unitStates } from '../core/progress.js';
 import { currentStage, groupLines, hasPersonas, mutePersona, personaEnv, personaNote, releasePersona, setPersonaStage } from '../core/personas.js';
 import { clockPhase, isThreadNode, liveThreads, maskUnits, patchLive, threadSwitches } from '../core/threads.js';
@@ -66,7 +66,7 @@ function hookRow(hook) {
         hook.status === 'done'
             ? '已演'
             : chain
-              ? `第 ${hook.step + 1}/${hook.steps.length} 步${hook.status === 'queue' ? ' · 排队' : ''}`
+              ? `第 ${hook.step + 1}/${hook.steps.length} 步${hook.status === 'queue' ? '，排队' : ''}`
               : { wait: '待触发', active: '已激活', queue: '排队' }[hook.status];
     const markHtml = mark
         ? `<button type="button" class="pi-meta pi-meta-btn${hook.status === 'active' ? ' is-dot' : ''}" data-act="hook-menu" data-key="${esc(hook.key)}">${esc(mark)}</button>`
@@ -148,7 +148,7 @@ function timeline(units, states, progress, carried, live, sw, expiredOpen) {
         const muted = progress.muted.includes(unit.id);
         const range = unit.stage.data && unit.stage.data.时间范围;
         const label = state === 'done' || state === 'todo' ? '' : STATE_LABELS[state];
-        const notes = [label, manual ? '手动' : '', muted ? '不提醒' : ''].filter(Boolean).join(' · ');
+        const notes = [label, manual ? '手动' : '', muted ? '不提醒' : ''].filter(Boolean).join('，');
         return `<div class="pi-tl-item is-${state}"><span class="pi-tl-dot"></span><div class="pi-tl-box">
             <div class="pi-tl-hd"><span class="pi-tl-name" title="${esc(range || '')}">${esc(stageLabel(unit.stage.key))}</span>
                 ${notes ? `<span class="pi-tl-state">${esc(notes)}</span>` : ''}
@@ -158,7 +158,7 @@ function timeline(units, states, progress, carried, live, sw, expiredOpen) {
     return groups
         .map(
             (group) =>
-                `<div class="pi-tl-vol">${esc(volumeLabel(group.volume.key))}</div><div class="pi-tl">${group.units.map(item).join('')}</div>`,
+                `<div class="pi-tl-vol">${esc(volumeShowName(group.volume))}</div><div class="pi-tl">${group.units.map(item).join('')}</div>`,
         )
         .join('');
 }
@@ -254,7 +254,7 @@ export function render(view) {
             <button type="button" class="pi-btn is-sm" data-act="check"${checking ? ' disabled' : ''}>${checking ? '<span class="pi-spin"></span>检测中' : '立即检测'}</button>
             <button type="button" class="pi-btn is-sm" data-act="rewrite">改写后续</button></div>
         ${timeline(units, states, progress, settings.carryOver ? carriedNodes(units, states, progress, { withOff: !0 }) : [], liveOf(units, states, progress, settings), sw, st.expiredOpen)}`
-                : '<p class="pi-hint">大纲为空。到「大纲」页导入剧情 YAML，或让 AI 写一卷。</p>'
+                : '<p class="pi-hint">大纲为空。到「大纲」页导入剧情 YAML、导入长文，或让 AI 写。</p>'
         }
         </div>`;
 }
@@ -430,7 +430,7 @@ export const actions = {
                           ? list
                                 .map(
                                     (entry) =>
-                                        `<p class="pi-hint">${esc(positionLabel(entry))} · ${esc(entry.title)} · 顺序 ${entry.order}</p><pre class="pi-pre">${esc(entry.content)}</pre>`,
+                                        `<p class="pi-hint">${esc(positionLabel(entry))}，${esc(entry.title)}，顺序 ${entry.order}</p><pre class="pi-pre">${esc(entry.content)}</pre>`,
                                 )
                                 .join('')
                           : '';

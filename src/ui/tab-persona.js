@@ -1,5 +1,5 @@
 import { POSITIONS, ROLES } from '../core/inject.js';
-import { flattenUnits, stageLabel, volumeLabel } from '../core/outline.js';
+import { flattenUnits, stageLabel, volumeName } from '../core/outline.js';
 import { FAVOR_DIMS, PERSONA_MODES, currentStage, fameReading, groupLines, newLine, newStage, personaEnv, personaNote } from '../core/personas.js';
 import { emptyProgress } from '../core/progress.js';
 import { estimateTokens } from '../core/tokens.js';
@@ -55,7 +55,7 @@ function stageHtml(view, line, stage, index, current, units) {
     const attrs = name => `data-pl="${esc(line.id)}" data-ps="${esc(stage.id)}" data-f="${name}"`;
     const act = (name, icon, title, disabled = false) => `<button type="button" class="pi-icon-btn${name === 'ps-del' ? ' is-danger' : ''}" data-act="${name}" data-line="${esc(line.id)}" data-stage="${esc(stage.id)}" title="${title}"${disabled ? ' disabled' : ''}>${icon}</button>`;
     const extra = line.mode === 'check' ? field('进入条件', input(attrs('cond'), stage.cond, ' placeholder="如：主角出手帮了她，她开始动摇"')) : line.mode === 'outline'
-        ? field('跟随大纲阶段', `<select class="pi-sel" ${attrs('unitId')}>${options([{ value: '', label: '不绑定（跳过）' }, ...units.map(unit => ({ value: unit.id, label: `${volumeLabel(unit.volume.key)}·${stageLabel(unit.stage.key)}` }))], stage.unitId)}</select>`)
+        ? field('跟随大纲阶段', `<select class="pi-sel" ${attrs('unitId')}>${options([{ value: '', label: '不绑定（跳过）' }, ...units.map(unit => ({ value: unit.id, label: `${volumeName(unit.volume.key)} ${stageLabel(unit.stage.key)}` }))], stage.unitId)}</select>`)
         : line.mode === 'fame' ? `<div class="pi-pair">${field(line.fame.source === 'favor' ? `${line.fame.dim}下限` : '声望下限', input(`${attrs('min')} type="number"`, stage.range.min ?? ''))}${field(line.fame.source === 'favor' ? `${line.fame.dim}上限` : '声望上限', input(`${attrs('max')} type="number"`, stage.range.max ?? ''))}</div>${extraHtml(attrs, line, stage)}${field('进入条件（可空，写了要检测确认后才进）', input(attrs('cond'), stage.cond, ' placeholder="如：已经发生过表白"'))}` : '';
     return `<div class="pi-node pi-ps">
         <div class="pi-node-hd">${index === current ? '<span class="pi-badge is-accent">当前</span>' : ''}${input(attrs('name'), stage.name)}
@@ -125,7 +125,7 @@ function lineRow(view, line, open, units) {
     return `<div class="pi-entry${line.enabled ? '' : ' is-off'}">
         <div class="pi-entry-hd" data-act="pl-open" data-line="${esc(line.id)}">${open ? ICONS.caretDown : ICONS.caret}
             <span class="pi-etitle">${esc(line.name)}</span><span class="pi-badge">${esc(modeLabel(line.mode))}</span>
-            <span class="pi-meta">${esc(info.stage ? info.stage.name : '')}${note ? ` · ${note}` : ''}</span>
+            <span class="pi-meta">${esc(info.stage ? info.stage.name : '')}${note ? `，${note}` : ''}</span>
             <input type="checkbox" title="启用" data-pl-on="${esc(line.id)}"${line.enabled ? ' checked' : ''}></div>${open ? lineBody(view, line, units) : ''}</div>`;
 }
 

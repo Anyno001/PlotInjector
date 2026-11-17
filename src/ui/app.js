@@ -44,6 +44,14 @@ function readUi() {
     }
 }
 
+// 文本框随内容变高：最多到 320px，再多就在框里滚动
+function growBox(box) {
+    if (!box || !box.style) return;
+    box.style.height = 'auto';
+    let h = box.scrollHeight;
+    h > 0 && (box.style.height = `${Math.min(h + 2, 320)}px`);
+}
+
 export function writeUi(patch) {
     try {
         hostWindow().localStorage.setItem(UI_KEY, JSON.stringify({ ...readUi(), ...patch }));
@@ -165,7 +173,7 @@ export function createApp({ data, runtime, version }) {
         if (view.page) return current().render(view);
         const project = view.project();
         if (!view.projectId)
-            return `<div class="pi-empty">${data.index().projects.length ? '从项目列表选择一个项目。' : '一个项目就是一段剧情（一条主线或一条 if 线）：在讨论页想清楚，写成大纲，到执行页开始注入。设定页可选，给没有世界观的卡用。'}<br><br>
+            return `<div class="pi-empty">${data.index().projects.length ? '从项目列表选择一个项目。' : '一个项目保存一个故事的设定、人设、大纲和进度，绑定到角色卡和聊天使用。一般顺序：讨论、写大纲、执行。设定页和人设页可选。'}<br><br>
                 <button type="button" class="pi-btn is-primary" data-act="new-project">${ICONS.plus}新项目</button></div>`;
         if (!project) {
             const failed = view.loadError[view.projectId];
@@ -216,6 +224,16 @@ export function createApp({ data, runtime, version }) {
         ((body.className = `pi-body${!view.page && view.tab === 'discuss' && view.project() ? ' is-chat' : ''}`),
             (body.innerHTML = safeBodyHtml()),
             (body.scrollTop = keepScroll));
+        // 文本框随内容变高（第四批）：初始 2 行，内容多了再变高
+        body.querySelectorAll('.pi-ta-auto').forEach(growBox);
+        // 审阅页的页签横向滚动：重画后把当前页签滚到看得见的位置（只动页签栏，不动整页）
+        const tabs = body.querySelector('.pi-rv-dots'),
+            cur = tabs && tabs.querySelector('.pi-rv-dot.is-cur');
+        if (tabs && cur) {
+            const left = cur.offsetLeft - tabs.offsetLeft,
+                right = left + cur.offsetWidth;
+            (left < tabs.scrollLeft || right > tabs.scrollLeft + tabs.clientWidth) && (tabs.scrollLeft = Math.max(0, left - 24));
+        }
         const nextChat = body.querySelector('.pi-chat');
         if ((nextChat && (nextChat.scrollTop = chatAtEnd || chatScroll == null ? nextChat.scrollHeight : chatScroll), compose)) {
             const box = body.querySelector(compose.sel);
@@ -311,7 +329,8 @@ export function createApp({ data, runtime, version }) {
         const current2 = data.index().projects.find((item) => item.id === view.projectId),
             result = await openDialog({
                 title: '新项目',
-                html: `<label class="pi-field"><span>项目名（一条 if 线）</span><input class="pi-inp" data-f="name" placeholder="如：龙宫温养"></label>
+                html: `<label class="pi-field"><span>项目名</span><input class="pi-inp" data-f="name" placeholder="如：龙宫温养"></label>
+                <p class="pi-hint">一个项目保存一个故事的设定、人设、大纲和进度。每个聊天同时使用一个项目；当前聊天还没有项目时，会直接使用新项目。主线、支线都写在同一个项目的大纲里。</p>
                 ${groupField(current2 && current2.group ? current2.group : '')}
                 <label class="pi-check"><input type="checkbox" data-f="infinite"><span>无限流模式（主空间出发、世界库、污染）</span></label>`,
                 onMount: mountGroupField,
@@ -479,6 +498,7 @@ export function createApp({ data, runtime, version }) {
         handler && Promise.resolve(handler(view, target, event)).catch((error) => toast('error', error.message || String(error)));
     }
     function onInput(event) {
+        event.target.classList && event.target.classList.contains('pi-ta-auto') && growBox(event.target);
         if (event.target.dataset.psearch !== void 0) return ((view.search = event.target.value), applySearch());
         const handler = current().onInput;
         handler && handler(view, event.target, event);

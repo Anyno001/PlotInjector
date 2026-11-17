@@ -126,11 +126,8 @@ test('reference budget: kept in order, truncation reported honestly', () => {
   assert.equal(refs[0].text.length, 100);
   assert.match(refs[1].text, /以下 500 字因长度限制未附带/);
   assert.equal(refs.length, 2, 'C does not fit');
-  const line = extra.refsReportText(report, { total: 20000, kept: 12000 });
-  assert.match(line, /讨论记录（20000 字，只附了最近 12000 字）/);
-  assert.match(line, /A（100 字）/);
-  assert.match(line, /B（1000 字，只附了前 500 字）/);
-  assert.match(line, /C（50 字，超出预算未附带）/);
+  assert.equal(report.length, 3, 'every reference is reported, kept or not');
+  assert.deepEqual(report.map((r) => [r.title, r.chars, r.kept]), [['A', 100, 100], ['B', 1000, 500], ['C', 50, 0]], 'A kept whole, B cut, C not attached');
 });
 
 test('body-preset entry refers to section headers the projection actually emits', () => {

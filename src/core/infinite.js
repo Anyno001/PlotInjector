@@ -4,7 +4,6 @@ import { makeId } from './outline.js';
 // 项目侧 project.infinite 只放模板（骰池、造世界规范、写法条目前缀）；世界库随聊天存在 progress.infinite.worlds。
 // 所有函数返回新对象，不原地改。随机数由调用方传入 rng（默认 crypto 真随机）。
 export const INFINITE_SLOT = '@infinite';
-export const PHASES = ['train', 'world'];
 
 export const DEFAULT_POOLS = {
     horror: [

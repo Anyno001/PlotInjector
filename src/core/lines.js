@@ -56,7 +56,7 @@ export function lineEntryPlan(
         slots = sideSlots(lineStates, limit),
         unsynced = /* @__PURE__ */ new Set(),
         ok = (uid) => !known || known.has(uid) || (unsynced.add(uid), !1),
-        mainNow = paused ? null : lineStates.find((s) => s.line.kind === 'main' && s.state === '进行中') || null,
+        mainNow = paused || (clueProg && clueProg.mainPaused) ? null : lineStates.find((s) => s.line.kind === 'main' && s.state === '进行中') || null,
         mainUids = mainNow
             ? state.nodeStates
                   .filter((s) => s.node.uid && s.status === 'available' && !s.disabled && s.node.unit.line === mainNow.line)
@@ -93,9 +93,14 @@ export function lineEntryPlan(
     };
 }
 
+// 主线位置：同时只有一条主线「进行中」。暂停的主线不占位置（导入审阅总方案 H / GPT 审阅 R6）。
 export function mainSlotTaken(lineStates, id) {
-    let other = (lineStates || []).find((s) => s.line.kind === 'main' && s.line.id !== id && (s.state === '进行中' || s.state === '暂停'));
-    return other ? `主线 ${other.line.id} ${other.state === '暂停' ? '暂停中，还占着主线的位置' : '还在进行'}` : '';
+    let other = (lineStates || []).find((s) => s.line.kind === 'main' && s.line.id !== id && s.state === '进行中');
+    return other ? `主线 ${other.line.id} 还在进行` : '';
+}
+// 正在占着主线位置的那条（继续一条暂停的主线时，要先把它暂停）。
+export function mainInProgress(lineStates, id = '') {
+    return (lineStates || []).find((s) => s.line.kind === 'main' && s.line.id !== id && s.state === '进行中') || null;
 }
 
 export function catalogKnown(tables, scenePath) {

@@ -19,7 +19,6 @@ export const LLM_ROLES = [
 
 // 每个用途各存一套连接（同 v0.1.4）。接口预设只是存下来的连接，载入时复制进某个用途，之后互不影响。
 export const DEFAULT_LLM = { source: 'tavern', endpoint: '', apiKey: '', model: '', temperature: '' };
-export const DEFAULT_PRESET = { id: '', name: '', endpoint: '', apiKey: '', model: '', temperature: '' };
 const CONN_KEYS = ['endpoint', 'apiKey', 'model', 'temperature'];
 
 function pickConn(src) {
@@ -193,6 +192,7 @@ export function normalizeProject(value, id) {
         imports: Array.isArray(src.imports) ? src.imports.filter((x) => typeof x == 'string') : [],
         importAdopted: Array.isArray(src.importAdopted) ? src.importAdopted.filter((x) => typeof x == 'string') : [],
         genRefs: normalizeGenRefs(src.genRefs),
+        ...(src.secretNames && typeof src.secretNames == 'object' && !Array.isArray(src.secretNames) ? { secretNames: normalizeSecretNames(src.secretNames) } : {}),
         personas: normalizePersonas(src.personas),
         threads: { sideOn: !(src.threads && src.threads.sideOn === !1), worldOn: !(src.threads && src.threads.worldOn === !1) },
         mode: src.mode === 'infinite' ? 'infinite' : 'normal',
@@ -205,6 +205,22 @@ export function normalizeProject(value, id) {
 }
 
 // 设定、大纲页让 AI 写作时带的参考：讨论记录开关 + 世界书条目（规则与讨论页相同，见 core/refs.js）。
+// 保密名单（导入审阅总方案 R7）：按来源剧情线（卷 id）分开存，再导入 / 重新审阅一条线不覆盖别的线。
+// { 卷id: { names: [全名或别名…], confirmed: [确认过的短名…], denied: [确认不是的短名…] } }。没有这个字段 = 「未提供保密名单」。
+export function normalizeSecretNames(value) {
+    let list = (x) => (Array.isArray(x) ? [...new Set(x.map((n) => String(n || '').trim()).filter((n) => n.length >= 2))] : []);
+    return Object.fromEntries(
+        Object.entries(value || {})
+            .filter(([k, v]) => k && v && typeof v == 'object' && !Array.isArray(v))
+            .map(([k, v]) => [k, { names: list(v.names), confirmed: list(v.confirmed), denied: list(v.denied) }]),
+    );
+}
+// 项目检查时用的合并名单：所有线的全名、别名和确认过的短名。返回 null 表示一条线都没有提供名单。
+export function projectSecretNames(project) {
+    let all = project && project.secretNames && typeof project.secretNames == 'object' ? Object.values(project.secretNames) : [];
+    return all.length ? [...new Set(all.flatMap((x) => [...(x.names || []), ...(x.confirmed || [])]))] : null;
+}
+
 export function normalizeGenRefs(value) {
     const src = value && typeof value === 'object' ? value : {};
     const memo = Number(src.memo);
@@ -283,10 +299,6 @@ export function groupProjects(projects) {
     return [...groups.entries()]
         .sort(([a], [b]) => (a === '' ? -1 : b === '' ? 1 : a.localeCompare(b, 'zh')))
         .map(([name, items]) => ({ name, items }));
-}
-
-export function byteLength(text) {
-    return new TextEncoder().encode(String(text)).length;
 }
 
 export function formatBytes(bytes) {

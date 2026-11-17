@@ -224,7 +224,7 @@ export function auditHtml(a, what = '线索内容') {
     if (!a) return '<p class="pi-hint">最终请求核验：本次打开后还没有正文请求。</p>';
     let head = `最终请求核验（${time(a.at)}，请求约 ${a.chars} 字）：`;
     return !a.leaks.length && !a.duplicated
-        ? `<p class="pi-hint">${head}<span class="pi-badge is-ok">未发现不该出现的剧情</span>${a.projectionCount === 1 ? ` · ${what}出现 1 次` : ''}</p>`
+        ? `<p class="pi-hint">${head}<span class="pi-badge is-ok">未发现不该出现的剧情</span>${a.projectionCount === 1 ? `，${what}出现 1 次` : ''}</p>`
         : `<p class="pi-hint is-warn">${head}${a.duplicated ? `${what}出现 ${a.projectionCount} 次（重复注入）。` : ''}${a.leaks.length ? `发现 ${a.leaks.length} 处不该出现的剧情：` : ''}</p>${
               a.leaks.length
                   ? `<ul class="pi-clue-why">${a.leaks

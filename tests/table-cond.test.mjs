@@ -227,7 +227,10 @@ test('tableCatalogText: carries current values and the relevant note lines (form
   assert.doesNotMatch(cat, /随便写点什么/);
   assert.doesNotMatch(cat, /很长的说明/);
   assert.match(cat, /档位: \[敌视, 陌生, 友好, 亲密, 相恋\]/);
-  assert.match(cat, /取: 彼得/);
+  assert.match(cat, /取: 主角名/);
+  // 实测 2026-11-17：读不到真实的多人格子时，AI 照抄了示例样例 → 没有真实内容就不写样例
+  assert.match(cat, /\*\*没有\*\*这样的真实内容时，不写样例/);
+  assert.doesNotMatch(cat, /艾莉丝:室友, 取: 艾莉丝/, 'no copyable fake sample in the rule');
 });
 
 // ---------- 执行页：读不出来的开启条件给「改成人工开启」 ----------

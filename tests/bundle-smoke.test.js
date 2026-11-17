@@ -496,7 +496,7 @@ test('世界书管理：token 统计、修复关键词标点、批量选择后�
     await tick(10);
     doc.querySelector('[data-act="open-book"]').click();
     await tick(30);
-    assert.match(doc.querySelector('.pi-wb-tokens').textContent, /开启 6 · 全部/);
+    assert.match(doc.querySelector('.pi-wb-tokens').textContent, /开启 6，全部/);
 
     doc.querySelector('[data-act="book-more"]').click();
     await tick(10);
@@ -670,8 +670,11 @@ test('讨论页附带参考：世界书只显示条数；默认带手写条目�
     const doc = host.win.document;
     doc.querySelector('[data-act="tab"][data-tab="discuss"]').click();
     await tick(30);
+    assert.match(doc.querySelector('.pi-dc-refs').textContent, /世界书 12 条/, '收起时顶栏写出开着的参考');
+    doc.querySelector('[data-act="refs-toggle"]').click();
+    await tick(30);
     assert.match(doc.querySelector('[data-act="ref-wb"]').textContent, /世界书 12 条/);
-    assert.equal(doc.querySelectorAll('.pi-refs .pi-chip').length, 7, '顶栏不逐条列出条目（人格、改大纲及五项参考）');
+    assert.equal(doc.querySelectorAll('.pi-dc-refs-open .pi-chip').length, 6, '展开后不逐条列出条目（人格及五项参考）');
     doc.querySelector('[data-compose]').value = '接下来第三章怎么走';
     doc.querySelector('[data-act="send"]').click();
     await tick(40);
@@ -704,16 +707,21 @@ test('不走讨论直接写大纲：大纲页选世界书「全选」后，全�
     const doc = host.win.document;
     doc.querySelector('[data-act="tab"][data-tab="outline"]').click();
     await tick(30);
-    assert.ok(doc.querySelector('[data-act="gen-talk"]').disabled, '没有讨论记录时讨论参考不可点');
-    doc.querySelector('[data-act="gen-wb"]').click();
-    await tick(30);
-    doc.querySelector('.pi-dialog [data-ref-every="1"]').click();
-    doc.querySelector('.pi-dialog .pi-dlg-acts .is-primary').click();
-    await tick(30);
-    assert.match(doc.querySelector('[data-act="gen-wb"]').textContent, /世界书 14 条/);
+    // 第三批：参考在「AI 写新剧情线」的弹框里选
+    assert.equal(doc.querySelector('.pi-body [data-act="gen-wb"]'), null, '大纲页顶部不再放参考');
     doc.querySelector('[data-act="ai-volume"]').click();
     await tick(20);
-    doc.querySelector('.pi-dialog .pi-dlg-acts .is-primary').click();
+    const write = doc.querySelector('.pi-dialog');
+    assert.ok(write.querySelector('[data-act="gen-talk"]').disabled, '没有讨论记录时讨论参考不可点');
+    write.querySelector('[data-act="gen-wb"]').click();
+    await tick(30);
+    const picker = [...doc.querySelectorAll('.pi-dialog')].pop();
+    picker.querySelector('[data-ref-every="1"]').click();
+    picker.querySelector('.pi-dlg-acts .is-primary').click();
+    await tick(30);
+    assert.ok(write.isConnected, '写作弹框还在');
+    assert.match(write.querySelector('[data-act="gen-wb"]').textContent, /世界书 14 条/);
+    write.querySelector('.pi-dlg-acts .is-primary').click();
     await tick(40);
     const user = host.llmCalls.at(-1)[1].content;
     assert.match(user, /【世界书参考】/);

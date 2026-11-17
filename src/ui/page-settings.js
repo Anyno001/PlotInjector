@@ -1,4 +1,4 @@
-import { resolveGuide, GUIDE_PRESETS, BUILTIN_GUIDE } from '../core/guide.js';
+import { resolveGuide, GUIDE_PRESETS } from '../core/guide.js';
 
 import { bodyGuideText, BODY_GUIDE, PACES, PACE_TEXT, paceText } from '../core/inject.js';
 
@@ -98,7 +98,7 @@ function paceRow(view, s) {
     const pace = PACES.some((item) => item.value === st(view).pace) ? st(view).pace : current || 'normal';
     const pick = PACES.map((item) => ({
         value: item.value,
-        label: `${item.label}${item.value === current ? '（当前聊天使用）' : ''}${s.paceText[item.value] ? '·已改' : ''}`,
+        label: `${item.label}${item.value === current ? '（当前聊天使用）' : ''}${s.paceText[item.value] ? '（已改）' : ''}`,
     }));
     return `<div class="pi-set-row"><span>推进速度说明</span>${changed.length ? `<span class="pi-badge">已修改 ${changed.join('、')}</span>` : ''}<span class="pi-spacer"></span>
             <button type="button" class="pi-btn is-sm is-ghost" data-act="pace-toggle">${open ? '收起' : '编辑'}</button></div>

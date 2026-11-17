@@ -42,8 +42,8 @@ function varChoices(item) {
 
 function previewHtml(plan) {
     const issues = plan.issues.map(issue => `<p class="pi-hint is-warn">${esc(issue.title)}：${esc(issue.text)}</p>`).join('');
-    const lines = plan.lines.map(line => `<div class="pi-wb-hit"><span class="pi-wb-title">${esc(line.group ? `${line.group} · ` : '')}${esc(line.name)}</span>
-        <span class="pi-meta">${line.mode === 'fame' ? '读声望' : line.mode === 'check' ? '条件检测' : '手动'} · ${line.stages.length} 阶段</span></div>`).join('');
+    const lines = plan.lines.map(line => `<div class="pi-wb-hit"><span class="pi-wb-title">${esc(line.group ? `${line.group}：` : '')}${esc(line.name)}</span>
+        <span class="pi-meta">${line.mode === 'fame' ? '读声望' : line.mode === 'check' ? '条件检测' : '手动'}，${line.stages.length} 阶段</span></div>`).join('');
     const vars = plan.vars.filter(item => item.kind !== 'num').map(item => `<div class="pi-wb-hit"><span class="pi-wb-title" title="${esc(item.path)}">${esc(item.name)}</span>
         <select class="pi-sel" data-pi-kind="${esc(item.path)}">${options(varChoices(item), item.kind === 'fixed' ? `fix:${item.pick}` : 'line')}</select></div>`).join('');
     return `${issues}

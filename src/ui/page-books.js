@@ -85,7 +85,7 @@ function section(name, entries, empty, bulk, openKey, picked, advOpen) {
 function tokenText(s) {
     if (!s.tokens) return '<span class="pi-meta">统计中…</span>';
     const mark = s.tokens.exact ? '' : '≈';
-    return `<span class="pi-meta">开启 ${mark}${s.tokens.on} · 全部 ${mark}${s.tokens.all} token</span>`;
+    return `<span class="pi-meta">开启 ${mark}${s.tokens.on}，全部 ${mark}${s.tokens.all} token</span>`;
 }
 
 // 工具条：小图标 + 短名横排成一行色块，次要操作收进「更多」。
@@ -646,7 +646,7 @@ export const actions = {
             const text = box.querySelector('[data-f="text"]').value;
             const globals = worldInfoMatchSettings();
             const result = triggerTest(entries, text, tk, globals);
-            const body = group('常驻', result.constant, () => '') + group('关键词命中', result.keyword, item => `${esc(item.matched.join('、'))} · `);
+            const body = group('常驻', result.constant, () => '') + group('关键词命中', result.keyword, item => `${esc(item.matched.join('、'))}：`);
             box.querySelector('[data-f="result"]').innerHTML = `${body || '<p class="pi-hint">没有命中的条目</p>'}
                 <p class="pi-meta">合计 ${result.tokens.total} token（常驻 ${result.tokens.constant}，关键词 ${result.tokens.keyword}）</p>
                 <p class="pi-meta">未计算递归、概率、分组与扫描深度</p>${globals.known ? '' : '<p class="pi-meta">未读到酒馆全局匹配设置，按不区分大小写、不全词匹配计算</p>'}`;

@@ -82,14 +82,16 @@ test('line draft prompt: identity table, only-these lines, line rules, main line
 });
 
 // ---------- 按线合并 ----------
-test('merge by line: the same line from two parts is merged inside itself; different lines never merge; line fields: first kept, conflicts reported', () => {
+test('merge by line: the same line from two parts is merged inside itself; different lines never merge; line fields: first kept, rewrite summarised in one note', () => {
   const a = vol('S01', { 简介: '前一段' }), b = { ...vol('S01', { 简介: '后一段', 入口提示: '由头' }), stages: [{ id: 'x', key: '阶段2_后来', data: { 主线节点: [{ id: 's01_late', 名称: '后来', 入口: '去', 发现: [{ 事实: 'F_late', 内容: 'x' }], 完成条件: { 事实: 'F_late' } }] } }] };
   const out = C.mergeImportByLine([a, vol('S02'), b]);
   assert.deepEqual(out.map((v) => v.line.编号), ['S01', 'S02']);
   assert.deepEqual(out[0].stages.map((s) => s.key), ['阶段1_经过', '阶段2_后来']);
   assert.equal(out[0].line.简介, '前一段');
   assert.equal(out[0].line.入口提示, '由头', 'empty fields filled');
-  assert.ok(out.conflicts.some((c) => c.field === '简介'));
+  assert.ok(!out.conflicts.some((c) => c.field === '简介'), 'a rewritten head field is not listed one by one');
+  assert.deepEqual(out.conflicts.map((c) => [c.line, c.rewrite]), [['S01', 1]], 'one summary note for the line');
+  assert.match(C.importConflictText(out.conflicts[0]), /线 S01 跨了几段，后面的段把前面已经写过的内容又写了一遍（1 处），以前一段为准/);
   // same stage name in two different lines is NOT merged
   assert.equal(out[1].stages.length, 1);
 });
@@ -116,20 +118,6 @@ test('droppedLineRefs: dropping a line that another kept line waits on is report
   assert.match(r[0], /S10.*要等 S08，但 S08 不要了/);
 });
 
-// ---------- 按意见修改 ----------
-test('revise: prompt carries only the targets with comments; reply is filtered to target ids; change text says what changed', () => {
-  const m = C.lineReviseMessages({ targets: [{ id: 'S03', yaml: 'yaml', comment: '改成巴基主动来找' }], context: '- S04「护送」' });
-  assert.match(m[0].content, /只改列出的这几条/);
-  assert.match(m[1].content, /【要改的线 S03】\n意见：改成巴基主动来找/);
-  assert.match(m[1].content, /其他线（只读）/);
-  const { got, missing } = C.pickRevised([vol('S03', { 开启条件: { 线: 'M1 == 完成' } }), vol('S99')], ['S03', 'S04']);
-  assert.deepEqual(Object.keys(got), ['S03']);
-  assert.deepEqual(missing, ['S04']);
-  const t = C.lineChangeText(vol('S03'), vol('S03', { 开启条件: { 线: 'M1 == 完成' } }, 2));
-  assert.match(t.join('；'), /开启：（无） → \{线:M1 == 完成\}/);
-  assert.match(t.join('；'), /内容：1 个阶段 · 1 个场景 → 2 个阶段 · 2 个场景/);
-});
-
 // ---------- UI：批量导入 → 审阅页 → 采用 ----------
 const SRC = ['# 支线方案', '## 支线总览', '| 1 | 景点 | 独立 |', ...[1, 2, 3, 4].map((n) => [`## ${n} 支线${n}`, ...Array.from({ length: 30 }, () => `第${n}条支线的经过。`.repeat(8))].join('\n\n'))].join('\n\n');
 const IDX = '```yaml\n梗概: x\n支线:\n  - {编号: S01, 名称: 景点, 文档里的序号: "1", 本段有经过: true}\n  - {编号: S02, 名称: 搬家, 文档里的序号: "2", 本段有经过: true}\n  - {编号: S03, 名称: 影院, 文档里的序号: "3", 本段有经过: true}\n  - {编号: S04, 名称: 护送, 文档里的序号: "4", 关系: 默认在 3 之后, 本段有经过: true}\n事实:\n  - {编号: F_a, 内容: x, 性质: 实物}\n```';
@@ -151,57 +139,76 @@ async function boot(vols = []) {
 }
 const blur = async (doc, el, value) => { el.value = value; el.dispatchEvent(new doc.defaultView.FocusEvent('focusout', { bubbles: true })); await tick(); };
 
-test('UI: bulk side import → one page per line → comment saved → 不要这条 warns dependents → revise only commented → adopt all kept, ids avoid existing', async () => {
+// ---- 第二批 b：「好几条支线」导入用统一审阅页（外层选线，内层翻页）----
+const rvWait = async (doc) => { for (let i = 0; i < 80 && !doc.querySelector('.pi-rv'); i++) await tick(); assert.ok(doc.querySelector('.pi-rv'), 'review page shown'); };
+const nextLine = async (doc) => { doc.querySelector('.pi-rv-line [title="下一条"]').click(); await tick(); await tick(); };
+const curLine = (doc) => doc.querySelector('.pi-rv-lname b').textContent;
+const gotoLine = async (doc, id) => { for (let i = 0; i < 20; i++) { const prev = doc.querySelector('.pi-rv-line [title="上一条"]'); if (!prev || prev.disabled) break; prev.click(); await tick(); await tick(); } for (let i = 0; i < 20 && !curLine(doc).startsWith(id); i++) await nextLine(doc); assert.ok(curLine(doc).startsWith(id), `on ${id}`); };
+const dlg = async (doc, label) => { for (let i = 0; i < 40 && ![...doc.querySelectorAll('.pi-dialog .pi-btn, .pi-dialog .pi-menu-item')].length; i++) await tick(); const d = [...doc.querySelectorAll('.pi-dialog')].pop(); assert.ok(d, `dialog for ${label}`); const t = d.textContent; const b = [...d.querySelectorAll('.pi-btn, .pi-menu-item')].find((x) => x.textContent.trim() === label || x.dataset.dlgValue === label); assert.ok(b, `button ${label} in: ${t}`); b.click(); await tick(); await tick(); return t; };
+const lineJob = (inst, pid) => inst.data.imports.get(inst.data.project(pid).imports.at(-1));
+const volOf = (job, id) => Object.keys(job.review.lineIds).find((k) => job.review.lineIds[k] === id);
+
+test('UI: bulk side import → one page per line → comment saved → 本次不导入 warns dependents → only commented pages are sent → save all kept, ids avoid existing', async () => {
   const main = { id: 'vM', key: '剧情_M1_主线', line: { 编号: 'M1', 类型: '主线' }, stages: [{ id: 'sm', key: '阶段1_调查', data: { 主线节点: [{ id: 'm1', 名称: 'm1', 入口: '去', 发现: [{ 事实: 'Fm', 内容: 'x' }], 完成条件: { 事实: 'Fm' } }] } }] };
   const { host, inst, doc, click, pid } = await boot([main, vol('S01')]);
   let revised = 0;
   host.llm.reply = undefined;
   host.llm.respond = (body) => {
     if (/整理作者索引/.test(body)) return IDX;
-    if (/按意见修改这几条/.test(body)) { revised++; assert.ok(/要改的线 S02/.test(body) && !/要改的线 S03/.test(body), 'only commented lines are sent'); return linesYaml(['S02']).replace('S02的简介', 'S02改过的简介'); }
+    const unit = /【单位：([^】\s]+\/line)】/.exec(body);
+    if (unit && /按意见修改|带一句作者意见/.test(body)) {
+      revised++;
+      const units = [...body.matchAll(/【单位：([^】\s]+)】(?!」)/g)].map((m) => m[1]).filter((k) => k !== 'v1/s5');
+      assert.deepEqual([...new Set(units)], [unit[1]], 'only the commented page is sent');
+      return `【单位：${unit[1]}】\n\`\`\`yaml\n线:\n  编号: S02\n  类型: 支线\n  简介: S02改过的简介\n  入口提示: 巴基打来电话\n\`\`\``;
+    }
     const only = /这一次\*\*只写\*\* ([S0-9、]+) 这几条/.exec(body);
     return linesYaml(only ? only[1].split('、') : ['S01']);
   };
   await click('[data-act="import-open-panel"]');
   doc.querySelector('[data-imp-text]').value = SRC;
-  const mode = doc.querySelector('[data-imp-mode]'); mode.value = 'lines';
+  doc.querySelector('[data-imp-mode]').value = 'lines';
   await click('[data-act="import-start"]');
-  for (let i = 0; i < 60 && !doc.querySelector('.pi-lr'); i++) await tick();
-  assert.ok(doc.querySelector('.pi-lr'), 'review page opened after the run');
-  assert.match(doc.querySelector('.pi-lr h3').textContent, /导入的支线 · 4 条/);
-  assert.match(doc.querySelector('.pi-lr').textContent, /1 \/ 4/);
-  // 写意见（失焦保存）
-  await click('[data-act="lr-go"][data-dir="1"]');
-  assert.match(doc.querySelector('.pi-lr-item b').textContent, /S02/);
-  await blur(doc, doc.querySelector('[data-lr-comment]'), '改成巴基主动来找');
-  assert.match(doc.querySelector('[data-lr-saved]').textContent, /已保存/);
-  // 直接改字段
-  await blur(doc, doc.querySelector('[data-lr-field="入口提示"]'), '巴基打来电话');
-  // 第三条不要了 → 第四条（要等 S03）提示
-  await click('[data-act="lr-go"][data-dir="1"]');
-  await click('[data-act="lr-drop"]');
-  await click('[data-act="lr-go"][data-dir="1"]');
-  assert.match(doc.querySelector('.pi-lr').textContent, /S04.*要等 S03，但 S03 不要了/);
-  // 按意见修改：只发 S02
-  await click('[data-act="lr-revise"]');
-  for (let i = 0; i < 30 && !revised; i++) await tick();
+  await rvWait(doc);
+  assert.match(doc.querySelector('.pi-rv h3').textContent, /导入的支线/);
+  assert.match(doc.querySelector('.pi-rv-state').textContent, /导入的支线 4 条，4 条待保存/);
+  assert.match(doc.querySelector('.pi-rv-lname').textContent, /S01[\s\S]*1 \/ 4/);
+  // S02：线页写意见、直接改入口
+  await nextLine(doc);
+  assert.match(curLine(doc), /S02/);
+  await blur(doc, doc.querySelector('[data-rv-comment]'), '改成巴基主动来找');
+  await blur(doc, doc.querySelector('[data-rv-line="入口提示"]'), '巴基打来电话');
+  // S03 本次不导入 → S04（要等 S03）提示
+  await nextLine(doc);
+  await click('[data-act="rv-line-menu"]');
+  await dlg(doc, 'drop');
+  assert.match(doc.querySelector('.pi-rv').textContent, /本次不导入/);
+  await nextLine(doc);
+  assert.match(doc.querySelector('.pi-rv').textContent, /S04.*要等 S03，但 S03 不要了/);
+  // 发送意见：只发 S02 的线页
+  await click('[data-act="rv-preview"]');
+  await dlg(doc, '发送');
+  for (let i = 0; i < 40 && !revised; i++) await tick();
+  for (let i = 0; i < 10 && inst.__view.busy[`review:${pid}`]; i++) await tick();
   await tick();
   assert.equal(revised, 1);
-  const job = inst.data.imports.get(Object.values(inst.data.project(pid).imports)[0]);
-  assert.equal(job.lineReview.items.S02.vol.line.简介, 'S02改过的简介');
-  assert.equal(job.lineReview.items.S02.comment, '');
-  assert.equal(job.lineReview.items.S02.lastComment, '改成巴基主动来找');
-  // 采用：S03 不要了；S01 和已有的撞号 → 换号
-  const toasts = []; for (const k of ['info', 'success', 'warning', 'error']) host.w.toastr[k] = (m) => toasts.push(`${k}:${m}`);
-  await click('[data-act="lr-adopt"]');
-  const dlg = doc.querySelector('.pi-dialog .pi-btn.is-danger, .pi-dialog .pi-btn.is-primary'); dlg && dlg.click(); await tick();
+  let job = lineJob(inst, pid);
+  const s02 = job.review.draft.find((v) => v.id === volOf(job, 'S02'));
+  assert.equal(s02.line.简介, 'S02改过的简介');
+  assert.equal(job.review.comments[`${s02.id}/line`] || '', '', 'sent comment cleared');
+  // 保存：S03 不导入；S01 和已有的撞号 → 换号
+  const hist0 = (inst.data.project(pid).outline.history || []).length;
+  await click('[data-act="import-adopt"]');
+  await dlg(doc, '仍然保存');
+  assert.equal((inst.data.project(pid).outline.history || []).length, hist0 + 1, 'R1: saving records outline history first');
   const ids = [...inst.data.project(pid).outline.volumes.map((v) => v.line && v.line.编号)];
   assert.deepEqual(ids, ['M1', 'S01', 'S05', 'S02', 'S04'], 'S01 clashes → S05 (S03 is dropped but still referenced, so it is not reused)');
-  assert.ok(!ids.includes('S03'), 'dropped line not adopted');
   const outline = JSON.stringify(inst.data.project(pid).outline);
   assert.ok(!outline.includes('原文出处'), 'author-only fields stay out');
-  // 再点一次采用：不重复
-  await click('[data-act="tab"][data-tab="outline"]');
+  assert.equal(inst.data.project(pid).outline.volumes[3].line.入口提示, '巴基打来电话');
+  // 再保存一次：已保存的不重复写
+  await click('[data-act="import-adopt"]');
+  assert.equal(inst.data.project(pid).outline.volumes.length, 5);
   await inst.destroy();
 });
 
@@ -219,29 +226,9 @@ test('UI: bulk side import — a call that leaves out a line gets one retry for 
   doc.querySelector('[data-imp-text]').value = SRC;
   doc.querySelector('[data-imp-mode]').value = 'lines';
   await click('[data-act="import-start"]');
-  for (let i = 0; i < 60 && !doc.querySelector('.pi-lr'); i++) await tick();
+  await rvWait(doc);
   assert.ok(asked.includes('S02,S03'), `the missing two were asked for again: ${asked.join(' | ')}`);
-  assert.match(doc.querySelector('.pi-lr h3').textContent, /4 条/);
-  await inst.destroy();
-});
-
-test('UI: outline page 剧情线… edits an adopted line directly; revise by comment shows a preview and applies on confirm', async () => {
-  const { host, inst, doc, click, pid } = await boot([vol('S01'), vol('S02')]);
-  await click('[data-act="lines-open"]');
-  assert.match(doc.querySelector('.pi-lr').textContent, /1 \/ 2/);
-  assert.equal(doc.querySelector('[data-act="lr-drop"]'), null, 'no 不要这条 for adopted lines');
-  await blur(doc, doc.querySelector('[data-lr-field="简介"]'), '新的简介');
-  assert.equal(inst.data.project(pid).outline.volumes[0].line.简介, '新的简介', 'saved into the project');
-  await blur(doc, doc.querySelector('[data-lr-comment]'), '加一个阶段');
-  host.llm.reply = undefined;
-  host.llm.respond = () => '```yaml\n剧情_S01_标题S01:\n  线: {编号: S01, 类型: 支线, 简介: 新的简介}\n  阶段1_经过:\n    主线节点:\n      - {id: s01_n0, 名称: S01场景0, 入口: 去S01, 发现: [{事实: F_S01_0, 内容: x}], 完成条件: {事实: F_S01_0}}\n  阶段2_后来:\n    主线节点:\n      - {id: s01_n1, 名称: 后来, 入口: 去, 发现: [{事实: F_S01_1, 内容: y}], 完成条件: {事实: F_S01_1}}\n```';
-  await click('[data-act="lr-revise"]');
-  for (let i = 0; i < 30 && !doc.querySelector('.pi-dialog'); i++) await tick();
-  assert.match(doc.querySelector('.pi-dialog').textContent, /S01：内容：1 个阶段 · 1 个场景 → 2 个阶段 · 2 个场景/);
-  doc.querySelector('.pi-dialog .pi-btn.is-primary').click(); await tick(); await tick();
-  assert.equal(inst.data.project(pid).outline.volumes[0].stages.length, 2);
-  assert.equal(inst.data.project(pid).outline.volumes[0].id, 'vS01', 'volume id kept');
-  assert.match(doc.querySelector('.pi-lr').textContent, /已改过/);
+  assert.match(doc.querySelector('.pi-rv-state').textContent, /4 条/);
   await inst.destroy();
 });
 
@@ -259,52 +246,31 @@ async function openJob(inst, doc, click, pid, items) {
   inst.data.updateProject(pid, (p) => ({ ...p, imports: [...p.imports || [], job.id] }));
   await click('[data-act="import-open-panel"]');
   await click(`[data-act="import-open"][data-id="${job.id}"]`);
-  await click('[data-act="import-lines-review"]');
-  assert.ok(doc.querySelector('.pi-lr'), 'review page open');
+  await rvWait(doc);
   return job.id;
 }
 const confirmAll = async (doc) => { const b = doc.querySelector('.pi-dialog .pi-btn.is-danger, .pi-dialog .pi-btn.is-primary'); b && b.click(); await tick(); };
 
-test('UI: adopt S01 alone (it clashes and is renumbered), reopen, adopt S03 that waits on S01 → it waits on the adopted line; the adopted item is read-only (GPT 代码审阅 R4)', async () => {
+test('UI: save S01 alone (it clashes and is renumbered), then S03 that waits on S01 → it waits on the saved line; the saved line is read-only (GPT 代码审阅 R4)', async () => {
   const { inst, doc, click, pid } = await boot([vol('S01'), vol('S02')]);
   await openJob(inst, doc, click, pid, [vol('S01'), vol('S03', { 开启条件: { 线: 'S01 == 完成' } })]);
-  // S03 not yet: drop it, adopt only S01
-  await click('[data-act="lr-go"][data-dir="1"]');
-  await click('[data-act="lr-drop"]');
-  await click('[data-act="lr-adopt"]'); await confirmAll(doc);
+  // S03 先不导入，只保存 S01
+  await gotoLine(doc, 'S03');
+  await click('[data-act="rv-line-menu"]'); await dlg(doc, 'drop');
+  await click('[data-act="import-adopt"]'); await dlg(doc, '保存');
   const ids = () => [...inst.data.project(pid).outline.volumes.map((v) => v.line.编号)];
   assert.deepEqual(ids(), ['S01', 'S02', 'S04'], 'S01 clashes → S04 (S03 is the batch\'s own id)');
-  // reopen the same job: 剧情线 panel closed after adopting; the import panel shows the job card again
-  await click('[data-act="import-open-panel"]');
-  doc.querySelector('[data-act="import-lines-review"]') || await click('[data-act="import-open"]');
-  await click('[data-act="import-lines-review"]');
-  assert.match(doc.querySelector('.pi-lr').textContent, /已采用为 S04/, 'the adopted item says where it went');
-  assert.equal(doc.querySelector('[data-lr-field]'), null, 'and cannot be edited here');
-  await click('[data-act="lr-go"][data-dir="1"]');
-  await click('[data-act="lr-drop"]'); // 还是要这条
-  await click('[data-act="lr-adopt"]'); await confirmAll(doc);
+  // 留在审阅页：S01 标已保存、不能再改
+  await gotoLine(doc, 'S01');
+  assert.match(doc.querySelector('.pi-rv').textContent, /已经保存到大纲（S04）/);
+  assert.ok(!doc.querySelector('[data-act="rv-line-menu"]'), 'no drop / redraft on a saved line');
+  // S03 撤回不导入，再保存
+  await gotoLine(doc, 'S03');
+  await click('[data-act="rv-line-menu"]'); await dlg(doc, 'undrop');
+  await click('[data-act="import-adopt"]'); await dlg(doc, '保存');
   const vols = inst.data.project(pid).outline.volumes;
   assert.deepEqual(ids(), ['S01', 'S02', 'S04', 'S03']);
-  assert.equal(vols[3].line.开启条件.线, 'S04 == 完成', 'waits on the line adopted earlier, not the project\'s own S01');
-  await inst.destroy();
-});
-
-test('UI: revise by comment — a comment written while the request is out is kept and not shown as done; the result goes back to the job it came from (GPT 代码审阅 R10)', async () => {
-  const { host, inst, doc, click, pid } = await boot([]);
-  const jobId = await openJob(inst, doc, click, pid, [vol('S01'), vol('S02')]);
-  await blur(doc, doc.querySelector('[data-lr-comment]'), '旧意见');
-  let release;
-  host.llm.reply = undefined;
-  host.llm.respond = () => new Promise((r) => { release = () => r(linesYaml(['S01']).replace('S01的简介', '改过的')); });
-  const p = click('[data-act="lr-revise"]');
-  for (let i = 0; i < 30 && !release; i++) await tick();
-  // while waiting: the comment box still works
-  await blur(doc, doc.querySelector('[data-lr-comment]'), '等待期间写下的新意见');
-  release(); await p; for (let i = 0; i < 10; i++) await tick();
-  const it = inst.data.imports.get(jobId).lineReview.items.S01;
-  assert.equal(it.vol.line.简介, '改过的');
-  assert.equal(it.comment, '等待期间写下的新意见', 'the new comment is kept');
-  assert.equal(it.lastComment, '旧意见', 'lastComment is the one actually sent');
+  assert.equal(vols[3].line.开启条件.线, 'S04 == 完成', 'waits on the line saved earlier, not the project\'s own S01');
   await inst.destroy();
 });
 
@@ -340,8 +306,9 @@ test('UI (R2): the review page shows the deadlock on S07 instead of "no problems
   const { inst, doc, click, pid } = await boot([]);
   const s07 = { id: 'v7', key: '剧情_S07_扣具', line: { 编号: 'S07', 类型: '支线' }, stages: [{ id: 's7', key: '阶段1_扣具样件', data: { 进入条件: { 事实: 'F_ava_needs' }, 主线节点: [{ id: 's07_needs', 名称: '听需求', 入口: '去', 发现: [{ 事实: 'F_ava_needs', 内容: '四项需求' }], 完成条件: { 事实: 'F_ava_needs' } }] } }] };
   await openJob(inst, doc, click, pid, [s07, vol('S08')]);
-  assert.match(doc.querySelector('.pi-lr').textContent, /这条线走不通/);
-  assert.match(doc.querySelector('.pi-lr').textContent, /1 条需要看一下/);
+  assert.match(doc.querySelector('.pi-rv').textContent, /这条线走不通/);
+  await click('[data-act="rv-lines"]');
+  assert.match([...doc.querySelectorAll('.pi-dialog .pi-menu-item')][0].textContent, /S07[\s\S]*问题/, 'the line list marks S07 as having problems');
   await inst.destroy();
 });
 
@@ -376,4 +343,102 @@ test('inventedOpenIssue: a 线 condition needs the document to mention that line
   assert.match(gate.text, /文档写的是：可以与别的故事穿插.*请核对原文/);
   // a main line the document names is backed
   assert.equal(C.inventedOpenIssue(v('S20', { 线: 'M1 == 完成' }), [{ 编号: 'S20', 关系: '遗留物主线结束后' }], mains), null);
+});
+
+// GPT 代码审阅第 2 点（DeepSeek 实测 S07 名下是 S02 的阶段）：重复内容写出双方的线和阶段，两边都能「重新整理」；只重写那一条
+test('UI: bulk side import — a stage copied into another line is reported with both lines; 重新整理 rewrites only the chosen line', async () => {
+  const { host, inst, doc, click, pid } = await boot([]);
+  let redraft = 0;
+  host.llm.reply = undefined;
+  host.llm.respond = (body) => {
+    if (/整理作者索引/.test(body)) return IDX;
+    const only = /这一次\*\*只写\*\* ([S0-9、]+) 这几条/.exec(body), ids = only ? only[1].split('、') : ['S01'];
+    if (ids.length === 1 && ids[0] === 'S03' && body.includes('s02_a')) {
+      // 重新整理时：别的线已写好的内容作为「已经写出」给了 AI → 这次写对
+      redraft++;
+      return linesYaml(['S03']);
+    }
+    // 第一次：S03 名下抄了 S02 的阶段（同样的节点 id）
+    return linesYaml(ids).replace(/s03_a/g, 's02_a').replace(/S03场景/g, 'S02场景');
+  };
+  await click('[data-act="import-open-panel"]');
+  doc.querySelector('[data-imp-text]').value = SRC;
+  doc.querySelector('[data-imp-mode]').value = 'lines';
+  await click('[data-act="import-start"]');
+  await rvWait(doc);
+  await gotoLine(doc, 'S02');
+  const text = doc.querySelector('.pi-rv').textContent;
+  assert.match(text, /同时出现在 S02「阶段1 经过」和 S03「阶段1 经过」/);
+  assert.match(text, /s02_a/);
+  assert.ok(doc.querySelector('[data-act="rv-redraft"][data-line="S02"]') && doc.querySelector('[data-act="rv-redraft"][data-line="S03"]'), 'both sides offered');
+  const job0 = lineJob(inst, pid);
+  const s02 = JSON.stringify(job0.review.draft.find((v) => v.id === volOf(job0, 'S02'))), volId = volOf(job0, 'S03');
+  const calls = host.llmCalls.length;
+  await click('[data-act="rv-redraft"][data-line="S03"]');
+  for (let i = 0; i < 40 && !redraft; i++) await tick();
+  for (let i = 0; i < 10 && inst.__view.busy[`review:${pid}`]; i++) await tick();
+  await tick();
+  const job = lineJob(inst, pid);
+  assert.ok(host.llmCalls.length > calls && host.llmCalls.slice(calls).every((c) => /只写\*\* S03 这几条/.test(c.body)), 'only S03 is asked for');
+  const s03 = job.review.draft.find((v) => v.id === volId);
+  assert.match(JSON.stringify(s03), /s03_a/);
+  assert.equal(s03.line.编号, 'S03');
+  assert.match(JSON.stringify(job.review.prev[volId]), /s02_a/, 'previous draft kept for comparison');
+  assert.equal(JSON.stringify(job.review.draft.find((v) => v.id === volOf(job, 'S02'))), s02, 'other line untouched');
+  assert.match(curLine(doc), /S03/, 'jumps to the rewritten line');
+  assert.doesNotMatch(doc.querySelector('.pi-rv').textContent, /同时出现在/);
+  await inst.destroy();
+});
+
+// 第二批 b：旧任务的逐条审阅数据（改稿、意见、不导入、重新整理前的内容）原样迁进统一审阅页，不从原始整理结果重建
+test('migration: an old multi-line job keeps reviewed edits, per-line comments, drops and the pre-redraft copy in the new review page', async () => {
+  const { inst, doc, click, pid } = await boot([]);
+  const edited = vol('S01', { 简介: '审过改过的简介' }), orig = vol('S02'), prev = vol('S02', { 简介: '重新整理前' });
+  const job = await inst.data.imports.create({ projectId: pid, text: 'x', mode: 'lines', needs: '' });
+  await inst.data.imports.update(job.id, (j) => ({ ...j, step: 'review', drafts: { 0: { list: [{ volumes: [vol('S01'), vol('S02'), vol('S03')] }] } }, lineReview: { order: ['S01', 'S02', 'S03'], conflicts: ['线 S02：简介 两段写得不一样'], items: { S01: { vol: edited, comment: '入口写具体', lastComment: '', changed: ['简介'] }, S02: { vol: orig, comment: '', prev }, S03: { vol: vol('S03'), comment: '', dropped: true } } } }));
+  inst.data.updateProject(pid, (p) => ({ ...p, imports: [...(p.imports || []), job.id] }));
+  await click('[data-act="import-open-panel"]');
+  await click(`[data-act="import-open"][data-id="${job.id}"]`);
+  await rvWait(doc);
+  const r = lineJob(inst, pid).review;
+  assert.equal(r.lines, true);
+  assert.equal(r.draft.find((v) => v.id === volOf({ review: r }, 'S01')).line.简介, '审过改过的简介', 'reviewed edit kept, not rebuilt from drafts');
+  assert.equal(r.comments[`${volOf({ review: r }, 'S01')}/line`], '入口写具体', 'per-line comment moved onto the line page');
+  assert.equal(JSON.stringify(r.dropped), JSON.stringify([volOf({ review: r }, 'S03')]));
+  assert.match(JSON.stringify(r.prev), /重新整理前/);
+  assert.match(doc.querySelector('.pi-rv').textContent, /整理时的提示（1）/, 'merge conflicts shown');
+  assert.match(doc.querySelector('[data-act="rv-preview"]').textContent, /发送意见（1 页）/);
+  await gotoLine(doc, 'S03');
+  assert.match(doc.querySelector('.pi-rv').textContent, /本次不导入/);
+  assert.match(doc.querySelector('.pi-rv-lname').textContent, /不导入/);
+  await inst.destroy();
+});
+
+// 「按表格条件」开始（用户 2026-11-16）：表、行、列从当前数据库选，填值；显示这一格现在的值；保存到大纲是干净的开启条件
+test('table start condition: pick table / row / column from the database, type a value, see the current value; saving writes {表: 表/行/列 op 值} without review-only marks', async () => {
+  const { inst, doc, click, pid } = await boot([]);
+  await openJob(inst, doc, click, pid, [vol('S01')]);
+  const pick = async (sel, value) => { const el = doc.querySelector(sel); assert.ok(el, `missing ${sel}`); el.value = value; el.dispatchEvent(new doc.defaultView.Event('input', { bubbles: true })); await tick(); await tick(); };
+  const radio = doc.querySelector('[data-rv-when="table"]');
+  assert.ok(radio, '按表格条件 offered');
+  radio.checked = true; radio.dispatchEvent(new doc.defaultView.Event('input', { bubbles: true })); await tick(); await tick();
+  assert.ok(doc.querySelector('select[data-rv-tbl="table"]'), 'table select shown');
+  assert.match(doc.querySelector('select[data-rv-tbl="table"]').textContent, /重要角色表/);
+  await pick('select[data-rv-tbl="table"]', '重要角色表');
+  assert.match(doc.querySelector('select[data-rv-tbl="row"]').textContent, /巴基/);
+  assert.match(doc.querySelector('select[data-rv-tbl="col"]').textContent, /阶段/);
+  await pick('select[data-rv-tbl="row"]', '巴基');
+  await pick('select[data-rv-tbl="col"]', '阶段');
+  await pick('select[data-rv-tbl="op"]', '>=');
+  await blur(doc, doc.querySelector('input[data-rv-tbl="value"]'), '2');
+  const r = lineJob(inst, pid).review;
+  assert.equal(JSON.stringify(r.draft[0].line.开启条件), JSON.stringify({ 表: '重要角色表/巴基/阶段 >= 2' }));
+  assert.match(doc.querySelector('.pi-rv-tbl').textContent, /现在：1/, 'shows the current cell value');
+  assert.equal(doc.querySelector('.pi-rv-tbl .pi-badge.is-warn').textContent, '未满足', 'and a 未满足 pill');
+  assert.ok(doc.querySelector('[data-rv-when="table"]').checked, 'stays on the table option');
+  await click('[data-act="import-adopt"]'); await dlg(doc, '保存');
+  const saved = inst.data.project(pid).outline.volumes[0].line;
+  assert.equal(JSON.stringify(saved.开启条件), JSON.stringify({ 表: '重要角色表/巴基/阶段 >= 2' }));
+  assert.ok(!('开始方式表格' in saved) && !('表格条件草稿' in saved) && !('开始时机已选' in saved), 'no review-only marks in the outline');
+  await inst.destroy();
 });

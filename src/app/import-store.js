@@ -16,7 +16,7 @@ export function createImportStore({ read = readJsonFile, write = writeJsonFile, 
             next = prev.catch(() => {}).then(fn);
         return (queues.set(name, next), next.finally(() => queues.get(name) === next && queues.delete(name)));
     }
-    async function create({ projectId, text, mode, needs }) {
+    async function create({ projectId, text, mode, needs, kind = '' }) {
         let id = makeId('imp'),
             job = {
                 version: 1,
@@ -24,6 +24,7 @@ export function createImportStore({ read = readJsonFile, write = writeJsonFile, 
                 projectId,
                 createdAt: Date.now(),
                 mode,
+                ...(kind ? { kind } : {}),
                 needs: String(needs || ''),
                 chars: String(text || '').length,
                 step: 'split',

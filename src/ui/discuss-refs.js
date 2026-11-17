@@ -281,17 +281,3 @@ export function fitRefs(refs, limit = 24e3) {
     }
     return { refs: used, report };
 }
-
-export function refsReportText(report, talk) {
-    let parts = report.map((r) =>
-        r.kept === r.chars
-            ? `${r.title}（${r.chars} 字）`
-            : r.kept
-              ? `${r.title}（${r.chars} 字，只附了前 ${r.kept} 字）`
-              : `${r.title}（${r.chars} 字，超出预算未附带）`,
-    );
-    return (
-        talk && parts.unshift(`讨论记录（${talk.total} 字${talk.total > talk.kept ? `，只附了最近 ${talk.kept} 字` : ''}）`),
-        parts.length ? `本次附带的材料：${parts.join('、')}` : '本次没有附带讨论记录和参考资料'
-    );
-}

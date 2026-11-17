@@ -47,7 +47,7 @@ test('the discussion prompt follows the chosen guide: opener and section title a
 
 test('generic guide: key rules present (language, secrets in <仅作者> and never lost, plain words in discussion, edit-mode handoff)', () => {
   const g = G.GENERIC_GUIDE;
-  for (const s of ['客观、清楚的现代书面语', '不用口语腔', '不用古白话腔', '只在专名和器物上用当时的叫法', '<仅作者>', '用户讲过的秘密不能丢', '不用插件内部的叫法', '插件会附上改动提案的格式和规则', '只复制公开部分，删去整段 <仅作者>…</仅作者>']) assert.ok(g.includes(s), s);
+  for (const s of ['客观、清楚的现代书面语', '不用口语腔', '不用古白话腔', '只在专名和器物上用当时的叫法', '<仅作者>', '用户讲过的秘密不能丢', '不用插件内部的叫法', '审阅修改', '只复制公开部分，删去整段 <仅作者>…</仅作者>']) assert.ok(g.includes(s), s);
 });
 
 test('generic guide output format still parses into blocks the setting page can edit', () => {

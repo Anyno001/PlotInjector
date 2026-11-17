@@ -149,6 +149,7 @@ test('15.3: the final confirm lists outcomes computed NOW (fact confirmed while 
 test('15.2-3: same chat, database switched to another branch between preview and confirm → nothing written', async () => {
   const { host, inst, doc } = await setup();
   host.db.setTables(liveTables(buildTemplate({ controlRow: ['主线', ''], factRows: [{ code: 'F_box', label: 'a' }], knowRows: [] }))); await tick();
+  (() => { const t = doc.querySelector('[data-act="run-set-toggle"][aria-expanded="false"]'); t && t.click(); })(); await tick();
   doc.querySelector('[data-act="clue-prebuild"]').click(); await tick();
   const dlg = doc.querySelector('.pi-dialog');
   dlg.querySelectorAll('[data-pb-label]').forEach((el, i) => { el.value = `标签${i}`; });
@@ -162,6 +163,7 @@ test('15.2-3 (P2): a previewed row that is already present again at confirm is s
   const { host, inst, doc } = await setup();
   const t = liveTables(buildTemplate({ controlRow: ['主线', ''], factRows: [{ code: 'F_box', label: 'a' }], knowRows: [] }));
   host.db.setTables(t); await tick();
+  (() => { const t = doc.querySelector('[data-act="run-set-toggle"][aria-expanded="false"]'); t && t.click(); })(); await tick();
   doc.querySelector('[data-act="clue-prebuild"]').click(); await tick();
   const dlg = doc.querySelector('.pi-dialog');
   dlg.querySelectorAll('[data-pb-label]').forEach((el, i) => { el.value = `标签${i}`; });

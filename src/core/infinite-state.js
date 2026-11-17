@@ -8,12 +8,6 @@ import { hubWordNames, resolveHub } from './infinite.js';
 // 注入器只读主空间那一栏，读到「出发」词时开副本，读到「返回」词时关副本。纯函数，不改入参。
 // 所有函数的 config 参数是 project.infinite.config（或其中的主空间部分），缺省用默认配置。
 
-// 四个状态的显示名（按配置算出）：每组词的第一个。顺序固定为 hub、depart、away、back。
-export function trainStates(config) {
-    const names = hubWordNames(config);
-    return [names.hub, names.depart, names.away, names.back];
-}
-
 // 正文 AI 会自由发挥，所以读得宽松：
 // - 标签：容许空格、属性、全角尖括号，缺了收尾标签就读到全文末尾
 // - 栏名：配置里的栏名都认；找不到栏名就读整块（去掉污染那一行）

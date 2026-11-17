@@ -7,6 +7,9 @@ export const NODE_FIELDS = [
     { field: '支线事件', kind: 'side', prefix: 's', label: '支线' },
     { field: '世界动态', kind: 'world', prefix: 'w', label: '世界动态' },
 ];
+// 节点分类的叫法：线索推进里「主线节点」叫「剧情节点」、「支线事件」叫「可选事件」（和主线 / 支线这两种剧情线区分开）。键名不变。
+export const CLUE_NODE_WORDS = { main: '剧情节点', side: '可选事件', world: '世界动态' };
+export const nodeWord = (meta, clue = false) => (clue ? CLUE_NODE_WORDS[meta.kind] || meta.label : meta.label);
 const STAGE_HINT_KEYS = ['时间范围', 'AI指令', '主线节点', '支线事件', '世界动态', '状态变化'];
 
 // 状态变化：本阶段结束时人物关系、认知、信息差比之前变了什么。阶段演完后累积起来接在设定后面注入，覆盖设定里的开局状态。
@@ -110,7 +113,21 @@ export function volumeLabel(key) {
     const { short, title } = splitVolumeKey(key);
     return title ? `${short}·${title}` : short;
 }
+// 界面上显示的卷名（用户 2026-11-16：界面不用「·」）。注入正文、提示词里仍用 volumeLabel，保持和旧版逐字一致。
+export function volumeName(key) {
+    const { short, title } = splitVolumeKey(key);
+    return title ? `${short} ${title}` : short;
+}
 
+// 线的显示名（线索推进，实测 2026-11-17：几次导入都叫「卷1」，执行页分不清）：有编号时用编号代替「卷N」，
+// 「剧情_卷1_旧码头的账本」+ M1 → 「M1 旧码头的账本」；卷名里已经是编号的不重复。没有编号（按阶段推进）照旧。
+export function volumeShowName(volume) {
+    const key = volume && volume.key,
+        id = volume && isPlainObject(volume.line) ? String(volume.line.编号 || '').trim() : '';
+    if (!id) return volumeName(key);
+    const { short, title } = splitVolumeKey(key);
+    return short === id || /^卷/.test(short) ? `${id}${title ? ` ${title}` : ''}` : `${id} ${volumeName(key)}`;
+}
 // 阶段二_腺图与封咒 → { short: 阶段二, title: 腺图与封咒 }
 export function splitStageKey(key) {
     const text = String(key || '');
@@ -272,10 +289,6 @@ export function restoreOutline(text, current = [], idOf = makeId) {
         return { ...row.volume, id, stages };
     });
     return { volumes, alias };
-}
-
-export function volumesFromHistory(text, current = [], idOf = makeId) {
-    return restoreOutline(text, current, idOf).volumes;
 }
 
 // 大纲换过以后当前阶段不在了：取原来位置上（按全书顺序）最接近的阶段；原阶段还在或无从判断时返回 null。

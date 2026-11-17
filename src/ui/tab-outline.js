@@ -1,4 +1,3 @@
-import { lrActions, renderLineReview, lrOnChange } from './line-review.js';
 import {
     tableCondReport,
     clueIndexText,
@@ -7,6 +6,7 @@ import {
     restoreHistory,
     clueProgressText,
     historyGuard,
+    discoveryList,
 } from '../core/clue-project.js';
 import {
     tableCatalogText,
@@ -23,8 +23,15 @@ import { acuApi } from '../app/clue-runtime.js';
 import { cloneTables } from '../core/clue-tables.js';
 import { prepareLabels } from './clue-run.js';
 
-import { CLUE_STAGE_KEYS, reidConflicts, isClueMode } from '../core/clue-model.js';
-import { renderImport, importActions } from './long-import.js';
+import { CLUE_STAGE_KEYS, reidConflicts, isClueMode, normalizeClue } from '../core/clue-model.js';
+import { putVolume, prepareCommit, commitOutline, draftDiffers, targetStamp } from '../core/review-draft.js';
+import { renderImport, importActions, importJobOf } from './long-import.js';
+// 讨论页「打开审阅」用（经这里转一下，免得讨论页直接引 long-import 造成模块加载顺序问题）
+export { openEditReview, showEditReview } from './long-import.js';
+import { openEditReview, showEditReview } from './long-import.js';
+import { reviewOnInput } from './import-review.js';
+import { projectClueIssues, importJobKind } from '../core/long-import.js';
+import { projectSecretNames } from '../core/store.js';
 
 import { settingPiecesFromEntries, afterImport, classifyEntries, pickWorldbookEntries } from './wb-import.js';
 import { stringifyYaml, parseYaml } from '../core/yaml.js';
@@ -32,12 +39,13 @@ import { ctx, downloadBlob, toast } from '../host/st.js';
 
 import { resolveRefs, progressText, fitRefs } from './discuss-refs.js';
 
-import { compileClue, parseCondition } from '../core/clue-rules.js';
+import { compileClue, parseCondition, conditionRefs, isRequired } from '../core/clue-rules.js';
 
 import {
     isPlainObject,
     CHANGE_FIELD,
     NODE_FIELDS,
+    nodeWord,
     changeLines,
     flattenUnits,
     mainNodeNames,
@@ -55,7 +63,8 @@ import {
     stageLabel,
     stageNodes,
     stageToText,
-    volumeLabel,
+    volumeName,
+    volumeShowName,
     volumeToText,
 } from '../core/outline.js';
 
@@ -123,11 +132,61 @@ function historyHtml(project, at) {
         ${chosen ? `<pre class="pi-pre">${esc(chosen.text)}</pre>` : ''}</div>`;
 }
 
-function checkHtml(project) {
-    const issues = outlineIssues(project.outline.volumes);
-    if (!issues.length) return '<div class="pi-card"><h3>大纲检查</h3><p class="pi-hint">没有发现问题。</p></div>';
-    return `<div class="pi-card"><h3>大纲检查<span class="pi-meta">${issues.length} 项</span></h3>
-        ${issues.map((item) => `<button type="button" class="pi-titem is-issue" data-act="issue-go" data-id="${esc(item.stageId || item.volumeId)}"><span class="pi-pname">${esc(item.text)}</span></button>`).join('')}</div>`;
+// 叫法（导入审阅总方案第三节 I）：线索推进里「卷」叫「剧情线」，阶段推进照旧叫「卷」。YAML 键名不变。
+// p：项目或 view（取 view.project()）。
+export function vq(p, outline, clue) {
+    let project = p && typeof p.project === 'function' ? p.project() : p;
+    return project && isClueMode(project) ? clue : outline;
+}
+
+// 大纲检查。线索推进的项目：用和导入审阅同一套人话检查（走不通的地方、替代途径、拿不到的线索、保密名字），
+// 每条可以点，跳到那个阶段；按阶段推进的项目：原来的格式检查（时间范围、主线节点、重名）。
+// 审阅修改里有几条线改了还没保存（读审阅修改任务的草稿，不调 AI）
+function editDraftCount(view, project) {
+    let job = (project.imports || []).map((id) => view.data.imports.get(id)).find((j) => j && importJobKind(j) === 'edit' && j.review && Array.isArray(j.review.draft));
+    if (!job) return 0;
+    return job.review.draft.filter((v) => {
+        let b = (job.review.base || []).find((x) => x.id === v.id),
+            live = project.outline.volumes.find((x) => x.id === v.id);
+        return b && live && draftDiffers([b], [v]) && draftDiffers([live], [v]);
+    }).length;
+}
+// 检查按钮上的数字：要处理的问题数（大纲没变就用上次算的结果）
+const checkCache = new WeakMap();
+function checkErrorCount(view, project) {
+    let key = project.outline.volumes,
+        hit = checkCache.get(key);
+    if (hit !== void 0) return hit;
+    let n = 0;
+    try {
+        let clue = isClueMode(project);
+        n = clue ? projectClueIssues(project.outline.volumes, { secrets: projectSecretNames(project) }).filter((x) => x.level === 'error').length : 0;
+    } catch {}
+    return (checkCache.set(key, n), n);
+}
+function checkHtml(view, project) {
+    const clue = isClueMode(project),
+        current = clue && view.runtime.activeId() === view.projectId ? view.runtime.clue.compute() : null,
+        { known, claimed } = chatFactSets(current),
+        base = outlineIssues(project.outline.volumes).filter((x) => !clue || x.kind !== 'no-time'),
+        more = clue ? projectClueIssues(project.outline.volumes, { secrets: projectSecretNames(project), knownFacts: known, claimedFacts: claimed }) : [],
+        errs = more.filter((x) => x.level === 'error'),
+        asks = more.filter((x) => x.level !== 'error'),
+        total = base.length + more.length,
+        idOf = (x) => x.stageId || (x.stageIds && x.stageIds[0]) || x.volumeId || '',
+        row = (x) => {
+            let id = idOf(x),
+                body = `<span class="pi-pname">${esc(x.plain || x.text)}</span>${x.fix ? `<span class="pi-hint pi-check-fix">怎么改：${esc(x.fix)}</span>` : ''}`;
+            return id
+                ? `<button type="button" class="pi-titem is-issue pi-check-item" data-act="issue-go" data-id="${esc(id)}">${body}</button>`
+                : `<div class="pi-titem is-issue pi-check-item">${body}</div>`;
+        };
+    if (!total) return `<div class="pi-card"><h3>大纲检查</h3><p class="pi-hint">没有发现问题。${clue ? '（按线索推进检查了：走不走得通、拿不拿得到线索、替代途径。）' : ''}</p></div>`;
+    return `<div class="pi-card"><h3>大纲检查<span class="pi-meta">${total} 项</span></h3>
+        ${clue ? '<p class="pi-hint">点一条跳到那个阶段。想让 AI 改：点「审阅修改…」，在那条线的页上写意见。</p>' : ''}
+        ${errs.length ? `<div class="pi-rv-sec">要处理的问题（${errs.length}）</div>${errs.map(row).join('')}` : ''}
+        ${base.length ? `${clue ? `<div class="pi-rv-sec">格式（${base.length}）</div>` : ''}${base.map(row).join('')}` : ''}
+        ${asks.length ? `<details><summary class="pi-hint">另有 ${asks.length} 项需确认</summary>${asks.map(row).join('')}</details>` : ''}</div>`;
 }
 
 function overviewHtml(view, project) {
@@ -135,10 +194,10 @@ function overviewHtml(view, project) {
     const units = flattenUnits(project.outline.volumes);
     const live = runtime.activeId() === project.id;
     const states = live ? unitStates(units, runtime.progress()) : {};
-    if (!units.length) return '<div class="pi-card"><p class="pi-hint">还没有卷。</p></div>';
+    if (!units.length) return `<div class="pi-card"><p class="pi-hint">还没有${vq(project, '卷', '剧情线')}。</p></div>`;
     return project.outline.volumes
         .map(
-            (volume) => `<div class="pi-card"><h3>${esc(volumeLabel(volume.key))}</h3>
+            (volume) => `<div class="pi-card"><h3>${esc(volumeShowName(volume))}</h3>
         ${
             volume.stages
                 .map((stage) => {
@@ -168,10 +227,10 @@ function treeHtml(project, sel) {
             .map(
                 (
                     volume,
-                ) => `<button type="button" class="pi-titem is-vol${volume.id === sel ? ' is-sel' : ''}" data-act="sel" data-id="${esc(volume.id)}"><span class="pi-pname">${esc(volumeLabel(volume.key))}</span></button>
+                ) => `<button type="button" class="pi-titem is-vol${volume.id === sel ? ' is-sel' : ''}" data-act="sel" data-id="${esc(volume.id)}"><span class="pi-pname">${esc(volumeShowName(volume))}</span></button>
         ${volume.stages.map((stage) => `<button type="button" class="pi-titem is-stage${stage.id === sel ? ' is-sel' : ''}" data-act="sel" data-id="${esc(stage.id)}"><span class="pi-pname">${esc(stageLabel(stage.key))}</span></button>`).join('')}`,
             )
-            .join('') || '<p class="pi-hint">还没有卷。</p>'
+            .join('') || `<p class="pi-hint">还没有${vq(project, '卷', '剧情线')}。</p>`
     );
 }
 
@@ -224,6 +283,20 @@ function playValue(key, raw) {
     return text;
 }
 
+// 节点的基本字段（第四批，用户 2026-11-16）：名称、地点并排；线索推进时「必需」是名称旁边的小标签，点一下切换必需 / 可选。
+// 其余字段照旧；线索推进时事件、偏转、触发收进下面的「更多」（clueNodeFields 里），不常用。
+function nodeBasics(meta, index, value, keys, clueOn) {
+    let input = (key, ph = '') => `<input class="pi-inp" data-node-field="${esc(meta.field)}" data-i="${index}" data-k="${esc(key)}" value="${esc(value[key] ?? '')}"${ph ? ` placeholder="${esc(ph)}"` : ''}>`,
+        area = (key) => `<textarea class="pi-ta pi-ta-auto" rows="2" data-node-field="${esc(meta.field)}" data-i="${index}" data-k="${esc(key)}">${esc(value[key] ?? '')}</textarea>`,
+        req = isRequired({ item: value, kind: meta.kind }),
+        pill = clueOn && meta.kind !== 'world' ? `<button type="button" class="pi-req${req ? ' is-on' : ''}" data-act="node-req" data-field="${esc(meta.field)}" data-i="${index}" title="点一下切换">${req ? '必需' : '可选'}</button>` : '',
+        later = clueOn ? new Set(['事件', '偏转', '触发']) : new Set(),
+        pairKeys = keys.includes('名称') && keys.includes('地点') ? ['名称', '地点'] : [],
+        rest = keys.filter((k) => !pairKeys.includes(k) && !later.has(k));
+    return `${pairKeys.length ? `<div class="pi-pair2"><label class="pi-field"><span class="pi-namehd">名称${pill}</span>${input('名称')}</label><label class="pi-field"><span>地点</span>${input('地点', '可写多个')}</label></div>` : ''}
+        ${rest.map((key) => `<label class="pi-field"><span>${esc(key)}</span>${LONG_KEYS.has(key) ? area(key) : input(key)}</label>`).join('')}`;
+}
+
 function nodeEditor(stage, meta, clueOn = false) {
     const list = Array.isArray(stage.data[meta.field]) ? stage.data[meta.field] : [],
         items = list
@@ -233,20 +306,40 @@ function nodeEditor(stage, meta, clueOn = false) {
                     keys = [.../* @__PURE__ */ new Set([...NODE_KEYS[meta.kind], ...Object.keys(value)])].filter(
                         (key) => !play.includes(key) && key !== 'id' && !CLUE_TEXT_KEYS.includes(key) && !CLUE_YAML_KEYS.includes(key),
                     );
-                return `<div class="pi-node"><div class="pi-node-hd"><span class="pi-badge">${esc(meta.label)} ${index + 1}</span><span class="pi-grow"></span>
+                return `<div class="pi-node"><div class="pi-node-hd"><span class="pi-badge">${esc(nodeWord(meta, clueOn))} ${index + 1}</span><span class="pi-grow"></span>
             <button type="button" class="pi-icon-btn" data-act="node-menu" data-field="${esc(meta.field)}" data-i="${index}" data-last="${index < list.length - 1 ? '' : '1'}" title="更多">${ICONS.more}</button></div>
-            ${keys.map((key) => `<label class="pi-field"><span>${esc(key)}</span>${LONG_KEYS.has(key) ? `<textarea class="pi-ta" rows="2" data-node-field="${esc(meta.field)}" data-i="${index}" data-k="${esc(key)}">${esc(value[key] ?? '')}</textarea>` : `<input class="pi-inp" data-node-field="${esc(meta.field)}" data-i="${index}" data-k="${esc(key)}" value="${esc(value[key] ?? '')}">`}</label>`).join('')}
+            ${nodeBasics(meta, index, value, keys, clueOn)}
             ${playEditor(meta, value, index)}${clueOn ? clueNodeFields(meta, index, value) : ''}</div>`;
             })
             .join('');
-    return `<div class="pi-card"><h3>${esc(meta.field)}<span class="pi-spacer"></span><button type="button" class="pi-btn is-sm" data-act="node-add" data-field="${esc(meta.field)}" data-kind="${meta.kind}">添加</button></h3>
+    return `<div class="pi-card"><h3>${esc(clueOn ? nodeWord(meta, !0) : meta.field)}<span class="pi-spacer"></span><button type="button" class="pi-btn is-sm" data-act="node-add" data-field="${esc(meta.field)}" data-kind="${meta.kind}">添加</button></h3>
         ${items || '<p class="pi-hint">无</p>'}</div>`;
 }
 
 // 节点按 主线 / 支线 / 世界动态 分开看，一次只展开一类，避免一长串。
-function nodeTabs(stage, kind) {
+function nodeTabs(stage, kind, clueOn = false) {
     const count = (meta) => (Array.isArray(stage.data[meta.field]) ? stage.data[meta.field].length : 0);
-    return `<div class="pi-seg pi-node-seg">${NODE_FIELDS.map((meta) => `<button type="button" class="pi-seg-btn${meta.kind === kind ? ' is-sel' : ''}" data-act="node-kind" data-kind="${meta.kind}">${esc(meta.label)} ${count(meta)}</button>`).join('')}</div>`;
+    return `<div class="pi-seg pi-node-seg">${NODE_FIELDS.map((meta) => `<button type="button" class="pi-seg-btn${meta.kind === kind ? ' is-sel' : ''}" data-act="node-kind" data-kind="${meta.kind}">${esc(nodeWord(meta, clueOn))} ${count(meta)}</button>`).join('')}</div>`;
+}
+
+// 阶段的进入 / 结束条件（第四批）：都没写时收起，标题后一句摘要；写了内容的展开
+function condBrief(v) {
+    if (v == null || v === '') return '';
+    let errs = [],
+        c = parseCondition(v, errs);
+    return errs.length ? String(typeof v === 'string' ? v : JSON.stringify(v)).slice(0, 40) : condWordsShort(c);
+}
+function condWordsShort(c) {
+    let r = conditionRefs(c);
+    return [...r.facts].map((f) => `拿到 ${f}`).concat([...r.nodes].map((n) => `${n} 完成`), [...r.lines].map((l) => `${l} 完成`)).slice(0, 3).join('、') || '已写';
+}
+function stageCondFold(stage) {
+    let keys = ['进入条件', '结束条件'],
+        has = keys.filter((k) => stage.data[k] != null && stage.data[k] !== ''),
+        brief = has.length ? has.map((k) => `${k.slice(0, 2)}：${condBrief(stage.data[k])}`).join('；') : '都没写',
+        yamlOf = (k) => (stage.data[k] == null ? '' : typeof stage.data[k] === 'string' ? stage.data[k] : stringifyYaml(stage.data[k]).trim());
+    return `<details class="pi-fold"${has.length ? ' open' : ''}><summary><b>进入 / 结束条件</b><span>${esc(brief)}</span></summary>
+        ${keys.map((key) => `<label class="pi-field"><span>${key}</span><textarea class="pi-ta is-mono pi-ta-auto" rows="2" data-stage-yaml="${key}">${esc(yamlOf(key))}</textarea></label>`).join('')}<p class="pi-status" data-stage-yaml-status></p></details>`;
 }
 
 function stageEditor(volume, stage, raw, kind, clueOn = false) {
@@ -258,31 +351,32 @@ function stageEditor(volume, stage, raw, kind, clueOn = false) {
             ...CLUE_STAGE_KEYS,
         ]),
         extra = Object.keys(stage.data).filter((key) => !known.has(key)),
-        head = `<div class="pi-card"><h3>阶段<span class="pi-spacer"></span>${raw ? '' : '<button type="button" class="pi-btn is-primary is-sm" data-act="outline-save">保存</button>'}<button type="button" class="pi-icon-btn" data-act="stage-menu" title="更多">${ICONS.more}</button></h3>
-        <p class="pi-hint">所属：${esc(volumeLabel(volume.key))}</p>`;
+        // 第四批（用户 2026-11-16）：大纲编辑边输入边保存，去掉「保存」按钮，标题下一句说明
+        head = `<div class="pi-card"><h3>阶段<span class="pi-spacer"></span><button type="button" class="pi-icon-btn" data-act="stage-menu" title="更多">${ICONS.more}</button></h3>
+        <p class="pi-hint pi-ol-auto">${raw ? '改完点「应用」。' : '修改自动保存；条件填写后点别处生效。'}</p><p class="pi-hint">所属：${esc(volumeShowName(volume))}</p>`;
     return raw
         ? `${head}<textarea class="pi-ta is-mono is-tall" data-raw>${esc(stageToText(stage))}</textarea>
             <div class="pi-tools is-c1 is-end"><button type="button" class="pi-btn is-primary is-sm" data-act="raw-apply">应用</button></div><p class="pi-status" data-raw-status></p></div>`
-        : `${head}<label class="pi-field"><span>阶段名（阶段N_标题）</span><input class="pi-inp" data-stage-key value="${esc(stage.key)}"></label>
-        <label class="pi-field"><span>时间范围（用来判断何时切到下一段）</span><input class="pi-inp" data-stage-field="时间范围" value="${esc(stage.data.时间范围 ?? '')}"></label>
-        <label class="pi-field"><span>AI指令</span><textarea class="pi-ta" rows="2" data-stage-field="AI指令">${esc(stage.data.AI指令 ?? '')}</textarea></label>
-        <label class="pi-field"><span>状态变化（每行一条，本阶段演完后接在设定后面注入）</span><textarea class="pi-ta" rows="2" data-stage-list="${CHANGE_FIELD}" placeholder="例：她察觉到 A 对她不只是兄弟情">${esc(
+        : `${head}<div class="pi-pair2"><label class="pi-field"><span>阶段名</span><input class="pi-inp" data-stage-key value="${esc(stage.key)}" placeholder="阶段N_标题"></label>
+        <label class="pi-field"><span>时间范围</span><input class="pi-inp" data-stage-field="时间范围" value="${esc(stage.data.时间范围 ?? '')}" placeholder="可空"></label></div>
+        <label class="pi-field"><span>AI指令</span><textarea class="pi-ta pi-ta-auto" rows="2" data-stage-field="AI指令" placeholder="可空">${esc(stage.data.AI指令 ?? '')}</textarea></label>
+        <label class="pi-field"><span>状态变化</span><textarea class="pi-ta pi-ta-auto" rows="2" data-stage-list="${CHANGE_FIELD}" placeholder="每行一条，本阶段演完后注入">${esc(
             changeLines(stage.data).join(`
 `),
         )}</textarea></label>
-        ${clueOn ? ['进入条件', '结束条件'].map((key) => `<label class="pi-field"><span>${key}</span><textarea class="pi-ta is-mono" data-stage-yaml="${key}">${esc(stage.data[key] == null ? '' : typeof stage.data[key] === 'string' ? stage.data[key] : stringifyYaml(stage.data[key]).trim())}</textarea></label>`).join('') + `<p class="pi-status" data-stage-yaml-status></p>` : ''}
+        ${clueOn ? stageCondFold(stage) : ''}
 ${extra.length ? `<p class="pi-hint">另有字段：${esc(extra.join('、'))}（在 YAML 原文里编辑）</p>` : ''}</div>
-        ${nodeTabs(stage, kind)}${nodeEditor(
+        ${nodeTabs(stage, kind, clueOn)}${nodeEditor(
             stage,
             NODE_FIELDS.find((meta) => meta.kind === kind),
             clueOn,
         )}`;
 }
 
-function volumeEditor(volume) {
-    return `<div class="pi-card"><h3>卷<span class="pi-spacer"></span><button type="button" class="pi-btn is-primary is-sm" data-act="outline-save">保存</button><button type="button" class="pi-icon-btn" data-act="vol-menu" title="更多">${ICONS.more}</button></h3>
+function volumeEditor(volume, project = null) {
+    return `<div class="pi-card"><h3>${vq(project, '卷', '剧情线')}<span class="pi-spacer"></span><button type="button" class="pi-btn is-sm" data-act="review-open" data-id="${esc(volume.id)}">审阅修改</button><button type="button" class="pi-icon-btn" data-act="vol-menu" title="更多">${ICONS.more}</button></h3>
         <div class="pi-tools is-c1"><button type="button" class="pi-btn is-sm" data-act="stage-add">＋新阶段</button></div>
-        <label class="pi-field"><span>卷名（剧情_卷X_标题）</span><input class="pi-inp" data-vol-key value="${esc(volume.key)}"></label>
+        <label class="pi-field"><span>${vq(project, '卷名（剧情_卷X_标题）', '剧情线名（YAML 里的顶层键，如 剧情_M1_标题）')}</span><input class="pi-inp" data-vol-key value="${esc(volume.key)}"></label>
         <p class="pi-hint">${volume.stages.length} 个阶段</p></div>`;
 }
 
@@ -292,7 +386,7 @@ function multiHtml(view, draft) {
     const good = draft.items.filter((item) => item.ok);
     const rows = draft.items
         .map((item, i) => {
-            const head = `<div class="pi-vrow"><span class="pi-grow">第 ${draft.volumeNo + i} 卷${item.ok && item.volumes[0] ? ` <b>${esc(volumeLabel(item.volumes[0].key))}</b>` : ''}</span>
+            const head = `<div class="pi-vrow"><span class="pi-grow">第 ${draft.volumeNo + i} ${vq(view, '卷', '条')}${item.ok && item.volumes[0] ? ` <b>${esc(volumeName(item.volumes[0].key))}</b>` : ''}</span>
             <span class="pi-meta">${item.ok ? '已解析' : '格式错误'}</span>
             <button type="button" class="pi-icon-btn" data-act="multi-menu" data-i="${i}" title="更多">${ICONS.more}</button></div>`;
             if (item.ok) return `<div class="pi-vitem">${head}</div>`;
@@ -313,11 +407,11 @@ function multiHtml(view, draft) {
             { isObtained: (id) => known.includes(id), obtainedFacts: known, claimedFacts: claimed },
         );
     }
-    return `<div class="pi-card"><h3>AI 写的大纲<span class="pi-meta">${good.length}/${draft.n} 卷</span></h3>
+    return `<div class="pi-card"><h3>AI 写的大纲<span class="pi-meta">${good.length}/${draft.n} ${vq(view, '卷', '条')}</span></h3>
         ${draft.scope ? '<p class="pi-hint">' + esc(draft.scope) + '</p>' : ''}
         ${isClueMode(view.project()) ? '<details><summary>线索结构检查（' + clueIssues.length + '）</summary>' + clueIssues.map((issue) => '<p class="pi-hint is-warn">' + esc(issue) + '</p>').join('') + '</details>' : ''}
         ${rows}
-        <div class="pi-tools is-c2 is-end"><button type="button" class="pi-btn is-primary is-sm" data-act="multi-append"${ready && !busy ? '' : ' disabled'}>${partial ? `追加已写完的 ${good.length} 卷` : '追加'}</button>
+        <div class="pi-tools is-c2 is-end"><button type="button" class="pi-btn is-primary is-sm" data-act="multi-append"${ready && !busy ? '' : ' disabled'}>${partial ? `追加已写完的 ${good.length} ${vq(view, '卷', '条')}` : '追加'}</button>
         <button type="button" class="pi-btn is-sm" data-act="multi-drop"${busy ? ' disabled' : ''}>丢弃</button></div></div>`;
 }
 
@@ -338,15 +432,15 @@ function draftHtml(view, draft) {
             draft.volumes
                 .map(
                     (volume) =>
-                        `<p class="pi-hint"><b>${esc(volumeLabel(volume.key))}</b>：${volume.stages.map((stage) => esc(stageLabel(stage.key))).join('、')}</p>`,
+                        `<p class="pi-hint"><b>${esc(volumeName(volume.key))}</b>：${volume.stages.map((stage) => esc(stageLabel(stage.key))).join('、')}</p>`,
                 )
                 .join('') +
             (draft.scope ? `<p class="pi-hint">${esc(draft.scope)}</p>` : '') +
             (conds.length
-                ? `<p class="pi-hint">读表格的条件：</p>${conds.map((x) => `<p class="pi-hint${x.level === 'ok' ? '' : ' is-warn'}">· ${esc(x.where)}：${esc(x.raw)}　现在：${esc(x.now || '（读不到）')}${x.level === 'ok' ? ' ✓' : ''}</p>`).join('')}`
+                ? `<p class="pi-hint">读表格的条件：</p>${conds.map((x) => `<p class="pi-hint${x.level === 'ok' ? '' : ' is-warn'}">${esc(x.where)}：${esc(x.raw)}　现在：${esc(x.now || '（读不到）')}${x.level === 'ok' ? ' ✓' : ''}</p>`).join('')}`
                 : '') +
             (issues.length
-                ? `<p class="pi-hint is-warn">线索结构检查（${issues.length}）：</p>${issues.map((i) => `<p class="pi-hint is-warn">· ${esc(i)}</p>`).join('')}`
+                ? `<p class="pi-hint is-warn">线索结构检查（${issues.length}）：</p>${issues.map((i) => `<p class="pi-hint is-warn">${esc(i)}</p>`).join('')}`
                 : draft.clue
                   ? '<p class="pi-hint">线索结构检查：没有发现问题。</p>'
                   : ''),
@@ -355,8 +449,8 @@ function draftHtml(view, draft) {
             ? '<button type="button" class="pi-btn is-primary is-sm" data-act="draft-stage">替换</button>'
             : draft.mode === 'rewrite'
               ? '<button type="button" class="pi-btn is-primary is-sm" data-act="draft-rest">替换剩余阶段</button>'
-              : `<button type="button" class="pi-btn is-primary is-sm" data-act="draft-new">${draft.volumes.length > 1 ? `全部追加 ${draft.volumes.length} 卷` : '存为新卷'}</button>
-           <button type="button" class="pi-btn is-sm" data-act="draft-replace">替换选中卷</button>
+              : `<button type="button" class="pi-btn is-primary is-sm" data-act="draft-new">${draft.volumes.length > 1 ? `全部追加 ${draft.volumes.length} ${vq(view, '卷', '条')}` : vq(view, '存为新卷', '存为新剧情线')}</button>
+           <button type="button" class="pi-btn is-sm" data-act="draft-replace">${vq(view, '替换选中卷', '替换选中的剧情线')}</button>
            <button type="button" class="pi-btn is-sm" data-act="draft-append">追加为新阶段</button>`;
     return `<div class="pi-card"><h3>${title}<span class="pi-badge is-ok">已解析</span></h3>${summary}
         <details><summary class="pi-hint">YAML 原文</summary><pre class="pi-pre">${esc(draft.yaml)}</pre></details>
@@ -377,7 +471,6 @@ function syncDraft(view, s) {
 }
 
 export function render(view) {
-    if (st(view).lineReview && st(view).lineReview === view.projectId) return renderLineReview(view);
     if (st(view).importing === view.projectId) return renderImport(view);
     const project = view.project(),
         s = st(view);
@@ -388,24 +481,27 @@ export function render(view) {
         editor = stage
             ? stageEditor(volume, stage, s.raw, kind, isClueMode(project))
             : volume
-              ? volumeEditor(volume)
-              : '<div class="pi-card"><p class="pi-hint">从左边选一卷或一个阶段编辑。</p></div>';
-    return `<div class="pi-card"><h3>大纲${isClueMode(project) && project.outline.volumes.some((v) => isPlainObject(v.line)) ? '<button type="button" class="pi-btn is-sm" data-act="lines-open">剧情线…</button>' : ''}<span class="pi-spacer"></span><button type="button" class="pi-icon-btn" data-act="outline-menu" title="更多">${ICONS.more}</button></h3>
-        <div class="pi-tools is-c4"><button type="button" class="pi-btn is-sm" data-act="import-open-panel">导入长文…</button>
-            <button type="button" class="pi-btn is-sm${s.check ? ' is-primary' : ''}" data-act="check-toggle">检查</button>
-            <button type="button" class="pi-btn is-sm${s.overview ? ' is-primary' : ''}" data-act="overview-toggle">总览</button>
-            <button type="button" class="pi-btn is-sm${s.history ? ' is-primary' : ''}" data-act="history">历史 ${project.outline.history.length}</button></div>
-        ${genRefsBar(view, 'outline')}
-        <div class="pi-tools is-c1">${s.multi && s.multi.projectId === view.projectId ? `<button type="button" class="pi-btn is-primary is-sm" data-act="multi-stop"><span class="pi-spin"></span>写作中 ${s.multi.k}/${s.multi.n}，点击停止</button>` : `<button type="button" class="pi-btn is-primary is-sm" data-act="ai-volume"${busy ? ' disabled' : ''}>${busy ? '<span class="pi-spin"></span>写作中' : `AI 写第 ${project.outline.volumes.length + 1} 卷`}</button>`}</div>
+              ? volumeEditor(volume, project)
+              : `<div class="pi-card"><p class="pi-hint">从左边选${vq(project, '一卷', '一条剧情线')}或一个阶段编辑。</p></div>`;
+    // 顶部（第三批，用户 2026-11-16 选 A）：「AI 写新剧情线」占一行；下面审阅修改、导入长文、检查三个等宽；总览、历史收进「⋯」；参考移进 AI 写的弹框
+    const writing = s.multi && s.multi.projectId === view.projectId,
+        hasVols = project.outline.volumes.length > 0,
+        dirtyN = hasVols ? editDraftCount(view, project) : 0,
+        errN = hasVols ? checkErrorCount(view, project) : 0;
+    return `<div class="pi-card"><h3>大纲<span class="pi-spacer"></span><button type="button" class="pi-icon-btn" data-act="outline-menu" title="更多">${ICONS.more}</button></h3>
+        ${writing ? `<button type="button" class="pi-btn is-primary pi-ol-write" data-act="multi-stop"><span class="pi-spin"></span>写作中 ${s.multi.k}/${s.multi.n}，点击停止</button>` : `<button type="button" class="pi-btn is-primary pi-ol-write" data-act="ai-volume"${busy ? ' disabled' : ''}>${busy ? '<span class="pi-spin"></span>写作中' : vq(project, `AI 写第 ${project.outline.volumes.length + 1} 卷`, 'AI 写新剧情线')}</button>`}
+        <div class="pi-ol-tools"><button type="button" class="pi-btn is-sm" data-act="review-open"${hasVols ? '' : ' disabled'} title="逐页查看各条线，在对应页写意见后一次发给 AI，确认后保存到大纲">审阅修改${dirtyN ? `<span class="pi-badge is-warn">${dirtyN}</span>` : ''}</button>
+            <button type="button" class="pi-btn is-sm" data-act="import-open-panel">导入长文</button>
+            <button type="button" class="pi-btn is-sm${s.check ? ' is-primary' : ''}" data-act="check-toggle">检查${errN ? `<span class="pi-badge is-warn">${errN}</span>` : ''}</button></div>
         </div>
         ${draftHtml(view, s.draft)}
-        ${s.check ? checkHtml(project) : ''}
+        ${s.check ? checkHtml(view, project) : ''}
         ${s.history ? historyHtml(project, s.historyAt) : ''}
         ${
             s.overview
                 ? overviewHtml(view, project)
                 : `<div class="pi-tree"><div class="pi-tree-list">${treeHtml(project, s.sel)}
-            <button type="button" class="pi-btn is-sm is-ghost is-block" data-act="vol-add">＋新卷</button></div>
+            <button type="button" class="pi-btn is-sm is-ghost is-block" data-act="vol-add">${vq(project, '＋新卷', '＋新剧情线')}</button></div>
             <div>${editor}</div></div>`
         }`;
 }
@@ -496,7 +592,7 @@ async function importTexts(view, texts) {
         }
     }
     if (added.length) addVolumes(view, added);
-    if (added.length) toast('success', `已导入 ${added.length} 卷。`);
+    if (added.length) toast('success', `已导入 ${added.length} ${vq(view, '卷', '条剧情线')}。`);
     view.renderBody();
     if (failed.length) {
         await openDialog({
@@ -578,7 +674,7 @@ export async function startRewrite(view) {
               )
             : -1;
     if (isClueMode(project) && clueCur && clueFrom < 0)
-        return (toast('info', '所有阶段都已结束，没有剩余阶段可以改写。要继续剧情，请用大纲页的「AI 写第 N 卷」另起新卷。'), void 0);
+        return (toast('info', '所有阶段都已结束，没有剩余阶段可以改写。要继续剧情，请用大纲页的「AI 写新剧情线」另起一条。'), void 0);
     let task = taskContext(view),
         from = isClueMode(project) ? Math.max(0, clueFrom) : Math.max(0, currentIndex(units, view.runtime.progress())),
         reason = await promptDialog({ title: '让 AI 改写后续阶段', label: '偏转说明（可空）：剧情哪里和大纲不一样了', multiline: !0 });
@@ -624,7 +720,7 @@ export async function startRewrite(view) {
 function applyRest(view, draft, guard = rewriteGuardNow(view, draft)) {
     let project = view.project(),
         unit = flattenUnits(project.outline.volumes).find((item) => item.id === draft.fromUnitId);
-    if (!unit) throw new Error('原来的阶段已不存在，改用「存为新卷」。');
+    if (!unit) throw new Error(`原来的阶段已不存在，改用「${vq(view, '存为新卷', '存为新剧情线')}」。`);
     let incoming = draft.volumes;
     guard &&
         (guard.keepDone.size || guard.reinsert.size) &&
@@ -648,12 +744,28 @@ const MAX_VOLUMES = 5;
 
 async function writeDialog(view) {
     const picked = await openDialog({
-        title: 'AI 写大纲',
-        html: `<label class="pi-field"><span>卷数</span><select class="pi-sel" data-wv-n>${options(
-            Array.from({ length: MAX_VOLUMES }, (_, i) => ({ value: i + 1, label: `${i + 1} 卷` })),
+        title: vq(view, 'AI 写新卷', 'AI 写新剧情线'),
+        html: `<label class="pi-field"><span>${vq(view, '卷数', '写几条')}</span><select class="pi-sel" data-wv-n>${options(
+            Array.from({ length: MAX_VOLUMES }, (_, i) => ({ value: i + 1, label: `${i + 1} ${vq(view, '卷', '条')}` })),
             1,
         )}</select></label>
-            <label class="pi-field"><span>整体要求（可空）</span><textarea class="pi-ta" rows="4" data-wv-request>${esc(st(view).request || '')}</textarea></label>`,
+            <label class="pi-field"><span>整体要求（可空）</span><textarea class="pi-ta" rows="4" data-wv-request>${esc(st(view).request || '')}</textarea></label>
+            <div class="pi-field"><span>参考</span>${genRefsBar(view, 'outline', () => {}, { label: !1 })}</div>`,
+        onMount: (root) => {
+            // 参考按钮在弹框里点：改了以后只重画这一块（不关弹框）
+            root.addEventListener('click', async (e) => {
+                let b = e.target.closest('[data-act="gen-talk"],[data-act="gen-wb"]');
+                if (!b) return;
+                e.stopPropagation();
+                await genActions[b.dataset.act](view);
+                // 世界书条数是异步算的：算好后再画一次这一块
+                let redraw = () => {
+                    let bar = root.isConnected && root.querySelector('.pi-refs');
+                    bar && (bar.outerHTML = genRefsBar(view, 'outline', redraw, { label: !1 }));
+                };
+                redraw();
+            }, true);
+        },
         actions: [
             { label: '取消', value: null },
             {
@@ -684,7 +796,7 @@ function volumeRequest({ project, talk, wb, material, extra = [], no, k, n, requ
         refs: wb,
         volumes,
         volumeNo: no,
-        request: n > 1 ? '共写 ' + n + ' 卷，这是第 ' + k + ' 卷。' + (request || '') : request,
+        request: n > 1 ? `共写 ${n} ${vq(project, '卷', '条剧情线')}，这是第 ${k} ${vq(project, '卷', '条')}。${request || ''}` : request,
         mode: isClueMode(project) ? 'clue' : 'outline',
         clueIndex: isClueMode(project) ? clueIndexText(volumes) : '',
         progress: material?.progress || '',
@@ -775,7 +887,7 @@ async function writeVolumes(view, n, request, onConfirmed = null) {
                     );
                 } catch (error) {
                     if (!controller.signal.aborted)
-                        toast('error', `第 ${k} 卷写作失败：${error.message}。已写好的 ${draft.items.length} 卷保留在草稿里。`);
+                        toast('error', `第 ${k} ${vq(view, '卷', '条')}写作失败：${error.message}。已写好的 ${draft.items.length} ${vq(view, '卷', '条')}保留在草稿里。`);
                     break;
                 }
                 if (controller.signal.aborted) break;
@@ -799,7 +911,34 @@ async function writeVolumes(view, n, request, onConfirmed = null) {
 export const actions = {
     ...genActions,
     ...importActions,
-    ...lrActions,
+    // 审阅修改（第二批，用户 2026-11-16）：大纲页顶部「审阅修改…」打开所有线（从选中的线或第一条开始）；选中一条线时的按钮直接打开这一条
+    async 'review-open'(view, target) {
+        const project = view.project();
+        if (!project.outline.volumes.length) return toast('info', '大纲里还没有内容。');
+        const pick = (target && target.dataset.id) || findSel(project, st(view).sel).volume?.id || project.outline.volumes[0].id,
+            jobId = await openEditReview(view, pick, {}, { note: isClueMode(project) ? '剧情线' : '卷' });
+        (showEditReview(view, jobId), view.renderBody());
+    },
+    // 节点「必需 / 可选」小标签（第四批）：点一下切换。主线节点默认必需，可选写 必需: false；支线事件默认可选
+    'node-req'(view, target) {
+        const { stage } = findSel(view.project(), st(view).sel);
+        if (!stage) return;
+        const field = target.dataset.field,
+            index = Number(target.dataset.i);
+        (updateStage(view, stage.id, (item) => {
+            const list = [...(item.data[field] || [])],
+                node = list[index] && typeof list[index] == 'object' ? { ...list[index] } : null;
+            if (!node) return item;
+            const kind = field === '主线节点' ? 'main' : 'side',
+                req = isRequired({ item: node, kind });
+            // 切到和默认一样时去掉这个键（主线默认必需、支线默认可选），否则写明
+            req === (kind !== 'main') ? delete node.必需 : (node.必需 = !req);
+            list[index] = node;
+            return { ...item, data: { ...item.data, [field]: list } };
+        }),
+            view.runtime.refresh(),
+            view.renderBody());
+    },
     'node-kind'(view, target) {
         ((st(view).nodeKind = target.dataset.kind), view.renderBody());
     },
@@ -838,12 +977,12 @@ export const actions = {
     },
     async 'vol-menu'(view) {
         const pick = await menuDialog({
-            title: '卷',
+            title: vq(view, '卷', '剧情线'),
             items: [
                 { label: '上移', value: 'vol-up' },
                 { label: '下移', value: 'vol-down' },
-                { label: '导出本卷', value: 'vol-export' },
-                { label: '删除卷', value: 'vol-del', danger: !0 },
+                { label: vq(view, '导出本卷', '导出这条剧情线'), value: 'vol-export' },
+                { label: vq(view, '删除卷', '删除这条剧情线'), value: 'vol-del', danger: !0 },
             ],
         });
         pick && (await actions[pick](view));
@@ -856,7 +995,7 @@ export const actions = {
         const { volume } = findSel(view.project(), st(view).sel);
         !volume ||
             !(await confirmDialog({
-                title: `删除「${volumeLabel(volume.key)}」`,
+                title: `删除「${volumeName(volume.key)}」`,
                 body: `连同 ${volume.stages.length} 个阶段一起删除，不能撤销。想留一份的话先点「导出」。`,
                 okLabel: '删除',
                 danger: !0,
@@ -917,8 +1056,8 @@ export const actions = {
     async 'stage-move'(view) {
         const { volume, stage } = findSel(view.project(), st(view).sel),
             others = view.project().outline.volumes.filter((item) => item.id !== volume.id);
-        if (!stage || !others.length) return toast('info', '没有其他卷可移动。');
-        const to = await menuDialog({ title: '移到…', items: others.map((item) => ({ label: volumeLabel(item.key), value: item.id })) });
+        if (!stage || !others.length) return toast('info', vq(view, '没有其他卷可移动。', '没有别的剧情线可以移过去。'));
+        const to = await menuDialog({ title: '移到…', items: others.map((item) => ({ label: volumeName(item.key), value: item.id })) });
         to && (update(view, (volumes) => moveStageToVolume(volumes, stage.id, to)), view.runtime.refresh(), view.renderBody());
     },
     async 'stage-del'(view) {
@@ -944,22 +1083,6 @@ export const actions = {
         ((st(view).raw = !st(view).raw), view.renderBody());
     },
     // 手动保存：把编辑框里的内容再写一遍、立即落盘，并刷新注入内容（不用等失焦）。
-    async 'outline-save'(view, target) {
-        (target
-            .closest('.pi-body')
-            ?.querySelectorAll(
-                '[data-stage-key],[data-vol-key],[data-stage-field],[data-stage-list],[data-node-field],[data-stage-yaml],[data-node-yaml]',
-            )
-            .forEach((box) => {
-                (onInput(view, box), onBlur(view, box));
-            }),
-            view.runtime.refresh());
-        try {
-            (await view.data.flush(), toast('success', '大纲已保存，注入内容已刷新。'));
-        } catch (error) {
-            toast('error', `保存失败：${error.message}`);
-        }
-    },
     'raw-apply'(view, target) {
         const { stage } = findSel(view.project(), st(view).sel),
             box = target.closest('.pi-card'),
@@ -1050,9 +1173,11 @@ export const actions = {
         const pick = await menuDialog({
             title: '大纲',
             items: [
-                { label: '导入YAML', value: 'import-file' },
-                { label: '粘贴', value: 'import-paste' },
-                { label: '从世界书', value: 'import-wb' },
+                { label: st(view).overview ? '收起总览' : '总览', value: 'overview-toggle' },
+                { label: `${st(view).history ? '收起历史' : '历史'}（${view.project().outline.history.length}）`, value: 'history' },
+                { label: '导入 YAML', value: 'import-file' },
+                { label: '粘贴 YAML', value: 'import-paste' },
+                { label: '从世界书导入', value: 'import-wb' },
                 { label: '导出', value: 'export', disabled: !view.project().outline.volumes.length },
             ],
         });
@@ -1114,7 +1239,7 @@ export const actions = {
                 title: '导出大纲',
                 choices: [
                     { label: '取消', value: null },
-                    { label: '每卷一个文件', value: 'each' },
+                    { label: vq(project, '每卷一个文件', '每条剧情线一个文件'), value: 'each' },
                     { label: '合成一个文件', value: 'one', primary: !0 },
                 ],
             });
@@ -1150,10 +1275,10 @@ export const actions = {
         if (!item) return;
         const busy = view.busy.outline,
             pick = await menuDialog({
-                title: `第 ${draft.volumeNo + i} 卷`,
+                title: `第 ${draft.volumeNo + i} ${vq(view, '卷', '条')}`,
                 items: [
                     ...(item.ok ? [{ label: 'YAML 原文', value: 'multi-yaml' }] : []),
-                    { label: '重写这一卷', value: 'multi-redo', disabled: busy },
+                    { label: vq(view, '重写这一卷', '重写这一条'), value: 'multi-redo', disabled: busy },
                     ...(item.ok
                         ? []
                         : [
@@ -1173,7 +1298,7 @@ export const actions = {
         });
     },
     async 'multi-drop'(view) {
-        (await confirmDialog({ title: '丢弃草稿', body: '已写好的卷不会保存。', okLabel: '丢弃', danger: !0 })) &&
+        (await confirmDialog({ title: '丢弃草稿', body: vq(view, '已写好的卷不会保存。', '已写好的剧情线不会保存。'), okLabel: '丢弃', danger: !0 })) &&
             ((st(view).draft = null), view.renderBody());
     },
     'multi-reparse'(view, target) {
@@ -1268,17 +1393,62 @@ ${yaml}
     },
     async 'draft-replace'(view) {
         const { volume } = findSel(view.project(), st(view).sel);
-        if (!volume) throw new Error('先在左边选中要替换的卷');
+        if (!volume) throw new Error(vq(view, '先在左边选中要替换的卷', '先在左边选中要替换的剧情线'));
+        const incoming = st(view).draft.volumes,
+            projectId = view.projectId;
+        // 剧情线（带「线」的卷）：只换阶段，编号、类型、开启条件这些线头由程序保留；阶段按名称 / 共有节点对应保留 id
+        // （导入审阅总方案 P12 / GPT 审阅 R2）。AI 一次写了好几卷时，只拿第一卷换进来，其余的仍按原来追加在后面。
+        // 写入走统一保存：先按这个聊天的进度准备好最终内容，确认框写出改动和对进度的影响（GPT 代码审阅 R8），先记大纲历史（R1）。
+        if (isPlainObject(volume.line) && incoming.length) {
+            const head = incoming[0],
+                { volumes: put } = putVolume([volume], volume.id, { ...head, key: volume.key, line: undefined }, { allowLine: [] }),
+                prepare = () => {
+                    const p = view.project(),
+                        cur = isClueMode(p) && view.runtime.activeId() === projectId ? view.runtime.clue.compute() : null;
+                    return prepareCommit(p, [put[0]], { clue: cur ? { snap: cur.snap, prog: cur.prog, config: normalizeClue(p.clue) } : null, label: 'AI 替换剧情线' });
+                },
+                effects = (pr) => [...(pr.guard ? [...pr.guard.diffs, ...pr.guard.notes] : []), ...(pr.restored.length ? [`已经完成的节点会保留：${pr.restored.join('、')}（完成条件不变）`] : [])];
+            let prep = prepare();
+            const shown = effects(prep),
+                // 确认期间这条线在大纲里被改过或删掉 → 不替换（GPT 第二轮 N1）
+                stamp0 = targetStamp(view.project(), [volume.id]);
+            if (
+                !(await confirmDialog({
+                    title: `替换「${volumeName(volume.key)}」`,
+                    body: `这条剧情线的阶段换成 AI 写的内容（编号和线头保留）${shown.length ? '；按这个聊天的进度：' : '。'}`,
+                    list: [...prep.changes.flatMap((c) => c.changes).slice(0, 12), ...shown],
+                    okLabel: '替换',
+                    danger: !0,
+                }))
+            )
+                return;
+            if (view.projectId !== projectId) return toast('warning', '确认期间切换了项目，没有替换。');
+            if (targetStamp(view.project(), [volume.id]) !== stamp0) return toast('warning', '确认期间这条剧情线又被改过（或删掉了），没有替换。请再点一次核对。');
+            const again = prepare();
+            if (JSON.stringify(effects(again)) !== JSON.stringify(shown)) return toast('warning', '确认期间剧情进度变了，对进度的影响和刚才显示的不同，没有替换。请再点一次核对。');
+            prep = again;
+            let written = !1;
+            view.data.updateProject(projectId, (p) => {
+                const w = commitOutline(p, prep);
+                if (!w.ok) return p;
+                written = !0;
+                const at = w.outline.volumes.findIndex((v) => v.id === volume.id),
+                    rest = incoming.slice(1);
+                return { ...p, outline: { ...w.outline, volumes: [...w.outline.volumes.slice(0, at + 1), ...rest, ...w.outline.volumes.slice(at + 1)] } };
+            });
+            if (!written) return toast('warning', '大纲刚刚又被改过了，没有替换。请再点一次。');
+            prep.restored.length && toast('info', `已保留已经完成的节点：${prep.restored.join('、')}（完成条件不变）。`);
+            return ((st(view).draft = null), (st(view).sel = volume.id), view.runtime.refresh(), view.renderBody(), afterAdopt(view));
+        }
         if (
             !(await confirmDialog({
-                title: `替换「${volumeLabel(volume.key)}」`,
-                body: '该卷原有阶段全部换成 AI 写的内容。',
+                title: `替换「${volumeName(volume.key)}」`,
+                body: vq(view, '该卷原有阶段全部换成 AI 写的内容。', '这条剧情线原有的阶段全部换成 AI 写的内容。'),
                 okLabel: '替换',
                 danger: !0,
             }))
         )
             return;
-        const incoming = st(view).draft.volumes;
         (update(view, (volumes) => volumes.flatMap((item) => (item.id === volume.id ? incoming : [item])), 'AI 替换整卷'),
             (st(view).draft = null),
             (st(view).sel = incoming[0].id),
@@ -1288,7 +1458,7 @@ ${yaml}
     },
     'draft-append'(view) {
         const { volume } = findSel(view.project(), st(view).sel);
-        if (!volume) throw new Error('先在左边选中要追加到的卷');
+        if (!volume) throw new Error(vq(view, '先在左边选中要追加到的卷', '先在左边选中要追加到的剧情线'));
         const stages = st(view).draft.volumes.flatMap((item) => item.stages);
         (updateVolume(view, volume.id, (item) => ({ ...item, stages: [...item.stages, ...stages] }), 'AI 追加阶段'),
             (st(view).draft = null),
@@ -1419,7 +1589,7 @@ async function stageOp(view, op) {
     const unit = flattenUnits(project.outline.volumes).find((item) => item.id === st(view).sel);
     if (!unit) return;
     const next = op === 'merge' ? unit.volume.stages[unit.stageIndex + 1] : null;
-    if (op === 'merge' && !next) throw new Error('本卷没有下一段可合并。');
+    if (op === 'merge' && !next) throw new Error(vq(view, '本卷没有下一段可合并。', '这条剧情线没有下一段可合并。'));
     const material = await generationMaterial(view, { task: 'rewrite' });
     if (!taskStillValid(view, task)) return staleTaskNotice(view, task);
     const { talk, refs: wb } = material;
@@ -1449,7 +1619,9 @@ function renameInTree(target, id, label) {
 }
 
 export function onInput(view, target) {
-    if (target.matches('[data-lr-win]') || target.matches('select[data-lr-field]')) return void lrOnChange(view, target);
+    if (target.matches('[data-rv-when],[data-rv-win],select[data-rv-tbl]')) return void reviewOnInput(view, target, importJobOf);
+    // 导入页「推进方式」下拉框（第四批：代替「整理成：… 改」）
+    if (target.matches('[data-imp-modesel]')) return void importActions['import-mode'](view, target, target.value);
     let { stage, volume } = findSel(view.project(), st(view).sel);
     if (target.dataset.aiRequest !== void 0) {
         st(view).request = target.value;
@@ -1459,7 +1631,7 @@ export function onInput(view, target) {
         const key = target.value.trim();
         key &&
             !view.project().outline.volumes.some((item) => item.key === key && item.id !== volume.id) &&
-            (updateVolume(view, volume.id, (item) => ({ ...item, key })), renameInTree(target, volume.id, volumeLabel(key)));
+            (updateVolume(view, volume.id, (item) => ({ ...item, key })), renameInTree(target, volume.id, volumeName(key)));
         return;
     }
     if (stage) {
@@ -1514,7 +1686,7 @@ export function onInput(view, target) {
 
 // 失焦时同步注入内容；名字改动直接改树上的文字，不整页重画（避免吞掉紧接着的点击）。
 export function onBlur(view, target) {
-    if (target.matches('[data-lr-field],[data-lr-comment]')) return lrOnChange(view, target);
+    if (target.matches('[data-rv-comment],[data-rv-line],input[data-rv-tbl]')) return reviewOnInput(view, target, importJobOf, { blur: !0 });
     if (target.dataset.nodeYaml !== void 0 || target.dataset.stageYaml !== void 0) return applyYamlField(view, target);
     (target.dataset.nodeField &&
         ['名称', '类型', '内容'].includes(target.dataset.k) &&
@@ -1568,12 +1740,23 @@ export const CLUE_TEXT_KEYS = ['入口', '场景', '作者备注'];
 
 export const CLUE_YAML_KEYS = ['必需', '开放条件', '提前条件', '完成条件', '发现', '相关事实'];
 
+// 线索推进的节点字段（第四批）：入口、场景直接显示；完成条件和发现收在「线索条件」里（写了就展开，收起时一句摘要）；
+// 不常用的（事件、偏转、触发、作者备注、开放 / 提前条件、相关事实）收在「更多」里，写了内容的不藏。
 export function clueNodeFields(meta2, index, value) {
-    let yamlOf = (v) => (v === void 0 || v === null || v === '' ? '' : typeof v == 'string' ? v : stringifyYaml(v).trim());
-    return `<details class="pi-clue-fields"${CLUE_YAML_KEYS.some((k) => value[k] !== void 0) ? ' open' : ''}><summary class="pi-hint">线索字段 · ID ${esc(value.id || '（保存后自动补）')}</summary>
-        ${CLUE_TEXT_KEYS.map((key) => `<label class="pi-field"><span>${esc(key)}${key === '作者备注' ? '（不注入）' : key === '入口' ? '（开放后告诉正文可以去做）' : '（成为焦点时注入）'}</span><textarea class="pi-ta" rows="2" data-node-field="${esc(meta2.field)}" data-i="${index}" data-k="${esc(key)}">${esc(value[key] ?? '')}</textarea></label>`).join('')}
-        ${CLUE_YAML_KEYS.map((key) => `<label class="pi-field"><span>${esc(key)}</span><textarea class="pi-ta is-mono" rows="${key === '发现' ? 3 : 2}" data-node-yaml="${esc(meta2.field)}" data-i="${index}" data-k="${esc(key)}" placeholder="${esc(CLUE_PLACEHOLDER[key] || '')}">${esc(yamlOf(value[key]))}</textarea></label>`).join('')}
-        <p class="pi-status" data-node-yaml-status="${index}"></p></details>`;
+    let yamlOf = (v) => (v === void 0 || v === null || v === '' ? '' : typeof v == 'string' ? v : stringifyYaml(v).trim()),
+        has = (k) => value[k] !== void 0 && value[k] !== null && value[k] !== '',
+        text = (key, hint = '') => `<label class="pi-field"><span>${esc(key)}</span><textarea class="pi-ta pi-ta-auto" rows="2" data-node-field="${esc(meta2.field)}" data-i="${index}" data-k="${esc(key)}"${hint ? ` placeholder="${esc(hint)}"` : ''}>${esc(value[key] ?? '')}</textarea></label>`,
+        yaml = (key) => `<label class="pi-field"><span>${esc(key)}</span><textarea class="pi-ta is-mono pi-ta-auto" rows="2" data-node-yaml="${esc(meta2.field)}" data-i="${index}" data-k="${esc(key)}" placeholder="${esc(CLUE_PLACEHOLDER[key] || '')}">${esc(yamlOf(value[key]))}</textarea></label>`,
+        gets = discoveryList(value).map((d) => d.fact).filter(Boolean),
+        condSum = [has('完成条件') ? `完成：${condBrief(value.完成条件)}` : '', gets.length ? `获得 ${gets.join('、')}` : ''].filter(Boolean).join('；') || '都没写',
+        moreKeys = ['事件', '偏转', '触发', '作者备注', '开放条件', '提前条件', '相关事实'].filter((k) => k in value || ['作者备注', '开放条件', '提前条件', '相关事实'].includes(k)),
+        moreHas = moreKeys.filter(has),
+        moreSum = moreHas.length ? `已写：${moreHas.join('、')}` : '都没写',
+        moreField = (k) => (CLUE_YAML_KEYS.includes(k) ? yaml(k) : k === '作者备注' ? text(k, '只给作者看，不注入') : `<label class="pi-field"><span>${esc(k)}</span><textarea class="pi-ta pi-ta-auto" rows="2" data-node-field="${esc(meta2.field)}" data-i="${index}" data-k="${esc(k)}">${esc(value[k] ?? '')}</textarea></label>`);
+    return `${text('入口', '开放后告诉正文可以去做')}${text('场景', '成为焦点时注入')}
+        <details class="pi-fold"${has('完成条件') || gets.length ? ' open' : ''}><summary><b>线索条件</b><span>${esc(condSum)}</span></summary>${yaml('完成条件')}${yaml('发现')}</details>
+        <details class="pi-fold"${moreHas.length ? ' open' : ''}><summary><b>更多</b><span>${esc(moreSum)}</span></summary>${moreKeys.map(moreField).join('')}<p class="pi-hint">ID ${esc(value.id || '保存后自动补')}</p></details>
+        <p class="pi-status" data-node-yaml-status="${index}"></p>`;
 }
 
 export const CLUE_PLACEHOLDER = {

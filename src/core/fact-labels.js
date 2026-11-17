@@ -69,7 +69,8 @@ export function factLabelContext(volumes, codes = null) {
             place: '',
             scene: l.brief,
             answer: '',
-            record: '',
+            // 作者对开启条件的原话（「原开启条件」）：这件事最直接的说明（实测：AI 新建的开启事实没有别的说明）
+            record: l.origCond || '',
             stage: '',
             routes: [],
             usedBy: [`线 ${ids.join('、')} 的开启条件（正文里发生这件事时登记）`],
@@ -196,16 +197,6 @@ export function answerMinusPublic(answer, publicText) {
     for (let len = Math.min(12, a.length); len >= 4; len--)
         for (let i = 0; i + len <= a.length; i++) pub.includes(a.slice(i, i + len)) && mark.fill(!0, i, i + len);
     return [...a].map((ch, i) => (mark[i] ? '|' : ch)).join('');
-}
-
-export function factLabelWarnings(value, ctx = {}, opts = {}) {
-    let r = factLabelCheck(value, ctx, opts);
-    return [
-        ...r.warns.slice(0, 2),
-        ...r.suspects.map((s) => `${s.where}里有答案的片段「${s.piece}」`),
-        ...r.warns.slice(2),
-        ...r.notes.map((n) => `模型拿不准：${n}`),
-    ];
 }
 
 export function factLabelCheck({ label = '', criterion = '', unsure = '' }, ctx = {}, { secrets = [] } = {}) {

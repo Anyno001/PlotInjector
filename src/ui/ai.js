@@ -1,4 +1,4 @@
-import { resolveGuide, BUILTIN_GUIDE } from '../core/guide.js';
+import { resolveGuide } from '../core/guide.js';
 
 import { transcript } from '../core/prompts.js';
 import { resolveLlm } from '../core/store.js';

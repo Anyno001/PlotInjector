@@ -8,8 +8,6 @@ import { nodeUid, DEFAULT_CLUE } from './clue-model.js';
 
 export const COND_MAX_DEPTH = 2;
 
-export const OPS = ['==', '!=', '>=', '<=', '>', '<'];
-
 export const ATOM_KEYS = ['事实', '知情', '核实', '节点', '表', '时间', '线'];
 
 export const TRI = { t: 'true', f: 'false', u: 'unknown' };
@@ -313,8 +311,6 @@ export function tableConsistencyHints(snapshot) {
 
 export const AWAY_PREFIX = '@away:';
 
-export const NODE_STATUS = ['locked', 'available', 'active', 'done'];
-
 export const NODE_STATUS_LABELS = { locked: '未开放', available: '可进行', active: '进行中', done: '已完成' };
 
 export function emptyClueProgress() {
@@ -499,10 +495,22 @@ export function computeClueState(compiled, snapshot, clueProg, config = DEFAULT_
             if (o === l || o.kind !== 'main' || (o.mode !== 'auto' && !lineEvidence(o)) || (!lineEvidence(o) && k > at)) continue;
             let s = lineStateOf(o);
             if (!s) return `主线 ${o.id} 的状态还算不出来`;
+            // 自动开始：暂停的主线也挡着（GPT 七题审阅 §3：暂停 M1 不会自己开 M2）。
+            // 手动「进入」看的是 mainSlotTaken，暂停的不占位置（GPT 审阅 R6），想先玩别的主线就手动进入。
             if (s.state === '进行中' || s.state === '暂停')
-                return `主线 ${o.id} ${s.state === '暂停' ? '暂停中，还占着主线的位置' : '还在进行'}`;
+                return `主线 ${o.id} ${s.state === '暂停' ? '暂停中（想先玩这条，点「进入」）' : '还在进行'}`;
         }
         return '';
+    }
+    // 接上一条：大纲里排在它前面的那条主线（按卷的先后）结束了没有。第一条主线没有前序，视为满足。
+    function prevMainDone(l) {
+        if (!l.after) return { v: TRI.t, reasons: [] };
+        let mains = lines.filter((x) => x.kind === 'main'),
+            prev = mains[mains.indexOf(l) - 1];
+        if (!prev) return { v: TRI.t, reasons: [] };
+        let s = lineStateOf(prev);
+        if (!s) return { v: TRI.u, reasons: [`主线 ${prev.id} 的状态还算不出来`] };
+        return s.state === '完成' || s.state === '放弃' ? { v: TRI.t, reasons: [] } : { v: TRI.f, reasons: [`排在主线 ${prev.id} 后面，要等它结束`] };
     }
     function lineStateOf(l) {
         if (lineMemo.has(l.id)) return lineMemo.get(l.id);
@@ -518,12 +526,14 @@ export function computeClueState(compiled, snapshot, clueProg, config = DEFAULT_
             started = evidence,
             why = man.started ? man.how || '已开始' : legacy ? `开场事实 ${l.legacyFact} 已出现` : '',
             waitMain = '';
+        let after = !evidence && !man.state && l.kind === 'main' ? prevMainDone(l) : { v: TRI.t, reasons: [] };
         !evidence &&
             !man.state &&
             eligible &&
             l.kind === 'main' &&
             l.mode === 'auto' &&
-            ((waitMain = mainBusy(l)) || ((started = !0), (why = '开启条件已满足')));
+            ((waitMain = after.v !== TRI.t ? after.reasons.join('；') || '要等前一条主线结束' : clueProg.mainPaused ? '主线已全部暂停' : mainBusy(l)) ||
+                ((started = !0), (why = '开启条件已满足')));
         let state =
                 man.state === 'abandon'
                     ? '放弃'
@@ -622,6 +632,7 @@ export function computeClueState(compiled, snapshot, clueProg, config = DEFAULT_
                 ls = node.unit.line && lineOf.get(node.unit.line);
             if (ls && ls.state !== '进行中') open = { v: TRI.f, reasons: [`所在的线 ${ls.line.id} ${ls.missed ? '已错过' : ls.state}`] };
             else if (ls && ls.line.kind === 'side' && clueProg.sidePaused) open = { v: TRI.f, reasons: ['支线已全部暂停'] };
+            else if (ls && ls.line.kind === 'main' && clueProg.mainPaused) open = { v: TRI.f, reasons: ['主线已全部暂停'] };
             else if (over.open === 'force') open = { v: TRI.t, reasons: ['人工开放'], manual: !0 };
             else if (over.open === 'block') open = { v: TRI.f, reasons: ['已手动停用'], manual: !0 };
             else {
@@ -687,7 +698,8 @@ export function pickFocus(nodeStates, clueProg, config, snapshot, stageStates) {
 
 export const LINE_STATES = ['未触发', '可开启', '进行中', '暂停', '完成', '放弃'];
 
-export const LINE_STATE_ALIAS = { 开过: ['进行中', '暂停', '完成', '放弃'], 开着: ['进行中', '暂停'] };
+// 结束 = 完成或放弃（导入审阅总方案 H / GPT 审阅 R6）：「前一条结束后再开」不会因为前一条被放弃而永远等着。原来的「完成」仍只表示完成。
+export const LINE_STATE_ALIAS = { 开过: ['进行中', '暂停', '完成', '放弃'], 开着: ['进行中', '暂停'], 结束: ['完成', '放弃'] };
 
 export function normalizeOps(text) {
     return String(text || '')
@@ -923,6 +935,9 @@ export function compileLines(units, errors) {
                 synthetic: !isPlainObject(volume.line),
                 window: null,
                 origCond: clueText(raw.原开启条件),
+                // 接上一条（导入审阅总方案 H / GPT 审阅 R6）：排在前一条主线后面，前一条「结束」（完成或放弃）后才自动开始。
+                // 只管自动开始；手动进入可以跳过它，剧情条件照样要满足。
+                after: kind === 'main' && (raw.接上一条 === !0 || raw.接上一条 === 'true' || raw.接上一条 === '是'),
             };
         (lines.push(line), pend.push([line, raw.开启时段, errs, where]));
     }

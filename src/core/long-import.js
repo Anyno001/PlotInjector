@@ -1,5 +1,5 @@
-import { CLUE_LINE_RULES, CLUE_OUTLINE_RULES_WITH_LINES, CLUE_OUTLINE_RULES, OUTLINE_RULES } from './prompts.js';
-import { discoveryList, clueText, clueAlternativeRoutes, clueReachability } from './clue-project.js';
+import { CLUE_LINE_RULES, CLUE_OUTLINE_RULES_WITH_LINES, CLUE_OUTLINE_RULES, OUTLINE_RULES, ENTRY_HINT_RULE, BRIEF_RULE } from './prompts.js';
+import { discoveryList, clueText, clueAlternativeRoutes, clueReachability, checkClueDraft } from './clue-project.js';
 import {
     volumeLabel,
     splitStageKey,
@@ -9,7 +9,10 @@ import {
     stageLabel,
     flattenUnits,
     stageNodes,
+    nodeMapsToLists,
+    VOLUME_LINE_KEY,
 } from './outline.js';
+import { parseYaml } from './yaml.js';
 import { conditionRefs, parseCondition, compileClue } from './clue-rules.js';
 
 import { CLUE_STAGE_KEYS, CLUE_NODE_KEYS, nodeUid, stripAuthorDeep, outlineStageData } from './clue-model.js';
@@ -68,7 +71,7 @@ export const IMPORT_INDEX_FORMAT = [
     '```yaml',
     '梗概: 这一段讲了什么（两三句）',
     '人物:',
-    '  - {名称: 常用称呼, 别名: [只属于这个人的其他称呼], 同一人: 前面索引里已有的名称（只有原文明说是同一个人时才写）, 公开身份: 别人眼里他是谁, 真实身份: 只有作者知道的（没有就省略）, 名字保密: 揭示之前正文不能出现这个名字时写 true（只是身份或所做的事保密、名字本身公开的，不写）, 首次登场: 本段 / 之前}',
+    '  - {名称: 常用称呼, 别名: [只属于这个人的其他称呼], 同一人: 前面索引里已有的名称（只有原文明说是同一个人时才写）, 公开身份: 别人眼里他是谁, 真实身份: 只有作者知道的（没有就省略）, 名字保密: 按上面的判断方法，需要时写 true（不需要就省略）, 首次登场: 本段 / 之前}',
     '  # 「维修工」「老板」这类很多人都能叫的泛称不要写进别名；同一个人的化名、绰号才写。',
     '地点:',
     '  - {名称: …, 说明: 一句话}',
@@ -92,7 +95,11 @@ export function importIndexMessages({ part, total, prev = '', needs = '' }) {
                 '区分三件事：原书里的真相（作者知道）；角色说的话（证词、传闻，不一定是真的）；玩家通过什么行动才能知道。',
                 '只写材料里有的，不要补写。拿不准的写在「作者资料」里并注明「待确认」。',
                 '「事实」只收**玩家在游戏里通过某个行动能拿到的具体信息或实物**：看到的东西、听到的话、读到的记录、确认的地点。一段材料通常只有几条。',
-                '材料里的写作规则、提醒和限制（如「不能一次检查就解决全部问题」「只说合作不产生成果」「彼得会逐渐愿意让别人分担」「结局可以不完全成功」）**不是事实**，写进「作者资料」。',
+                '材料里的写作规则、提醒和限制（如「不能一次检查就解决全部问题」「只说合作不产生成果」「主角会逐渐愿意让别人分担」「结局可以不完全成功」）**不是事实**，写进「作者资料」。',
+                '「名字保密」怎么判断：问自己「故事一开始，叙述里能不能直接用这个名字称呼这个人？」能，就不写；不能、要等剧情揭晓以后才能出现，才写 true。',
+                '  - 要写 true 的，例如：幕后主使的真名、真凶是谁、化名者的本名、整个故事要查出来的那个人。',
+                '  - 不写的，例如：主角和主要同伴的名字（哪怕他有一重不让外人知道的身份）、公开使用的称号、代号、外号。',
+                '  - 两种称呼本身都可以在正文里出现、只是它们指同一个人这件事保密的，把这层对应写进「真实身份」，不标名字保密；某个称呼本身也要等剧情揭晓才能出现的，那个称呼仍按上面的办法标。',
                 `输出格式（只输出这一个代码块）：\n${IMPORT_INDEX_FORMAT}`,
             ].join('\n'),
         },
@@ -174,7 +181,7 @@ export function mergeImportIndex(list) {
 
 export const IMPORT_AUTHOR_KEYS = ['原文出处', '来源', '待确认', '补写'];
 
-export function importDraftMessages({ part, index, prevTail = '', mode = 'clue', needs = '', actors = '', done = '' }) {
+export function importDraftMessages({ part, index, prevTail = '', mode = 'clue', needs = '', actors = '', done = '', kind = '' }) {
     let clue = mode === 'clue',
         rules = clue ? CLUE_OUTLINE_RULES : OUTLINE_RULES,
         onlyClue = (x) => (clue ? x : '');
@@ -224,12 +231,16 @@ export function importDraftMessages({ part, index, prevTail = '', mode = 'clue',
                     '材料写了「没有 X 也可以做 Y」「不经过 X 也能到 Y」「Y 不依赖 X」的，Y 的开放条件和它所在阶段的进入条件都**不能**要求 X；前一阶段的结束条件也要允许不走 X（用「任一」把另一条路写进去，或把 X 所在节点写成「必需: false」）。',
                 ),
                 onlyClue(
-                    '最稳妥的写法：把 X 和 Y 放进**同一个阶段**，X 写「必需: false」，Y 不写开放条件（雾港实测：模型把「可以跳过老韩直接查账房」写成了先后两个阶段，第二阶段要等第一阶段的事实，结果跳过的路走不通）。只有 X 和 Y 之间确实隔着时间或地点的大转场，才分成两个阶段，这时后一阶段的进入条件要留出不走 X 的路。',
+                    '最稳妥的写法：把 X 和 Y 放进**同一个阶段**，X 写「必需: false」，Y 不写开放条件（例：原文说「可以跳过问话，直接去查记录」，就不要写成先后两个阶段，否则第二阶段要等第一阶段的事实，跳过的路走不通）。只有 X 和 Y 之间确实隔着时间或地点的大转场，才分成两个阶段，这时后一阶段的进入条件要留出不走 X 的路。',
+                ),
+                onlyClue(
+                    '「必需」的意思：必需节点没完成，阶段就算满足了结束条件也不会结束。所以材料说某件事「可以不做」「可以跳过」「不经过也能继续」「没有它也行」的，这个节点一定写「必需: false」；只有材料要求必须做到的，才保持必需。',
                 ),
                 onlyClue(
                     '节点的完成条件写成它自己产出的事实（如 {事实: F_mateo_absent}），**不能**写成 {节点: 自己的 id}：「自己完成了才算完成」永远不会成立。',
                 ),
                 '要求正文「不要提某人的名字 / 某个真相」时，AI指令和入口里**不能写出那个名字或真相本身**（写出来就已经告诉正文了）。改成「幕后的人此时没有名字，只称『发号施令的人』」这样的写法；具体名字只放在作者备注的 <仅作者> 里，或者等揭示它的那个发现的「内容」里。',
+                clue && (kind === 'main' || kind === 'side') ? importLineHeadRule(kind, part) : '',
                 actors && `角色对应：${actors}`,
                 needs && `作者的要求：${needs}`,
                 rules,
@@ -249,6 +260,217 @@ export function importDraftMessages({ part, index, prevTail = '', mode = 'clue',
                 .join('\n\n'),
         },
     ];
+}
+
+// 导入「一条主线 / 一条支线」（导入审阅总方案 F / H）：整份文档成一条剧情线，卷的第一个键写「线」。
+// 编号由插件分配（采用时排在已有的线后面），模型不用写；开始时机照原文抄，原文没写就不写开启条件，由作者在审阅页选。
+export function importLineHeadRule(kind, part = null) {
+    let main = kind === 'main';
+    return [
+        `这份文档是**一条${main ? '主线' : '支线'}**：整份文档写成一条剧情线（YAML 里的一卷），它的第一个键写「线」（只在第一段写；后面几段沿用同一个顶层键名，不再写「线」）。`,
+        `  线: {类型: ${main ? '主线' : '支线'}, 简介: 一句话（必须写，规则见下）, 入口提示: 一句由头（必须写，规则见下）, 开始时机原文: 文档里写的这条线什么时候、因为什么开始（照抄原句；没写就省略）}`,
+        BRIEF_RULE,
+        ENTRY_HINT_RULE,
+        '  · 不写「编号」，插件会分配。',
+        `  · 文档明确写了开始的前提（如「拿到某某之后」「某条线结束后」），再写「开启条件」（用条件写法）；没写就**不要**写开启条件，作者会在审阅页自己选。${main ? '主线默认排在前一条主线后面，不用为此写条件。' : ''}`,
+        part && part.i > 0 ? '  · 这一段不是第一段：不要再写「线」。' : '',
+    ]
+        .filter(Boolean)
+        .join('\n');
+}
+
+// 导入任务的文档类型（kind）：main（一条主线）/ side（一条支线）/ lines（好几条支线）/ outline（按阶段推进，不分线）。
+// 旧任务没有 kind：mode lines → lines；mode outline → outline；mode clue → 旧的「线索推进的大纲」，没有线头（legacy）。
+export function importJobKind(job) {
+    let k = job && job.kind;
+    return k === 'main' || k === 'side' || k === 'lines' || k === 'outline' || k === 'edit' ? k : job && job.mode === 'lines' ? 'lines' : job && job.mode === 'outline' ? 'outline' : 'legacy';
+}
+
+// 「按意见修改」的请求（导入审阅总方案 4.3 / GPT 审阅 R4）：一组单位一次请求。
+// units：[{ key, kind: 'line' | 'stage', label, yaml, comment, source }]（source：这个单位对应的原文片段，只附这一段）。
+// context：组外有关的单位的真实条件表达式和事实来源（只读）。secrets：保密名字（必须改的位置用）。
+// 输出格式：每个单位一个代码块，代码块前一行写「【单位：<key>】」，插件按 key 回写，不靠模型照抄名字定位。
+// overall：整体意见（用户 2026-11-16：只对当前这条线）——这时 units 里有这条线的所有部分（u.overall 不为 false），
+//   别的线上写了意见的部分也可能在里面（u.overall = false，只按它自己的意见改）；只输出真要改的。
+// talk：讨论记录（作为参考）；mode：'outline' 时用按阶段推进的规则（不加线索字段）。
+export function reviewReviseMessages({ units, context = '', secrets = [], tableCatalog = '', mainLines = '', overall = '', talk = '', mode = 'clue' }) {
+    let fence = '```',
+        clue = mode !== 'outline';
+    return [
+        {
+            role: 'system',
+            content: [
+                overall
+                    ? '下面是一条剧情线的全部部分（线头和各阶段），可能还有别的线上带意见的部分。【整体意见】只用于标了「整体意见适用」的部分；其他部分只按它自己的意见改。'
+                    : '下面是剧情线里的几个部分（线头或阶段），每个部分带一句作者意见。按意见修改这几个部分。',
+                `输出：每个部分一个 ${fence}yaml 代码块；**每个代码块的前一行必须单独写一行「【单位：编号】」**（编号照抄下面每个部分开头给的，例如「【单位：v1/s5】」），然后才是代码块。${overall ? '只输出真正改动了的部分，没改的不要输出。' : '只输出列出的部分，别的不要输出。'}`,
+                '· 阶段：输出这个阶段（顶层键是阶段名，下面是阶段字段）。线头：输出「线:」下面的字段。',
+                '· 只按意见改，没提到的地方原样保留：节点 id、事实编号、条件不要顺手改。还是同一件事的节点必须沿用原来的 id（哪怕改了名称、入口），新加的事才用新 id、新事实编号。',
+                '· 意见是在问问题或说明情况时（比如「这里就是揭晓真名的地方」「是同一个人，换成称呼」），按它的意思改；拿不准的保持原样。',
+                '· 修条件问题时，按【原文】的意思选改法：比如「补一个产出」和「推迟开放」都能让阶段走通，但剧情含义不同，要看原文怎么写的。原文没写的门槛不要新加，原文写了的门槛不要去掉。',
+                talk ? '· 【讨论记录】是作者和 AI 之前的讨论，只作参考：作者在讨论里明确定下的，按它理解意见；还在商量的不算数。意见和讨论冲突时以意见为准。' : '',
+                '· 意见指出的问题必须改掉，不能原样交回。常见改法：原文写了「任意一路查到足够材料也可以继续」这类替代路线的，把那条路写进结束条件的「任一」，或者把只在某条路上才需要的节点改成「必需: false」；原文写了必须两样都到手的，就保留门槛，在意见里说明原因（输出时把这个阶段原样给出，并在代码块前一行写「保持原样：原因」）。',
+                '· 线头的编号、类型（主线 / 支线）不能改。线头的「简介」「入口提示」是空的，就按下面的规则顺手补上。',
+                clue ? `${BRIEF_RULE}\n${ENTRY_HINT_RULE}` : '',
+                secrets.length ? `· 保密名字（揭示之前正文不能出现）：${secrets.join('、')}。它们只能写在揭示它的那条发现的「内容」或作者备注的 <仅作者> 里；其他字段用身份称呼代替。` : '',
+                clue && tableCatalog && `【当前数据库的表格】\n${tableCatalog}`,
+                clue && mainLines && `【已有的主线】\n${mainLines}`,
+                // 大纲规则第一句「只输出一个代码块」和上面的按部分输出冲突，去掉
+                (clue ? CLUE_OUTLINE_RULES_WITH_LINES : OUTLINE_RULES).split('\n').filter((l) => !/^只输出一个 ```yaml 代码块/.test(l)).join('\n'),
+            ]
+                .filter(Boolean)
+                .join('\n'),
+        },
+        {
+            role: 'user',
+            content: [
+                overall && `【整体意见】（只对标了「整体意见适用」的部分）\n${overall}`,
+                ...units.map((u) =>
+                    [
+                        `【单位：${u.key}】${u.label}${overall && u.overall !== !1 ? '（整体意见适用）' : ''}`,
+                        u.comment ? `意见：${u.comment}` : overall && u.overall !== !1 ? '意见：（这一部分没有单独的意见，只按整体意见改；不需要改就不要输出）' : '',
+                        u.source && `【原文】\n${u.source}`,
+                        `${fence}yaml\n${u.yaml}\n${fence}`,
+                    ]
+                        .filter(Boolean)
+                        .join('\n'),
+                ),
+                context && `【相关的其他部分（只读，不要输出）】\n${context}`,
+                talk && `【讨论记录】（参考）\n${talk}`,
+            ]
+                .filter(Boolean)
+                .join('\n\n'),
+        },
+    ];
+}
+// 拆回复：「【单位：key】」后面紧跟的第一个代码块。返回 { key: 代码块文字 }；没有标记的代码块不认。
+// 模型常漏写标记（DeepSeek 实测：两次都只给了代码块）。补救只在不会认错时用：
+//   units = [{ key, name }]（name：阶段名或「线」）。只有一个单位时，唯一的代码块就是它；
+//   有几个时，按代码块顶层键 = 请求里的阶段名对应（只认这次请求里的名字，对不上的不用）。
+//   名字有重复（两条线都有「阶段1_经过」、几个线头都叫「线」）时不猜：同名的块和单位都不补，意见保留（GPT 第二轮 N4）。
+export function splitUnitReplies(text, units = []) {
+    let out = {},
+        t = String(text || ''),
+        re = /【单位：([^】\s]+)】[^\n]*\n[\s\S]*?```(?:yaml)?\s*\n([\s\S]*?)```/g,
+        m;
+    while ((m = re.exec(t))) m[1] in out || (out[m[1]] = m[2]);
+    if (!units.length) return out;
+    // 有标记的块已经认了；剩下没标记的块（DeepSeek 实测：几个块里漏写其中一个的标记）按阶段名补上
+    let blocks = [...t.matchAll(/```(?:yaml)?\s*\n([\s\S]*?)```/g)].map((x) => x[1]).filter((b) => !Object.values(out).includes(b));
+    if (units.length === 1 && !Object.keys(out).length && blocks.length === 1) return { [units[0].key]: blocks[0] };
+    let topOf = (b) => ((/^([^\s:#][^:\n]*):/m.exec(b) || [])[1] || '').trim(),
+        tops = blocks.map(topOf);
+    for (let [i, b] of blocks.entries()) {
+        let top = tops[i],
+            cands = top ? units.filter((u) => u.name === top && !(u.key in out)) : [];
+        // 只有一个候选、并且没有别的同名块时才补
+        cands.length === 1 && units.filter((u) => u.name === top).length === 1 && tops.filter((t) => t === top).length === 1 && (out[cands[0].key] = b);
+    }
+    return out;
+}
+
+// 模型说明「保持原样：原因」的单位（提示词要求它这样写）：{ 单位键: 原因 }。原因写在标记前一行或标记和代码块之间都认。
+export function keepReasons(text) {
+    let t = String(text || ''),
+        out = {};
+    for (let m of t.matchAll(/【单位：([^】\s]+)】/g)) {
+        let p = m.index,
+            prev = t.lastIndexOf('```', p - 1),
+            from = prev < 0 ? 0 : prev + 3,
+            next = t.indexOf('```', p),
+            win = t.slice(from, next < 0 ? t.length : next),
+            r = /保持原样[:：]\s*([^\n]+)/.exec(win);
+        r && !(m[1] in out) && (out[m[1]] = r[1].replace(/【单位：[^】]*】/g, '').trim());
+    }
+    return out;
+}
+
+// 读出一个单位的修改结果（模型给的格式不总一样）：
+//   阶段：{阶段名: 字段} 最好；包了一层卷名（{卷名: {线, 阶段名: 字段}}，DeepSeek 实测）时，按请求的阶段名取出那一个阶段；
+//         都对不上时不认（不把整卷当成一个阶段，免得清空节点）。
+//   线头：{线: {...}}、{卷名: {线: {...}}} 或直接字段。
+// want：请求时的阶段名（或「线」）；oldNodes：原来的节点数——原来有节点、改完一个都没有的，视为模型给错了格式，不认。
+export function parseUnitReply(key, text, want, oldNodes = 0) {
+    let v = parseYaml(text);
+    if (!isPlainObject(v)) throw new Error('格式不对：应该是「名字: 内容」');
+    if (String(key).endsWith('/line')) {
+        let l = isPlainObject(v[VOLUME_LINE_KEY]) ? v[VOLUME_LINE_KEY] : Object.values(v).map((x) => isPlainObject(x) && x[VOLUME_LINE_KEY]).find(isPlainObject) || v;
+        return { line: l };
+    }
+    let looks = (x) => isPlainObject(x) && (NODE_FIELDS.some(({ field }) => field in x) || 'AI指令' in x || '进入条件' in x || '结束条件' in x),
+        pick = null;
+    if (want && looks(v[want])) pick = [want, v[want]];
+    else
+        for (let [, inner] of Object.entries(v))
+            if (isPlainObject(inner) && want && looks(inner[want])) pick = [want, inner[want]];
+    if (!pick) {
+        let entries = Object.entries(v).filter(([k, x]) => k !== VOLUME_LINE_KEY && looks(x));
+        entries.length === 1 && (pick = entries[0]);
+    }
+    if (!pick) throw new Error('回复里找不到这个阶段');
+    let nodes = NODE_FIELDS.reduce((n, { field }) => n + (Array.isArray(pick[1][field]) ? pick[1][field].length : 0), 0);
+    if (oldNodes && !nodes) throw new Error('回复里这个阶段一个场景都没有（可能格式给错了），没有采用');
+    return { stage: { key: pick[0], data: nodeMapsToLists(pick[1]) } };
+}
+
+// 按意见修改时附的原文（GPT 审阅 R4：改条件要看原文依据）。导入记录的是这个节点来自原文的哪一段（起 / 止，一段可能有几千字），
+// 整段太长；优先取讲推进、门槛、替代路线的小节（「推进条件」「调查如何继续」「走不通时」「合流」「进入条件」），
+// 再补开头，合计不超过 max 字。没有这类小节时取开头。
+const SOURCE_KEYS = /推进条件|调查如何继续|如何继续|走不通|合流|进入条件|结束条件|先后不限|任一|任意一/;
+export function sourceExcerpt(src, from, to, max = 2400) {
+    let text = String(src || '').slice(Math.max(0, from || 0), Math.min(String(src || '').length, to || 0));
+    if (text.length <= max) return text;
+    let parts = text.split(/\n(?=#{2,4}\s)/),
+        head = parts[0],
+        keyed = parts.slice(1).filter((p) => SOURCE_KEYS.test(p.split('\n')[0]) || SOURCE_KEYS.test(p.slice(0, 200))),
+        out = [];
+    let room = max;
+    for (let p of keyed) if (p.length <= room) (out.push(p), (room -= p.length + 1));
+    let start = head.slice(0, Math.max(0, Math.min(head.length, room)));
+    return [start, ...out].filter(Boolean).join('\n…\n');
+}
+
+// 问题 → 追加进意见的一句话（「把所有问题填进意见」/「填进意见」）。不覆盖作者原话，同一句不重复加（GPT 审阅 R4 末条）。
+// 需要确认的（warn）只填问题的开头，由作者接着写回答，不替作者回答。
+// 同一页里原因相同的问题合成一条（目前：几个节点都「一直开不了」）。合并后的条目带 parts（原来的几条），加入意见时一句话说全。
+export function mergeSameIssues(list) {
+    let out = [],
+        groups = new Map();
+    for (let x of list || []) {
+        let k = x.same && x.level === 'error' ? `${x.same.key}|${x.same.stage}` : '';
+        if (!k) {
+            out.push(x);
+            continue;
+        }
+        groups.has(k) ? groups.get(k).parts.push(x) : (groups.set(k, { ...x, parts: [x] }), out.push(groups.get(k)));
+    }
+    return out.map((x) => {
+        if (!x.parts || x.parts.length < 2) return x.parts ? x.parts[0] : x;
+        let names = x.parts.map((y) => y.same.node);
+        return {
+            ...x,
+            id: x.parts.map((y) => y.id).join('+'),
+            plain: `「${x.same.stage}」：下面 ${names.length} 个节点一直开不了（它们的开放条件要的线索，前面拿不到），这几条路走不通。`,
+            names,
+            fix: '看看它们的开放条件：要的线索是不是写错了，或者前面阶段漏了产出这条线索的地方。',
+            text: x.parts.map((y) => y.text).join('\n'),
+        };
+    });
+}
+export function issueCommentLine(x) {
+    if (x.level === 'error') return `${x.plain || x.text}${x.names ? `：${x.names.map((n) => `「${n}」`).join('、')}` : ''}${x.fix ? `（${x.fix}）` : ''}`;
+    return x.kind === 'secret-short' ? `关于${(x.spots && x.spots[0] && `「${x.spots[0].where}」里的`) || ''}「${x.name}」：` : x.kind === 'secret-reveal' ? `关于揭晓「${x.name}」的地方：` : `关于「${(x.plain || x.text).slice(0, 20)}…」：`;
+}
+export function appendComment(comment, line) {
+    let cur = String(comment || ''),
+        add = String(line || '').trim();
+    return !add || cur.split('\n').some((l) => l.trim() === add || l.trim().startsWith(add)) ? cur : cur.trim() ? `${cur.replace(/\s+$/, '')}\n${add}` : add;
+}
+// 要确认的问题写成一个问句（审阅页用；不做选项按钮，回答写进意见）。
+export function issueQuestion(x) {
+    if (x.kind === 'secret-reveal') return { q: `${x.plain.replace(/查到时会揭晓/, '查到时，正文会拿到').replace(/。$/, '这个名字。')}这里就是揭晓真名的地方吗？`, how: '是的话不用管；不是的话在意见里说一声。' };
+    if (x.kind === 'secret-short') return { q: `${x.plain.replace(/。$/, '')}。是同一个人吗？`, how: '是的话在意见里说一声；只是碰巧同字就不用管。' };
+    return { q: x.plain || x.text, how: x.fix || '没问题就不用管；要改的话在意见里说一声。' };
 }
 
 export const IMPORT_STAGE_KEYS = [...STAGE_HINT_KEYS, ...CLUE_STAGE_KEYS];
@@ -302,18 +524,39 @@ export function importSecretNames(index) {
     ];
 }
 
+// 疑似短名（总方案 C / GPT 审阅 R7）：保密全名按「·」「•」、空格拆开的每一段（≥2 字）。只是候选：
+// 命中时报「需确认」，不当成确定的泄密；作者确认后才当保密别名用。
+// 不收：本来就是全名或别名的；是某个不保密人物的名称 / 别名（或其中一段）的；常见泛称。
+export const SECRET_SHORT_STOP = ['先生', '小姐', '女士', '老板', '医生', '博士', '队长', '警官', '老师', '师傅'];
+export function importSecretShorts(index, names = importSecretNames(index)) {
+    if (!names || !names.length) return [];
+    let people = index && Array.isArray(index.人物) ? index.人物.filter(isPlainObject) : [],
+        open = people
+            .filter((p) => !(p.名字保密 === !0 || p.名字保密 === 'true' || p.名字保密 === '是'))
+            .flatMap((p) => [p.名称, ...(Array.isArray(p.别名) ? p.别名 : [])])
+            .map((n) => String(n || '').trim())
+            .filter(Boolean),
+        openParts = new Set(open.flatMap((n) => [n, ...n.split(/[·•\s]+/)])),
+        out = new Map();
+    for (let full of names)
+        for (let part of String(full).split(/[·•\s]+/).map((x) => x.trim()))
+            part.length >= 2 && part !== full && !names.includes(part) && !openParts.has(part) && !SECRET_SHORT_STOP.includes(part) && !out.has(part) && out.set(part, full);
+    return [...out].map(([short, full]) => ({ short, full }));
+}
+
 export function importVisibleText(volumes, mode = 'clue') {
     let out = [],
         stage = '',
+        stageId = '',
         put = (layer, where, value, field = '') => {
             let t = clueText(typeof value == 'string' ? value : value == null ? '' : JSON.stringify(value));
-            t && out.push({ layer, where, text: t, stage, field });
+            t && out.push({ layer, where, text: t, stage, stageId, field });
         };
     for (let vol of volumes || [])
         for (let st of vol.stages || []) {
             let where = stageLabel(st.key),
                 data = isPlainObject(st.data) ? st.data : {};
-            stage = st.key;
+            ((stage = st.key), (stageId = st.id || ''));
             put('body', where, stripAuthorDeep(String(st.key || '')), '阶段名');
             if (mode !== 'clue') {
                 for (let [k, v] of Object.entries(outlineStageData(data))) put('body', where, v, k);
@@ -338,22 +581,6 @@ export function importVisibleText(volumes, mode = 'clue') {
                             : put('reveal', at, d, `${id}.发现`);
                 }
         }
-    return out;
-}
-
-export function importSecretHits(volumes, names, mode = 'clue') {
-    let out = {};
-    for (let x of importVisibleText(volumes, mode)) {
-        if (x.layer !== 'body' && x.layer !== 'fill') continue;
-        for (let s of names || [])
-            s &&
-                s.length >= 2 &&
-                x.text.includes(s) &&
-                (out[x.stage] = [
-                    ...(out[x.stage] || []),
-                    `${x.field}「${x.text.length > 120 ? `${x.text.slice(0, 120)}…` : x.text}」里出现了「${s}」`,
-                ]);
-    }
     return out;
 }
 
@@ -398,21 +625,57 @@ export function checkImportDraft(volumes, { index = null, secrets = null, mode =
     for (let x of importVisibleText(volumes, mode)) {
         if (x.layer === 'author') continue;
         for (let s of names)
-            s && s.length >= 2 && x.text.includes(s) && hits.set(`${x.layer}|${s}`, [...(hits.get(`${x.layer}|${s}`) || []), x.where]);
+            s && s.length >= 2 && x.text.includes(s) && hits.set(`${x.layer}|${s}`, [...(hits.get(`${x.layer}|${s}`) || []), x]);
     }
-    for (let [k, w] of hits) {
+    // 同一个名字出现在几个阶段：每个阶段各报一条（每条落在自己那一页，按意见修改时各阶段都收到意见）。
+    for (let [k, all] of hits)
+        for (let w of [...new Set(all.map((x) => x.stageId))].map((id) => all.filter((x) => x.stageId === id))) {
         let [layer, s] = k.split('|'),
-            list = [...new Set(w)].join('、');
+            list = [...new Set(w.map((x) => x.where))].join('、');
         layer === 'reveal'
             ? out.push({
                   level: 'warn',
+                  kind: 'secret-reveal',
+                  name: s,
+                  stageId: w[0].stageId,
+                  spots: w.map(spotOf),
                   text: `保密的名字「${s}」写在「可能的发现」里（${list}）：玩家到场时正文就会拿到它（标明尚未发生）。确认这是这个节点当场就能揭示的；不是的话移到作者备注的 <仅作者> 里`,
+                  plain: `${[...new Set(w.map((x) => `「${x.where}」`))].join('、')}查到时会揭晓「${s}」。`,
+                  fix: '如果这里就是揭晓这个名字的地方，不用改；如果不是，把名字换成称呼（比如「掮客」「技术员」）。',
               })
             : out.push({
                   level: 'error',
+                  kind: layer === 'fill' ? 'secret-fill' : 'secret-body',
+                  name: s,
+                  stageId: w[0].stageId,
+                  spots: w.map(spotOf),
                   text: `保密的名字「${s}」出现在${IMPORT_LAYER_TEXT[layer]}里（${list}）；只能写在揭示它的那个发现的「内容」或作者备注的 <仅作者> 里`,
+                  plain:
+                      layer === 'fill'
+                          ? `${placeText(w)}写了「${s}」：填表的模型会看到这个名字，可能提前把它记进表格。`
+                          : `${placeText(w)}写了「${s}」：正文每一轮都会看到这个名字，玩家还没查到就泄露了。`,
+                  fix: `把「${s}」换成不点名的称呼（比如「掮客」「改装器材的技术员」）。名字只留在揭晓它的那条发现的「内容」里。`,
               });
+        }
+    let shorts = secrets ? [] : importSecretShorts(index, names),
+        shortHits = new Map();
+    for (let x of importVisibleText(volumes, mode)) {
+        if (x.layer !== 'body' && x.layer !== 'fill') continue;
+        for (let { short, full } of shorts)
+            x.text.includes(short) && !x.text.includes(full) && shortHits.set(short, [...(shortHits.get(short) || []), { ...x, full }]);
     }
+    for (let [short, w] of shortHits)
+        out.push({
+            level: 'warn',
+            kind: 'secret-short',
+            name: short,
+            full: w[0].full,
+            stageId: w[0].stageId,
+            spots: w.map(spotOf),
+            text: `疑似保密名字「${short}」（「${w[0].full}」的一部分）出现在${[...new Set(w.map((x) => IMPORT_LAYER_TEXT[x.layer]))].join('、')}里（${[...new Set(w.map((x) => x.where))].join('、')}）`,
+            plain: `${placeText(w)}出现了「${short}」，它可能就是保密的「${w[0].full}」。`,
+            fix: `是同一个人的话，按保密名字处理（换成称呼）；只是碰巧同字（比如别的人物、普通词），点「不是」就不再提醒。`,
+        });
     // 作者侧字段残留：只查主线、支线节点（世界动态的「来源」是正常字段）。
     let left = /* @__PURE__ */ new Set();
     for (let vol of volumes || [])
@@ -440,25 +703,129 @@ export function checkImportDraft(volumes, { index = null, secrets = null, mode =
     return out;
 }
 
+// ---- 问题的人话（总方案 A）：事实编号换成内容、节点编号换成名称；原来的 text 保留，界面放进「详细」里。----
+const shortText = (t, n = 20) => {
+    let x = String(t || '').trim().replace(/[。；，、.!！]+$/, '');
+    return x.length > n ? `${x.slice(0, n)}…` : x;
+};
+function factTexts(volumes) {
+    let out = new Map();
+    for (let u of flattenUnits(volumes || []))
+        for (let n of stageNodes(u.stage.data))
+            for (let d of discoveryList(isPlainObject(n.item) ? n.item : {})) d.fact && !out.has(d.fact) && out.set(d.fact, d.text);
+    return out;
+}
+// 「阶段7 收尾」的AI指令、入口 —— 字段名去掉节点编号和发现编号。
+function placeText(spots) {
+    let byStage = new Map();
+    for (let x of spots) {
+        let f = String(x.field || ''),
+            what = /^(AI指令|阶段名|时间范围)$/.test(f) ? f : FIELD_WORDS[f.replace(/^[^.]+\./, '').replace(/\[[^\]]*\]/g, '')] || f;
+        byStage.set(x.where, [...new Set([...(byStage.get(x.where) || []), what])]);
+    }
+    return [...byStage].map(([w, fs]) => `「${w}」的${fs.join('、')}`).join('，');
+}
+const FIELD_WORDS = { 入口: '入口', 地点: '地点', 场景: '场景', id: '编号', 发现: '发现', '发现.内容': '发现', '发现.记录': '登记标准（记录）', '发现.事实': '事实编号', 主线节点: '剧情节点', 支线事件: '可选事件', 世界动态: '世界动态' };
+function spotOf(x) {
+    return { stageId: x.stageId, where: x.where, field: x.field, excerpt: shortText(x.text, 60) };
+}
+function routePlain(r, facts) {
+    let path = r.nodeNames.map((n) => `「${n}」`).join('、然后'),
+        need = r.needs.map((f) => `「${shortText(facts.get(f) || f)}」`).join('或');
+    // 这条路的起点自己就开不了（开放条件要的线索前面拿不到）：先说这个，比「拿不到结束的线索」更准
+    if (!r.gets.length && r.at !== 'next')
+        return {
+            plain: `「${r.stage}」：「${r.nodeNames[0]}」一直开不了（它的开放条件要的线索，前面拿不到），这条路走不通。`,
+            fix: '看看它的开放条件：要的线索是不是写错了，或者前面阶段漏了产出这条线索的地方。',
+            // 同一阶段里几个节点都因为这个原因开不了：界面合成一张卡（GPT 界面审阅第 9 条）
+            same: { key: 'open-never', stage: r.stage, node: r.nodeNames[0] },
+        };
+    if (r.at === 'next')
+        return {
+            plain: `「${r.stage}」：玩家只做${path}的话，这一阶段能结束，但下一阶段进不去${need ? `，下一阶段要${need}` : ''}。`,
+            fix: '让下一阶段的进入条件也认这条路拿到的线索（用「任一」），或者让这条路也能拿到下一阶段要的线索。',
+        };
+    if (r.at === 'required')
+        return {
+            plain: `「${r.stage}」：玩家只做${path}的话，还有必须完成的「${r.left.join('、')}」做不了，这一阶段结束不了。`,
+            fix: '看看那个必须完成的节点什么时候开放；如果它其实是可选的，改成「必需: false」。',
+        };
+    return {
+        plain: `「${r.stage}」：玩家只做${path}的话，拿不到${need || '结束这一阶段要的线索'}，这一阶段结束不了。`,
+        fix: '让这个节点也产出能结束本阶段的线索；或者改成做完别的节点之后才开放它，这样它就不算单独的一条路。选哪种看原文的意思。',
+    };
+}
+
+// 大纲页「检查」用的线索结构检查（导入审阅总方案第 2 条剩余项）：和导入审阅同一套人话问题。
+//   编译错误、条件里拿不到的事实 / 不存在的节点和线、走不通的地方、替代途径；
+//   保密名字：项目存过名单（导入时的作者索引）才查，没有名单不报「没做保密检查」（项目里的线多半不是导入的）。
+// 每条带 stageId / volumeId，界面用来跳到那个阶段。
+export function projectClueIssues(volumes, { secrets = null, knownFacts = [], claimedFacts = [] } = {}) {
+    let out = [],
+        units = flattenUnits(volumes || []),
+        // 文字里提到的阶段（阶段名、阶段 key 或节点 id），用来跳转；长的先比，免得「阶段1」吃掉「阶段12」
+        marks = units
+            .flatMap((u) => [stageLabel(u.stage.key), u.stage.key, ...stageNodes(u.stage.data).map((n) => nodeUid(n.item)).filter(Boolean)].map((t) => [t, u.stage.id]))
+            .sort((a, b) => b[0].length - a[0].length),
+        hint = (text) => (marks.find(([t]) => t && text.includes(t)) || [])[1] || '';
+    for (let t of compileClue(volumes || []).errors) out.push({ level: 'error', kind: 'compile', text: t, plain: t, stageId: hint(t) });
+    let list = checkClueDraft(volumes || [], [], { obtainedFacts: knownFacts, claimedFacts }).filter((t) => !/^这些(主线|剧情)节点没有/.test(t));
+    for (let t of list)
+        out.some((x) => x.text === t) ||
+            out.push({
+                level: /没有任何节点产出|不存在的节点|不存在的线|会一直开不了|编号和已有的线重复/.test(t) ? 'error' : 'warn',
+                kind: 'struct',
+                text: t,
+                plain: t,
+                stageId: hint(t),
+            });
+    if (secrets && secrets.length)
+        out.push(...checkImportDraft(volumes || [], { secrets, mode: 'clue' }).filter((x) => /^secret-/.test(x.kind || '')));
+    out.push(...importReachIssues(volumes || [], { knownFacts, claimedFacts }));
+    return out;
+}
+
 export function importReachIssues(applied, { only = null, knownFacts = [], claimedFacts = [] } = {}) {
     let out = [],
         mine = (x) => !only || only.has(x.stage);
+    let facts = factTexts(applied);
     for (let r of clueAlternativeRoutes(applied, { knownFacts, claimedFacts })) {
         if (!mine(r)) continue;
+        let base = { kind: 'route', lineId: r.lineId, volumeId: r.volumeId, stageId: r.stageId, nodeIds: r.nodeIds, at: r.at, nextStageId: r.nextStageId };
         r.verdict === 'blocked'
             ? out.push({
+                  ...base,
                   level: 'error',
                   text: `替代途径走不通：${r.stage}·${r.node} 单独走完时，${r.why}。常见原因：这条线产出的事实不在阶段结束条件 / 下一阶段进入条件的「任一」里`,
+                  ...routePlain(r, facts),
               })
             : r.verdict === 'unknown' &&
-              out.push({ level: 'warn', text: `替代途径要到运行时才能确认：${r.stage}·${r.node} 单独走完时，${r.why}` });
+              out.push({
+                  ...base,
+                  level: 'warn',
+                  text: `替代途径要到运行时才能确认：${r.stage}·${r.node} 单独走完时，${r.why}`,
+                  plain: `「${r.stage}」：玩家只走${r.nodeNames.map((n) => `「${n}」`).join('、然后')}时能不能继续，要看游戏里表格、时间这些情况。`,
+                  fix: '多半不用改；想确定的话，看看这一阶段的结束条件是不是依赖表格或时间。',
+              });
     }
     let reach = clueReachability(applied, { knownFacts, claimedFacts }),
-        stuck = [...reach.stuckStages, ...reach.stuckNodes].filter(mine);
+        all = [...reach.stuckStages, ...reach.stuckNodes].filter(mine),
+        routed = new Set(out.filter((x) => x.kind === 'route' && x.level === 'error').map((x) => x.stageId)),
+        follow = (x) => /上一阶段尚未结束|阶段未进入/.test(x.why),
+        stuck = all.filter((x) => !follow(x) && !(routed.has(x.stageId) && !x.node && /^结束条件不满足|^必需节点做不完/.test(x.why))),
+        after = all.filter(follow).length;
+    !stuck.length && all.length && !routed.size && (stuck = all);
     stuck.length &&
         reach.verdict === 'blocked' &&
         out.push({
             level: 'error',
+            kind: 'reach',
+            stageIds: [...new Set(stuck.map((x) => x.stageId).filter(Boolean))],
+            plain: `按现在的条件推下去，有地方永远走不到：${stuck
+                .slice(0, 4)
+                .map((x) => `「${x.stage}${x.node ? `·${x.nodeName || x.node}` : ''}」`)
+                .join('、')}${after ? `，以及后面 ${after} 处因此走不到` : ''}。`,
+            fix: '看看这些地方的进入条件或开放条件：要的线索是不是前面根本拿不到。',
             text: `按大纲推演走不通：${stuck
                 .slice(0, 6)
                 .map((x) => `${x.stage}${x.node ? `·${x.node}` : ''}（${x.why}）`)
@@ -468,6 +835,13 @@ export function importReachIssues(applied, { only = null, knownFacts = [], claim
         reach.verdict === 'unknown' &&
         out.push({
             level: 'warn',
+            kind: 'reach-unknown',
+            stageIds: [...new Set(stuck.map((x) => x.stageId).filter(Boolean))],
+            plain: `有些地方能不能走到，要看游戏里的时间、谁知道什么或表格里的值：${stuck
+                .slice(0, 4)
+                .map((x) => `「${x.stage}」`)
+                .join('、')}。`,
+            fix: '多半不用改，游戏里自然会满足；确实卡住时可以在执行页手动开放。',
             text: `有些地方取决于时间、知情或表格的值：${stuck
                 .slice(0, 4)
                 .map((x) => `${x.stage}${x.node ? `·${x.node}` : ''}`)
@@ -489,33 +863,15 @@ export function importDoneText(volumes) {
         .join('\n');
 }
 
-export function importRepairMessages({ yaml, issues, mode = 'clue', spots = [] }) {
-    let fence = '```';
-    return [
-        {
-            role: 'system',
-            content: [
-                `下面的大纲草稿检查出了问题。只修改列出的问题，其余内容原样保留，输出完整的修改后大纲（一个 ${fence}yaml 代码块）。`,
-                '幕后人物的名字或真相出现在 AI指令、入口、场景、名称、记录这些字段里时：改成不点名的写法（如「发号施令的人」「改装器材的技术员」），名字只留在揭示它的那个发现的「内容」里，或作者备注的 <仅作者> 里。',
-                '「记录」是给填表模型看的登记标准，也不能写名字：写成「正文出现订单或付款记录指向幕后组织者时登记」这样，不要写「此时才出现某某这个名字」。',
-                spots.length ? '【必须改的位置】里列出的每一句都要改，改完这些字段里不能再有那个名字。' : '',
-                '重复的节点 id：保留一个，另一个合并进去或改成新 id。',
-                '替代途径走不通：把那条线产出的关键事实，加进本阶段结束条件和下一阶段进入条件的「任一」里。',
-                mode === 'clue' ? CLUE_OUTLINE_RULES : OUTLINE_RULES,
-            ]
-                .filter(Boolean)
-                .join('\n'),
-        },
-        {
-            role: 'user',
-            content: `【问题】\n${issues.map((x) => `- ${x}`).join('\n')}${spots.length ? `\n\n【必须改的位置】\n${spots.map((x) => `- ${x}`).join('\n')}` : ''}\n\n【草稿】\n${fence}yaml\n${yaml}\n${fence}`,
-        },
-    ];
-}
-
-export function mergeImportParts(vols) {
+// rewrite：跨段时后面的段把前面已经写过的线头、阶段、节点又写了一遍（实测 2026-11-17：S07、S15 列出 35～45 条
+// 「两段写得不一样」，还造出重复节点 id）。true 时前一段为准、空的才补、不列冲突；新阶段、新节点、新发现照常加。
+// 「多条支线」按线合并时用 true，被略过的条数记在结果的 skipped 上，由调用方合成一句提示；
+// 「一条主线 / 一条支线」导入仍用默认 false（逐条列出冲突），实测这类导入几乎没有重写。
+export function mergeImportParts(vols, { rewrite = !1 } = {}) {
     let stages = [],
         conflicts = [],
+        seen = /* @__PURE__ */ new Set(),
+        skipped = 0,
         asList = (x) => (Array.isArray(x) ? x : isPlainObject(x) ? [x] : []),
         same = (a, b) => JSON.stringify(a) === JSON.stringify(b),
         empty = (v) => v == null || v === '' || (Array.isArray(v) && !v.length),
@@ -523,7 +879,7 @@ export function mergeImportParts(vols) {
             for (let [k, v] of Object.entries(from))
                 skip.includes(k) ||
                     empty(v) ||
-                    (empty(into[k]) ? (into[k] = v) : same(into[k], v) || conflicts.push({ ...where, field: k, kept: into[k], other: v }));
+                    (empty(into[k]) ? (into[k] = v) : same(into[k], v) || (rewrite ? skipped++ : conflicts.push({ ...where, field: k, kept: into[k], other: v })));
         },
         mergeNode = (a, b, where) => {
             let finds = asList(a.发现);
@@ -536,12 +892,40 @@ export function mergeImportParts(vols) {
             }
             return (finds.length && (a.发现 = finds), mergeFields(a, b, ['id', '发现'], where), a);
         };
+    // 已经出现过的节点 id（任何阶段）。跨段重写时，同一个节点出现在后一段的另一个阶段：
+    // 新增的发现、原来空着的字段合进原来的节点（GPT 第五轮 C2：整个丢掉会连新发现一起丢），再去掉这个重复的位置；原来的位置不变。
+    let idsOf = (st) => NODE_FIELDS.flatMap(({ field }) => asList(st.data && st.data[field]).map((n) => (isPlainObject(n) ? n.id : '')).filter(Boolean)),
+        findNode = (id) => {
+            for (let x of stages)
+                for (let { field } of NODE_FIELDS) {
+                    let n = asList(x.data && x.data[field]).find((m) => isPlainObject(m) && m.id === id);
+                    if (n) return { node: n, stage: x };
+                }
+            return null;
+        },
+        foldMoved = (st, own) => {
+            if (!rewrite || !isPlainObject(st.data)) return st;
+            let data = { ...st.data };
+            for (let { field } of NODE_FIELDS)
+                Array.isArray(data[field]) &&
+                    (data[field] = data[field].filter((n) => {
+                        if (!(isPlainObject(n) && n.id && seen.has(n.id) && !own.has(n.id))) return !0;
+                        let at = findNode(n.id);
+                        return at ? (mergeNode(at.node, n, { stage: stageLabel(at.stage.key), node: n.id }), skipped++, !1) : !0;
+                    }));
+            return { ...st, data };
+        };
     for (let v of vols || [])
         for (let st0 of v.stages || []) {
-            let st = JSON.parse(JSON.stringify(st0)),
-                hit = stages.find((x) => x.key === st.key);
+            let hit0 = stages.find((x) => x.key === st0.key),
+                st = foldMoved(JSON.parse(JSON.stringify(st0)), new Set(hit0 ? idsOf(hit0) : [])),
+                hit = hit0;
             if (!hit) {
-                stages.push(st);
+                // 后一段重写的阶段：节点都是前面已有的（已合回原处），别的也只有重写的阶段字段时，整个阶段不加。
+                // 还剩新内容（新节点、无 id 的世界动态）就加。阶段指令等字段是对这些重复节点的重写，不单独算。
+                let fresh = NODE_FIELDS.some(({ field }) => asList(st.data && st.data[field]).length > 0);
+                if (rewrite && idsOf(st0).length && !fresh) continue;
+                (stages.push(st), idsOf(st).forEach((id) => seen.add(id)));
                 continue;
             }
             let where = { stage: stageLabel(st.key) },
@@ -551,7 +935,7 @@ export function mergeImportParts(vols) {
                 for (let n of asList(st.data && st.data[field])) {
                     let list = Array.isArray(hit.data[field]) ? hit.data[field] : (hit.data[field] = asList(hit.data[field])),
                         k = list.findIndex((x) => isPlainObject(x) && isPlainObject(n) && x.id && x.id === n.id);
-                    k >= 0 ? mergeNode(list[k], n, { ...where, node: n.id }) : list.push(n);
+                    k >= 0 ? mergeNode(list[k], n, { ...where, node: n.id }) : (list.push(n), isPlainObject(n) && n.id && seen.add(n.id));
                 }
         }
     let lineIds = [...new Set((vols || []).map((v) => (isPlainObject(v.line) ? String(v.line.编号 || '').trim() : '')).filter(Boolean))];
@@ -560,12 +944,13 @@ export function mergeImportParts(vols) {
     let first = vols && vols.length ? vols[0] : null,
         keepLine = (vols || []).map((v) => v.line).find((l) => isPlainObject(l)),
         out = first ? [{ ...first, ...(keepLine ? { line: keepLine } : {}), stages }] : [];
-    return Object.defineProperty(out, 'conflicts', { value: conflicts, enumerable: !1 });
+    return Object.defineProperties(out, { conflicts: { value: conflicts, enumerable: !1 }, skipped: { value: skipped, enumerable: !1 } });
 }
 
 export function importConflictText(c) {
+    if (c.rewrite) return `线 ${c.line} 跨了几段，后面的段把前面已经写过的内容又写了一遍（${c.rewrite} 处），以前一段为准，后面只补了新的阶段和场景。需要的话在审阅页对照原文改`;
     if (c.lines)
-        return `草稿里写了好几条剧情线（${c.lines.join('、')}），长文导入暂时只能合成一条：保留了「${c.lines[0]}」，其余几条的阶段并进了这一条，它们的线编号和开启条件没有保留。要分开成几条线，采用后在大纲页让 AI 另写新卷`;
+        return `草稿里写了好几条剧情线（${c.lines.join('、')}），长文导入暂时只能合成一条：保留了「${c.lines[0]}」，其余几条的阶段并进了这一条，它们的线编号和开启条件没有保留。要分开成几条线，采用后在大纲页让 AI 另写新的剧情线`;
     let s = (v) => (typeof v == 'string' ? v : JSON.stringify(v)).slice(0, 80);
     return `${c.stage}${c.node ? `·${c.node}` : ''} 的「${c.field}」两段写得不一样：保留了前一段的「${s(c.kept)}」，后一段是「${s(c.other)}」。需要的话在采用后手动改`;
 }
@@ -589,8 +974,8 @@ export function importLineIndexMessages(base) {
 ${IMPORT_LINE_INDEX}
 `,
             )}
-这份文档是好几条分别成卷的支线，不要合并成一条连续的剧情。先在「支线」里列出本段出现的每一条支线（一条支线被切成两段时，后一段沿用前一段的编号，不要另建）。
-每条支线有没有开启前提，逐条照原文抄进「开启条件原文」「关系」：「分别成卷」不等于「没有前提」，原文写了「默认在 8 之后」就照抄；原文明说「独立」也照抄「独立」；原文没写就省略。`,
+这份文档是好几条各自独立成线的支线，不要合并成一条连续的剧情。先在「支线」里列出本段出现的每一条支线（一条支线被切成两段时，后一段沿用前一段的编号，不要另建）。
+每条支线有没有开启前提，逐条照原文抄进「开启条件原文」「关系」：「各自成线」不等于「没有前提」，原文写了「默认在 8 之后」就照抄；原文明说「独立」也照抄「独立」；原文没写就省略。`,
         },
         base[1],
     ];
@@ -667,9 +1052,9 @@ export function importLineDraftMessages({
 ${CLUE_LINE_RULES.join(`
 `)}
 · 上面说的「只引用有节点产出的事实编号」，线的开启条件例外：它里面的事实可以不需要节点产出。
-这份材料是好几条分别成卷的支线：
-· 本段里的**每一条**支线写成单独的一卷，卷的第一个键写「线」，类型写「支线」，编号**必须**用【线身份表】里的编号；卷名写「剧情_编号_标题」。不要把两条支线写进同一卷，也不要写主线。
-· 一条支线从上一段延续过来时，用同一个编号、同一个卷名，只写新增的阶段或节点。
+这份材料是好几条各自独立成线的支线：
+· 本段里的**每一条**支线写成单独的一条剧情线（YAML 里单独一卷），它的第一个键写「线」，类型写「支线」，编号**必须**用【线身份表】里的编号；顶层键写「剧情_编号_标题」。不要把两条支线写进同一卷，也不要写主线。
+· 一条支线从上一段延续过来时（【已经写出的阶段和节点】里已经有它），用同一个编号、同一个卷名，只写新增的阶段或节点；「线」下面只写编号和类型，简介、入口提示、开启条件、原开启条件前面已经写过，不要重写。
 · 每条支线的事实编号、节点 id 带上这条支线的编号（如 F_s03_poster、s03_cinema），免得不同支线撞号。
 · 开启条件和开启时段只照【线身份表】里这条线自己的「开启」「关系」写，每条分开判断，不要照抄同一次写的别的线。三种情况：
   - 写的是「独立」或什么都没写：不写开启条件，也不写开启时段。邀请、碰面这类由头写成第一个节点的入口，不要编成「收到邀请」的事实条件。
@@ -705,6 +1090,36 @@ ${mainLines}`,
         { role: 'system', content: sys },
         { role: 'user', content: user },
     ];
+}
+
+// 「好几条支线」导入：同一批里两条线出现同一段内容（DeepSeek 实测：S07 名下是 S02 的整个阶段，四个节点 id 都重复）。
+// 只报事实，不猜谁抄了谁：写出两边的线和阶段，由作者决定重新整理哪一条（GPT 代码审阅第 2 点）。
+// 同一段 = 两个阶段共有节点 id，或阶段名和节点名完全一样。返回 [{ a: {id, stage}, b: {id, stage}, nodes: [id…], text }]。
+export function importLineDuplicates(vols) {
+    let idOf = (v) => (isPlainObject(v.line) ? String(v.line.编号 || '').trim() : ''),
+        units = (vols || []).flatMap((v) =>
+            (v.stages || []).map((s) => {
+                let ns = stageNodes(s.data);
+                return { id: idOf(v), stage: stageLabel(s.key), uids: ns.map((n) => nodeUid(n.item)).filter(Boolean), names: ns.map((n) => n.name).join('|'), key: s.key };
+            }),
+        ),
+        out = [];
+    for (let i = 0; i < units.length; i++)
+        for (let j = i + 1; j < units.length; j++) {
+            let a = units[i],
+                b = units[j];
+            if (!a.id || !b.id || a.id === b.id) continue;
+            let shared = a.uids.filter((u) => b.uids.includes(u)),
+                sameText = a.key === b.key && a.names && a.names === b.names;
+            (shared.length || sameText) &&
+                out.push({
+                    a: { id: a.id, stage: a.stage },
+                    b: { id: b.id, stage: b.stage },
+                    nodes: shared,
+                    text: `这段内容同时出现在 ${a.id}「${a.stage}」和 ${b.id}「${b.stage}」${shared.length ? `（重复的节点：${shared.slice(0, 4).join('、')}${shared.length > 4 ? '……' : ''}）` : ''}，请核对归属。可能是整理时放错了线，可以重新整理其中一条。`,
+                });
+        }
+    return out;
 }
 
 export function importLineIssues(drafts, existing, { index = null, known = [], claimed = [] } = {}) {
@@ -780,15 +1195,15 @@ export function mergeImportByLine(vols) {
     let out = [];
     for (let key of order) {
         let list = groups.get(key),
-            merged = mergeImportParts(list),
+            merged = mergeImportParts(list, { rewrite: !0 }),
             line = {};
+        // 线头：前一段为准，空的才补（后面的段重写的简介、入口提示不逐条列冲突，实测 2026-11-17）
+        let skippedHead = 0;
         for (let v of list)
             if (isPlainObject(v.line))
                 for (let [k, val] of Object.entries(v.line))
-                    line[k] == null || line[k] === ''
-                        ? (line[k] = val)
-                        : JSON.stringify(line[k]) !== JSON.stringify(val) &&
-                          conflicts.push({ stage: `线 ${key}`, field: k, kept: line[k], other: val });
+                    line[k] == null || line[k] === '' ? (line[k] = val) : JSON.stringify(line[k]) !== JSON.stringify(val) && skippedHead++;
+        merged.skipped + skippedHead && !key.startsWith('?') && conflicts.push({ line: key, rewrite: merged.skipped + skippedHead });
         (conflicts.push(...merged.conflicts.filter((c) => !c.lines)),
             key.startsWith('?') &&
                 conflicts.push({ stage: volumeLabel(list[0].key), field: '线', kept: '（没写）', other: '', noLine: !0 }),
@@ -920,78 +1335,6 @@ export function droppedLineRefs(kept, dropped, existingVolumes = []) {
                 );
     for (let l of comp.lines || []) l.window && gone.has(l.window.main) && out.push(`线 ${l.id} 的开启时段引用了 ${l.window.main}`);
     return out;
-}
-
-export function lineReviseMessages({ targets, context = '', tableCatalog = '', mainLines = '' }) {
-    let fence = '```';
-    return [
-        {
-            role: 'system',
-            content: [
-                `下面几条剧情线（每条是一卷）各带一句作者意见。按意见修改这几条，输出修改后的这几卷（一个 ${fence}yaml 代码块，顶层键是卷名，卷的第一个键是「线」）。`,
-                '· 只改列出的这几条，每条都要输出；线的编号不能改；没提到的部分原样保留。',
-                '· 别的线只是给你参考，不要输出、不要改。',
-                '· 改开启条件时按下面线的写法。意见说「主线到某个阶段以后 / 期间才能开」的，在线下面写单独的字段「开启时段: {主线: M1, 从: 阶段短名}」（要关的话加 到），旧的开启条件去掉（没有别的要求就整个不写）；不要写进开启条件，也不要为它另编一个事实。',
-                '· 改剧情内容时，还是同一件事的节点必须沿用原来的 id（哪怕改了名称、入口），新加的事才用新 id。',
-                CLUE_OUTLINE_RULES_WITH_LINES,
-            ].join(`
-`),
-        },
-        {
-            role: 'user',
-            content: [
-                mainLines &&
-                    `【项目里已有的主线】
-${mainLines}`,
-                context &&
-                    `【其他线（只读）】
-${context}`,
-                tableCatalog,
-                ...targets.map(
-                    (t) => `【要改的线 ${t.id}】
-意见：${t.comment}
-${fence}yaml
-${t.yaml}
-${fence}`,
-                ),
-            ].filter(Boolean).join(`
-
-`),
-        },
-    ];
-}
-
-export function pickRevised(volumes, ids) {
-    let got = {};
-    for (let v of volumes || []) {
-        let id = isPlainObject(v.line) ? String(v.line.编号 || '').trim() : '';
-        id && ids.includes(id) && !got[id] && (got[id] = v);
-    }
-    return { got, missing: ids.filter((id) => !got[id]) };
-}
-
-export function lineChangeText(before, after) {
-    let out = [],
-        show = (v) => (v == null || v === '' ? '（无）' : (typeof v == 'string' ? v : JSON.stringify(v).replace(/"/g, '')).slice(0, 60)),
-        a = isPlainObject(before.line) ? before.line : {},
-        b = isPlainObject(after.line) ? after.line : {};
-    for (let [k, label] of [
-        ['类型', '类型'],
-        ['简介', '简介'],
-        ['开启条件', '开启'],
-        ['开启方式', '开启方式'],
-        ['开启时段', '时段'],
-        ['入口提示', '入口'],
-    ])
-        JSON.stringify(a[k] ?? null) !== JSON.stringify(b[k] ?? null) && out.push(`${label}：${show(a[k])} → ${show(b[k])}`);
-    let count = (v) => `${v.stages.length} 个阶段 · ${v.stages.reduce((n, s) => n + stageNodes(s.data).length, 0)} 个场景`;
-    return (
-        count(before) !== count(after)
-            ? out.push(`内容：${count(before)} → ${count(after)}`)
-            : JSON.stringify(before.stages.map((s) => s.data)) !== JSON.stringify(after.stages.map((s) => s.data)) &&
-              out.push('内容有改动'),
-        out
-    );
 }
 
 export function mainLinesText(volumes) {

@@ -76,7 +76,9 @@ test('compile: line ids, kinds, modes; errors for missing id, duplicate id, unkn
 test('conditions: 线 / 计数 parse; full-width ops and a pasted <if cell="…"> are accepted', () => {
   assert.equal(C.parseAtom('线: S07 == 完成').kind, 'line');
   assert.equal(C.parseAtom('线: S07 == 开过').state, '开过');
-  assert.equal(C.parseAtom('线: S07 == 结束').kind, 'bad');
+  // 导入审阅总方案 H / GPT 审阅 R6：「结束」= 完成或放弃，是合法的线状态
+  assert.equal(C.parseAtom('线: S07 == 结束').state, '结束');
+  assert.equal(C.parseAtom('线: S07 == 已结束').kind, 'bad');
   const pasted = C.parseAtom('<if cell="关系表/巴基/阶段 ≥ 2">');
   assert.deepEqual([pasted.kind, pasted.path, pasted.op, pasted.value], ['cell', '关系表/巴基/阶段', '>=', '2']);
   const full = C.parseAtom('表: 关系表/巴基/阶段 ＞＝ 2');
@@ -271,7 +273,7 @@ test('prompt + draft check: the table catalog is sent; a condition on a missing 
   const cat = C.tableCatalogText(tables);
   assert.match(cat, /关系表：列 角色、阶段；现有行 巴基/);
   const m = C.outlineMessages({ setting: '', talk: '', volumes: [], volumeNo: 1, request: '加一条支线', mode: 'clue', tableCatalog: cat });
-  assert.match(m[0].content, /在卷的第一个键写「线」/);
+  assert.match(m[0].content, /第一个键写「线」/);
   assert.match(m[1].content, /当前数据库的表格/);
   const draft = C.parseOutlineText(`剧情_S01_采访:
   线:
@@ -331,9 +333,9 @@ test('R2: 知情 / 核实 / knowledge-cell conditions on a line\'s 开启条件 
 // ---------- R3：长文导入不拿线的写法；写出了多条线时明说，不悄悄合并 ----------
 test('R3: line rules go only to the new-volume request; long import gets the base rules; several lines in an import draft are reported', () => {
   const vol = C.outlineMessages({ setting: '', talk: '', volumes: [], volumeNo: 1, mode: 'clue' })[0].content;
-  assert.match(vol, /在卷的第一个键写「线」/);
+  assert.match(vol, /第一个键写「线」/);
   const imp = C.importDraftMessages({ part: { i: 0, title: '一', text: '材料' }, index: '', mode: 'clue' })[0].content;
-  assert.doesNotMatch(imp, /在卷的第一个键写「线」|当前数据库的表格/);
+  assert.doesNotMatch(imp, /第一个键写「线」|当前数据库的表格/);
   assert.match(imp, /只引用大纲里确实有节点产出的事实编号/);
   // two different lines from the model: kept as one, reported, the first line's attributes kept
   const a = { id: 'a', key: '剧情_A', line: { 编号: 'A', 开启方式: '人工' }, stages: [{ id: 's1', key: '阶段1_调查', data: { 主线节点: [node('nA', 'FA')] } }] };

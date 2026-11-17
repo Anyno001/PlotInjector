@@ -13,19 +13,19 @@ export const TOUR_STEPS = {
         {
             target: '.pi-side-hd [data-act=new-project]',
             title: '新建项目',
-            body: '一个项目就是一段剧情，比如一条主线或一条 if 线。新建后会自动设为当前角色卡的项目。',
+            body: '一个项目保存一个故事的设定、人设、大纲和进度。每个聊天同时使用一个项目；当前聊天还没有项目时，会直接使用新项目。主线、支线都写在同一个项目的大纲里。',
             side: 'right',
         },
         {
             target: ['.pi-plist .pi-pitem', '.pi-plist'],
             title: '项目列表',
-            body: '你的项目都在这里，点一下打开。带小圆点的是当前角色卡正在用的那个。右键可以改名、分组或删除。',
+            body: '你的项目都在这里，点一下打开。带圆点的是当前聊天使用的项目。长按或右键：切换使用、改名、分组、删除。',
             side: 'right',
         },
         {
             target: '.pi-tabs',
-            title: '四个页签',
-            body: '一般的顺序：在「讨论」里和 AI 把剧情想清楚，写成「大纲」，到「执行」页开始注入。「设定」页可选，给没有世界观的卡用。线索推进还能同时跑主线和几条支线，到「大纲」「执行」页点问号看说明。',
+            title: '页签',
+            body: '一般的顺序：在「讨论」里和 AI 把剧情想清楚，写成「大纲」，到「执行」页开始注入。「设定」「人设」页可选：设定给没有世界观的卡用，人设按剧情阶段切换角色的设定。线索推进还能同时跑主线和几条支线，到「大纲」「执行」页点问号看说明。',
             side: 'bottom',
         },
         {
@@ -49,15 +49,15 @@ export const TOUR_STEPS = {
     ],
     discuss: [
         {
-            target: '.pi-refs',
+            target: '.pi-dc-refs',
             title: '附带参考',
-            body: '发给 AI 时一起附上的资料：设定、大纲、剧情进度、最近几楼正文、世界书条目。粉色是开着的，点一下切换。附得越多，AI 越了解情况，也越费 token。',
+            body: '发给 AI 时一起附上的资料：设定、大纲、剧情进度、最近几楼正文、世界书条目。点开选择，粉色是开着的。附得越多，AI 越了解情况，也越费 token。',
             side: 'bottom',
         },
         {
-            target: '[data-act=edit-mode]',
-            title: '改大纲',
-            body: '打开后，你说想怎么改大纲，AI 会在回复末尾附上一份改动提案，回复下面出现「审阅并应用」，勾选后插进大纲。目前只能加节点、调整同一阶段里的顺序。只是聊天时关掉就行。',
+            target: '[data-act=review-pick]',
+            title: '审阅修改',
+            body: '讨论只用来聊，不直接改大纲。想改时点这里，选一条剧情线：逐页查看各阶段，在对应页写意见，预览后一次发给 AI，看过再保存到大纲。讨论记录会作为参考一起带上。',
             side: 'bottom',
         },
         {
@@ -90,34 +90,106 @@ export const TOUR_STEPS = {
     ],
     outline: [
         {
+            target: ['[data-act=ai-volume]', '[data-ai-request]'],
+            title: 'AI 写新大纲',
+            body: '写下要求，AI 参考讨论和设定写一段新大纲（线索推进时是一条新剧情线），先显示草稿，确认后才写进大纲。参考哪些讨论记录和世界书，在弹框里选。',
+            side: 'bottom',
+        },
+        {
+            target: '[data-act=review-open]',
+            title: '审阅修改',
+            body: '逐条、逐页查看各条线，在对应页写意见，一次发给 AI 修改。改动先存为草稿，点「保存到大纲」才生效；关掉再打开草稿还在。按钮上的数字是改了还没保存的线。',
+            side: 'bottom',
+        },
+        {
             target: '[data-act=import-open-panel]',
             title: '导入长文',
-            body: '已经有剧情方案或小说？贴进来，AI 逐段整理成大纲草稿，你按阶段审阅后再采用。中途关掉也能接着做。',
+            body: '已有剧情方案或小说时，粘贴进来，AI 逐段整理成大纲草稿，逐页审阅后再保存到大纲。中途关闭可以接着做。',
             side: 'bottom',
         },
         {
-            target: ['[data-act=import-file]', '[data-act=import-paste]'],
-            title: '其他导入方式',
-            body: '手上已经有插件导出的大纲文件时，用「导入文件」「粘贴」或「从世界书」。',
+            target: '[data-act=check-toggle]',
+            title: '检查',
+            body: '检查整份大纲。线索推进会查走不通的地方、拿不到的线索和保密名字；点一条跳到对应阶段。按钮上的数字是要处理的问题数。',
             side: 'bottom',
         },
         {
-            target: ['[data-act=ai-volume]', '[data-ai-request]'],
-            title: 'AI 写一卷',
-            body: '在旁边的输入框里写要求，AI 会参考讨论和设定写一卷新大纲，先给你看草稿，确认后才写进大纲。线索推进时可以直接说「加一条巴基的支线，等关系到熟悉再开」，AI 会写成一条单独的线。',
-            side: 'bottom',
-        },
-        {
-            target: '[data-act=lines-open]',
-            title: '剧情线',
-            body: '主线和支线一页一条地看：改简介、入口、开启时段；想改开启条件或剧情，就写一句意见让 AI 改，改之前会先给你看改了什么。',
+            target: '[data-act=outline-menu]',
+            title: '更多',
+            body: '总览、历史版本，以及导入 YAML、粘贴、从世界书导入、导出。',
             side: 'bottom',
         },
         {
             target: ['.pi-tree-list', '.pi-tree'],
             title: '大纲结构',
-            body: '卷 → 阶段 → 节点。点一个阶段，在右边编辑它的内容。线索推进的阶段多一块「线索字段」，写开放条件、发现和完成条件。',
+            body: '卷（线索推进里叫剧情线）→ 阶段 → 节点。点一个阶段在右边编辑。线索推进的阶段多一块「线索字段」：开放条件、发现、完成条件。',
             side: 'right',
+        },
+    ],
+    // 导入页（大纲页里打开「导入长文」）
+    import: [
+        {
+            target: '[data-imp-text]',
+            title: '原文',
+            body: '粘贴剧情方案或小说，或选择 txt / md 文件。很长的文档会分段整理。',
+            side: 'bottom',
+        },
+        {
+            target: '[data-imp-modesel]',
+            title: '推进方式',
+            body: '默认和项目一致。线索推进按「查到什么、能做下一步」整理；按阶段推进按时间顺序整理。',
+            side: 'bottom',
+        },
+        {
+            target: '.pi-imp-kind',
+            title: '文档内容',
+            body: '一条主线、一条支线，或多条支线。决定按什么方式整理。',
+            side: 'bottom',
+        },
+        {
+            target: '[data-act=import-start]',
+            title: '开始整理',
+            body: '整理完成后进入审阅页。长文要整理一阵，可以先去做别的；没保存的导入在「之前的导入」里继续，「审阅修改」页顶上也会提示。',
+            side: 'top',
+        },
+    ],
+    // 逐页审阅（导入、重新审阅、讨论页「审阅修改」共用）
+    review: [
+        {
+            target: '.pi-rv-dots',
+            title: '页签',
+            body: '「线信息」是这条线的开头信息，后面是各阶段。黄色：有问题；粉色：已修改；右上角小红点：写了意见。换线点上面的线名。',
+            side: 'bottom',
+        },
+        {
+            target: '[data-act=rv-line-menu]',
+            title: '这条线的更多操作',
+            body: '导入多条支线时，在线信息页右上角：某条这次不想要，选「本次不导入」；整理得不好，可以单独重新整理这一条。',
+            side: 'bottom',
+        },
+        {
+            target: '[data-rv-comment]',
+            title: '意见',
+            body: '在对应页写修改意见。离开输入框自动保存。',
+            side: 'top',
+        },
+        {
+            target: '[data-act=rv-fill-all]',
+            title: '全部加入意见',
+            body: '把各页检查出的问题追加到意见里，不覆盖已写的内容。待确认的问题需要自己填写回答。标题上的「问题」数字可以跳到有问题的页。',
+            side: 'top',
+        },
+        {
+            target: '[data-act=rv-preview]',
+            title: '发送意见',
+            body: '汇总各页意见，可再修改，也可写不限于某一页的整体意见；确认后一次发给 AI。改完的内容先进草稿，可撤销。',
+            side: 'top',
+        },
+        {
+            target: '[data-act=import-adopt]',
+            title: '保存到大纲',
+            body: '确认后才写进大纲。已在聊天中完成的节点会保留，并记一份大纲历史，可在「历史」里恢复。',
+            side: 'top',
         },
     ],
     run: [
@@ -150,6 +222,13 @@ export const TOUR_STEPS = {
         { target: '.pi-tl-vol', title: '阶段时间线', body: '每个阶段的状态。点阶段右边的「⋯」可以手动设为当前、标为已完成。', side: 'top' },
         // 线索推进
         {
+            // 运行设置收起时，下面讲具体按钮的两步会跳过；这一步总能看到（GPT 第二轮界面审阅）
+            target: '[data-act=run-set-toggle]',
+            title: '运行设置',
+            body: '推进方式、表格绑定、同时进行的支线、推进速度都在这里。表格绑好后默认收起，点标题展开。',
+            side: 'bottom',
+        },
+        {
             target: '[data-act=clue-gen-template]',
             title: '生成线索模板',
             body: '线索推进靠数据库里的三张表记录主角查到了什么。第一次在一个聊天里用时，先点这里加上这三张表，原有的表和数据都不动。',
@@ -162,7 +241,8 @@ export const TOUR_STEPS = {
             side: 'bottom',
         },
         {
-            target: '[data-act=clue-pause]',
+            // 多条线时暂停在「暂停 ▾」菜单里（菜单收起时里面的按钮看不到）
+            target: '.pi-pause-menu > summary, [data-act=clue-pause]',
             title: '暂停剧情',
             body: '想先玩一段日常时暂停，不再注入线索内容，进度保留。只有一条主线时，主线走完这里会出现「开始下一段主线」。',
             side: 'bottom',
@@ -241,7 +321,15 @@ export const TOUR_STEPS = {
 };
 
 export function tourScopeOf(view) {
-    return view.page ? view.page : view.project() ? view.tab : 'core';
+    if (view.page) return view.page;
+    if (!view.project()) return 'core';
+    // 大纲页里打开的导入页、逐页审阅页各有自己的说明
+    if (view.tab === 'outline') {
+        let doc = hostDocument();
+        if (doc.querySelector('.pi-root .pi-rv .pi-rv-dots')) return 'review';
+        if (doc.querySelector('.pi-root [data-imp-text]')) return 'import';
+    }
+    return view.tab;
 }
 
 export function tourState(data) {

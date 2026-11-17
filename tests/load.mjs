@@ -9,7 +9,6 @@ import * as M6 from '../src/core/clue-project.js';
 import * as M7 from '../src/core/clue-progress.js';
 import * as M8 from '../src/core/clue-audit.js';
 import * as M9 from '../src/core/clue-template.js';
-import * as M10 from '../src/core/outline-proposal.js';
 import * as M11 from '../src/core/inject.js';
 import * as M12 from '../src/core/prompts.js';
 import * as M13 from '../src/core/long-import.js';
@@ -17,5 +16,6 @@ import * as M14 from '../src/core/fact-labels.js';
 import * as M15 from '../src/core/store.js';
 import * as M16 from '../src/core/guide.js';
 import * as M17 from '../src/core/setting.js';
+import * as M18 from '../src/core/review-draft.js';
 import YAML from 'yaml';
-export function loadCore(){ const api={...Lines,...M0,...M1,...M2,...M3,...M4,...M5,...M6,...M7,...M8,...M9,...M10,...M11,...M12,...M13,...M14,...M15,...M16,...M17};api.setYamlLib(YAML);return api;}
+export function loadCore(){ const api={...Lines,...M0,...M1,...M2,...M3,...M4,...M5,...M6,...M7,...M8,...M9,...M11,...M12,...M13,...M14,...M15,...M16,...M17,...M18};api.setYamlLib(YAML);return api;}

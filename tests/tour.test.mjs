@@ -105,3 +105,62 @@ test('a page whose buttons are not shown says so instead of opening an empty tou
   await press(doc, 'close');
   await inst.destroy();
 });
+
+// 导入页、逐页审阅页（大纲页里打开的）有自己的说明；讨论页指向新的「参考」「审阅修改」（导入审阅总方案第 5 条剩余项）。
+test('the ? button on the import page and on the review page plays their own steps; the discussion steps point at 参考 / 审阅修改', async () => {
+  const { host, inst, doc, pid } = await boot({ withProject: true });
+  inst.data.updateSettings({ tourState: { revision: 2, done: ['core'] } });
+  inst.data.updateProject(pid, (p) => ({ ...p, outline: { ...p.outline, volumes: [{ id: 'v1', key: '剧情_卷一_码头', stages: [{ id: 's1', key: '阶段一_报案', data: { 时间范围: '第一天', 主线节点: [{ 名称: '报案', 地点: '码头', 事件: '有人报案' }] } }] }] } }));
+  inst.open(); await tick();
+  const click = async (sel) => { const el = doc.querySelector(sel); assert.ok(el, `missing ${sel}`); el.click(); await tick(); };
+  const titles = async () => { const out = []; for (let i = 0; i < 12 && pop(doc); i++) { out.push(title(doc)); await press(doc, 'next'); } return out; };
+  await click(`[data-act="project"][data-id="${pid}"]`);
+  await click('[data-act="tab"][data-tab="discuss"]');
+  for (let i = 0; i < 20 && !doc.querySelector('.pi-dc-refs'); i++) await tick();
+  await click('.pi-top-end [data-act=tour]');
+  const d = await titles();
+  assert.ok(d.includes('附带参考') && d.includes('审阅修改'), d.join(' / '));
+  // 导入页
+  await click('[data-act="tab"][data-tab="outline"]');
+  await click('[data-act="import-open-panel"]');
+  await click('.pi-top-end [data-act=tour]');
+  const im = await titles();
+  assert.ok(im.includes('原文') && im.includes('开始整理'), im.join(' / '));
+  assert.deepEqual([...im], ['原文', '推进方式', '开始整理'], 'outline-mode project: 文档内容 is not on the page, so its step is skipped; 推进方式 is found');
+  // 切成线索推进，「文档内容」出现，四步都在、顺序和页面一致
+  doc.querySelector('[data-imp-modesel]').value = 'clue';
+  doc.querySelector('[data-imp-modesel]').dispatchEvent(new host.w.Event('input', { bubbles: true })); await tick(); await tick();
+  await click('.pi-top-end [data-act=tour]');
+  assert.deepEqual([...(await titles())], ['原文', '推进方式', '文档内容', '开始整理']);
+  // 审阅页（讨论页「审阅修改」进去）
+  await click('[data-act="tab"][data-tab="discuss"]');
+  await click('[data-act="review-pick"]');
+  doc.querySelector('.pi-dialog [data-dlg-value="v1"]').click();
+  for (let i = 0; i < 30 && !doc.querySelector('.pi-rv'); i++) await tick();
+  await click('.pi-top-end [data-act=tour]');
+  const rv = await titles();
+  assert.ok(rv.includes('页签') && rv.includes('发送意见') && rv.includes('保存到大纲'), rv.join(' / '));
+  assert.ok(!rv.includes('导入长文'), 'not the outline tab steps');
+  assert.ok(!rv.includes('这条线的更多操作'), 'the ⋯ step is skipped when the page has no ⋯ (not a multi-line import)');
+  await inst.destroy();
+});
+
+test('multi-line import review: the tour points at the ⋯ on the line page (本次不导入 / 重新整理)', async () => {
+  const { inst, doc, pid } = await boot({ withProject: true });
+  inst.data.updateSettings({ tourState: { revision: 2, done: ['core'] } });
+  const v = (id) => ({ id: `v${id}`, key: `剧情_${id}_x`, line: { 编号: id, 类型: '支线', 简介: 'x' }, stages: [{ id: `s${id}`, key: '阶段1_x', data: { 主线节点: [{ id: `${id}a`, 名称: 'a', 入口: '去', 发现: [{ 事实: `F_${id}`, 内容: 'x' }], 完成条件: { 事实: `F_${id}` } }] } }] });
+  const job = await inst.data.imports.create({ projectId: pid, text: 'x', mode: 'lines', needs: '' });
+  await inst.data.imports.update(job.id, (j) => ({ ...j, step: 'review', lineReview: { items: { S01: { vol: v('S01'), comment: '', lastComment: '', changed: [], dropped: false }, S02: { vol: v('S02'), comment: '', lastComment: '', changed: [], dropped: false } }, order: ['S01', 'S02'], conflicts: [] } }));
+  inst.data.updateProject(pid, (p) => ({ ...p, imports: [...(p.imports || []), job.id] }));
+  inst.open(); await tick();
+  const click = async (sel) => { const el = doc.querySelector(sel); assert.ok(el, `missing ${sel}`); el.click(); await tick(); };
+  await click(`[data-act="project"][data-id="${pid}"]`);
+  await click('[data-act="tab"][data-tab="outline"]');
+  await click('[data-act="import-open-panel"]');
+  await click(`[data-act="import-open"][data-id="${job.id}"]`);
+  for (let i = 0; i < 30 && !doc.querySelector('.pi-rv'); i++) await tick();
+  await click('.pi-top-end [data-act=tour]');
+  const out = []; for (let i = 0; i < 12 && pop(doc); i++) { out.push(title(doc)); await press(doc, 'next'); }
+  assert.deepEqual([...out.slice(0, 2)], ['页签', '这条线的更多操作'], out.join(' / '));
+  await inst.destroy();
+});

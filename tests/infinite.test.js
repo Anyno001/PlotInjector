@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DEFAULT_CONFIG, DEFAULT_HUB, blankedWordKeys, normalizeInfinite, normalizeWorld, poolToText, putWorld, randomFloat, rollPool, rollWorldDice, textToPool, titleKey } from '../src/core/infinite.js';
 import { addLog, buildInfiniteDetail, createWorld, emptyInfinite, enterWorld, leaveWorld, normalizeInfiniteProgress, reenterWorld, removeWorld, undoEnter, undoLeave, withTrigger } from '../src/core/infinite-flow.js';
-import { decideTrigger, describeRead, hashText, judgeTrigger, makeTrigger, parseTrainState, trainStates } from '../src/core/infinite-state.js';
+import { decideTrigger, describeRead, hashText, judgeTrigger, makeTrigger, parseTrainState } from '../src/core/infinite-state.js';
+import { hubWordNames } from '../src/core/infinite.js';
 import { DEFAULT_WORLD_SPEC, buildWorldMessages, horrorTitle, parseWorldReply, worldSpecText } from '../src/core/infinite-world.js';
 import { buildEntries } from '../src/core/inject.js';
 import { emptyProgress, normalizeProgress } from '../src/core/progress.js';
@@ -253,7 +254,8 @@ test('自定义主空间配置：开、关、否定、照抄模板都按配置�
     assert.equal(judgeTrigger(enter, aptBlock('出门'), APT), 'same');
     assert.equal(judgeTrigger(enter, aptBlock('公寓里'), APT), 'undo');
     assert.equal(describeRead({ floor: 6, state: '出门' }, APT), '上次读到：第 6 楼 公寓：出门');
-    assert.deepEqual(trainStates(APT), ['公寓里', '出门', '副本里', '回公寓']);
+    const names = hubWordNames(APT);
+    assert.deepEqual([names.hub, names.depart, names.away, names.back], ['公寓里', '出门', '副本里', '回公寓']);
 });
 
 test('自定义配置：标签和栏名里的正则特殊字符先转义', () => {

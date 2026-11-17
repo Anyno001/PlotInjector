@@ -369,6 +369,7 @@ test('prebuild through the run page: only missing rows are inserted via the offi
   inst.open(); await new Promise((r) => setTimeout(r, 20));
   const doc = host.w.document, tick = () => new Promise((r) => setTimeout(r, 20));
   doc.querySelector(`[data-act="project"][data-id="${p.id}"]`).click(); await tick();
+  (() => { const t = doc.querySelector('[data-act="run-set-toggle"][aria-expanded="false"]'); t && t.click(); })(); await tick();
   doc.querySelector('[data-act="clue-prebuild"]').click(); await tick();
   const dlg = doc.querySelector('.pi-dialog');
   assert.match(dlg.textContent, /每一轮都会发给填表模型/);
@@ -390,6 +391,7 @@ test('prebuild through the run page: only missing rows are inserted via the offi
   assert.ok(know.some((r) => r[1] === 'F_seen@user' && r[4] === '未知'), 'knowledge row pre-built as 未知');
   assert.equal(inst.runtime.clue.compute().snap.problems.filter((x) => /没有这些编号的行|预建行/.test(x)).length, 0, 'no missing pre-built rows anymore');
   // running again: nothing to add
+  (() => { const t = doc.querySelector('[data-act="run-set-toggle"][aria-expanded="false"]'); t && t.click(); })(); await tick();
   doc.querySelector('[data-act="clue-prebuild"]').click(); await tick();
   assert.equal(doc.querySelector('.pi-dialog'), null, 'no dialog when complete');
   await inst.destroy();

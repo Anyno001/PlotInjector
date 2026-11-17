@@ -8,6 +8,11 @@ import { loadCore } from './load.mjs';
 import { createHost } from './host-sim.mjs';
 
 const C = loadCore();
+// 把结构化检查结果拼成一行文字，方便按提示语断言（原来的生产包装函数 factLabelWarnings 已删，界面直接用 factLabelCheck）
+const warnText = (value, ctx = {}, opts = {}) => {
+  const r = C.factLabelCheck(value, ctx, opts);
+  return [...r.warns, ...r.suspects.map((s) => `${s.where}里有答案的片段「${s.piece}」`), ...r.notes.map((n) => `模型拿不准：${n}`)];
+};
 const here = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT = JSON.parse(fs.readFileSync(path.join(here, 'fixtures/shujuku-default-template-spv8.9.2.json'), 'utf8'));
 const tick = () => new Promise((r) => setTimeout(r, 20));
@@ -55,12 +60,12 @@ test('parse + warnings: missing codes reported; answer overlap, secret names, un
   assert.deepEqual([...r.missing], ['F_key']);
   assert.ok(!r.items.has('F_ghost'), 'codes not asked for are ignored');
   const ctx = new Map(C.factLabelContext(VOLS()).map((x) => [x.code, x]));
-  assert.deepEqual([...C.factLabelWarnings(r.items.get('F_han'), ctx.get('F_han'))], []);
-  assert.match(C.factLabelWarnings(r.items.get('F_mark'), ctx.get('F_mark')).join(), /模型拿不准：原文对这条发现写得很含糊/);
-  assert.match(C.factLabelWarnings(r.items.get('F_doc'), ctx.get('F_doc')).join(), /口径里有答案的片段/);
-  assert.match(C.factLabelWarnings({ label: '侄子的单据', criterion: '读到时登记，没读到不算' }, {}, { secrets: ['侄子'] }).join(), /保密的名字「侄子」/);
-  assert.match(C.factLabelWarnings({ label: '痕迹', criterion: '看到痕迹时登记' }, {}).join(), /没写清楚什么情况不算/);
-  assert.match(C.factLabelWarnings({ label: '', criterion: '' }, { orphan: true }).join(), /还没有标签.*还没有登记口径.*没有节点产出/);
+  assert.deepEqual([...warnText(r.items.get('F_han'), ctx.get('F_han'))], []);
+  assert.match(warnText(r.items.get('F_mark'), ctx.get('F_mark')).join(), /模型拿不准：原文对这条发现写得很含糊/);
+  assert.match(warnText(r.items.get('F_doc'), ctx.get('F_doc')).join(), /口径里有答案的片段/);
+  assert.match(warnText({ label: '侄子的单据', criterion: '读到时登记，没读到不算' }, {}, { secrets: ['侄子'] }).join(), /保密的名字「侄子」/);
+  assert.match(warnText({ label: '痕迹', criterion: '看到痕迹时登记' }, {}).join(), /没写清楚什么情况不算/);
+  assert.match(warnText({ label: '', criterion: '' }, { orphan: true }).join(), /还没有标签.*还没有登记口径.*没有节点产出/);
 });
 
 test('dialog: 自动填写 fills only empty boxes, flags rows that need a look, and the import writes what the author sees', async () => {
@@ -74,6 +79,7 @@ test('dialog: 自动填写 fills only empty boxes, flags rows that need a look, 
   const doc = host.w.document;
   doc.querySelector(`[data-act="project"][data-id="${p.id}"]`).click(); await tick();
   doc.querySelector('[data-act="tab"][data-tab="run"]').click(); await tick();
+  (() => { const t = doc.querySelector('[data-act="run-set-toggle"][aria-expanded="false"]'); t && t.click(); })(); await tick();
   doc.querySelector('[data-act="clue-gen-template"]').click(); await tick();
   const dlg = doc.querySelector('.pi-dialog');
   assert.match(dlg.textContent, /这份大纲里有 4 条要追踪的线索/);
@@ -81,7 +87,7 @@ test('dialog: 自动填写 fills only empty boxes, flags rows that need a look, 
   assert.match(dlg.textContent, /这一步在做什么/);
   assert.match(dlg.textContent, /拿到了，后面的剧情才会开放/);
   const firstRow = dlg.querySelector('[data-fr-row]');
-  assert.match(firstRow.textContent, /阶段1 证词 · 夜班看守老韩/);
+  assert.match(firstRow.textContent, /阶段1 证词，夜班看守老韩/);
   assert.match(firstRow.textContent, /这条线索查到的是：老韩说看见周先生/);
   assert.match(firstRow.textContent, /只给你看，不会写进表格/);
   // the technical change list is folded
@@ -146,15 +152,15 @@ test('dialog: 自动填写 fills only empty boxes, flags rows that need a look, 
 test('warnings: words the body already sees (entry, place, scene) are not treated as answer leaks; the real answer still is', () => {
   // 真实「旧码头」大纲里，「上锁的抽屉」写在场景里（正文到场就能看到），是取得动作，不是答案。
   const ctx = { nodeName: '账房里上锁的抽屉', entry: '可以进账房看看', scene: '桌边的抽屉上锁的抽屉锁着', answer: '打开上锁的抽屉，里面是出货单原件：那批货是在白天正常出库的' };
-  assert.deepEqual([...C.factLabelWarnings({ label: '抽屉里的单据', criterion: '主角亲手打开上锁的抽屉、读到原件内容时登记；只看到锁着的抽屉不算' }, ctx)], []);
-  assert.match(C.factLabelWarnings({ label: '抽屉里的单据', criterion: '读到白天正常出库时登记；没读到不算' }, ctx).join(), /口径里有答案的片段/);
+  assert.deepEqual([...warnText({ label: '抽屉里的单据', criterion: '主角亲手打开上锁的抽屉、读到原件内容时登记；只看到锁着的抽屉不算' }, ctx)], []);
+  assert.match(warnText({ label: '抽屉里的单据', criterion: '读到白天正常出库时登记；没读到不算' }, ctx).join(), /口径里有答案的片段/);
 });
 test('第五轮 3b: the author-only node name is not public text, so an answer copied from it is still caught', () => {
   const ctx = { nodeName: '密令藏在钟楼', entry: '去城里打听', answer: '密令藏在钟楼' };
-  assert.match(C.factLabelWarnings({ label: '密令藏在钟楼', criterion: '读到密令时登记；没读到不算' }, ctx).join(), /标签里有答案的片段/);
+  assert.match(warnText({ label: '密令藏在钟楼', criterion: '读到密令时登记；没读到不算' }, ctx).join(), /标签里有答案的片段/);
 });
 test('第五轮 3c: only explicit negatives count as "says what does not count"', () => {
-  const w = (c) => C.factLabelWarnings({ label: '原件', criterion: c }, {}).join();
+  const w = (c) => warnText({ label: '原件', criterion: c }, {}).join();
   assert.match(w('到仓库门口才算'), /没写清楚什么情况不算/);
   assert.ok(!/没写清楚什么情况不算/.test(w('读到原件时登记，仅仅路过不计入')));
   assert.ok(!/没写清楚什么情况不算/.test(w('读到原件时登记；只看到锁着的抽屉不算')));
@@ -169,7 +175,7 @@ test('第五轮 5: a fact produced by two nodes sends both ways of getting it to
   const body = C.factLabelMessages([ctx])[1].content;
   assert.match(body, /物流单/); assert.match(body, /另一种取得方式 1: 阶段1 x · 证人/); assert.match(body, /马特奥当面说出地址/);
   assert.match(C.factLabelMessages([ctx])[0].content, /口径要把每种方式都包括进去/);
-  assert.match(C.factLabelWarnings({ label: '地址', criterion: '听到城东旧冰厂时登记；没听到不算' }, ctx).join(), /口径里有答案的片段/, 'second route answer is checked too');
+  assert.match(warnText({ label: '地址', criterion: '听到城东旧冰厂时登记；没听到不算' }, ctx).join(), /口径里有答案的片段/, 'second route answer is checked too');
 });
 
 test('review: a literal overlap the review clears stays grey; a failed review falls back to the script warning', async () => {
@@ -183,6 +189,7 @@ test('review: a literal overlap the review clears stays grey; a failed review fa
   const doc = host.w.document;
   doc.querySelector(`[data-act="project"][data-id="${p.id}"]`).click(); await tick();
   doc.querySelector('[data-act="tab"][data-tab="run"]').click(); await tick();
+  (() => { const t = doc.querySelector('[data-act="run-set-toggle"][aria-expanded="false"]'); t && t.click(); })(); await tick();
   const open = async () => { doc.querySelector('[data-act="clue-gen-template"]').click(); await tick(); return doc.querySelector('.pi-dialog'); };
   const write = yamlReply([
     '- {编号: F_han, 标签: 看守的证词, 口径: 看守当面说出那晚看到了什么时登记，记为存疑；推托没开口不算}',
@@ -234,6 +241,7 @@ test('R5: editing a row while the review is pending keeps the edit; the old verd
   const doc = host.w.document;
   doc.querySelector(`[data-act="project"][data-id="${p.id}"]`).click(); await tick();
   doc.querySelector('[data-act="tab"][data-tab="run"]').click(); await tick();
+  (() => { const t = doc.querySelector('[data-act="run-set-toggle"][aria-expanded="false"]'); t && t.click(); })(); await tick();
   doc.querySelector('[data-act="clue-gen-template"]').click(); await tick();
   const dlg = doc.querySelector('.pi-dialog');
   const idx = (code) => [...dlg.querySelectorAll('[data-fr-row]')].findIndex((r) => r.querySelector('.pi-fr-hd .pi-meta').textContent === code);

@@ -309,11 +309,11 @@ export function checkClueDraft(
     for (let l of draft.lines || []) for (let id of conditionRefs(l.open).lines) allLines.has(id) || badLines.add(id);
     badLines.size && out.push(`开启条件引用了不存在的线：${[...badLines].join('、')}`);
     let noDone = draft.nodes.filter((n) => n.kind === 'main' && !n.done).map((n) => n.uid || n.name);
-    noDone.length && out.push(`这些主线节点没有完成条件，只能人工标记完成：${noDone.join('、')}`);
+    noDone.length && out.push(`这些剧情节点没有完成条件，只能人工标记完成：${noDone.join('、')}`);
     let noFind = draft.nodes
         .filter((n) => n.kind === 'main' && !discoveryList(isPlainObject(n.item) ? n.item : {}).length)
         .map((n) => n.uid || n.name);
-    if ((noFind.length && out.push(`这些主线节点没有「发现」：${noFind.join('、')}`), !applied)) return out;
+    if ((noFind.length && out.push(`这些剧情节点没有「发现」：${noFind.join('、')}`), !applied)) return out;
     let reach = clueReachability(applied, { knownFacts: obtainedFacts, claimedFacts }),
         list = (xs) =>
             xs
@@ -589,7 +589,8 @@ export function buildClueProjection(
             (used.offer = offer.line),
             (used.leads = items.map((x) => x.uid)));
         let sidePaused = !!(clueProg && clueProg.sidePaused),
-            live = (state.lineStates || []).some((s) => s.state === '进行中' && (s.line.kind === 'main' || !sidePaused));
+            mainPaused = !!(clueProg && clueProg.mainPaused),
+            live = (state.lineStates || []).some((s) => s.state === '进行中' && (s.line.kind === 'main' ? !mainPaused : !sidePaused));
         (focus || lines.length || plan.recognize.length || live) && (lines.push(CLUE_OFF_MATERIAL_RULE), (used.guard = !0));
         for (let r of plan.recognize)
             used.scenes.some((x) => x.uid === r.uid) || used.scenes.push({ uid: r.uid, entry: r.entry, place: r.place, focus: !1 });
@@ -719,6 +720,7 @@ export function clueReachability(volumes, { knownFacts = [], claimedFacts = [] }
         ((s.entered.v === TRI.u || s.end.v === TRI.u) && (depends = !0),
             stuckStages.push({
                 stage: stageLabel(u.stage.key),
+                stageId: u.id,
                 why,
                 line: u.line ? u.line.id : '',
                 unknown: s.entered.v === TRI.u || s.end.v === TRI.u,
@@ -735,6 +737,8 @@ export function clueReachability(volumes, { knownFacts = [], claimedFacts = [] }
         ((ns.open.v === TRI.u || ns.done.v === TRI.u || !ns.node.done) && (depends = !0),
             stuckNodes.push({
                 node: ns.node.uid || ns.node.name,
+                nodeName: ns.node.name || ns.node.uid,
+                stageId: ns.node.unit.id,
                 stage: stageLabel(ns.node.unit.stage.key),
                 why: reason,
                 line: ns.node.unit.line ? ns.node.unit.line.id : '',
@@ -821,8 +825,10 @@ export function clueAlternativeRoutes(volumes, { knownFacts = [], claimedFacts =
                         (ns.node.required || used.includes(ns.node) || used.push(ns.node), gives(ns.node).forEach((f) => have.add(f)));
                 if (have.size === before) break;
             }
+            // 「下一阶段」只在同一条剧情线里找（GPT 总方案审阅 R5）：一条线的最后一个阶段之后是另一条独立的线，
+            // 那条线等手动开启、等条件都是正常设计，不算这条线走不通。没有线信息的旧大纲仍按整串卷连着算。
             let s = state.stageStates.get(u.id),
-                next = units[ui + 1],
+                next = units[ui + 1] && units[ui + 1].line === u.line ? units[ui + 1] : null,
                 ns = next && state.stageStates.get(next.id),
                 tri = (x) => x && x.v;
             let endV = s.done ? TRI.t : s.entered.v !== TRI.t ? tri(s.entered) : s.requiredLeft.length ? TRI.f : tri(s.end),
@@ -835,12 +841,24 @@ export function clueAlternativeRoutes(volumes, { knownFacts = [], claimedFacts =
                     : endV !== TRI.t
                       ? `本阶段结束${verdict === 'unknown' ? '要看运行时的情况' : '不了'}：${(s.entered.v !== TRI.t ? s.entered.reasons : s.end.reasons).join('；') || s.requiredLeft.map((n) => n.uid).join('、')}`
                       : `下一阶段${verdict === 'unknown' ? '能否进入要看运行时的情况' : '进不去'}：${ns.entered.reasons.join('；')}`;
+            // 结构化字段（总方案 A / R5）：给审阅页拼人话、跳转、按根因去重用。原来的 stage / node / why 文字不变。
+            let need = verdict === 'ok' ? null : endV !== TRI.t ? (s.entered.v !== TRI.t ? u.clue && u.clue.enter : u.clue && u.clue.end) : next && next.clue && next.clue.enter;
             out.push({
                 stage: stageLabel(u.stage.key),
                 node: used.map((n) => n.uid || n.name).join(' → '),
                 ok: verdict !== 'blocked',
                 verdict,
                 why,
+                lineId: u.line ? u.line.id : '',
+                volumeId: u.volume ? u.volume.id : '',
+                stageId: u.id,
+                nodeIds: used.map((n) => n.uid).filter(Boolean),
+                nodeNames: used.map((n) => n.name || n.uid),
+                at: verdict === 'ok' ? '' : endV !== TRI.t ? (s.entered.v !== TRI.t ? 'enter' : s.requiredLeft.length ? 'required' : 'end') : 'next',
+                nextStageId: next ? next.id : '',
+                gets: [...have].filter((f) => used.some((n) => gives(n).includes(f))),
+                needs: need ? [...conditionRefs(need).facts].filter((f) => !have.has(f)) : [],
+                left: s.requiredLeft.map((n) => n.name || n.uid),
             });
         }
     }

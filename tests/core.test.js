@@ -4,7 +4,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import YAML from 'yaml';
 import { setYamlLib, parseYaml } from '../src/core/yaml.js';
-import { flattenUnits, moveItem, moveStageToVolume, outlineIssues, outlineToText, parseOutlineText, pushOutlineHistory, replaceStages, stageNodes, volumeLabel, volumesFromHistory } from '../src/core/outline.js';
+import { flattenUnits, moveItem, moveStageToVolume, outlineIssues, outlineToText, parseOutlineText, pushOutlineHistory, replaceStages, stageNodes, volumeLabel } from '../src/core/outline.js';
+import { restoreOutline as restoreOutlineAt } from '../src/core/outline.js';
+const volumesFromHistory = (text, current) => restoreOutlineAt(text, current).volumes;
 import { advance, emptyProgress, setNodeChecked, uncheckByNames, unitStates, patchSlot } from '../src/core/progress.js';
 import { buildEntries, buildIndexText, carriedNodes, toWorldInfoEntry } from '../src/core/inject.js';
 import { buildCheckMessages, cleanFloorText, parseCheckReply } from '../src/core/check.js';
@@ -481,7 +483,8 @@ test('normalizeProject 补 outline.history 默认值', () => {
 
 // threads v0.1.23：进度钟、支线钩子、支线链、玩家自开的线。
 import { legacyOutputs } from './fixtures/legacy-scenarios.js';
-import { addPlayerThread, applyCheck, checkThreads, clockPhase, ignoreThread, liveThreads, maskUnits, patchClock, patchHook, threadState, threadSwitches } from '../src/core/threads.js';
+import { addPlayerThread, applyCheck, checkThreads, clockPhase, ignoreThread, liveThreads, maskUnits, threadState, threadSwitches } from '../src/core/threads.js';
+import { patchClock, patchHook } from './thread-helpers.mjs';
 import crypto from 'node:crypto';
 
 test('旧大纲（没有新键）的注入、剧情索引、状态变化、检测提示与 v0.1.22 逐字一致', () => {

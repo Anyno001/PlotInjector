@@ -166,7 +166,8 @@ test('entry rotation: the running main line is offered first once; then it and t
   assert.deepEqual([0, 1, 2, 3].map((n) => C.lineEntryPlan(r2.state, prog(), { round: n, firstOffer: seen }).offer.line), ['M1', 'S07', 'M1', 'S07']);
   assert.equal(C.mainSlotTaken(r2.state.lineStates, 'M2'), '主线 M1 还在进行');
   const paused = run([MAIN(), m2], snap(), prog({ lines: { M1: { started: true, state: 'pause' } } }));
-  assert.match(C.mainSlotTaken(paused.state.lineStates, 'M2'), /暂停中/, 'a paused main line still holds the slot');
+  // 导入审阅总方案 H / GPT 审阅 R6：暂停的主线不占手动进入的位置（仍然挡着自动开始，见上一个测试）
+  assert.equal(C.mainSlotTaken(paused.state.lineStates, 'M2'), '', 'a paused main line no longer blocks entering another one by hand');
 });
 
 test('scene catalog gate: entries not yet in the 场景目录 cell are neither offered nor recognised; they are reported as unsynced (GPT 代码审阅 R2)', () => {
@@ -535,7 +536,17 @@ test('runtime: manual enter records the start and sets the focus (one entry: tha
   inst.runtime.clue.lineAct('S11', 'enter', 'S11b');
   c = (inst.runtime.clue.invalidate(), inst.runtime.clue.compute());
   assert.equal(c.state.focus.uid, 'S11b', 'the entry the player picked');
-  assert.throws(() => inst.runtime.clue.lineAct('M2', 'enter'), /主线位置被占着：主线 M1 还在进行/);
+  // 导入审阅总方案 H / GPT 审阅 R6：手动进入另一条主线 = 一次操作里先暂停正在进行的 M1（界面先问过），始终只有一条主线进行中
+  inst.runtime.clue.lineAct('M2', 'enter');
+  assert.equal(lineOf(inst, 'M1').state, '暂停');
+  assert.equal(lineOf(inst, 'M2').state, '进行中');
+  // 继续 M1：M2 一起暂停
+  inst.runtime.clue.lineAct('M1', 'resume');
+  assert.equal(lineOf(inst, 'M1').state, '进行中');
+  assert.equal(lineOf(inst, 'M2').state, '暂停');
+  // 暂停全部主线时不能进入主线
+  inst.runtime.clue.setPaused(true, 'mains');
+  assert.throws(() => inst.runtime.clue.lineAct('M2', 'resume') || inst.runtime.clue.lineAct('M2', 'enter'), /主线已全部暂停/);
   await inst.destroy();
 });
 
@@ -632,15 +643,18 @@ test('line card: side pause is labelled 暂停全部支线 and running side line
   inst.open(); await new Promise((r) => setTimeout(r, 20));
   const doc = host.w.document, view = async () => { doc.querySelector('[data-act="tab"][data-tab="run"]').click(); await new Promise((r) => setTimeout(r, 30)); return doc.body.textContent; };
   let text = await view();
-  assert.match(text, /暂停全部支线/);
-  assert.match(text, /已离开 2 轮 · 上次在S01a处/, 'away reminder in the line card (two replies since the player was in S01)');
-  const s01 = [...doc.querySelectorAll('.pi-line-row')].find((r) => /S01 · 支线/.test(r.textContent));
-  assert.ok(s01.querySelector('[data-act="clue-line"][data-value="pause"]'), 'single pause kept');
+  // 第三批：只暂停支线在「剧情」卡的「暂停」菜单里；单条线的暂停在这条线的「⋯」里
+  assert.ok(doc.querySelector('.pi-pause-menu [data-act="clue-pause-side"][data-value="1"]'), '只暂停支线 in the pause menu');
+  assert.match(doc.querySelector('.pi-pause-menu').textContent, /只暂停支线/);
+  assert.match(text, /已离开 2 轮，上次在S01a处/, 'away reminder in the line card (two replies since the player was in S01)');
+  const s01 = [...doc.querySelectorAll('.pi-line-row')].find((r) => /S01/.test(r.textContent) && /支线/.test(r.textContent));
+  assert.ok(s01.querySelector('.pi-line-more [data-act="clue-line"][data-value="pause"]'), 'single pause kept (in ⋯)');
   inst.runtime.clue.setPaused(true, 'side');
   text = await view();
   assert.match(text, /继续全部支线/);
-  const row = [...doc.querySelectorAll('.pi-line-row')].find((r) => /S01 · 支线/.test(r.textContent));
+  const row = [...doc.querySelectorAll('.pi-line-row')].find((r) => /S01/.test(r.textContent) && /支线/.test(r.textContent));
   assert.match(row.textContent, /进行中全部支线已暂停/, 'running side line marked');
+  assert.doesNotMatch(row.querySelector('.pi-line-name').textContent, /·/, 'no middle dot in the line name');
   const proj = inst.runtime.clue.projection();
   assert.doesNotMatch(String(proj.content || ''), /已离开/, 'the reminder is never injected');
   await inst.destroy();
@@ -725,4 +739,26 @@ test('line confirm (real DOM): 标记完成 / 放弃 confirmed after switching p
     assert.equal(lineOf(inst, 'M1').state, '进行中', `${act}: project A untouched too (the stale click did nothing)`);
     await inst.destroy();
   }
+});
+
+// 第三批（用户 2026-11-16）：执行页按「需要处理 → 剧情 → 剧情线 → 本轮场景 → 节点 → 运行设置」排；运行设置表格已绑定时收起，展开后有推进方式、表格绑定、支线名额、推进速度；节点只展开进行中的阶段
+test('run page layout: order, collapsed 运行设置 (opens on click), only the live stage is expanded, pause menu keeps the three kinds', async () => {
+  const { host, inst } = await boot(2, [MAIN(), side('S01'), side('S02')]);
+  inst.open(); await new Promise((r) => setTimeout(r, 20));
+  const doc = host.w.document, tick = () => new Promise((r) => setTimeout(r, 30));
+  doc.querySelector('[data-act="tab"][data-tab="run"]').click(); await tick();
+  const heads = [...doc.querySelectorAll('.pi-body .pi-card > h3')].map((h) => h.textContent.replace(/\s+/g, '')).filter(Boolean);
+  const at = (re) => heads.findIndex((h) => re.test(h));
+  assert.ok(at(/^剧情进行中/) >= 0 && at(/^剧情线/) > at(/^剧情进行中/) && at(/^本轮场景/) > at(/^剧情线/) && at(/^节点/) > at(/^本轮场景/) && at(/运行设置/) > at(/^节点/), heads.join(' | '));
+  const fold = doc.querySelector('[data-act="run-set-toggle"]');
+  assert.equal(fold.getAttribute('aria-expanded'), 'false', 'tables bound → settings collapsed');
+  assert.match(fold.closest('h3').textContent, /线索推进，表格已绑定，推进速度/);
+  assert.equal(doc.querySelector('[data-act="clue-mode"]'), null);
+  fold.click(); await tick();
+  for (const sel of ['[data-act="clue-mode"]', '[data-act="clue-bind-toggle"]', '[data-act="clue-gen-template"]', '[data-clue-sidelimit]', '[data-act="pace"]']) assert.ok(doc.querySelector(sel), `${sel} in 运行设置`);
+  const menu = doc.querySelector('.pi-pause-menu');
+  assert.ok(menu.querySelector('[data-act="clue-pause"][data-value="1"]') && menu.querySelector('[data-act="clue-pause-mains"]') && menu.querySelector('[data-act="clue-pause-side"]'), '暂停全部剧情 / 只暂停主线 / 只暂停支线 all in the menu');
+  const names = [...doc.querySelectorAll('.pi-line-name')].map((b) => b.textContent);
+  assert.ok(names.every((n) => !/·/.test(n) && !/^(\S+) \1/.test(n)), names.join(' | '));
+  await inst.destroy();
 });

@@ -4,7 +4,6 @@ import { normalizePersonaProgress } from './persona-progress.js';
 
 // 进度随聊天存在 chat_metadata.plotInjector；这里只做纯计算，所有函数返回新对象，不原地改。
 export const SETTING_SLOT = '@setting';
-export const INDEX_SLOT = '@index';
 export const STATES = ['done', 'active', 'next', 'todo'];
 export const STATE_LABELS = { done: '已过', active: '进行中', next: '下一段', todo: '未到' };
 

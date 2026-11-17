@@ -54,8 +54,11 @@ test('long import: paste → run → review → adopt appends one volume; author
   const nodes = vols[0].stages.flatMap((s) => s.data.主线节点);
   assert.ok(nodes.length >= 1);
   assert.ok(nodes.every((n) => !('来源' in n)), 'author-only 来源 not in the outline');
-  // second click (same job): nothing new
-  await click('[data-act="import-adopt"]');
+  // 采用后审阅页换成「已保存到大纲」（导入审阅总方案 E），没有第二个采用按钮；强行再触发一次采用也不写第二份
+  assert.match(doc.body.textContent, /已保存到大纲/);
+  assert.ok(!doc.querySelector('[data-act="import-adopt"]'), 'no adopt button after adopting');
+  const fake = doc.createElement('div'); fake.className = 'pi-card'; doc.querySelector('.pi-body').append(fake); // 点击要落在插件里才会被处理
+  const btn = doc.createElement('button'); btn.dataset.act = 'import-adopt'; fake.append(btn); btn.click(); await tick();
   assert.equal(inst.data.project(pid).outline.volumes.length, 1, 'adopted only once');
   await inst.destroy();
 });
@@ -106,8 +109,9 @@ test('long import: adopt, reload the plugin (state read back from files), adopt 
   await click2('[data-act="import-open-panel"]');
   for (let i = 0; i < 20 && !doc2.querySelector(`[data-act="import-open"][data-id="${jobId}"]`); i++) await tick();
   await click2(`[data-act="import-open"][data-id="${jobId}"]`);
-  assert.match(doc2.body.textContent, /已采用/);
-  await click2('[data-act="import-adopt"]');
+  assert.match(doc2.body.textContent, /已保存到大纲/);
+  const fake = doc2.createElement('div'); fake.className = 'pi-card'; doc2.querySelector('.pi-body').append(fake); // 点击要落在插件里才会被处理
+  const btn = doc2.createElement('button'); btn.dataset.act = 'import-adopt'; fake.append(btn); btn.click(); await tick();
   assert.equal(inst2.data.project(pid).outline.volumes.length, 1, 'no second copy after reload');
   await inst2.destroy();
 });

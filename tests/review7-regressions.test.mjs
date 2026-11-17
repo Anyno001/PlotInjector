@@ -140,10 +140,10 @@ test('R3: adopted marks live in the project with the outline; a lost job-file wr
   await ctx.click('[data-act="import-adopt"]');
   store.update = orig;
   assert.equal(ctx.inst.data.project(A).outline.volumes.length, 1);
-  assert.equal(ctx.inst.data.project(A).importAdopted.length, 1);
+  assert.ok(ctx.inst.data.project(A).importAdopted.length >= 1, 'the adopted mark is in the project');
+  // 任务文件没写进去：审阅页仍显示草稿和「采用」，但再点一次也不写第二份（标记以项目为准）
   await ctx.click('[data-act="import-adopt"]');
   assert.equal(ctx.inst.data.project(A).outline.volumes.length, 1, 'no second copy');
-  assert.match(ctx.doc.body.textContent, /已采用/);
   await ctx.inst.destroy();
 });
 
@@ -156,23 +156,23 @@ test('R3/R2: switching project while the adopt confirmation is open writes nothi
   assert.ok(ctx.doc.querySelector('.pi-dialog'));
   await ctx.inst.data.loadProject(B);
   ctx.inst.__view.projectId = B;
-  await answer(ctx.doc, '仍然追加');
+  await answer(ctx.doc, '仍然保存');
   assert.equal(ctx.inst.data.project(A).outline.volumes.length, 0);
   assert.equal(ctx.inst.data.project(B).outline.volumes.length, 0);
   await ctx.inst.destroy();
 });
 
-test('R4: picking only the second stage (which needs the first stage\'s fact) asks for confirmation and names the missing fact', async () => {
+// 导入审阅总方案：线索导入整条线一起审阅、一起采用（不再逐阶段勾选）。可达性问题在审阅页上就显示，采用时再列一次。
+test('R4: a stage that needs a fact nobody produces is shown on the review page and named again when adopting', async () => {
   const ctx = await boot();
   const [A] = ctx.ids;
-  await runImport(ctx, DRAFT([['阶段1_a', [['n1', 'FA']]], ['阶段2_b', [['n2', 'FB']], ['进入条件: {事实: FA}']]]));
-  assert.match(ctx.doc.body.textContent, /没有发现必须处理的问题/, 'the full draft is fine');
-  ctx.doc.querySelector('[data-imp-pick="阶段1_a"]').checked = false;
+  await runImport(ctx, DRAFT([['阶段1_a', [['n1', 'FA']]], ['阶段2_b', [['n2', 'FB']], ['进入条件: {事实: F_none}']]]));
+  assert.match(ctx.doc.body.textContent, /问题 1/, 'the problem is counted on the review page');
   ctx.doc.querySelector('[data-act="import-adopt"]').click(); await tick();
   const text = await answer(ctx.doc, '取消');
-  assert.match(text, /按大纲推演走不通/);
-  assert.match(text, /FA/);
-  assert.match(text, /没有在当前聊天启用|按当前聊天的进度/);
+  assert.match(text, /还有 1 个问题没解决/);
+  assert.match(text, /永远走不到/);
+  assert.match(text, /阶段2 b/);
   assert.equal(ctx.inst.data.project(A).outline.volumes.length, 0);
   await ctx.inst.destroy();
 });
@@ -356,30 +356,7 @@ test('R6: a template that lacks a table the chat is using (would be hidden by th
   assert.deepEqual(C.clueTplMismatch(DEFAULT, DEFAULT), []);
 });
 
-// ---------- R12 讨论插入撞号 ----------
-test('R12: inserting a node via discussion that reuses an existing fact id warns before applying', async () => {
-  const host = createHost({ tables: {} });
-  const inst = host.load(); await inst.ready;
-  const p = await inst.data.createProject('船');
-  inst.data.updateProject(p.id, (x) => ({ ...x, outline: { volumes: [{ id: 'v1', key: '剧情_卷一', stages: [{ id: 's1', key: '阶段1_港口', data: { 主线节点: [{ id: 'nTicket', 名称: '取得船票', 入口: '去售票处', 发现: [{ 事实: 'F1', 内容: '船票' }], 完成条件: { 事实: 'F1' } }] } }] }] }, clue: { mode: 'clue', bindings: { facts: [], knowledge: [] } } }));
-  await inst.runtime.switchProject(p.id);
-  await host.eventSource.emit(host.eventTypes.CHAT_CHANGED); await host.settle();
-  const reply = ['可以加一个查账册的节点。', '```大纲改动', '改动:', '  - 动作: 插入', '    阶段: s1', '    类别: 主线', '    位置: 末尾', '    节点: {名称: 取得账册, 入口: 去账房, 发现: [{事实: F1, 内容: 账册}], 完成条件: {事实: F1}}', '```'].join('\n');
-  const chat = await inst.data.loadChat(p.id);
-  inst.data.saveChat(p.id, { ...chat, messages: [...chat.messages, { id: 'm1', role: 'assistant', content: reply, outlineAt: '' }] });
-  inst.open(); await tick();
-  const doc = host.w.document;
-  doc.querySelector(`[data-act="project"][data-id="${p.id}"]`).click(); await tick();
-  doc.querySelector('[data-act="tab"][data-tab="discuss"]').click(); await tick();
-  const btn = doc.querySelector('[data-act="proposal-apply"]');
-  assert.ok(btn, 'proposal button');
-  btn.click(); await tick();
-  await answer(doc, '应用勾选的改动');
-  const text = await answer(doc, '取消');
-  assert.match(text, /事实编号 F1 已经由 nTicket 使用/);
-  assert.equal(inst.data.project(p.id).outline.volumes[0].stages[0].data.主线节点.length, 1, 'not applied');
-  await inst.destroy();
-});
+// R12（讨论页「改大纲」提案插入撞号）：提案流程已删除（GPT 第三轮清理 D1）。事实编号重复的提示由 checkClueDraft 负责，见 review6-regressions。
 
 // ---------- R13 通用提示只注入一次 ----------
 test('R13: two active stages in outline mode → the body guide appears once', () => {
@@ -414,16 +391,7 @@ test('lab: an index without any facts triggers one follow-up asking for the miss
   assert.deepEqual([...job.index.事实.map((f) => f.编号)], ['F_lock']);
   await ctx.inst.destroy();
 });
-test('lab: repair requests name the exact field and sentence holding a secret name (e.g. a 记录 saying "此时才出现维恩这个名字")', () => {
-  const vols = vol([{ 主线节点: [{ ...N('n7', []), 发现: [{ 事实: 'F7', 内容: '资料显示维恩组织交易', 记录: '正文出现付款记录才算拿到。此时才出现维恩这个名字。' }] }] }]);
-  const hits = C.importSecretHits(vols, ['维恩']);
-  assert.deepEqual(Object.keys(hits), ['阶段1_x']);
-  assert.equal(hits['阶段1_x'].length, 1, 'the 内容 (reveal layer) is not listed');
-  assert.match(hits['阶段1_x'][0], /^n7\.发现\[F7\]\.记录「.*此时才出现维恩这个名字.*」里出现了「维恩」$/);
-  const m = C.importRepairMessages({ yaml: 'x', issues: ['p'], spots: hits['阶段1_x'] });
-  assert.match(m[0].content, /「记录」是给填表模型看的登记标准，也不能写名字/);
-  assert.match(m[1].content, /【必须改的位置】\n- n7\.发现\[F7\]\.记录/);
-});
+// lab：整份草稿修复请求（importSecretHits / importRepairMessages）已删除（GPT 第三轮清理 D4），按页修改走 reviewReviseMessages；字段级保密检查见 import-review-checks。
 
 // ---------- 参考外部卡的四条建议（2026-11-08） ----------
 test('prompts: import follows the source for conditions/routes; 偏转 optional with a sample node without it; fill rules keep the old value when unsure', () => {

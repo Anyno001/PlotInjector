@@ -2,21 +2,21 @@ import { normalizeGenRefs } from '../core/store.js';
 import { toast } from '../host/st.js';
 import { talkText } from './ai.js';
 import { pickRefs, wbRefTexts, wbSummary } from './discuss-refs.js';
-import { esc } from './dom.js';
 
 // 设定、大纲页让 AI 写作时带的参考：讨论记录、世界书条目。按项目保存，两页共用一份。
 // 没在讨论页聊过也能直接用世界书写设定、写大纲。
 
 const refsOf = project => normalizeGenRefs(project.genRefs);
 
-export function genRefsBar(view, scope) {
+// rerender：世界书条数算好后怎么重画（默认重画整页；放在弹框里时只重画这一块）
+export function genRefsBar(view, scope, rerender = () => view.renderBody(), { label = !0 } = {}) {
     const project = view.project();
     const refs = refsOf(project);
     const chat = view.data.chat(view.projectId);
     if (!chat) view.data.loadChat(view.projectId).then(() => view.renderBody()).catch(() => {});
     const talks = chat ? chat.messages.length + (chat.summary ? 1 : 0) : 0;
-    const wb = wbSummary(view, refs, () => view.renderBody(), `gen-${scope}`);
-    return `<div class="pi-refs"><span class="pi-hint">参考：</span>
+    const wb = wbSummary(view, refs, rerender, `gen-${scope}`);
+    return `<div class="pi-refs">${label ? '<span class="pi-hint">参考：</span>' : ''}
         <button type="button" class="pi-chip${refs.talk && talks ? ' is-on' : ''}" data-act="gen-talk"${talks ? '' : ' disabled title="讨论页还没有记录"'}>讨论记录</button>
         <button type="button" class="pi-chip${wb && wb.count ? ' is-on' : ''}" data-act="gen-wb">世界书 ${wb ? `${wb.count} 条` : '…'}</button></div>`;
 }

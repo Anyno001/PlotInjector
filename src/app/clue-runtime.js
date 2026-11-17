@@ -29,6 +29,7 @@ import {
     enterEvidence,
     sideSlots,
     mainSlotTaken,
+    mainInProgress,
     LINE_CATALOG_COL,
     sceneCatalogCell,
     appendTargetFloor,
@@ -335,6 +336,7 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
                         let slots = sideSlots(c.state.lineStates, p.clue.sideLimit || 1),
                             busy = ls.line.kind === 'main' ? mainSlotTaken(c.state.lineStates, ls.line.id) : '';
                         if (busy) note(`没有开始 ${ev.line}：${busy}`);
+                        else if (ls.line.kind === 'main' && c.prog.mainPaused) note(`主线已全部暂停：没有开始 ${ev.line}`);
                         else if (ls.line.kind === 'side' && c.prog.sidePaused) note(`支线已全部暂停：没有开始 ${ev.line}`);
                         else if (ls.line.kind === 'side' && slots.full) {
                             let off = slots.used.length === 1 ? c.state.lineStates.find((x) => x.line.id === slots.used[0]) : null;
@@ -426,13 +428,14 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
         let s = c.state.lineStates.find((x) => x.line.id === id);
         if (!s || s.started) return;
         if (!s.eligible) throw new Error('这条线的开启条件还没满足；想早点开，可以修改它的开启条件');
-        let busy = s.line.kind === 'main' ? mainSlotTaken(c.state.lineStates, id) : '';
-        if (busy) throw new Error(`主线位置被占着：${busy}`);
+        let other = s.line.kind === 'main' ? mainInProgress(c.state.lineStates, id) : null;
+        if (s.line.kind === 'main' && c.prog.mainPaused) throw new Error('主线已全部暂停，先点「继续全部主线」');
         if (s.line.kind === 'side' && c.prog.sidePaused) throw new Error('支线已全部暂停，先点「继续全部支线」');
         let entry = uid && s.entries.includes(uid) ? uid : s.entries.length === 1 ? s.entries[0] : '';
         if (s.line.kind === 'side' && sideSlots(c.state.lineStates, p.clue.sideLimit || 1).full)
             return switchSide(id, 'manual', void 0, pauseId, entry);
         (addOps([
+            ...(other ? [{ kind: 'line', target: other.line.id, value: 'pause', note: `换成 ${id}` }] : []),
             { kind: 'line', target: id, value: 'start', text: 'manual', note: '人工进入' },
             ...(entry ? [{ kind: 'focus', target: entry, value: !0, sceneAt: sceneNow() }] : []),
         ]),
@@ -544,6 +547,20 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
                 s = c && c.state.lineStates.find((x) => x.line.id === id);
             if (s && s.line.kind === 'side' && s.started && sideSlots(c.state.lineStates, p.clue.sideLimit || 1).full)
                 throw new Error('同时进行的支线已经满了：先暂停正在进行的那条，再继续这条');
+            // 继续一条主线：同时只能有一条主线进行中（GPT 审阅 R6）。占着位置的那条由界面先问过，这里一起暂停（一次操作）。
+            // 自动开始的主线没有「开始」记录，暂停后只靠条件判断：继续时补一条开始记录，免得被别的暂停中的主线挡住又回到「可开启」。
+            let other = s && s.line.kind === 'main' ? mainInProgress(c.state.lineStates, id) : null,
+                mark = s && s.line.kind === 'main' && !s.manual.started ? [{ kind: 'line', target: id, value: 'start', text: 'manual', note: '继续' }] : [];
+            if (s && s.line.kind === 'main' && c.prog.mainPaused) throw new Error('主线已全部暂停，先点「继续全部主线」');
+            if (other || mark.length)
+                return (
+                    addOps([
+                        ...(other ? [{ kind: 'line', target: other.line.id, value: 'pause', note: `换成 ${id}` }] : []),
+                        { kind: 'line', target: id, value: 'resume' },
+                        ...mark,
+                    ]),
+                    scheduleSync()
+                );
         }
         (act({ kind: 'line', target: id, value: value || '' }), scheduleSync());
     }
@@ -578,12 +595,17 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
         if (!p) return;
         let vols = p.outline.volumes,
             idOf = (v) => (isPlainObject(v.line) ? String(v.line.编号 || '').trim() : ''),
-            sideOf = (v) => isPlainObject(v.line) && String(v.line.类型 || '').trim() !== '主线',
-            at = vols.findIndex((v) => idOf(v) === id);
-        if (at < 0 || !sideOf(vols[at])) return;
+            kindOf = (v) => (isPlainObject(v.line) ? (String(v.line.类型 || '').trim() === '主线' ? 'main' : 'side') : ''),
+            at = vols.findIndex((v) => idOf(v) === id),
+            kind = at < 0 ? '' : kindOf(vols[at]);
+        if (!kind) return;
         let to = at + dir;
-        for (; to >= 0 && to < vols.length && !sideOf(vols[to]);) to += dir;
+        for (; to >= 0 && to < vols.length && kindOf(vols[to]) !== kind;) to += dir;
         if (to < 0 || to >= vols.length) return;
+        // 已经开始的主线（自动开始的没有「开始」记录，只靠顺序推出来）：先补一条开始记录，换了顺序也不会被锁回去（GPT 审阅 R6）
+        let c = kind === 'main' ? compute() : null,
+            mark = c ? c.state.lineStates.filter((x) => x.line.kind === 'main' && x.started && !x.manual.started).map((x) => ({ kind: 'line', target: x.line.id, value: 'start', text: 'manual', note: '调整顺序前已开始' })) : [];
+        mark.length && addOps(mark);
         let next = vols.slice();
         (([next[at], next[to]] = [next[to], next[at]]),
             data.updateProject(p.id, (cur) => ({ ...cur, outline: { ...cur.outline, volumes: next } })),
@@ -875,7 +897,11 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
     }
     function opLabel(op) {
         if (op.kind === 'pause')
-            return op.target === 'side' ? (op.value ? '暂停全部支线' : '继续全部支线') : op.value ? '暂停剧情' : '继续剧情';
+            return op.target === 'side'
+                ? op.value ? '暂停全部支线' : '继续全部支线'
+                : op.target === 'mains'
+                  ? op.value ? '暂停全部主线' : '继续全部主线'
+                  : op.value ? '暂停剧情' : '继续剧情';
         if (op.kind === 'line')
             return `${{ start: '开启', pause: '暂停', resume: '继续', done: '标记完成', abandon: '放弃', deny: '取消开启', skip: '跳过', '': '还原手动操作' }[String(op.value || '')] || op.value}线 ${op.target}${op.note ? `（${op.note}）` : ''}`;
         let names = {
@@ -902,7 +928,7 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
         uid && act({ kind: 'focus', target: `${AWAY_PREFIX}${uid}`, value: !0, sceneAt: sceneNow() });
     }
     function setPaused(paused, target = 'main') {
-        (act({ kind: 'pause', target: target === 'side' ? 'side' : 'main', value: paused ? !0 : '' }), scheduleSync());
+        (act({ kind: 'pause', target: target === 'side' ? 'side' : target === 'mains' ? 'mains' : 'main', value: paused ? !0 : '' }), scheduleSync());
     }
     function setFocus(uid) {
         let c = compute(),
