@@ -1,6 +1,7 @@
 import { createTour, tourState, tourScopeOf, TOUR_REVISION } from './tour.js';
 
 import { normalizeInfinite } from '../core/infinite.js';
+import { isTrpg } from '../core/trpg.js';
 import { groupProjects } from '../core/store.js';
 import { cardKey, cardName, hostDocument, hostWindow, toast } from '../host/st.js';
 import { confirmDialog, el, ensureStyle, esc, isNight, menuDialog, openDialog, options, pickFiles, setNight } from './dom.js';
@@ -325,6 +326,22 @@ export function createApp({ data, runtime, version }) {
         const picked = box.querySelector('[data-f=group]').value;
         return picked === NEW_GROUP ? box.querySelector('[data-f=new-group]').value.trim() : picked;
     }
+    // 跑团模式（core/trpg.js）：设置页「实验功能」打开后，新建 / 编辑项目时才出现这一行；已经是跑团的项目编辑时总是显示。
+    function trpgField(on) {
+        return data.settings().trpgLab || on
+            ? `<label class="pi-check"><input type="checkbox" data-f="trpg"${on ? ' checked' : ''}><span>跑团模式（CoC 7 版，线索推进）</span></label>`
+            : '';
+    }
+    function readTrpgField(box) {
+        const el = box.querySelector('[data-f=trpg]');
+        return el ? el.checked : null;
+    }
+    function setTrpg(id, on) {
+        data.updateProject(id, (project) => {
+            const { trpg, ...rest } = project;
+            return on ? { ...rest, trpg: { ...(trpg || {}), on: !0, rule: 'coc7' }, clue: { ...project.clue, mode: 'clue' } } : rest;
+        });
+    }
     async function newProject() {
         setDrawer(!1);
         const current2 = data.index().projects.find((item) => item.id === view.projectId),
@@ -334,6 +351,7 @@ export function createApp({ data, runtime, version }) {
                 <p class="pi-hint">一个项目保存一个故事的设定、人设、大纲和进度。每个聊天同时使用一个项目；当前聊天还没有项目时，会直接使用新项目。主线、支线都写在同一个项目的大纲里。</p>
                 ${groupField(current2 && current2.group ? current2.group : '')}
                 <label class="pi-check"><input type="checkbox" data-f="infinite"><span>无限流模式（主空间出发、世界库、污染）</span></label>
+                ${trpgField(!1)}
                 <div class="pi-row"><span class="pi-hint">已有导出的项目文件：</span><button type="button" class="pi-btn is-sm" data-dlg-value="import-file">从文件导入</button></div>`,
                 onMount: mountGroupField,
                 actions: [
@@ -345,6 +363,7 @@ export function createApp({ data, runtime, version }) {
                             name: box.querySelector('[data-f=name]').value,
                             group: readGroupField(box),
                             mode: box.querySelector('[data-f=infinite]').checked ? 'infinite' : 'normal',
+                            trpg: readTrpgField(box),
                         }),
                     },
                 ],
@@ -354,6 +373,7 @@ export function createApp({ data, runtime, version }) {
         const name = result.name;
         try {
             const project = await data.createProject(name, result.group, result.mode);
+            result.trpg && result.mode !== 'infinite' && setTrpg(project.id, !0);
             (!runtime.activeId() && cardKey() && (await runtime.switchProject(project.id)), await selectProject(project.id, 'discuss'));
         } catch (error) {
             toast('error', `新建失败：${error.message}`);
@@ -432,7 +452,8 @@ export function createApp({ data, runtime, version }) {
                 title: '编辑项目',
                 html: `<label class="pi-field"><span>名称</span><input class="pi-inp" data-f="name" value="${esc(meta.name)}"></label>
                 ${groupField(meta.group || '')}
-                <label class="pi-check"><input type="checkbox" data-f="infinite"${mode === 'infinite' ? ' checked' : ''}><span>无限流模式</span></label>`,
+                <label class="pi-check"><input type="checkbox" data-f="infinite"${mode === 'infinite' ? ' checked' : ''}><span>无限流模式</span></label>
+                ${trpgField(isTrpg(data.project(id)))}`,
                 onMount: mountGroupField,
                 actions: [
                     { label: '删除项目', danger: !0, value: 'delete' },
@@ -444,6 +465,7 @@ export function createApp({ data, runtime, version }) {
                             name: box.querySelector('[data-f=name]').value.trim(),
                             group: readGroupField(box),
                             mode: box.querySelector('[data-f=infinite]').checked ? 'infinite' : 'normal',
+                            trpg: readTrpgField(box),
                         }),
                     },
                 ],
@@ -471,6 +493,7 @@ export function createApp({ data, runtime, version }) {
                 data.renameProject(id, result.name, result.group),
                 result.mode !== mode &&
                     data.updateProject(id, (project) => ({ ...project, mode: result.mode, infinite: normalizeInfinite(project.infinite) })),
+                result.trpg !== null && result.trpg !== isTrpg(data.project(id)) && setTrpg(id, result.trpg && result.mode !== 'infinite'),
                 runtime.refresh(),
                 render());
         }

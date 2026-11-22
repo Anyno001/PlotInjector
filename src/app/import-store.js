@@ -16,7 +16,7 @@ export function createImportStore({ read = readJsonFile, write = writeJsonFile, 
             next = prev.catch(() => {}).then(fn);
         return (queues.set(name, next), next.finally(() => queues.get(name) === next && queues.delete(name)));
     }
-    async function create({ projectId, text, mode, needs, kind = '' }) {
+    async function create({ projectId, text, mode, needs, kind = '', trpg = !1 }) {
         let id = makeId('imp'),
             job = {
                 version: 1,
@@ -25,6 +25,8 @@ export function createImportStore({ read = readJsonFile, write = writeJsonFile, 
                 createdAt: Date.now(),
                 mode,
                 ...(kind ? { kind } : {}),
+                // 跑团模组导入（core/trpg.js）：整理时追加判定规则
+                ...(trpg ? { trpg: !0 } : {}),
                 needs: String(needs || ''),
                 chars: String(text || '').length,
                 step: 'split',

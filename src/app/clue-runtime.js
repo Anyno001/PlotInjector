@@ -51,6 +51,7 @@ import {
 } from '../core/clue-tables.js';
 
 import { hostWindow, chatMessages, ctx, toast } from '../host/st.js';
+import { isTrpg, trpgCheckResults } from '../core/trpg.js';
 import { isClueMode, withNodeIds } from '../core/clue-model.js';
 
 import { isPlainObject } from '../core/outline.js';
@@ -760,6 +761,8 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
                 stay: stayText(stayState(prog && prog.stays, chatMessages(), info), 'clue'),
                 plan: c.plan,
                 notReady: c.notReady,
+                // 跑团模式：从聊天记录算出各检定的结果（core/trpg.js）；不是跑团项目不算
+                checks: isTrpg(project()) ? trpgCheckResults(chatMessages()) : null,
             });
         return {
             ...out,

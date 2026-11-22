@@ -1,4 +1,4 @@
-// PlotInjector v0.3.3
+// PlotInjector v0.3.4
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -161,9 +161,9 @@
   function createWriter({ delay = 800, write = writeJsonFile, onError = () => {
   }, onSaved = () => {
   } } = {}) {
-    let pending = /* @__PURE__ */ new Map(), timers = /* @__PURE__ */ new Map(), running = /* @__PURE__ */ new Map(), view = hostWindow();
+    let pending = /* @__PURE__ */ new Map(), timers = /* @__PURE__ */ new Map(), running2 = /* @__PURE__ */ new Map(), view = hostWindow();
     function flushOne(name) {
-      if (timers.has(name) && view.clearTimeout(timers.get(name)), timers.delete(name), running.has(name)) return running.get(name);
+      if (timers.has(name) && view.clearTimeout(timers.get(name)), timers.delete(name), running2.has(name)) return running2.get(name);
       if (!pending.has(name)) return Promise.resolve();
       let value = pending.get(name);
       pending.delete(name);
@@ -176,9 +176,9 @@
         }
         return !0;
       })().then(async (ok) => {
-        running.delete(name), ok && pending.has(name) && !timers.has(name) && await flushOne(name);
+        running2.delete(name), ok && pending.has(name) && !timers.has(name) && await flushOne(name);
       });
-      return running.set(name, job), job;
+      return running2.set(name, job), job;
     }
     return {
       schedule(name, value) {
@@ -191,16 +191,16 @@
       async flush() {
         for (let timer of timers.values()) view.clearTimeout(timer);
         timers.clear();
-        for (let round = 0; round < 5 && (pending.size || running.size); round++) {
+        for (let round = 0; round < 5 && (pending.size || running2.size); round++) {
           let before = new Set(pending.keys());
-          if (await Promise.all([.../* @__PURE__ */ new Set([...pending.keys(), ...running.keys()])].map(flushOne)), [...pending.keys()].every((k) => before.has(k)) && !running.size && pending.size)
+          if (await Promise.all([.../* @__PURE__ */ new Set([...pending.keys(), ...running2.keys()])].map(flushOne)), [...pending.keys()].every((k) => before.has(k)) && !running2.size && pending.size)
             break;
         }
       },
       cancel(name) {
         timers.has(name) && view.clearTimeout(timers.get(name)), timers.delete(name), pending.delete(name);
       },
-      hasPending: () => pending.size > 0 || running.size > 0,
+      hasPending: () => pending.size > 0 || running2.size > 0,
       failed: () => [...pending.keys()].filter((name) => !timers.has(name))
     };
   }
@@ -859,14 +859,16 @@ ${body}
       }).then(fn);
       return queues2.set(name, next), next.finally(() => queues2.get(name) === next && queues2.delete(name));
     }
-    async function create({ projectId, text: text2, mode, needs, kind = "" }) {
+    async function create({ projectId, text: text2, mode: mode2, needs, kind = "", trpg = !1 }) {
       let id = makeId("imp"), job = {
         version: 1,
         id,
         projectId,
         createdAt: Date.now(),
-        mode,
+        mode: mode2,
         ...kind ? { kind } : {},
+        // 跑团模组导入（core/trpg.js）：整理时追加判定规则
+        ...trpg ? { trpg: !0 } : {},
         needs: String(needs || ""),
         chars: String(text2 || "").length,
         step: "split",
@@ -1552,12 +1554,12 @@ ${value.name}`);
     let dupTitles = [...byTitle.values()].filter((item) => item.entries.length > 1), constTokens = on.filter((entry) => entry.constant).reduce((sum, entry) => sum + tokenOf2(entry), 0), total = on.reduce((sum, entry) => sum + tokenOf2(entry), 0), ratio = total ? constTokens / total : 0;
     return { shortKeys, noKeys, shared, dupTitles, constant: { count: on.filter((entry) => entry.constant).length, tokens: constTokens, total, ratio, warn: ratio > 0.6 } };
   }
-  function sortEntries(entries, mode, tokenOf2 = () => 0) {
+  function sortEntries(entries, mode2, tokenOf2 = () => 0) {
     let list = entries.map((entry, index) => ({ entry, index })), by = {
       order: (a, b) => a.entry.order - b.entry.order,
       tokens: (a, b) => tokenOf2(b.entry) - tokenOf2(a.entry),
       title: (a, b) => String(a.entry.title).localeCompare(String(b.entry.title), "zh")
-    }[mode];
+    }[mode2];
     return by ? list.sort((a, b) => by(a, b) || a.index - b.index).map((item) => item.entry) : entries;
   }
 
@@ -2397,6 +2399,224 @@ ${lines2.join(`
     return settings && settings.bodyGuide === !1 ? "" : settings && String(settings.bodyGuideText || "").trim() || BODY_GUIDE;
   }
 
+  // src/core/trpg.js
+  var TRPG_RULES = [{ value: "coc7", label: "CoC 7 版" }], KP_BLOCK = "KP规则";
+  function normalizeTrpg(value) {
+    return isPlainObject(value) ? { on: value.on !== !1, rule: TRPG_RULES.some((r) => r.value === value.rule) ? value.rule : "coc7" } : null;
+  }
+  function isTrpg(project) {
+    return !!(project && project.trpg && project.trpg.on);
+  }
+  var LEVELS = ["普通", "困难", "极难"];
+  function normalizeCheck(value) {
+    if (value == null || value === "" || value === !1) return null;
+    if (typeof value == "string") {
+      let text2 = value.trim(), level2 = LEVELS.find((l) => text2.includes(l)) || "普通", skills2 = text2.replace(/[（(][^）)]*[）)]/g, "").replace(new RegExp(`(${LEVELS.join("|")})|检定|判定|暗骰`, "g"), "").split(/[\/、,，或\s]+/).map((s) => s.trim()).filter(Boolean);
+      return skills2.length ? { skills: skills2, level: level2, hidden: /暗骰/.test(text2), fail: "" } : null;
+    }
+    if (!isPlainObject(value)) return null;
+    let raw = value.技能 ?? value.skill ?? "", skills = (Array.isArray(raw) ? raw : String(raw).split(/[\/、,，或]+/)).map((s) => String(s).trim()).filter(Boolean);
+    if (!skills.length) return null;
+    let level = String(value.难度 || "").trim();
+    return {
+      skills,
+      level: LEVELS.includes(level) ? level : "普通",
+      hidden: value.暗骰 === !0 || value.暗骰 === "true" || value.暗骰 === "是",
+      fail: String(value.失败 ?? "").trim()
+    };
+  }
+  var CHECK_MODES = [
+    { value: "text", label: "正文里写一行【检定】" },
+    { value: "anke", label: "论坛安科（IGS 论坛点 ROLL）" }
+  ], CHECK_RESULT = "成败由插件按骰点算好，写在本轮材料里：材料里写「判定成功」的，这一轮写出那条发现；写「判定失败」的，按失败写，不要写出也不要暗示那条发现；还是「待判定」的说明用户还没掷，不要自己判断成败，也不要猜测会发现什么。用户消息里的骰点不用你来算。用户说成功了、本轮材料里却没有对应的「判定成功」条目时，只写到判定成功、开始有所发现的那一刻，具体发现了什么留到下一轮，绝不要自己编。理智检定不受这条限制：用户掷完后按模组的理智损失结算。", CHECK_RULE = `「待判定」的发现：玩家的行动到了这一步时，在正文末尾写出检定请求「【检定】谁：技能 技能值（难度）#编号」，如「【检定】{{user}}：侦查 60（困难）#F03」。技能从材料里写的技能中挑最合适的一个；技能值从调查员资料里取，查不到就不写；编号照抄材料里的 #编号。写到掷骰之前就停下，不替玩家掷骰，不写结果。暗骰同样写请求，只写技能，不说明在查什么。${CHECK_RESULT}`, CHECK_RULE_ANKE = `「待判定」的发现：玩家的行动到了这一步时，在正文最末另起一行写一个检定安科 [igs-anke:检定|问题|对象|技能|技能值|难度|编号]：问题用楼主的口吻对网友说；对象写真正去做这件事的人（楼主、角色名或 {{user}}）；技能从材料里写的技能中挑最合适的一个；技能值从调查员资料里取，查不到写 50；难度写 普通、困难或极难；编号照抄材料里的 #编号（不带 #）。理智检定也用它，技能写「理智」、技能值写当前理智值、编号写 SAN。写到掷骰之前就停下，不替玩家掷骰，不写结果。${CHECK_RESULT}`;
+  function checkRule(settings) {
+    return settings && settings.trpgCheck === "anke" ? CHECK_RULE_ANKE : CHECK_RULE;
+  }
+  function hasChecks(list) {
+    return (list || []).some((d) => d && d.check);
+  }
+  var TRPG_IMPORT_RULES = [
+    "【跑团模组（CoC 7 版）附加规则】",
+    "这份材料是 CoC 7 版跑团模组，AI 会担任 KP。除上面的规则外：",
+    "· 原文写了「××检定 / 成功的××可以 / 过一个××检定」才能得到的信息，写成带「判定」的发现：判定: {技能: 聆听, 难度: 普通, 失败: 失败时正文怎么写}。可以用多种技能之一的写「技能: [幸运, 侦查, 说服]」；难度只写 普通 / 困难 / 极难；原文说 KP 暗骰的加「暗骰: true」。原文没写失败结果的，「失败」省略。",
+    "· 判定只放在「发现」里，不要放进开放条件、完成条件。",
+    "· 不要因为判定卡死主线：一个必需节点如果只有一条途径、而它要的发现带判定，失败时必须还能往下走。原文写了失败后的替代办法（换人问、付出代价、晚一步）就写进「失败」；原文没写的，「失败」写「仍然得到，但要付出代价（耗时、被人注意或受伤）」，并在「待确认」里注明这是补写。",
+    "· 成功程度不同得到的信息不同（大成功多知道一点）的，把多出来的部分拆成另一条发现、另一个事实编号；节点的完成条件只用基本的那一条。",
+    "· 理智检定（如 sc0/1d3、0/1d3 的理智鉴定、损失 1D3/2D6 SAN）写在场景末尾的括号里，例如「（目睹尸体：理智检定 0/1d3）」，不要写成发现。",
+    "· 战斗、对抗、伤害、计量（如「临界值 +1」「可用厕所 -1」）、按钟点发生的事件、随机表、NPC 和敌人的数值、法术，不要写成节点或发现；插件会把这些另外整理成 KP 规则。和某个节点相关的，在场景或「AI指令」里一句话点到即可（如「这里可能和教徒起冲突」）。",
+    "· 模组里的「支线」「随机事件」是可以碰到也可以错过的，写进 支线事件:，「必需: false」。"
+  ].join(`
+`), KP_SECTIONS = ["机制与计量", "时间线", "理智检定", "随机事件与随机表", "NPC与敌人数据", "法术与道具效果", "结局条件", "预设调查员"];
+  function kpRulesMessages({ part, total }) {
+    return [
+      {
+        role: "system",
+        content: [
+          `你在为 AI 主持人（KP）整理一份 CoC 7 版模组的规则资料。这是第 ${part.i + 1}/${total} 段材料。`,
+          "只摘录主持跑团时要查的规则性内容，按下面的小标题分组（本段没有的小标题省略，不要写「无」）：",
+          KP_SECTIONS.map((s) => `${s}:`).join("　"),
+          "· 机制与计量：特殊机制、需要持续记录的数值（名称、记给谁、初始值、每一档的表现、什么情况加减多少、多久检定一次）。",
+          "· 时间线：钟点和对应事件；写明「如果玩家做了什么，事件怎么变」。",
+          "· 理智检定：在什么情况下、损失多少（照抄 0/1d3 这类写法）。",
+          "· 随机事件与随机表：每一项的触发方式和效果；骰表保留编号。",
+          "· NPC与敌人数据：属性、HP、MP、护甲、攻击、技能、闪避，照原文数值抄。",
+          "· 法术与道具效果：消耗、用时、效果。",
+          "· 结局条件：各结局怎么达成、奖励（如恢复理智）。",
+          "· 预设调查员：职业、携带物、个人任务（玩家可以看到的部分）。",
+          "数值、骰子表达式、技能名照原文，不换算、不补 CoC 常识；原文没写的不编。剧情叙述、场景描写、氛围文字不要摘。",
+          "每条一行，用「- 」开头，尽量短。只输出这些分组，不加说明。"
+        ].join(`
+`)
+      },
+      { role: "user", content: `【材料：${part.title}】
+${part.text}` }
+    ];
+  }
+  function kpMergeMessages(pieces) {
+    return [
+      {
+        role: "system",
+        content: [
+          "下面是同一份 CoC 模组分段摘出的 KP 规则。合并成一份：同一小标题的内容放在一起，重复的只留一条，数值以原文为准，不新增内容。",
+          `小标题顺序：${KP_SECTIONS.join("、")}。每个小标题单独一行、以冒号结尾，下面每条「- 」开头。只输出合并结果。`
+        ].join(`
+`)
+      },
+      { role: "user", content: pieces.map((p, i) => `【第 ${i + 1} 段】
+${p}`).join(`
+
+`) }
+    ];
+  }
+  function kpBlockText(reply2) {
+    let body = String(reply2 || "").replace(/^```[a-z]*\n?|```$/gim, "").split(`
+`).map((line) => {
+      let m = /^\s*(?:#{1,4}\s*)?([^\s\-*#][^:：]{0,20})[:：]\s*$/.exec(line);
+      return m ? `【${m[1].trim()}】` : line.replace(/\s+$/, "");
+    }).join(`
+`).replace(/\n{3,}/g, `
+
+`).trim();
+    return body ? `${KP_BLOCK}:
+（KP 资料：主持时按这里裁定；具体数值和幕后信息不要直接告诉玩家，只描写表现。）
+${body}` : "";
+  }
+  var AI_CHECK_TAG = "AI 检查：";
+  function trpgReviewMessages({ units, whole = "" }) {
+    return [
+      {
+        role: "system",
+        content: [
+          "你在审稿：下面是从一份 CoC 7 版跑团模组导入的线索大纲（YAML），每一页是一个阶段。对照原文逐页检查，只指出问题，不要改写大纲。",
+          "重点查这些：",
+          "1. 原文写了「××检定 / 成功的××可以 / 过一个××检定」才能得到的信息，大纲的发现里没有写「判定」，或者技能、难度和原文对不上。",
+          "2. 必需节点只有一条途径，它要的发现带判定，却没写「失败」时怎么办（失败就卡住主线）。",
+          "3. 理智检定、战斗、伤害、计量（如临界值、可用厕所数）、按钟点发生的事件被写成了节点或发现；理智检定应写在场景末尾的括号里。",
+          "4. 入口、场景里提前写出了调查结果、幕后真相或还没到揭示时机的答案。",
+          "5. 发现的内容是原文里没有的（编出来的线索），或者原文里重要的线索、调查点漏了。",
+          "6. 模组里可以错过的支线、随机事件被写成了必需的主线节点。",
+          "每个问题写一行：「- 问题（建议：怎么改）」，指明是哪个节点，尽量短。没问题的页不写。",
+          "输出格式：每页先写一行【页N】，下面列这一页的问题；全部没问题时只输出「没有发现问题」。"
+        ].join(`
+`)
+      },
+      {
+        role: "user",
+        content: [
+          whole && `【模组原文】
+${whole}`,
+          ...units.map((u, i) => [`【页${i + 1}】${u.label}`, u.source && !whole ? `（对应原文）
+${u.source}` : "", `（大纲）
+${u.yaml}`].filter(Boolean).join(`
+`))
+        ].filter(Boolean).join(`
+
+`)
+      }
+    ];
+  }
+  function parseReviewReply(text2, count) {
+    let out = {}, cur = -1;
+    for (let line of String(text2 || "").split(`
+`)) {
+      let m = /^\s*[#*]*\s*【\s*页\s*(\d+)\s*】/.exec(line);
+      if (m) {
+        let n = Number(m[1]) - 1;
+        cur = n >= 0 && n < count ? n : -1;
+        continue;
+      }
+      let item = /^\s*(?:[-*•]|\d+[.、])\s*(.+?)\s*$/.exec(line);
+      cur >= 0 && item && (out[cur] = [...out[cur] || [], item[1]]);
+    }
+    return out;
+  }
+  var LEVEL_OF = (text2) => /极难/.test(text2 || "") ? "极难" : /困难/.test(text2 || "") ? "困难" : "普通", CODE = /#\s*([A-Za-z][\w-]{0,40})/;
+  function parseCheckRequests(text2) {
+    let out = [], src = String(text2 || "");
+    for (let m of src.matchAll(/【检定】([^\n]*)/g)) {
+      let line = m[1], code = CODE.exec(line), body = line.replace(/^[^：:]*[：:]/, ""), skill = /^\s*([^\s\d（(#]+)/.exec(body), value = /(\d{1,3})/.exec(body.replace(CODE, ""));
+      code && skill && out.push({ code: code[1], skill: skill[1], value: value ? Number(value[1]) : null, level: LEVEL_OF(body) });
+    }
+    for (let m of src.matchAll(/[\[【［]\s*igs\s*-?\s*anke\s*[:：]\s*检定\s*[|｜]([^\]】］]*)[\]】］]/gi)) {
+      let f = m[1].split(/[|｜]/).map((x) => x.trim()), code = f.find((x, i) => i >= 2 && /^#?[A-Za-z][\w-]*$/.test(x));
+      f[2] && code && out.push({ code: code.replace(/^#/, ""), skill: f[2], value: /^\d{1,3}$/.test(f[3] || "") ? Number(f[3]) : null, level: LEVEL_OF(f.slice(4).join(" ")) });
+    }
+    return out;
+  }
+  var escapeRe = (t) => String(t).replace(/[.*+?^$()|[\]\\{}]/g, (c) => "\\" + c);
+  function parseRoll(text2, skill = "") {
+    let src = String(text2 || ""), bySkill = skill ? new RegExp(escapeRe(skill) + "[^\\d\\n]{0,6}(\\d{1,3})").exec(src) : null, m = /\d*\s*[dD]\s*100\s*[=＝:：]\s*(\d{1,3})/.exec(src) || /🎲\s*(\d{1,3})/.exec(src) || bySkill || /(?:掷出|骰出|出目|结果)\D{0,3}(\d{1,3})/.exec(src), value = /(\d{1,3})\s*[\/／]\s*(\d{1,3})/.exec(src);
+    if (m) return { die: Number(m[1]), value: value && Number(value[1]) === Number(m[1]) ? Number(value[2]) : null };
+    let w = /(大成功|极难成功|困难成功|大失败|失败|成功)/.exec(src);
+    return w ? { word: w[1] } : null;
+  }
+  function cocJudge(die, value, level = "普通") {
+    let fumble = die >= 100 || value < 50 && die >= 96, tier = die === 1 ? "大成功" : fumble ? "大失败" : die <= Math.floor(value / 5) ? "极难成功" : die <= Math.floor(value / 2) ? "困难成功" : die <= value ? "成功" : "失败", need = level === "极难" ? Math.floor(value / 5) : level === "困难" ? Math.floor(value / 2) : value;
+    return { tier, ok: die === 1 || !fumble && die <= need, need };
+  }
+  function trpgCheckResults(messages) {
+    let open = [], out = {};
+    (messages || []).forEach((msg, at) => {
+      if (!msg || msg.is_system) return;
+      let text2 = String(msg.mes || "");
+      if (!msg.is_user) {
+        for (let r of parseCheckRequests(text2)) out[r.code] || open.some((o) => o.code === r.code) || open.push(r);
+        return;
+      }
+      let named = CODE.exec(text2), req = named && open.find((o) => o.code === named[1]) || open[open.length - 1];
+      if (!req) return;
+      let roll = parseRoll(text2, req.skill);
+      if (!roll) return;
+      let value = roll.value || req.value, res = roll.die != null && value ? { ...cocJudge(roll.die, value, req.level), die: roll.die } : roll.word ? { tier: roll.word, ok: !/失败/.test(roll.word), die: null } : null;
+      res && (out[req.code] = { ...res, value, level: req.level, skill: req.skill, at }, open = open.filter((o) => o !== req));
+    });
+    let last = -1;
+    (messages || []).forEach((m, i) => m && m.is_user && !m.is_system && (last = i));
+    for (let r of Object.values(out)) r.fresh = r.at === last;
+    return out;
+  }
+  var GOT_ANYWAY = /仍然?(?:能)?(?:得到|拿到|发现|找到)|也能(?:得到|拿到|发现|找到)|还是(?:得到|拿到|发现|找到)/;
+  function checkLine(d, checks) {
+    if (!d || !d.check) return null;
+    let c = d.check, code = d.fact || "", what = `${c.skills.join(" / ")}${c.level === "普通" ? "" : `（${c.level}）`}`, r = code && checks ? checks[code] : null;
+    if (!r) return { reveal: !1, line: `- 待判定 #${code}：${what}${c.hidden ? "，暗骰" : ""}。掷骰成功之前不知道会发现什么，不要写出调查结果。` };
+    let how = `${r.skill}${r.die != null ? ` 1D100=${r.die}` : ""}${r.value ? `／${r.value}` : ""}，${r.tier}`;
+    return r.ok ? { reveal: !0, line: `- 判定成功 #${code}（${how}）：这一轮写出这条发现：${d.text}` } : c.fail && GOT_ANYWAY.test(c.fail) ? { reveal: !0, line: `- 判定失败 #${code}（${how}）：${c.fail}。可以写出：${d.text}` } : { reveal: !1, line: `- 判定失败 #${code}（${how}）：${c.fail || "没有发现"}。不要写出这条发现，也不要暗示它是什么。` };
+  }
+  function freshCheckLines(nodeStates, checks, { printed = [], isGot = () => !1, discoveriesOf, used = null } = {}) {
+    if (!checks || !discoveriesOf) return [];
+    let out = [];
+    for (let [code, r] of Object.entries(checks)) {
+      if (!r.fresh || printed.includes(code) || isGot(code)) continue;
+      let d = null;
+      for (let s of nodeStates || [])
+        if (d = discoveriesOf(s.node.item || {}).find((x) => x.fact === code && x.check), d) break;
+      let ck = d && checkLine(d, checks);
+      ck && (out.push(ck.line), ck.reveal && used && used.candidates.push({ fact: d.fact, record: d.record }));
+    }
+    return out.length ? ["刚才的判定结果（用户这一轮掷的骰）：", ...out] : [];
+  }
+
   // src/core/acu.js
   var ACU = /^TavernDB-ACU/i, CUSTOM = /^TavernDB-ACU-CustomExport-/i, TAIL = /-(?:\d+|包裹|上|下)$/, EN_FIELD = "英文字段";
   function acuField(title2) {
@@ -2568,7 +2788,7 @@ ${lines2.join(`
       settings: normalizeSettings(src.settings)
     };
   }
-  function newProject(name, now = Date.now(), mode = "normal") {
+  function newProject(name, now = Date.now(), mode2 = "normal") {
     return {
       version: 1,
       id: makeId("p"),
@@ -2580,8 +2800,8 @@ ${lines2.join(`
       defaults: JSON.parse(JSON.stringify(DEFAULT_PARAMS)),
       genRefs: normalizeGenRefs(),
       personas: emptyPersonas(),
-      mode: mode === "infinite" ? "infinite" : "normal",
-      ...mode === "infinite" ? { infinite: normalizeInfinite({}) } : {}
+      mode: mode2 === "infinite" ? "infinite" : "normal",
+      ...mode2 === "infinite" ? { infinite: normalizeInfinite({}) } : {}
     };
   }
   function normalizeProject(value, id) {
@@ -2620,6 +2840,8 @@ ${lines2.join(`
       personas: normalizePersonas(src.personas),
       threads: { sideOn: !(src.threads && src.threads.sideOn === !1), worldOn: !(src.threads && src.threads.worldOn === !1) },
       mode: src.mode === "infinite" ? "infinite" : "normal",
+      // 跑团模式（core/trpg.js）：只有开过的项目才有这个键
+      ...normalizeTrpg(src.trpg) ? { trpg: normalizeTrpg(src.trpg) } : {},
       ...src.infinite && typeof src.infinite == "object" ? { infinite: normalizeInfinite(src.infinite) } : {},
       // 批量导入支线采用后的对应（GPT 代码审阅 R4）：{ "任务id:原编号": 卷id }。之后再采用同一任务的线，引用照这个改到实际的新编号。
       ...src.importLineMap && typeof src.importLineMap == "object" && !Array.isArray(src.importLineMap) ? { importLineMap: Object.fromEntries(Object.entries(src.importLineMap).filter(([, v]) => typeof v == "string")) } : {}
@@ -2704,7 +2926,7 @@ ${lines2.join(`
   function createDataStore({ onChange: onChange8 = () => {
   }, onError = () => {
   } } = {}) {
-    let index = emptyIndex(), ready = !1, projects = /* @__PURE__ */ new Map(), chats = /* @__PURE__ */ new Map(), loading = /* @__PURE__ */ new Map(), failed = /* @__PURE__ */ new Set(), writer = createWriter({
+    let index = emptyIndex(), ready = !1, projects = /* @__PURE__ */ new Map(), chats = /* @__PURE__ */ new Map(), loading2 = /* @__PURE__ */ new Map(), failed = /* @__PURE__ */ new Set(), writer = createWriter({
       onSaved(name, bytes) {
         if (failed.delete(name), name === INDEX_FILE) return;
         let id = /^pi-[pc]-(.+)\.json$/.exec(name)?.[1], meta2 = index.projects.find((item) => item.id === id), kind = name.startsWith("pi-p-") ? "project" : "chat", knownFile = index.files.includes(name);
@@ -2728,12 +2950,12 @@ ${lines2.join(`
     }
     async function loadProject(id) {
       if (projects.has(id)) return projects.get(id);
-      if (loading.has(`p:${id}`)) return loading.get(`p:${id}`);
+      if (loading2.has(`p:${id}`)) return loading2.get(`p:${id}`);
       let job = (async () => {
         let file = await readJsonFile(projectFile(id)), project = file ? normalizeProject(file.value, id) : null;
         return project && (projects.set(id, project), syncImportIndex(project)), project;
-      })().finally(() => loading.delete(`p:${id}`));
-      return loading.set(`p:${id}`, job), job;
+      })().finally(() => loading2.delete(`p:${id}`));
+      return loading2.set(`p:${id}`, job), job;
     }
     function syncImportIndex(project) {
       let ids = Array.isArray(project.imports) ? project.imports : [], meta2 = index.projects.find((item) => item.id === project.id);
@@ -2762,8 +2984,8 @@ ${lines2.join(`
       let value = fn(current), next = value && value !== current ? normalizeProject(value, id) : value;
       return next && next !== current && saveProject(next), next;
     }
-    async function createProject(name, group = "", mode = "normal") {
-      return addProject(newProject(name, Date.now(), mode), group);
+    async function createProject(name, group = "", mode2 = "normal") {
+      return addProject(newProject(name, Date.now(), mode2), group);
     }
     async function addProject(project, group = "") {
       projects.set(project.id, project);
@@ -3337,7 +3559,13 @@ ${lines2.join(`
   }
   function discoveryList(item) {
     return (Array.isArray(item.发现) ? item.发现 : item.发现 ? [item.发现] : []).map(
-      (d) => isPlainObject(d) ? { fact: String(d.事实 || d.id || "").trim(), text: clueText(d.内容), record: clueText(d.记录) } : { fact: "", text: clueText(d), record: "" }
+      (d) => isPlainObject(d) ? {
+        fact: String(d.事实 || d.id || "").trim(),
+        text: clueText(d.内容),
+        record: clueText(d.记录),
+        // 跑团模式的「判定」（core/trpg.js）；没写判定的发现不带这个键
+        ...normalizeCheck(d.判定) ? { check: normalizeCheck(d.判定) } : {}
+      } : { fact: "", text: clueText(d), record: "" }
     ).filter((d) => d.text);
   }
   function nodeFactRefs(node) {
@@ -3614,7 +3842,7 @@ ${lines2.join(`
     }
     return out;
   }
-  function buildClueProjection(state, snapshot, clueProg, settings, { pace = "normal", stay = "", plan = null, notReady = null } = {}) {
+  function buildClueProjection(state, snapshot, clueProg, settings, { pace = "normal", stay = "", plan = null, notReady = null, checks = null } = {}) {
     let tag = String(settings.tagName || "剧情参考").trim() || "剧情参考", focus = state.nodeStates.find((s) => s.node.uid && s.node.uid === state.focus.uid), lines2 = [], used = {
       focus: focus ? focus.node.uid : "",
       facts: [],
@@ -3636,8 +3864,10 @@ ${lines2.join(`
         return !!(f && f.claimed) && !(over && over.status === "revoked");
       }, got = finds.filter((d) => d.fact && effectiveFact(d.fact, snapshot, clueProg).confirmed), voiced = finds.filter((d) => !got.includes(d) && isClaimed(d)), held = finds.filter((d) => !got.includes(d) && !voiced.includes(d) && d.fact && notReady && notReady.has(d.fact)), pending = finds.filter((d) => !got.includes(d) && !voiced.includes(d) && !held.includes(d)), gotFacts = new Set([...got, ...voiced].map((d) => d.fact));
       held.length && (used.held = held.map((d) => d.fact)), held.length && !pending.length && lines2.push("这一场的具体发现还在准备，这一轮先写到人物和环境，不要写出调查结果。"), pending.length && (lines2.push(got.length ? "本场景还可能获得的发现（尚未发生）：" : "本场景可能获得的发现（尚未发生）："), pending.forEach((d) => {
-        lines2.push(`- ${d.text}`), used.discoveries.push(d.fact || d.text.slice(0, 20)), d.fact && used.candidates.push({ fact: d.fact, record: d.record });
-      }));
+        let ck = checkLine(d, checks);
+        lines2.push(ck ? ck.line : `- ${d.text}`), used.discoveries.push(d.fact || d.text.slice(0, 20)), d.fact && (!ck || ck.reveal) && used.candidates.push({ fact: d.fact, record: d.record });
+      }), // 跑团模式：有带判定的发现时，加一条检定写法（没有判定时什么都不加）
+      hasChecks(pending) && lines2.push(checkRule(settings)));
       let holdersOf = (id) => [
         ...new Set(
           (snapshot.knowledge || []).filter((row2) => row2.fact === id && clueText(row2.actor)).map((row2) => `${clueText(row2.actor)}${row2.verified === !0 ? "" : `（${clueText(row2.credibility) || "未核实"}）`}`)
@@ -3703,7 +3933,14 @@ ${lines2.join(`
         "如果用户这一轮去做了上面的某件事，写到他到达、开始就可以；具体查到什么、对方说出什么，留到之后再写，不要自己编造结果。"
       ), used.leads = leads.map((l) => l.uid), leads.forEach((l) => used.scenes.push({ uid: l.uid, entry: l.text, place: l.place, focus: !1 })));
     }
-    if (!lines2.length) return { content: "", used };
+    if (checks && lines2.push(
+      ...freshCheckLines(state.nodeStates, checks, {
+        printed: used.discoveries,
+        isGot: (id) => effectiveFact(id, snapshot, clueProg).confirmed,
+        discoveriesOf: discoveryList,
+        used
+      })
+    ), !lines2.length) return { content: "", used };
     let note = pace === "slow" ? "节奏放慢，细写当下。" : pace === "fast" ? "节奏加快，次要细节一笔带过。" : "", guide = bodyGuideText(settings);
     return {
       content: `<${tag}>
@@ -3976,7 +4213,7 @@ ${guide ? `${guide}
       let atom = parseAtom(value);
       return atom.kind === "bad" && errors.push(atom.error), atom;
     }
-    let mode = "all", items;
+    let mode2 = "all", items;
     if (isPlainObject(value) && Object.keys(value).length === 1 && value.计数 !== void 0) return parseCountAtom(value.计数, errors);
     if (isPlainObject(value) && value.表 !== void 0 && Object.keys(value).length > 1 && Object.keys(value).every((k) => CELL_EXTRA_KEYS.includes(k)))
       return parseCellExtra(value, errors);
@@ -3990,9 +4227,9 @@ ${guide ? `${guide}
     }
     if (Array.isArray(value)) items = value;
     else if (isPlainObject(value) && Array.isArray(value.全部) && Object.keys(value).length === 1) items = value.全部;
-    else if (isPlainObject(value) && Array.isArray(value.任一) && Object.keys(value).length === 1) mode = "any", items = value.任一;
+    else if (isPlainObject(value) && Array.isArray(value.任一) && Object.keys(value).length === 1) mode2 = "any", items = value.任一;
     else return errors.push(`无法识别的条件结构：${JSON.stringify(value).slice(0, 60)}`), { kind: "bad", raw: "", error: "结构错误" };
-    return depth >= COND_MAX_DEPTH ? (errors.push("条件嵌套超过两层"), { kind: "bad", raw: "", error: "嵌套过深" }) : { kind: "group", mode, items: items.map((item) => parseCondition(item, errors, depth + 1)).filter(Boolean) };
+    return depth >= COND_MAX_DEPTH ? (errors.push("条件嵌套超过两层"), { kind: "bad", raw: "", error: "嵌套过深" }) : { kind: "group", mode: mode2, items: items.map((item) => parseCondition(item, errors, depth + 1)).filter(Boolean) };
   }
   function digitsOf(text2) {
     return (String(text2).match(/\d+/g) || []).map(Number);
@@ -4518,7 +4755,7 @@ ${guide ? `${guide}
       seen.add(id);
       let kind = String(raw.类型 || "").trim() === "主线" ? "main" : "side", open = parseCondition(raw.开启条件, errs), legacyFact = String(raw.开场事实 || "").trim(), modeText = String(raw.开启方式 || "").trim();
       modeText && !LINE_MODES[modeText] && errs.push(`开启方式「${modeText}」不认识，可以写：条件满足即开始、走进去才开始、人工`);
-      let mode = LINE_MODES[modeText] === "manual" ? "manual" : kind === "main" ? "auto" : "enter", line = {
+      let mode2 = LINE_MODES[modeText] === "manual" ? "manual" : kind === "main" ? "auto" : "enter", line = {
         id,
         kind,
         name: volumeLabel(volume.key),
@@ -4526,7 +4763,7 @@ ${guide ? `${guide}
         entryHint: clueText(raw.入口提示),
         open,
         legacyFact,
-        mode,
+        mode: mode2,
         volume,
         units: own,
         synthetic: !isPlainObject(volume.line),
@@ -5326,7 +5563,9 @@ ${guide ? `${guide}
         pace: prog && prog.pace,
         stay: stayText(stayState(prog && prog.stays, chatMessages(), info), "clue"),
         plan: c.plan,
-        notReady: c.notReady
+        notReady: c.notReady,
+        // 跑团模式：从聊天记录算出各检定的结果（core/trpg.js）；不是跑团项目不算
+        checks: isTrpg(project()) ? trpgCheckResults(chatMessages()) : null
       });
       return {
         ...out,
@@ -6207,12 +6446,12 @@ ${tail}` };
       for (let [field2, rep] of Object.entries(CLUE_TPL_REPLACE[name] || {})) {
         let cur = String(sheet.sourceData[field2] || "");
         if (cur.includes(rep.to)) continue;
-        let official = rep.whole || rep.from, norm2 = (t) => t.replace(
+        let official = rep.whole || rep.from, norm3 = (t) => t.replace(
           /\r\n?/g,
           `
 `
         ).trim();
-        norm2(cur) === norm2(official) ? (sheet.sourceData[field2] = cur.replace(rep.from, rep.to), changes.push(`「${name}」的${field2 === "initNode" ? "初始化" : "新增"}规则：「${rep.from}」改为「${rep.to}」`)) : problems2.push(
+        norm3(cur) === norm3(official) ? (sheet.sourceData[field2] = cur.replace(rep.from, rep.to), changes.push(`「${name}」的${field2 === "initNode" ? "初始化" : "新增"}规则：「${rep.from}」改为「${rep.to}」`)) : problems2.push(
           `「${name}」的${field2 === "initNode" ? "初始化" : "新增"}规则和数据库默认不同，没有替换；请确认它不会按设定预写内容`
         );
       }
@@ -6400,14 +6639,14 @@ ${lines2.join(`
     volumes,
     volumeNo,
     request,
-    mode = "outline",
+    mode: mode2 = "outline",
     refs = [],
     clueIndex = "",
     progress = "",
     recent = "",
     tableCatalog = ""
   }) {
-    let clue = mode === "clue", known = knownVolumesText(volumes), system = clue ? `你按用户的设定写线索推进模式的剧情大纲，格式必须与样例一致。
+    let clue = mode2 === "clue", known = knownVolumesText(volumes), system = clue ? `你按用户的设定写线索推进模式的剧情大纲，格式必须与样例一致。
 ${CLUE_OUTLINE_RULES_WITH_LINES}
 
 【格式样例】
@@ -6490,12 +6729,12 @@ ${reason}` : ""
       { role: "user", content: user }
     ];
   }
-  function fixYamlMessages(text2, error, mode = "outline") {
+  function fixYamlMessages(text2, error, mode2 = "outline") {
     return [
       {
         role: "system",
         content: `修正下面 YAML 的格式错误，内容不变。
-${mode === "clue" ? CLUE_OUTLINE_RULES : OUTLINE_RULES}`
+${mode2 === "clue" ? CLUE_OUTLINE_RULES : OUTLINE_RULES}`
       },
       {
         role: "user",
@@ -6550,17 +6789,17 @@ ${text2}`
     split: "拆成两段：把这个阶段按剧情先后拆成两个阶段，阶段名沿用「阶段N_标题」格式，两段的时间范围首尾相接且不重叠，节点、支线事件、世界动态按发生时间分到两段，状态变化归入对应的段。输出两个阶段。",
     merge: "与下一段合并：把「当前阶段」和「下一阶段」合成一个阶段，阶段名取能概括两段的标题，时间范围覆盖两段，节点、支线事件、世界动态按时间顺序合并并去掉重复，状态变化全部保留。输出一个阶段。"
   };
-  function stageOpMessages({ setting, talk = "", refs = [], volumes, unit, next, op, request, mode = "outline", progress = "" }) {
-    let rule = mode === "clue" ? STAGE_OPS[op] && STAGE_OPS[op].replace("节点、支线事件、世界动态", "剧情节点、可选事件、世界动态") : STAGE_OPS[op];
+  function stageOpMessages({ setting, talk = "", refs = [], volumes, unit, next, op, request, mode: mode2 = "outline", progress = "" }) {
+    let rule = mode2 === "clue" ? STAGE_OPS[op] && STAGE_OPS[op].replace("节点、支线事件、世界动态", "剧情节点、可选事件、世界动态") : STAGE_OPS[op];
     if (!rule) throw new Error("不支持的阶段操作");
     let system = [
       "你在调整剧情大纲中的单个阶段，格式必须与样例一致。",
-      mode === "clue" ? CLUE_OUTLINE_RULES : OUTLINE_RULES,
-      ...mode === "clue" ? [
+      mode2 === "clue" ? CLUE_OUTLINE_RULES : OUTLINE_RULES,
+      ...mode2 === "clue" ? [
         "保留已有节点的 id、发现里的事实编号和完成条件。已完成节点、已确认事实是已经发生的历史，不能改写或删掉。拆分阶段时，同一个节点只放在其中一个阶段。"
       ] : [],
       "阶段里的字段（时间范围、AI指令、主线节点、支线事件、世界动态、状态变化，以及其他任何键）原样保留或合理改写，不要丢键。",
-      `顶层键只写所属${mode === "clue" ? "剧情线" : "卷"}的名字「${unit.volume.key}」，下面只放结果阶段。`,
+      `顶层键只写所属${mode2 === "clue" ? "剧情线" : "卷"}的名字「${unit.volume.key}」，下面只放结果阶段。`,
       rule,
       `【格式样例】
 ${formatSample(volumes)}`
@@ -9855,6 +10094,7 @@ label.pi-wb-row{cursor:pointer}
       mode: p.mode,
       ...p.infinite ? { infinite: p.infinite } : {},
       clue: p.clue,
+      ...p.trpg ? { trpg: p.trpg } : {},
       defaults: p.defaults,
       threads: p.threads,
       outline: { volumes: p.outline.volumes, renames: p.outline.renames, idAlias: p.outline.idAlias },
@@ -10626,9 +10866,9 @@ ${part.text}`
     let out = { 梗概: [], 人物: [], 地点: [], 事实: [], 门槛: [], 并行: [], 作者资料: [], 待确认: [] }, people = /* @__PURE__ */ new Map(), byName = /* @__PURE__ */ new Map(), aliasOwner = /* @__PURE__ */ new Map(), places = /* @__PURE__ */ new Set(), facts = /* @__PURE__ */ new Map();
     for (let [k, idx] of (list || []).entries()) {
       if (!isPlainObject(idx)) continue;
-      let joinText = (v) => Array.isArray(v) ? v.map((x) => clueText(typeof x == "string" ? x : JSON.stringify(x))).filter(Boolean).join(`
+      let joinText2 = (v) => Array.isArray(v) ? v.map((x) => clueText(typeof x == "string" ? x : JSON.stringify(x))).filter(Boolean).join(`
 `) : clueText(v);
-      idx.梗概 && out.梗概.push(`第${k + 1}段：${joinText(idx.梗概)}`);
+      idx.梗概 && out.梗概.push(`第${k + 1}段：${joinText2(idx.梗概)}`);
       for (let p of Array.isArray(idx.人物) ? idx.人物 : []) {
         if (!isPlainObject(p) || !p.名称) continue;
         let name = String(p.名称), aliases = (Array.isArray(p.别名) ? p.别名 : []).map(String), same2 = [].concat(p.同一人 || []).map(String), hit = people.get(name) || [...same2, ...aliases].map((n) => byName.get(n)).find(Boolean);
@@ -10653,13 +10893,13 @@ ${part.text}`
         hit ? Object.entries(f).forEach(([kk, v]) => (hit[kk] == null || hit[kk] === "") && (hit[kk] = v)) : (facts.set(f.编号, { ...f, 段: k + 1 }), out.事实.push(facts.get(f.编号)));
       }
       out.门槛.push(...Array.isArray(idx.门槛) ? idx.门槛 : []), out.并行.push(...Array.isArray(idx.并行) ? idx.并行 : []), idx.作者资料 && out.作者资料.push(`第${k + 1}段：
-${joinText(idx.作者资料)}`);
+${joinText2(idx.作者资料)}`);
     }
     return out.secretFlag = !0, out;
   }
   var IMPORT_AUTHOR_KEYS = ["原文出处", "来源", "待确认", "补写"];
-  function importDraftMessages({ part, index, prevTail = "", mode = "clue", needs = "", actors = "", done = "", kind = "" }) {
-    let clue = mode === "clue", rules = clue ? CLUE_OUTLINE_RULES : OUTLINE_RULES, onlyClue = (x) => clue ? x : "";
+  function importDraftMessages({ part, index, prevTail = "", mode: mode2 = "clue", needs = "", actors = "", done = "", kind = "", trpg = !1 }) {
+    let clue = mode2 === "clue", rules = clue ? CLUE_OUTLINE_RULES : OUTLINE_RULES, onlyClue = (x) => clue ? x : "";
     return [
       {
         role: "system",
@@ -10716,7 +10956,9 @@ ${joinText(idx.作者资料)}`);
           clue && (kind === "main" || kind === "side") ? importLineHeadRule(kind, part) : "",
           actors && `角色对应：${actors}`,
           needs && `作者的要求：${needs}`,
-          rules
+          rules,
+          // 跑团模组导入（core/trpg.js）：只在导入任务带 trpg 时追加
+          clue && trpg ? TRPG_IMPORT_RULES : ""
         ].filter(Boolean).join(`
 `)
       },
@@ -10754,8 +10996,8 @@ ${part.text}`
     let k = job && job.kind;
     return k === "main" || k === "side" || k === "lines" || k === "outline" || k === "edit" ? k : job && job.mode === "lines" ? "lines" : job && job.mode === "outline" ? "outline" : "legacy";
   }
-  function reviewReviseMessages({ units, context = "", secrets = [], tableCatalog = "", mainLines = "", overall = "", talk = "", mode = "clue" }) {
-    let fence = "```", clue = mode !== "outline";
+  function reviewReviseMessages({ units, context = "", secrets = [], tableCatalog = "", mainLines = "", overall = "", talk = "", mode: mode2 = "clue" }) {
+    let fence = "```", clue = mode2 !== "outline";
     return [
       {
         role: "system",
@@ -10939,7 +11181,7 @@ ${add}` : add;
         part.length >= 2 && part !== full && !names2.includes(part) && !openParts.has(part) && !SECRET_SHORT_STOP.includes(part) && !out.has(part) && out.set(part, full);
     return [...out].map(([short, full]) => ({ short, full }));
   }
-  function importVisibleText(volumes, mode = "clue") {
+  function importVisibleText(volumes, mode2 = "clue") {
     let out = [], stage = "", stageId = "", put = (layer, where, value, field2 = "") => {
       let t = clueText(typeof value == "string" ? value : value == null ? "" : JSON.stringify(value));
       t && out.push({ layer, where, text: t, stage, stageId, field: field2 });
@@ -10947,7 +11189,7 @@ ${add}` : add;
     for (let vol of volumes || [])
       for (let st9 of vol.stages || []) {
         let where = stageLabel(st9.key), data = isPlainObject(st9.data) ? st9.data : {};
-        if (stage = st9.key, stageId = st9.id || "", put("body", where, stripAuthorDeep(String(st9.key || "")), "阶段名"), mode !== "clue") {
+        if (stage = st9.key, stageId = st9.id || "", put("body", where, stripAuthorDeep(String(st9.key || "")), "阶段名"), mode2 !== "clue") {
           for (let [k, v] of Object.entries(outlineStageData(data))) put("body", where, v, k);
           continue;
         }
@@ -10985,15 +11227,15 @@ ${add}` : add;
     fill: "填表模型看到的字段（编号、记录）",
     reveal: "到场就交给正文的「可能的发现」"
   };
-  function checkImportDraft(volumes, { index = null, secrets = null, mode = "clue", shortsSure = [], shortsNot = [] } = {}) {
-    let out = [], clue = mode === "clue", compiled = clue ? compileClue(volumes || []) : { errors: [] };
+  function checkImportDraft(volumes, { index = null, secrets = null, mode: mode2 = "clue", shortsSure = [], shortsNot = [] } = {}) {
+    let out = [], clue = mode2 === "clue", compiled = clue ? compileClue(volumes || []) : { errors: [] };
     out.push(...compiled.errors.map((t) => ({ level: "error", text: t })));
     let base = secrets || importSecretNames(index), names2 = base && [.../* @__PURE__ */ new Set([...base, ...shortsSure])], fullsOf = new Map(shortsSure.map((sh) => [sh, (base || []).filter((f) => f !== sh && f.includes(sh))])), bare = (sh, t) => (fullsOf.get(sh) || []).reduce((acc, f) => acc.split(f).join(""), t), hits = /* @__PURE__ */ new Map();
     names2 || (names2 = [], out.push({
       level: "warn",
       text: "这次导入的作者索引没有标出哪些名字需要保密（旧版本整理的），没有做名字保密检查。请自己看一下阶段名、AI指令、入口、场景里有没有不该出现的名字"
     }));
-    for (let x of importVisibleText(volumes, mode))
+    for (let x of importVisibleText(volumes, mode2))
       if (x.layer !== "author")
         for (let s of names2)
           s && s.length >= 2 && // 确认过的短名：先去掉包含它的全名再找，只有单独出现才算。同一处写了全名，全名那条已经报过；
@@ -11023,7 +11265,7 @@ ${add}` : add;
         });
       }
     let shorts = secrets ? [] : importSecretShorts(index, base).filter((x) => !shortsSure.includes(x.short) && !shortsNot.includes(x.short)), shortHits = /* @__PURE__ */ new Map();
-    for (let x of importVisibleText(volumes, mode))
+    for (let x of importVisibleText(volumes, mode2))
       if (!(x.layer !== "body" && x.layer !== "fill"))
         for (let { short, full } of shorts)
           x.text.includes(short) && !x.text.includes(full) && shortHits.set(short, [...shortHits.get(short) || [], { ...x, full }]);
@@ -11462,8 +11704,8 @@ ${mainLines}`,
     away: "主角眼下没在任何一段剧情里，只给入口"
   };
   function modeCard(project, inner = !1) {
-    let mode = project.clue ? project.clue.mode : "outline", body = `<div class="pi-seg">${PLOT_MODES.map((item) => `<button type="button" class="pi-seg-btn${item.value === mode ? " is-sel" : ""}" data-act="clue-mode" data-mode="${item.value}">${esc(item.label)}</button>`).join("")}</div>
-        <p class="pi-hint">${mode === "clue" ? "按主角实际查到的线索一步步开放剧情；进度跟着数据库填表更新。" : "按阶段顺序推进，每隔几楼让 AI 检查这一阶段演完没有。"}</p>`;
+    let mode2 = project.clue ? project.clue.mode : "outline", body = `<div class="pi-seg">${PLOT_MODES.map((item) => `<button type="button" class="pi-seg-btn${item.value === mode2 ? " is-sel" : ""}" data-act="clue-mode" data-mode="${item.value}">${esc(item.label)}</button>`).join("")}</div>
+        <p class="pi-hint">${mode2 === "clue" ? "按主角实际查到的线索一步步开放剧情；进度跟着数据库填表更新。" : "按阶段顺序推进，每隔几楼让 AI 检查这一阶段演完没有。"}</p>`;
     return inner ? `<div class="pi-run-sec"><div class="pi-run-sec-hd">推进方式</div>${body}</div>` : `<div class="pi-card"><h3>推进方式</h3>${body}</div>`;
   }
   function bindingText(list) {
@@ -11785,8 +12027,8 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
   }
   var clueActions = {
     async "clue-mode"(view, target) {
-      let mode = target.dataset.mode, project = view.project();
-      !project || project.clue && project.clue.mode === mode || mode === "clue" && !await confirmDialog({
+      let mode2 = target.dataset.mode, project = view.project();
+      !project || project.clue && project.clue.mode === mode2 || mode2 === "clue" && !await confirmDialog({
         title: "切换到线索推进",
         body: "线索推进按主角实际查到了什么来推进：数据库填表时记下拿到的线索，插件据此开放下一步。不再用 AI 判断「这一阶段演完了没有」，也不再一次把整个阶段交给正文。",
         list: [
@@ -11795,7 +12037,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
           "切换后，点下面「表格绑定」里的「生成线索模板」，给这个聊天加上记录线索的表格。"
         ],
         okLabel: "切换"
-      }) || (view.runtime.bumpEpoch(), view.data.updateProject(view.projectId, (p) => ({ ...p, clue: normalizeClue({ ...p.clue, mode }) })), view.runtime.clue.hideLineBar(), view.runtime.clue.invalidate(), mode === "clue" && view.runtime.clue.scheduleSync(), view.runtime.refresh(), view.renderBody());
+      }) || (view.runtime.bumpEpoch(), view.data.updateProject(view.projectId, (p) => ({ ...p, clue: normalizeClue({ ...p.clue, mode: mode2 }) })), view.runtime.clue.hideLineBar(), view.runtime.clue.invalidate(), mode2 === "clue" && view.runtime.clue.scheduleSync(), view.runtime.refresh(), view.renderBody());
     },
     "run-set-toggle"(view, target) {
       let st72 = view.tabState("run");
@@ -12693,6 +12935,44 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
     return review.draft.filter((v) => !drop.has(v.id) && !adoptedIds.has((review.lineIds || {})[v.id] || String((v.line || {}).编号 || "")));
   }
 
+  // src/ui/trpg-review.js
+  var WHOLE_MAX = 3e4;
+  function trpgReviewButton(view, job) {
+    if (!job || !job.trpg) return "";
+    let busy = view.busy[`trpg-check:${job.id}`];
+    return `<div class="pi-tools is-c1"><button type="button" class="pi-btn is-sm" data-act="rv-ai-check"${busy ? " disabled" : ""}>${busy ? '<span class="pi-spin"></span>AI 检查中' : "AI 检查（对照模组原文）"}</button></div>`;
+  }
+  function trpgReviewActions({ current, saveReview: saveReview2, reviewUnits: reviewUnits2, lineLocked: lineLocked2 }) {
+    return {
+      async "rv-ai-check"(view) {
+        let c = current(view);
+        if (!c || !c.job.trpg) return;
+        let key = `trpg-check:${c.job.id}`;
+        if (!view.busy[key]) {
+          view.busy[key] = !0, view.renderBody();
+          try {
+            let project = view.project(), review = c.review, notes = review.notes || {}, units = reviewUnits2(project, review).filter((u) => u.kind !== "line" && !lineLocked2(review, u.volumeId, project)), src = String(await view.data.imports.source(c.jobId).catch(() => "") || ""), whole = src.length <= WHOLE_MAX ? src : "", list = units.map((u) => {
+              let v = unitValue(review.draft, u.key), n = v && v.data ? stageNodes(v.data).map((x) => notes[nodeUid(x.item)]).find((x) => x && x.起 != null) : null;
+              return { key: u.key, label: v ? stageLabel(v.key) : u.key, yaml: v ? stringifyYaml({ [v.key]: v.data }) : "", source: !whole && n && src ? sourceExcerpt(src, n.起, n.止) : "" };
+            });
+            if (!list.length) return toast("info", "没有可以检查的阶段。");
+            let found = parseReviewReply(await ask(view, "outline", trpgReviewMessages({ units: list, whole })), list.length), pages = Object.keys(found).length, lines2 = Object.values(found).flat().length;
+            if (!lines2) return toast("success", "AI 检查没有发现问题。");
+            await saveReview2(view, c.jobId, (r) => {
+              let comments = { ...r.comments };
+              for (let [i, items] of Object.entries(found)) for (let x of items) comments[list[i].key] = appendComment(comments[list[i].key], `${AI_CHECK_TAG}${x}`);
+              return { ...r, comments };
+            }), toast("info", `AI 检查找到 ${lines2} 个问题（${pages} 页），已加入各页意见。看过、删掉不同意的，再点「按意见修改」。`);
+          } catch (error) {
+            toast("error", `AI 检查失败：${error && error.message || error}`);
+          } finally {
+            view.busy[key] = !1, view.renderBody();
+          }
+        }
+      }
+    };
+  }
+
   // src/ui/review-lines.js
   function reviewCheck(view, items, opts = {}) {
     let project = view.project(), rs = opts || {}, tables = currentTables(), kept = items.filter((x) => !x.dropped), base = rs.src === "import" ? project.outline.volumes : project.outline.volumes.filter((v) => !isPlainObject(v.line) || !kept.some((x) => x.vol.id === v.id)), all = [...base, ...kept.map((x) => x.vol)], comp = compileClue(all), dropped = items.filter((x) => x.dropped).map((x) => x.id), depends = droppedLineRefs(
@@ -12964,6 +13244,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
         ${locked ? `${comment.trim() ? `<div class="pi-field"><span>意见（未发送，只读）</span><textarea class="pi-ta" rows="3" readonly>${esc(comment)}</textarea></div>` : ""}<details><summary class="pi-hint">YAML</summary><pre class="pi-pre is-full">${esc(yamlText)}</pre></details>` : `<label class="pi-field"><span>意见</span><textarea class="pi-ta" rows="3" data-rv-comment="${esc(u.key)}" placeholder="对这一页的修改意见">${esc(comment)}</textarea></label>
         <details${review.yamlOpen === u.key ? " open" : ""}><summary class="pi-hint">编辑 YAML</summary><textarea class="pi-ta is-mono pi-rv-yaml" data-rv-yaml="${esc(u.key)}">${esc(yamlText)}</textarea>
           <div class="pi-tools is-c1"><button type="button" class="pi-btn is-sm" data-act="rv-yaml-save" data-unit="${esc(u.key)}">保存并检查</button></div><p class="pi-status" data-rv-yaml-status></p></details>`}
+        ${locked ? "" : trpgReviewButton(view, job)}
         <div class="pi-rv-foot"><button type="button" class="pi-btn${pending ? " is-primary" : ""}" data-act="rv-preview"${busy ? " disabled" : ""}>${busy ? '<span class="pi-spin"></span>修改中' : sendLabel(pending)}</button>${synced ? '<button type="button" class="pi-btn" data-act="import-adopt" disabled>已与大纲一致</button>' : `<button type="button" class="pi-btn${pending ? "" : " is-primary"}" data-act="import-adopt">${saveLabel(review, dirtyIds)}</button>`}</div></div>`;
   }
   function renderAdopted(view, job, review, crumb) {
@@ -13203,7 +13484,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
         crumbBack(view, c && c.review && c.review.adoptedId);
       }
     };
-    return actions12;
+    return Object.assign(actions12, trpgReviewActions({ current, saveReview, reviewUnits, lineLocked })), actions12;
   }
   async function reviseUnits(view, jobId, c, index, jobOf, opts = {}) {
     let review = c.review, units = reviewUnits(view.project(), review), overall = String(opts.overall || "").trim(), commented = sendableNotes(view.project(), review), overallVol = overall ? opts.overallVol || units[0] && units[0].volumeId : "", want = overall ? [.../* @__PURE__ */ new Set([...units.filter((u) => u.volumeId === overallVol).map((u) => u.key), ...commented])] : commented;
@@ -13382,6 +13663,206 @@ ${yamlOf(k)}`).join(`
     return !1;
   }
 
+  // src/core/doc-pdf.js
+  var CJK = "\\u3000-\\u303f\\u3400-\\u9fff\\uf900-\\ufaff\\uff00-\\uffef\\u2018-\\u201f\\u2026\\u2014", CJK_SPACE = new RegExp(`([${CJK}])[ \\u00a0]+(?=[${CJK}])`, "g"), BULLET = /^(?:[\uE000-\uF8FF•●▪◆■□◇○·]|-\s)\s*/, SENT_END = /[。！？!?…」』”）)：:]$/, DOT_LEADER = /[.·…．]{6,}/, HEAD_END = /[。！？!?…，,；;]$/, LIST_HEAD = /^(?:\d{1,2}[:：]\d{2}|\d{1,3}[.、．)）]|[（(]\d{1,3}[)）]|第[0-9一二三四五六七八九十百]+[章节条幕])/;
+  function isCjk(ch) {
+    return !!ch && new RegExp(`[${CJK}]`).test(ch);
+  }
+  function makeLine(items) {
+    let solid = items.filter((it) => it.h > 0 && it.str.trim()), text2 = "";
+    for (let it of items) text2 += it.str;
+    if (text2 = text2.replace(/\s+/g, " ").trim(), !text2 || !solid.length) return null;
+    let x = Math.min(...solid.map((it) => it.x)), right = Math.max(...solid.map((it) => it.x + it.w)), h = Math.max(...solid.map((it) => it.h)), font = solid.reduce((a, b) => b.str.length > a.str.length ? b : a).font;
+    return { text: text2, x, right, y: solid[0].y, h, font, items: solid };
+  }
+  function streamLines(items) {
+    let lines2 = [], cur = [], curY = null, flush = () => {
+      let line = cur.length ? makeLine(cur) : null;
+      line && lines2.push(line), cur = [], curY = null;
+    };
+    for (let it of items || [])
+      it.h > 0 && it.str.trim() && (curY !== null && Math.abs(it.y - curY) > it.h * 0.5 && flush(), curY === null && (curY = it.y)), cur.push(it), it.eol && flush();
+    return flush(), lines2;
+  }
+  function orderLooksBroken(lines2, width = 0) {
+    if (lines2.length < 6) return !1;
+    let jumps = 0, switches = 0;
+    for (let i = 1; i < lines2.length; i++)
+      lines2[i].y - lines2[i - 1].y > lines2[i].h * 2 && jumps++, width && Math.abs(lines2[i].x - lines2[i - 1].x) > width * 0.3 && switches++;
+    return jumps > Math.max(3, lines2.length * 0.12) || switches > Math.max(4, lines2.length * 0.3);
+  }
+  function coordLines(items, width) {
+    let rows2 = [];
+    for (let it of items || []) {
+      if (!(it.h > 0 && it.str.trim())) continue;
+      let row2 = rows2.find((r) => Math.abs(r.y - it.y) < it.h * 0.5);
+      row2 || rows2.push(row2 = { y: it.y, items: [] }), row2.items.push(it);
+    }
+    let mid = width / 2, pieces = [];
+    for (let row2 of rows2) {
+      row2.items.sort((a, b) => a.x - b.x);
+      let left = [], right = [], full = [];
+      for (let it of row2.items)
+        it.x < mid - 10 && it.x + it.w > mid + 10 ? full.push(it) : it.x + it.w / 2 < mid ? left.push(it) : right.push(it);
+      full.length ? pieces.push({ y: row2.y, col: "full", items: [...left, ...full, ...right].sort((a, b) => a.x - b.x) }) : (left.length && pieces.push({ y: row2.y, col: "L", items: left }), right.length && pieces.push({ y: row2.y, col: "R", items: right }));
+    }
+    pieces.sort((a, b) => b.y - a.y);
+    let out = [], band = [], flushBand = () => {
+      for (let col of ["L", "R"]) for (let p of band) p.col === col && out.push(p);
+      band = [];
+    };
+    for (let p of pieces) p.col === "full" ? (flushBand(), out.push(p)) : band.push(p);
+    return flushBand(), out.map((p) => makeLine(p.items)).filter(Boolean);
+  }
+  function norm(text2) {
+    return text2.replace(/\d+/g, "#").replace(/\s+/g, "");
+  }
+  function marginKeys(pages) {
+    let count = /* @__PURE__ */ new Map();
+    for (let p of pages)
+      for (let line of new Set(p.lines.filter((l) => inMargin(l, p)).map((l) => norm(l.text))))
+        count.set(line, (count.get(line) || 0) + 1);
+    return new Set([...count].filter(([, n]) => n >= 3).map(([k]) => k));
+  }
+  function inMargin(line, page) {
+    return line.y > page.height * 0.92 || line.y < page.height * 0.08;
+  }
+  function mode(values) {
+    let c = /* @__PURE__ */ new Map();
+    for (let [v, n] of values) c.set(v, (c.get(v) || 0) + n);
+    let best = null, bn = -1;
+    for (let [v, n] of c) n > bn && (best = v, bn = n);
+    return best;
+  }
+  function leadWidth(text2, h) {
+    let m = /^[（(“"《【「『][^）)”"》】」』]{0,20}[）)”"》】」』]/.exec(text2) || /^[A-Za-z0-9/.%+\-]+/.exec(text2), chunk = m ? m[0] : text2.slice(0, 1), w = 0;
+    for (let ch of chunk) w += isCjk(ch) ? h : h * 0.55;
+    return w;
+  }
+  function joinText(a, b) {
+    if (!a) return b;
+    let last = a[a.length - 1], first = b[0];
+    return /[A-Za-z]-$/.test(a) && /^[a-z]/.test(b) ? a.slice(0, -1) + b : isCjk(last) || isCjk(first) ? a + b : `${a} ${b}`;
+  }
+  function cleanText2(text2) {
+    return text2.replace(CJK_SPACE, "$1").replace(CJK_SPACE, "$1").replace(/([a-z])([.?!])(?=[A-Z])/g, "$1$2 ").replace(/[ \t]+/g, " ").trim();
+  }
+  function pdfPagesToText(input2, { keepToc = !1 } = {}) {
+    let warnings = [], pages = (input2 || []).map((p, i) => {
+      let lines2 = streamLines(p.items);
+      return orderLooksBroken(lines2, p.width) && (lines2 = coordLines(p.items, p.width)), { no: i + 1, width: p.width, height: p.height, lines: lines2 };
+    }), empty = pages.filter((p) => !p.lines.length).map((p) => p.no);
+    empty.length && warnings.push(`第 ${empty.join("、")} 页没有文字层（可能是图片或扫描页），没有转出文字。`);
+    let toc = pages.filter((p) => p.lines.filter((l) => DOT_LEADER.test(l.text)).length >= 3);
+    keepToc || toc.forEach((p) => p.lines = []);
+    let margins = marginKeys(pages);
+    for (let p of pages)
+      p.lines = p.lines.filter((l) => !(inMargin(l, p) && (margins.has(norm(l.text)) || /^[-—\s]*\d{1,3}[-—\s]*$/.test(l.text))) && !/^[.·…．\s]+$/.test(l.text));
+    let all = pages.flatMap((p) => p.lines.map((l) => ({ ...l, page: p })));
+    if (all.forEach((l, i) => l.i = i), !all.length) return { text: "", warnings, pages: pages.length, chars: 0 };
+    let body = mode(all.map((l) => [Math.round(l.h), l.text.length])), bodyFont = mode(all.filter((l) => Math.round(l.h) === body).map((l) => [l.font, l.text.length])), pageRight = (l) => Math.max(...l.page.lines.filter((o) => Math.abs(o.x - l.x) < l.h * 1.5).map((o) => o.right)), lineGap = mode(
+      all.slice(1).map((l, i) => {
+        let prev2 = all[i];
+        return [prev2.page === l.page && prev2.y > l.y ? Math.round(prev2.y - l.y) : 0, 1];
+      }).filter(([g]) => g > 0)
+    ) || body * 1.6, kindOf = (l) => {
+      let t = l.text;
+      return Math.round(l.h) >= body * 1.3 && t.length <= 30 ? "h1" : BULLET.test(t) ? "bullet" : /^\d{1,2}$/.test(t) ? "index" : l.font !== bodyFont && Math.round(l.h) >= body * 0.95 && t.length <= 24 && !HEAD_END.test(t) ? "h2" : "text";
+    }, blocks = [], cur = null, pendingIndex = "", prev = null, open = (kind, text3, line) => {
+      cur = { kind, x: line.x, text: pendingIndex && kind !== "h1" ? `${pendingIndex}. ${text3}` : text3 }, pendingIndex = "", blocks.push(cur);
+    };
+    for (let l of all) {
+      let kind = kindOf(l);
+      if (kind === "index") {
+        pendingIndex = l.text;
+        continue;
+      }
+      let breakHere = !cur || kind !== "text" || cur.kind === "h1" || cur.kind === "h2";
+      if (!breakHere && prev) {
+        let samePage = prev.page === l.page, below = samePage && prev.y > l.y, room = pageRight(prev) - prev.right, rightAligned = (a, b) => a && b && a.page === b.page && a.y > b.y && Math.abs(a.x - b.x) < b.h * 1.5 && Math.abs(a.right - b.right) < b.h * 0.6 && a.right - a.x > b.h * 3.5 && b.right - b.x > b.h * 3.5, justified = rightAligned(prev, l) || rightAligned(all[prev.i - 1], prev), short = room > prev.h * 1.5, deliberate = room > prev.h * 1.5 + leadWidth(l.text, l.h) && !justified, ragged = below && !justified && pageRight(prev) - prev.right > prev.h * 3 && pageRight(l) - l.right > l.h * 3 && Math.abs(prev.right - l.right) > l.h * 1.5;
+        (Math.round(prev.h) !== Math.round(l.h) || below && Math.abs(prev.x - l.x) < l.h * 3 && prev.y - l.y > lineGap * 1.5 || short && SENT_END.test(prev.text) || short && LIST_HEAD.test(l.text) || (deliberate || ragged) && !/[，、,；;]$/.test(prev.text)) && (breakHere = !0);
+      }
+      !breakHere && cur.kind === "bullet" && prev && prev.page === l.page && !(l.x > cur.x + l.h * 0.5) && (breakHere = !0), breakHere ? open(kind, kind === "bullet" ? l.text.replace(BULLET, "") : l.text, l) : cur.text = joinText(cur.text, l.text), prev = l;
+    }
+    let text2 = blocks.map((b) => {
+      let t = cleanText2(b.text);
+      return b.kind === "h1" ? `# ${t}` : b.kind === "h2" ? `## ${t}` : b.kind === "bullet" ? `- ${t}` : t;
+    }).filter((t) => t.replace(/^[#-]+\s*/, "")).join(`
+
+`);
+    return toc.length && !keepToc && warnings.push(`第 ${toc.map((p) => p.no).join("、")} 页像是目录，已略过。`), { text: text2, warnings, pages: pages.length, chars: text2.replace(/\s/g, "").length };
+  }
+
+  // src/host/pdf-load.js
+  var PDFJS_VERSION = "4.10.38", BASES = [
+    `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/legacy/build/`,
+    `https://unpkg.com/pdfjs-dist@${PDFJS_VERSION}/legacy/build/`
+  ], loading = null, importUrl = (url) => import(
+    /* @vite-ignore */
+    url
+  );
+  function loadPdfJs() {
+    return loading || (loading = (async () => {
+      let errors = [];
+      for (let base of BASES)
+        try {
+          let lib2 = await importUrl(`${base}pdf.min.mjs`);
+          return lib2.GlobalWorkerOptions.workerSrc = `${base}pdf.worker.min.mjs`, { lib: lib2, base: base.replace(/legacy\/build\/$/, "") };
+        } catch (error) {
+          errors.push(error && error.message ? error.message : String(error));
+        }
+      throw new Error(`PDF 组件下载失败（${errors[errors.length - 1] || "网络不通"}）`);
+    })(), loading.catch(() => loading = null), loading);
+  }
+  function isPdfFile(file) {
+    return !!file && (/\.pdf$/i.test(file.name || "") || file.type === "application/pdf");
+  }
+  async function pdfFileToText(file, { onProgress = () => {
+  }, load = loadPdfJs } = {}) {
+    let { lib: lib2, base } = await load(), data = new Uint8Array(await file.arrayBuffer()), doc = await lib2.getDocument({ data, cMapUrl: `${base}cmaps/`, cMapPacked: !0, standardFontDataUrl: `${base}standard_fonts/`, verbosity: 0 }).promise, pages = [];
+    try {
+      for (let n = 1; n <= doc.numPages; n++) {
+        onProgress(n, doc.numPages);
+        let page = await doc.getPage(n), vp = page.getViewport({ scale: 1 }), content = await page.getTextContent();
+        pages.push({
+          width: vp.width,
+          height: vp.height,
+          items: (content.items || []).filter((it) => typeof it.str == "string").map((it) => ({ str: it.str, x: it.transform[4], y: it.transform[5], w: it.width, h: it.height, font: it.fontName, eol: !!it.hasEOL }))
+        }), page.cleanup && page.cleanup();
+      }
+    } finally {
+      doc.destroy && doc.destroy();
+    }
+    return pdfPagesToText(pages);
+  }
+
+  // src/ui/trpg-kp.js
+  var running = /* @__PURE__ */ new Set();
+  async function runKpRules(view, projectId, text2) {
+    if (running.has(projectId)) return toast("info", "KP 规则还在整理中。");
+    running.add(projectId);
+    try {
+      let parts = splitLongText(text2, { target: 12e3, overlap: 200 }), pieces = [];
+      for (let part of parts) {
+        let reply2 = String(await ask(view, "setting", kpRulesMessages({ part, total: parts.length })) || "").trim();
+        reply2 && pieces.push(reply2);
+      }
+      if (!pieces.length) return toast("warning", "KP 规则没有整理出内容，可以到设定页手动补。");
+      let merged = pieces.length > 1 ? String(await ask(view, "setting", kpMergeMessages(pieces)) || "").trim() || pieces.join(`
+
+`) : pieces[0], block = kpBlockText(merged);
+      if (!block) return toast("warning", "KP 规则没有整理出内容，可以到设定页手动补。");
+      view.data.updateProject(projectId, (p) => {
+        let old = p.setting && p.setting.text || "";
+        return { ...p, setting: { ...p.setting, text: old.trim() ? mergeBlocks(old, block, [KP_BLOCK]) : block } };
+      }), toast("success", "KP 规则已整理进设定（「KP规则」分块）。");
+    } catch (error) {
+      toast("error", `KP 规则整理失败：${error && error.message || error}`);
+    } finally {
+      running.delete(projectId);
+    }
+  }
+
   // src/ui/long-import.js
   var IMPORT_PART_CHARS = 8e3, sti = (view) => {
     let all = view.tabState("import"), id = view.projectId || "";
@@ -13462,7 +13943,8 @@ ${yamlOf(k)}`).join(`
           mode: cur.mode,
           needs: cur.needs,
           done,
-          kind: importJobKind(cur)
+          kind: importJobKind(cur),
+          trpg: !!cur.trpg
         })
       ), r = parseOutlineReply(reply2);
       r.ok && r.volumes.length || (r = parseOutlineReply(await ask(view, "outline", fixYamlMessages(r.yaml, r.error || "没有读到任何阶段", cur.mode))));
@@ -13534,7 +14016,7 @@ ${yamlOf(k)}`).join(`
         }).finally(() => (s.loadingList = !1, view.renderBody())), '<div class="pi-empty"><span class="pi-spin"></span> 正在读取导入记录…</div>';
       let list = ids.map((id) => view.data.imports.get(id)).filter(Boolean), lost = (s.unreadable || []).filter((id) => ids.includes(id)), clue0 = s.mode ? s.mode === "clue" : isClueMode(project), kind0 = clue0 ? s.kind || "main" : "outline";
       return `${crumbs(0)}<div class="pi-card"><h3>导入长文<span class="pi-spacer"></span><button type="button" class="pi-btn is-sm is-ghost" data-act="import-close">回到大纲</button></h3>
-        <label class="pi-field"><span>原文</span><textarea class="pi-ta pi-imp-text" data-imp-text placeholder="粘贴剧情方案，或选择 txt / md 文件">${esc(s.text || "")}</textarea></label>
+        <label class="pi-field"><span>原文</span><textarea class="pi-ta pi-imp-text" data-imp-text placeholder="粘贴剧情方案，或选择 txt / md${isTrpg(project) ? " / pdf" : ""} 文件">${esc(s.text || "")}</textarea></label>
         <div class="pi-row pi-imp-file"><button type="button" class="pi-btn is-sm" data-act="import-pick-file">选择文件…</button></div>
         ${s.file ? `<div class="pi-imp-chip"><span class="pi-imp-chip-name">${esc(s.file.name)}</span><span class="pi-imp-chip-sub">${s.file.chars >= 1e4 ? `${(s.file.chars / 1e4).toFixed(1)} 万字` : `${s.file.chars} 字`}</span></div>` : ""}
         <label class="pi-field"><span>推进方式</span><select class="pi-sel" data-imp-modesel>${options(
@@ -13545,6 +14027,7 @@ ${yamlOf(k)}`).join(`
         clue0 ? "clue" : "outline"
       )}</select><span class="pi-hint">${clue0 ? "按查到的线索推进剧情。" : "按时间顺序一段段推进，整份文档整理成一卷。"}${clue0 === isClueMode(project) ? "" : "和项目现在的推进方式不同。保存后到执行页切换推进方式，剧情才会按这种方式推进。"}</span></label>
         ${clue0 ? `<div class="pi-field"><span>文档内容</span><div class="pi-imp-kind">${IMPORT_KINDS.map((k) => `<button type="button" class="pi-imp-kind-btn${kind0 === k.value ? " is-sel" : ""}" data-act="import-kind" data-kind="${k.value}"><b>${k.label}</b><span>${k.note}</span></button>`).join("")}</div></div>` : ""}
+        ${clue0 && kind0 !== "lines" && isTrpg(project) ? `<label class="pi-check"><input type="checkbox" data-imp-trpg${s.trpg ?? !0 ? " checked" : ""}><span>跑团模组（CoC 7 版）：带上检定，另外整理 KP 规则</span></label>` : ""}
         ${clue0 && !currentTables() ? '<p class="pi-hint is-warn">当前聊天读不到数据库表格。依赖表格的开始条件会先按手动开始整理；也可以到有表格的聊天里导入。</p>' : ""}
         <label class="pi-field"><span>要求（可空）</span><textarea class="pi-ta" rows="3" data-imp-needs placeholder="${esc(kind0 === "side" ? IMPORT_NEEDS_SIDE : kind0 === "lines" ? IMPORT_NEEDS_LINES : IMPORT_NEEDS_EXAMPLE)}">${esc(s.needs || "")}</textarea></label>
         <input type="hidden" data-imp-mode value="${clue0 ? kind0 === "lines" ? "lines" : "clue" : "outline"}"><input type="hidden" data-imp-kind value="${kind0}">
@@ -13605,6 +14088,8 @@ ${yamlOf(k)}`).join(`
   function keepStartInputs(view, target) {
     let card = target.closest(".pi-card"), s = sti(view);
     card && (s.text = card.querySelector("[data-imp-text]").value, s.needs = card.querySelector("[data-imp-needs]").value);
+    let trpgBox = card && card.querySelector("[data-imp-trpg]");
+    trpgBox && (s.trpg = trpgBox.checked);
   }
   var importActions = {
     ...rvActions,
@@ -13629,16 +14114,29 @@ ${yamlOf(k)}`).join(`
       sti(view).jobId = "", view.renderBody();
     },
     async "import-pick-file"(view, target) {
-      let files = await pickFiles({ accept: ".txt,.md,.markdown,text/plain", multiple: !1 });
+      let files = await pickFiles({ accept: isTrpg(view.project()) ? ".txt,.md,.markdown,.pdf,text/plain,application/pdf" : ".txt,.md,.markdown,text/plain", multiple: !1 });
       if (!files || !files.length) return;
-      let box = target.closest(".pi-card").querySelector("[data-imp-text]"), text2 = await files[0].text();
+      let box = target.closest(".pi-card").querySelector("[data-imp-text]"), text2;
+      if (isPdfFile(files[0])) {
+        let btn = target;
+        try {
+          btn.disabled = !0, btn.textContent = "正在读取 PDF…";
+          let r = await pdfFileToText(files[0], { onProgress: (n, total) => btn.textContent = `正在读取第 ${n}/${total} 页…` });
+          if (!r.text.trim()) return toast("warning", `没有读到文字。${r.warnings.join("")}扫描版 PDF 需要先做文字识别。`);
+          text2 = r.text, r.warnings.length && toast("info", r.warnings.join(""));
+        } catch (error) {
+          return toast("error", `PDF 读取失败：${error && error.message || error}`);
+        } finally {
+          btn.disabled = !1, btn.textContent = "选择文件…";
+        }
+      } else text2 = await files[0].text();
       box && (box.value = text2), keepStartInputs(view, target), sti(view).file = { name: files[0].name, chars: text2.replace(/\s/g, "").length }, view.renderBody();
     },
     async "import-start"(view, target) {
-      let card = target.closest(".pi-card"), text2 = card.querySelector("[data-imp-text]").value, needs = card.querySelector("[data-imp-needs]").value.trim(), mode = card.querySelector("[data-imp-mode]").value, kindBox = card.querySelector("[data-imp-kind]"), kind = mode === "outline" ? "outline" : mode === "lines" ? "lines" : kindBox && ["main", "side"].includes(kindBox.value) ? kindBox.value : "main", projectId = view.projectId;
+      let card = target.closest(".pi-card"), text2 = card.querySelector("[data-imp-text]").value, needs = card.querySelector("[data-imp-needs]").value.trim(), mode2 = card.querySelector("[data-imp-mode]").value, kindBox = card.querySelector("[data-imp-kind]"), kind = mode2 === "outline" ? "outline" : mode2 === "lines" ? "lines" : kindBox && ["main", "side"].includes(kindBox.value) ? kindBox.value : "main", projectId = view.projectId;
       if (!text2.trim()) return toast("warning", "先粘贴原文，或选择一个文件。");
-      let job = await view.data.imports.create({ projectId, text: text2, mode, needs, kind });
-      if (sti(view).text = "", sti(view).needs = "", sti(view).file = null, view.data.updateProject(projectId, (p) => ({ ...p, imports: [...importJobIds(p), job.id] })), view.projectId !== projectId)
+      let trpgBox = card.querySelector("[data-imp-trpg]"), trpg = !!(trpgBox && trpgBox.checked && mode2 === "clue"), job = await view.data.imports.create({ projectId, text: text2, mode: mode2, needs, kind, trpg });
+      if (sti(view).trpg = void 0, trpg && (view.data.updateProject(projectId, (p) => ({ ...p, trpg: { ...p.trpg || {}, on: !0, rule: "coc7" } })), runKpRules(view, projectId, text2)), sti(view).text = "", sti(view).needs = "", sti(view).file = null, view.data.updateProject(projectId, (p) => ({ ...p, imports: [...importJobIds(p), job.id] })), view.projectId !== projectId)
         return toast("info", "导入任务已建好，记在原来的项目里。");
       sti(view).jobId = job.id, view.renderBody(), importActions["import-run"](view);
     },
@@ -13947,19 +14445,19 @@ ${yamlOf(k)}`).join(`
     let project = view.project();
     if (!project.outline.volumes.find((v) => v.id === volumeId)) throw new Error("大纲里找不到这条线了（可能删掉了）");
     await Promise.all(importJobIds(project).filter((id) => !view.data.imports.get(id)).map((id) => view.data.imports.load(id).catch(() => null)));
-    let mode = isClueMode(project) ? "clue" : "outline", unitsOf = (draft2) => sessionUnits({ draft: draft2 }).filter((u) => u.kind === "stage" || mode === "clue" && isPlainObject(draft2.find((v) => v.id === u.volumeId).line)), keys = Object.keys(parts), open = importJobIds(project).map((id) => view.data.imports.get(id)).find((j) => j && importJobKind(j) === "edit" && j.review && Array.isArray(j.review.draft));
+    let mode2 = isClueMode(project) ? "clue" : "outline", unitsOf = (draft2) => sessionUnits({ draft: draft2 }).filter((u) => u.kind === "stage" || mode2 === "clue" && isPlainObject(draft2.find((v) => v.id === u.volumeId).line)), keys = Object.keys(parts), open = importJobIds(project).map((id) => view.data.imports.get(id)).find((j) => j && importJobKind(j) === "edit" && j.review && Array.isArray(j.review.draft));
     if (open)
       return await view.data.imports.update(open.id, (j) => {
-        let r = { ...syncEditSession(project, j.review), mode };
+        let r = { ...syncEditSession(project, j.review), mode: mode2 };
         keys.length && (r = editDraft(r, "讨论里 AI 给的修改", (d) => keys.reduce((acc, k) => putUnit(acc, k, parts[k]), d)));
         let units2 = unitsOf(r.draft), at2 = keys.length ? units2.findIndex((u) => keys.includes(u.key)) : units2.findIndex((u) => u.volumeId === volumeId);
         return { ...j, review: { ...r, at: Math.max(0, at2) } };
       }), open.id;
-    let session = createReviewSession({ source: "proposal", projectId: project.id, volumes: project.outline.volumes }), draft = keys.reduce((acc, k) => putUnit(acc, k, parts[k]), session.draft), units = unitsOf(draft), at = keys.length ? units.findIndex((u) => keys.includes(u.key)) : units.findIndex((u) => u.volumeId === volumeId), ch = Object.fromEntries(draftChanges(session.base, draft).map((x) => [x.key, x.changes])), job = await view.data.imports.create({ projectId: project.id, text: note, mode, needs: "", kind: "edit" });
+    let session = createReviewSession({ source: "proposal", projectId: project.id, volumes: project.outline.volumes }), draft = keys.reduce((acc, k) => putUnit(acc, k, parts[k]), session.draft), units = unitsOf(draft), at = keys.length ? units.findIndex((u) => keys.includes(u.key)) : units.findIndex((u) => u.volumeId === volumeId), ch = Object.fromEntries(draftChanges(session.base, draft).map((x) => [x.key, x.changes])), job = await view.data.imports.create({ projectId: project.id, text: note, mode: mode2, needs: "", kind: "edit" });
     return await view.data.imports.update(job.id, (j) => ({
       ...j,
       step: "review",
-      review: { ...session, mode, draft, at: Math.max(0, at), revised: keys.length > 0, lastChanges: ch, history: keys.length ? [{ label: "讨论里 AI 给的修改", at: Date.now(), draft: session.base }] : [] }
+      review: { ...session, mode: mode2, draft, at: Math.max(0, at), revised: keys.length > 0, lastChanges: ch, history: keys.length ? [{ label: "讨论里 AI 给的修改", at: Date.now(), draft: session.base }] : [] }
     })), view.data.updateProject(project.id, (p) => ({ ...p, imports: [...importJobIds(p), job.id] })), job.id;
   }
   function showEditReview(view, jobId) {
@@ -14535,16 +15033,16 @@ ${extra.length ? `<p class="pi-hint">另有字段：${esc(extra.join("、"))}（
       actions: [{ label: "关闭", value: !0, primary: !0 }]
     });
   }
-  function setDraft(view, mode, reply2, extra = {}, { all = !1 } = {}) {
+  function setDraft(view, mode2, reply2, extra = {}, { all = !1 } = {}) {
     let task = extra.task || taskContext(view);
     if (!taskStillValid(view, task)) return staleTaskNotice(view, task);
-    let project = view.project(), draft = { mode, ...parseOutlineReply(reply2, void 0, { all }), projectId: view.projectId, ...extra, task };
+    let project = view.project(), draft = { mode: mode2, ...parseOutlineReply(reply2, void 0, { all }), projectId: view.projectId, ...extra, task };
     if (draft.ok && isClueMode(project)) {
       let units = flattenUnits(project.outline.volumes), replaced = [], applied = [...project.outline.volumes, ...draft.volumes];
-      if (mode === "rewrite" && draft.fromUnitId) {
+      if (mode2 === "rewrite" && draft.fromUnitId) {
         let from = units.findIndex((u) => u.id === draft.fromUnitId);
         from >= 0 && (replaced = units.slice(from), applied = replaceRest(project.outline.volumes, draft.fromUnitId, draft.volumes));
-      } else if (STAGE_DRAFT[mode]) {
+      } else if (STAGE_DRAFT[mode2]) {
         let ids = new Set([draft.stageId, draft.nextId].filter(Boolean));
         replaced = units.filter((u) => ids.has(u.id)), replaced.length && (applied = replaceStages(
           project.outline.volumes,
@@ -16068,7 +16566,7 @@ ${parsed.body}` : parsed.body;
     });
     return { ...line, id: makeId("pl"), stages, defaultStage: ids.get(line.defaultStage) || "", source: null, sources: [] };
   }
-  function mergePersonaLines(existing, incoming, mode = "both") {
+  function mergePersonaLines(existing, incoming, mode2 = "both") {
     let out = [...existing], key = (line) => `${line.group}\0${line.name}`, added = 0, replaced = 0, skipped = 0;
     for (let line of incoming) {
       let at = out.findIndex((item) => key(item) === key(line));
@@ -16076,11 +16574,11 @@ ${parsed.body}` : parsed.body;
         out.push(line), added++;
         continue;
       }
-      if (mode === "skip") {
+      if (mode2 === "skip") {
         skipped++;
         continue;
       }
-      if (mode === "replace") {
+      if (mode2 === "replace") {
         out[at] = { ...line, id: out[at].id }, replaced++;
         continue;
       }
@@ -16211,8 +16709,8 @@ ${parsed.body}` : parsed.body;
     for (let item of info.values()) {
       let seen = /* @__PURE__ */ new Map();
       for (let value of item.values) {
-        let norm2 = loose(value);
-        seen.has(norm2) && seen.get(norm2) !== value ? report(entries.find((entry) => item.entries.has(`${entry.book}\0${entry.key}`)) || entries[0], "warn", `变量「${pathNames(item.path).name}」的值写法不一致：「${seen.get(norm2)}」与「${value}」`) : seen.set(norm2, value);
+        let norm3 = loose(value);
+        seen.has(norm3) && seen.get(norm3) !== value ? report(entries.find((entry) => item.entries.has(`${entry.book}\0${entry.key}`)) || entries[0], "warn", `变量「${pathNames(item.path).name}」的值写法不一致：「${seen.get(norm3)}」与「${value}」`) : seen.set(norm3, value);
       }
       if (kinds.get(item.path) === "num" && item.values.some((value) => !isNumber(value)))
         for (let entry of entries) item.entries.has(`${entry.book}\0${entry.key}`) && report(entry, "error", `变量「${pathNames(item.path).name}」同时用了数值与文字比较`);
@@ -16588,16 +17086,16 @@ ${suffix.trim()}` : body;
     async "pf-import"(view) {
       let [file] = await pickFiles({ accept: ".json,application/json" });
       if (!file) return;
-      let parsed = parsePersonaFile(await file.text()), same2 = parsed.lines.filter((line) => personas(view).lines.some((item) => item.group === line.group && item.name === line.name)).length, mode = "both";
+      let parsed = parsePersonaFile(await file.text()), same2 = parsed.lines.filter((line) => personas(view).lines.some((item) => item.group === line.group && item.name === line.name)).length, mode2 = "both";
       if (same2) {
-        if (mode = await choiceDialog({ title: `导入 ${parsed.lines.length} 条人设线`, body: `其中 ${same2} 条与现有人设线同组同名，怎么处理？`, choices: [
+        if (mode2 = await choiceDialog({ title: `导入 ${parsed.lines.length} 条人设线`, body: `其中 ${same2} 条与现有人设线同组同名，怎么处理？`, choices: [
           { label: "都保留（新的加「（导入）」）", value: "both", primary: !0 },
           { label: "替换同名", value: "replace" },
           { label: "跳过同名", value: "skip" },
           { label: "取消", value: null }
-        ] }), !mode) return;
+        ] }), !mode2) return;
       } else if (!await confirmDialog({ title: "导入人设", body: `将加入 ${parsed.lines.length} 条人设线。跟随大纲的阶段绑定不会带入，需要重新选。`, okLabel: "导入" })) return;
-      let merged = mergePersonaLines(personas(view).lines, parsed.lines, mode);
+      let merged = mergePersonaLines(personas(view).lines, parsed.lines, mode2);
       patchPersonas(view, (all) => ({ ...all, lines: merged.lines })), view.renderBody(), toast("success", `导入完成：新增 ${merged.added}，替换 ${merged.replaced}，跳过 ${merged.skipped}。`);
     },
     "pl-add"(view) {
@@ -17183,7 +17681,10 @@ ${suffix.trim()}` : body;
         ${guideCard(view, s)}
         <div class="pi-card"><h3>新手教程</h3>
         <p class="pi-hint">每个页面右上角的「?」可以播放这一页的教程。想从头再看一遍时，点下面的按钮：先播放总览，之后第一次打开插件时也会再播一次。</p>
-        <div class="pi-tools is-c1"><button type="button" class="pi-btn is-sm" data-act="tour-reset">重新播放全部教程</button></div></div>`;
+        <div class="pi-tools is-c1"><button type="button" class="pi-btn is-sm" data-act="tour-reset">重新播放全部教程</button></div></div>
+        <div class="pi-card"><h3>实验功能</h3>
+        <label class="pi-check"><input type="checkbox" data-set="trpgLab"${s.trpgLab ? " checked" : ""}><span>跑团模式（新建项目时可选）</span></label>
+        ${s.trpgLab ? `<label class="pi-field"><span>检定写法</span><select class="pi-sel" data-set="trpgCheck">${options(CHECK_MODES, s.trpgCheck === "anke" ? "anke" : "text")}</select></label>` : ""}</div>`;
   }
   var NUMERIC = /* @__PURE__ */ new Set(["checkEvery", "checkFloors", "hookCap"]);
   function readValue(target) {
@@ -17602,7 +18103,7 @@ ${suffix.trim()}` : body;
   var st8 = (view) => view.tabState("books"), GROUPS = {
     on: (entries) => entries.filter((entry) => !acuField(entry.title) && !entry.disabled),
     off: (entries) => entries.filter((entry) => !acuField(entry.title) && entry.disabled)
-  }, toggle = (entry) => `<button type="button" class="pi-switch${entry.disabled ? "" : " is-on"}" role="switch" aria-checked="${entry.disabled ? "false" : "true"}" data-act="wb-toggle" data-wb-toggle="${esc(entry.key)}" title="${entry.disabled ? "已关闭，点击开启" : "已开启，点击关闭"}"></button>`, norm = (text2) => String(text2 || "").trim().toLowerCase(), entryHit = (entry, q) => !q || [entry.title, entry.content, ...entry.keys, ...entry.keysSecondary].some((text2) => String(text2).toLowerCase().includes(q)), searchBox = (key, value, placeholder) => `<div class="pi-psearch is-wb">${ICONS.search}<input class="pi-inp" data-search="${key}" placeholder="${placeholder}" value="${esc(value || "")}">
+  }, toggle = (entry) => `<button type="button" class="pi-switch${entry.disabled ? "" : " is-on"}" role="switch" aria-checked="${entry.disabled ? "false" : "true"}" data-act="wb-toggle" data-wb-toggle="${esc(entry.key)}" title="${entry.disabled ? "已关闭，点击开启" : "已开启，点击关闭"}"></button>`, norm2 = (text2) => String(text2 || "").trim().toLowerCase(), entryHit = (entry, q) => !q || [entry.title, entry.content, ...entry.keys, ...entry.keysSecondary].some((text2) => String(text2).toLowerCase().includes(q)), searchBox = (key, value, placeholder) => `<div class="pi-psearch is-wb">${ICONS.search}<input class="pi-inp" data-search="${key}" placeholder="${placeholder}" value="${esc(value || "")}">
     <button type="button" class="pi-icon-btn pi-search-x" data-act="search-close" title="关闭搜索">${ICONS.close}</button></div>`, title = (entry) => `<span class="pi-wb-title" title="${esc(entry.title)}">${esc(entry.title)}</span>`, num2 = (value) => value || "";
   function advanced(entry, key, open) {
     let field2 = (f, label, value, attrs = 'type="number" min="0"') => `<label class="pi-field"><span>${label}</span><input class="pi-inp" ${attrs} data-wb-edit="${key}" data-f="${f}" value="${esc(value)}"></label>`, check = (f, label, on) => `<label class="pi-check"><input type="checkbox" data-wb-edit="${key}" data-f="${f}"${on ? " checked" : ""}><span>${label}</span></label>`;
@@ -17673,9 +18174,9 @@ ${suffix.trim()}` : body;
     let btn = hostDocument().querySelector('.pi-root [data-act="wb-undo"]');
     btn && (btn.disabled = !1);
   }
-  var shownEntries = (s) => (s.entries || []).filter((entry) => entryHit(entry, norm(s.query)));
+  var shownEntries = (s) => (s.entries || []).filter((entry) => entryHit(entry, norm2(s.query)));
   function bookBody(s, allEntries) {
-    let picked = s.picking ? s.picked : null, q = norm(s.query), entries = shownEntries(s), on = sortList(s, GROUPS.on(entries)), off = sortList(s, GROUPS.off(entries)), all = picked && handwritten(entries).length && handwritten(entries).every((entry) => picked.has(entry.key)), info = picked ? `<div class="pi-wb-info is-pick"><span class="pi-wb-count">已选 ${picked.size} 条</span><span class="pi-spacer"></span>
+    let picked = s.picking ? s.picked : null, q = norm2(s.query), entries = shownEntries(s), on = sortList(s, GROUPS.on(entries)), off = sortList(s, GROUPS.off(entries)), all = picked && handwritten(entries).length && handwritten(entries).every((entry) => picked.has(entry.key)), info = picked ? `<div class="pi-wb-info is-pick"><span class="pi-wb-count">已选 ${picked.size} 条</span><span class="pi-spacer"></span>
             <button type="button" class="pi-btn is-sm is-ghost" data-act="wb-pick-all">${all ? "取消全选" : "全选"}</button>
             <button type="button" class="pi-btn is-sm is-ghost" data-act="wb-picking">完成</button></div>` : `<div class="pi-wb-info"><span class="pi-wb-tokens">${tokenText(s)}</span></div>`, sorter = `<div class="pi-wb-sort"><span class="pi-meta">排序</span><select class="pi-sel" data-wb-sort>${options(SORTS, s.sort || "")}</select></div>`, head = `${info}${bookBar(s, allEntries)}${s.search === "entry" && allEntries.length ? searchBox("entry", s.query, "搜索条目标题、关键词、内容") : ""}${allEntries.length ? sorter : ""}`;
     return allEntries.length ? entries.length ? picked ? `${head}${section("已开启", on, "没有开启的条目", "", "", picked)}
@@ -17703,7 +18204,7 @@ ${suffix.trim()}` : body;
     return books;
   }
   function shownBooks(s) {
-    let q = norm(s.bookQuery), listed = listedBooks(s);
+    let q = norm2(s.bookQuery), listed = listedBooks(s);
     if (!q) return listed;
     let hit = (name) => name.toLowerCase().includes(q), others = allBookNames().filter((name) => hit(name) && !listed.some((book) => book.name === name)).map((name) => ({ name, source: "其他" }));
     return [...listed.filter((book) => hit(book.name)), ...others];
@@ -17720,7 +18221,7 @@ ${suffix.trim()}` : body;
             <button type="button" class="pi-icon-btn" data-act="page-more" title="更多">${ICONS.more}</button></h3>
         <p class="pi-hint is-warn">注意：这里的操作真的会修改你的世界书！</p>
         ${s.search === "book" ? searchBox("book", s.bookQuery, "搜索所有世界书") : ""}
-        ${list || `<p class="pi-hint">${norm(s.bookQuery) ? "没有匹配的世界书" : "没有关联或全局启用的世界书，可从「更多」搜索或打开其他世界书。"}</p>`}</div>`;
+        ${list || `<p class="pi-hint">${norm2(s.bookQuery) ? "没有匹配的世界书" : "没有关联或全局启用的世界书，可从「更多」搜索或打开其他世界书。"}</p>`}</div>`;
   }
   function editPatch(target) {
     let field2 = target.dataset.f, value = target.value;
@@ -18443,6 +18944,19 @@ ${suffix.trim()}` : body;
       let picked = box.querySelector("[data-f=group]").value;
       return picked === NEW_GROUP ? box.querySelector("[data-f=new-group]").value.trim() : picked;
     }
+    function trpgField(on) {
+      return data.settings().trpgLab || on ? `<label class="pi-check"><input type="checkbox" data-f="trpg"${on ? " checked" : ""}><span>跑团模式（CoC 7 版，线索推进）</span></label>` : "";
+    }
+    function readTrpgField(box) {
+      let el2 = box.querySelector("[data-f=trpg]");
+      return el2 ? el2.checked : null;
+    }
+    function setTrpg(id, on) {
+      data.updateProject(id, (project) => {
+        let { trpg, ...rest } = project;
+        return on ? { ...rest, trpg: { ...trpg || {}, on: !0, rule: "coc7" }, clue: { ...project.clue, mode: "clue" } } : rest;
+      });
+    }
     async function newProject2() {
       setDrawer(!1);
       let current2 = data.index().projects.find((item) => item.id === view.projectId), result = await openDialog({
@@ -18451,6 +18965,7 @@ ${suffix.trim()}` : body;
                 <p class="pi-hint">一个项目保存一个故事的设定、人设、大纲和进度。每个聊天同时使用一个项目；当前聊天还没有项目时，会直接使用新项目。主线、支线都写在同一个项目的大纲里。</p>
                 ${groupField(current2 && current2.group ? current2.group : "")}
                 <label class="pi-check"><input type="checkbox" data-f="infinite"><span>无限流模式（主空间出发、世界库、污染）</span></label>
+                ${trpgField(!1)}
                 <div class="pi-row"><span class="pi-hint">已有导出的项目文件：</span><button type="button" class="pi-btn is-sm" data-dlg-value="import-file">从文件导入</button></div>`,
         onMount: mountGroupField,
         actions: [
@@ -18461,7 +18976,8 @@ ${suffix.trim()}` : body;
             value: (box) => ({
               name: box.querySelector("[data-f=name]").value,
               group: readGroupField(box),
-              mode: box.querySelector("[data-f=infinite]").checked ? "infinite" : "normal"
+              mode: box.querySelector("[data-f=infinite]").checked ? "infinite" : "normal",
+              trpg: readTrpgField(box)
             })
           }
         ]
@@ -18471,7 +18987,7 @@ ${suffix.trim()}` : body;
       let name = result.name;
       try {
         let project = await data.createProject(name, result.group, result.mode);
-        !runtime.activeId() && cardKey() && await runtime.switchProject(project.id), await selectProject(project.id, "discuss");
+        result.trpg && result.mode !== "infinite" && setTrpg(project.id, !0), !runtime.activeId() && cardKey() && await runtime.switchProject(project.id), await selectProject(project.id, "discuss");
       } catch (error) {
         toast("error", `新建失败：${error.message}`);
       }
@@ -18531,11 +19047,12 @@ ${suffix.trim()}` : body;
       let meta2 = data.index().projects.find((item) => item.id === id);
       if (!meta2) return;
       data.project(id) || await data.loadProject(id);
-      let mode = data.project(id) ? data.project(id).mode : "normal", result = await openDialog({
+      let mode2 = data.project(id) ? data.project(id).mode : "normal", result = await openDialog({
         title: "编辑项目",
         html: `<label class="pi-field"><span>名称</span><input class="pi-inp" data-f="name" value="${esc(meta2.name)}"></label>
                 ${groupField(meta2.group || "")}
-                <label class="pi-check"><input type="checkbox" data-f="infinite"${mode === "infinite" ? " checked" : ""}><span>无限流模式</span></label>`,
+                <label class="pi-check"><input type="checkbox" data-f="infinite"${mode2 === "infinite" ? " checked" : ""}><span>无限流模式</span></label>
+                ${trpgField(isTrpg(data.project(id)))}`,
         onMount: mountGroupField,
         actions: [
           { label: "删除项目", danger: !0, value: "delete" },
@@ -18546,7 +19063,8 @@ ${suffix.trim()}` : body;
             value: (box) => ({
               name: box.querySelector("[data-f=name]").value.trim(),
               group: readGroupField(box),
-              mode: box.querySelector("[data-f=infinite]").checked ? "infinite" : "normal"
+              mode: box.querySelector("[data-f=infinite]").checked ? "infinite" : "normal",
+              trpg: readTrpgField(box)
             })
           }
         ]
@@ -18568,7 +19086,7 @@ ${suffix.trim()}` : body;
           }
           return;
         }
-        data.project(id) || await data.loadProject(id), data.renameProject(id, result.name, result.group), result.mode !== mode && data.updateProject(id, (project) => ({ ...project, mode: result.mode, infinite: normalizeInfinite(project.infinite) })), runtime.refresh(), render12();
+        data.project(id) || await data.loadProject(id), data.renameProject(id, result.name, result.group), result.mode !== mode2 && data.updateProject(id, (project) => ({ ...project, mode: result.mode, infinite: normalizeInfinite(project.infinite) })), result.trpg !== null && result.trpg !== isTrpg(data.project(id)) && setTrpg(id, result.trpg && result.mode !== "infinite"), runtime.refresh(), render12();
       }
     }
     function onClick(event) {
@@ -18734,7 +19252,7 @@ ${suffix.trim()}` : body;
   }
 
   // src/index.js
-  var VERSION = "0.3.3", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.3.4", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")

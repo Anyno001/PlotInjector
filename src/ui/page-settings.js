@@ -1,4 +1,5 @@
 import { resolveGuide, GUIDE_PRESETS } from '../core/guide.js';
+import { CHECK_MODES } from '../core/trpg.js';
 
 import { bodyGuideText, BODY_GUIDE, PACES, PACE_TEXT, paceText } from '../core/inject.js';
 
@@ -157,7 +158,10 @@ export function render(view) {
         ${guideCard(view, s)}
         <div class="pi-card"><h3>新手教程</h3>
         <p class="pi-hint">每个页面右上角的「?」可以播放这一页的教程。想从头再看一遍时，点下面的按钮：先播放总览，之后第一次打开插件时也会再播一次。</p>
-        <div class="pi-tools is-c1"><button type="button" class="pi-btn is-sm" data-act="tour-reset">重新播放全部教程</button></div></div>`;
+        <div class="pi-tools is-c1"><button type="button" class="pi-btn is-sm" data-act="tour-reset">重新播放全部教程</button></div></div>
+        <div class="pi-card"><h3>实验功能</h3>
+        <label class="pi-check"><input type="checkbox" data-set="trpgLab"${s.trpgLab ? ' checked' : ''}><span>跑团模式（新建项目时可选）</span></label>
+        ${s.trpgLab ? `<label class="pi-field"><span>检定写法</span><select class="pi-sel" data-set="trpgCheck">${options(CHECK_MODES, s.trpgCheck === 'anke' ? 'anke' : 'text')}</select></label>` : ''}</div>`;
 }
 
 const NUMERIC = new Set(['checkEvery', 'checkFloors', 'hookCap']);

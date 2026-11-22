@@ -41,6 +41,8 @@ import {
 } from '../core/review-draft.js';
 import { isPlainObject, stageLabel, stageNodes, makeId, volumeLabel, VOLUME_LINE_KEY, volumeName, splitStageKey } from '../core/outline.js';
 import { stringifyYaml } from '../core/yaml.js';
+// 跑团模组导入的「AI 检查」（只在带 trpg 的导入任务里出现）
+import { trpgReviewButton, trpgReviewActions } from './trpg-review.js';
 import { tableCatalogText } from '../core/prompts.js';
 import { isClueMode, nodeUid, reidConflicts } from '../core/clue-model.js';
 import { compileClue, parseCondition, confirmTierOrder, evalAtom, splitCompare } from '../core/clue-rules.js';
@@ -455,6 +457,7 @@ export function renderReview(view, job, review, index, crumb, notes = []) {
         <details${review.yamlOpen === u.key ? ' open' : ''}><summary class="pi-hint">编辑 YAML</summary><textarea class="pi-ta is-mono pi-rv-yaml" data-rv-yaml="${esc(u.key)}">${esc(yamlText)}</textarea>
           <div class="pi-tools is-c1"><button type="button" class="pi-btn is-sm" data-act="rv-yaml-save" data-unit="${esc(u.key)}">保存并检查</button></div><p class="pi-status" data-rv-yaml-status></p></details>`
          }
+        ${locked ? '' : trpgReviewButton(view, job)}
         <div class="pi-rv-foot"><button type="button" class="pi-btn${pending ? ' is-primary' : ''}" data-act="rv-preview"${busy ? ' disabled' : ''}>${busy ? '<span class="pi-spin"></span>修改中' : sendLabel(pending)}</button>${
             synced
                 ? '<button type="button" class="pi-btn" data-act="import-adopt" disabled>已与大纲一致</button>'
@@ -796,6 +799,7 @@ export function reviewActions({ jobOf, crumbBack, redraftLine, openSaved = null 
             crumbBack(view, c && c.review && c.review.adoptedId);
         },
     };
+    Object.assign(actions, trpgReviewActions({ current, saveReview, reviewUnits, lineLocked }));
     return actions;
 }
 

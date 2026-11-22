@@ -16,6 +16,7 @@ export function buildProjectFile(project, { personas = !0, setting = !0, version
             mode: p.mode,
             ...(p.infinite ? { infinite: p.infinite } : {}),
             clue: p.clue,
+            ...(p.trpg ? { trpg: p.trpg } : {}),
             defaults: p.defaults,
             threads: p.threads,
             outline: { volumes: p.outline.volumes, renames: p.outline.renames, idAlias: p.outline.idAlias },

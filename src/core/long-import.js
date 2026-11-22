@@ -16,6 +16,7 @@ import { parseYaml } from './yaml.js';
 import { conditionRefs, parseCondition, compileClue } from './clue-rules.js';
 
 import { CLUE_STAGE_KEYS, CLUE_NODE_KEYS, nodeUid, stripAuthorDeep, outlineStageData } from './clue-model.js';
+import { TRPG_IMPORT_RULES } from './trpg.js';
 
 export const CHAPTER_HEAD =
     /^(?:#{1,4}\s+.+|第[0-9一二三四五六七八九十百零〇两]+[章回节幕部卷].*|Chapter\s+\d+.*|[一二三四五六七八九十]+、.+)$/i;
@@ -181,7 +182,7 @@ export function mergeImportIndex(list) {
 
 export const IMPORT_AUTHOR_KEYS = ['原文出处', '来源', '待确认', '补写'];
 
-export function importDraftMessages({ part, index, prevTail = '', mode = 'clue', needs = '', actors = '', done = '', kind = '' }) {
+export function importDraftMessages({ part, index, prevTail = '', mode = 'clue', needs = '', actors = '', done = '', kind = '', trpg = !1 }) {
     let clue = mode === 'clue',
         rules = clue ? CLUE_OUTLINE_RULES : OUTLINE_RULES,
         onlyClue = (x) => (clue ? x : '');
@@ -244,6 +245,8 @@ export function importDraftMessages({ part, index, prevTail = '', mode = 'clue',
                 actors && `角色对应：${actors}`,
                 needs && `作者的要求：${needs}`,
                 rules,
+                // 跑团模组导入（core/trpg.js）：只在导入任务带 trpg 时追加
+                clue && trpg ? TRPG_IMPORT_RULES : '',
             ]
                 .filter(Boolean)
                 .join('\n'),

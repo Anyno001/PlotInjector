@@ -3,6 +3,7 @@ import { DEFAULT_PARAMS, OLD_DEFAULT_PARAMS } from './inject.js';
 import { normalizeInfinite } from './infinite.js';
 import { normalizeAlias, normalizeRenames } from './align.js';
 import { makeId } from './outline.js';
+import { normalizeTrpg } from './trpg.js';
 import { emptyPersonas, normalizePersonas } from './personas.js';
 import { DEFAULT_MEMO, DEFAULT_WB_RULE, migrateOc, normalizeWbRule } from './refs.js';
 
@@ -196,6 +197,8 @@ export function normalizeProject(value, id) {
         personas: normalizePersonas(src.personas),
         threads: { sideOn: !(src.threads && src.threads.sideOn === !1), worldOn: !(src.threads && src.threads.worldOn === !1) },
         mode: src.mode === 'infinite' ? 'infinite' : 'normal',
+        // 跑团模式（core/trpg.js）：只有开过的项目才有这个键
+        ...(normalizeTrpg(src.trpg) ? { trpg: normalizeTrpg(src.trpg) } : {}),
         ...(src.infinite && typeof src.infinite == 'object' ? { infinite: normalizeInfinite(src.infinite) } : {}),
         // 批量导入支线采用后的对应（GPT 代码审阅 R4）：{ "任务id:原编号": 卷id }。之后再采用同一任务的线，引用照这个改到实际的新编号。
         ...(src.importLineMap && typeof src.importLineMap == 'object' && !Array.isArray(src.importLineMap)
