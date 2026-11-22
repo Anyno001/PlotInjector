@@ -76,8 +76,8 @@ test('F05/F06: pending/unverified/missing are not satisfied', () => {
   assert.equal(r.status.nB, 'available');
   const s3 = r.state.stageStates.get('s3');
   assert.equal(s3.entered.v, 'false');
-  assert.ok(s3.entered.reasons.some((x) => x.includes('FA 待确认')));
-  assert.ok(s3.entered.reasons.some((x) => x.includes('FB 未核实')));
+  assert.ok(s3.entered.reasons.some((x) => x.includes('FA待确认')));
+  assert.ok(s3.entered.reasons.some((x) => x.includes('FB未核实')));
   // missing table → unknown with explicit reason
   r = run({});
   assert.ok(r.state.problems.includes('缺少表「事实表」'));

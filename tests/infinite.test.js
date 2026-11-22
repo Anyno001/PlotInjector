@@ -204,7 +204,7 @@ test('触发楼判断：没变 same、文字变了仍带触发值 keep、不再�
     assert.equal(judgeTrigger(leave, block('回到列车')), 'same');
     assert.equal(judgeTrigger(leave, block('世界里')), 'undo');
     assert.notEqual(hashText('a'), hashText('b'));
-    assert.equal(describeRead({ floor: 6, state: '停站' }), '上次读到：第 6 楼 列车：停站');
+    assert.equal(describeRead({ floor: 6, state: '停站' }), '上次读到：第6楼列车：停站');
     assert.equal(describeRead({ floor: 6, state: '' }), '最新一楼没有状态块');
     assert.equal(describeRead(null), '最新一楼没有状态块');
 });
@@ -253,7 +253,7 @@ test('自定义主空间配置：开、关、否定、照抄模板都按配置�
     const enter = makeTrigger({ kind: 'enter', floor: 3, text: aptBlock('出门'), worldId: 'w1' });
     assert.equal(judgeTrigger(enter, aptBlock('出门'), APT), 'same');
     assert.equal(judgeTrigger(enter, aptBlock('公寓里'), APT), 'undo');
-    assert.equal(describeRead({ floor: 6, state: '出门' }, APT), '上次读到：第 6 楼 公寓：出门');
+    assert.equal(describeRead({ floor: 6, state: '出门' }, APT), '上次读到：第6楼公寓：出门');
     const names = hubWordNames(APT);
     assert.deepEqual([names.hub, names.depart, names.away, names.back], ['公寓里', '出门', '副本里', '回公寓']);
 });

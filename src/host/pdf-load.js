@@ -25,7 +25,7 @@ export function loadPdfJs() {
                 errors.push(error && error.message ? error.message : String(error));
             }
         }
-        throw new Error(`PDF 组件下载失败（${errors[errors.length - 1] || '网络不通'}）`);
+        throw new Error(`PDF组件下载失败（${errors[errors.length - 1] || '网络不通'}）`);
     })();
     loading.catch(() => (loading = null));
     return loading;

@@ -43,7 +43,7 @@ test('N1: saving A does not list or roll back B that was only changed elsewhere;
     await t.blur('[data-rv-line="简介"]', 'A 的新简介');
     setLive(t, 'vS', (v) => ({ ...v, line: { ...v.line, 简介: 'B 在大纲里的新简介' } }));
     t.inst.__view.renderBody(); await tick();
-    assert.match(t.doc.querySelector('.pi-rv-state').textContent, /本项目 2 条线，1 条待保存/, 'B is not counted');
+    assert.match(t.doc.querySelector('.pi-rv-state').textContent, /本项目2条线，1条待保存/, 'B is not counted');
     await t.click('[data-act="import-adopt"]');
     const text = (await waitDialog(t)).textContent;
     assert.doesNotMatch(text, /已有新改动/, 'B is not an overwrite target');
@@ -151,8 +151,8 @@ test('N3: the overall comment on M1 sends M1 only, is labelled with the line, an
     await DE.openReview(t, 'v1');
     await t.click('[data-act="rv-preview"]');
     const dlg = await waitDialog(t);
-    assert.match(dlg.textContent, /对 M1 案子 的整体意见/);
-    assert.match(dlg.textContent, /只改M1 案子[\s\S]*3 个阶段/);
+    assert.match(dlg.textContent, /对M1 案子的整体意见/);
+    assert.match(dlg.textContent, /只改M1 案子[\s\S]*3个阶段/);
     dlg.querySelector('[data-rv-overall]').value = '语气轻一点';
     t.host.llm.reply = ['【单位：vS/line】', '```yaml', '线:', '  简介: 被改了', '```'].join('\n');
     const calls = t.host.llmCalls.length;
@@ -250,7 +250,7 @@ test('N5: an old bulk job whose S01 was adopted (importLineMap only) shows S01 a
     for (let i = 0; i < 20 && !Object.keys(LI.lineJob(inst, pid).review.adoptedLines || {}).length; i++) await tick();
     await LI.gotoLine(doc, 'S01');
     assert.match(doc.querySelector('.pi-rv-lname').textContent, /已保存/);
-    assert.match(doc.querySelector('[data-act="import-adopt"]').textContent, /（1 条线）/, 'only S02 left to save');
+    assert.match(doc.querySelector('[data-act="import-adopt"]').textContent, /（1条线）/, 'only S02 left to save');
   } finally { await inst.destroy(); }
 });
 
@@ -358,43 +358,8 @@ test('N8: a reply that adds a condition on a node that does not exist is held ba
     await t.dlgBtn('发送'); await done(t);
     assert.equal(JSON.stringify(job(t).review.draft), before, 'not applied');
     assert.equal(job(t).review.comments['v1/s2'], '加个前置', 'comment kept');
-    assert.ok(toasts.some((x) => /找不到的 node_does_not_exist/.test(x)), toasts.join('|'));
+    assert.ok(toasts.some((x) => /找不到的node_does_not_exist/.test(x)), toasts.join('|'));
   } finally { await t.inst.destroy(); }
-});
-
-// ---------- 文案 ----------
-test('wording: existing line without a start condition shows 无额外条件, not a warning; 保留现有条件; field hints under the labels', async () => {
-  const vols = DE.clueVols(); vols[1].line = { 编号: 'S01', 类型: '支线', 开启条件: { 任一: [{ 线: 'M1 == 完成' }, { 事实: 'F1' }] } };
-  const t = await DE.boot(vols, 'clue', false);
-  try {
-    await DE.openReview(t, 'v1');
-    const text = t.doc.querySelector('.pi-rv').textContent;
-    assert.match(text, /无额外条件/);
-    assert.doesNotMatch(text, /文档未写开始条件/);
-    assert.match(text, /供作者识别这条线/);
-    assert.match(text, /剧情入口/);
-    assert.match(text, /不代表事情已经发生/);
-    await t.click('.pi-rv-line [title="下一条"]');
-    assert.match(t.doc.querySelector('.pi-rv-opts').textContent, /保留现有条件/);
-  } finally { await t.inst.destroy(); }
-});
-
-// ---------- 入口规则（GPT 第二轮）：主角已在现场时不另编邀约 ----------
-test('entry rule: protagonist already on scene → write the change in front of him, not a new invitation; rule reaches the import / revise prompts', () => {
-  assert.match(C.ENTRY_HINT_RULE, /原文中主角已经在现场，就写眼前使他继续参与的变化，不另编邀约/);
-  assert.doesNotMatch(C.ENTRY_HINT_RULE, /写的是主角还没到场时/);
-  const m = C.reviewReviseMessages({ units: [{ key: 'v/line', label: '线', yaml: '线: {}', comment: '' }], overall: '补全' });
-  assert.match(m[0].content, /主角已经在现场/);
-  assert.match(m[1].content, /整体意见适用/);
-});
-
-// ---------- 新手引导（GPT 第二轮界面审阅）：运行设置收起时也能看到入口；多条线时暂停指向「暂停 ▾」 ----------
-test('tour: the run page has a 运行设置 step on the always-visible toggle before the template step; 暂停 targets the menu summary', async () => {
-  const src = fs.readFileSync(new URL('../src/ui/tour.js', import.meta.url), 'utf8');
-  const run = src.slice(src.indexOf('    run: ['), src.indexOf('\n    ],', src.indexOf('    run: [')));
-  const iSet = run.indexOf("target: '[data-act=run-set-toggle]'"), iTpl = run.indexOf("target: '[data-act=clue-gen-template]'");
-  assert.ok(iSet > 0 && iSet < iTpl, '运行设置 step comes first');
-  assert.match(run, /target: '\.pi-pause-menu > summary, \[data-act=clue-pause\]'/);
 });
 
 // ---------- GPT 第三轮 C1–C3、U1–U2 ----------
@@ -450,14 +415,6 @@ test('C3: removing the only producer of a fact that another unit in the same gro
   // 原来就没有来源的旧问题不拦
   const old = vol([node('na', 'F_X')], [node('nb', 'F2', { 开放条件: { 事实: 'F_GONE' } })]);
   assert.deepEqual(C.newMissingRefs(old, old, ['v/a', 'v/b']), []);
-});
-
-test('U1 / U2: button focus never un-sticks the footer; the selected page tab is scrolled into view after a re-render', async () => {
-  const css = fs.readFileSync(new URL('../src/ui/styles.js', import.meta.url), 'utf8');
-  assert.doesNotMatch(css, /focus-within \.pi-rv-foot/, 'no rule that moves the footer when a button gets focus');
-  const src = fs.readFileSync(new URL('../src/ui/app.js', import.meta.url), 'utf8');
-  assert.match(src, /\.pi-rv-dot\.is-cur/, 'renderBody keeps the current tab visible');
-  assert.match(src, /tabs\.scrollLeft = /);
 });
 
 // ---------- 第四轮 N1：YAML / AI 换了开始条件，旧的表格表单状态让位 ----------

@@ -50,8 +50,8 @@ test('pdf: 目录页略过、空白页提示、两端对齐的字间空格去掉
     ]);
     assert.equal(r.text, '卫生间，誓死捍卫。');
     assert.equal(r.warnings.length, 2);
-    assert.match(r.warnings[0], /第 1 页没有文字层/);
-    assert.match(r.warnings[1], /第 2 页像是目录/);
+    assert.match(r.warnings[0], /第1页没有文字层/);
+    assert.match(r.warnings[1], /第2页像是目录/);
 });
 
 test('pdf: 编号列挂到条目名前；时间线一行一条', () => {
@@ -246,7 +246,7 @@ test('pdf 读取：按页取文字层交给版式还原（假 pdf.js，不联网
     assert.ok(isPdfFile(file) && !isPdfFile({ name: 'a.txt', type: 'text/plain' }));
     let r = await pdfFileToText(file, { load: async () => ({ lib, base: 'https://x/' }), onProgress: (n, t) => progress.push(`${n}/${t}`) });
     assert.equal(r.text, '第一页的一句话。');
-    assert.match(r.warnings[0], /第 2 页没有文字层/);
+    assert.match(r.warnings[0], /第2页没有文字层/);
     assert.deepEqual(progress, ['1/2', '2/2']);
     assert.equal(seen[0].cMapUrl, 'https://x/cmaps/');
 });

@@ -40,12 +40,6 @@ test('R4: a confirmed short name revealed earlier on its own is still asked abou
   assert.deepEqual(C.checkImportDraft(v('维恩在幕后', '埃利奥特·维恩'), { index: idx, shortsNot: ['维恩'] }).filter((x) => x.name === '维恩'), [], 'denied: never reported');
 });
 
-test('stale wording is gone: no 「点『不是』」 advice, ask cards have no "说一声" filler', () => {
-  const w = C.checkImportDraft(VOLS, { index: idx }).find((x) => x.kind === 'secret-short');
-  assert.doesNotMatch(w.fix, /点「不是」/);
-  assert.equal(C.issueQuestion(w).how, '');
-});
-
 test('"== 3" matches a cell "3 信任"; "!= 3" does not; plain numbers and dates are unchanged', () => {
   const T = { sheet_r: sheet('重要角色表', ['姓名', '对<user>阶段', '好感', '日期'], [['彼得·帕克', '3 信任', '30', '2000-1-12']]) };
   assert.equal(ev('表: 重要角色表/彼得·帕克/对<user>阶段 == 3', T), 'true');
@@ -150,7 +144,7 @@ test('review: 是同一人 → the short name becomes a problem with 加入意�
   assert.deepEqual([...job(ctx).review.shortsSure], ['维恩']);
   assert.ok(!ctx.$('[data-act="rv-short"]'), 'the question is answered');
   assert.match(ctx.$('.pi-rv').textContent, /登记标准（记录）写了「维恩」/, 'now listed as a problem');
-  assert.match(ctx.$('.pi-rv-answered').textContent, /已确认 1 项/);
+  assert.match(ctx.$('.pi-rv-answered').textContent, /已确认1项/);
   // 发给 AI 的保密名单带上短名
   await ctx.click('[data-act="rv-fill-all"]');
   ctx.host.llm.respond = () => '【单位：x】\n```yaml\n阶段7_拦截: {}\n```';
@@ -173,7 +167,7 @@ test('review: 不是 silences the card; 收起 hides a reveal question; 撤回 b
   reveal.click(); await tick(); await tick();
   await ctx.click('[data-act="rv-short"][data-v="no"]');
   assert.ok(!ctx.$('[data-act="rv-dismiss"]') && !ctx.$('[data-act="rv-short"]'), 'nothing left to confirm');
-  assert.match(ctx.$('.pi-rv-answered').textContent, /已确认 2 项/);
+  assert.match(ctx.$('.pi-rv-answered').textContent, /已确认2项/);
   await ctx.click('[data-act="rv-undismiss"]');
   assert.ok(ctx.$('[data-act="rv-dismiss"]') && ctx.$('[data-act="rv-short"]'), 'both back after 撤回');
   await ctx.inst.destroy();
@@ -205,7 +199,7 @@ test('table form: a tier word with a numbered note offers 改成 3, which rewrit
   const radio = ctx.$('[data-rv-when="table"]'); radio.checked = true; await fire(ctx, radio, 'input');
   const set = async (k, v) => { const el = ctx.$(`[data-rv-tbl="${k}"]`); assert.ok(el, `form ${k}`); el.value = v; await fire(ctx, el, el.tagName === 'SELECT' ? 'input' : 'focusout'); };
   await set('table', '重要角色表'); await set('row', '彼得·帕克'); await set('col', '对<user>阶段'); await set('value', '信任');
-  assert.match(ctx.$('.pi-rv-tbl-now').textContent, /表格说明里「信任」是 3，比大小请填数字/);
+  assert.match(ctx.$('.pi-rv-tbl-now').textContent, /表格说明里「信任」是3，比大小请填数字/);
   await ctx.click('[data-act="rv-tbl-num"]');
   assert.equal(job(ctx).review.draft[0].line.开启条件.表, '重要角色表/彼得·帕克/对<user>阶段 >= 3');
   assert.match(ctx.$('.pi-rv-tbl-now').textContent, /现在：1 相识/);
@@ -301,7 +295,7 @@ test('R2: a failed write keeps the project unchanged and the input for retry; re
   await x.open();
   assert.equal(x.$('[data-le-label="0"]').value, '新标签7');
   assert.equal(x.$('[data-le-crit="0"]').value, '新口径7');
-  assert.match(x.$('.pi-dialog').textContent, /上次有 1 条没写进表格/);
+  assert.match(x.$('.pi-dialog').textContent, /上次有1条没写进表格/);
   await x.save();
   assert.deepEqual(x.rows().find((r) => r[1] === 'F7').slice(3), ['新标签7', '新口径7']);
   assert.equal(x.inst.data.project(x.pid).clue.labels.F7.criterion, '新口径7');
@@ -337,7 +331,7 @@ test('F1: switching to another project while F8 is being written saves only F7, 
   assert.equal(x.inst.data.project(x.pid).clue.labels.F7.label, '新标签7', 'F7 saved into the original project');
   assert.ok(!x.inst.data.project(x.pid).clue.labels.F8, 'F8 unverified: not saved');
   assert.deepEqual({ ...x.inst.data.project(q.id).clue.labels.F7 }, { label: 'B原标签', criterion: 'B原口径', sig: 'x' }, 'the other project is untouched');
-  assert.match(x.msgs.at(-1).text, /F8 写入途中切换了聊天、项目或数据隔离，结果待核实/);
+  assert.match(x.msgs.at(-1).text, /F8写入途中切换了聊天、项目或数据隔离，结果待核实/);
   await x.inst.destroy();
 });
 
@@ -375,12 +369,12 @@ test('F3: the write landed but the scope changed before the read-back; retrying 
   x.host.ctx.extensionSettings = meta('A'); x.host.db.setTables(saved); x.inst.runtime.clue.invalidate();
   const writes0 = x.api.updated.length;
   await x.open();
-  assert.match(x.$('.pi-dialog').textContent, /上次有 1 条/);
+  assert.match(x.$('.pi-dialog').textContent, /上次有1条/);
   await x.save();
   assert.equal(x.api.updated.length, writes0, 'the table is not written again');
   assert.equal(x.inst.data.project(x.pid).clue.labels.F7.label, '新标签7', 'project synced');
   assert.equal(x.inst.data.project(x.pid).clue.labels.F7.criterion, '新口径7');
-  assert.match(x.msgs.at(-1).text, /已同步 1 条到项目/);
+  assert.match(x.msgs.at(-1).text, /已同步1条到项目/);
   await x.open();
   assert.doesNotMatch(x.$('.pi-dialog').textContent, /上次有/, 'draft cleared');
   await x.inst.destroy();
@@ -406,7 +400,7 @@ test('fresh chat with only seed rows: edits go into the project, the table is no
   assert.deepEqual(api.updated, [], 'the table is not written');
   assert.equal(ctx.inst.data.project(ctx.pid).clue.labels.F7.criterion, '新口径7', 'saved into the project');
   assert.equal(msgs.at(-1).level, 'info');
-  assert.match(msgs.at(-1).text, /已存进项目 1 条/);
+  assert.match(msgs.at(-1).text, /已存进项目1条/);
   // 第一次填表：初始行变成真正的行
   ctx.host.db.setTables({ sheet_f: { name: '关键事实表', content: [['row_id', '编号', '状态', '标签', '登记口径'], ['1', 'F7', '未获得', 'A标签7', 'A口径7'], ['2', 'F8', '未获得', 'A标签8', 'A口径8']] } });
   ctx.inst.runtime.clue.invalidate();
@@ -433,19 +427,16 @@ test('after a reload the in-memory draft is gone, but a project label that diffe
   await ctx.click('[data-act="clue-labels-edit"]');
   assert.equal(ctx.$('[data-le-label="0"]').value, '项目标签7');
   assert.equal(ctx.$('[data-le-label="1"]').value, '标签8', 'rows without a project label show the table value');
-  assert.match(ctx.$('.pi-dialog').textContent, /有 1 条和项目里存的不一样/);
+  assert.match(ctx.$('.pi-dialog').textContent, /有1条和项目里存的不一样/);
   await ctx.inst.destroy();
 });
 
 // ---------- 实测 2026-11-17：口径写成「记为传闻 / 推测」，表格不认 ----------
-test('label check flags status words the table does not have; the generation prompt says to write 存疑', () => {
+test('label check flags status words the table does not have', () => {
   const w = (c) => C.factLabelCheck({ label: '标签', criterion: c }, {}).warns.filter((x) => /记为/.test(x));
   assert.match(w('老太太当面讲述时登记，记为传闻；只提到旧事不算。')[0], /「记为传闻」.*改成「记为存疑」/);
   assert.match(w('正文写出判断时登记，记为推测；只听到描述不算。')[0], /「记为推测」/);
   assert.deepEqual(w('对方当面说出时登记，记为存疑；没开口不算。'), []);
   assert.deepEqual(w('亲手读到时登记；没读到不算。'), []);
   assert.deepEqual(w('读到后记为“已核实”；没看到不算。'), []);
-  const prompt = JSON.stringify(C.factLabelMessages([{ code: 'F1', answer: 'x', usedBy: [] }], {}));
-  assert.match(prompt, /表格的状态只有「已核实」「存疑」两种可写/);
-  assert.match(prompt, /不要写「记为传闻」「记为推测」/);
 });

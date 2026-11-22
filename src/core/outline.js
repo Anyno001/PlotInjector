@@ -72,7 +72,7 @@ export function parseOutlineText(text, idOf = makeId) {
         value = parseYaml(text);
     } catch (error) {
         const line = yamlErrorLine(error);
-        const wrapped = new Error(`YAML 格式错误${line ? `（第 ${line} 行）` : ''}：${String(error.message || error).split('\n')[0]}`);
+        const wrapped = new Error(`YAML格式错误${line ? `（第${line}行）` : ''}：${String(error.message || error).split('\n')[0]}`);
         wrapped.line = line;
         throw wrapped;
     }
@@ -398,7 +398,7 @@ function threadNameIssues(volumes) {
             for (const unit of list) {
                 if (seen.has(unit.id)) continue;
                 seen.add(unit.id);
-                issues.push({ kind: 'dup-thread', volumeId: unit.volume.id, stageId: unit.id, text: `${what}「${name}」在 ${where} 重名` });
+                issues.push({ kind: 'dup-thread', volumeId: unit.volume.id, stageId: unit.id, text: `${what}「${name}」在${where}重名` });
             }
         }
     }

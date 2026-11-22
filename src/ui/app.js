@@ -329,7 +329,7 @@ export function createApp({ data, runtime, version }) {
     // 跑团模式（core/trpg.js）：设置页「实验功能」打开后，新建 / 编辑项目时才出现这一行；已经是跑团的项目编辑时总是显示。
     function trpgField(on) {
         return data.settings().trpgLab || on
-            ? `<label class="pi-check"><input type="checkbox" data-f="trpg"${on ? ' checked' : ''}><span>跑团模式（CoC 7 版，线索推进）</span></label>`
+            ? `<label class="pi-check"><input type="checkbox" data-f="trpg"${on ? ' checked' : ''}><span>跑团模式（CoC 7版，线索推进）</span></label>`
             : '';
     }
     function readTrpgField(box) {
@@ -394,9 +394,9 @@ export function createApp({ data, runtime, version }) {
             // 确认框只留要紧的：名字、里面有什么、要不要先建表（用户 2026-11-17：字太多，要简洁）
             what = [
                 summary.clue ? '线索推进' : '按阶段推进',
-                summary.lines ? `${summary.lines} 条剧情线` : '',
-                summary.labels ? `${summary.labels} 条标签` : '',
-                summary.personas ? `${summary.personas} 条人设` : '',
+                summary.lines ? `${summary.lines}条剧情线` : '',
+                summary.labels ? `${summary.labels}条标签` : '',
+                summary.personas ? `${summary.personas}条人设` : '',
                 summary.setting ? '设定' : '',
             ].filter(Boolean),
             // 当前聊天读得到表格时，核对项目绑定的表在不在
@@ -405,7 +405,7 @@ export function createApp({ data, runtime, version }) {
                 // 排法 A（用户 2026-11-17 选定）：灰色小标题、大号项目名、一排小标签、细线下一句提示
                 html: `<div><p class="pi-pf-imp-ttl">导入项目</p><p class="pi-pf-imp-name">${esc(name)}</p>
                 <div class="pi-pf-imp-pills">${what.map((w) => `<span class="pi-badge">${esc(w)}</span>`).join('')}</div>
-                ${summary.clue ? `<p class="pi-pf-imp-note${missing && missing.length ? ' is-warn' : ''}">${missing && missing.length ? `当前聊天缺少${esc(missing.join('、'))}。` : ''}游玩前在执行页点「生成线索模板」。</p>` : ''}</div>`,
+                ${summary.clue ? `<p class="pi-pf-imp-note${missing && missing.length ? ' is-warn' : ''}">${missing && missing.length ? `当前聊天缺少${esc(missing.join('、'))}。` : ''}游玩前在执行页点「创建模板」。</p>` : ''}</div>`,
                 actions: [
                     { label: '取消', value: null },
                     { label: '导入', primary: !0, value: !0 },

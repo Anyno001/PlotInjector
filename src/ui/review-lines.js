@@ -91,7 +91,7 @@ export function reviewCheck(view, items, opts = {}) {
             empty.length &&
                 issues.push({
                     level: 'error',
-                    text: `这些阶段没有读到任何场景（节点）：${empty.join('、')}。可能是 AI 把场景写在了不认识的字段下，写意见让 AI 重写这一条`,
+                    text: `这些阶段没有读到任何场景（节点）：${empty.join('、')}。可能是AI把场景写在了不认识的字段下，写意见让AI重写这一条`,
                 });
             let job = rs.src === 'import' ? importJobOf(view, rs.jobId) : null,
                 inv =
@@ -116,7 +116,7 @@ export function condWords(c, names = {}) {
     if (!c) return '';
     let fact = (id) => (names.facts && names.facts[id] ? `「${names.facts[id]}」` : id),
         node = (id) => (names.nodes && names.nodes[id] ? `「${names.nodes[id]}」` : id),
-        line = (id) => (names.lines && names.lines[id] ? `「${names.lines[id]}」` : `线 ${id}`);
+        line = (id) => (names.lines && names.lines[id] ? `「${names.lines[id]}」` : `线${id}`);
     if (c.kind === 'group')
         return c.items
             .map((x) => condWords(x, names))
@@ -133,7 +133,7 @@ export function condWords(c, names = {}) {
         : c.kind === 'fact'
           ? `正文里发生了${fact(c.fact)}`
           : c.kind === 'count'
-            ? `${c.table}里 ${c.column} ${OP_WORD[c.op] || c.op} ${c.value} 的${c.cmp}${c.n}行`
+            ? `${c.table}里${c.column} ${OP_WORD[c.op] || c.op} ${c.value}的${c.cmp}${c.n}行`
             : c.kind === 'know'
               ? `${c.actor === 'user' ? '主角' : c.actor}知道${fact(c.fact)}`
               : c.kind === 'node'

@@ -17,7 +17,7 @@ export function parsePersonaFile(text, { keepOutline = false } = {}) {
     try {
         data = JSON.parse(text);
     } catch {
-        throw new Error('文件不是有效的 JSON');
+        throw new Error('文件不是有效的JSON');
     }
     if (!data || data.kind !== PERSONA_FILE_KIND || !Array.isArray(data.lines)) throw new Error('这不是剧情注入器导出的人设文件');
     const { lines } = normalizePersonas({ lines: data.lines });

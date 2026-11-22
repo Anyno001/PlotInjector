@@ -34,7 +34,7 @@ function diffHtml(a, b) {
 
 function checkBadge(check) {
     if (!check) return '';
-    return `<span class="pi-badge ${check === 'PASS' ? 'is-ok' : 'is-danger'}">速查 ${esc(check)}</span>`;
+    return `<span class="pi-badge ${check === 'PASS' ? 'is-ok' : 'is-danger'}">速查${esc(check)}</span>`;
 }
 
 function fixesHtml(fixes, where) {
@@ -66,7 +66,7 @@ function draftHtml(view, project, draft) {
             ${open ? `<div class="pi-entry-bd">${diffHtml(old ? old.text : '', block.text)}</div>` : ''}</div>`;
         })
         .join('');
-    return `<div class="pi-card"><h3>新稿对比 ${checkBadge(draft.check)}</h3>
+    return `<div class="pi-card"><h3>新稿对比${checkBadge(draft.check)}</h3>
         <p class="pi-hint">勾选的分块替换旧稿，新分块追加到末尾。</p>${rows}
         ${fixesHtml(draft.fixes, 'draft')}
         <div class="pi-tools is-c3 is-end"><button type="button" class="pi-btn is-sm is-primary" data-act="draft-all">全部采用</button>
@@ -82,7 +82,7 @@ function historyHtml(project, at) {
     return `<div class="pi-card"><h3>历史版本</h3>
         ${list
             .map(
-                (item, i) => `<div class="pi-row"><span class="pi-grow">${esc(fmt(item.at))}，${item.text.length} 字</span>
+                (item, i) => `<div class="pi-row"><span class="pi-grow">${esc(fmt(item.at))}，${item.text.length}字</span>
             <button type="button" class="pi-btn is-sm" data-act="hist-diff" data-i="${i}">对比当前</button>
             <button type="button" class="pi-btn is-sm" data-act="hist-restore" data-i="${i}">回退到此版</button></div>`,
             )
@@ -102,12 +102,12 @@ export function render(view) {
         chip = (block) =>
             `<span class="pi-chip pi-block-chip${mute.has(block.key) ? ' is-mute' : ''}"><button type="button" data-act="jump" data-key="${esc(block.key)}" title="跳到这一块">${esc(block.title)}</button><button type="button" class="pi-block-eye" data-act="block-mute" data-key="${esc(block.key)}" title="${mute.has(block.key) ? '已设为不注入，点击恢复注入' : '注入正文，点击设为不注入'}">${mute.has(block.key) ? ICONS.eyeOff : ICONS.eye}</button><button type="button" class="pi-block-del" data-act="block-del" data-key="${esc(block.key)}" title="删除整个分块">${ICONS.close}</button></span>`;
     return `${s.draft ? draftHtml(view, project, s.draft) : ''}
-        <div class="pi-card"><h3>设定 ${checkBadge(project.setting.check)}<span class="pi-spacer"></span><button type="button" class="pi-btn is-primary is-sm" data-act="setting-save">保存</button></h3>
+        <div class="pi-card"><h3>设定${checkBadge(project.setting.check)}<span class="pi-spacer"></span><button type="button" class="pi-btn is-primary is-sm" data-act="setting-save">保存</button></h3>
         <div class="pi-tools is-c4">
-            <button type="button" class="pi-btn is-sm is-primary" data-act="from-talk"${busy ? ' disabled' : ''}>${busy ? '<span class="pi-spin"></span>整理中' : 'AI 整理'}</button>
+            <button type="button" class="pi-btn is-sm is-primary" data-act="from-talk"${busy ? ' disabled' : ''}>${busy ? '<span class="pi-spin"></span>整理中' : 'AI整理'}</button>
             <button type="button" class="pi-btn is-sm" data-act="sync-outline"${busy || !hasOutline || !text.trim() ? ' disabled' : ''}>按大纲校对</button>
             <button type="button" class="pi-btn is-sm" data-act="import-wb">从世界书导入</button>
-            <button type="button" class="pi-btn is-sm${s.history ? ' is-primary' : ''}" data-act="history">历史版本 ${project.setting.history.length}</button>
+            <button type="button" class="pi-btn is-sm${s.history ? ' is-primary' : ''}" data-act="history">历史版本${project.setting.history.length}</button>
             <label class="pi-check"><input type="checkbox" data-append${s.append ? ' checked' : ''}><span>只追加，不改动已有分块</span></label></div>
         ${genRefsBar(view, 'setting')}
         ${blocks.length ? `<div class="pi-toc">${blocks.map(chip).join('')}</div>` : ''}
@@ -172,7 +172,7 @@ async function editFix(view, where, index, drop = !1) {
                       { label: '取消', value: null },
                       { label: '只从列表移除', value: { listOnly: !0 } },
                       {
-                          label: '让 AI 从正文删掉',
+                          label: '让AI从正文删掉',
                           primary: !0,
                           danger: !0,
                           value: (box) => (blocks.length ? { key: readKey(box), drop: !0 } : { listOnly: !0 }),
@@ -181,7 +181,7 @@ async function editFix(view, where, index, drop = !1) {
                 : [
                       { label: '取消', value: null },
                       {
-                          label: '让 AI 重写该分块',
+                          label: '让AI重写该分块',
                           primary: !0,
                           value: (box) => ({ key: readKey(box), text: box.querySelector('[data-f=text]').value.trim() }),
                       },
@@ -208,7 +208,7 @@ async function editFix(view, where, index, drop = !1) {
         let tail = parts.slice(1).findIndex((b) => !b.author && !b.cont);
         rewritten = parts[0] && { text: joinBlocks(parts.slice(0, tail < 0 ? parts.length : tail + 1)) };
     }
-    if (!rewritten) throw new Error('AI 没有返回分块内容');
+    if (!rewritten) throw new Error('AI没有返回分块内容');
     let merged = joinBlocks(
             blocks.map((item) => (item.key === block.key ? { ...item, text: rewritten.text } : item)).filter((item) => item.text.trim()),
         ),
@@ -239,7 +239,7 @@ export const actions = {
             );
         if (!reply) return;
         const parsed = parseSettingReply(reply);
-        if (!parsed.body) throw new Error('AI 回复里没有世界观正文');
+        if (!parsed.body) throw new Error('AI回复里没有世界观正文');
         const body = append
             ? `${project.setting.text.trim()}
 
@@ -332,7 +332,7 @@ ${parsed.body}`
 
 `),
         ),
-            toast('success', `${picked.length - chosen.authorCount} 条进公开设定，${chosen.authorCount} 条作为仅作者资料（不注入）。`),
+            toast('success', `${picked.length - chosen.authorCount}条进公开设定，${chosen.authorCount}条作为仅作者资料（不注入）。`),
             view.renderBody(),
             await afterImport(picked, { authorCount: chosen.authorCount }));
     },

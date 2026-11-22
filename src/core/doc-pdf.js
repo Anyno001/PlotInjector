@@ -161,7 +161,7 @@ export function pdfPagesToText(input, { keepToc = !1 } = {}) {
             return { no: i + 1, width: p.width, height: p.height, lines };
         });
     let empty = pages.filter((p) => !p.lines.length).map((p) => p.no);
-    empty.length && warnings.push(`第 ${empty.join('、')} 页没有文字层（可能是图片或扫描页），没有转出文字。`);
+    empty.length && warnings.push(`第${empty.join('、')}页没有文字层（可能是图片或扫描页），没有转出文字。`);
     let toc = pages.filter((p) => p.lines.filter((l) => DOT_LEADER.test(l.text)).length >= 3);
     keepToc || toc.forEach((p) => (p.lines = []));
     let margins = marginKeys(pages);
@@ -239,6 +239,6 @@ export function pdfPagesToText(input, { keepToc = !1 } = {}) {
         })
         .filter((t) => t.replace(/^[#-]+\s*/, ''))
         .join('\n\n');
-    toc.length && !keepToc && warnings.push(`第 ${toc.map((p) => p.no).join('、')} 页像是目录，已略过。`);
+    toc.length && !keepToc && warnings.push(`第${toc.map((p) => p.no).join('、')}页像是目录，已略过。`);
     return { text, warnings, pages: pages.length, chars: text.replace(/\s/g, '').length };
 }

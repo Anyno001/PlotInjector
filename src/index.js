@@ -23,7 +23,7 @@ function boot() {
     host.__plotInjectorBootError = '';
     const yaml = libs().yaml;
     if (!yaml) {
-        host.__plotInjectorBootError = '当前酒馆没有提供 YAML 解析库（SillyTavern.libs.yaml），需要更新酒馆。';
+        host.__plotInjectorBootError = '当前酒馆没有提供YAML解析库（SillyTavern.libs.yaml），需要更新酒馆。';
         toast('error', host.__plotInjectorBootError);
         return;
     }

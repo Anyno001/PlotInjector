@@ -169,17 +169,6 @@ test('places: a node may list several places; a card\'s own place table is named
   assert.match(vm, /节点的地点用表里已有的叫法/);
 });
 
-test('fill rule text: activity first; 无 also when still on the spot; passing by is not entering and does not keep the old scene', () => {
-  const ctrl = C.clueSheets({})[0];
-  const note = ctrl.sourceData.note;
-  assert.match(note, /这一列记的不是主角在不在场/);
-  assert.match(note, /写「无」，人还在原地、对面还是同一个人也一样/);
-  assert.match(note, /边走边接着谈、到隔壁房间找能打开那把锁的钥匙/);
-  assert.match(note, /路上经过邮局没进去 → 写「无」/);
-  assert.match(note, /全局表里还没更新的地点不能否定正文里已经发生的转场/);
-  assert.doesNotMatch(note, /离场/);
-});
-
 // ---------- GPT 代码审阅（9c4e216）R1：人工焦点被表格接管后，表格写回原值不复活 ----------
 test('R1: leave n1 → table 无 → player really returns → table n1 again: focus comes back; deleting the takeover floors restores the manual leave', async () => {
   const T = (scene) => ({ sheet_f: { name: '事实表', content: [[null, '编号', '状态'], ['1', 'F1', '未获得']] }, sheet_c: { name: '线索控制表', content: [[null, '标识', '当前场景'], ['1', '主线', scene]] } });

@@ -26,7 +26,7 @@ export function findSheet(tables, name) {
     return hits.length === 1
         ? { sheet: hits[0] }
         : hits.length
-          ? { error: `表「${name}」重名 ${hits.length} 张` }
+          ? { error: `表「${name}」重名${hits.length}张` }
           : { error: `缺少表「${name}」` };
 }
 
@@ -339,7 +339,7 @@ export function pickEntry(text, key) {
         vals = [...new Set(hits.map((e) => e.value))];
     return hits.length
         ? vals.length > 1
-            ? { state: 'unknown', reason: `这一格里「${k}」出现了 ${hits.length} 次、写法不同，分不清取哪个` }
+            ? { state: 'unknown', reason: `这一格里「${k}」出现了${hits.length}次、写法不同，分不清取哪个` }
             : vals[0] === ''
               ? { state: 'unknown', reason: `「${k}」这一项是空的` }
               : { state: 'ok', value: vals[0] }

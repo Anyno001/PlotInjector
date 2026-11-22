@@ -70,7 +70,7 @@ test('main lines are serial: one at a time in outline order; a paused main line 
 
 test('window: open from M1 stage 2 entered to stage 3 ended; missed after; a started side line keeps going; a roll-back reopens it', () => {
   const vols = () => [MAIN(), side('S07', { 开启时段: { 主线: 'M1', 从: '阶段2', 到: '阶段3' } })];
-  assert.match(run(vols()).line('S07').window.reasons.join(), /要等 M1 进入「阶段2 追查」/);
+  assert.match(run(vols()).line('S07').window.reasons.join(), /要等M1进入「阶段2 追查」/);
   assert.equal(run(vols()).line('S07').state, '未触发');
   assert.equal(run(vols(), snap({ f: { F_m1a: '已核实' } })).line('S07').state, '可开启', 'stage 2 entered');
   const late = run(vols(), snap({ f: { F_m1a: '已核实', F_m1b: '已核实', F_m1c: '已核实' } }));
@@ -82,7 +82,7 @@ test('window: open from M1 stage 2 entered to stage 3 ended; missed after; a sta
   assert.equal(run(vols(), snap({ f: { F_m1a: '已核实' } })).line('S07').missed, false, 'rolled back into the window: offered again');
   // a stage name that does not resolve is an error, not "no limit"
   const bad = C.compileClue([MAIN(), side('S08', { 开启时段: { 主线: 'M1', 从: '阶段9' } })]);
-  assert.match(bad.errors.join(), /阶段「阶段9」在 M1 里找不到/);
+  assert.match(bad.errors.join(), /阶段「阶段9」在M1里找不到/);
   assert.equal(run([MAIN(), side('S08', { 开启时段: { 主线: 'M1', 从: '阶段9' } })]).line('S08').state, '未触发');
 });
 
@@ -164,7 +164,7 @@ test('entry rotation: the running main line is offered first once; then it and t
   assert.equal(p0.recognize.some((x) => x.line === 'M2'), false, 'M2 cannot be walked into while M1 holds the slot');
   const seen = new Set(['M1']);
   assert.deepEqual([0, 1, 2, 3].map((n) => C.lineEntryPlan(r2.state, prog(), { round: n, firstOffer: seen }).offer.line), ['M1', 'S07', 'M1', 'S07']);
-  assert.equal(C.mainSlotTaken(r2.state.lineStates, 'M2'), '主线 M1 还在进行');
+  assert.equal(C.mainSlotTaken(r2.state.lineStates, 'M2'), '主线M1还在进行');
   const paused = run([MAIN(), m2], snap(), prog({ lines: { M1: { started: true, state: 'pause' } } }));
   // 导入审阅总方案 H / GPT 审阅 R6：暂停的主线不占手动进入的位置（仍然挡着自动开始，见上一个测试）
   assert.equal(C.mainSlotTaken(paused.state.lineStates, 'M2'), '', 'a paused main line no longer blocks entering another one by hand');
@@ -646,7 +646,7 @@ test('line card: side pause is labelled 暂停全部支线 and running side line
   // 第三批：只暂停支线在「剧情」卡的「暂停」菜单里；单条线的暂停在这条线的「⋯」里
   assert.ok(doc.querySelector('.pi-pause-menu [data-act="clue-pause-side"][data-value="1"]'), '只暂停支线 in the pause menu');
   assert.match(doc.querySelector('.pi-pause-menu').textContent, /只暂停支线/);
-  assert.match(text, /已离开 2 轮，上次在S01a处/, 'away reminder in the line card (two replies since the player was in S01)');
+  assert.match(text, /已离开2轮，上次在S01a处/, 'away reminder in the line card (two replies since the player was in S01)');
   const s01 = [...doc.querySelectorAll('.pi-line-row')].find((r) => /S01/.test(r.textContent) && /支线/.test(r.textContent));
   assert.ok(s01.querySelector('.pi-line-more [data-act="clue-line"][data-value="pause"]'), 'single pause kept (in ⋯)');
   inst.runtime.clue.setPaused(true, 'side');

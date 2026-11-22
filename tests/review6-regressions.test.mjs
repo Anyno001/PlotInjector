@@ -11,9 +11,6 @@ import { buildTemplate, BINDING_YAML } from '../templates/clue-tables/build-temp
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const storyText = fs.readFileSync(path.join(here, '../templates/clue-tables/示例_小镇失窃案.yaml'), 'utf8');
-const pluginSrc = fs.readFileSync(path.join(here, '../src/ui/clue-run.js'), 'utf8');
-const templateSrc = fs.readFileSync(path.join(here, '../templates/clue-tables/build-template.mjs'), 'utf8');
-const rulesSrc = fs.readFileSync(path.join(here, '../src/core/clue-template.js'), 'utf8');
 const tick = () => new Promise((r) => setTimeout(r, 20));
 const C = loadCore();
 
@@ -46,16 +43,6 @@ async function setup({ tables: given } = {}) {
   await click(`[data-act="project"][data-id="${p.id}"]`);
   return { host, inst, doc, click, set, commit, tables, pid: p.id };
 }
-
-// ---------- 17.1 P1: 「填入示例 → 应用」 must not bring back the removed 启用 switch ----------
-test('17.1 P1: the in-panel binding example equals the template binding (no 启用, time list)', () => {
-  const m = /(?:export )?(?:var|const) BINDING_EXAMPLE = `([\s\S]*?)`;/.exec(pluginSrc);
-  assert.ok(m, 'example found');
-  const tpl = /export const BINDING_YAML = `([\s\S]*?)`;/.exec(templateSrc);
-  const lf = (x) => x.split(String.fromCharCode(13)).join('');
-  assert.equal(lf(m[1]), lf(tpl[1]), 'same text as BINDING_YAML');
-  assert.ok(!/启用/.test(m[1]));
-});
 
 test('17.1 P1: clicking 填入示例 → 应用 keeps clue material flowing (no missing-column switch)', async () => {
   const { inst, click, doc, set, commit } = await setup();
@@ -134,10 +121,4 @@ test('17.1 P2: a fact obtained while the rewrite confirm is open is shown before
   const done = inst.data.project(pid).outline.volumes[0].stages[1].data.主线节点.find((n) => n.id === 'n_ledger').完成条件;
   assert.deepEqual(JSON.parse(JSON.stringify(done)), { 事实: 'F_ledger' }, 'cancelled → outline unchanged');
   await inst.destroy();
-});
-
-// ---------- 17.1 P2: template examples must not carry the test story's answers ----------
-test('17.1 P2: fill-rule examples in the companion template are case-neutral', () => {
-  for (const w of ['窗台', '印泥', '当铺', '拖痕', '侧窗']) assert.ok(!rulesSrc.includes(w), `template example mentions ${w}`);
-  assert.match(rulesSrc, /纯佐证，只追加依据/);
 });

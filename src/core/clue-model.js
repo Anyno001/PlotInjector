@@ -236,7 +236,7 @@ export function reidConflicts(incoming, existingVolumes) {
             .map((node) => node.uid)
             .filter(Boolean),
         dup = own.find((uid, i) => own.indexOf(uid) !== i);
-    if (dup) throw new Error(`导入内容里节点 ID「${dup}」重复，无法确定条件引用指向哪个节点，请先修正`);
+    if (dup) throw new Error(`导入内容里节点ID「${dup}」重复，无法确定条件引用指向哪个节点，请先修正`);
     let map = /* @__PURE__ */ new Map();
     for (let uid of own) taken.has(uid) && map.set(uid, makeId('n'));
     if (!map.size) return [incoming, []];

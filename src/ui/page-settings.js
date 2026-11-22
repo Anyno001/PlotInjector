@@ -82,7 +82,7 @@ function guideCard(view, s) {
         custom = s.guidePreset === 'custom';
     return `<div class="pi-card"><h3>写作基准<span class="pi-spacer"></span>
             <button type="button" class="pi-btn is-sm is-ghost" data-act="guide-toggle">${open ? '收起' : '查看'}</button></h3>
-        <p class="pi-hint">在讨论页聊设定和剧情、在设定页整理设定时，AI 按这份基准来写。正文模型看不到它。</p>
+        <p class="pi-hint">在讨论页聊设定和剧情、在设定页整理设定时，AI按这份基准来写。正文模型看不到它。</p>
         <label class="pi-field"><span>使用哪一份</span><select class="pi-sel" data-guide-preset>${options(
             GUIDE_PRESETS.map((x) => ({ value: x.value, label: x.value === 'generic' ? '通用（默认）' : x.label })),
             preset.value,
@@ -101,7 +101,7 @@ function paceRow(view, s) {
         value: item.value,
         label: `${item.label}${item.value === current ? '（当前聊天使用）' : ''}${s.paceText[item.value] ? '（已改）' : ''}`,
     }));
-    return `<div class="pi-set-row"><span>推进速度说明</span>${changed.length ? `<span class="pi-badge">已修改 ${changed.join('、')}</span>` : ''}<span class="pi-spacer"></span>
+    return `<div class="pi-set-row"><span>推进速度说明</span>${changed.length ? `<span class="pi-badge">已修改${changed.join('、')}</span>` : ''}<span class="pi-spacer"></span>
             <button type="button" class="pi-btn is-sm is-ghost" data-act="pace-toggle">${open ? '收起' : '编辑'}</button></div>
         ${
             open
@@ -156,12 +156,10 @@ export function render(view) {
         ${paceRow(view, s)}</div>
         ${llmCard(view, s)}
         ${guideCard(view, s)}
-        <div class="pi-card"><h3>新手教程</h3>
-        <p class="pi-hint">每个页面右上角的「?」可以播放这一页的教程。想从头再看一遍时，点下面的按钮：先播放总览，之后第一次打开插件时也会再播一次。</p>
-        <div class="pi-tools is-c1"><button type="button" class="pi-btn is-sm" data-act="tour-reset">重新播放全部教程</button></div></div>
         <div class="pi-card"><h3>实验功能</h3>
         <label class="pi-check"><input type="checkbox" data-set="trpgLab"${s.trpgLab ? ' checked' : ''}><span>跑团模式（新建项目时可选）</span></label>
-        ${s.trpgLab ? `<label class="pi-field"><span>检定写法</span><select class="pi-sel" data-set="trpgCheck">${options(CHECK_MODES, s.trpgCheck === 'anke' ? 'anke' : 'text')}</select></label>` : ''}</div>`;
+        ${s.trpgLab ? `<label class="pi-field"><span>检定写法</span><select class="pi-sel" data-set="trpgCheck">${options(CHECK_MODES, s.trpgCheck === 'anke' ? 'anke' : 'text')}</select></label>` : ''}</div>
+        <div class="pi-tools is-c1"><button type="button" class="pi-btn is-sm is-ghost" data-act="tour-reset" title="先播放总览，之后第一次打开插件时也会再播一次">重新播放教程</button></div>`;
 }
 
 const NUMERIC = new Set(['checkEvery', 'checkFloors', 'hookCap']);

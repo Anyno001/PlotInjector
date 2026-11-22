@@ -18,7 +18,7 @@ export function genRefsBar(view, scope, rerender = () => view.renderBody(), { la
     const wb = wbSummary(view, refs, rerender, `gen-${scope}`);
     return `<div class="pi-refs">${label ? '<span class="pi-hint">参考：</span>' : ''}
         <button type="button" class="pi-chip${refs.talk && talks ? ' is-on' : ''}" data-act="gen-talk"${talks ? '' : ' disabled title="讨论页还没有记录"'}>讨论记录</button>
-        <button type="button" class="pi-chip${wb && wb.count ? ' is-on' : ''}" data-act="gen-wb">世界书 ${wb ? `${wb.count} 条` : '…'}</button></div>`;
+        <button type="button" class="pi-chip${wb && wb.count ? ' is-on' : ''}" data-act="gen-wb">世界书${wb ? `${wb.count}条` : '…'}</button></div>`;
 }
 
 export async function genRefTexts(view, limit) {
@@ -37,7 +37,7 @@ export const genActions = {
         view.renderBody();
     },
     async 'gen-wb'(view) {
-        const result = await pickRefs(refsOf(view.project()), 'AI 写作参考的世界书条目');
+        const result = await pickRefs(refsOf(view.project()), 'AI写作参考的世界书条目');
         if (!result) return;
         if (result.none) return toast('info', '当前卡没有关联的世界书。');
         update(view, { wb: result.wb, memo: result.memo });

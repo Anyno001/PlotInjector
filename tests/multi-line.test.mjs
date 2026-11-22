@@ -104,7 +104,7 @@ test('count: rows matching a column test; a missing table or column is unknown, 
   const at = (n) => C.parseCondition({ 计数: { 表: '关系表', 条件: '阶段 >= 2', 至少: n } });
   assert.equal(C.evalCondition(at(2), env(tablesWith(2))).v, C.TRI.t, '巴基 2, 沃克 3');
   assert.equal(C.evalCondition(at(3), env(tablesWith(2))).v, C.TRI.f);
-  assert.match(C.evalCondition(at(3), env(tablesWith(2))).reasons.join(), /有 2 行/);
+  assert.match(C.evalCondition(at(3), env(tablesWith(2))).reasons.join(), /有2行/);
   assert.equal(C.evalCondition(at(1), env({})).v, C.TRI.u, 'no table: unknown');
   assert.equal(C.evalCondition(C.parseCondition({ 计数: { 表: '关系表', 条件: '好感 >= 2', 至少: 1 } }), env(tablesWith(2))).v, C.TRI.u, 'no column: unknown');
 });
@@ -125,7 +125,7 @@ test('threshold reached but no opening yet: the side line is only 可开启; its
 test('the opening fact (even 存疑) starts the line; it stays started when the relationship drops afterwards', () => {
   const r = run(snap({ stage: 2, f: { F_s07_open: '存疑' } }));
   assert.equal(r.line('S07').state, '进行中');
-  assert.match(r.line('S07').why, /开场事实 F_s07_open 已出现/);
+  assert.match(r.line('S07').why, /开场事实F_s07_open已出现/);
   assert.equal(r.node('s7a').status, 'available');
   const dropped = run(snap({ stage: 1, f: { F_s07_open: '存疑' } }));
   assert.equal(dropped.line('S07').state, '进行中', 'condition changed afterwards: not undone');

@@ -32,12 +32,12 @@ async function fetchWithTimeout(url, init) {
 export async function readJsonFile(name) {
     const res = await fetchWithTimeout(`/${filePath(name)}?t=${Date.now()}`, { cache: 'no-store' });
     if (res.status === 404) return null;
-    if (!res.ok) throw new Error(`读取 ${name} 失败（HTTP ${res.status}）`);
+    if (!res.ok) throw new Error(`读取${name}失败（HTTP ${res.status}）`);
     const text = await res.text();
     try {
         return { value: JSON.parse(text), bytes: new TextEncoder().encode(text).length };
     } catch {
-        throw new Error(`${name} 不是有效 JSON`);
+        throw new Error(`${name}不是有效JSON`);
     }
 }
 
@@ -48,7 +48,7 @@ export async function writeJsonFile(name, value) {
         headers: { ...requestHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, data: utf8Base64(text) }),
     });
-    if (!res.ok) throw new Error(`写入 ${name} 失败（HTTP ${res.status}）`);
+    if (!res.ok) throw new Error(`写入${name}失败（HTTP ${res.status}）`);
     return new TextEncoder().encode(text).length;
 }
 
@@ -59,7 +59,7 @@ export async function deleteFile(name) {
         body: JSON.stringify({ path: filePath(name) }),
     });
     if (res.status === 404) return false;
-    if (!res.ok) throw new Error(`删除 ${name} 失败（HTTP ${res.status}）`);
+    if (!res.ok) throw new Error(`删除${name}失败（HTTP ${res.status}）`);
     return true;
 }
 

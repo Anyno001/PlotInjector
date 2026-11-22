@@ -90,7 +90,7 @@ test('只有阶段没有卷时自动包成一卷', () => {
 });
 
 test('YAML 格式错误报出行号', () => {
-    assert.throws(() => parseOutlineText('a:\n  b: [\n  c: d\n', idOf), error => error.line > 0 && /第 \d+ 行/.test(error.message));
+    assert.throws(() => parseOutlineText('a:\n  b: [\n  c: d\n', idOf), error => error.line > 0 && /第\d+行/.test(error.message));
 });
 
 test('正文只注入设定与当前阶段详细；详细标明是尚未发生的规划；剧情索引给检测用、写得详细', () => {
@@ -623,12 +623,12 @@ test('支线钩子过期：激活后超过时限楼数未开始即过期，错�
 test('支线链：只注入当前一步并标明第 k/n 步，命中后推进，走完才算演完；跨阶段延续', () => {
     const { units, live, detail } = threadSetup();
     let progress = emptyProgress('p');
-    assert.match(detail(progress), /支线｜寻剑：第 1\/2 步：打听剑的下落/);
+    assert.match(detail(progress), /支线｜寻剑：第1\/2步：打听剑的下落/);
     assert.doesNotMatch(detail(progress), /进山取剑/);
     progress = applyCheck(progress, live(progress), parseCheckReply('{"done":["寻剑"]}'), { floor: 3 }).progress;
     progress = advance(progress, units).progress;
-    assert.match(detail(progress), /支线｜寻剑（来自阶段一）：第 2\/2 步：进山取剑/);
-    assert.match(buildIndexText(units, unitStates(units, progress), progress), /\[第 2\/2 步\] 支线｜寻剑（来自阶段一）：进山取剑/);
+    assert.match(detail(progress), /支线｜寻剑（来自阶段一）：第2\/2步：进山取剑/);
+    assert.match(buildIndexText(units, unitStates(units, progress), progress), /\[第2\/2步\] 支线｜寻剑（来自阶段一）：进山取剑/);
     progress = applyCheck(progress, live(progress), parseCheckReply('{"done":["寻剑"]}'), { floor: 9 }).progress;
     assert.equal(live(progress).hooks.find(hook => hook.node.name === '寻剑').status, 'done');
     assert.doesNotMatch(detail(progress), /寻剑/);
@@ -847,8 +847,8 @@ test('钟、钩子重名：检测索引加来源后缀并按带后缀的名称�
     assert.equal(state.hooks[`${units[1].id}:s0`].at, 4);
     assert.equal(state.hooks[`${units[0].id}:s0`], undefined);
     const texts = outlineIssues(project.outline.volumes).filter(item => item.kind === 'dup-thread').map(item => item.text);
-    assert.ok(texts.some(text => /支线「支线1」在 .+ 重名/.test(text)));
-    assert.ok(texts.some(text => /进度钟「逼近」在 .+ 重名/.test(text)));
+    assert.ok(texts.some(text => /支线「支线1」在.+重名/.test(text)));
+    assert.ok(texts.some(text => /进度钟「逼近」在.+重名/.test(text)));
 });
 
 test('进度钟：同一批楼（楼数没增加）不重复推进；检测提示标出上次已读到哪一楼', () => {

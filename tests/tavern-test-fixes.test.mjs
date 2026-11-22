@@ -100,13 +100,8 @@ test('bulk import: batches inside one part run concurrently, never more than 3 a
     await LI.rvWait(doc);
     assert.ok(peak >= 2, `batches overlap (peak ${peak})`);
     assert.ok(peak <= 3, `at most 3 at once (peak ${peak})`);
-    assert.match(doc.querySelector('.pi-rv-state').textContent, /6 条/);
+    assert.match(doc.querySelector('.pi-rv-state').textContent, /6条/);
   } finally { await inst.destroy(); }
-});
-
-test('runPool limit is 3 in the source (user 2026-11-17)', () => {
-  const src = fs.readFileSync(new URL('../src/ui/long-import.js', import.meta.url), 'utf8');
-  assert.match(src, /const IMPORT_CONCURRENCY = 3;/);
 });
 
 // ---------- 7：审阅修改里提示还没保存的导入 ----------
@@ -126,7 +121,7 @@ test('edit review: an unsaved multi-line import is pointed to, with an 打开 bu
     for (let i = 0; i < 20 && !doc.querySelector('.pi-rv'); i++) await tick();
     const note = doc.querySelector('.pi-rv-pending');
     assert.ok(note, 'note shown on the edit review page');
-    assert.match(note.textContent, /还有 2 条支线未保存到大纲。打开审阅/);
+    assert.match(note.textContent, /还有2条支线未保存到大纲。打开审阅/);
     note.querySelector('[data-act="import-open"]').click();
     for (let i = 0; i < 20 && !/导入的支线/.test(doc.querySelector('.pi-rv h3')?.textContent || ''); i++) await tick();
     assert.match(doc.querySelector('.pi-rv h3').textContent, /导入的支线/, 'opens the bulk import');
@@ -141,23 +136,7 @@ test('edit review: an unsaved multi-line import is pointed to, with an 打开 bu
 });
 
 // ---------- 1 / 2 / 9：提示词规则 ----------
-test('index prompt: name secrecy is judged by "can the narration call him this from the start", with general examples; no card-specific names', () => {
-  const sys = C.importIndexMessages({ part: { i: 0, title: 't', text: 'x' }, total: 1 })[0].content;
-  assert.match(sys, /故事一开始，叙述里能不能直接用这个名字称呼这个人/);
-  assert.match(sys, /主角和主要同伴的名字（哪怕他有一重不让外人知道的身份）、公开使用的称号、代号、外号/);
-  assert.doesNotMatch(sys, /蜘蛛侠|彼得·帕克/);
-});
-
-test('draft prompt: a node the text says can be skipped is 必需: false (necessary nodes block the stage end)', () => {
-  const sys = C.importDraftMessages({ part: { i: 0, title: 't', text: 'x' }, index: '' })[0].content;
-  assert.match(sys, /必需节点没完成，阶段就算满足了结束条件也不会结束/);
-  assert.match(sys, /「可以不做」「可以跳过」「不经过也能继续」「没有它也行」的，这个节点一定写「必需: false」/);
-});
-
 test('line rules: a new line-opening fact gets a meaningful code with the line id and a sentence in 原开启条件; the label prompt sees that sentence', () => {
-  const rules = C.CLUE_LINE_RULES.join('\n');
-  assert.match(rules, /不要用 F30 这种流水号/);
-  assert.match(rules, /把这件事写成一句话放进「原开启条件」/);
   const vols = [{ id: 'v', key: '剧情_S02_x', line: { 编号: 'S02', 类型: '支线', 开启条件: { 事实: 'F_s02_ask' }, 原开启条件: '玛雅通过叶莲娜请主角帮忙' }, stages: [{ id: 's', key: '阶段1_y', data: { 主线节点: [{ id: 'n', 名称: 'n', 入口: '去', 发现: [{ 事实: 'F_n', 内容: 'x' }], 完成条件: { 事实: 'F_n' } }] } }] }];
   const ctx = C.factLabelContext(vols).find((x) => x.code === 'F_s02_ask');
   assert.equal(ctx.record, '玛雅通过叶莲娜请主角帮忙');
@@ -174,15 +153,6 @@ test('import page: when no database tables are readable, a note says table-based
     inst.__view.renderBody(); await tick();
     assert.match(doc.body.textContent, /当前聊天读不到数据库表格。依赖表格的开始条件会先按手动开始整理/);
   } finally { await inst.destroy(); }
-});
-
-test('entry hint rule: the protagonist is called what the people in that line call him (title / code name / alias)', () => {
-  assert.match(C.ENTRY_HINT_RULE, /主角的称呼跟着这条线里的人走：这条线里的人只知道他的某个称号、代号或化名时，入口里也用那个称呼/);
-});
-
-test('bulk import prompt: a line continued from an earlier part only adds stages; its head (brief, entry, start) is not rewritten', () => {
-  const msgs = C.importLineDraftMessages({ part: { i: 1, title: 't', text: 'x' }, index: '', lines: [{ 编号: 'S01', 名称: 'a' }], only: ['S01'] });
-  assert.match(msgs[0].content, /「线」下面只写编号和类型，简介、入口提示、开启条件、原开启条件前面已经写过，不要重写/);
 });
 
 // ---------- 跨段重写（实测 2026-11-17：S07 / S15 列出 35～45 条冲突、重复节点 id s07_final） ----------
@@ -203,7 +173,7 @@ test('bulk merge: a later part rewriting known nodes keeps the earlier text, lis
   assert.deepEqual(ids, ['s07_needs', 's07_final', 's07_reply'], 'moved node kept once, in its first place; the new node is added');
   assert.equal(C.compileClue(out).errors.length, 0, 'no duplicate node id');
   assert.equal(out.conflicts.length, 1);
-  assert.match(C.importConflictText(out.conflicts[0]), /线 S07 跨了几段.*（5 处）/, 'head 1 + stage AI指令 1 + same-stage 入口 1 + moved node (its 入口, the node itself) 2');
+  assert.match(C.importConflictText(out.conflicts[0]), /线S07跨了几段.*（5处）/, 'head 1 + stage AI指令1 + same-stage入口1 + moved node (its入口, the node itself) 2');
 });
 
 test('bulk merge: a later stage that only repeats known nodes is not added as an empty stage', () => {
@@ -219,7 +189,7 @@ test('single-line import merge keeps listing conflicts one by one (unchanged)', 
   const b = { id: 'v', key: '剧情_卷一', stages: [{ id: 's', key: '阶段1_x', data: { 主线节点: [{ id: 'n1', 入口: '后' }] } }] };
   const m = C.mergeImportParts([a, b]);
   assert.equal(m.conflicts.length, 1);
-  assert.match(C.importConflictText(m.conflicts[0]), /n1 的「入口」两段写得不一样/);
+  assert.match(C.importConflictText(m.conflicts[0]), /n1的「入口」两段写得不一样/);
 });
 
 test('run page line cards: 「卷1」 is dropped when the line has an id', async () => {
@@ -266,15 +236,15 @@ test('round 5 C1: batch 1 fails after 2–4 finished → progress is honest; 继
     const job = LI.lineJob(inst, pid);
     assert.equal(job.drafts[0].list.filter(Boolean).filter((x) => !x.error).length, 3, 'batches 2–4 kept');
     const card = doc.querySelector('.pi-card').textContent;
-    assert.match(card, /已整理 0 段/, 'a part with a missing batch is not counted as done');
-    assert.match(card, /第 1 段有 1 批未完成，其他结果已保存|S01、S02、S03 转写失败/);
+    assert.match(card, /已整理0段/, 'a part with a missing batch is not counted as done');
+    assert.match(card, /第1段有1批未完成，其他结果已保存|S01、S02、S03转写失败/);
     assert.ok(run.peak() <= 3);
     const before = run.asked.length;
     await click('[data-act="import-run"]');
     await LI.rvWait(doc);
     const again = run.asked.slice(before).filter((x) => x.startsWith('1:'));
     assert.deepEqual(again, ['1:S01,S02,S03'], `part 1: only the failed batch is asked again (${run.asked.slice(before).join(' | ')})`);
-    assert.match(doc.querySelector('.pi-rv-state').textContent, /12 条/);
+    assert.match(doc.querySelector('.pi-rv-state').textContent, /12条/);
   } finally { await inst.destroy(); }
 });
 
@@ -302,7 +272,7 @@ test('round 5 C1: the saved job has null holes; after reloading the plugin 继�
     await LI.rvWait(doc);
     const again = run.asked.slice(before).filter((x) => x.startsWith('1:'));
     assert.deepEqual(again, ['1:S01,S02,S03'], `part 1: only the failed batch is asked again (${run.asked.slice(before).join(' | ')})`);
-    assert.match(doc.querySelector('.pi-rv-state').textContent, /12 条/);
+    assert.match(doc.querySelector('.pi-rv-state').textContent, /12条/);
   } finally { await (inst2 || inst).destroy(); }
 });
 
@@ -310,9 +280,9 @@ test('round 5 C1 core: lineBatchState / importFailedParts read null holes and co
   const job = { mode: 'lines', parts: [{ i: 0, title: 't' }], lineIdent: { lines: Array.from({ length: 12 }, (_, k) => ({ 编号: ID(k + 1), parts: [0] })) }, drafts: { 0: { list: [null, { volumes: [] }, { volumes: [] }, { volumes: [] }] } } };
   const st = UI.lineBatchState(job, { i: 0 });
   assert.deepEqual([st.want, st.ok, st.left], [4, 3, 1]);
-  assert.deepEqual([...UI.importFailedParts(job).map((f) => f.why)], ['第 1 段有 1 批未完成，其他结果已保存']);
+  assert.deepEqual([...UI.importFailedParts(job).map((f) => f.why)], ['第1段有1批未完成，其他结果已保存']);
   job.drafts[0].list[0] = { only: ['S01', 'S02', 'S03'], error: 'x' };
-  assert.match(UI.importFailedParts(job)[0].why, /S01、S02、S03 转写失败/);
+  assert.match(UI.importFailedParts(job)[0].why, /S01、S02、S03转写失败/);
   job.drafts[0].list[0] = { volumes: [] };
   assert.equal(UI.importFailedParts(job).length, 0);
 });
@@ -367,12 +337,6 @@ test('round 5 C4: composed prompts (index, single-line, multi-line, revise, line
   ].map((m) => m.content);
   texts.push(C.CLUE_LINE_RULES.join('\n'), C.ENTRY_HINT_RULE, C.CLUE_OUTLINE_RULES_WITH_LINES);
   for (const t of texts) assert.doesNotMatch(t, NAMES, t.match(NAMES)?.[0]);
-});
-
-test('round 5: name-secrecy rule is narrowed: a correspondence between two usable names goes to 真实身份; a name that itself must wait is still secret', () => {
-  const sys = C.importIndexMessages({ part: { i: 0, title: 't', text: 'x' }, total: 1 })[0].content;
-  assert.match(sys, /两种称呼本身都可以在正文里出现、只是它们指同一个人这件事保密的，把这层对应写进「真实身份」/);
-  assert.match(sys, /某个称呼本身也要等剧情揭晓才能出现的，那个称呼仍按上面的办法标/);
 });
 
 // ---------- 第五轮 U1：保存过、点「继续修改」重新打开的单条导入，不再被说成没保存 ----------

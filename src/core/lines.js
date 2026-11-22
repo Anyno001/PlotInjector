@@ -96,7 +96,7 @@ export function lineEntryPlan(
 // 主线位置：同时只有一条主线「进行中」。暂停的主线不占位置（导入审阅总方案 H / GPT 审阅 R6）。
 export function mainSlotTaken(lineStates, id) {
     let other = (lineStates || []).find((s) => s.line.kind === 'main' && s.line.id !== id && s.state === '进行中');
-    return other ? `主线 ${other.line.id} 还在进行` : '';
+    return other ? `主线${other.line.id}还在进行` : '';
 }
 // 正在占着主线位置的那条（继续一条暂停的主线时，要先把它暂停）。
 export function mainInProgress(lineStates, id = '') {
@@ -193,7 +193,7 @@ export function frameEvents(msg, isoKey = null) {
 }
 
 export function fillEvidence(msg, sheetKey, isoKey = null) {
-    if (!msg || msg.is_user) return { ok: !1, reason: '不是 AI 回复' };
+    if (!msg || msg.is_user) return { ok: !1, reason: '不是AI回复' };
     if (!sheetKey) return { ok: !1, reason: '不知道线索控制表在数据库里的编号' };
     let events = frameEvents(msg, isoKey);
     return events === null

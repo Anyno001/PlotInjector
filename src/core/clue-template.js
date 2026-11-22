@@ -359,7 +359,7 @@ export function synthesizeClueTemplate(base, { clue = {} } = {}) {
             for (let n = 2; tpl[key]; n++) key = `${sheet.uid}_${n}`;
             ((sheet.uid = key), (sheet.orderNo = ++maxOrder), (tpl[key] = sheet), created.push(sheet.name));
             let rows = sheet.content.length - 1;
-            changes.push(`新增「${sheet.name}」${rows ? `，带 ${rows} 行预建数据` : ''}`);
+            changes.push(`新增「${sheet.name}」${rows ? `，带${rows}行预建数据` : ''}`);
             continue;
         }
         let wantHead = clueTplHeader(sheet),
@@ -376,7 +376,7 @@ export function synthesizeClueTemplate(base, { clue = {} } = {}) {
                 ddl = oldDdl.trim() ? ddlAddColumns(oldDdl, [{ sql: 'scene_catalog', label: LINE_CATALOG_COL }]) : { ok: !0, ddl: '' };
             if (!ddl.ok) {
                 problems.push(
-                    `「线索控制表」的 DDL ${ddl.why || '无法解析'}，没有加「${LINE_CATALOG_COL}」列；多线的场景目录写不进去，需要的话请在数据库里手动加`,
+                    `「线索控制表」的DDL ${ddl.why || '无法解析'}，没有加「${LINE_CATALOG_COL}」列；多线的场景目录写不进去，需要的话请在数据库里手动加`,
                 );
                 continue;
             }
@@ -419,8 +419,8 @@ export function synthesizeClueTemplate(base, { clue = {} } = {}) {
             ? (sameRealtime(g.sheet.updateConfig) ||
                   ((g.sheet.updateConfig = { ...(g.sheet.updateConfig || {}), ...CLUE_TPL_REALTIME }),
                   changes.push(`「${g.name}」改为每楼更新（与线索表同组，时间、地点每楼都准；填表次数会相应变多）`)),
-              g.time || problems.push(`「${g.name}」里没找到时间列（${GLOBAL_TIME_COLS.join('、')}）：时间条件会是未知，可以在表格绑定里把 time 指向记时间的那一格`))
-            : problems.push('没找到记时间、地点的全局表：大纲里的时间条件会是未知。可以在表格绑定里把 time 指向记时间的那一格'),
+              g.time || problems.push(`「${g.name}」里没找到时间列（${GLOBAL_TIME_COLS.join('、')}）：时间条件会是未知，可以在表格绑定里把time指向记时间的那一格`))
+            : problems.push('没找到记时间、地点的全局表：大纲里的时间条件会是未知。可以在表格绑定里把time指向记时间的那一格'),
         patchDefault('重要角色表', (sheet) => {
             let head = sheet.content[0],
                 have = clueTplHeader(sheet),
@@ -429,7 +429,7 @@ export function synthesizeClueTemplate(base, { clue = {} } = {}) {
                 let ddl = ddlAddColumns(sheet.sourceData && sheet.sourceData.ddl, add);
                 if (!ddl.ok)
                     return problems.push(
-                        `「重要角色表」的 DDL ${ddl.why || '无法解析'}，没有加列（剧情身份、当前动向）；需要的话请在数据库里手动加`,
+                        `「重要角色表」的DDL ${ddl.why || '无法解析'}，没有加列（剧情身份、当前动向）；需要的话请在数据库里手动加`,
                     );
                 ((sheet.sourceData = { ...sheet.sourceData, ddl: ddl.ddl }), head.push(...add.map((c) => c.label)));
                 for (let row of sheet.content.slice(1)) Array.isArray(row) && row.push(...add.map(() => ''));
@@ -486,7 +486,7 @@ export function synthesizeClueTemplate(base, { clue = {} } = {}) {
             want = CLUE_TPL_DEFAULTS[name];
         if (!want.every((c) => head.includes(c)))
             return problems.push(
-                `「${name}」的列和数据库默认不一致（缺 ${want.filter((c) => !head.includes(c)).join('、')}），没有改它的规则；需要的话请手动加上防剧透要求`,
+                `「${name}」的列和数据库默认不一致（缺${want.filter((c) => !head.includes(c)).join('、')}），没有改它的规则；需要的话请手动加上防剧透要求`,
             );
         ((sheet.sourceData = { ...(sheet.sourceData || {}) }), extra && extra(sheet));
         for (let [field, rep] of Object.entries(CLUE_TPL_REPLACE[name] || {})) {

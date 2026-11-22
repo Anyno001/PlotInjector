@@ -82,7 +82,7 @@ test('dialog: 自动填写 fills only empty boxes, flags rows that need a look, 
   (() => { const t = doc.querySelector('[data-act="run-set-toggle"][aria-expanded="false"]'); t && t.click(); })(); await tick();
   doc.querySelector('[data-act="clue-gen-template"]').click(); await tick();
   const dlg = doc.querySelector('.pi-dialog');
-  assert.match(dlg.textContent, /这份大纲里有 4 条要追踪的线索/);
+  assert.match(dlg.textContent, /这份大纲里有4条要追踪的线索/);
   // the dialog says what this step is for, and each row says which clue it is (stage, node, the answer — shown to the author only)
   assert.match(dlg.textContent, /这一步在做什么/);
   assert.match(dlg.textContent, /拿到了，后面的剧情才会开放/);
@@ -112,8 +112,8 @@ test('dialog: 自动填写 fills only empty boxes, flags rows that need a look, 
   };
   dlg.querySelector('[data-fr-auto]').click();
   for (let i = 0; i < 30 && !/已填好/.test(dlg.querySelector('[data-fr-status]').textContent); i++) await tick();
-  assert.match(dlg.querySelector('[data-fr-status]').textContent, /已填好 3 条，1 条没生成（F_key）/);
-  assert.match(dlg.querySelector('[data-fr-status]').textContent, /1 条原来的写法会透露答案，已经自动改好/);
+  assert.match(dlg.querySelector('[data-fr-status]').textContent, /已填好3条，1条没生成（F_key）/);
+  assert.match(dlg.querySelector('[data-fr-status]').textContent, /1条原来的写法会透露答案，已经自动改好/);
   assert.equal(reviewed.length, 1, 'one review call');
   assert.match(reviewed[0], /F_doc/);
   assert.match(reviewed[0], /F_mark/, 'every auto-filled row is reviewed, not only the ones the script flagged');
@@ -205,7 +205,7 @@ test('review: a literal overlap the review clears stays grey; a failed review fa
   const row = dlg.querySelector(`[data-fr-row="${idx('F_doc')}"]`);
   assert.equal(row.querySelector('.pi-warn-line'), null, 'review said no leak: no yellow');
   assert.ok(!row.classList.contains('is-warn'));
-  assert.match(dlg.querySelector('[data-fr-status]').textContent, /1 条标黄/, 'only F_key (no node produces it) stays yellow');
+  assert.match(dlg.querySelector('[data-fr-status]').textContent, /1条标黄/, 'only F_key (no node produces it) stays yellow');
   [...dlg.querySelectorAll('.pi-btn')].find((b) => b.textContent === '取消').click(); await tick();
   // the review call fails: the script's literal overlap is shown in yellow, and the status says the check did not finish
   dlg = await open();

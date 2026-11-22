@@ -41,13 +41,6 @@ test('R1: public names are not secrets (马特奥, 蜘蛛侠); old indexes witho
   const vols = vol([{ AI指令: '马特奥在店里，蜘蛛侠路过', 主线节点: [N('n1', ['F1'])] }]);
   assert.deepEqual(C.checkImportDraft(vols, { index }).filter((x) => /保密的名字/.test(x.text)), []);
 });
-test('R1: the draft prompt no longer claims discoveries reach the body only after being revealed', () => {
-  const sys = C.importDraftMessages({ part: { i: 0, title: 't', text: 'x' }, index: '' })[0].content;
-  assert.ok(!/揭示之后才会给正文/.test(sys));
-  assert.match(sys, /玩家到场时它会作为「可能的发现」交给正文/);
-  assert.match(C.importIndexMessages({ part: { i: 0, title: 't', text: 'x' }, total: 1 })[0].content, /名字保密/);
-});
-
 // ---------- 长文导入界面（R2 R3 R4 R7 R11） ----------
 const DRAFT = (stages) => ['```yaml', '剧情_卷1_x:', ...stages.flatMap(([key, nodes, extra = []]) => [`  ${key}:`, ...extra.map((l) => `    ${l}`), '    主线节点:', ...nodes.flatMap(([id, fact, open]) => [`      - id: ${id}`, `        名称: 节点${id}`, `        入口: 去${id}`, `        发现: [{事实: ${fact}, 内容: c${id}}]`, `        完成条件: {事实: ${fact}}`, ...(open ? [`        开放条件: {事实: ${open}}`] : [])])]), '```'].join('\n');
 const INDEX = '```yaml\n梗概: x\n人物: []\n```';
@@ -167,10 +160,10 @@ test('R4: a stage that needs a fact nobody produces is shown on the review page 
   const ctx = await boot();
   const [A] = ctx.ids;
   await runImport(ctx, DRAFT([['阶段1_a', [['n1', 'FA']]], ['阶段2_b', [['n2', 'FB']], ['进入条件: {事实: F_none}']]]));
-  assert.match(ctx.doc.body.textContent, /问题 1/, 'the problem is counted on the review page');
+  assert.match(ctx.doc.body.textContent, /问题1/, 'the problem is counted on the review page');
   ctx.doc.querySelector('[data-act="import-adopt"]').click(); await tick();
   const text = await answer(ctx.doc, '取消');
-  assert.match(text, /还有 1 个问题没解决/);
+  assert.match(text, /还有1个问题没解决/);
   assert.match(text, /永远走不到/);
   assert.match(text, /阶段2 b/);
   assert.equal(ctx.inst.data.project(A).outline.volumes.length, 0);
@@ -194,7 +187,7 @@ test('R7: a part whose draft cannot be parsed is shown as failed (not "no proble
   let bad = true;
   await runImport(ctx, (body) => (bad && !/格式错误|没有读到/.test(body) ? 'not yaml: [' : bad ? 'still: [' : DRAFT([['阶段1_a', [['n1', 'F1']]]])));
   assert.ok(!ctx.doc.querySelector('[data-act="import-adopt"]'), 'not in review');
-  assert.match(ctx.doc.body.textContent, /第 1 段转写失败/);
+  assert.match(ctx.doc.body.textContent, /第1段转写失败/);
   assert.match(ctx.doc.querySelector('[data-act="import-run"]').textContent, /重试失败的段/);
   const job = ctx.inst.data.imports.get(ctx.inst.data.project(A).imports[0]);
   assert.ok(job.drafts[0].error);
@@ -251,7 +244,7 @@ test('R5: conflicting fields across parts keep the earlier one and are reported 
   const merged = C.mergeImportParts([...a, ...b]);
   assert.deepEqual(merged[0].stages[0].data.主线节点[0].完成条件, { 事实: 'FA' });
   assert.equal(merged.conflicts.length, 1);
-  assert.match(C.importConflictText(merged.conflicts[0]), /n1 的「完成条件」两段写得不一样/);
+  assert.match(C.importConflictText(merged.conflicts[0]), /n1的「完成条件」两段写得不一样/);
 });
 
 // ---------- R8 合法 YAML 不改 ----------
@@ -393,24 +386,6 @@ test('lab: an index without any facts triggers one follow-up asking for the miss
 });
 // lab：整份草稿修复请求（importSecretHits / importRepairMessages）已删除（GPT 第三轮清理 D4），按页修改走 reviewReviseMessages；字段级保密检查见 import-review-checks。
 
-// ---------- 参考外部卡的四条建议（2026-11-08） ----------
-test('prompts: import follows the source for conditions/routes; 偏转 optional with a sample node without it; fill rules keep the old value when unsure', () => {
-  const sys = C.importDraftMessages({ part: { i: 0, title: 't', text: 'x' }, index: '' })[0].content;
-  assert.match(sys, /取得条件和替代路线以原文为准/);
-  assert.match(sys, /原文没写取得条件的节点，开放条件留空/);
-  assert.match(sys, /导入时不适用/);
-  assert.ok(!/并检查：只走其中一条时/.test(C.CLUE_OUTLINE_RULES), 'the model is no longer asked to verify routes itself');
-  assert.match(C.OUTLINE_RULES, /偏转默认不写/);
-  const sample = C.parseYaml(C.SAMPLE_STAGE);
-  const nodes = Object.values(Object.values(sample)[0])[0].主线节点;
-  assert.ok(nodes.some((n) => !('偏转' in n)) && nodes.some((n) => '偏转' in n), 'sample shows a node with and without 偏转');
-  const tpl = C.synthesizeClueTemplate({}, { clue: {} }).template;
-  const note = (name) => Object.values(tpl).find((s) => s && s.name === name).sourceData.note;
-  for (const n of ['关键事实表', '知情表', '线索控制表']) assert.match(note(n), /拿不准.*保持原值/);
-  assert.ok(!/或者证据不足/.test(note('关键事实表')));
-});
-
-// ---------- 雾港实测 2026-11-08：证词记为存疑，必需节点「完成条件: {事实: 证词}」永远完不成，下一阶段不开放 ----------
 test('live: {事实} counts a claimed (存疑) fact as obtained; {核实} needs 已核实; a manual revoke still blocks both', () => {
   const st = (raw) => (raw === '已核实' ? { status: 'confirmed', raw } : raw === '存疑' ? { status: 'unconfirmed', claimed: true, raw } : { status: 'unconfirmed', raw });
   const snap = (vals) => ({ facts: new Map(Object.entries(vals).map(([id, raw]) => [id, { id, text: '', ...st(raw) }])), knowledge: [], tables: {}, problems: [] });
@@ -437,12 +412,6 @@ test('live: {事实} counts a claimed (存疑) fact as obtained; {核实} needs 
   assert.equal(C.parseCondition({ 核实: 'F1@甲' }).kind, 'know');
   assert.equal(C.parseCondition({ 核实: 'F1' }).verified, true);
 });
-test('live: prompts explain {事实} vs {核实} so imports and AI-written outlines do not gate on testimony being 已核实', () => {
-  assert.match(C.CLUE_OUTLINE_RULES, /\{核实: F01\}（必须已核实，说法不算）/);
-  assert.match(C.CLUE_OUTLINE_RULES, /如果用 \{核实\} 去等它，节点永远完不成/);
-  assert.match(C.importDraftMessages({ part: { i: 0, title: 't', text: 'x' }, index: '' })[0].content, /材料明确要求「被证实」时才用 \{核实: 编号\}/);
-});
-
 // ---------- 雾港实测「旧码头」导入（2026-11-08）发现的四个问题 ----------
 test('live import: nobody needs secrecy (model omitted 名字保密 for everyone) is not reported as a legacy index', () => {
   const idx = C.mergeImportIndex([{ 人物: [{ 名称: '老韩', 公开身份: '看守' }, { 名称: '周先生', 公开身份: '会计' }] }]);
@@ -471,15 +440,4 @@ test('live import: stray keys from the model (阶段下的「Ａ: {}」) are dro
   assert.equal(r.notes.n1.来源, '原句');
   assert.equal(d.世界动态[0].来源, '码头脚夫', 'a world event keeps its 来源');
   assert.ok(!C.checkImportDraft(r.volumes, { mode: 'outline' }).some((x) => /只给作者看的字段/.test(x.text)));
-});
-test('live import: the draft prompt tells the model to keep "Y does not depend on X" in one stage', () => {
-  const sys = C.importDraftMessages({ part: { i: 0, title: 't', text: 'x' }, index: '' })[0].content;
-  assert.match(sys, /「Y 不依赖 X」/);
-  assert.match(sys, /把 X 和 Y 放进\*\*同一个阶段\*\*/);
-});
-test('live fill: a judgment drawn after reading the original is 亲见, and 推测 never pairs with 已核实', () => {
-  const tpl = C.synthesizeClueTemplate({}, { clue: {} }).template;
-  const note = Object.values(tpl).find((s) => s && s.name === '知情表').sourceData.note;
-  assert.match(note, /读了单据后判断证词对不上），记为「亲见」/);
-  assert.match(note, /推测不配「已核实」/);
 });

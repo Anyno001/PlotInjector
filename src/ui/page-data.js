@@ -38,22 +38,22 @@ function versionCard(view, settings) {
     const status =
         {
             checking: '<span class="pi-spin"></span>正在检测最新版本…',
-            done: newer ? `最新版本 v${esc(latest.version)}，可以更新。` : '已是最新版本。',
+            done: newer ? `最新版本v${esc(latest.version)}，可以更新。` : '已是最新版本。',
             error: `检测失败：${esc(latest.error)}`,
         }[latest.state] || '';
     const pinned = settings.loaderRef;
     let note = '';
-    if (newer && !viaLoader()) note = '当前是单文件版，需重新导入新版 JSON 才能更新。';
-    else if (newer && pinned) note = `已指定 ${esc(pinned)}，清空指定版本后才会更新。`;
+    if (newer && !viaLoader()) note = '当前是单文件版，需重新导入新版JSON才能更新。';
+    else if (newer && pinned) note = `已指定${esc(pinned)}，清空指定版本后才会更新。`;
     const updateBtn =
         newer && viaLoader()
-            ? `<button type="button" class="pi-btn is-sm is-primary" data-act="update-now">更新到 v${esc(latest.version)}</button>`
+            ? `<button type="button" class="pi-btn is-sm is-primary" data-act="update-now">更新到v${esc(latest.version)}</button>`
             : '';
     return `<div class="pi-card"><h3>版本更新</h3>
-        <p class="pi-hint">当前版本 v${esc(view.version)}。${status}</p>
+        <p class="pi-hint">当前版本v${esc(view.version)}。${status}</p>
         ${note ? `<p class="pi-hint is-warn">${note}</p>` : ''}
         <div class="pi-tools ${updateBtn ? 'is-c2' : 'is-c1'} pi-acts"><button type="button" class="pi-btn is-sm" data-act="check-update"${latest.state === 'checking' ? ' disabled' : ''}>检查更新</button>${updateBtn}</div>
-        <label class="pi-field"><span>指定版本</span><input class="pi-inp" data-set="loaderRef" value="${esc(settings.loaderRef)}" placeholder="留空跟随最新版本，可填 v0.1.0 或 main"></label></div>`;
+        <label class="pi-field"><span>指定版本</span><input class="pi-inp" data-set="loaderRef" value="${esc(settings.loaderRef)}" placeholder="留空跟随最新版本，可填v0.1.0或main"></label></div>`;
 }
 
 function referenced(index) {
@@ -136,13 +136,13 @@ export function onChange(view, target) {
     let ref = target.value.trim();
     if (/^\d+\.\d+\.\d+$/.test(ref)) ref = `v${ref}`;
     if (ref && ref !== 'main' && !/^v\d+\.\d+\.\d+$/.test(ref)) {
-        toast('warning', '版本号格式应为 v0.1.0 这样的三段数字，或填 main；未保存。');
+        toast('warning', '版本号格式应为v0.1.0这样的三段数字，或填main；未保存。');
         target.value = view.data.settings().loaderRef;
         return;
     }
     target.value = ref;
     view.data.updateSettings({ loaderRef: ref });
-    toast('success', ref ? `已指定 ${ref}，刷新酒馆页面生效。` : '已改为跟随最新版本，刷新酒馆页面生效。');
+    toast('success', ref ? `已指定${ref}，刷新酒馆页面生效。` : '已改为跟随最新版本，刷新酒馆页面生效。');
 }
 
 async function verify(view) {
@@ -168,7 +168,7 @@ export const actions = {
     async 'update-now'(view) {
         const pinned = view.data.settings().loaderRef,
             body = pinned ? `将清空指定版本（${pinned}），改为跟随最新版本，然后刷新酒馆页面。` : '将刷新酒馆页面，载入最新版本。';
-        (await confirmDialog({ title: `更新到 v${latest.version}`, body, okLabel: '更新并刷新' })) &&
+        (await confirmDialog({ title: `更新到v${latest.version}`, body, okLabel: '更新并刷新' })) &&
             (pinned && (view.data.updateSettings({ loaderRef: '' }), await view.data.flush()),
             writeUi({ loader: null }),
             hostWindow().location.reload());
@@ -192,15 +192,15 @@ export const actions = {
         const project = await exportTarget(view),
             sum = projectSummary(project),
             parts = [
-                sum.lines ? `${sum.lines} 条剧情线` : '',
-                sum.labels ? `${sum.labels} 条线索标签` : '',
+                sum.lines ? `${sum.lines}条剧情线` : '',
+                sum.labels ? `${sum.labels}条线索标签` : '',
                 project.secretNames ? '保密名单' : '',
                 `推进方式（${sum.clue ? '线索推进' : '按阶段推进'}）和注入设置`,
             ].filter(Boolean),
             pick = await openDialog({
                 title: `导出「${project.name}」`,
                 html: `<p class="pi-hint">包含：${esc(parts.join('、'))}。</p>
-                ${sum.personas ? `<label class="pi-check"><input type="checkbox" data-f="personas" checked><span>人设（${sum.personas} 条）</span></label>` : ''}
+                ${sum.personas ? `<label class="pi-check"><input type="checkbox" data-f="personas" checked><span>人设（${sum.personas}条）</span></label>` : ''}
                 ${sum.setting ? '<label class="pi-check"><input type="checkbox" data-f="setting" checked><span>设定</span></label>' : ''}
                 ${sum.personas || sum.setting ? '<p class="pi-hint">人设、设定已经写进世界书的，可以不勾。</p>' : ''}
                 <p class="pi-hint">不含讨论记录、聊天进度和导入草稿。</p>`,
@@ -240,7 +240,7 @@ export const actions = {
                   buildZip(files),
                   'application/zip',
               ),
-            toast('success', `已导出 ${files.length} 个项目的人设。`));
+            toast('success', `已导出${files.length}个项目的人设。`));
     },
     async 'delete-file'(view, target) {
         const name = target.dataset.name;

@@ -5,7 +5,7 @@ import { emptyProgress } from '../core/progress.js';
 import { estimateTokens } from '../core/tokens.js';
 import { buildPersonaFile, mergePersonaLines, parsePersonaFile } from '../core/persona-file.js';
 import { downloadBlob, toast } from '../host/st.js';
-import { choiceDialog, confirmDialog, esc, options, pickFiles } from './dom.js';
+import { choiceDialog, confirmDialog, esc, menuDialog, options, pickFiles } from './dom.js';
 import { ICONS } from './styles.js';
 import { openImport, restoreImported } from './persona-import.js';
 
@@ -77,7 +77,7 @@ function partnerField(attrs, line, bar) {
 // 读声望线的状态说明：读到几、落在哪、没读到该查什么。
 function fameHint(view, line, info, bar) {
     if (!info.active) return '当前聊天没有使用本项目，这里不读声望。';
-    if (info.lost) return `没有读到这条${line.fame.source === 'favor' ? '角色数据' : '声望'}，请检查名称是否和 IGS 里的一致。读不到时沿用手动选的阶段。`;
+    if (info.lost) return `没有读到这条${line.fame.source === 'favor' ? '角色数据' : '声望'}，请检查名称是否和IGS里的一致。读不到时沿用手动选的阶段。`;
     const value = fameReading(line, view.runtime.fame());
     const base = value === null ? '' : `当前读到的数值：${value}。`;
     if (info.miss) return `${base}这个数值不在任何阶段的区间内，现在显示「${info.stage.name}」。请给每个阶段填上下限。`;
@@ -130,17 +130,12 @@ function lineRow(view, line, open, units) {
 }
 
 // 人设单独导出导入：文件只含人设线。
-function fileCard(all) {
-    return `<div class="pi-card"><h3>导出与导入</h3>
-        <div class="pi-tools is-c2"><button type="button" class="pi-btn is-sm" data-act="pf-export"${all.lines.length ? '' : ' disabled'}>导出人设</button>
-            <button type="button" class="pi-btn is-sm" data-act="pf-import">导入人设</button></div></div>`;
-}
-
 function importedCard(all) {
     const rows = all.imported.map((item, index) => `<div class="pi-wb-row"><span class="pi-wb-title" title="${esc(item.book)}">${esc(item.title || item.key)}<small> ${esc(item.book)}</small></span>
         <button type="button" class="pi-btn is-sm" data-act="imp-restore" data-i="${index}">恢复</button></div>`).join('');
-    return `<div class="pi-card"><h3>世界书转入<span class="pi-spacer"></span><button type="button" class="pi-btn is-sm" data-act="imp-open">转入人设</button></h3>
-        ${rows || '<p class="pi-hint">还没有从世界书转入过条目。</p>'}${rows ? '<p class="pi-hint">转入时关闭了原条目，点恢复可重新开启。</p>' : ''}</div>`;
+    if (!rows) return '';
+    return `<div class="pi-card"><h3>世界书转入</h3>
+        ${rows}<p class="pi-hint">转入时关闭了原条目，点恢复可重新开启。</p></div>`;
 }
 
 export function render(view) {
@@ -155,11 +150,10 @@ export function render(view) {
         const head = `<button type="button" class="pi-group-hd" data-act="pg-fold" data-group="${esc(key)}">${shut ? ICONS.caret : ICONS.caretDown}${esc(group.name || '未分组')}<small>${group.lines.length}</small></button>`;
         return `<div class="pi-group${shut ? ' is-collapsed' : ''}">${head}${shut ? '' : group.lines.map(line => lineRow(view, line, s.open === line.id, units)).join('')}</div>`;
     }).join('');
-    return `<div class="pi-card"><h3>人设<span class="pi-meta">${all.lines.length} 条线</span><span class="pi-spacer"></span>
-            <button type="button" class="pi-btn is-sm is-primary" data-act="pl-add">${ICONS.plus}新建人设线</button></h3>
+    return `<div class="pi-card"><h3>人设<span class="pi-meta">${all.lines.length}条线</span><span class="pi-spacer"></span>
+            <button type="button" class="pi-btn is-sm is-primary" data-act="pl-add">${ICONS.plus}新建人设线</button><button type="button" class="pi-icon-btn" data-act="persona-menu" title="导出、导入与世界书转入">${ICONS.more}</button></h3>
         ${groups || '<p class="pi-hint">还没有人设线。新建一条，或从世界书转入。</p>'}</div>
-        ${importedCard(all)}
-        ${fileCard(all)}`;
+        ${importedCard(all)}`;
 }
 
 const LINE_PATCH = {
@@ -245,10 +239,21 @@ export const actions = {
         s.collapsed = [...set];
         view.renderBody();
     },
+    async 'persona-menu'(view) {
+        const pick = await menuDialog({
+            title: '人设',
+            items: [
+                { label: '导出人设', value: 'pf-export', disabled: !personas(view).lines.length },
+                { label: '导入人设', value: 'pf-import' },
+                { label: '从世界书转入人设', value: 'imp-open' },
+            ],
+        });
+        pick && (await actions[pick](view));
+    },
     'pf-export'(view) {
         const project = view.project();
         downloadBlob(`人设-${project.name}-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(buildPersonaFile(personas(view), { project: project.name, version: view.version }), null, 2));
-        toast('success', `已导出 ${personas(view).lines.length} 条人设线。`);
+        toast('success', `已导出${personas(view).lines.length}条人设线。`);
     },
     async 'pf-import'(view) {
         const [file] = await pickFiles({ accept: '.json,application/json' });
@@ -257,14 +262,14 @@ export const actions = {
         const same = parsed.lines.filter(line => personas(view).lines.some(item => item.group === line.group && item.name === line.name)).length;
         let mode = 'both';
         if (same) {
-            mode = await choiceDialog({ title: `导入 ${parsed.lines.length} 条人设线`, body: `其中 ${same} 条与现有人设线同组同名，怎么处理？`, choices: [
+            mode = await choiceDialog({ title: `导入${parsed.lines.length}条人设线`, body: `其中${same}条与现有人设线同组同名，怎么处理？`, choices: [
                 { label: '都保留（新的加「（导入）」）', value: 'both', primary: true }, { label: '替换同名', value: 'replace' }, { label: '跳过同名', value: 'skip' }, { label: '取消', value: null }] });
             if (!mode) return;
-        } else if (!(await confirmDialog({ title: '导入人设', body: `将加入 ${parsed.lines.length} 条人设线。跟随大纲的阶段绑定不会带入，需要重新选。`, okLabel: '导入' }))) return;
+        } else if (!(await confirmDialog({ title: '导入人设', body: `将加入${parsed.lines.length}条人设线。跟随大纲的阶段绑定不会带入，需要重新选。`, okLabel: '导入' }))) return;
         const merged = mergePersonaLines(personas(view).lines, parsed.lines, mode);
         patchPersonas(view, all => ({ ...all, lines: merged.lines }));
         view.renderBody();
-        toast('success', `导入完成：新增 ${merged.added}，替换 ${merged.replaced}，跳过 ${merged.skipped}。`);
+        toast('success', `导入完成：新增${merged.added}，替换${merged.replaced}，跳过${merged.skipped}。`);
     },
     'pl-add'(view) {
         const line = newLine('新人设线', '');

@@ -71,7 +71,7 @@ test('the ? button plays the current page; steps whose button is not on screen a
   // outline mode: the project is active, so 启用项目 is skipped; clue-only buttons are skipped
   assert.ok(!seen.includes('启用项目'), seen.join());
   assert.ok(seen.includes('推进方式'));
-  assert.ok(!seen.includes('生成线索模板'), 'clue-only step skipped in outline mode');
+  assert.ok(!seen.includes('创建模板'), 'clue-only step skipped in outline mode');
   // Esc closes
   doc.querySelector('[data-act="tour"]').click(); await tick();
   doc.dispatchEvent(new doc.defaultView.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));

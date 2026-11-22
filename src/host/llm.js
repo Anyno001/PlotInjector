@@ -12,7 +12,7 @@ function apiBase(endpoint) {
     } catch {
         throw new Error('接口地址无效');
     }
-    if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('接口地址需以 http:// 或 https:// 开头');
+    if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('接口地址需以http:// 或https:// 开头');
     const root = base.replace(/\/(?:chat\/completions|models)$/i, '');
     return /\/v\d+$/i.test(root) ? root : `${root}/v1`;
 }
@@ -56,7 +56,7 @@ async function postBackend(route, body, llm, signal) {
         const detail = safeDetail((data && data.error && (data.error.message || data.error)) || (data && data.message) || text, llm.apiKey);
         throw new Error(`接口请求失败${res.ok ? '' : `（HTTP ${res.status}）`}${detail ? `：${detail}` : ''}`);
     }
-    if (!data) throw new Error(`接口返回的不是 JSON${text ? `：${safeDetail(text, llm.apiKey)}` : ''}`);
+    if (!data) throw new Error(`接口返回的不是JSON${text ? `：${safeDetail(text, llm.apiKey)}` : ''}`);
     return data;
 }
 
@@ -81,27 +81,101 @@ async function viaTavern(messages) {
     }
 }
 
-async function viaCustom(messages, llm, signal) {
+async function viaCustom(messages, llm, signal, onText = null) {
     if (!String(llm.model || '').trim()) throw new Error('请先选择模型');
     const body = { ...connection(llm), model: llm.model, stream: false, messages };
     const temperature = Number(llm.temperature);
     if (llm.temperature !== '' && Number.isFinite(temperature)) body.temperature = temperature;
+    if (onText) return viaCustomStream(body, llm, signal, onText);
     const data = await postBackend('generate', body, llm, signal);
     return String((data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '');
 }
 
+// 流式（用户 2026-11-22：导入长文时看不出进度）：经酒馆后端转发的 SSE，每收到一块就回调已生成的全文。
+// 后端或接口不支持流式、直接回了 JSON 的，按非流式读。
+async function viaCustomStream(body, llm, signal, onText) {
+    const res = await hostWindow().fetch('/api/backends/chat-completions/generate', {
+        method: 'POST',
+        cache: 'no-cache',
+        signal,
+        headers: { ...requestHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...body, stream: true }),
+    });
+    const type = String((res.headers && res.headers.get && res.headers.get('content-type')) || '');
+    if (!res.ok || !res.body || !/event-stream/i.test(type)) {
+        const text = await res.text();
+        let data = null;
+        try {
+            data = JSON.parse(text);
+        } catch {
+            /* 下面统一报错 */
+        }
+        if (!res.ok || !data || data.error) {
+            const detail = safeDetail((data && data.error && (data.error.message || data.error)) || (data && data.message) || text, llm.apiKey);
+            throw new Error(`接口请求失败${res.ok ? '' : `（HTTP ${res.status}）`}${detail ? `：${detail}` : ''}`);
+        }
+        return String((data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '');
+    }
+    const reader = res.body.getReader(),
+        decoder = new TextDecoder();
+    let buf = '',
+        out = '';
+    const take = (line) => {
+        const m = /^data:\s?(.*)$/.exec(line.trim());
+        if (!m || m[1] === '[DONE]') return;
+        let data;
+        try {
+            data = JSON.parse(m[1]);
+        } catch {
+            return;
+        }
+        if (data && data.error) throw new Error(`接口请求失败：${safeDetail(data.error.message || data.error, llm.apiKey)}`);
+        const delta = data && data.choices && data.choices[0] && (data.choices[0].delta || data.choices[0].message);
+        const piece = delta && typeof delta.content === 'string' ? delta.content : '';
+        // 思考模型先流 reasoning_content、content 为空：也回调一次，让超时从这里重新计时
+        ((out += piece), onText(out));
+    };
+    for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const rows = buf.split('\n');
+        buf = rows.pop();
+        rows.forEach(take);
+    }
+    (buf += decoder.decode()) && take(buf);
+    return out;
+}
+
 // signal 中止时立即以 AbortError 结束。走酒馆当前 API 时底层请求取消不了，迟到的结果直接丢弃。
-export async function requestLlm(messages, llm, { timeoutMs = 180000, signal } = {}) {
+// onText：只有独立接口会流式回调已生成的文字；这时超时按「多久没收到新内容」算，长回复不会因为总时长被掐断。
+export async function requestLlm(messages, llm, { timeoutMs = 180000, signal, onText } = {}) {
     const view = hostWindow();
     const controller = new view.AbortController();
     let timer;
     let onAbort = null;
-    const timeout = new Promise((_, reject) => {
+    let fail = null;
+    const arm = () => {
+        view.clearTimeout(timer);
         timer = view.setTimeout(() => {
             controller.abort();
-            reject(new Error('请求超时'));
+            fail && fail(new Error('请求超时'));
         }, timeoutMs);
+    };
+    const timeout = new Promise((_, reject) => {
+        fail = reject;
+        arm();
     });
+    const live = onText
+        ? (text) => {
+              arm();
+              try {
+                  onText(text);
+              } catch {
+                  /* 进度显示出错不影响请求 */
+              }
+          }
+        : null;
     const stopped = new Promise((_, reject) => {
         if (!signal) return;
         onAbort = () => {
@@ -114,7 +188,7 @@ export async function requestLlm(messages, llm, { timeoutMs = 180000, signal } =
         else signal.addEventListener('abort', onAbort, { once: true });
     });
     try {
-        const job = llm.source === 'custom' ? viaCustom(messages, llm, controller.signal) : viaTavern(messages);
+        const job = llm.source === 'custom' ? viaCustom(messages, llm, controller.signal, live) : viaTavern(messages);
         job.catch(() => {});
         const text = stripThinking(await Promise.race([job, timeout, stopped]));
         if (!text) throw new Error('模型没有返回内容');

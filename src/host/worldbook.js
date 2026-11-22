@@ -90,7 +90,7 @@ export function bookEntries(data) {
     return Object.entries(data.entries).map(([key, entry]) => ({
         uid: String(entry.uid ?? key),
         key,
-        title: String(entry.comment || '').trim() || [].concat(entry.key || []).slice(0, 3).join('、') || `条目 ${entry.uid ?? key}`,
+        title: String(entry.comment || '').trim() || [].concat(entry.key || []).slice(0, 3).join('、') || `条目${entry.uid ?? key}`,
         comment: String(entry.comment || ''),
         content: String(entry.content || ''),
         disabled: Boolean(entry.disable),

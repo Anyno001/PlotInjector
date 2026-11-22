@@ -119,7 +119,7 @@ export function textToPool(text) {
 // 真随机 [0,1)。取 32 位整数除以 2^32，不用 Math.random。
 export function randomFloat() {
     const g = globalThis.crypto;
-    if (!g || typeof g.getRandomValues !== 'function') throw new Error('当前环境没有 crypto 真随机');
+    if (!g || typeof g.getRandomValues !== 'function') throw new Error('当前环境没有crypto真随机');
     const buf = new Uint32Array(1);
     g.getRandomValues(buf);
     return buf[0] / 4294967296;

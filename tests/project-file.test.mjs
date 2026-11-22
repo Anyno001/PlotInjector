@@ -65,7 +65,7 @@ test('parseProjectFile: new project id, inner ids kept, labels still match their
   assert.deepEqual([...project.outline.history], []);
   assert.equal(C.labelsToPrepare(project.outline.volumes, project.clue.labels).length, 0, 'stored labels still valid: nothing to regenerate');
   assert.deepEqual({ ...summary, exportedAt: '' }, { name: '街区', clue: true, lines: 1, labels: 1, personas: 1, setting: true, app: '', exportedAt: '', hasPersonas: true, hasSetting: true });
-  assert.throws(() => PF.parseProjectFile('not json'), /不是有效的 JSON/);
+  assert.throws(() => PF.parseProjectFile('not json'), /不是有效的JSON/);
   assert.throws(() => PF.parseProjectFile('{"kind":"plot-injector-personas","lines":[]}'), /不是剧情注入器导出的项目文件/);
   assert.throws(() => PF.parseProjectFile(JSON.stringify({ ...PF.buildProjectFile(p), version: 2 })), /更新的插件版本/);
   assert.throws(() => PF.parseProjectFile(JSON.stringify({ kind: 'plot-injector-project', version: 1, project: { name: 'x' } })), /没有大纲/);
@@ -125,8 +125,8 @@ test('data page: export outline and full project; the export dialog offers perso
   assert.match(await ctx.downloads.at(-1).blob.text(), /剧情_M1_案子/);
   await ctx.click('[data-act="export-project"]');
   const dlg = ctx.$('.pi-dialog');
-  assert.match(dlg.textContent, /1 条剧情线/);
-  assert.match(dlg.textContent, /1 条线索标签/);
+  assert.match(dlg.textContent, /1条剧情线/);
+  assert.match(dlg.textContent, /1条线索标签/);
   assert.match(dlg.textContent, /保密名单/);
   assert.ok(dlg.querySelector('[data-f=personas]').checked && dlg.querySelector('[data-f=setting]').checked, 'personas and setting checked by default');
   dlg.querySelector('[data-f=setting]').checked = false;
@@ -156,8 +156,8 @@ test('new project → 从文件导入: confirm shows what is inside and the rena
   assert.equal(dlg.querySelector('.pi-pf-imp-name').textContent, '街区（导入）', 'same name → 「（导入）」');
   assert.equal(dlg.querySelector('.pi-pf-imp-ttl').textContent, '导入项目');
   assert.ok(!dlg.querySelector('h4'), 'no separate dialog title (layout A)');
-  assert.deepEqual([...dlg.querySelectorAll('.pi-badge')].map((x) => x.textContent), ['线索推进', '1 条剧情线', '1 条标签', '1 条人设', '设定']);
-  assert.match(dlg.textContent, /当前聊天缺少关键事实表、线索控制表。游玩前在执行页点「生成线索模板」。/, 'bound tables missing in this chat are named');
+  assert.deepEqual([...dlg.querySelectorAll('.pi-badge')].map((x) => x.textContent), ['线索推进', '1条剧情线', '1条标签', '1条人设', '设定']);
+  assert.match(dlg.textContent, /当前聊天缺少关键事实表、线索控制表。游玩前在执行页点「创建模板」。/, 'bound tables missing in this chat are named');
   assert.doesNotMatch(dlg.textContent, /导出自|已有同名项目/, 'kept short (user 2026-11-17)');
   await ctx.dlgBtn('导入');
   const metas = ctx.inst.data.index().projects;

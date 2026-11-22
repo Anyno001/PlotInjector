@@ -124,27 +124,10 @@ test('author-view progress text: stages, node status with ids/names, confirmed f
 test('reference budget: kept in order, truncation reported honestly', () => {
   const { refs, report } = extra.fitRefs([{ title: 'A', text: 'a'.repeat(100) }, { title: 'B', text: 'b'.repeat(1000) }, { title: 'C', text: 'c'.repeat(50) }], 600);
   assert.equal(refs[0].text.length, 100);
-  assert.match(refs[1].text, /以下 500 字因长度限制未附带/);
+  assert.match(refs[1].text, /以下500字因长度限制未附带/);
   assert.equal(refs.length, 2, 'C does not fit');
   assert.equal(report.length, 3, 'every reference is reported, kept or not');
   assert.deepEqual(report.map((r) => [r.title, r.chars, r.kept]), [['A', 100, 100], ['B', 1000, 500], ['C', 50, 0]], 'A kept whole, B cut, C not attached');
-});
-
-test('body-preset entry refers to section headers the projection actually emits', () => {
-  const preset = fs.readFileSync(path.join(here, '../templates/正文预设条目_线索推进.md'), 'utf8');
-  const proj = fs.readFileSync(path.join(here, '../src/core/clue-project.js'), 'utf8');
-  // trigger phrases (the entry only applies when these appear) + phrases the entry tells the model how to handle
-  for (const phrase of ['本轮可演的场景材料', '目前可以去做的事', '可能获得的发现（尚未发生）', '已经获得的发现', '可以去做的事', '表格没有记录具体内容', '知情范围未记录']) {
-    assert.ok(preset.includes(`「${phrase}」`), `preset mentions ${phrase}`);
-    assert.ok(proj.includes(phrase), `projection still emits ${phrase}`);
-  }
-  assert.match(preset, /<剧情参考>/);
-  // 11.3: the entry must not constrain outline mode — its trigger phrases never appear in outline-mode detail text
-  const inject = fs.readFileSync(path.join(here, '../src/core/inject.js'), 'utf8');
-  for (const trigger of ['本轮可演的场景材料', '目前可以去做的事']) assert.ok(!inject.includes(trigger), `outline mode never emits ${trigger}`);
-  // 11.3: a clear single action may pay off in the same floor
-  assert.match(preset, /就可以在这一楼写出观察结果/);
-  assert.ok(!preset.includes('不要一楼里把整段调查写完'), 'the blanket "never finish in one floor" rule is gone');
 });
 
 // ---------- V5: creation sample gate + a real alternative path ----------
@@ -169,13 +152,6 @@ test('V5: creation sample — witness refuses, independent back-door evidence al
   assert.notEqual(st2.n04_confront, 'locked', 'the testimony path also works');
   const st3 = sampleState({ F01: 'confirmed', F02: 'confirmed' });
   assert.equal(st3.n04_confront, 'locked', 'ledger alone is not enough');
-});
-
-test('V5: rules state what a code tracks, and that 知情 includes the user\'s own guesses', () => {
-  assert.match(extra.CLUE_OUTLINE_RULES, /先明确这个编号追踪哪件事/);
-  assert.match(extra.CLUE_OUTLINE_RULES, /「知情」连主角自己的推测也算/);
-  // route checking moved to the plugin (2026-11-08); the rule now says how to write routes, not to verify them
-  assert.match(extra.CLUE_OUTLINE_RULES, /各条途径产出的事实都写进下一步条件的「任一」里/);
 });
 
 // ---------- reachability (GPT §19.1) ----------

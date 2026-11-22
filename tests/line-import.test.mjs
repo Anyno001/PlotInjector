@@ -55,7 +55,7 @@ test('line identity: merged by id across parts; parts only where the line has re
   ]);
   assert.deepEqual(r.lines.map((l) => [l.编号, l.parts]), [['S01', [0]], ['S02', [1]], ['S09', [1]], ['S03', [2]]]);
   assert.deepEqual(r.lines[0].主要人物, ['叶莲娜'], 'later parts fill empty fields');
-  assert.match(r.notes.join(), /第 2 条支线被编了两个编号（S02、S09）/);
+  assert.match(r.notes.join(), /第2条支线被编了两个编号（S02、S09）/);
   // a line marked "not here" everywhere falls back to every part it was listed in
   const r2 = C.mergeLineIdentity([{ 支线: [{ 编号: 'S05', 本段有经过: false }] }, { 支线: [{ 编号: 'S05', 本段有经过: false }] }]);
   assert.deepEqual(r2.lines[0].parts, [0, 1]);
@@ -91,7 +91,7 @@ test('merge by line: the same line from two parts is merged inside itself; diffe
   assert.equal(out[0].line.入口提示, '由头', 'empty fields filled');
   assert.ok(!out.conflicts.some((c) => c.field === '简介'), 'a rewritten head field is not listed one by one');
   assert.deepEqual(out.conflicts.map((c) => [c.line, c.rewrite]), [['S01', 1]], 'one summary note for the line');
-  assert.match(C.importConflictText(out.conflicts[0]), /线 S01 跨了几段，后面的段把前面已经写过的内容又写了一遍（1 处），以前一段为准/);
+  assert.match(C.importConflictText(out.conflicts[0]), /线S01跨了几段，后面的段把前面已经写过的内容又写了一遍（1处），以前一段为准/);
   // same stage name in two different lines is NOT merged
   assert.equal(out[1].stages.length, 1);
 });
@@ -115,7 +115,7 @@ test('droppedLineRefs: dropping a line that another kept line waits on is report
   const kept = [vol('S10', { 开启条件: { 线: 'S08 == 完成' } }), vol('S11')];
   const r = C.droppedLineRefs(kept, ['S08']);
   assert.equal(r.length, 1);
-  assert.match(r[0], /S10.*要等 S08，但 S08 不要了/);
+  assert.match(r[0], /S10.*要等S08，但S08不要了/);
 });
 
 // ---------- UI：批量导入 → 审阅页 → 采用 ----------
@@ -171,7 +171,7 @@ test('UI: bulk side import → one page per line → comment saved → 本次不
   await click('[data-act="import-start"]');
   await rvWait(doc);
   assert.match(doc.querySelector('.pi-rv h3').textContent, /导入的支线/);
-  assert.match(doc.querySelector('.pi-rv-state').textContent, /导入的支线 4 条，4 条待保存/);
+  assert.match(doc.querySelector('.pi-rv-state').textContent, /导入的支线4条，4条待保存/);
   assert.match(doc.querySelector('.pi-rv-lname').textContent, /S01[\s\S]*1 \/ 4/);
   // S02：线页写意见、直接改入口
   await nextLine(doc);
@@ -184,7 +184,7 @@ test('UI: bulk side import → one page per line → comment saved → 本次不
   await dlg(doc, 'drop');
   assert.match(doc.querySelector('.pi-rv').textContent, /本次不导入/);
   await nextLine(doc);
-  assert.match(doc.querySelector('.pi-rv').textContent, /S04.*要等 S03，但 S03 不要了/);
+  assert.match(doc.querySelector('.pi-rv').textContent, /S04.*要等S03，但S03不要了/);
   // 发送意见：只发 S02 的线页
   await click('[data-act="rv-preview"]');
   await dlg(doc, '发送');
@@ -228,7 +228,7 @@ test('UI: bulk side import — a call that leaves out a line gets one retry for 
   await click('[data-act="import-start"]');
   await rvWait(doc);
   assert.ok(asked.includes('S02,S03'), `the missing two were asked for again: ${asked.join(' | ')}`);
-  assert.match(doc.querySelector('.pi-rv-state').textContent, /4 条/);
+  assert.match(doc.querySelector('.pi-rv-state').textContent, /4条/);
   await inst.destroy();
 });
 
@@ -317,20 +317,20 @@ test('inventedOpenIssue: a 线 condition needs the document to mention that line
   const v = (id, c, win) => ({ line: { 编号: id, 开启条件: c, ...win ? { 开启时段: win } : {} } });
   const mains = [{ id: 'M1', name: '遗留物' }];
   const t = (r) => r && r.text;
-  assert.match(t(C.inventedOpenIssue(v('S04', { 线: 'S03 == 完成' }), ident, mains)), /要等 S03，但文档没提到它/);
+  assert.match(t(C.inventedOpenIssue(v('S04', { 线: 'S03 == 完成' }), ident, mains)), /要等S03，但文档没提到它/);
   assert.equal(C.inventedOpenIssue(v('S10', { 线: 'S07 == 完成' }), ident, mains), null);
-  assert.match(t(C.inventedOpenIssue(v('S12', { 线: 'S08 == 完成' }), ident, mains)), /要等 S08，但文档没提到它/);
+  assert.match(t(C.inventedOpenIssue(v('S12', { 线: 'S08 == 完成' }), ident, mains)), /要等S08，但文档没提到它/);
   assert.equal(C.inventedOpenIssue(v('S13', { 线: 'S08 == 完成' }), ident, mains), null);
   assert.match(t(C.inventedOpenIssue(v('S04', { 事实: 'F_x' }), ident, mains)), /是独立的.*多了/);
   assert.equal(C.inventedOpenIssue(v('S04', {}), ident, mains), null);
   // GPT 代码审阅 R11 的三个漏报
   const m1 = C.inventedOpenIssue(v('S04', { 线: 'M1 == 完成' }), ident, mains);
-  assert.match(t(m1), /要等 M1，但文档没提到它/, 'a main line not in the side identity table is not backed by default');
+  assert.match(t(m1), /要等M1，但文档没提到它/, 'a main line not in the side identity table is not backed by default');
   assert.equal(m1.canDrop, true);
   const w = C.inventedOpenIssue(v('S04', undefined, { 主线: 'M1', 从: '调查' }), ident, mains);
   assert.match(t(w), /加了开启时段（M1）/, 'an independent line must not get a window either');
   const mix = C.inventedOpenIssue(v('S13', { 全部: [{ 线: 'S08 == 完成' }, { 事实: 'F_fake' }] }), ident, mains);
-  assert.match(t(mix), /除了等线，还多了 事实: F_fake/, 'one backed line ref does not vouch for the whole compound condition');
+  assert.match(t(mix), /除了等线，还多了事实: F_fake/, 'one backed line ref does not vouch for the whole compound condition');
   assert.equal(mix.canDrop, false, 'S13 really waits for S08: no one-click drop that would delete that too');
   // the document did not say anything: not "independent", only a soft hint, no drop button
   const silent = C.inventedOpenIssue(v('S07', { 事实: 'F_y' }), ident, mains);
@@ -368,7 +368,7 @@ test('UI: bulk side import — a stage copied into another line is reported with
   await rvWait(doc);
   await gotoLine(doc, 'S02');
   const text = doc.querySelector('.pi-rv').textContent;
-  assert.match(text, /同时出现在 S02「阶段1 经过」和 S03「阶段1 经过」/);
+  assert.match(text, /同时出现在S02「阶段1 经过」和S03「阶段1 经过」/);
   assert.match(text, /s02_a/);
   assert.ok(doc.querySelector('[data-act="rv-redraft"][data-line="S02"]') && doc.querySelector('[data-act="rv-redraft"][data-line="S03"]'), 'both sides offered');
   const job0 = lineJob(inst, pid);
@@ -407,7 +407,7 @@ test('migration: an old multi-line job keeps reviewed edits, per-line comments, 
   assert.equal(JSON.stringify(r.dropped), JSON.stringify([volOf({ review: r }, 'S03')]));
   assert.match(JSON.stringify(r.prev), /重新整理前/);
   assert.match(doc.querySelector('.pi-rv').textContent, /整理时的提示（1）/, 'merge conflicts shown');
-  assert.match(doc.querySelector('[data-act="rv-preview"]').textContent, /发送意见（1 页）/);
+  assert.match(doc.querySelector('[data-act="rv-preview"]').textContent, /发送意见（1页）/);
   await gotoLine(doc, 'S03');
   assert.match(doc.querySelector('.pi-rv').textContent, /本次不导入/);
   assert.match(doc.querySelector('.pi-rv-lname').textContent, /不导入/);

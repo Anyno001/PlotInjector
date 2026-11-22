@@ -119,5 +119,5 @@ export function judgeTrigger(trigger, text, config) {
 
 export function describeRead(read, config) {
     if (!read) return '最新一楼没有状态块';
-    return read.state ? `上次读到：第 ${read.floor} 楼 ${resolveHub(config).hubName}：${read.state}` : '最新一楼没有状态块';
+    return read.state ? `上次读到：第${read.floor}楼${resolveHub(config).hubName}：${read.state}` : '最新一楼没有状态块';
 }

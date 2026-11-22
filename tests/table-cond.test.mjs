@@ -44,7 +44,7 @@ test('pickEntry: never looks inside someone else\'s value; exact names only; amb
   };
   unk('玛丽:听说彼得:很怪', '彼得', /还没有「彼得」/);
   unk('彼得·帕克:朋友;玛丽:同学', '彼得', /还没有/);
-  unk('彼得:朋友;彼得:敌人', '彼得', /出现了 2 次/);
+  unk('彼得:朋友;彼得:敌人', '彼得', /出现了2次/);
   unk('和爱丽丝关系不好', '爱丽丝', /不是按「名字:内容」分条写的/);
   // 括号里的分号不切
   assert.equal(C.pickEntry('事情（瞒着谁；谁知道）；另一件（a；b）', '事情').value, '瞒着谁；谁知道');

@@ -23,7 +23,7 @@ async function loadCandidates() {
 const idOf = entry => `${entry.book}\u0000${entry.key}`;
 
 function listHtml(books, picked) {
-    if (!books.length) return '<p class="pi-hint">当前启用的世界书里没有含 if 条件的手写条目。</p>';
+    if (!books.length) return '<p class="pi-hint">当前启用的世界书里没有含if条件的手写条目。</p>';
     return books.map(book => {
         const all = book.entries.every(entry => picked.has(idOf(entry)));
         return `<div class="pi-wb-sec"><div class="pi-wb-sec-hd">${esc(book.name)}<small>${book.entries.length}</small>
@@ -35,7 +35,7 @@ function listHtml(books, picked) {
 
 // 每个变量一个下拉：写死为某值（转入时只留这段文字）或拆成阶段（嵌套在别的阶段里的只能写死）。
 function varChoices(item) {
-    const fix = item.values.map(value => ({ value: `fix:${value}`, label: `写死为 ${value}` }));
+    const fix = item.values.map(value => ({ value: `fix:${value}`, label: `写死为${value}` }));
     const line = item.canLine ? [{ value: 'line', label: '拆成阶段' }] : [];
     return item.kind === 'fixed' ? [...fix, ...line] : [...line, ...fix];
 }
@@ -43,7 +43,7 @@ function varChoices(item) {
 function previewHtml(plan) {
     const issues = plan.issues.map(issue => `<p class="pi-hint is-warn">${esc(issue.title)}：${esc(issue.text)}</p>`).join('');
     const lines = plan.lines.map(line => `<div class="pi-wb-hit"><span class="pi-wb-title">${esc(line.group ? `${line.group}：` : '')}${esc(line.name)}</span>
-        <span class="pi-meta">${line.mode === 'fame' ? '读声望' : line.mode === 'check' ? '条件检测' : '手动'}，${line.stages.length} 阶段</span></div>`).join('');
+        <span class="pi-meta">${line.mode === 'fame' ? '读声望' : line.mode === 'check' ? '条件检测' : '手动'}，${line.stages.length}阶段</span></div>`).join('');
     const vars = plan.vars.filter(item => item.kind !== 'num').map(item => `<div class="pi-wb-hit"><span class="pi-wb-title" title="${esc(item.path)}">${esc(item.name)}</span>
         <select class="pi-sel" data-pi-kind="${esc(item.path)}">${options(varChoices(item), item.kind === 'fixed' ? `fix:${item.pick}` : 'line')}</select></div>`).join('');
     return `${issues}
@@ -72,7 +72,7 @@ export async function openImport(view) {
     const draw = box => {
         const body = box.querySelector('[data-f=body]');
         body.innerHTML = step === 'list' ? listHtml(books, picked) : previewHtml(plan());
-        box.querySelector('[data-f=count]').textContent = step === 'list' ? `已选 ${picked.size} 条` : '预览';
+        box.querySelector('[data-f=count]').textContent = step === 'list' ? `已选${picked.size}条` : '预览';
         for (const btn of box.querySelectorAll('[data-dlg]')) {
             if (btn.textContent === '返回选择' || btn.textContent === '转入') btn.hidden = step === 'list';
             if (btn.textContent === '预览') btn.hidden = step !== 'list';
@@ -122,7 +122,7 @@ async function commit(view, { entries, plan }) {
     for (const entry of ok) byBook.set(entry.book, [...(byBook.get(entry.book) || []), entry.key]);
     for (const [book, keys] of byBook) await setEntriesDisabled(book, keys, true);
     view.runtime.refresh();
-    toast('success', `已转入 ${plan.lines.length} 条人设线，关闭了 ${ok.length} 个原条目。`);
+    toast('success', `已转入${plan.lines.length}条人设线，关闭了${ok.length}个原条目。`);
     return true;
 }
 

@@ -19,7 +19,7 @@ async function getJson(url, ms) {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return await res.json();
     } catch (error) {
-        throw controller.signal.aborted ? new Error(`连接超时（${ms / 1000} 秒）`) : error;
+        throw controller.signal.aborted ? new Error(`连接超时（${ms / 1000}秒）`) : error;
     } finally {
         clearTimeout(timer);
     }

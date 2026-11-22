@@ -129,13 +129,13 @@ export function applyOp(op, cell, wanted) {
 export function effectiveFact(id, snapshot, clueProg) {
     let over = clueProg && clueProg.factOverrides && clueProg.factOverrides[id],
         fact = snapshot && snapshot.facts && snapshot.facts.get(id);
-    if (over && over.status === 'revoked') return { v: TRI.f, confirmed: !1, text: '', why: `${id} 已人工撤销` };
+    if (over && over.status === 'revoked') return { v: TRI.f, confirmed: !1, text: '', why: `${id}已人工撤销` };
     if (over && over.status === 'confirmed')
-        return { v: TRI.t, confirmed: !0, text: (fact && fact.text) || over.text || '', why: `${id} 已人工确认` };
-    if (!fact) return { v: TRI.u, confirmed: !1, text: '', why: `${id} 尚无记录` };
-    if (fact.status === 'confirmed') return { v: TRI.t, confirmed: !0, text: fact.text, why: `${id} 已确认` };
-    if (fact.status === 'pending') return { v: TRI.u, confirmed: !1, text: '', why: `${id} 待确认` };
-    return { v: TRI.f, confirmed: !1, text: '', why: `${id} 未核实（${fact.raw || '空'}）` };
+        return { v: TRI.t, confirmed: !0, text: (fact && fact.text) || over.text || '', why: `${id}已人工确认` };
+    if (!fact) return { v: TRI.u, confirmed: !1, text: '', why: `${id}尚无记录` };
+    if (fact.status === 'confirmed') return { v: TRI.t, confirmed: !0, text: fact.text, why: `${id}已确认` };
+    if (fact.status === 'pending') return { v: TRI.u, confirmed: !1, text: '', why: `${id}待确认` };
+    return { v: TRI.f, confirmed: !1, text: '', why: `${id}未核实（${fact.raw || '空'}）` };
 }
 
 export function evalAtom(atom, env) {
@@ -146,32 +146,32 @@ export function evalAtom(atom, env) {
             let fact = env.facts && env.facts.get(atom.fact),
                 over = env.factOverrides && env.factOverrides[atom.fact];
             return fact && fact.claimed && !(over && over.status === 'revoked')
-                ? { v: TRI.t, why: `${atom.fact} 已在正文出现（${fact.raw || '说法'}）` }
+                ? { v: TRI.t, why: `${atom.fact}已在正文出现（${fact.raw || '说法'}）` }
                 : { v: eff.v, why: eff.why };
         }
         case 'know': {
             let over = env.factOverrides && env.factOverrides[atom.fact];
-            if (over && over.status === 'revoked') return { v: TRI.f, why: `${atom.fact} 已人工撤销` };
+            if (over && over.status === 'revoked') return { v: TRI.f, why: `${atom.fact}已人工撤销` };
             let rows = env.knowledge.filter((row) => row.fact === atom.fact && row.actor === atom.actor);
             return rows.length
                 ? atom.verified
                     ? rows.some((row) => row.verified === !0)
-                        ? { v: TRI.t, why: `${atom.actor} 已核实 ${atom.fact}` }
+                        ? { v: TRI.t, why: `${atom.actor}已核实${atom.fact}` }
                         : rows.some((row) => row.verified === null)
-                          ? { v: TRI.u, why: `无法判断 ${atom.actor} 是否核实 ${atom.fact}（可信度未绑定或未填写）` }
-                          : { v: TRI.f, why: `${atom.actor} 对 ${atom.fact} 仅为${rows[0].credibility || '未核实'}` }
-                    : { v: TRI.t, why: `${atom.actor} 知道 ${atom.fact}${rows[0].way ? `（${rows[0].way}）` : ''}` }
-                : { v: TRI.u, why: `${atom.actor} 没有 ${atom.fact} 的知情记录` };
+                          ? { v: TRI.u, why: `无法判断${atom.actor}是否核实${atom.fact}（可信度未绑定或未填写）` }
+                          : { v: TRI.f, why: `${atom.actor}对${atom.fact}仅为${rows[0].credibility || '未核实'}` }
+                    : { v: TRI.t, why: `${atom.actor}知道${atom.fact}${rows[0].way ? `（${rows[0].way}）` : ''}` }
+                : { v: TRI.u, why: `${atom.actor}没有${atom.fact}的知情记录` };
         }
         case 'line': {
             let st = env.lineState ? env.lineState(atom.line) : void 0;
-            if (st === void 0) return { v: TRI.u, why: `没有编号为 ${atom.line} 的线` };
+            if (st === void 0) return { v: TRI.u, why: `没有编号为${atom.line}的线` };
             if (st === null)
                 return atom.state === '开过' && env.lineStarted && env.lineStarted(atom.line)
-                    ? { v: atom.op === '==' ? TRI.t : TRI.f, why: `线 ${atom.line} 已经开始过` }
-                    : { v: TRI.u, why: `线 ${atom.line} 的状态还算不出来（开启条件未知，或线之间循环引用）` };
+                    ? { v: atom.op === '==' ? TRI.t : TRI.f, why: `线${atom.line}已经开始过` }
+                    : { v: TRI.u, why: `线${atom.line}的状态还算不出来（开启条件未知，或线之间循环引用）` };
             let hit = (LINE_STATE_ALIAS[atom.state] || [atom.state]).includes(st);
-            return { v: (atom.op === '==' ? hit : !hit) ? TRI.t : TRI.f, why: `线 ${atom.line} 现在是「${st}」` };
+            return { v: (atom.op === '==' ? hit : !hit) ? TRI.t : TRI.f, why: `线${atom.line}现在是「${st}」` };
         }
         case 'count': {
             let r = countRows(env.tables, atom.table, atom.column, atom.op, atom.value, applyOp);
@@ -179,23 +179,23 @@ export function evalAtom(atom, env) {
             let test = (n) => (atom.cmp === '至少' ? n >= atom.n : atom.cmp === '至多' ? n <= atom.n : n === atom.n),
                 lo = test(r.count),
                 hi = test(r.count + r.unsure),
-                label = `${atom.table} 里 ${atom.column} ${atom.op} ${atom.value} 的有 ${r.count} 行${r.unsure ? `，另有 ${r.unsure} 行的值无法比较` : ''}`;
+                label = `${atom.table}里${atom.column} ${atom.op} ${atom.value}的有${r.count}行${r.unsure ? `，另有${r.unsure}行的值无法比较` : ''}`;
             return (
                 atom.cmp === '等于' && (lo = hi = atom.n >= r.count && atom.n <= r.count + r.unsure && (!r.unsure || null)),
                 lo === hi && lo !== null
                     ? lo
                         ? { v: TRI.t, why: label }
-                        : { v: TRI.f, why: `${label}（要${atom.cmp} ${atom.n} 行）` }
+                        : { v: TRI.f, why: `${label}（要${atom.cmp} ${atom.n}行）` }
                     : { v: TRI.u, why: label }
             );
         }
         case 'node': {
             let done = env.nodeDone(atom.node);
             return done === void 0
-                ? { v: TRI.u, why: `节点 ${atom.node} 不存在` }
+                ? { v: TRI.u, why: `节点${atom.node}不存在` }
                 : done
-                  ? { v: TRI.t, why: `节点 ${atom.node} 已完成` }
-                  : { v: TRI.f, why: `节点 ${atom.node} 未完成` };
+                  ? { v: TRI.t, why: `节点${atom.node}已完成` }
+                  : { v: TRI.f, why: `节点${atom.node}未完成` };
         }
         case 'cell':
         case 'time': {
@@ -318,12 +318,12 @@ export function tableConsistencyHints(snapshot) {
             snapshot.knowPresent &&
             [...snapshot.knowPresent].some((k) => k.startsWith(`${id}@`)) &&
             hints.push(
-                `${id} 在事实表里已记为「${fact.raw || '已确认'}」，但知情表里还没有任何人知道它；如果正文里有人亲见或听到，检查知情表是否漏填`,
+                `${id}在事实表里已记为「${fact.raw || '已确认'}」，但知情表里还没有任何人知道它；如果正文里有人亲见或听到，检查知情表是否漏填`,
             );
         fact.status === 'unconfirmed' &&
             !fact.claimed &&
             who.length &&
-            hints.push(`知情表记录了 ${who.join('、')} 知道 ${id}，但事实表仍是「${fact.raw}」；检查事实表是否漏填`);
+            hints.push(`知情表记录了${who.join('、')}知道${id}，但事实表仍是「${fact.raw}」；检查事实表是否漏填`);
     }
     return hints;
 }
@@ -370,9 +370,9 @@ export function compileClue(volumes) {
             (nerrs.forEach((e) => errors.push(`${where}·${node.name}：${e}`)),
                 uid
                     ? ids.has(uid)
-                        ? errors.push(`节点 ID「${uid}」重复`)
+                        ? errors.push(`节点ID「${uid}」重复`)
                         : ids.add(uid)
-                    : node.kind === 'main' && errors.push(`${where}·${node.name}：缺少稳定 ID`),
+                    : node.kind === 'main' && errors.push(`${where}·${node.name}：缺少稳定ID`),
                 nodes.push(c));
         }
     }
@@ -452,7 +452,7 @@ export function computeClueState(compiled, snapshot, clueProg, config = DEFAULT_
                   ? (result = { v: TRI.f, reasons: ['人工撤销完成'], manual: !0 })
                   : node.done
                     ? node.uid && visiting.has(node.uid)
-                        ? (cycles.push(node.uid), (result = { v: TRI.u, reasons: [`节点 ${node.uid} 条件循环引用`] }))
+                        ? (cycles.push(node.uid), (result = { v: TRI.u, reasons: [`节点${node.uid}条件循环引用`] }))
                         : (node.uid && visiting.add(node.uid),
                           (result = evalCondition(node.done, env)),
                           node.uid && visiting.delete(node.uid))
@@ -496,28 +496,28 @@ export function computeClueState(compiled, snapshot, clueProg, config = DEFAULT_
         if (w.bad) return { v: TRI.u, reasons: [`开启时段写得不对：${w.bad}`] };
         let main = byLine.get(w.main),
             ms = main ? lineStateOf(main) : null;
-        if (!ms) return { v: TRI.u, reasons: [`主线 ${w.main} 的状态还算不出来`] };
+        if (!ms) return { v: TRI.u, reasons: [`主线${w.main}的状态还算不出来`] };
         if (ms.state === '完成' || ms.state === '放弃')
             return { v: TRI.f, missed: !0, reasons: [`开启时段已过（${w.main} ${ms.state === '完成' ? '已经完成' : '已经放弃'}）`] };
-        if (!ms.started) return { v: TRI.f, reasons: [`要等主线 ${w.main} 开始`] };
+        if (!ms.started) return { v: TRI.f, reasons: [`要等主线${w.main}开始`] };
         let from = w.from ? stageStates.get(w.from) : null,
             to = w.to ? stageStates.get(w.to) : null;
         return from && from.entered.v !== TRI.t
-            ? { v: from.entered.v === TRI.u ? TRI.u : TRI.f, reasons: [`要等 ${w.main} 进入「${w.fromLabel}」`] }
+            ? { v: from.entered.v === TRI.u ? TRI.u : TRI.f, reasons: [`要等${w.main}进入「${w.fromLabel}」`] }
             : to && to.done
-              ? { v: TRI.f, missed: !0, reasons: [`开启时段已过（${w.main} 的「${w.toLabel}」已经结束）`] }
-              : { v: TRI.t, reasons: [`在 ${w.main} 的开启时段内`] };
+              ? { v: TRI.f, missed: !0, reasons: [`开启时段已过（${w.main}的「${w.toLabel}」已经结束）`] }
+              : { v: TRI.t, reasons: [`在${w.main}的开启时段内`] };
     }
     function mainBusy(l) {
         let at = lines.indexOf(l);
         for (let [k, o] of lines.entries()) {
             if (o === l || o.kind !== 'main' || (o.mode !== 'auto' && !lineEvidence(o)) || (!lineEvidence(o) && k > at)) continue;
             let s = lineStateOf(o);
-            if (!s) return `主线 ${o.id} 的状态还算不出来`;
-            // 自动开始：暂停的主线也挡着（GPT 七题审阅 §3：暂停 M1 不会自己开 M2）。
-            // 手动「进入」看的是 mainSlotTaken，暂停的不占位置（GPT 审阅 R6），想先玩别的主线就手动进入。
+            if (!s) return `主线${o.id}的状态还算不出来`;
+            // 自动开始：暂停的主线也挡着（GPT七题审阅 §3：暂停M1不会自己开M2）。
+            // 手动「进入」看的是mainSlotTaken，暂停的不占位置（GPT审阅R6），想先玩别的主线就手动进入。
             if (s.state === '进行中' || s.state === '暂停')
-                return `主线 ${o.id} ${s.state === '暂停' ? '暂停中（想先玩这条，点「进入」）' : '还在进行'}`;
+                return `主线${o.id} ${s.state === '暂停' ? '暂停中（想先玩这条，点「进入」）' : '还在进行'}`;
         }
         return '';
     }
@@ -528,8 +528,8 @@ export function computeClueState(compiled, snapshot, clueProg, config = DEFAULT_
             prev = mains[mains.indexOf(l) - 1];
         if (!prev) return { v: TRI.t, reasons: [] };
         let s = lineStateOf(prev);
-        if (!s) return { v: TRI.u, reasons: [`主线 ${prev.id} 的状态还算不出来`] };
-        return s.state === '完成' || s.state === '放弃' ? { v: TRI.t, reasons: [] } : { v: TRI.f, reasons: [`排在主线 ${prev.id} 后面，要等它结束`] };
+        if (!s) return { v: TRI.u, reasons: [`主线${prev.id}的状态还算不出来`] };
+        return s.state === '完成' || s.state === '放弃' ? { v: TRI.t, reasons: [] } : { v: TRI.f, reasons: [`排在主线${prev.id}后面，要等它结束`] };
     }
     function lineStateOf(l) {
         if (lineMemo.has(l.id)) return lineMemo.get(l.id);
@@ -543,7 +543,7 @@ export function computeClueState(compiled, snapshot, clueProg, config = DEFAULT_
             win = settled || evidence ? { v: TRI.t, reasons: [] } : windowOf(l),
             eligible = cond.v === TRI.t && win.v === TRI.t,
             started = evidence,
-            why = man.started ? man.how || '已开始' : legacy ? `开场事实 ${l.legacyFact} 已出现` : '',
+            why = man.started ? man.how || '已开始' : legacy ? `开场事实${l.legacyFact}已出现` : '',
             waitMain = '';
         let after = !evidence && !man.state && l.kind === 'main' ? prevMainDone(l) : { v: TRI.t, reasons: [] };
         !evidence &&
@@ -580,7 +580,7 @@ export function computeClueState(compiled, snapshot, clueProg, config = DEFAULT_
                 pending: !man.state && !started && (cond.v === TRI.u || win.v === TRI.u),
             };
         if (state === '进行中') {
-            stageChain(l.units, () => ({ v: TRI.t, reasons: [`线 ${l.id} 进行中（${why}）`] }));
+            stageChain(l.units, () => ({ v: TRI.t, reasons: [`线${l.id}进行中（${why}）`] }));
             let last = stageStates.get(l.units[l.units.length - 1].id);
             last && last.done && ((result.state = '完成'), (result.why = '最后一个阶段已结束'));
         }
@@ -776,7 +776,7 @@ export function parseCellExtra(value, errors) {
         if (/包含/.test(atom.op)) return (errors.push(`「包含」不用写档位：${raw}`), { kind: 'bad', raw, error: '档位格式错误' });
         if (!tiers.includes(atom.value))
             return (
-                errors.push(`条件里的「${atom.value}」不在档位 ${tiers.join('/')} 里：${raw}`),
+                errors.push(`条件里的「${atom.value}」不在档位${tiers.join('/')}里：${raw}`),
                 { kind: 'bad', raw, error: '档位格式错误' }
             );
         ((atom.tiers = tiers), (atom.tierOk = String(value.顺序 ?? '').trim() === '已确认'));
@@ -881,8 +881,8 @@ export function resolveLineWindow(raw, lines, errs) {
     if (!isPlainObject(raw)) return (errs.push('开启时段应写成 {主线: M1, 从: 阶段2, 到: 阶段3}'), { bad: '开启时段写法不对' });
     let mainId = String(raw.主线 || '').trim(),
         main = lines.find((l) => l.id === mainId);
-    if (!main) return (errs.push(`开启时段引用了不存在的主线「${mainId}」`), { bad: `找不到主线 ${mainId}` });
-    if (main.kind !== 'main') return (errs.push(`开启时段里的「${mainId}」不是主线`), { bad: `${mainId} 不是主线` });
+    if (!main) return (errs.push(`开启时段引用了不存在的主线「${mainId}」`), { bad: `找不到主线${mainId}` });
+    if (main.kind !== 'main') return (errs.push(`开启时段里的「${mainId}」不是主线`), { bad: `${mainId}不是主线` });
     let find = (ref) => {
             let r = String(ref ?? '').trim();
             if (!r) return { unit: null };
@@ -894,8 +894,8 @@ export function resolveLineWindow(raw, lines, errs) {
                 ? { unit: hits[0] }
                 : {
                       error: hits.length
-                          ? `开启时段里的「${r}」在 ${mainId} 里有好几个同名阶段`
-                          : `开启时段里的阶段「${r}」在 ${mainId} 里找不到`,
+                          ? `开启时段里的「${r}」在${mainId}里有好几个同名阶段`
+                          : `开启时段里的阶段「${r}」在${mainId}里找不到`,
                   };
         },
         from = find(raw.从),

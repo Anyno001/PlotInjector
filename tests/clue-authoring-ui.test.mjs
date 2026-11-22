@@ -67,7 +67,7 @@ test('clue mode: AI volume prompt carries clue rules, checked worldbook ref, clu
   assert.match(user.content, /想让第二卷围绕修车铺展开/);
   assert.equal((user.content.match(/小镇设定/g) || []).length, 1, 'setting not duplicated through refs');
   const body = doc.querySelector('.pi-body').textContent;
-  assert.match(body, /本次附带的材料：讨论记录（\d+ 字）、人物·周老人（\d+ 字）、线索进度（当前聊天）/);
+  assert.match(body, /本次附带的材料：讨论记录（\d+字）、人物·周老人（\d+字）、线索进度（当前聊天）/);
   assert.match(body, /线索结构检查（\d+）/);
   assert.match(body, /没有任何节点产出的事实：F_ghost/);
   await inst.destroy();
@@ -131,7 +131,7 @@ test('worldbook import: entries default to author-only (wrapped, not injected); 
   doc.querySelector('.pi-dialog [data-kind="0"][value="public"]').checked = true;
   doc.querySelector('.pi-dialog .pi-btn.is-primary').click(); await tick();
   // original-entry dialog mentions author-only entries; keep them
-  assert.match(doc.querySelector('.pi-dialog').textContent, /1 条导入为仅作者资料/);
+  assert.match(doc.querySelector('.pi-dialog').textContent, /1条导入为仅作者资料/);
   [...doc.querySelectorAll('.pi-dialog .pi-btn')].find((b) => b.textContent === '保留').click(); await tick();
   const text = inst.data.project(pid).setting.text;
   assert.match(text, /小镇有一条主街。/);
@@ -175,7 +175,7 @@ test('V6 volume: ticking 当前大纲 sends its text (incl. an author note) and 
   assert.ok(!user.content.includes('线索进度（作者视角'), 'progress unticked → not sent');
   assert.ok(!user.content.includes('【最近正文】'), '0 floors → no recent text');
   const body = doc.querySelector('.pi-body').textContent;
-  assert.match(body, /当前大纲（\d+ 字）/);
+  assert.match(body, /当前大纲（\d+字）/);
   assert.ok(!/线索进度（当前聊天）/.test(body), 'list does not claim progress');
   assert.ok(!/最近 \d+ 楼正文/.test(body));
   await inst.destroy();
@@ -196,8 +196,8 @@ test('V6 rewrite: the discussion record listed is actually in the request; 0 flo
   assert.match(user.content, /【讨论摘要】[\s\S]*想让第二卷围绕修车铺展开/, 'discussion actually sent');
   assert.ok(!user.content.includes('【最近正文】'), '0 floors → none');
   const body = doc.querySelector('.pi-body').textContent;
-  assert.match(body, /讨论记录（\d+ 字）/);
-  assert.match(body, /最近正文：讨论区勾选的楼数为 0，没有附带/);
+  assert.match(body, /讨论记录（\d+字）/);
+  assert.match(body, /最近正文：讨论区勾选的楼数为0，没有附带/);
   // with floors ticked, recent text is sent and listed
   await setRefs(inst, id, { floors: 2 });
   doc.querySelector('[data-act="draft-drop"]').click(); await tick();
@@ -206,6 +206,6 @@ test('V6 rewrite: the discussion record listed is actually in the request; 0 flo
   doc.querySelector('.pi-dialog textarea, .pi-dialog input').value = 'x';
   doc.querySelector('.pi-dialog .pi-btn.is-primary').click(); await tick(); await tick();
   assert.match(lastPrompt(host)[1].content, /【最近正文】[\s\S]*主角走进杂货店/);
-  assert.match(doc.querySelector('.pi-body').textContent, /最近 2 楼正文/);
+  assert.match(doc.querySelector('.pi-body').textContent, /最近2楼正文/);
   await inst.destroy();
 });

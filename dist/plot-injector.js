@@ -1,4 +1,4 @@
-// PlotInjector v0.3.4
+// PlotInjector v0.3.5
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -12,7 +12,7 @@
     lib = value || null;
   }
   function getYamlLib() {
-    if (!lib) throw new Error("YAML 解析库未就绪");
+    if (!lib) throw new Error("YAML解析库未就绪");
     return lib;
   }
   function parseYaml(text2) {
@@ -115,12 +115,12 @@
   async function readJsonFile(name) {
     let res = await fetchWithTimeout(`/${filePath(name)}?t=${Date.now()}`, { cache: "no-store" });
     if (res.status === 404) return null;
-    if (!res.ok) throw new Error(`读取 ${name} 失败（HTTP ${res.status}）`);
+    if (!res.ok) throw new Error(`读取${name}失败（HTTP ${res.status}）`);
     let text2 = await res.text();
     try {
       return { value: JSON.parse(text2), bytes: new TextEncoder().encode(text2).length };
     } catch {
-      throw new Error(`${name} 不是有效 JSON`);
+      throw new Error(`${name}不是有效JSON`);
     }
   }
   async function writeJsonFile(name, value) {
@@ -129,7 +129,7 @@
       headers: { ...requestHeaders(), "Content-Type": "application/json" },
       body: JSON.stringify({ name, data: utf8Base64(text2) })
     });
-    if (!res.ok) throw new Error(`写入 ${name} 失败（HTTP ${res.status}）`);
+    if (!res.ok) throw new Error(`写入${name}失败（HTTP ${res.status}）`);
     return new TextEncoder().encode(text2).length;
   }
   async function deleteFile(name) {
@@ -139,7 +139,7 @@
       body: JSON.stringify({ path: filePath(name) })
     });
     if (res.status === 404) return !1;
-    if (!res.ok) throw new Error(`删除 ${name} 失败（HTTP ${res.status}）`);
+    if (!res.ok) throw new Error(`删除${name}失败（HTTP ${res.status}）`);
     return !0;
   }
   async function verifyFiles(names2) {
@@ -362,7 +362,7 @@ ${body}
     let taken = new Set(
       clueNodes(existingVolumes).map((node) => node.uid).filter(Boolean)
     ), own = clueNodes(incoming).map((node) => node.uid).filter(Boolean), dup = own.find((uid, i) => own.indexOf(uid) !== i);
-    if (dup) throw new Error(`导入内容里节点 ID「${dup}」重复，无法确定条件引用指向哪个节点，请先修正`);
+    if (dup) throw new Error(`导入内容里节点ID「${dup}」重复，无法确定条件引用指向哪个节点，请先修正`);
     let map = /* @__PURE__ */ new Map();
     for (let uid of own) taken.has(uid) && map.set(uid, makeId("n"));
     if (!map.size) return [incoming, []];
@@ -574,7 +574,7 @@ ${body}
     try {
       value = parseYaml(text2);
     } catch (error) {
-      let line = yamlErrorLine(error), wrapped = new Error(`YAML 格式错误${line ? `（第 ${line} 行）` : ""}：${String(error.message || error).split(`
+      let line = yamlErrorLine(error), wrapped = new Error(`YAML格式错误${line ? `（第${line}行）` : ""}：${String(error.message || error).split(`
 `)[0]}`);
       throw wrapped.line = line, wrapped;
     }
@@ -791,7 +791,7 @@ ${body}
         if (list.length < 2) continue;
         let places = [...new Set(list.map((unit) => stageLabel(unit.stage.key)))].join("、"), where = places.includes("、") ? places : `${places}的不同节点`, seen = /* @__PURE__ */ new Set();
         for (let unit of list)
-          seen.has(unit.id) || (seen.add(unit.id), issues.push({ kind: "dup-thread", volumeId: unit.volume.id, stageId: unit.id, text: `${what}「${name}」在 ${where} 重名` }));
+          seen.has(unit.id) || (seen.add(unit.id), issues.push({ kind: "dup-thread", volumeId: unit.volume.id, stageId: unit.id, text: `${what}「${name}」在${where}重名` }));
       }
     }
     return issues;
@@ -1006,7 +1006,7 @@ ${body}
   }
   function randomFloat() {
     let g = globalThis.crypto;
-    if (!g || typeof g.getRandomValues != "function") throw new Error("当前环境没有 crypto 真随机");
+    if (!g || typeof g.getRandomValues != "function") throw new Error("当前环境没有crypto真随机");
     let buf = new Uint32Array(1);
     return g.getRandomValues(buf), buf[0] / 4294967296;
   }
@@ -1477,8 +1477,8 @@ ${value.name}`);
   }
   function orderPlan(entries, { start, step, by = "list" }) {
     let begin = Math.round(Number(start)), gap = Math.round(Number(step));
-    if (!Number.isFinite(begin) || begin < 0) throw new Error("起始数字需为不小于 0 的整数");
-    if (!Number.isFinite(gap) || gap < 1) throw new Error("间隔需为不小于 1 的整数");
+    if (!Number.isFinite(begin) || begin < 0) throw new Error("起始数字需为不小于0的整数");
+    if (!Number.isFinite(gap) || gap < 1) throw new Error("间隔需为不小于1的整数");
     return (by === "order" ? entries.map((entry, index) => ({ entry, index })).sort((a, b) => a.entry.order - b.entry.order || a.index - b.index).map((item) => item.entry) : entries).map((entry, index) => ({ key: entry.key, title: entry.title, from: entry.order, to: begin + index * gap }));
   }
   var escapeRegex = (text2) => text2.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -1811,7 +1811,7 @@ ${value.name}`);
     }
     return out;
   }
-  var moveText = (move) => `${itemLabel(move.item)}：${move.item.from} → ${move.item.to}${move.floor || move.reason ? `（${move.floor ? `第 ${move.floor} 楼` : ""}${move.floor && move.reason ? "：" : ""}${move.reason}）` : ""}`;
+  var moveText = (move) => `${itemLabel(move.item)}：${move.item.from} → ${move.item.to}${move.floor || move.reason ? `（${move.floor ? `第${move.floor}楼` : ""}${move.floor && move.reason ? "：" : ""}${move.reason}）` : ""}`;
   function applyMoves(progress, project, moves) {
     let next = progress;
     for (let move of moves) {
@@ -2036,7 +2036,7 @@ ${value.name}`);
   }
   var fromText = (item) => item.carried ? `（来自${splitStageKey(item.unit.stage.key).short}）` : "", indexName = (item) => item.label === item.node.name ? `${item.node.name}${fromText(item)}` : item.label;
   function stepText(hook) {
-    return hook.steps.length ? `第 ${Math.min(hook.step + 1, hook.steps.length)}/${hook.steps.length} 步` : "";
+    return hook.steps.length ? `第${Math.min(hook.step + 1, hook.steps.length)}/${hook.steps.length}步` : "";
   }
   function hookLine(hook) {
     let item = isObj4(hook.node.item) ? hook.node.item : {}, body = (hook.steps.length ? [item.地点, `${stepText(hook)}：${hook.steps[hook.step] || ""}`] : [item.地点, item.事件 || item.内容, item.触发 ? `触发：${item.触发}` : ""]).map(str).filter(Boolean);
@@ -3297,7 +3297,7 @@ ${u.yaml}`].filter(Boolean).join(`
   }
   function findSheet(tables, name) {
     let hits = sheetList(tables).filter((sheet) => sheet.name === name || sheet.key === name);
-    return hits.length === 1 ? { sheet: hits[0] } : hits.length ? { error: `表「${name}」重名 ${hits.length} 张` } : { error: `缺少表「${name}」` };
+    return hits.length === 1 ? { sheet: hits[0] } : hits.length ? { error: `表「${name}」重名${hits.length}张` } : { error: `缺少表「${name}」` };
   }
   function sheetRows(sheet) {
     let head = Array.isArray(sheet.content[0]) ? sheet.content[0] : [], own = sheet.content.slice(1).filter(Array.isArray), seeds = Array.isArray(sheet.seedRows) ? sheet.seedRows.filter(Array.isArray) : [], rows2 = own.length ? own : seeds;
@@ -3491,7 +3491,7 @@ ${u.yaml}`].filter(Boolean).join(`
     if (!k) return { state: "unknown", reason: "没写要取哪一项" };
     if (!list.length) return { state: "unknown", reason: "这一格不是按「名字:内容」分条写的" };
     let hits = list.filter((e) => keys.includes(e.key)), vals = [...new Set(hits.map((e) => e.value))];
-    return hits.length ? vals.length > 1 ? { state: "unknown", reason: `这一格里「${k}」出现了 ${hits.length} 次、写法不同，分不清取哪个` } : vals[0] === "" ? { state: "unknown", reason: `「${k}」这一项是空的` } : { state: "ok", value: vals[0] } : { state: "unknown", reason: `这一格里还没有「${k}」这一项` };
+    return hits.length ? vals.length > 1 ? { state: "unknown", reason: `这一格里「${k}」出现了${hits.length}次、写法不同，分不清取哪个` } : vals[0] === "" ? { state: "unknown", reason: `「${k}」这一项是空的` } : { state: "ok", value: vals[0] } : { state: "unknown", reason: `这一格里还没有「${k}」这一项` };
   }
   var TIER_EDGE = /[\s:：,，。.;；|｜(（\-—~～/／]/;
   function tierIndex(value, tiers) {
@@ -3610,9 +3610,9 @@ ${u.yaml}`].filter(Boolean).join(`
     for (let l of compiled.lines || []) lines2.push(`- 线 ${l.id}（${l.kind === "main" ? "主线" : "支线"}）「${l.name}」`);
     for (let node of compiled.nodes) {
       if (!node.uid) continue;
-      let item = isPlainObject(node.item) ? node.item : {}, gives = discoveryList(item).map((d) => d.fact).filter(Boolean), needs = [...new Set([node.open, node.done].flatMap((c) => [...conditionRefs(c).facts]))];
+      let item = isPlainObject(node.item) ? node.item : {}, gives2 = discoveryList(item).map((d) => d.fact).filter(Boolean), needs = [...new Set([node.open, node.done].flatMap((c) => [...conditionRefs(c).facts]))];
       lines2.push(
-        `- ${node.uid}「${node.name}」${clueText(item.入口) ? ` 入口：${clueText(item.入口)}` : ""}${gives.length ? ` · 产出 ${gives.join("、")}` : ""}${needs.length ? ` · 用到 ${needs.join("、")}` : ""}`
+        `- ${node.uid}「${node.name}」${clueText(item.入口) ? ` 入口：${clueText(item.入口)}` : ""}${gives2.length ? ` · 产出 ${gives2.join("、")}` : ""}${needs.length ? ` · 用到 ${needs.join("、")}` : ""}`
       );
     }
     return lines2.join(`
@@ -3962,7 +3962,7 @@ ${guide ? `${guide}
     );
   }
   function clueReachability(volumes, { knownFacts = [], claimedFacts = [] } = {}) {
-    let compiled = compileClue(volumes || []), have = new Set(knownFacts), claimed = new Set(claimedFacts), external = /* @__PURE__ */ new Set(), cfg = normalizeClue({ mode: "clue", autoFocusSingle: !1 }), gives = new Map(
+    let compiled = compileClue(volumes || []), have = new Set(knownFacts), claimed = new Set(claimedFacts), external = /* @__PURE__ */ new Set(), cfg = normalizeClue({ mode: "clue", autoFocusSingle: !1 }), gives2 = new Map(
       compiled.nodes.map((n) => [
         n,
         discoveryList(isPlainObject(n.item) ? n.item : {}).map((d) => d.fact).filter(Boolean)
@@ -3985,7 +3985,7 @@ ${guide ? `${guide}
     for (let u of compiled.units)
       u.clue && [u.clue.enter, u.clue.end].forEach((c) => conditionRefs(c).facts.forEach((f) => allFacts.add(f)));
     for (let n of compiled.nodes)
-      [n.open, n.early, n.done].forEach((c) => conditionRefs(c).facts.forEach((f) => allFacts.add(f))), gives.get(n).forEach((f) => allFacts.add(f));
+      [n.open, n.early, n.done].forEach((c) => conditionRefs(c).facts.forEach((f) => allFacts.add(f))), gives2.get(n).forEach((f) => allFacts.add(f));
     let state = null, lineProg = { lines: {} };
     for (let round = 0; round < 64; round++) {
       let facts = claimSnapshot(allFacts, have, claimed), knowledge = [...knowActors].flatMap(
@@ -3998,7 +3998,7 @@ ${guide ? `${guide}
       if (Object.keys(lineProg.lines).length !== before0) continue;
       let before = have.size;
       for (let s of state.nodeStates)
-        (s.status === "available" || s.status === "active" || s.status === "done") && gives.get(s.node).forEach((f) => have.add(f));
+        (s.status === "available" || s.status === "active" || s.status === "done") && gives2.get(s.node).forEach((f) => have.add(f));
       if (have.size === before) break;
     }
     let stuckStages = [], stuckNodes = [], depends = !1;
@@ -4038,7 +4038,7 @@ ${guide ? `${guide}
     };
   }
   function clueAlternativeRoutes(volumes, { knownFacts = [], claimedFacts = [] } = {}) {
-    let compiled = compileClue(volumes || []), out = [], cfg = normalizeClue({ mode: "clue", autoFocusSingle: !1 }), units = compiled.units, claimed = new Set(claimedFacts), gives = (n) => discoveryList(isPlainObject(n.item) ? n.item : {}).map((d) => d.fact).filter(Boolean), reach = null, obtainable = () => reach || (reach = new Set(clueReachability(volumes, { knownFacts, claimedFacts }).obtainable)), all = /* @__PURE__ */ new Set([...knownFacts, ...claimed]), knowActors = /* @__PURE__ */ new Map(), knowAtoms = (cond) => {
+    let compiled = compileClue(volumes || []), out = [], cfg = normalizeClue({ mode: "clue", autoFocusSingle: !1 }), units = compiled.units, claimed = new Set(claimedFacts), gives2 = (n) => discoveryList(isPlainObject(n.item) ? n.item : {}).map((d) => d.fact).filter(Boolean), reach = null, obtainable = () => reach || (reach = new Set(clueReachability(volumes, { knownFacts, claimedFacts }).obtainable)), all = /* @__PURE__ */ new Set([...knownFacts, ...claimed]), knowActors = /* @__PURE__ */ new Map(), knowAtoms = (cond) => {
       if (cond) {
         if (cond.kind === "group") return cond.items.forEach(knowAtoms);
         cond.kind === "know" && knowActors.set(cond.fact, (knowActors.get(cond.fact) || /* @__PURE__ */ new Set()).add(cond.actor));
@@ -4047,7 +4047,7 @@ ${guide ? `${guide}
     for (let u of units)
       u.clue && [u.clue.enter, u.clue.end].forEach((c) => (conditionRefs(c).facts.forEach((f) => all.add(f)), knowAtoms(c)));
     for (let n of compiled.nodes)
-      [n.open, n.early, n.done].forEach((c) => (conditionRefs(c).facts.forEach((f) => all.add(f)), knowAtoms(c))), gives(n).forEach((f) => all.add(f));
+      [n.open, n.early, n.done].forEach((c) => (conditionRefs(c).facts.forEach((f) => all.add(f)), knowAtoms(c))), gives2(n).forEach((f) => all.add(f));
     let snapshot = (have) => ({
       facts: claimSnapshot(all, have, claimed),
       knowledge: [...knowActors].flatMap(
@@ -4059,13 +4059,13 @@ ${guide ? `${guide}
     for (let [ui, u] of units.entries()) {
       let own = compiled.nodes.filter((n) => n.unit === u), alts = own.filter((n) => n.kind === "main" && !n.required);
       if (alts.length < 2) continue;
-      let altFacts = new Set(alts.flatMap(gives)), altIds = new Set(alts.map((n) => n.uid).filter(Boolean)), starts = alts.filter((n) => {
+      let altFacts = new Set(alts.flatMap(gives2)), altIds = new Set(alts.map((n) => n.uid).filter(Boolean)), starts = alts.filter((n) => {
         let refs = conditionRefs(n.open);
-        return ![...refs.facts].some((f) => altFacts.has(f) && !gives(n).includes(f)) && ![...refs.nodes].some((id) => altIds.has(id) && id !== n.uid);
+        return ![...refs.facts].some((f) => altFacts.has(f) && !gives2(n).includes(f)) && ![...refs.nodes].some((id) => altIds.has(id) && id !== n.uid);
       });
       if (starts.length < 2) continue;
       let base = new Set(knownFacts), got = obtainable(), required = own.filter((n) => n.required);
-      for (let n of compiled.nodes) units.indexOf(n.unit) < ui && gives(n).forEach((f) => got.has(f) && base.add(f));
+      for (let n of compiled.nodes) units.indexOf(n.unit) < ui && gives2(n).forEach((f) => got.has(f) && base.add(f));
       if (!(units.length && computeClueState(compiled, snapshot(base), emptyClueProgress(), cfg).stageStates.get(u.id).entered.v !== TRI.t))
         for (let start of starts) {
           let allowed = /* @__PURE__ */ new Set([start, ...alts.filter((n) => !starts.includes(n)), ...required]), have = new Set(base), used = [start], state = null;
@@ -4073,7 +4073,7 @@ ${guide ? `${guide}
             state = computeClueState(compiled, snapshot(have), emptyClueProgress(), cfg);
             let before = have.size;
             for (let ns2 of state.nodeStates)
-              allowed.has(ns2.node) && ns2.status !== "locked" && (ns2.node.required || used.includes(ns2.node) || used.push(ns2.node), gives(ns2.node).forEach((f) => have.add(f)));
+              allowed.has(ns2.node) && ns2.status !== "locked" && (ns2.node.required || used.includes(ns2.node) || used.push(ns2.node), gives2(ns2.node).forEach((f) => have.add(f)));
             if (have.size === before) break;
           }
           let s = state.stageStates.get(u.id), next = units[ui + 1] && units[ui + 1].line === u.line ? units[ui + 1] : null, ns = next && state.stageStates.get(next.id), tri = (x) => x && x.v, endV = s.done ? TRI.t : s.entered.v !== TRI.t ? tri(s.entered) : s.requiredLeft.length ? TRI.f : tri(s.end), nextV = next ? tri(ns.entered) : TRI.t, verdict = endV === TRI.t && nextV === TRI.t ? "ok" : endV === TRI.f || endV === TRI.t && nextV === TRI.f ? "blocked" : "unknown", why = verdict === "ok" ? "" : endV !== TRI.t ? `本阶段结束${verdict === "unknown" ? "要看运行时的情况" : "不了"}：${(s.entered.v !== TRI.t ? s.entered.reasons : s.end.reasons).join("；") || s.requiredLeft.map((n) => n.uid).join("、")}` : `下一阶段${verdict === "unknown" ? "能否进入要看运行时的情况" : "进不去"}：${ns.entered.reasons.join("；")}`, need = verdict === "ok" ? null : endV !== TRI.t ? s.entered.v !== TRI.t ? u.clue && u.clue.enter : u.clue && u.clue.end : next && next.clue && next.clue.enter;
@@ -4090,7 +4090,7 @@ ${guide ? `${guide}
             nodeNames: used.map((n) => n.name || n.uid),
             at: verdict === "ok" ? "" : endV !== TRI.t ? s.entered.v !== TRI.t ? "enter" : s.requiredLeft.length ? "required" : "end" : "next",
             nextStageId: next ? next.id : "",
-            gets: [...have].filter((f) => used.some((n) => gives(n).includes(f))),
+            gets: [...have].filter((f) => used.some((n) => gives2(n).includes(f))),
             needs: need ? [...conditionRefs(need).facts].filter((f) => !have.has(f)) : [],
             left: s.requiredLeft.map((n) => n.name || n.uid)
           });
@@ -4259,7 +4259,7 @@ ${guide ? `${guide}
   }
   function effectiveFact(id, snapshot, clueProg) {
     let over = clueProg && clueProg.factOverrides && clueProg.factOverrides[id], fact = snapshot && snapshot.facts && snapshot.facts.get(id);
-    return over && over.status === "revoked" ? { v: TRI.f, confirmed: !1, text: "", why: `${id} 已人工撤销` } : over && over.status === "confirmed" ? { v: TRI.t, confirmed: !0, text: fact && fact.text || over.text || "", why: `${id} 已人工确认` } : fact ? fact.status === "confirmed" ? { v: TRI.t, confirmed: !0, text: fact.text, why: `${id} 已确认` } : fact.status === "pending" ? { v: TRI.u, confirmed: !1, text: "", why: `${id} 待确认` } : { v: TRI.f, confirmed: !1, text: "", why: `${id} 未核实（${fact.raw || "空"}）` } : { v: TRI.u, confirmed: !1, text: "", why: `${id} 尚无记录` };
+    return over && over.status === "revoked" ? { v: TRI.f, confirmed: !1, text: "", why: `${id}已人工撤销` } : over && over.status === "confirmed" ? { v: TRI.t, confirmed: !0, text: fact && fact.text || over.text || "", why: `${id}已人工确认` } : fact ? fact.status === "confirmed" ? { v: TRI.t, confirmed: !0, text: fact.text, why: `${id}已确认` } : fact.status === "pending" ? { v: TRI.u, confirmed: !1, text: "", why: `${id}待确认` } : { v: TRI.f, confirmed: !1, text: "", why: `${id}未核实（${fact.raw || "空"}）` } : { v: TRI.u, confirmed: !1, text: "", why: `${id}尚无记录` };
   }
   function evalAtom(atom, env) {
     switch (atom.kind) {
@@ -4267,31 +4267,31 @@ ${guide ? `${guide}
         let eff = effectiveFact(atom.fact, { facts: env.facts }, { factOverrides: env.factOverrides });
         if (atom.verified || eff.v !== TRI.f) return { v: eff.v, why: eff.why };
         let fact = env.facts && env.facts.get(atom.fact), over = env.factOverrides && env.factOverrides[atom.fact];
-        return fact && fact.claimed && !(over && over.status === "revoked") ? { v: TRI.t, why: `${atom.fact} 已在正文出现（${fact.raw || "说法"}）` } : { v: eff.v, why: eff.why };
+        return fact && fact.claimed && !(over && over.status === "revoked") ? { v: TRI.t, why: `${atom.fact}已在正文出现（${fact.raw || "说法"}）` } : { v: eff.v, why: eff.why };
       }
       case "know": {
         let over = env.factOverrides && env.factOverrides[atom.fact];
-        if (over && over.status === "revoked") return { v: TRI.f, why: `${atom.fact} 已人工撤销` };
+        if (over && over.status === "revoked") return { v: TRI.f, why: `${atom.fact}已人工撤销` };
         let rows2 = env.knowledge.filter((row2) => row2.fact === atom.fact && row2.actor === atom.actor);
-        return rows2.length ? atom.verified ? rows2.some((row2) => row2.verified === !0) ? { v: TRI.t, why: `${atom.actor} 已核实 ${atom.fact}` } : rows2.some((row2) => row2.verified === null) ? { v: TRI.u, why: `无法判断 ${atom.actor} 是否核实 ${atom.fact}（可信度未绑定或未填写）` } : { v: TRI.f, why: `${atom.actor} 对 ${atom.fact} 仅为${rows2[0].credibility || "未核实"}` } : { v: TRI.t, why: `${atom.actor} 知道 ${atom.fact}${rows2[0].way ? `（${rows2[0].way}）` : ""}` } : { v: TRI.u, why: `${atom.actor} 没有 ${atom.fact} 的知情记录` };
+        return rows2.length ? atom.verified ? rows2.some((row2) => row2.verified === !0) ? { v: TRI.t, why: `${atom.actor}已核实${atom.fact}` } : rows2.some((row2) => row2.verified === null) ? { v: TRI.u, why: `无法判断${atom.actor}是否核实${atom.fact}（可信度未绑定或未填写）` } : { v: TRI.f, why: `${atom.actor}对${atom.fact}仅为${rows2[0].credibility || "未核实"}` } : { v: TRI.t, why: `${atom.actor}知道${atom.fact}${rows2[0].way ? `（${rows2[0].way}）` : ""}` } : { v: TRI.u, why: `${atom.actor}没有${atom.fact}的知情记录` };
       }
       case "line": {
         let st9 = env.lineState ? env.lineState(atom.line) : void 0;
-        if (st9 === void 0) return { v: TRI.u, why: `没有编号为 ${atom.line} 的线` };
+        if (st9 === void 0) return { v: TRI.u, why: `没有编号为${atom.line}的线` };
         if (st9 === null)
-          return atom.state === "开过" && env.lineStarted && env.lineStarted(atom.line) ? { v: atom.op === "==" ? TRI.t : TRI.f, why: `线 ${atom.line} 已经开始过` } : { v: TRI.u, why: `线 ${atom.line} 的状态还算不出来（开启条件未知，或线之间循环引用）` };
+          return atom.state === "开过" && env.lineStarted && env.lineStarted(atom.line) ? { v: atom.op === "==" ? TRI.t : TRI.f, why: `线${atom.line}已经开始过` } : { v: TRI.u, why: `线${atom.line}的状态还算不出来（开启条件未知，或线之间循环引用）` };
         let hit = (LINE_STATE_ALIAS[atom.state] || [atom.state]).includes(st9);
-        return { v: (atom.op === "==" ? hit : !hit) ? TRI.t : TRI.f, why: `线 ${atom.line} 现在是「${st9}」` };
+        return { v: (atom.op === "==" ? hit : !hit) ? TRI.t : TRI.f, why: `线${atom.line}现在是「${st9}」` };
       }
       case "count": {
         let r = countRows(env.tables, atom.table, atom.column, atom.op, atom.value, applyOp);
         if (r.state !== "ok") return { v: TRI.u, why: r.reason };
-        let test = (n) => atom.cmp === "至少" ? n >= atom.n : atom.cmp === "至多" ? n <= atom.n : n === atom.n, lo = test(r.count), hi = test(r.count + r.unsure), label = `${atom.table} 里 ${atom.column} ${atom.op} ${atom.value} 的有 ${r.count} 行${r.unsure ? `，另有 ${r.unsure} 行的值无法比较` : ""}`;
-        return atom.cmp === "等于" && (lo = hi = atom.n >= r.count && atom.n <= r.count + r.unsure && (!r.unsure || null)), lo === hi && lo !== null ? lo ? { v: TRI.t, why: label } : { v: TRI.f, why: `${label}（要${atom.cmp} ${atom.n} 行）` } : { v: TRI.u, why: label };
+        let test = (n) => atom.cmp === "至少" ? n >= atom.n : atom.cmp === "至多" ? n <= atom.n : n === atom.n, lo = test(r.count), hi = test(r.count + r.unsure), label = `${atom.table}里${atom.column} ${atom.op} ${atom.value}的有${r.count}行${r.unsure ? `，另有${r.unsure}行的值无法比较` : ""}`;
+        return atom.cmp === "等于" && (lo = hi = atom.n >= r.count && atom.n <= r.count + r.unsure && (!r.unsure || null)), lo === hi && lo !== null ? lo ? { v: TRI.t, why: label } : { v: TRI.f, why: `${label}（要${atom.cmp} ${atom.n}行）` } : { v: TRI.u, why: label };
       }
       case "node": {
         let done = env.nodeDone(atom.node);
-        return done === void 0 ? { v: TRI.u, why: `节点 ${atom.node} 不存在` } : done ? { v: TRI.t, why: `节点 ${atom.node} 已完成` } : { v: TRI.f, why: `节点 ${atom.node} 未完成` };
+        return done === void 0 ? { v: TRI.u, why: `节点${atom.node}不存在` } : done ? { v: TRI.t, why: `节点${atom.node}已完成` } : { v: TRI.f, why: `节点${atom.node}未完成` };
       }
       case "cell":
       case "time": {
@@ -4370,8 +4370,8 @@ ${guide ? `${guide}
     for (let [id, fact] of snapshot.facts || []) {
       let who = holders.get(id) || [];
       (fact.status === "confirmed" || fact.claimed) && !who.length && snapshot.knowPresent && [...snapshot.knowPresent].some((k) => k.startsWith(`${id}@`)) && hints.push(
-        `${id} 在事实表里已记为「${fact.raw || "已确认"}」，但知情表里还没有任何人知道它；如果正文里有人亲见或听到，检查知情表是否漏填`
-      ), fact.status === "unconfirmed" && !fact.claimed && who.length && hints.push(`知情表记录了 ${who.join("、")} 知道 ${id}，但事实表仍是「${fact.raw}」；检查事实表是否漏填`);
+        `${id}在事实表里已记为「${fact.raw || "已确认"}」，但知情表里还没有任何人知道它；如果正文里有人亲见或听到，检查知情表是否漏填`
+      ), fact.status === "unconfirmed" && !fact.claimed && who.length && hints.push(`知情表记录了${who.join("、")}知道${id}，但事实表仍是「${fact.raw}」；检查事实表是否漏填`);
     }
     return hints;
   }
@@ -4398,7 +4398,7 @@ ${guide ? `${guide}
           early: parseCondition(item.提前条件, nerrs),
           done: parseCondition(item.完成条件, nerrs)
         };
-        nerrs.forEach((e) => errors.push(`${where}·${node.name}：${e}`)), uid ? ids.has(uid) ? errors.push(`节点 ID「${uid}」重复`) : ids.add(uid) : node.kind === "main" && errors.push(`${where}·${node.name}：缺少稳定 ID`), nodes.push(c);
+        nerrs.forEach((e) => errors.push(`${where}·${node.name}：${e}`)), uid ? ids.has(uid) ? errors.push(`节点ID「${uid}」重复`) : ids.add(uid) : node.kind === "main" && errors.push(`${where}·${node.name}：缺少稳定ID`), nodes.push(c);
       }
     }
     for (let node of nodes)
@@ -4454,7 +4454,7 @@ ${guide ? `${guide}
     function nodeDone(node) {
       if (node.uid && doneMemo.has(node.uid)) return doneMemo.get(node.uid);
       let over = node.uid && overrides[node.uid] || {}, result;
-      return over.done === "force" ? result = { v: TRI.t, reasons: ["人工标记完成"], manual: !0 } : over.done === "undo" ? result = { v: TRI.f, reasons: ["人工撤销完成"], manual: !0 } : node.done ? node.uid && visiting.has(node.uid) ? (cycles.push(node.uid), result = { v: TRI.u, reasons: [`节点 ${node.uid} 条件循环引用`] }) : (node.uid && visiting.add(node.uid), result = evalCondition(node.done, env), node.uid && visiting.delete(node.uid)) : result = { v: TRI.f, reasons: ["没有完成条件，需人工标记"] }, node.uid && doneMemo.set(node.uid, result), result;
+      return over.done === "force" ? result = { v: TRI.t, reasons: ["人工标记完成"], manual: !0 } : over.done === "undo" ? result = { v: TRI.f, reasons: ["人工撤销完成"], manual: !0 } : node.done ? node.uid && visiting.has(node.uid) ? (cycles.push(node.uid), result = { v: TRI.u, reasons: [`节点${node.uid}条件循环引用`] }) : (node.uid && visiting.add(node.uid), result = evalCondition(node.done, env), node.uid && visiting.delete(node.uid)) : result = { v: TRI.f, reasons: ["没有完成条件，需人工标记"] }, node.uid && doneMemo.set(node.uid, result), result;
     }
     let stageStates = /* @__PURE__ */ new Map();
     function stageChain(list, firstEntered) {
@@ -4475,21 +4475,21 @@ ${guide ? `${guide}
       if (!w) return { v: TRI.t, reasons: [] };
       if (w.bad) return { v: TRI.u, reasons: [`开启时段写得不对：${w.bad}`] };
       let main = byLine.get(w.main), ms = main ? lineStateOf(main) : null;
-      if (!ms) return { v: TRI.u, reasons: [`主线 ${w.main} 的状态还算不出来`] };
+      if (!ms) return { v: TRI.u, reasons: [`主线${w.main}的状态还算不出来`] };
       if (ms.state === "完成" || ms.state === "放弃")
         return { v: TRI.f, missed: !0, reasons: [`开启时段已过（${w.main} ${ms.state === "完成" ? "已经完成" : "已经放弃"}）`] };
-      if (!ms.started) return { v: TRI.f, reasons: [`要等主线 ${w.main} 开始`] };
+      if (!ms.started) return { v: TRI.f, reasons: [`要等主线${w.main}开始`] };
       let from = w.from ? stageStates.get(w.from) : null, to = w.to ? stageStates.get(w.to) : null;
-      return from && from.entered.v !== TRI.t ? { v: from.entered.v === TRI.u ? TRI.u : TRI.f, reasons: [`要等 ${w.main} 进入「${w.fromLabel}」`] } : to && to.done ? { v: TRI.f, missed: !0, reasons: [`开启时段已过（${w.main} 的「${w.toLabel}」已经结束）`] } : { v: TRI.t, reasons: [`在 ${w.main} 的开启时段内`] };
+      return from && from.entered.v !== TRI.t ? { v: from.entered.v === TRI.u ? TRI.u : TRI.f, reasons: [`要等${w.main}进入「${w.fromLabel}」`] } : to && to.done ? { v: TRI.f, missed: !0, reasons: [`开启时段已过（${w.main}的「${w.toLabel}」已经结束）`] } : { v: TRI.t, reasons: [`在${w.main}的开启时段内`] };
     }
     function mainBusy(l) {
       let at = lines2.indexOf(l);
       for (let [k, o] of lines2.entries()) {
         if (o === l || o.kind !== "main" || o.mode !== "auto" && !lineEvidence(o) || !lineEvidence(o) && k > at) continue;
         let s = lineStateOf(o);
-        if (!s) return `主线 ${o.id} 的状态还算不出来`;
+        if (!s) return `主线${o.id}的状态还算不出来`;
         if (s.state === "进行中" || s.state === "暂停")
-          return `主线 ${o.id} ${s.state === "暂停" ? "暂停中（想先玩这条，点「进入」）" : "还在进行"}`;
+          return `主线${o.id} ${s.state === "暂停" ? "暂停中（想先玩这条，点「进入」）" : "还在进行"}`;
       }
       return "";
     }
@@ -4498,13 +4498,13 @@ ${guide ? `${guide}
       let mains = lines2.filter((x) => x.kind === "main"), prev = mains[mains.indexOf(l) - 1];
       if (!prev) return { v: TRI.t, reasons: [] };
       let s = lineStateOf(prev);
-      return s ? s.state === "完成" || s.state === "放弃" ? { v: TRI.t, reasons: [] } : { v: TRI.f, reasons: [`排在主线 ${prev.id} 后面，要等它结束`] } : { v: TRI.u, reasons: [`主线 ${prev.id} 的状态还算不出来`] };
+      return s ? s.state === "完成" || s.state === "放弃" ? { v: TRI.t, reasons: [] } : { v: TRI.f, reasons: [`排在主线${prev.id}后面，要等它结束`] } : { v: TRI.u, reasons: [`主线${prev.id}的状态还算不出来`] };
     }
     function lineStateOf(l) {
       if (lineMemo.has(l.id)) return lineMemo.get(l.id);
       if (lineVisiting.has(l.id)) return cycles.push(`线 ${l.id}`), null;
       lineVisiting.add(l.id);
-      let man = (clueProg.lines || {})[l.id] || {}, legacy = !man.started && legacySeen(l), evidence = !!man.started || legacy, settled = man.state && (evidence || man.state !== "pause"), cond = settled ? { v: TRI.t, reasons: [] } : evalCondition(l.open, env), win = settled || evidence ? { v: TRI.t, reasons: [] } : windowOf(l), eligible = cond.v === TRI.t && win.v === TRI.t, started = evidence, why = man.started ? man.how || "已开始" : legacy ? `开场事实 ${l.legacyFact} 已出现` : "", waitMain = "", after = !evidence && !man.state && l.kind === "main" ? prevMainDone(l) : { v: TRI.t, reasons: [] };
+      let man = (clueProg.lines || {})[l.id] || {}, legacy = !man.started && legacySeen(l), evidence = !!man.started || legacy, settled = man.state && (evidence || man.state !== "pause"), cond = settled ? { v: TRI.t, reasons: [] } : evalCondition(l.open, env), win = settled || evidence ? { v: TRI.t, reasons: [] } : windowOf(l), eligible = cond.v === TRI.t && win.v === TRI.t, started = evidence, why = man.started ? man.how || "已开始" : legacy ? `开场事实${l.legacyFact}已出现` : "", waitMain = "", after = !evidence && !man.state && l.kind === "main" ? prevMainDone(l) : { v: TRI.t, reasons: [] };
       !evidence && !man.state && eligible && l.kind === "main" && l.mode === "auto" && ((waitMain = after.v !== TRI.t ? after.reasons.join("；") || "要等前一条主线结束" : clueProg.mainPaused ? "主线已全部暂停" : mainBusy(l)) || (started = !0, why = "开启条件已满足"));
       let state = man.state === "abandon" ? "放弃" : man.state === "done" ? "完成" : man.state === "pause" ? "暂停" : started ? "进行中" : eligible ? "可开启" : "未触发", result = {
         line: l,
@@ -4521,7 +4521,7 @@ ${guide ? `${guide}
         pending: !man.state && !started && (cond.v === TRI.u || win.v === TRI.u)
       };
       if (state === "进行中") {
-        stageChain(l.units, () => ({ v: TRI.t, reasons: [`线 ${l.id} 进行中（${why}）`] }));
+        stageChain(l.units, () => ({ v: TRI.t, reasons: [`线${l.id}进行中（${why}）`] }));
         let last = stageStates.get(l.units[l.units.length - 1].id);
         last && last.done && (result.state = "完成", result.why = "最后一个阶段已结束");
       }
@@ -4647,7 +4647,7 @@ ${guide ? `${guide}
         return errors.push(`档位要写成至少两项、不重复的列表，从低到高：${raw}`), { kind: "bad", raw, error: "档位格式错误" };
       if (/包含/.test(atom.op)) return errors.push(`「包含」不用写档位：${raw}`), { kind: "bad", raw, error: "档位格式错误" };
       if (!tiers.includes(atom.value))
-        return errors.push(`条件里的「${atom.value}」不在档位 ${tiers.join("/")} 里：${raw}`), { kind: "bad", raw, error: "档位格式错误" };
+        return errors.push(`条件里的「${atom.value}」不在档位${tiers.join("/")}里：${raw}`), { kind: "bad", raw, error: "档位格式错误" };
       atom.tiers = tiers, atom.tierOk = String(value.顺序 ?? "").trim() === "已确认";
     }
     if (value.样例 !== void 0) {
@@ -4717,8 +4717,8 @@ ${guide ? `${guide}
     if (raw == null || raw === "") return null;
     if (!isPlainObject(raw)) return errs.push("开启时段应写成 {主线: M1, 从: 阶段2, 到: 阶段3}"), { bad: "开启时段写法不对" };
     let mainId = String(raw.主线 || "").trim(), main = lines2.find((l) => l.id === mainId);
-    if (!main) return errs.push(`开启时段引用了不存在的主线「${mainId}」`), { bad: `找不到主线 ${mainId}` };
-    if (main.kind !== "main") return errs.push(`开启时段里的「${mainId}」不是主线`), { bad: `${mainId} 不是主线` };
+    if (!main) return errs.push(`开启时段引用了不存在的主线「${mainId}」`), { bad: `找不到主线${mainId}` };
+    if (main.kind !== "main") return errs.push(`开启时段里的「${mainId}」不是主线`), { bad: `${mainId}不是主线` };
     let find = (ref) => {
       let r = String(ref ?? "").trim();
       if (!r) return { unit: null };
@@ -4727,7 +4727,7 @@ ${guide ? `${guide}
         return [u.stage.key, short, title2, stageLabel(u.stage.key)].map((x) => String(x || "").trim()).includes(r);
       });
       return hits.length === 1 ? { unit: hits[0] } : {
-        error: hits.length ? `开启时段里的「${r}」在 ${mainId} 里有好几个同名阶段` : `开启时段里的阶段「${r}」在 ${mainId} 里找不到`
+        error: hits.length ? `开启时段里的「${r}」在${mainId}里有好几个同名阶段` : `开启时段里的阶段「${r}」在${mainId}里找不到`
       };
     }, from = find(raw.从), to = find(raw.到), bad = from.error || to.error;
     return bad ? (errs.push(bad), { bad }) : {
@@ -4855,7 +4855,7 @@ ${guide ? `${guide}
   }
   function mainSlotTaken(lineStates, id) {
     let other = (lineStates || []).find((s) => s.line.kind === "main" && s.line.id !== id && s.state === "进行中");
-    return other ? `主线 ${other.line.id} 还在进行` : "";
+    return other ? `主线${other.line.id}还在进行` : "";
   }
   function mainInProgress(lineStates, id = "") {
     return (lineStates || []).find((s) => s.line.kind === "main" && s.line.id !== id && s.state === "进行中") || null;
@@ -4913,7 +4913,7 @@ ${guide ? `${guide}
     })) : [];
   }
   function fillEvidence(msg, sheetKey, isoKey = null) {
-    if (!msg || msg.is_user) return { ok: !1, reason: "不是 AI 回复" };
+    if (!msg || msg.is_user) return { ok: !1, reason: "不是AI回复" };
     if (!sheetKey) return { ok: !1, reason: "不知道线索控制表在数据库里的编号" };
     let events = frameEvents(msg, isoKey);
     return events === null ? { ok: !1, reason: "读不到数据库现在用的隔离标识，这一楼又有好几份记录，认不准是哪一份" } : events.length ? events.filter((e) => (FILL_SOURCES.includes(e.source) || e.source === "checkpoint") && e.filled.includes(sheetKey) && !e.error).length ? { ok: !0, reason: "" } : { ok: !1, reason: "这一楼的填表没有处理线索控制表" } : { ok: !1, reason: "这一楼还没有填表记录" };
@@ -4945,6 +4945,40 @@ ${guide ? `${guide}
     for (let r of plan.catalog || plan.recognize || []) push(r.uid, r.entry, r.place);
     return rows2.length ? rows2.join(`。
 `) : "（暂时没有可以去做的剧情，当前场景写「无」）";
+  }
+
+  // src/core/trpg-rows.js
+  var TRPG_ROW_DEPTH = 1, TRPG_ROW_CAP = 30, gives = (n) => discoveryList(isPlainObject(n.item) ? n.item : {}).map((d) => d.fact).filter(Boolean);
+  function trpgWantFacts(compiled, state, snap2, prog, config, { depth = TRPG_ROW_DEPTH, cap = TRPG_ROW_CAP } = {}) {
+    let want = /* @__PURE__ */ new Set(), have = /* @__PURE__ */ new Set(), add = (ns) => ns.status !== "locked" && gives(ns.node).forEach((f) => want.add(f));
+    for (let ns of state && state.nodeStates || []) add(ns);
+    for (let [id, f] of snap2 && snap2.facts || []) f && f.status === "confirmed" && have.add(id);
+    let knowAtoms = /* @__PURE__ */ new Set();
+    for (let u of compiled.units) u.clue && [u.clue.enter, u.clue.end].forEach((c) => conditionRefs(c).knows.forEach((k) => knowAtoms.add(k)));
+    for (let n of compiled.nodes) [n.open, n.early, n.done].forEach((c) => conditionRefs(c).knows.forEach((k) => knowAtoms.add(k)));
+    let base = want.size;
+    for (let layer = 0; layer < depth && want.size - base < cap; layer++) {
+      want.forEach((f) => have.add(f));
+      let facts = new Map(snap2 && snap2.facts ? snap2.facts : []);
+      for (let id of have) facts.set(id, { ...facts.get(id) || {}, id, status: "confirmed", raw: "已核实", text: (facts.get(id) || {}).text || "" });
+      let knowledge = [
+        ...snap2 && snap2.knowledge || [],
+        ...[...knowAtoms].flatMap((k) => {
+          let i = k.lastIndexOf("@"), fact = k.slice(0, i);
+          return have.has(fact) ? [{ fact, actor: k.slice(i + 1), way: "亲见", verified: !0 }] : [];
+        })
+      ], sim = computeClueState(compiled, { ...snap2 || {}, facts, knowledge }, prog, config), before = want.size;
+      for (let ns of sim.nodeStates) {
+        if (want.size - base >= cap) break;
+        add(ns);
+      }
+      if (want.size === before) break;
+    }
+    return want;
+  }
+  function trpgRowFilter(compiled, want) {
+    let produced = new Set(compiled.nodes.flatMap(gives));
+    return (code) => !produced.has(code) || want.has(code);
   }
 
   // src/core/clue-audit.js
@@ -5255,11 +5289,11 @@ ${guide ? `${guide}
               evidenceOk: proof.ok,
               denied
             }), ls = ev && c.state.lineStates.find((s) => s.line.id === ev.line);
-            if (proof.ok || note(`当前场景是入口 ${value}，但${proof.reason}，先不算进入（可以在执行页点「进入」）`), ev && ls && !ls.started && !ls.manual.state) {
+            if (proof.ok || note(`当前场景是入口${value}，但${proof.reason}，先不算进入（可以在执行页点「进入」）`), ev && ls && !ls.started && !ls.manual.state) {
               let slots = sideSlots(c.state.lineStates, p.clue.sideLimit || 1), busy = ls.line.kind === "main" ? mainSlotTaken(c.state.lineStates, ls.line.id) : "";
-              if (busy) note(`没有开始 ${ev.line}：${busy}`);
-              else if (ls.line.kind === "main" && c.prog.mainPaused) note(`主线已全部暂停：没有开始 ${ev.line}`);
-              else if (ls.line.kind === "side" && c.prog.sidePaused) note(`支线已全部暂停：没有开始 ${ev.line}`);
+              if (busy) note(`没有开始${ev.line}：${busy}`);
+              else if (ls.line.kind === "main" && c.prog.mainPaused) note(`主线已全部暂停：没有开始${ev.line}`);
+              else if (ls.line.kind === "side" && c.prog.sidePaused) note(`支线已全部暂停：没有开始${ev.line}`);
               else if (ls.line.kind === "side" && slots.full) {
                 let off = slots.used.length === 1 ? c.state.lineStates.find((x) => x.line.id === slots.used[0]) : null;
                 lineToast(
@@ -5270,7 +5304,7 @@ ${guide ? `${guide}
                   () => switchSide(ev.line, ev.key, lastAi, "", ev.uid)
                 );
               } else
-                addOps([{ kind: "line", target: ev.line, value: "start", text: ev.key, note: "走进了入口", atIndex: lastAi }]), changed = !0, note(`线 ${ev.line} 开始：第 ${lastAi} 楼走进了入口 ${ev.uid}`), lineToast(
+                addOps([{ kind: "line", target: ev.line, value: "start", text: ev.key, note: "走进了入口", atIndex: lastAi }]), changed = !0, note(`线${ev.line}开始：第${lastAi}楼走进了入口${ev.uid}`), lineToast(
                   `start:${ev.key}`,
                   ls.line.kind === "side" ? "支线开始" : "主线开始",
                   ls.line.name,
@@ -5285,10 +5319,10 @@ ${guide ? `${guide}
               kind: "line",
               target: c.plan.due,
               value: "skip",
-              note: "提示了 3 次没有进入，先让后面的上来",
+              note: "提示了3次没有进入，先让后面的上来",
               atIndex: lastAi
             }
-          ]), changed = !0, note(`支线 ${c.plan.due} 提示了 3 次没有进入，排到后面`)), !ticketValid(t0))
+          ]), changed = !0, note(`支线${c.plan.due}提示了3次没有进入，排到后面`)), !ticketValid(t0))
             return;
           changed && (dirty = !0);
           let now = compute();
@@ -5317,14 +5351,14 @@ ${guide ? `${guide}
       if (c.prog.sidePaused) return toast("info", "支线已全部暂停，没有切换。先点「继续全部支线」。");
       let off = pauseId || (used.length === 1 ? used[0] : "");
       if (used.length >= (p.clue.sideLimit || 1) && !used.includes(off))
-        return toast("info", `现在有 ${used.length} 条支线在进行，请到执行页「剧情线」里先暂停其中一条，再点这条的「进入」。`);
+        return toast("info", `现在有${used.length}条支线在进行，请到执行页「剧情线」里先暂停其中一条，再点这条的「进入」。`);
       let ops = [];
-      used.includes(off) && used.length >= (p.clue.sideLimit || 1) && ops.push({ kind: "line", target: off, value: "pause", note: `切换到 ${id}` }), s.manual.state === "pause" && ops.push({ kind: "line", target: id, value: "resume" }), ops.push({
+      used.includes(off) && used.length >= (p.clue.sideLimit || 1) && ops.push({ kind: "line", target: off, value: "pause", note: `切换到${id}` }), s.manual.state === "pause" && ops.push({ kind: "line", target: id, value: "resume" }), ops.push({
         kind: "line",
         target: id,
         value: "start",
         text: key || "manual",
-        note: ops.length ? `从 ${off} 切换过来` : "人工进入",
+        note: ops.length ? `从${off}切换过来` : "人工进入",
         ...Number.isInteger(floor) ? { atIndex: floor } : {}
       }), (!key || key === "manual") && uid && ops.push({ kind: "focus", target: uid, value: !0, sceneAt: sceneNow() });
       let offName = ops.length > 1 && (c.state.lineStates.find((x) => x.line.id === off) || { line: { name: off } }).line.name;
@@ -5343,7 +5377,7 @@ ${guide ? `${guide}
       if (s.line.kind === "side" && sideSlots(c.state.lineStates, p.clue.sideLimit || 1).full)
         return switchSide(id, "manual", void 0, pauseId, entry);
       addOps([
-        ...other ? [{ kind: "line", target: other.line.id, value: "pause", note: `换成 ${id}` }] : [],
+        ...other ? [{ kind: "line", target: other.line.id, value: "pause", note: `换成${id}` }] : [],
         { kind: "line", target: id, value: "start", text: "manual", note: "人工进入" },
         ...entry ? [{ kind: "focus", target: entry, value: !0, sceneAt: sceneNow() }] : []
       ]), scheduleSync();
@@ -5360,7 +5394,7 @@ ${guide ? `${guide}
       let [table, row2] = String(path).split("/").map((x) => x.trim()), want = sceneCatalogCell(c.state, c.plan || { recognize: [] }, c.prog), found = findSheet(c.snap.tables || {}, table);
       if (found.error) return;
       let { col: colOf, rows: rows2 } = sheetRows(found.sheet), ci = colOf(col), hits = findRow(rows2, row2);
-      if (ci < 0) return catalogMissing || (catalogMissing = !0, note(`线索控制表还没有「${col}」这一列：点一次「生成线索模板」补上`));
+      if (ci < 0) return catalogMissing || (catalogMissing = !0, note(`线索控制表还没有「${col}」这一列：点一次「创建模板」补上`));
       if (hits.length !== 1 || cellText(hits[0][ci]) === want || !ticketValid(t0)) return;
       let index = found.sheet.content.indexOf(hits[0]);
       if (index < 1) return;
@@ -5380,12 +5414,12 @@ ${guide ? `${guide}
         if (!lid) return !0;
         let s = started.get(lid);
         return !!s && (s.manual.startAt === void 0 || s.manual.startAt < 0 || target >= s.manual.startAt);
-      }, wantFact = (code) => triggers.has(code) || !factLines.has(code) || [...factLines.get(code)].some(lineReady), diff = prebuildDiff(
+      }, trpgSet = isTrpg(p) ? trpgWantFacts(c.compiled, c.state, c.snap, c.prog, p.clue) : null, wantFact = (code) => triggers.has(code) || !factLines.has(code) || [...factLines.get(code)].some(lineReady) && (!trpgSet || trpgSet.has(code)), diff = prebuildDiff(
         { ...plan, facts: plan.facts.filter((f) => wantFact(f.code)), knows: plan.knows.filter((k) => wantFact(k.fact)) },
         c.snap,
         p.clue.bindings
       ), labelOf = (code) => labels[code] || {}, ready = diff.newFacts.filter((f) => labelOf(f.code).label), waiting = diff.newFacts.length - ready.length;
-      if (waiting && !labelsWarned && (labelsWarned = !0, note(`有 ${waiting} 条事实还没有标签，先不补行（采用大纲时会自动生成；也可以用「按大纲补表格行」）`)), !ready.length && !diff.newKnows.length)
+      if (waiting && !labelsWarned && (labelsWarned = !0, note(`有${waiting}条事实还没有标签，先不补行（采用大纲时会自动生成；也可以用「补全表格」）`)), !ready.length && !diff.newKnows.length)
         return;
       let factOk = new Set(c.snap.facts ? c.snap.facts.keys() : []), done = [];
       for (let f of ready) {
@@ -5399,7 +5433,7 @@ ${guide ? `${guide}
           let row2 = { 键: k.key, [kb.事实列]: k.fact, [kb.角色列]: k.actor };
           kb.方式列 && (row2[kb.方式列] = Array.isArray(kb.未知值) ? kb.未知值[0] : kb.未知值 || "未知"), kb.可信度列 && (row2[kb.可信度列] = "未核实"), await Promise.resolve(api.insertRow({ tableName: kb.表, data: row2, skipNotify: !0 })).catch(() => -1) >= 0 && done.push(k.key);
         }
-      done.length && (note(`自动补了 ${done.length} 行：${done.slice(0, 6).join("、")}${done.length > 6 ? "……" : ""}`), invalidate("clue-rows"));
+      done.length && (note(`自动补了${done.length}行：${done.slice(0, 6).join("、")}${done.length > 6 ? "……" : ""}`), invalidate("clue-rows"));
     }
     function lineAct(id, value, uid = "", s0 = null) {
       if (s0 && !scopeValid(s0)) throw new Error("已经切换了聊天、项目或推进方式，这次操作没有执行，请重新点一次");
@@ -5416,7 +5450,7 @@ ${guide ? `${guide}
         if (s && s.line.kind === "main" && c.prog.mainPaused) throw new Error("主线已全部暂停，先点「继续全部主线」");
         if (other || mark.length)
           return addOps([
-            ...other ? [{ kind: "line", target: other.line.id, value: "pause", note: `换成 ${id}` }] : [],
+            ...other ? [{ kind: "line", target: other.line.id, value: "pause", note: `换成${id}` }] : [],
             { kind: "line", target: id, value: "resume" },
             ...mark
           ]), scheduleSync();
@@ -5481,7 +5515,7 @@ ${guide ? `${guide}
       let f = c.snap.facts && c.snap.facts.get(id);
       act({ kind: "fact", target: id, value: "revoked", text: f ? f.text : "", note: "玩家作废：正文可能自己编的" });
       let r = await voidTables(p, id, s0.ticket, s0.iso).catch((e) => ({ table: "none", why: e && e.message || String(e) }));
-      return invalidate("clue-void"), note(r.table === "ok" ? `作废 ${id}：表格已改回未获得` : `作废 ${id}：${r.why || "表格没改"}`), { done: !0, ...r };
+      return invalidate("clue-void"), note(r.table === "ok" ? `作废${id}：表格已改回未获得` : `作废${id}：${r.why || "表格没改"}`), { done: !0, ...r };
     }
     var SQL_WORD = /^[A-Za-z_\u0080-￿][A-Za-z0-9_$\u0080-￿]*$/;
     async function voidTables(p, id, t0, iso0) {
@@ -5490,7 +5524,7 @@ ${guide ? `${guide}
       if (typeof api.executeSqlMutation != "function" || typeof api.querySql != "function")
         return {
           table: "none",
-          why: "数据库不是 SQLite 存储模式（或还没就绪），插件没法安全改表；需要的话请到数据库里把这条改回「未获得」"
+          why: "数据库不是SQLite存储模式（或还没就绪），插件没法安全改表；需要的话请到数据库里把这条改回「未获得」"
         };
       let unknown = Array.isArray(kb && kb.未知值) ? kb.未知值[0] : kb && kb.未知值 || "未知", jobs = [
         {
@@ -5527,7 +5561,7 @@ ${guide ? `${guide}
       let why = [
         failed.join("；"),
         fr.problems.length ? `事实表读不到：${fr.problems[0]}` : !factOk && "事实表这条还不是「未获得」",
-        kr && kr.problems.length ? `知情表读不到：${kr.problems[0]}` : !knowOk && `知情表还有 ${knows.map((k) => k.actor).join("、")} 记着知道`
+        kr && kr.problems.length ? `知情表读不到：${kr.problems[0]}` : !knowOk && `知情表还有${knows.map((k) => k.actor).join("、")}记着知道`
       ].filter(Boolean).join("；");
       return { table: factOk && knowOk || factOk || knowOk ? "partial" : "none", why: why || "没法确认表格结果" };
     }
@@ -5667,7 +5701,7 @@ ${guide ? `${guide}
       if (op.kind === "pause")
         return op.target === "side" ? op.value ? "暂停全部支线" : "继续全部支线" : op.target === "mains" ? op.value ? "暂停全部主线" : "继续全部主线" : op.value ? "暂停剧情" : "继续剧情";
       if (op.kind === "line")
-        return `${{ start: "开启", pause: "暂停", resume: "继续", done: "标记完成", abandon: "放弃", deny: "取消开启", skip: "跳过", "": "还原手动操作" }[String(op.value || "")] || op.value}线 ${op.target}${op.note ? `（${op.note}）` : ""}`;
+        return `${{ start: "开启", pause: "暂停", resume: "继续", done: "标记完成", abandon: "放弃", deny: "取消开启", skip: "跳过", "": "还原手动操作" }[String(op.value || "")] || op.value}线${op.target}${op.note ? `（${op.note}）` : ""}`;
       let names2 = {
         open: { force: "手动开放", block: "暂时停用", "": "开放改回按条件判断" },
         done: { force: "手动完成", undo: "算作没完成", "": "完成改回按表格判断" },
@@ -5675,7 +5709,7 @@ ${guide ? `${guide}
         focus: { true: "设为本轮场景", "": "取消我选的场景" },
         fact: { confirmed: "确认线索", revoked: "作废线索", "": "线索改回按表格判断" }
       }, label = names2[op.kind] && names2[op.kind][String(op.value ?? "")] || op.kind;
-      return op.kind === "focus" && op.value && op.target.startsWith(AWAY_PREFIX) ? `主角离开 ${op.target.slice(AWAY_PREFIX.length)}` : `${label} ${op.target}${op.note ? `（${op.note}）` : ""}`;
+      return op.kind === "focus" && op.value && op.target.startsWith(AWAY_PREFIX) ? `主角离开${op.target.slice(AWAY_PREFIX.length)}` : `${label} ${op.target}${op.note ? `（${op.note}）` : ""}`;
     }
     function sceneNow() {
       let p = project(), path = p && p.clue.bindings.scene && p.clue.bindings.scene.路径, c = compute();
@@ -5924,7 +5958,7 @@ ${floor.text}`)].join(`
     } catch {
       throw new Error("接口地址无效");
     }
-    if (!["http:", "https:"].includes(parsed.protocol)) throw new Error("接口地址需以 http:// 或 https:// 开头");
+    if (!["http:", "https:"].includes(parsed.protocol)) throw new Error("接口地址需以http:// 或https:// 开头");
     let root = base.replace(/\/(?:chat\/completions|models)$/i, "");
     return /\/v\d+$/i.test(root) ? root : `${root}/v1`;
   }
@@ -5956,7 +5990,7 @@ ${floor.text}`)].join(`
       let detail = safeDetail(data && data.error && (data.error.message || data.error) || data && data.message || text2, llm.apiKey);
       throw new Error(`接口请求失败${res.ok ? "" : `（HTTP ${res.status}）`}${detail ? `：${detail}` : ""}`);
     }
-    if (!data) throw new Error(`接口返回的不是 JSON${text2 ? `：${safeDetail(text2, llm.apiKey)}` : ""}`);
+    if (!data) throw new Error(`接口返回的不是JSON${text2 ? `：${safeDetail(text2, llm.apiKey)}` : ""}`);
     return data;
   }
   function stripThinking(text2) {
@@ -5974,19 +6008,70 @@ ${mark}` } : m) : [{ role: "system", content: mark }, ...messages];
       backgroundMarks.delete(mark);
     }
   }
-  async function viaCustom(messages, llm, signal) {
+  async function viaCustom(messages, llm, signal, onText = null) {
     if (!String(llm.model || "").trim()) throw new Error("请先选择模型");
     let body = { ...connection(llm), model: llm.model, stream: !1, messages }, temperature = Number(llm.temperature);
-    llm.temperature !== "" && Number.isFinite(temperature) && (body.temperature = temperature);
+    if (llm.temperature !== "" && Number.isFinite(temperature) && (body.temperature = temperature), onText) return viaCustomStream(body, llm, signal, onText);
     let data = await postBackend("generate", body, llm, signal);
     return String(data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content || "");
   }
-  async function requestLlm(messages, llm, { timeoutMs = 18e4, signal } = {}) {
-    let view = hostWindow(), controller = new view.AbortController(), timer, onAbort = null, timeout = new Promise((_, reject) => {
-      timer = view.setTimeout(() => {
-        controller.abort(), reject(new Error("请求超时"));
+  async function viaCustomStream(body, llm, signal, onText) {
+    let res = await hostWindow().fetch("/api/backends/chat-completions/generate", {
+      method: "POST",
+      cache: "no-cache",
+      signal,
+      headers: { ...requestHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ ...body, stream: !0 })
+    }), type = String(res.headers && res.headers.get && res.headers.get("content-type") || "");
+    if (!res.ok || !res.body || !/event-stream/i.test(type)) {
+      let text2 = await res.text(), data = null;
+      try {
+        data = JSON.parse(text2);
+      } catch {
+      }
+      if (!res.ok || !data || data.error) {
+        let detail = safeDetail(data && data.error && (data.error.message || data.error) || data && data.message || text2, llm.apiKey);
+        throw new Error(`接口请求失败${res.ok ? "" : `（HTTP ${res.status}）`}${detail ? `：${detail}` : ""}`);
+      }
+      return String(data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content || "");
+    }
+    let reader = res.body.getReader(), decoder = new TextDecoder(), buf = "", out = "", take = (line) => {
+      let m = /^data:\s?(.*)$/.exec(line.trim());
+      if (!m || m[1] === "[DONE]") return;
+      let data;
+      try {
+        data = JSON.parse(m[1]);
+      } catch {
+        return;
+      }
+      if (data && data.error) throw new Error(`接口请求失败：${safeDetail(data.error.message || data.error, llm.apiKey)}`);
+      let delta = data && data.choices && data.choices[0] && (data.choices[0].delta || data.choices[0].message), piece = delta && typeof delta.content == "string" ? delta.content : "";
+      out += piece, onText(out);
+    };
+    for (; ; ) {
+      let { value, done } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: !0 });
+      let rows2 = buf.split(`
+`);
+      buf = rows2.pop(), rows2.forEach(take);
+    }
+    return (buf += decoder.decode()) && take(buf), out;
+  }
+  async function requestLlm(messages, llm, { timeoutMs = 18e4, signal, onText } = {}) {
+    let view = hostWindow(), controller = new view.AbortController(), timer, onAbort = null, fail = null, arm = () => {
+      view.clearTimeout(timer), timer = view.setTimeout(() => {
+        controller.abort(), fail && fail(new Error("请求超时"));
       }, timeoutMs);
-    }), stopped = new Promise((_, reject) => {
+    }, timeout = new Promise((_, reject) => {
+      fail = reject, arm();
+    }), live = onText ? (text2) => {
+      arm();
+      try {
+        onText(text2);
+      } catch {
+      }
+    } : null, stopped = new Promise((_, reject) => {
       signal && (onAbort = () => {
         controller.abort();
         let error = new Error("已停止");
@@ -5994,7 +6079,7 @@ ${mark}` } : m) : [{ role: "system", content: mark }, ...messages];
       }, signal.aborted ? onAbort() : signal.addEventListener("abort", onAbort, { once: !0 }));
     });
     try {
-      let job = llm.source === "custom" ? viaCustom(messages, llm, controller.signal) : viaTavern(messages);
+      let job = llm.source === "custom" ? viaCustom(messages, llm, controller.signal, live) : viaTavern(messages);
       job.catch(() => {
       });
       let text2 = stripThinking(await Promise.race([job, timeout, stopped]));
@@ -6355,7 +6440,7 @@ ${tail}` };
         for (let n = 2; tpl[key]; n++) key = `${sheet.uid}_${n}`;
         sheet.uid = key, sheet.orderNo = ++maxOrder, tpl[key] = sheet, created.push(sheet.name);
         let rows2 = sheet.content.length - 1;
-        changes.push(`新增「${sheet.name}」${rows2 ? `，带 ${rows2} 行预建数据` : ""}`);
+        changes.push(`新增「${sheet.name}」${rows2 ? `，带${rows2}行预建数据` : ""}`);
         continue;
       }
       let wantHead = clueTplHeader(sheet), head = clueTplHeader(have.sheet), missing = wantHead.filter((c) => !head.includes(c));
@@ -6363,7 +6448,7 @@ ${tail}` };
         let oldDdl = String(have.sheet.sourceData && have.sheet.sourceData.ddl || ""), ddl = oldDdl.trim() ? ddlAddColumns(oldDdl, [{ sql: "scene_catalog", label: LINE_CATALOG_COL }]) : { ok: !0, ddl: "" };
         if (!ddl.ok) {
           problems2.push(
-            `「线索控制表」的 DDL ${ddl.why || "无法解析"}，没有加「${LINE_CATALOG_COL}」列；多线的场景目录写不进去，需要的话请在数据库里手动加`
+            `「线索控制表」的DDL ${ddl.why || "无法解析"}，没有加「${LINE_CATALOG_COL}」列；多线的场景目录写不进去，需要的话请在数据库里手动加`
           );
           continue;
         }
@@ -6384,13 +6469,13 @@ ${tail}` };
       sameRealtime(have.sheet.updateConfig) || (have.sheet.updateConfig = { ...have.sheet.updateConfig || {}, ...CLUE_TPL_REALTIME }, changes.push(`「${sheet.name}」改为每楼更新（与全局表同组）`));
     }
     let g = findGlobalTable([...byName.values()].map((x) => x.sheet));
-    return g ? (sameRealtime(g.sheet.updateConfig) || (g.sheet.updateConfig = { ...g.sheet.updateConfig || {}, ...CLUE_TPL_REALTIME }, changes.push(`「${g.name}」改为每楼更新（与线索表同组，时间、地点每楼都准；填表次数会相应变多）`)), g.time || problems2.push(`「${g.name}」里没找到时间列（${GLOBAL_TIME_COLS.join("、")}）：时间条件会是未知，可以在表格绑定里把 time 指向记时间的那一格`)) : problems2.push("没找到记时间、地点的全局表：大纲里的时间条件会是未知。可以在表格绑定里把 time 指向记时间的那一格"), patchDefault("重要角色表", (sheet) => {
+    return g ? (sameRealtime(g.sheet.updateConfig) || (g.sheet.updateConfig = { ...g.sheet.updateConfig || {}, ...CLUE_TPL_REALTIME }, changes.push(`「${g.name}」改为每楼更新（与线索表同组，时间、地点每楼都准；填表次数会相应变多）`)), g.time || problems2.push(`「${g.name}」里没找到时间列（${GLOBAL_TIME_COLS.join("、")}）：时间条件会是未知，可以在表格绑定里把time指向记时间的那一格`)) : problems2.push("没找到记时间、地点的全局表：大纲里的时间条件会是未知。可以在表格绑定里把time指向记时间的那一格"), patchDefault("重要角色表", (sheet) => {
       let head = sheet.content[0], have = clueTplHeader(sheet), add = CLUE_TPL_CHAR_COLS.filter((c) => !have.includes(c.label));
       if (add.length) {
         let ddl = ddlAddColumns(sheet.sourceData && sheet.sourceData.ddl, add);
         if (!ddl.ok)
           return problems2.push(
-            `「重要角色表」的 DDL ${ddl.why || "无法解析"}，没有加列（剧情身份、当前动向）；需要的话请在数据库里手动加`
+            `「重要角色表」的DDL ${ddl.why || "无法解析"}，没有加列（剧情身份、当前动向）；需要的话请在数据库里手动加`
           );
         sheet.sourceData = { ...sheet.sourceData, ddl: ddl.ddl }, head.push(...add.map((c) => c.label));
         for (let row2 of sheet.content.slice(1)) Array.isArray(row2) && row2.push(...add.map(() => ""));
@@ -6440,7 +6525,7 @@ ${tail}` };
       let sheet = hit.sheet, head = clueTplHeader(sheet), want = CLUE_TPL_DEFAULTS[name];
       if (!want.every((c) => head.includes(c)))
         return problems2.push(
-          `「${name}」的列和数据库默认不一致（缺 ${want.filter((c) => !head.includes(c)).join("、")}），没有改它的规则；需要的话请手动加上防剧透要求`
+          `「${name}」的列和数据库默认不一致（缺${want.filter((c) => !head.includes(c)).join("、")}），没有改它的规则；需要的话请手动加上防剧透要求`
         );
       sheet.sourceData = { ...sheet.sourceData || {} }, extra && extra(sheet);
       for (let [field2, rep] of Object.entries(CLUE_TPL_REPLACE[name] || {})) {
@@ -7417,7 +7502,7 @@ NSFW指引（涉及成人内容时）:
     return trigger ? text2 == null || !(trigger.kind === "enter" ? enterStates(config) : leaveStates(config)).includes(parseTrainState(text2, config)) ? "undo" : hashText(text2) === trigger.hash ? "same" : "keep" : "none";
   }
   function describeRead(read, config) {
-    return read && read.state ? `上次读到：第 ${read.floor} 楼 ${resolveHub(config).hubName}：${read.state}` : "最新一楼没有状态块";
+    return read && read.state ? `上次读到：第${read.floor}楼${resolveHub(config).hubName}：${read.state}` : "最新一楼没有状态块";
   }
 
   // src/core/infinite-world.js
@@ -7560,7 +7645,7 @@ ${horrorGuide}` : "",
     return Object.entries(data.entries).map(([key, entry]) => ({
       uid: String(entry.uid ?? key),
       key,
-      title: String(entry.comment || "").trim() || [].concat(entry.key || []).slice(0, 3).join("、") || `条目 ${entry.uid ?? key}`,
+      title: String(entry.comment || "").trim() || [].concat(entry.key || []).slice(0, 3).join("、") || `条目${entry.uid ?? key}`,
       comment: String(entry.comment || ""),
       content: String(entry.content || ""),
       disabled: !!entry.disable,
@@ -8046,7 +8131,7 @@ ${horrorGuide}` : "",
         if (settings.handleMode === "auto") {
           setProgress(step.progress), notice.show({
             id: "advance",
-            title: `已切到 ${placeOf(step.to)}`,
+            title: `已切到${placeOf(step.to)}`,
             body: reason || "检测判断本阶段已演完。",
             actions: [{ label: "撤销", run: () => backTo(unit.id) }],
             timeout: 12e3
@@ -8055,7 +8140,7 @@ ${horrorGuide}` : "",
         }
         notice.show({
           id: "advance",
-          title: `${placeOf(unit)} 已演完`,
+          title: `${placeOf(unit)}已演完`,
           body: reason || "检测判断本阶段已演完。",
           actions: [
             { label: "打开下一段", primary: !0, run: () => openNext() },
@@ -8154,7 +8239,7 @@ ${horrorGuide}` : "",
       }
       notice.show({
         id: "offtrack",
-        title: `${placeOf(unit)} 偏离大纲`,
+        title: `${placeOf(unit)}偏离大纲`,
         body: `${reason || "正文走向与后续阶段冲突。"}后续阶段可能接不上，建议改写。`,
         actions: [
           {
@@ -8178,11 +8263,11 @@ ${horrorGuide}` : "",
     }
     function threadEventText(event) {
       return {
-        "clock-tick": `进度钟「${event.name}」推进到 ${event.filled}/${event.total}`,
+        "clock-tick": `进度钟「${event.name}」推进到${event.filled}/${event.total}`,
         "clock-due": `进度钟「${event.name}」已满格，本段必须发生`,
         "clock-done": `世界动态「${event.name}」已发生`,
         "hook-on": `支线「${event.name}」条件满足，已激活`,
-        "chain-step": `支线链「${event.name}」进入第 ${event.step + 1}/${event.total} 步`,
+        "chain-step": `支线链「${event.name}」进入第${event.step + 1}/${event.total}步`,
         "hook-done": `支线「${event.name}」已演完`,
         "hook-expired": `支线「${event.name}」超过时限，已过期`
       }[event.type] || event.type;
@@ -8305,7 +8390,7 @@ ${horrorGuide}` : "",
       log("世界档案还在生成，先等它完成"), await Promise.race([promise.catch(() => null), timeout]), view.clearTimeout(timer), timedOut && opening && (log(`等待世界档案超过 ${WORLD_WAIT_MS / 1e3} 秒，本次回复先不带档案`), notice.show({
         id: "inf-wait",
         title: "世界档案还没生成完",
-        body: `已等待 ${WORLD_WAIT_MS / 1e3} 秒，本次回复先不带档案，生成完成后从下一次回复起带上。`,
+        body: `已等待${WORLD_WAIT_MS / 1e3}秒，本次回复先不带档案，生成完成后从下一次回复起带上。`,
         timeout: 12e3
       }));
     }
@@ -8467,7 +8552,7 @@ ${horrorGuide}` : "",
         return ticketValid(scope) && (setProgress({ ...currentProgress(), lastFailFloor: floorCount() }), log(`检测失败：${error.message}`), notice.show({
           id: "checkfail",
           title: "进度检测失败",
-          body: `已自动重试 ${CHECK_RETRIES} 次：${error.message}`,
+          body: `已自动重试${CHECK_RETRIES}次：${error.message}`,
           actions: [
             { label: "重试", primary: !0, run: () => checkNow({ manual }) },
             { label: "关闭", run: () => {
@@ -8526,7 +8611,7 @@ ${horrorGuide}` : "",
         return ticketValid(t) ? (setProgress({ ...currentProgress(), lastFailFloor: floorCount() }), log(`检测失败：${error.message}`), notice.show({
           id: "checkfail",
           title: "进度检测失败",
-          body: `已自动重试 ${CHECK_RETRIES} 次：${error.message}`,
+          body: `已自动重试${CHECK_RETRIES}次：${error.message}`,
           actions: [
             { label: "重试", primary: !0, run: () => checkNow({ manual }) },
             { label: "关闭", run: () => {
@@ -9696,7 +9781,7 @@ label.pi-wb-row{cursor:pointer}
       {
         target: ".pi-tabs",
         title: "页签",
-        body: "一般的顺序：在「讨论」里和 AI 把剧情想清楚，写成「大纲」，到「执行」页开始注入。「设定」「人设」页可选：设定给没有世界观的卡用，人设按剧情阶段切换角色的设定。线索推进还能同时跑主线和几条支线，到「大纲」「执行」页点问号看说明。",
+        body: "一般的顺序：在「讨论」里和AI把剧情想清楚，写成「大纲」，到「执行」页开始注入。「设定」「人设」页可选：设定给没有世界观的卡用，人设按剧情阶段切换角色的设定。线索推进还能同时跑主线和几条支线，到「大纲」「执行」页点问号看说明。",
         side: "bottom"
       },
       {
@@ -9708,7 +9793,7 @@ label.pi-wb-row{cursor:pointer}
       {
         target: ".pi-top-end [data-page=settings]",
         title: "设置",
-        body: "模型接口、写作基准、注入方式都在这里。第一次用请先配好「模型接口」：讨论和写大纲都要用到 AI。",
+        body: "模型接口、写作基准、注入方式都在这里。第一次用请先配好「模型接口」：讨论和写大纲都要用到AI。",
         side: "bottom"
       },
       {
@@ -9722,19 +9807,19 @@ label.pi-wb-row{cursor:pointer}
       {
         target: ".pi-dc-refs",
         title: "附带参考",
-        body: "发给 AI 时一起附上的资料：设定、大纲、剧情进度、最近几楼正文、世界书条目。点开选择，粉色是开着的。附得越多，AI 越了解情况，也越费 token。",
+        body: "发给AI时一起附上的资料：设定、大纲、剧情进度、最近几楼正文、世界书条目。点开选择，粉色是开着的。附得越多，AI越了解情况，也越费token。",
         side: "bottom"
       },
       {
         target: "[data-act=review-pick]",
         title: "审阅修改",
-        body: "讨论只用来聊，不直接改大纲。想改时点这里，选一条剧情线：逐页查看各阶段，在对应页写意见，预览后一次发给 AI，看过再保存到大纲。讨论记录会作为参考一起带上。",
+        body: "讨论只用来聊，不直接改大纲。想改时点这里，选一条剧情线：逐页查看各阶段，在对应页写意见，预览后一次发给AI，看过再保存到大纲。讨论记录会作为参考一起带上。",
         side: "bottom"
       },
       {
         target: ".pi-compose",
-        title: "和 AI 讨论",
-        body: "说说你想写的剧情或设定，一句话也行。AI 回复下面有「整理成设定」「据此写大纲」，想清楚了就点它们。Ctrl+Enter 发送。",
+        title: "和AI讨论",
+        body: "说说你想写的剧情或设定，一句话也行。AI回复下面有「整理成设定」「据此写大纲」，想清楚了就点它们。Ctrl+Enter发送。",
         side: "top"
       }
     ],
@@ -9742,13 +9827,13 @@ label.pi-wb-row{cursor:pointer}
       {
         target: "[data-setting]",
         title: "这一页做什么",
-        body: "给还没有世界观的卡用，比如没有世界书的 OC 卡。这里写的设定，开玩后每一轮都会交给正文模型。卡本身有世界书的话，留空就行。",
+        body: "给还没有世界观的卡用，比如没有世界书的OC卡。这里写的设定，开玩后每一轮都会交给正文模型。卡本身有世界书的话，留空就行。",
         side: "top"
       },
       {
         target: "[data-act=from-talk]",
         title: "从讨论整理",
-        body: "AI 把讨论记录整理成一块块的设定，先给你看草稿，你勾选采用哪几块。勾上「只追加」就不会改动已有的内容。",
+        body: "AI把讨论记录整理成一块块的设定，先给你看草稿，你勾选采用哪几块。勾上「只追加」就不会改动已有的内容。",
         side: "bottom"
       },
       {
@@ -9762,20 +9847,20 @@ label.pi-wb-row{cursor:pointer}
     outline: [
       {
         target: ["[data-act=ai-volume]", "[data-ai-request]"],
-        title: "AI 写新大纲",
-        body: "写下要求，AI 参考讨论和设定写一段新大纲（线索推进时是一条新剧情线），先显示草稿，确认后才写进大纲。参考哪些讨论记录和世界书，在弹框里选。",
+        title: "AI写新大纲",
+        body: "写下要求，AI参考讨论和设定写一段新大纲（线索推进时是一条新剧情线），先显示草稿，确认后才写进大纲。参考哪些讨论记录和世界书，在弹框里选。",
         side: "bottom"
       },
       {
         target: "[data-act=review-open]",
         title: "审阅修改",
-        body: "逐条、逐页查看各条线，在对应页写意见，一次发给 AI 修改。改动先存为草稿，点「保存到大纲」才生效；关掉再打开草稿还在。按钮上的数字是改了还没保存的线。",
+        body: "逐条、逐页查看各条线，在对应页写意见，一次发给AI修改。改动先存为草稿，点「保存到大纲」才生效；关掉再打开草稿还在。按钮上的数字是改了还没保存的线。",
         side: "bottom"
       },
       {
         target: "[data-act=import-open-panel]",
         title: "导入长文",
-        body: "已有剧情方案或小说时，粘贴进来，AI 逐段整理成大纲草稿，逐页审阅后再保存到大纲。中途关闭可以接着做。",
+        body: "已有剧情方案或小说时，粘贴进来，AI逐段整理成大纲草稿，逐页审阅后再保存到大纲。中途关闭可以接着做。",
         side: "bottom"
       },
       {
@@ -9787,7 +9872,7 @@ label.pi-wb-row{cursor:pointer}
       {
         target: "[data-act=outline-menu]",
         title: "更多",
-        body: "总览、历史版本，以及导入 YAML、粘贴、从世界书导入、导出。",
+        body: "总览、历史版本，以及导入YAML、粘贴、从世界书导入、导出。",
         side: "bottom"
       },
       {
@@ -9802,7 +9887,7 @@ label.pi-wb-row{cursor:pointer}
       {
         target: "[data-imp-text]",
         title: "原文",
-        body: "粘贴剧情方案或小说，或选择 txt / md 文件。很长的文档会分段整理。",
+        body: "粘贴剧情方案或小说，或选择txt / md文件。很长的文档会分段整理。",
         side: "bottom"
       },
       {
@@ -9853,7 +9938,7 @@ label.pi-wb-row{cursor:pointer}
       {
         target: "[data-act=rv-preview]",
         title: "发送意见",
-        body: "汇总各页意见，可再修改，也可写不限于某一页的整体意见；确认后一次发给 AI。改完的内容先进草稿，可撤销。",
+        body: "汇总各页意见，可再修改，也可写不限于某一页的整体意见；确认后一次发给AI。改完的内容先进草稿，可撤销。",
         side: "top"
       },
       {
@@ -9873,7 +9958,7 @@ label.pi-wb-row{cursor:pointer}
       {
         target: ".pi-seg:has([data-act=clue-mode])",
         title: "推进方式",
-        body: "大纲推进由 AI 判断这一阶段演完没有，演完就推到下一阶段。线索推进按主角实际查到了什么来开放下一步，适合调查、解谜类剧情。两种的进度分开保存，可以随时切换。",
+        body: "大纲推进由AI判断这一阶段演完没有，演完就推到下一阶段。线索推进按主角实际查到了什么来开放下一步，适合调查、解谜类剧情。两种的进度分开保存，可以随时切换。",
         side: "bottom"
       },
       // 大纲推进
@@ -9887,7 +9972,7 @@ label.pi-wb-row{cursor:pointer}
       {
         target: "[data-act=check]",
         title: "检测与改写",
-        body: "插件每隔几楼会让 AI 检查进度，也可以手动「立即检测」。剧情偏离大纲太多时，用「改写后续」让 AI 按现在的走向重写之后的阶段，已经演完的部分不动。",
+        body: "插件每隔几楼会让AI检查进度，也可以手动「立即检测」。剧情偏离大纲太多时，用「改写后续」让AI按现在的走向重写之后的阶段，已经演完的部分不动。",
         side: "bottom"
       },
       { target: ".pi-tl-vol", title: "阶段时间线", body: "每个阶段的状态。点阶段右边的「⋯」可以手动设为当前、标为已完成。", side: "top" },
@@ -9901,13 +9986,13 @@ label.pi-wb-row{cursor:pointer}
       },
       {
         target: "[data-act=clue-gen-template]",
-        title: "生成线索模板",
+        title: "创建模板",
         body: "线索推进靠数据库里的三张表记录主角查到了什么。第一次在一个聊天里用时，先点这里加上这三张表，原有的表和数据都不动。",
         side: "bottom"
       },
       {
         target: "[data-act=clue-prebuild]",
-        title: "按大纲补表格行",
+        title: "补全表格",
         body: "大纲里新加了线索以后，用它把缺的部分补进表格，已有的不动。多条线时插件会在线开始后自动补，一般用不着手动点。",
         side: "bottom"
       },
@@ -9945,7 +10030,7 @@ label.pi-wb-row{cursor:pointer}
       {
         target: [".pi-clue-hd", ".pi-clue-stage"],
         title: "节点",
-        body: "每件事当前的状态，点一下看条件。点右边的「⋯」可以手动开放、标记完成，或者确认、作废一条线索，填表记错时用。剧情偏离太多时，用上面的「改写后续」让 AI 重写还没演的部分。",
+        body: "每件事当前的状态，点一下看条件。点右边的「⋯」可以手动开放、标记完成，或者确认、作废一条线索，填表记错时用。剧情偏离太多时，用上面的「改写后续」让AI重写还没演的部分。",
         side: "top"
       }
     ],
@@ -9959,7 +10044,7 @@ label.pi-wb-row{cursor:pointer}
       {
         target: "[data-guide-preset]",
         title: "写作基准",
-        body: "讨论和整理设定时，AI 照这份基准来写。默认是通用版；写同人选「同人世界观速成」；也可以选「自定义」自己改。",
+        body: "讨论和整理设定时，AI照这份基准来写。默认是通用版；写同人选「同人世界观速成」；也可以选「自定义」自己改。",
         side: "top"
       },
       {
@@ -9971,7 +10056,7 @@ label.pi-wb-row{cursor:pointer}
       {
         target: "[data-set=checkEvery]",
         title: "阶段推进",
-        body: "大纲推进时，每隔几楼让 AI 检查一次进度，以及演完、偏离时要不要先问你。",
+        body: "大纲推进时，每隔几楼让AI检查一次进度，以及演完、偏离时要不要先问你。",
         side: "bottom"
       },
       { target: "[data-act=tour-reset]", title: "重新播放教程", body: "想从头再看一遍各页说明时点这里。", side: "top" }
@@ -10113,7 +10198,7 @@ label.pi-wb-row{cursor:pointer}
     try {
       data = JSON.parse(text2);
     } catch {
-      throw new Error("文件不是有效的 JSON");
+      throw new Error("文件不是有效的JSON");
     }
     if (!isPlainObject(data) || data.kind !== PROJECT_FILE_KIND || !isPlainObject(data.project)) throw new Error("这不是剧情注入器导出的项目文件");
     if (Number(data.version) > 1) throw new Error("这个项目文件来自更新的插件版本，请先更新插件");
@@ -10177,8 +10262,8 @@ label.pi-wb-row{cursor:pointer}
   });
 
   // src/ui/ai.js
-  function ask(view, role, messages, { signal } = {}) {
-    return requestLlm(messages, resolveLlm(view.data.settings(), role), { signal });
+  function ask(view, role, messages, { signal, onText } = {}) {
+    return requestLlm(messages, resolveLlm(view.data.settings(), role), { signal, onText });
   }
   function guideText(view) {
     return guideInfo(view).text;
@@ -10232,7 +10317,7 @@ label.pi-wb-row{cursor:pointer}
     return buildIndexText(units, unitStates(units, progress), progress, { carryOver: settings.carryOver, hookCap: settings.hookCap });
   }
   function floorsText(view, count) {
-    return count ? view.runtime.recentFloors(count).map((floor) => `【第 ${floor.index} 楼】
+    return count ? view.runtime.recentFloors(count).map((floor) => `【第${floor.index}楼】
 ${floor.text}`).join(`
 
 `) : "";
@@ -10253,7 +10338,7 @@ ${floor.text}`).join(`
       text2 && refs.push({ title: "剧情进度（已演、进行中与之后的阶段）", text: text2 });
     }
     let floors = floorsText(view, r.floors);
-    return floors && refs.push({ title: `最近 ${r.floors} 楼正文`, text: floors }), [...refs, ...await wbRefTexts(r.wb, r.memo)];
+    return floors && refs.push({ title: `最近${r.floors}楼正文`, text: floors }), [...refs, ...await wbRefTexts(r.wb, r.memo)];
   }
   async function wbRefTexts(rule, memo) {
     let books = await loadBoundBooks(), checked = checkedSet(rule, books, memo), out = [];
@@ -10319,7 +10404,7 @@ ${floor.text}`).join(`
         for (let book of books) for (let entry of book.entries) byId.set(entryRefId(book.name, entry), entry);
         let sum = () => {
           let ids = [...box.querySelectorAll("[data-ref-id]:checked")].map((input2) => input2.dataset.refId), tokens = ids.reduce((total, id) => total + estimateTokens(byId.get(id)?.content || ""), 0);
-          box.querySelector("[data-ref-sum]").textContent = `已选 ${ids.length} 条，约 ${tokens} token`;
+          box.querySelector("[data-ref-sum]").textContent = `已选${ids.length}条，约${tokens} token`;
         }, applyMemo = () => {
           let n = Math.max(0, Math.round(Number(box.querySelector("[data-ref-memo]")?.value) || 0));
           for (let book of box.querySelectorAll(".pi-ref-book"))
@@ -10368,7 +10453,7 @@ ${floor.text}`).join(`
         continue;
       }
       let kept = text2.length > left ? `${text2.slice(0, left)}
-……（以下 ${text2.length - left} 字因长度限制未附带）` : text2;
+……（以下${text2.length - left}字因长度限制未附带）` : text2;
       used.push({ title: ref.title, text: kept }), report.push({ title: ref.title, chars: text2.length, kept: Math.min(text2.length, left) }), left -= Math.min(text2.length, left);
     }
     return { refs: used, report };
@@ -10862,6 +10947,16 @@ ${part.text}`
       }
     ];
   }
+  function importIndexForPart(index, partNo) {
+    if (!isPlainObject(index) || !Array.isArray(index.事实)) return index;
+    let here = Number(partNo) + 1;
+    return {
+      ...index,
+      事实: index.事实.map(
+        (f) => !isPlainObject(f) || !Number.isFinite(Number(f.段)) || Math.abs(Number(f.段) - here) <= 1 ? f : Object.fromEntries(["编号", "内容", "性质", "段"].filter((k) => f[k] != null && f[k] !== "").map((k) => [k, f[k]]))
+      )
+    };
+  }
   function mergeImportIndex(list) {
     let out = { 梗概: [], 人物: [], 地点: [], 事实: [], 门槛: [], 并行: [], 作者资料: [], 待确认: [] }, people = /* @__PURE__ */ new Map(), byName = /* @__PURE__ */ new Map(), aliasOwner = /* @__PURE__ */ new Map(), places = /* @__PURE__ */ new Set(), facts = /* @__PURE__ */ new Map();
     for (let [k, idx] of (list || []).entries()) {
@@ -11119,7 +11214,7 @@ ${talk}`
       return {
         ...x,
         id: x.parts.map((y) => y.id).join("+"),
-        plain: `「${x.same.stage}」：下面 ${names2.length} 个节点一直开不了（它们的开放条件要的线索，前面拿不到），这几条路走不通。`,
+        plain: `「${x.same.stage}」：下面${names2.length}个节点一直开不了（它们的开放条件要的线索，前面拿不到），这几条路走不通。`,
         names: names2,
         fix: "看看它们的开放条件：要的线索是不是写错了，或者前面阶段漏了产出这条线索的地方。",
         text: x.parts.map((y) => y.text).join(`
@@ -11363,12 +11458,12 @@ ${add}` : add;
       r.verdict === "blocked" ? out.push({
         ...base,
         level: "error",
-        text: `替代途径走不通：${r.stage}·${r.node} 单独走完时，${r.why}。常见原因：这条线产出的事实不在阶段结束条件 / 下一阶段进入条件的「任一」里`,
+        text: `替代途径走不通：${r.stage}·${r.node}单独走完时，${r.why}。常见原因：这条线产出的事实不在阶段结束条件 / 下一阶段进入条件的「任一」里`,
         ...routePlain(r, facts)
       }) : r.verdict === "unknown" && out.push({
         ...base,
         level: "warn",
-        text: `替代途径要到运行时才能确认：${r.stage}·${r.node} 单独走完时，${r.why}`,
+        text: `替代途径要到运行时才能确认：${r.stage}·${r.node}单独走完时，${r.why}`,
         plain: `「${r.stage}」：玩家只走${r.nodeNames.map((n) => `「${n}」`).join("、然后")}时能不能继续，要看游戏里表格、时间这些情况。`,
         fix: "多半不用改；想确定的话，看看这一阶段的结束条件是不是依赖表格或时间。"
       });
@@ -11378,7 +11473,7 @@ ${add}` : add;
       level: "error",
       kind: "reach",
       stageIds: [...new Set(stuck.map((x) => x.stageId).filter(Boolean))],
-      plain: `按现在的条件推下去，有地方永远走不到：${stuck.slice(0, 4).map((x) => `「${x.stage}${x.node ? `·${x.nodeName || x.node}` : ""}」`).join("、")}${after ? `，以及后面 ${after} 处因此走不到` : ""}。`,
+      plain: `按现在的条件推下去，有地方永远走不到：${stuck.slice(0, 4).map((x) => `「${x.stage}${x.node ? `·${x.nodeName || x.node}` : ""}」`).join("、")}${after ? `，以及后面${after}处因此走不到` : ""}。`,
       fix: "看看这些地方的进入条件或开放条件：要的线索是不是前面根本拿不到。",
       text: `按大纲推演走不通：${stuck.slice(0, 6).map((x) => `${x.stage}${x.node ? `·${x.node}` : ""}（${x.why}）`).join("；")}`
     }), stuck.length && reach.verdict === "unknown" && out.push({
@@ -11448,11 +11543,11 @@ ${add}` : add;
     return Object.defineProperties(out, { conflicts: { value: conflicts, enumerable: !1 }, skipped: { value: skipped, enumerable: !1 } });
   }
   function importConflictText(c) {
-    if (c.rewrite) return `线 ${c.line} 跨了几段，后面的段把前面已经写过的内容又写了一遍（${c.rewrite} 处），以前一段为准，后面只补了新的阶段和场景。需要的话在审阅页对照原文改`;
+    if (c.rewrite) return `线${c.line}跨了几段，后面的段把前面已经写过的内容又写了一遍（${c.rewrite}处），以前一段为准，后面只补了新的阶段和场景。需要的话在审阅页对照原文改`;
     if (c.lines)
-      return `草稿里写了好几条剧情线（${c.lines.join("、")}），长文导入暂时只能合成一条：保留了「${c.lines[0]}」，其余几条的阶段并进了这一条，它们的线编号和开启条件没有保留。要分开成几条线，采用后在大纲页让 AI 另写新的剧情线`;
+      return `草稿里写了好几条剧情线（${c.lines.join("、")}），长文导入暂时只能合成一条：保留了「${c.lines[0]}」，其余几条的阶段并进了这一条，它们的线编号和开启条件没有保留。要分开成几条线，采用后在大纲页让AI另写新的剧情线`;
     let s = (v) => (typeof v == "string" ? v : JSON.stringify(v)).slice(0, 80);
-    return `${c.stage}${c.node ? `·${c.node}` : ""} 的「${c.field}」两段写得不一样：保留了前一段的「${s(c.kept)}」，后一段是「${s(c.other)}」。需要的话在采用后手动改`;
+    return `${c.stage}${c.node ? `·${c.node}` : ""}的「${c.field}」两段写得不一样：保留了前一段的「${s(c.kept)}」，后一段是「${s(c.other)}」。需要的话在采用后手动改`;
   }
   var IMPORT_NEEDS_EXAMPLE = "这是我写的剧情方案，开头的真相和人物表只给我自己看，不要放进剧情。调查部分想细一点玩，打斗和赶路带过就行。中间有两条调查线不分先后，走哪条都能继续。原作的反转保留，其他细节可以为了好玩改动。", IMPORT_LINE_INDEX = [
     "支线:   # 这份文档里的每一条支线，按文档顺序。编号从 S01 起，整份文档统一（后面几段沿用前面已经编好的编号）",
@@ -11487,7 +11582,7 @@ ${IMPORT_LINE_INDEX}
           continue;
         }
         let entry = { ...l, 编号: id, parts: here(l) ? [k] : [] };
-        out.push(entry), byId.set(id, entry), no && byNo.has(no) && byNo.get(no) !== id ? notes.push(`文档里第 ${no} 条支线被编了两个编号（${byNo.get(no)}、${id}），请确认是不是同一条`) : no && byNo.set(no, id);
+        out.push(entry), byId.set(id, entry), no && byNo.has(no) && byNo.get(no) !== id ? notes.push(`文档里第${no}条支线被编了两个编号（${byNo.get(no)}、${id}），请确认是不是同一条`) : no && byNo.set(no, id);
       }
     for (let l of out)
       l.parts.length || (l.parts = (list || []).map(
@@ -11566,7 +11661,7 @@ ${mainLines}`,
           a: { id: a.id, stage: a.stage },
           b: { id: b.id, stage: b.stage },
           nodes: shared,
-          text: `这段内容同时出现在 ${a.id}「${a.stage}」和 ${b.id}「${b.stage}」${shared.length ? `（重复的节点：${shared.slice(0, 4).join("、")}${shared.length > 4 ? "……" : ""}）` : ""}，请核对归属。可能是整理时放错了线，可以重新整理其中一条。`
+          text: `这段内容同时出现在${a.id}「${a.stage}」和${b.id}「${b.stage}」${shared.length ? `（重复的节点：${shared.slice(0, 4).join("、")}${shared.length > 4 ? "……" : ""}）` : ""}，请核对归属。可能是整理时放错了线，可以重新整理其中一条。`
         });
       }
     return out;
@@ -11591,7 +11686,7 @@ ${mainLines}`,
           let got = known.includes(d.fact);
           add(idOf2(v), {
             level: got ? "error" : "warn",
-            text: `线索编号 ${d.fact} 项目里已经有了（「${old.node}」：${old.text}），这条线的「${n.name}」又用它表示「${d.text}」。${got ? "这个聊天里它已经拿到了，采用后这条线会被当成已经查到。" : ""}如果是同一件事的另一条查法可以保留；不是同一件事的话，写意见让 AI 换一个编号`
+            text: `线索编号${d.fact}项目里已经有了（「${old.node}」：${old.text}），这条线的「${n.name}」又用它表示「${d.text}」。${got ? "这个聊天里它已经拿到了，采用后这条线会被当成已经查到。" : ""}如果是同一件事的另一条查法可以保留；不是同一件事的话，写意见让AI换一个编号`
           });
         }
     let all = [...existing || [], ...drafts || []], mine = new Set((drafts || []).map(idOf2)), reach = clueReachability(all, { knownFacts: known, claimedFacts: claimed });
@@ -11601,7 +11696,7 @@ ${mainLines}`,
       let hard = stuck.filter((x) => !x.unknown), soft = stuck.filter((x) => x.unknown), say = (list) => list.slice(0, 4).map((x) => `${x.stage}${x.node ? `·${x.node}` : ""}（${x.why}）`).join("；");
       hard = hard.filter((x) => !/线 [A-Za-z]+\d+ (未触发|可开启)/.test(x.why)), hard.length && add(id, {
         level: "error",
-        text: `这条线走不通：${say(hard)}。常见原因是阶段的进入条件要等本阶段自己才能查到的线索，写意见让 AI 改`
+        text: `这条线走不通：${say(hard)}。常见原因是阶段的进入条件要等本阶段自己才能查到的线索，写意见让AI改`
       }), !hard.length && soft.length && add(id, { level: "info", text: `有些地方要到玩的时候才知道能不能走通（取决于时间或表格）：${say(soft)}` });
     }
     return out;
@@ -11670,20 +11765,20 @@ ${mainLines}`,
     }, otherIds = (ident || []).filter((l) => l.编号 !== id), refsAny = otherIds.some((l) => mentions(l.编号)) || (mains || []).some((m) => mentions(m.id)), free = !!text2 && LINE_FREE_WORDS.test(text2) && !refsAny, stance = free ? "free" : text2 ? "stated" : "silent", atoms = [], errs = [], parsed = hasCond ? parseCondition(cond, errs) : null, walk = (c) => c && (c.kind === "group" ? c.items.forEach(walk) : atoms.push(c));
     walk(parsed);
     let lineAtoms = atoms.filter((a) => a.kind === "line"), unbacked = lineAtoms.filter((a) => !mentions(a.line)).map((a) => a.line), others = atoms.filter((a) => a.kind !== "line"), problems2 = [];
-    return unbacked.length && problems2.push(`要等 ${unbacked.join("、")}，但文档没提到${unbacked.length > 1 ? "它们" : "它"}`), stance === "free" && others.length && problems2.push(`多了 ${others.map((a) => a.raw || a.kind).join("、")}`), stance !== "free" && lineAtoms.length > unbacked.length && others.length && problems2.push(`除了等线，还多了 ${others.map((a) => a.raw || a.kind).join("、")}，请核对原文有没有这一项`), stance === "free" && win && problems2.push(`加了开启时段（${String(win.主线).trim()}）`), stance === "stated" && !lineAtoms.length && others.length && problems2.push(`是 ${others.map((a) => a.raw || a.kind).join("、")}，请核对原文是不是这个意思`), problems2.length ? {
-      text: `${stance === "free" ? `文档里这条是独立的（${said}）` : stance === "stated" ? `文档写的是：${said}` : "文档没写这条的开启前提"}；AI 写的开启条件${problems2.join("；")}`,
+    return unbacked.length && problems2.push(`要等${unbacked.join("、")}，但文档没提到${unbacked.length > 1 ? "它们" : "它"}`), stance === "free" && others.length && problems2.push(`多了${others.map((a) => a.raw || a.kind).join("、")}`), stance !== "free" && lineAtoms.length > unbacked.length && others.length && problems2.push(`除了等线，还多了${others.map((a) => a.raw || a.kind).join("、")}，请核对原文有没有这一项`), stance === "free" && win && problems2.push(`加了开启时段（${String(win.主线).trim()}）`), stance === "stated" && !lineAtoms.length && others.length && problems2.push(`是${others.map((a) => a.raw || a.kind).join("、")}，请核对原文是不是这个意思`), problems2.length ? {
+      text: `${stance === "free" ? `文档里这条是独立的（${said}）` : stance === "stated" ? `文档写的是：${said}` : "文档没写这条的开启前提"}；AI写的开启条件${problems2.join("；")}`,
       level: stance === "free" || unbacked.length ? "error" : "warn",
       canDrop: stance === "free"
-    } : stance === "silent" && hasCond && !lineAtoms.length ? { text: "文档没写这条的开启前提，AI 写了开启条件，请核对原文", level: "warn", canDrop: !1 } : null;
+    } : stance === "silent" && hasCond && !lineAtoms.length ? { text: "文档没写这条的开启前提，AI写了开启条件，请核对原文", level: "warn", canDrop: !1 } : null;
   }
   function droppedLineRefs(kept, dropped, existingVolumes = []) {
     let gone = new Set(dropped), out = [], comp = compileClue([...existingVolumes, ...kept]);
     for (let l of comp.lines || [])
       for (let id of conditionRefs(l.open).lines)
         gone.has(id) && out.push(
-          `线 ${l.id}「${l.name}」的开启条件要等 ${id}，但 ${id} 不要了：${l.id} 会一直开不了，可以写意见让 AI 改条件，或者一起不要`
+          `线 ${l.id}「${l.name}」的开启条件要等${id}，但${id}不要了：${l.id}会一直开不了，可以写意见让AI改条件，或者一起不要`
         );
-    for (let l of comp.lines || []) l.window && gone.has(l.window.main) && out.push(`线 ${l.id} 的开启时段引用了 ${l.window.main}`);
+    for (let l of comp.lines || []) l.window && gone.has(l.window.main) && out.push(`线 ${l.id} 的开启时段引用了${l.window.main}`);
     return out;
   }
   function mainLinesText(volumes) {
@@ -11703,9 +11798,13 @@ ${mainLines}`,
     none: "还没确定",
     away: "主角眼下没在任何一段剧情里，只给入口"
   };
+  function trpgSeedRows(project, c, factRows, knowRows) {
+    if (!isTrpg(project) || !c) return { factRows, knowRows };
+    let keep = trpgRowFilter(c.compiled, trpgWantFacts(c.compiled, c.state, c.snap, c.prog, project.clue));
+    return { factRows: factRows.filter((f) => keep(f.code)), knowRows: knowRows.filter((k) => keep(k.fact)) };
+  }
   function modeCard(project, inner = !1) {
-    let mode2 = project.clue ? project.clue.mode : "outline", body = `<div class="pi-seg">${PLOT_MODES.map((item) => `<button type="button" class="pi-seg-btn${item.value === mode2 ? " is-sel" : ""}" data-act="clue-mode" data-mode="${item.value}">${esc(item.label)}</button>`).join("")}</div>
-        <p class="pi-hint">${mode2 === "clue" ? "按主角实际查到的线索一步步开放剧情；进度跟着数据库填表更新。" : "按阶段顺序推进，每隔几楼让 AI 检查这一阶段演完没有。"}</p>`;
+    let mode2 = project.clue ? project.clue.mode : "outline", body = `<div class="pi-seg">${PLOT_MODES.map((item) => `<button type="button" class="pi-seg-btn${item.value === mode2 ? " is-sel" : ""}" data-act="clue-mode" data-mode="${item.value}">${esc(item.label)}</button>`).join("")}</div>`;
     return inner ? `<div class="pi-run-sec"><div class="pi-run-sec-hd">推进方式</div>${body}</div>` : `<div class="pi-card"><h3>推进方式</h3>${body}</div>`;
   }
   function bindingText(list) {
@@ -11721,13 +11820,13 @@ ${mainLines}`,
     ].filter(Boolean).join("，") || "还没有绑定", path = b.scene && b.scene.路径, hasCatalog = !!(tables && path && catalogKnown(tables, path));
     return `<div class="${inner ? "pi-run-sec" : "pi-card"}"><${inner ? 'div class="pi-run-sec-hd"' : "h3"}>表格绑定<span class="pi-meta">${esc(summary)}</span><span class="pi-spacer"></span>
         <button type="button" class="pi-btn is-sm is-ghost" data-act="clue-bind-toggle">${open ? "收起" : "编辑"}</button></${inner ? "div" : "h3"}>
-        ${open ? `<p class="pi-hint">告诉插件去数据库的哪张表、哪一列读线索。用「生成线索模板」建的表，点「填入示例」再「应用」就行；自己的表照着示例改表名和列名。</p>
+        ${open ? `<p class="pi-hint">告诉插件去数据库的哪张表、哪一列读线索。用「创建模板」建的表，点「填入示例」再「应用」就行；自己的表照着示例改表名和列名。</p>
         <textarea class="pi-ta is-mono is-tall" data-clue-bindings>${esc(bindingText(b))}</textarea>
         <div class="pi-tools is-c2 is-end"><button type="button" class="pi-btn is-sm" data-act="clue-bind-example">填入示例</button>
         <button type="button" class="pi-btn is-primary is-sm" data-act="clue-bind-apply">应用</button></div><p class="pi-status" data-clue-bind-status></p>` : ""}
-        <div class="pi-tools"><button type="button" class="pi-btn is-sm is-primary is-wide" data-act="clue-gen-template" title="在当前聊天的表格上加入三张线索表（带上大纲要用的行），并调整默认表的规则；先预览，确认后才导入">生成线索模板…</button></div>
-        <div class="pi-tools is-c${hasCatalog ? 2 : 3}"><button type="button" class="pi-btn is-sm" data-act="clue-prebuild" title="大纲里加了新线索以后，把缺的行补进关键事实表、知情表；已有的行不动">按大纲补表格行…</button><button type="button" class="pi-btn is-sm" data-act="clue-labels-edit" title="改关键事实表里已有线索的标签和登记口径">改线索标签…</button>
-        ${hasCatalog ? "" : '<button type="button" class="pi-btn is-sm" data-act="clue-catalog" title="旧聊天的线索表没有「场景目录」列、又不想重新生成模板时用：复制一段对照文字，手动贴进表格说明">手动贴场景目录…</button>'}</div></div>`;
+        <div class="pi-tools"><button type="button" class="pi-btn is-sm is-primary is-wide" data-act="clue-gen-template" title="生成线索模板：在当前聊天的表格上加入三张线索表（带上大纲要用的行），并调整默认表的规则；先预览，确认后才导入">创建模板</button></div>
+        <div class="pi-tools is-c${hasCatalog ? 2 : 3}"><button type="button" class="pi-btn is-sm" data-act="clue-prebuild" title="按大纲补表格行：大纲里加了新线索以后，把缺的行补进关键事实表、知情表；已有的行不动">补全表格…</button><button type="button" class="pi-btn is-sm" data-act="clue-labels-edit" title="修改线索标签：修改关键事实表里已有线索的标签和登记口径">修改线索…</button>
+        ${hasCatalog ? "" : '<button type="button" class="pi-btn is-sm" data-act="clue-catalog" title="手动贴场景目录：旧聊天的线索表没有「场景目录」列、又不想重新生成模板时用，复制一段对照文字，手动贴进表格说明">场景目录</button>'}</div></div>`;
   }
   var BINDING_EXAMPLE = `facts:
   - {表: 关键事实表, 编号列: 编号, 状态列: 状态, 已核实值: 已核实, 说法值: 存疑, 内容列: 内容, 来源列: 依据}
@@ -11769,7 +11868,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
         <p class="pi-hint">日常游玩中：不注入线索，只保留设定；进度都保留，继续后接着推。</p></div>` : done && !multi ? `<div class="pi-card"><h3>主线<span class="pi-badge is-ok">已全部完成</span><span class="pi-spacer"></span>
         <button type="button" class="pi-btn is-sm" data-act="clue-pause" data-value="1">暂停剧情</button>
         <button type="button" class="pi-btn is-sm is-primary" data-act="clue-next">开始下一段主线…</button></h3>
-        <p class="pi-hint">${leads ? `还有 ${leads} 个没走过的可选节点会作为「可以去做的事」提供给正文；不想要就暂停剧情。` : "已经没有可去做的线索事项。"}想接着玩，点「开始下一段主线」写一条新的主线。</p></div>` : `<div class="pi-card"><h3>${title2}<span class="pi-badge is-ok">进行中</span><span class="pi-spacer"></span>
+        <p class="pi-hint">${leads ? `还有${leads}个没走过的可选节点会作为「可以去做的事」提供给正文；不想要就暂停剧情。` : "已经没有可去做的线索事项。"}想接着玩，点「开始下一段主线」写一条新的主线。</p></div>` : `<div class="pi-card"><h3>${title2}<span class="pi-badge is-ok">进行中</span><span class="pi-spacer"></span>
         ${multi ? pauseMenu(c) : '<button type="button" class="pi-btn is-sm" data-act="clue-pause" data-value="1" title="去玩日常：所有线索内容都不注入，进度保留">暂停剧情</button>'}</h3>${multi ? `<p class="pi-hint">${esc(lineSummary(c))}</p>` : ""}</div>`;
   }
   function nodeGroups(groups, c, st72) {
@@ -11777,7 +11876,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
     let live = groups.filter((g) => g.live), rest = groups.filter((g) => !g.live);
     if (!live.length || !rest.length) return groups.map((g) => g.html).join("");
     let open = !!st72.stagesOpen;
-    return `${live.map((g) => g.html).join("")}<button type="button" class="pi-run-fold is-sub" data-act="run-stages-toggle" aria-expanded="${open}">${open ? "▾" : "▸"} 其他阶段（${rest.length}）</button>${open ? rest.map((g) => g.html).join("") : ""}`;
+    return `${live.map((g) => g.html).join("")}<button type="button" class="pi-run-fold is-sub" data-act="run-stages-toggle" aria-expanded="${open}">${open ? "▾" : "▸"}其他阶段（${rest.length}）</button>${open ? rest.map((g) => g.html).join("") : ""}`;
   }
   function lineDisplayName(l) {
     let name = String(l.name || "").replace(/·/g, " ");
@@ -11785,7 +11884,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
   }
   function lineSummary(c) {
     let list = c.state.lineStates || [], on = (k) => list.filter((s) => s.line.kind === k && s.state === "进行中").length, sides = list.filter((s) => s.line.kind === "side").length, limit = c.plan ? c.plan.slots.limit : 1;
-    return `主线 ${on("main")} 条进行中${sides ? `；支线 ${on("side")} / ${limit} 条` : ""}${c.prog.mainPaused ? "；主线已全部暂停" : ""}${c.prog.sidePaused ? "；支线已全部暂停" : ""}`;
+    return `主线${on("main")}条进行中${sides ? `；支线${on("side")} / ${limit}条` : ""}${c.prog.mainPaused ? "；主线已全部暂停" : ""}${c.prog.sidePaused ? "；支线已全部暂停" : ""}`;
   }
   function pauseMenu(c) {
     let list = c.state.lineStates || [], mains = list.filter((s) => s.line.kind === "main").length, sides = list.filter((s) => s.line.kind === "side").length;
@@ -11799,8 +11898,8 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
     let limit = c.plan ? c.plan.slots.limit : 1;
     return `<div class="pi-row pi-line-opts"><label class="pi-check"><span>同时进行的支线</span><select class="pi-sel is-sm" data-clue-sidelimit>${options(
       [
-        { value: "1", label: "最多 1 条" },
-        { value: "2", label: "最多 2 条" }
+        { value: "1", label: "最多1条" },
+        { value: "2", label: "最多2条" }
       ],
       String(limit)
     )}</select></label>
@@ -11809,7 +11908,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
   function renderClueRun(view, project, st72) {
     let { runtime } = view, clue = runtime.clue, c = clue.compute(), d = clue.diagnose();
     if (!c) return modeCard(project);
-    let problems2 = [...c.snap.problems, ...c.compiled.errors, ...c.state.cycles.map((u) => `节点 ${u} 条件循环引用`)], focus = c.state.focus, focusNode = c.state.nodeStates.find((s) => s.node.uid === focus.uid), entries = runtime.entries(), clueEntry = entries.find((e) => e.slotId === CLUE_SLOT), enabled = c.snap.enabled === !1 ? '<span class="pi-badge is-warn">主线关闭</span>' : "", paused = c.prog.paused ? '<span class="pi-badge is-warn">已暂停</span>' : "", groups = [];
+    let problems2 = [...c.snap.problems, ...c.compiled.errors, ...c.state.cycles.map((u) => `节点${u}条件循环引用`)], focus = c.state.focus, focusNode = c.state.nodeStates.find((s) => s.node.uid === focus.uid), entries = runtime.entries(), clueEntry = entries.find((e) => e.slotId === CLUE_SLOT), enabled = c.snap.enabled === !1 ? '<span class="pi-badge is-warn">主线关闭</span>' : "", paused = c.prog.paused ? '<span class="pi-badge is-warn">已暂停</span>' : "", groups = [];
     for (let unit of c.compiled.units) {
       let stage = c.state.stageStates.get(unit.id);
       groups.push({
@@ -11817,8 +11916,10 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
         html: stageBlock(unit, stage, c.state.nodeStates.filter((s) => s.node.unit === unit), focus.uid, st72)
       });
     }
-    let last = clue.lastInjected(), b0 = project.clue.bindings, unbound = !(b0.facts.length || b0.knowledge.length), setOpen = st72.setOpen !== void 0 ? st72.setOpen : unbound || !c.snap.api, mode0 = (PLOT_MODES.find((m) => m.value === project.clue.mode) || PLOT_MODES[0]).label, setSummary = [mode0, unbound ? "表格未绑定" : "表格已绑定", `推进速度 ${(PACES.find((x) => x.value === runtime.progress().pace) || PACES[1]).label}`].join("，"), settings = `<div class="pi-card pi-run-set"><h3><button type="button" class="pi-run-fold" data-act="run-set-toggle" aria-expanded="${setOpen}">${setOpen ? "▾" : "▸"} 运行设置</button>${setOpen ? "" : `<span class="pi-meta">${esc(setSummary)}</span>`}</h3>
-        ${setOpen ? `${modeCard(project, !0)}${bindingCard(project, st72, c.snap.api ? c.snap.tables : null, !0)}${lineOpts(c, project)}<div class="pi-pace"><span class="pi-pace-label">推进速度</span><div class="pi-seg">${PACES.map((pace) => `<button type="button" class="pi-seg-btn${pace.value === runtime.progress().pace ? " is-sel" : ""}" data-act="pace" data-pace="${pace.value}">${pace.label}</button>`).join("")}</div></div>` : ""}</div>`, labelRow = (c.state.lineStates || []).length ? labelsPendingHtml(project, c) : "", noDb = !c.snap.api, todo = [...problems2.map((p) => `<p class="pi-hint is-warn">${esc(noDb && p === c.snap.problems[0] ? "没有检测到数据库插件（shujuku），当前无法注入。剧情线的进度不受影响，装好并开启数据库插件后接着用。" : p)}</p>`), ...labelRow ? [labelRow] : []];
+    let last = clue.lastInjected(), b0 = project.clue.bindings, unbound = !(b0.facts.length || b0.knowledge.length), setOpen = st72.setOpen !== void 0 ? st72.setOpen : unbound || !c.snap.api, mode0 = (PLOT_MODES.find((m) => m.value === project.clue.mode) || PLOT_MODES[0]).label, setSummary = [mode0, unbound ? "表格未绑定" : "表格已绑定", `推进速度${(PACES.find((x) => x.value === runtime.progress().pace) || PACES[1]).label}`].join("，"), settings = `<div class="pi-card pi-run-set"><h3><button type="button" class="pi-run-fold" data-act="run-set-toggle" aria-expanded="${setOpen}">${setOpen ? "▾" : "▸"}运行设置</button>${setOpen ? "" : `<span class="pi-meta">${esc(setSummary)}</span>`}</h3>
+        ${setOpen ? `${modeCard(project, !0)}${bindingCard(project, st72, c.snap.api ? c.snap.tables : null, !0)}${lineOpts(c, project)}<div class="pi-pace"><span class="pi-pace-label">推进速度</span><div class="pi-seg">${PACES.map((pace) => `<button type="button" class="pi-seg-btn${pace.value === runtime.progress().pace ? " is-sel" : ""}" data-act="pace" data-pace="${pace.value}">${pace.label}</button>`).join("")}</div></div>` : ""}</div>`, labelRow = (c.state.lineStates || []).length ? labelsPendingHtml(project, c) : "", noDb = !c.snap.api, lack = noDb ? [] : problems2.filter((p) => /^缺少表「/.test(p)), lackRow = lack.length ? `<p class="pi-hint is-warn">当前聊天还没有线索表（${esc(lack.map((p) => p.replace(/^缺少表/, "")).join("、"))}）。<button type="button" class="pi-btn is-sm is-primary" data-act="clue-gen-template">创建模板</button></p>` : "";
+    problems2 = problems2.filter((p) => !lack.includes(p));
+    let todo = [...lackRow ? [lackRow] : [], ...problems2.map((p) => `<p class="pi-hint is-warn">${esc(noDb && p === c.snap.problems[0] ? "没有检测到数据库插件（shujuku），当前无法注入。剧情线的进度不受影响，装好并开启数据库插件后接着用。" : p)}</p>`), ...labelRow ? [labelRow] : []];
     return `${todo.length ? `<div class="pi-card"><h3>需要处理<span class="pi-badge is-warn">${todo.length}</span></h3>${todo.join("")}</div>` : ""}
         ${mainlineCard(c)}${lineCard(c, project)}
         <div class="pi-card"><h3>本轮场景${enabled}${paused}<span class="pi-spacer"></span>
@@ -11830,20 +11931,19 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
         ${(c.hints || []).map((h) => `<p class="pi-hint is-warn">两表核对：${esc(h)}</p>`).join("")}
         ${c.notReady && c.notReady.size && focusNode && discoveryList(isPlainObject(focusNode.node.item) ? focusNode.node.item : {}).some((d2) => d2.fact && c.notReady.has(d2.fact)) ? `<p class="pi-hint is-warn">这一场有线索还在准备，这一轮先不给正文：${esc(
       discoveryList(focusNode.node.item).filter((d2) => d2.fact && c.notReady.has(d2.fact)).map((d2) => d2.fact).join("、")
-    )}。下一次填表后会自动补；一直补不上可以用「按大纲补表格行」。</p>` : ""}
-        ${!c.prog.paused && d.plot && d.plot.items.length ? `<p class="pi-hint is-warn">数据库剧情推进预设「${esc(d.plot.preset)}」里启用了召回以外的任务：${esc(d.plot.items.map((x) => `「${x.task}」（输出 ${x.tags.join("、")}）`).join("、"))}。它们会替角色安排行动，可能和线索剧情抢方向。建议在数据库里先关掉，只留召回（插件不会替你改）。</p>` : ""}
-        <p class="pi-hint">这一轮要注入${clueEntry && clueEntry.content ? `约 ${estimateTokens(clueEntry.content)} token` : `的内容为空${c.snap.api ? clueEntry && clueEntry.reason ? `（${esc(clueEntry.reason)}）` : "" : "（数据库未连接）"}`}${last ? `；上次实际注入 ${new Date(last.at).toLocaleTimeString("zh-CN", { hour12: !1 })}，${last.chars} 字` : ""}。</p>
-        <p class="pi-hint">按数据库最近一次填好的表格计算${d.lastTableUpdate ? `（表格 ${new Date(d.lastTableUpdate).toLocaleTimeString("zh-CN", { hour12: !1 })} 更新）` : ""}。上一轮还没填完就发送，新线索会晚一轮生效。</p>
+    )}。下一次填表后会自动补；一直补不上可以用「补全表格」。</p>` : ""}
+        ${!c.prog.paused && d.plot && d.plot.items.length ? `<p class="pi-hint is-warn">数据库剧情推进预设「${esc(d.plot.preset)}」里启用了召回以外的任务：${esc(d.plot.items.map((x) => `「${x.task}」（输出${x.tags.join("、")}）`).join("、"))}。它们会替角色安排行动，可能和线索剧情抢方向。建议在数据库里先关掉，只留召回（插件不会替你改）。</p>` : ""}
+        <p class="pi-hint" title="按数据库最近一次填好的表格计算。上一轮还没填完就发送，新线索会晚一轮生效。">这一轮要注入${clueEntry && clueEntry.content ? `约${estimateTokens(clueEntry.content)} token` : `的内容为空${c.snap.api ? clueEntry && clueEntry.reason ? `（${esc(clueEntry.reason)}）` : "" : "（数据库未连接）"}`}${last ? `；上次实际注入${new Date(last.at).toLocaleTimeString("zh-CN", { hour12: !1 })}，${last.chars}字` : ""}${d.lastTableUpdate ? `；表格${new Date(d.lastTableUpdate).toLocaleTimeString("zh-CN", { hour12: !1 })}更新` : ""}。</p>
         </div>
         <div class="pi-card"><h3>节点<span class="pi-meta">点节点看条件，「⋯」手动调整</span><span class="pi-spacer"></span>
-            <button type="button" class="pi-btn is-sm is-ghost" data-act="rewrite" title="按已发生的剧情和线索进度，让 AI 改写未结束的阶段；结果先进草稿，不会直接覆盖">改写后续</button></h3>
+            <button type="button" class="pi-btn is-sm is-ghost" data-act="rewrite" title="按已发生的剧情和线索进度，让AI改写未结束的阶段；结果先进草稿，不会直接覆盖">改写后续</button></h3>
         ${nodeGroups(groups, c, st72) || '<p class="pi-hint">大纲为空。</p>'}</div>
         ${settings}
         ${clueLogCard(runtime)}`;
   }
   function clueLogCard(runtime) {
-    let prog = runtime.progress(), ops = normalizeClueOps(prog.clue).ops.slice(-12).reverse(), chat = chatMessages();
-    return ops.length ? `<div class="pi-card"><h3>手动操作记录</h3>${ops.map((op) => `<p class="pi-hint${anchorValid(op.at, chat) ? "" : " is-off"}">${new Date(op.time).toLocaleString("zh-CN", { hour12: !1 })}　${esc(runtime.clue.opLabel(op))}${anchorValid(op.at, chat) ? "" : "（所在楼层已回退，未生效）"}</p>`).join("")}</div>` : "";
+    let prog = runtime.progress(), allOps = normalizeClueOps(prog.clue).ops, ops = allOps.slice(-12).reverse(), chat = chatMessages();
+    return ops.length ? `<div class="pi-card"><details class="pi-fold"><summary><b>操作记录（${allOps.length}）</b></summary>${ops.map((op) => `<p class="pi-hint${anchorValid(op.at, chat) ? "" : " is-off"}">${new Date(op.time).toLocaleString("zh-CN", { hour12: !1 })}　${esc(runtime.clue.opLabel(op))}${anchorValid(op.at, chat) ? "" : "（所在楼层已回退，未生效）"}</p>`).join("")}</details></div>` : "";
   }
   function factRowsHtml(facts, prefix, volumes, stored = {}, { intro = !0 } = {}) {
     let ctx2 = new Map(
@@ -11867,7 +11967,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
           <p>这两样每一轮都会发给填表模型，所以<b>不能写出答案</b>：写「打开抽屉、读到单据时」，不写单据上写了什么。</p>
           <p class="is-example">例　标签：抽屉里的单据　｜　写到哪一步：主角打开抽屉、读到单据内容时算拿到；只看到锁着的抽屉不算</p></div>
           <div class="pi-tools is-c1"${intro ? "" : " hidden"}><button type="button" class="pi-btn is-sm" data-fr-auto>自动填写</button></div>
-          <p class="pi-hint" data-fr-status>${intro ? "建议先点「自动填写」，由 AI 按大纲写好，你只需要检查标黄的地方。也可以自己填。" : "标黄的地方是插件检查出的问题，照着改框里的字就行。"}</p>
+          <p class="pi-hint" data-fr-status>${intro ? "建议先点「自动填写」，由AI按大纲写好，你只需要检查标黄的地方。也可以自己填。" : "标黄的地方是插件检查出的问题，照着改框里的字就行。"}</p>
           ${facts.map(row2).join("")}</div>`;
   }
   function storedLabel(stored, code, c) {
@@ -11888,7 +11988,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
       )
     ).then((jobs) => {
       let missing = jobs.filter((j) => !j).length;
-      secrets = [.../* @__PURE__ */ new Set([...jobs.filter(Boolean).flatMap((j) => importSecretNames(j.index) || []), ...projectSecretNames(project) || []])], secretsNote = missing ? `有 ${missing} 份导入记录读不到，这次没有核对其中的保密名字。` : "", secretsNote && (status.textContent = `${status.textContent} ${secretsNote}`), facts.forEach((_, i) => (field2(i, "label").value.trim() || field2(i, "crit").value.trim()) && check(i));
+      secrets = [.../* @__PURE__ */ new Set([...jobs.filter(Boolean).flatMap((j) => importSecretNames(j.index) || []), ...projectSecretNames(project) || []])], secretsNote = missing ? `有${missing}份导入记录读不到，这次没有核对其中的保密名字。` : "", secretsNote && (status.textContent = `${status.textContent} ${secretsNote}`), facts.forEach((_, i) => (field2(i, "label").value.trim() || field2(i, "crit").value.trim()) && check(i));
     }), reviewed = /* @__PURE__ */ new Map(), check = (i) => {
       let f = facts[i], value = { label: field2(i, "label").value.trim(), criterion: field2(i, "crit").value.trim() }, r = factLabelCheck({ ...value, unsure: unsure.get(f.code) || "" }, ctx2.get(f.code) || {}, { secrets }), out = box.querySelector(`[data-fr-warn="${i}"]`), rv = reviewed.get(f.code), same2 = rv && rv.label === value.label && rv.criterion === value.criterion, warns = [...r.warns], notes = [...r.notes];
       if (same2 && rv.leak) warns.push(`会透露答案：${rv.what || "标签或口径里写出了查到的内容"}`);
@@ -11955,7 +12055,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
           reviewFailed = `检查没完成（${error.message}），下面按字面比对标出了可能透露答案的地方。`;
         }
         let warned = facts.reduce((n, _, i) => n + (check(i) ? 1 : 0), 0);
-        status.textContent = `${secretsNote}${reviewFailed}已填好 ${todo.length - r.missing.length} 条${r.missing.length ? `，${r.missing.length} 条没生成（${r.missing.join("、")}），可以再点一次或自己填` : ""}。${fixed ? `${fixed} 条原来的写法会透露答案，已经自动改好。` : ""}${warned ? `${warned} 条标黄：黄字说明了原因，照着改一下框里的字就行，改完黄色会消失。觉得没问题也可以不改，标黄不会挡住导入。` : "没有发现问题，可以直接确认。"}`;
+        status.textContent = `${secretsNote}${reviewFailed}已填好${todo.length - r.missing.length}条${r.missing.length ? `，${r.missing.length}条没生成（${r.missing.join("、")}），可以再点一次或自己填` : ""}。${fixed ? `${fixed}条原来的写法会透露答案，已经自动改好。` : ""}${warned ? `${warned}条标黄：黄字说明了原因，照着改一下框里的字就行，改完黄色会消失。觉得没问题也可以不改，标黄不会挡住导入。` : "没有发现问题，可以直接确认。"}`;
       } catch (error) {
         status.textContent = `生成失败：${error.message}。可以再试一次，或者自己填。`;
       } finally {
@@ -12030,11 +12130,11 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
       let mode2 = target.dataset.mode, project = view.project();
       !project || project.clue && project.clue.mode === mode2 || mode2 === "clue" && !await confirmDialog({
         title: "切换到线索推进",
-        body: "线索推进按主角实际查到了什么来推进：数据库填表时记下拿到的线索，插件据此开放下一步。不再用 AI 判断「这一阶段演完了没有」，也不再一次把整个阶段交给正文。",
+        body: "线索推进按主角实际查到了什么来推进：数据库填表时记下拿到的线索，插件据此开放下一步。不再用AI判断「这一阶段演完了没有」，也不再一次把整个阶段交给正文。",
         list: [
           "大纲推进的进度会保留，切回来就恢复。",
           "大纲要写「发现」和「完成条件」，节点才会自动完成；没写的只能在执行页手动标记。",
-          "切换后，点下面「表格绑定」里的「生成线索模板」，给这个聊天加上记录线索的表格。"
+          "切换后，点下面「表格绑定」里的「创建模板」，给这个聊天加上记录线索的表格。"
         ],
         okLabel: "切换"
       }) || (view.runtime.bumpEpoch(), view.data.updateProject(view.projectId, (p) => ({ ...p, clue: normalizeClue({ ...p.clue, mode: mode2 }) })), view.runtime.clue.hideLineBar(), view.runtime.clue.invalidate(), mode2 === "clue" && view.runtime.clue.scheduleSync(), view.runtime.refresh(), view.renderBody());
@@ -12059,7 +12159,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
       let card = target.closest(".pi-card"), status = card.querySelector("[data-clue-bind-status]");
       try {
         let value = parseYaml(card.querySelector("[data-clue-bindings]").value) || {};
-        if (!isPlainObject(value)) throw new Error("应是 switch / facts / knowledge / scene / time 的映射");
+        if (!isPlainObject(value)) throw new Error("应是switch / facts / knowledge / scene / time的映射");
         view.data.updateProject(view.projectId, (p) => ({ ...p, clue: normalizeClue({ ...p.clue, bindings: value }) })), view.runtime.clue.invalidate(), view.tabState("run").bindOpen = !1, view.renderBody();
       } catch (error) {
         status.textContent = error.message, status.classList.add("is-err");
@@ -12142,9 +12242,9 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
         title: "开始下一段主线",
         body: "下一段主线写成一条新的剧情线，放在现有大纲后面。前面的主线结束后，它的第一阶段会自动开始。",
         list: [
-          "1. 到大纲页用「AI 写新剧情线」或自己写一条（会附上已用过的编号，避免撞号）",
+          "1. 到大纲页用「AI写新剧情线」或自己写一条（会附上已用过的编号，避免撞号）",
           "2. 回到执行页，在「表格绑定」里点「按大纲补表格行…」，给新事实建行",
-          "3. 旧聊天先点一次「生成线索模板」，让新剧情线的场景能被认出来",
+          "3. 旧聊天先点一次「创建模板」，让新剧情线的场景能被认出来",
           "写新剧情线期间想先玩日常，可以先暂停剧情"
         ],
         okLabel: "去写新剧情线"
@@ -12171,10 +12271,10 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
         let stored = storedLabel(project.clue.labels, f.code, labelCtx.get(f.code)), fromProject = !drafts[f.code] && stored && (stored.label !== f.table.label || stored.criterion !== f.table.criterion) ? { label: stored.label, criterion: stored.criterion } : null, pend = drafts[f.code] || fromProject;
         return { ...f, now: pend || f.table, retry: !!drafts[f.code], newer: !!fromProject, draft: pend || null };
       });
-      if (!facts.length) return toast("info", "表格里还没有这个项目的线索行。先用「生成线索模板」或「按大纲补表格行」建好。");
+      if (!facts.length) return toast("info", "表格里还没有这个项目的线索行。先用「创建模板」或「补全表格」建好。");
       let retry = facts.filter((f) => f.retry).length, newer = facts.filter((f) => f.newer).length, picked = await openDialog({
-        title: "改线索标签",
-        html: `<p class="pi-hint">改的是当前聊天「${esc(fb.表)}」里的标签和登记口径。改宽了，主角还没查到就可能被算作拿到。</p>${seedOnly ? '<p class="pi-hint is-warn">这个聊天还没填过表，表格里现在是模板的初始行。改动先存进项目；聊一轮、数据库第一次填表后，再打开这里点保存，写进表格。</p>' : ""}${retry ? `<p class="pi-hint is-warn">上次有 ${retry} 条没写进表格，下面是你当时填的内容，点保存再试一次。</p>` : ""}${newer && !seedOnly ? `<p class="pi-hint is-warn">有 ${newer} 条和项目里存的不一样，下面填的是项目里的版本，点保存写进这个聊天的表格。</p>` : ""}${factRowsHtml(facts, "le", project.outline.volumes, {}, { intro: !1 })}`,
+        title: "修改线索标签",
+        html: `<p class="pi-hint">改的是当前聊天「${esc(fb.表)}」里的标签和登记口径。改宽了，主角还没查到就可能被算作拿到。</p>${seedOnly ? '<p class="pi-hint is-warn">这个聊天还没填过表，表格里现在是模板的初始行。改动先存进项目；聊一轮、数据库第一次填表后，再打开这里点保存，写进表格。</p>' : ""}${retry ? `<p class="pi-hint is-warn">上次有${retry}条没写进表格，下面是你当时填的内容，点保存再试一次。</p>` : ""}${newer && !seedOnly ? `<p class="pi-hint is-warn">有${newer}条和项目里存的不一样，下面填的是项目里的版本，点保存写进这个聊天的表格。</p>` : ""}${factRowsHtml(facts, "le", project.outline.volumes, {}, { intro: !1 })}`,
         onMount: (root) => mountFactRows(view, root, facts, "le", project.outline.volumes),
         actions: [
           { label: "取消", value: null },
@@ -12197,8 +12297,8 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
       let live = () => prebuildScopeValid(view, scope) && view.runtime.clue.opScope().iso === s0.iso, pid = project.id, changed = picked.filter((f) => f.label !== f.table.label || f.criterion !== f.table.criterion), synced = picked.filter((f) => !changed.includes(f) && f.draft && f.draft.label === f.label && f.draft.criterion === f.criterion);
       if (!live()) return toast("warning", "确认期间切换了聊天、项目、推进方式或数据隔离，没有写入。请回到原聊天重新操作。");
       if (seedOnly && changed.length)
-        return keepLabels(view, changed, pid), labelDrafts.set(dkey, { ...labelDrafts.get(dkey) || {}, ...Object.fromEntries(changed.map((f) => [f.code, { label: f.label, criterion: f.criterion }])) }), view.renderBody(), toast("info", `已存进项目 ${changed.length} 条。这个聊天还没填过表，表格要等第一次填表后再写：到时打开「改线索标签」点保存。`);
-      if (synced.length && keepLabels(view, synced, pid), dropLabelDrafts(dkey, picked.filter((f) => !changed.includes(f)).map((f) => f.code)), !changed.length) return toast(synced.length ? "success" : "info", synced.length ? `表格里已经是新的值，已同步 ${synced.length} 条到项目。` : "没有改动。");
+        return keepLabels(view, changed, pid), labelDrafts.set(dkey, { ...labelDrafts.get(dkey) || {}, ...Object.fromEntries(changed.map((f) => [f.code, { label: f.label, criterion: f.criterion }])) }), view.renderBody(), toast("info", `已存进项目${changed.length}条。这个聊天还没填过表，表格要等第一次填表后再写：到时打开「修改线索」点保存。`);
+      if (synced.length && keepLabels(view, synced, pid), dropLabelDrafts(dkey, picked.filter((f) => !changed.includes(f)).map((f) => f.code)), !changed.length) return toast(synced.length ? "success" : "info", synced.length ? `表格里已经是新的值，已同步${synced.length}条到项目。` : "没有改动。");
       let done = [], failed = [], unsure = [], stopped = !1, tableNow = () => {
         let now = view.runtime.clue.compute(), sh = findSheet(now && now.snap.tables || {}, fb.表);
         if (sh.error) return null;
@@ -12242,14 +12342,14 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
       let notWritten = [...failed, ...changed.filter((f) => !done.includes(f) && !failed.includes(f) && !unsure.includes(f))], left = [...notWritten, ...unsure];
       left.length && labelDrafts.set(dkey, { ...labelDrafts.get(dkey) || {}, ...Object.fromEntries(left.map((f) => [f.code, { label: f.label, criterion: f.criterion }])) }), view.runtime.clue.invalidate(), view.renderBody();
       let parts = [
-        `已改 ${done.length} 条`,
-        notWritten.length ? `${notWritten.length} 条没写进表格：${notWritten.map((f) => f.code).join("、")}` : "",
-        unsure.length ? `${unsure.map((f) => f.code).join("、")} 写入途中切换了聊天、项目或数据隔离，结果待核实` : "",
+        `已改${done.length}条`,
+        notWritten.length ? `${notWritten.length}条没写进表格：${notWritten.map((f) => f.code).join("、")}` : "",
+        unsure.length ? `${unsure.map((f) => f.code).join("、")}写入途中切换了聊天、项目或数据隔离，结果待核实` : "",
         saved ? "" : "原项目已经不在了，没有存进项目"
       ].filter(Boolean);
-      !left.length && saved ? toast("success", `已改 ${done.length} 条线索的标签和口径。`) : toast(
+      !left.length && saved ? toast("success", `已改${done.length}条线索的标签和口径。`) : toast(
         stopped || !saved ? "warning" : "error",
-        `${parts.join("；")}。${left.length ? "你填的内容已保留，回到原聊天再打开「改线索标签」，点保存重试。" : ""}`
+        `${parts.join("；")}。${left.length ? "你填的内容已保留，回到原聊天再打开「修改线索」，点保存重试。" : ""}`
       );
     },
     // 按大纲补表格行：预览 → 作者逐条确认标签和登记口径 → 通过官方 insertRow 只插入缺的行（已有行不动，不覆盖已演进度）。
@@ -12266,16 +12366,16 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
       if (!diff.newFacts.length && !diff.newKnows.length)
         return toast(
           "info",
-          `表格行已经齐全（已有 ${diff.kept.length} 个事实）。${diff.stale.length ? `表里有大纲已不再使用的编号：${diff.stale.join("、")}，不会自动删除。` : ""}`
+          `表格行已经齐全（已有${diff.kept.length}个事实）。${diff.stale.length ? `表里有大纲已不再使用的编号：${diff.stale.join("、")}，不会自动删除。` : ""}`
         );
       let html = `<div class="pi-fr-intro"><p>大纲里新增了线索，但<b>当前聊天</b>的线索表里还没有它们。这一步把缺的补上，已有的行一律不动，不影响已经玩到的进度。</p></div>
           ${diff.stale.length ? `<p class="pi-hint is-warn">表里有大纲已不再使用的编号：${esc(diff.stale.join("、"))}（不会删除）</p>` : ""}
           <details class="pi-fr-more"><summary class="pi-hint">写入细节</summary>
           <p class="pi-hint">目标聊天：${esc(scope.chatLabel || "当前聊天")}</p>
-          ${diff.newKnows.length && diff.knowTable ? `<p class="pi-hint">「${esc(diff.knowTable)}」新增 ${diff.newKnows.length} 行：${esc(diff.newKnows.map((k) => k.key).join("、"))}</p>` : ""}
+          ${diff.newKnows.length && diff.knowTable ? `<p class="pi-hint">「${esc(diff.knowTable)}」新增${diff.newKnows.length}行：${esc(diff.newKnows.map((k) => k.key).join("、"))}</p>` : ""}
           ${diff.kept.length ? `<p class="pi-hint">已有、不改动：${esc(diff.kept.join("、"))}</p>` : ""}
           <p class="pi-hint">确认时会再核对一次，表格在这期间变了就不写入。补完以后如果对线索表重新「手动填表」，补的行可能被清掉，请检查一次。</p></details>
-          ${diff.newFacts.length ? `<h4 class="pi-fr-title">要补的线索：${diff.newFacts.length} 条</h4>${factRowsHtml(diff.newFacts, "pb", project.outline.volumes, project.clue.labels)}` : ""}`, picked = await openDialog({
+          ${diff.newFacts.length ? `<h4 class="pi-fr-title">要补的线索：${diff.newFacts.length}条</h4>${factRowsHtml(diff.newFacts, "pb", project.outline.volumes, project.clue.labels)}` : ""}`, picked = await openDialog({
         title: "按大纲补表格行",
         html,
         onMount: (root) => mountFactRows(view, root, diff.newFacts, "pb", project.outline.volumes),
@@ -12299,9 +12399,9 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
         return toast("warning", "确认期间切换了聊天、项目或推进方式，没有写入。请回到原聊天重新操作。");
       let now = view.runtime.clue.compute(), fresh = prebuildDiff(plan, now.snap, project.clue.bindings), labels = new Map(picked.map((f) => [f.code, f])), previewKnows = new Set(diff.newKnows.map((k) => k.key)), vanished = diff.kept.filter((code) => !(now.snap.facts && now.snap.facts.has(code)));
       if (vanished.length)
-        return toast("warning", `确认期间表格变了（预览时已有的 ${vanished.join("、")} 现在不见了），没有写入。请重新点一次。`);
+        return toast("warning", `确认期间表格变了（预览时已有的${vanished.join("、")}现在不见了），没有写入。请重新点一次。`);
       if (!prebuildTargetSame(targetPrint, prebuildTargetPrint(now.snap.tables, project.clue.bindings)))
-        return toast("warning", "确认期间表格变了（可能刚填过表），没有写入。请重新打开「按大纲补表格行」，按现在的表格再确认一次。");
+        return toast("warning", "确认期间表格变了（可能刚填过表），没有写入。请重新打开「补全表格」，按现在的表格再确认一次。");
       let want = fresh.newFacts.map((f) => f.code).filter((code) => labels.has(code)), knowsToWrite = fresh.newKnows.filter((k) => previewKnows.has(k.key)), fb = project.clue.bindings.facts[0], kb = project.clue.bindings.knowledge[0], done = [], failed = [], factOk = new Set(now.snap.facts ? now.snap.facts.keys() : []), stopped = "";
       for (let code of want) {
         if (!prebuildScopeValid(view, scope)) {
@@ -12322,19 +12422,19 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
           kb.方式列 && (data[kb.方式列] = Array.isArray(kb.未知值) ? kb.未知值[0] : kb.未知值 || "未知"), kb.可信度列 && (data[kb.可信度列] = "未核实"), await api.insertRow({ tableName: kb.表, data, skipNotify: !0 }).catch(() => -1) >= 0 ? done.push(k.key) : failed.push(k.key);
         }
       view.runtime.clue.invalidate(), view.renderBody();
-      let msg = `已写入 ${done.length} 行${done.length ? `（${done.slice(0, 8).join("、")}${done.length > 8 ? "……" : ""}）` : ""}`;
+      let msg = `已写入${done.length}行${done.length ? `（${done.slice(0, 8).join("、")}${done.length > 8 ? "……" : ""}）` : ""}`;
       stopped ? toast("warning", `${msg}。${stopped}，后面的行没有写；回到原聊天再点一次，会只补剩下的。`) : failed.length ? toast(
         "error",
-        `${msg}；${failed.length} 行失败：${failed.slice(0, 6).join("、")}。当前聊天至少要有一楼 AI 回复，数据库才能保存表格；失败事实的知情行也没有写。`
+        `${msg}；${failed.length}行失败：${failed.slice(0, 6).join("、")}。当前聊天至少要有一楼AI回复，数据库才能保存表格；失败事实的知情行也没有写。`
       ) : toast("success", `${msg}。`);
     },
     // 场景编号对照：只有编号、入口、地点（和正文看到的入口同级）；作者粘贴进线索控制表的说明（官方填表只展开目标表，放在控制表自己的说明里才看得到）。
     // 生成线索模板（GPT §17.2）：读当前聊天的真实模板 → 和运行表交叉核对 → 合成 → 预览 → 明确用 seed 导入当前聊天
-    // → 重新读表核对 → 成功才写绑定。已有线索表时不在模板里追加行（官方 seed 不会落进非空表），新事实用「按大纲补表格行」。
+    // → 重新读表核对 → 成功才写绑定。已有线索表时不在模板里追加行（官方 seed 不会落进非空表），新事实用「补全表格」。
     async "clue-gen-template"(view) {
       let api = acuApi(), project = view.project(), c = view.runtime.clue.compute();
       if (!api || typeof api.getTableTemplate != "function" || typeof api.importTemplateFromData != "function")
-        return toast("warning", "没有检测到数据库的模板接口（需要官方 SP·数据库 8.9 以上），无法生成。");
+        return toast("warning", "没有检测到数据库的模板接口（需要官方SP·数据库8.9以上），无法生成。");
       if (!cardKey()) return toast("warning", "请先打开要使用的聊天。");
       let scope = prebuildScope(view), base = null;
       try {
@@ -12359,8 +12459,8 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
       let html = `<div class="pi-fr-intro"><p>给<b>当前这个聊天</b>的数据库加上线索推进要用的三张表，用来记录主角查到了什么、谁知道了什么、现在在哪个场景。</p>
           <p>原有的表和数据都会保留，不会删除任何东西，也不影响别的聊天。</p></div>
           ${preview.problems.length ? `<p class="pi-hint is-warn"><b>需要你注意：</b></p><ul>${preview.problems.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
-          <details class="pi-fr-more"><summary class="pi-hint">具体会改哪些地方（${preview.changes.length} 处）</summary><p class="pi-hint">目标聊天：${esc(scope.chatLabel || "当前聊天")}</p><ul>${preview.changes.map((x) => `<li>${esc(x)}</li>`).join("") || "<li>没有需要改动的地方</li>"}</ul></details>
-          ${hasFacts ? '<p class="pi-hint">这个聊天已经有关键事实表，不在模板里追加行。新线索请在导入后用「按大纲补表格行」。</p>' : plan.facts.length ? `<h4 class="pi-fr-title">这份大纲里有 ${plan.facts.length} 条要追踪的线索</h4>${factRowsHtml(plan.facts, "gt", project.outline.volumes, project.clue.labels)}` : '<p class="pi-hint">大纲里还没有线索编号，线索表先建成空表。</p>'}`, picked = await openDialog({
+          <details class="pi-fr-more"><summary class="pi-hint">具体会改哪些地方（${preview.changes.length}处）</summary><p class="pi-hint">目标聊天：${esc(scope.chatLabel || "当前聊天")}</p><ul>${preview.changes.map((x) => `<li>${esc(x)}</li>`).join("") || "<li>没有需要改动的地方</li>"}</ul></details>
+          ${hasFacts ? '<p class="pi-hint">这个聊天已经有关键事实表，不在模板里追加行。新线索请在导入后用「补全表格」。</p>' : plan.facts.length ? `<h4 class="pi-fr-title">这份大纲里有${plan.facts.length}条要追踪的线索</h4>${factRowsHtml(plan.facts, "gt", project.outline.volumes, project.clue.labels)}` : '<p class="pi-hint">大纲里还没有线索编号，线索表先建成空表。</p>'}`, picked = await openDialog({
         title: "生成线索模板",
         html,
         onMount: (root) => hasFacts || mountFactRows(view, root, plan.facts, "gt", project.outline.volumes),
@@ -12389,12 +12489,12 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
       } catch {
       }
       if (JSON.stringify(again) !== JSON.stringify(base))
-        return toast("warning", "确认期间这个聊天的表格模板变了，没有导入。请重新点「生成线索模板」。");
+        return toast("warning", "确认期间这个聊天的表格模板变了，没有导入。请重新点「创建模板」。");
       view.runtime.clue.invalidate();
       let liveNow = view.runtime.clue.compute(), again2 = clueTplMismatch(base, liveNow && liveNow.snap.tables || {});
-      if (again2.length) return toast("warning", `确认期间当前聊天的表格变了，没有导入：${again2[0]}。请重新点「生成线索模板」。`);
+      if (again2.length) return toast("warning", `确认期间当前聊天的表格变了，没有导入：${again2[0]}。请重新点「创建模板」。`);
       let catalogNow = liveNow ? sceneCatalogCell(liveNow.state, liveNow.plan || { recognize: [] }, liveNow.prog) : "", gen = synthesizeClueTemplate(base, {
-        clue: hasFacts ? { scenes: plan.scenes } : { controlRow: ["主线", "", catalogNow], factRows: picked, knowRows: plan.knows, scenes: plan.scenes }
+        clue: hasFacts ? { scenes: plan.scenes } : { controlRow: ["主线", "", catalogNow], ...trpgSeedRows(project, liveNow, picked, plan.knows), scenes: plan.scenes }
       }), res = null;
       try {
         res = await api.importTemplateFromData(gen.template, { scope: "chat", dataMode: "seed" });
@@ -12430,7 +12530,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
         `模板已经导入，但现在读表还看不到：${lost.join("、")}。请点「重新读表」，或等一楼自动填表后再看；不要重复导入。`
       ) : toast(
         "success",
-        `已导入。${gen.changes.length} 处改动${gen.problems.length ? `，${gen.problems.length} 处需要注意（见预览）` : ""}。插件绑定已更新。`
+        `已导入。${gen.changes.length}处改动${gen.problems.length ? `，${gen.problems.length}处需要注意（见预览）` : ""}。插件绑定已更新。`
       );
     },
     async "clue-catalog"(view) {
@@ -12505,7 +12605,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
     });
     if (!id || !id.trim()) return;
     let pick = await menuDialog({
-      title: `线索 ${id.trim()}`,
+      title: `线索${id.trim()}`,
       items: [
         { label: "手动确认拿到了（表格没记上时用）", value: "confirmed" },
         { label: "当作没拿到（只改插件判断，不改表格）", value: "revoked" },
@@ -12543,14 +12643,14 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
       return l.kind === "main" ? c.prog.mainPaused ? "主线已全部暂停。" : l.mode === "manual" ? "手动开始：点「进入」开始，正在进行的主线会先暂停。" : s.waitMain ? `${s.waitMain}，轮到它时自动开始。` : "" : plan && plan.unsynced && s.entries.length && s.entries.every((u) => plan.unsynced.includes(u)) ? "还在准备，下一轮开始提示。" : l.mode === "manual" ? "手动开始：不主动提示，点「进入」开始。" : c.prog.sidePaused ? "支线已全部暂停。" : plan && plan.slots.full ? "同时进行的支线已满，正文暂时不提它；主角自己走进去时，顶端会出现「切换」。" : plan && plan.offer && plan.offer.line === l.id ? "正文会在空闲时提起入口，主角走进去就开始。" : s.entries.length ? "排在后面，轮到它时正文会提起入口；主角自己走进去也会开始。" : "第一个阶段还没有能开始的场景。";
     if (s.state !== "进行中") return "";
     let away = c.away && c.away[l.id];
-    return away && c.state.focus.uid && c.state.nodeStates.some((n) => n.node.uid === c.state.focus.uid && n.node.unit.line && n.node.unit.line.id === l.id) && (away = null), away ? `已离开 ${away.rounds} 轮${away.place ? `，上次在${away.place}` : ""}` : s.why;
+    return away && c.state.focus.uid && c.state.nodeStates.some((n) => n.node.uid === c.state.focus.uid && n.node.unit.line && n.node.unit.line.id === l.id) && (away = null), away ? `已离开${away.rounds}轮${away.place ? `，上次在${away.place}` : ""}` : s.why;
   }
   function lineCard(c, project) {
     let list = c.state.lineStates || [];
     if (!list.length) return "";
     let sides = list.filter((s) => s.line.kind === "side"), mains = list.filter((s) => s.line.kind === "main"), limit = c.plan ? c.plan.slots.limit : 1, used = c.plan ? c.plan.slots.used.length : 0, row2 = (s) => {
       let l = s.line, wait = lineWaitText(s, c, isPlainObject(project.clue.labels) ? project.clue.labels : {}), btn = (v, label, cls = "", tip = "") => `<button type="button" class="pi-btn is-sm${cls}" data-act="clue-line" data-id="${esc(l.id)}" data-value="${v}"${tip ? ` title="${esc(tip)}"` : ""}>${label}</button>`, canEnter = !s.started && !s.manual.state && s.eligible && (l.kind === "main" ? !c.prog.mainPaused : !s.waitMain), inQueue = l.kind === "side" && l.mode !== "manual" && s.state === "可开启" && s.entries.length && c.plan && !c.plan.slots.full && !c.prog.sidePaused, undo = s.manual.evidence && s.manual.evidence !== "manual" && !s.manual.evidence.startsWith("auto@") && s.state === "进行中" ? btn("deny", "取消开启", " is-ghost", "插件认错了：这条线回到可开启，同一次依据不再自动开启") : s.manual.started || s.manual.state ? btn("", "还原", " is-ghost", "把你在这条线上点过的进入 / 暂停 / 完成 / 放弃还原，回到按条件自动判断") : "", checks = !s.started && !s.manual.state && l.mode !== "manual" ? tableCondChecks(l.open, c.snap.tables || {}) : [], stuck = checks.filter((x) => x.stuck), fix = stuck.length ? `<p class="pi-hint is-warn">开启条件读不出来：${esc(stuck.flatMap((x) => x.notes).join("；"))}。这样它会一直开不了。 <button type="button" class="pi-btn is-sm" data-act="clue-line-manual" data-id="${esc(l.id)}" title="开启条件挪到「原开启条件」里留着看，不再自动判断；执行页出现「进入」按钮，玩家想玩时点它">改成手动开始</button></p>` : "", orig = l.origCond ? `<p class="pi-hint">原来的开启要求（自己判断什么时候点「进入」）：${esc(l.origCond)}</p>` : "", tierBtns = checks.filter((x) => x.tierPending).map(
-        (x) => `<p class="pi-hint is-warn">档位顺序是 AI 推断的：${esc(x.tierPending.join(" < "))}。确认前这个条件一直是未知。 <button type="button" class="pi-btn is-sm" data-act="clue-tiers" data-tiers="${esc(JSON.stringify(x.tierPending))}" title="大纲里用同样档位的条件都算确认">从低到高没错</button> <button type="button" class="pi-btn is-sm is-ghost" data-act="clue-line-manual" data-id="${esc(l.id)}">改成手动开始</button></p>`
+        (x) => `<p class="pi-hint is-warn">档位顺序是AI推断的：${esc(x.tierPending.join(" < "))}。确认前这个条件一直是未知。 <button type="button" class="pi-btn is-sm" data-act="clue-tiers" data-tiers="${esc(JSON.stringify(x.tierPending))}" title="大纲里用同样档位的条件都算确认">从低到高没错</button> <button type="button" class="pi-btn is-sm is-ghost" data-act="clue-line-manual" data-id="${esc(l.id)}">改成手动开始</button></p>`
       ).join(""), group = l.kind === "side" ? sides : mains, k = group.indexOf(s), arrows = group.length > 1 ? `<button type="button" class="pi-btn is-sm is-ghost" data-act="clue-line-move" data-id="${esc(l.id)}" data-dir="-1"${k <= 0 ? " disabled" : ""}>往前排</button><button type="button" class="pi-btn is-sm is-ghost" data-act="clue-line-move" data-id="${esc(l.id)}" data-dir="1"${k >= group.length - 1 ? " disabled" : ""}>往后排</button>` : "", title2 = lineDisplayName(l), main0 = canEnter ? btn("enter", "进入", " is-primary", l.mode === "manual" ? "想玩这条线了：现在开始" : "主角已经开始做这件事了（填表没认出来时用），或者你现在就想开始") : s.state === "暂停" ? btn("resume", "继续", " is-primary") : "", g1 = [...canEnter || s.state === "进行中" ? [btn("pause", "暂停", " is-ghost")] : []].join("") + arrows, g2 = [
         ...s.state === "进行中" ? [btn("done", "标记完成", " is-ghost")] : [],
         ...canEnter && inQueue ? [btn("skip", "跳过", " is-ghost")] : [],
@@ -12570,7 +12670,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
   }
   function stayNotice(view, c) {
     let info = view.runtime.clue.stayInfo(), st9 = info && info.key ? stayState(view.runtime.progress().stays, chatMessages(), info) : null;
-    return st9 && st9.idle >= 7 ? `<p class="pi-hint is-warn">这一场很久没有新的发现了（连续 ${st9.idle} 条回复）。想换个地方，可以让主角离开，或者点「离开这个调查」；想先玩日常，可以暂停剧情。也可能只是填表漏记了，可以对照正文看看。</p>` : "";
+    return st9 && st9.idle >= 7 ? `<p class="pi-hint is-warn">这一场很久没有新的发现了（连续${st9.idle}条回复）。想换个地方，可以让主角离开，或者点「离开这个调查」；想先玩日常，可以暂停剧情。也可能只是填表漏记了，可以对照正文看看。</p>` : "";
   }
   function keepLabels(view, picked, pid = view.projectId) {
     let p = pid ? view.data.project(pid) : null;
@@ -12647,8 +12747,8 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
         let missing = todo.filter((x) => !got.has(x.code)).map((x) => x.code);
         return quiet || (missing.length ? toast(
           "warning",
-          `线索标签准备好了 ${got.size} 条，${missing.length} 条没生成（${missing.slice(0, 5).join("、")}）。可以到执行页重试。`
-        ) : toast("success", `已为 ${got.size} 条线索准备好标签。`)), view.runtime.clue.scheduleSync(), { done: got.size, missing };
+          `线索标签准备好了${got.size}条，${missing.length}条没生成（${missing.slice(0, 5).join("、")}）。可以到执行页重试。`
+        ) : toast("success", `已为${got.size}条线索准备好标签。`)), view.runtime.clue.scheduleSync(), { done: got.size, missing };
       } catch (error) {
         return quiet || toast("warning", `线索标签没准备好：${error.message}。大纲已经采用；可以到执行页重试。`), { done: 0, missing: todo.map((x) => x.code), error: error.message };
       } finally {
@@ -12658,7 +12758,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
   }
   function labelsPendingHtml(project, c) {
     let have = c && c.snap.facts || /* @__PURE__ */ new Map(), todo = labelsToPrepare(project.outline.volumes, project.clue.labels).filter((x) => !have.has(x.code));
-    return todo.length ? `<div class="pi-row pi-labels-todo"><p class="pi-hint is-warn" title="${esc(todo.map((x) => x.code).join("、"))}">${todo.length} 条线索的标签还没准备好，这些线开始后暂时补不了表格行。</p><button type="button" class="pi-btn is-sm" data-act="clue-labels">${labelJob ? "正在准备…" : "现在准备"}</button></div>` : "";
+    return todo.length ? `<div class="pi-row pi-labels-todo"><p class="pi-hint is-warn" title="${esc(todo.map((x) => x.code).join("、"))}">${todo.length}条线索的标签还没准备好，这些线开始后暂时补不了表格行。</p><button type="button" class="pi-btn is-sm" data-act="clue-labels">${labelJob ? "正在准备…" : "现在准备"}</button></div>` : "";
   }
   function unofferedHtml(c) {
     return (c.unoffered || []).map((x) => {
@@ -12940,7 +13040,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
   function trpgReviewButton(view, job) {
     if (!job || !job.trpg) return "";
     let busy = view.busy[`trpg-check:${job.id}`];
-    return `<div class="pi-tools is-c1"><button type="button" class="pi-btn is-sm" data-act="rv-ai-check"${busy ? " disabled" : ""}>${busy ? '<span class="pi-spin"></span>AI 检查中' : "AI 检查（对照模组原文）"}</button></div>`;
+    return `<div class="pi-tools is-c1"><button type="button" class="pi-btn is-sm" data-act="rv-ai-check"${busy ? " disabled" : ""}>${busy ? '<span class="pi-spin"></span>AI检查中' : "AI检查（对照模组原文）"}</button></div>`;
   }
   function trpgReviewActions({ current, saveReview: saveReview2, reviewUnits: reviewUnits2, lineLocked: lineLocked2 }) {
     return {
@@ -12957,14 +13057,14 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
             });
             if (!list.length) return toast("info", "没有可以检查的阶段。");
             let found = parseReviewReply(await ask(view, "outline", trpgReviewMessages({ units: list, whole })), list.length), pages = Object.keys(found).length, lines2 = Object.values(found).flat().length;
-            if (!lines2) return toast("success", "AI 检查没有发现问题。");
+            if (!lines2) return toast("success", "AI检查没有发现问题。");
             await saveReview2(view, c.jobId, (r) => {
               let comments = { ...r.comments };
               for (let [i, items] of Object.entries(found)) for (let x of items) comments[list[i].key] = appendComment(comments[list[i].key], `${AI_CHECK_TAG}${x}`);
               return { ...r, comments };
-            }), toast("info", `AI 检查找到 ${lines2} 个问题（${pages} 页），已加入各页意见。看过、删掉不同意的，再点「按意见修改」。`);
+            }), toast("info", `AI检查找到${lines2}个问题（${pages}页），已加入各页意见。看过、删掉不同意的，再点「按意见修改」。`);
           } catch (error) {
-            toast("error", `AI 检查失败：${error && error.message || error}`);
+            toast("error", `AI检查失败：${error && error.message || error}`);
           } finally {
             view.busy[key] = !1, view.renderBody();
           }
@@ -13008,7 +13108,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
         let empty = x.vol.stages.filter((s) => !stageNodes(s.data).length).map((s) => stageLabel(s.key));
         empty.length && issues.push({
           level: "error",
-          text: `这些阶段没有读到任何场景（节点）：${empty.join("、")}。可能是 AI 把场景写在了不认识的字段下，写意见让 AI 重写这一条`
+          text: `这些阶段没有读到任何场景（节点）：${empty.join("、")}。可能是AI把场景写在了不认识的字段下，写意见让AI重写这一条`
         });
         let job = rs.src === "import" ? importJobOf(view, rs.jobId) : null, inv = job && job.lineIdent ? inventedOpenIssue(
           x.vol,
@@ -13023,14 +13123,14 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
   var OP_WORD = { "==": "是", "!=": "不是", ">=": "≥", "<=": "≤", ">": ">", "<": "<", 包含: "里有", 不包含: "里没有" };
   function condWords(c, names2 = {}) {
     if (!c) return "";
-    let fact = (id) => names2.facts && names2.facts[id] ? `「${names2.facts[id]}」` : id, node = (id) => names2.nodes && names2.nodes[id] ? `「${names2.nodes[id]}」` : id, line = (id) => names2.lines && names2.lines[id] ? `「${names2.lines[id]}」` : `线 ${id}`;
+    let fact = (id) => names2.facts && names2.facts[id] ? `「${names2.facts[id]}」` : id, node = (id) => names2.nodes && names2.nodes[id] ? `「${names2.nodes[id]}」` : id, line = (id) => names2.lines && names2.lines[id] ? `「${names2.lines[id]}」` : `线${id}`;
     if (c.kind === "group")
       return c.items.map((x) => condWords(x, names2)).filter(Boolean).join(c.mode === "any" ? "，或者" : "，并且");
     if (c.kind === "cell") {
       let [t, row2, col] = String(c.path).split("/").map((x) => x.trim());
       return `（${t}）${row2}的${col}${c.pick ? `里「${c.pick}」那一项` : ""} ${OP_WORD[c.op] || c.op} ${c.value}${c.tiers ? `（${c.tiers.join(" < ")}）` : ""}`;
     }
-    return c.kind === "line" ? `${line(c.line)} ${c.state === "开过" ? c.op === "==" ? "开始过" : "还没开始过" : c.state === "开着" ? c.op === "==" ? "正在进行" : "不在进行中" : `${c.op === "==" ? "是" : "不是"}「${c.state}」`}` : c.kind === "fact" ? `正文里发生了${fact(c.fact)}` : c.kind === "count" ? `${c.table}里 ${c.column} ${OP_WORD[c.op] || c.op} ${c.value} 的${c.cmp}${c.n}行` : c.kind === "know" ? `${c.actor === "user" ? "主角" : c.actor}知道${fact(c.fact)}` : c.kind === "node" ? `场景${node(c.node)}完成` : c.raw || "";
+    return c.kind === "line" ? `${line(c.line)} ${c.state === "开过" ? c.op === "==" ? "开始过" : "还没开始过" : c.state === "开着" ? c.op === "==" ? "正在进行" : "不在进行中" : `${c.op === "==" ? "是" : "不是"}「${c.state}」`}` : c.kind === "fact" ? `正文里发生了${fact(c.fact)}` : c.kind === "count" ? `${c.table}里${c.column} ${OP_WORD[c.op] || c.op} ${c.value}的${c.cmp}${c.n}行` : c.kind === "know" ? `${c.actor === "user" ? "主角" : c.actor}知道${fact(c.fact)}` : c.kind === "node" ? `场景${node(c.node)}完成` : c.raw || "";
   }
   function condNames(volumes) {
     let comp = compileClue(volumes || []), facts = {}, nodes = {}, lines2 = {};
@@ -13164,7 +13264,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
     }).map((v) => v.id);
   }
   function lineIssueCard(x, volId) {
-    let btn = x.fix === "redraft" ? x.lines.map((id) => `<button type="button" class="pi-btn is-sm" data-act="rv-redraft" data-line="${esc(id)}">重新整理 ${esc(id)}</button>`).join("") : x.fix === "drop-open" ? `<button type="button" class="pi-btn is-sm" data-act="rv-drop-open" data-vol="${esc(volId)}" title="删掉整条开启条件和开启时段（不是只删多出来的那一项）">去掉开启条件和时段</button>` : x.fix === "tiers" ? `<button type="button" class="pi-btn is-sm" data-act="rv-tiers" data-vol="${esc(volId)}" data-tiers="${esc(JSON.stringify(x.tiers))}">顺序对，确认</button>` : "";
+    let btn = x.fix === "redraft" ? x.lines.map((id) => `<button type="button" class="pi-btn is-sm" data-act="rv-redraft" data-line="${esc(id)}">重新整理${esc(id)}</button>`).join("") : x.fix === "drop-open" ? `<button type="button" class="pi-btn is-sm" data-act="rv-drop-open" data-vol="${esc(volId)}" title="删掉整条开启条件和开启时段（不是只删多出来的那一项）">去掉开启条件和时段</button>` : x.fix === "tiers" ? `<button type="button" class="pi-btn is-sm" data-act="rv-tiers" data-vol="${esc(volId)}" data-tiers="${esc(JSON.stringify(x.tiers))}">顺序对，确认</button>` : "";
     return `<div class="pi-rv-issue${x.level === "error" ? "" : " is-ask"}"><p>${esc(x.text)}</p>${btn ? `<div class="pi-row">${btn}</div>` : ""}</div>`;
   }
   function tableForm(vol, locked = !1) {
@@ -13173,13 +13273,13 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
       if (!tables) status = "读不到当前的表格（数据库没打开或这张卡没绑表格），保存后到执行页核对。";
       else {
         let errs = [], c = t.value !== "" ? parseCondition(tableCondOf(t), errs) : null, r = !errs.length && c ? cellCondCheck(c, tables) : null, v = r && r.now ? evalAtom(c, { tables }).v : "", num3 = [">=", "<=", ">", "<"].includes(t.op) ? tierNumberInNote(sheet ? sheet.note : "", t.value) : null;
-        num3 != null && (tierFix = { vol: vol.id, value: String(num3) }), status = t.value === "" ? "填上比较的值。" : r ? `${r.now ? `现在：${r.now}` : "现在：表里还没有这一格的值"}${num3 != null ? `。表格说明里「${t.value}」是 ${num3}，比大小请填数字` : r.notes.length ? `。${r.notes[0]}` : ""}` : errs.join("；"), badge = v === "true" ? '<span class="pi-badge is-ok">已满足</span>' : v === "false" ? '<span class="pi-badge is-warn">未满足</span>' : "";
+        num3 != null && (tierFix = { vol: vol.id, value: String(num3) }), status = t.value === "" ? "填上比较的值。" : r ? `${r.now ? `现在：${r.now}` : "现在：表里还没有这一格的值"}${num3 != null ? `。表格说明里「${t.value}」是${num3}，比大小请填数字` : r.notes.length ? `。${r.notes[0]}` : ""}` : errs.join("；"), badge = v === "true" ? '<span class="pi-badge is-ok">已满足</span>' : v === "false" ? '<span class="pi-badge is-warn">未满足</span>' : "";
       }
     return `<div class="pi-rv-tbl">
       ${field2("table", sheets.map((x) => x.name), "选择表")}
       <div class="pi-row pi-rv-tbl-row">${field2("row", rows2, "选择行")}${field2("col", cols, "选择列")}</div>
-      <div class="pi-row pi-rv-tbl-row is-cmp"><select class="pi-sel is-sm" ${attr("op")}>${opt(TABLE_OPS, t.op)}</select><input class="pi-inp is-sm" ${attr("value")} value="${esc(t.value)}" placeholder="值，如 2 或 熟悉"></div>
-      ${isPlainObject(l.表格条件草稿) ? '<p class="pi-hint is-warn">条件还没填完，保存前要补全。</p>' : ""}${status ? `<p class="pi-hint pi-rv-tbl-now">${esc(status)}${badge}</p>` : '<p class="pi-hint">选好表、行、列，填比较的值。</p>'}${tierFix && !locked ? `<div class="pi-row"><button type="button" class="pi-btn is-sm" data-act="rv-tbl-num" data-vol="${esc(tierFix.vol)}" data-value="${esc(tierFix.value)}">改成 ${esc(tierFix.value)}</button></div>` : ""}
+      <div class="pi-row pi-rv-tbl-row is-cmp"><select class="pi-sel is-sm" ${attr("op")}>${opt(TABLE_OPS, t.op)}</select><input class="pi-inp is-sm" ${attr("value")} value="${esc(t.value)}" placeholder="值，如2或 熟悉"></div>
+      ${isPlainObject(l.表格条件草稿) ? '<p class="pi-hint is-warn">条件还没填完，保存前要补全。</p>' : ""}${status ? `<p class="pi-hint pi-rv-tbl-now">${esc(status)}${badge}</p>` : '<p class="pi-hint">选好表、行、列，填比较的值。</p>'}${tierFix && !locked ? `<div class="pi-row"><button type="button" class="pi-btn is-sm" data-act="rv-tbl-num" data-vol="${esc(tierFix.vol)}" data-value="${esc(tierFix.value)}">改成${esc(tierFix.value)}</button></div>` : ""}
     </div>`;
   }
   function windowField(project, vol, locked = !1) {
@@ -13197,21 +13297,21 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
     return out;
   }
   function stateLine(review, dirtyIds, dirty) {
-    return (review.source !== "import" || review.reopened) && review.draft.length > 1 ? `本项目 ${review.draft.length} 条线，${dirtyIds.length ? `${dirtyIds.length} 条待保存` : "和大纲一致"}` : review.lines ? `导入的支线 ${review.draft.length} 条，${saveCount(review)} 条待保存` : dirty ? "草稿已保存，未应用到大纲" : "和大纲一致";
+    return (review.source !== "import" || review.reopened) && review.draft.length > 1 ? `本项目${review.draft.length}条线，${dirtyIds.length ? `${dirtyIds.length}条待保存` : "和大纲一致"}` : review.lines ? `导入的支线${review.draft.length}条，${saveCount(review)}条待保存` : dirty ? "草稿已保存，未应用到大纲" : "和大纲一致";
   }
   function saveCount(review, dirtyIds = []) {
     return review.lines ? review.draft.filter((v) => !lineLocked(review, v.id)).length : (review.source !== "import" || review.reopened) && review.draft.length > 1 ? dirtyIds.length : 0;
   }
   function saveLabel(review, dirtyIds) {
     let n = saveCount(review, dirtyIds);
-    return n ? `保存到大纲（${n} 条线）` : "保存到大纲";
+    return n ? `保存到大纲（${n}条线）` : "保存到大纲";
   }
-  var sendLabel = (n) => n ? `发送意见（${n} 页）` : "发送意见";
+  var sendLabel = (n) => n ? `发送意见（${n}页）` : "发送意见";
   function renderReview(view, job, review, index, crumb, notes = []) {
     let units = reviewUnits(view.project(), review), issues = reviewIssues(view, review, index), changed = new Set(draftChanges(review.base, review.draft).map((c) => c.key)), at = Math.max(0, Math.min(units.length - 1, review.at || 0)), u = units[at], vol = review.draft.find((v) => v.id === u.volumeId), busy = view.busy[`review:${view.projectId}`], errCount = Object.values(issues).flat().filter((x) => x.level === "error").length, askCount = Object.values(issues).flat().filter((x) => x.level !== "error").length, pending = sendableNotes(view.project(), review).length, last = (review.lastChanges || {})[u.key], mineUnits = units.map((x, i) => ({ ...x, i })).filter((x) => x.volumeId === u.volumeId), lineFirst = mineUnits[0] && mineUnits[0].kind === "line", dot = (x, n) => {
       let i = x.i, has = (issues[x.key] || []).some((y) => y.level === "error");
       return `<button type="button" class="pi-rv-dot${(i === at ? " is-cur" : has ? " is-err" : changed.has(x.key) && review.revised ? " is-chg" : "") + (String((review.comments || {})[x.key] || "").trim() ? " is-note" : "")}" data-act="rv-go" data-i="${i}">${x.kind === "line" ? "线信息" : esc(stageLabel(unitValue(review.draft, x.key).key))}</button>`;
-    }, vols = review.draft, vi = vols.findIndex((v) => v.id === vol.id), dropSet = new Set(review.dropped || []), isDrop = dropSet.has(vol.id), adoptedHere = review.lines && (review.adoptedLines || {})[vol.id], goneHere = !review.lines && lineLocked(review, vol.id, view.project()), locked = lineLocked(review, vol.id, view.project()), ro = locked ? " disabled" : "", lineIssues = review.lines ? lineLevelIssues(view, job, review)[vol.id] || [] : [], firstOf = (v) => units.findIndex((x) => x.volumeId === v.id), picker = vols.length > 1 ? `<div class="pi-rv-line"><button type="button" class="pi-rv-arr" data-act="rv-go" data-i="${vi > 0 ? firstOf(vols[vi - 1]) : at}"${vi > 0 ? "" : " disabled"} title="上一条">‹</button><button type="button" class="pi-rv-lname" data-act="rv-lines" title="选择其他线"><b${isDrop ? ' class="is-drop"' : ""}>${esc(lineTitle(vol))}</b><span>${vi + 1} / ${vols.length}${isDrop ? "，不导入" : adoptedHere ? "，已保存" : ""}</span></button><button type="button" class="pi-rv-arr" data-act="rv-go" data-i="${vi < vols.length - 1 ? firstOf(vols[vi + 1]) : at}"${vi < vols.length - 1 ? "" : " disabled"} title="下一条">›</button></div>` : "", comment = (review.comments || {})[u.key] || "", mine = issues[u.key] || [], filled = (x) => comment.includes(issueCommentLine(x).trim()), isEdit = review.source === "proposal", dirtyIds = changedLines(view.project(), review), dirty = !(isEdit || review.reopened) || dirtyIds.length > 0, full = !!review.fullOpen, clueOn = reviewIsClue(view.project(), review), fillAll = '<button type="button" class="pi-rv-fillall" data-act="rv-fill-all">全部加入意见</button>', synced = !dirty && (isEdit || review.reopened), stateText = stateLine(review, dirtyIds, dirty), head = `<h3>${isEdit ? "审阅修改" : "审阅"}${vols.length > 1 ? review.lines ? "：导入的支线" : "" : `：${esc(volumeName(vol.key))}`}<span class="pi-rv-end">${errCount ? `<button type="button" class="pi-badge is-warn pi-rv-issues" data-act="rv-first-issue" title="跳到有问题的页">问题 ${errCount} ›</button>` : review.revised ? '<span class="pi-badge is-ok">检查通过</span>' : ""}</span></h3><div class="pi-rv-state${dirty ? " is-draft" : ""}">${stateText}</div>${picker}`, nav = `<div class="pi-rv-nav"><div class="pi-rv-dots">${mineUnits.map(dot).join("")}</div></div>`, body = "";
+    }, vols = review.draft, vi = vols.findIndex((v) => v.id === vol.id), dropSet = new Set(review.dropped || []), isDrop = dropSet.has(vol.id), adoptedHere = review.lines && (review.adoptedLines || {})[vol.id], goneHere = !review.lines && lineLocked(review, vol.id, view.project()), locked = lineLocked(review, vol.id, view.project()), ro = locked ? " disabled" : "", lineIssues = review.lines ? lineLevelIssues(view, job, review)[vol.id] || [] : [], firstOf = (v) => units.findIndex((x) => x.volumeId === v.id), picker = vols.length > 1 ? `<div class="pi-rv-line"><button type="button" class="pi-rv-arr" data-act="rv-go" data-i="${vi > 0 ? firstOf(vols[vi - 1]) : at}"${vi > 0 ? "" : " disabled"} title="上一条">‹</button><button type="button" class="pi-rv-lname" data-act="rv-lines" title="选择其他线"><b${isDrop ? ' class="is-drop"' : ""}>${esc(lineTitle(vol))}</b><span>${vi + 1} / ${vols.length}${isDrop ? "，不导入" : adoptedHere ? "，已保存" : ""}</span></button><button type="button" class="pi-rv-arr" data-act="rv-go" data-i="${vi < vols.length - 1 ? firstOf(vols[vi + 1]) : at}"${vi < vols.length - 1 ? "" : " disabled"} title="下一条">›</button></div>` : "", comment = (review.comments || {})[u.key] || "", mine = issues[u.key] || [], filled = (x) => comment.includes(issueCommentLine(x).trim()), isEdit = review.source === "proposal", dirtyIds = changedLines(view.project(), review), dirty = !(isEdit || review.reopened) || dirtyIds.length > 0, full = !!review.fullOpen, clueOn = reviewIsClue(view.project(), review), fillAll = '<button type="button" class="pi-rv-fillall" data-act="rv-fill-all">全部加入意见</button>', synced = !dirty && (isEdit || review.reopened), stateText = stateLine(review, dirtyIds, dirty), head = `<h3>${isEdit ? "审阅修改" : "审阅"}${vols.length > 1 ? review.lines ? "：导入的支线" : "" : `：${esc(volumeName(vol.key))}`}<span class="pi-rv-end">${errCount ? `<button type="button" class="pi-badge is-warn pi-rv-issues" data-act="rv-first-issue" title="跳到有问题的页">问题${errCount} ›</button>` : review.revised ? '<span class="pi-badge is-ok">检查通过</span>' : ""}</span></h3><div class="pi-rv-state${dirty ? " is-draft" : ""}">${stateText}</div>${picker}`, nav = `<div class="pi-rv-nav"><div class="pi-rv-dots">${mineUnits.map(dot).join("")}</div></div>`, body = "";
     if (u.kind === "line") {
       let l = vol.line, main = String(l.类型 || "").trim() === "主线", pick = whenPick(l), raw = clueText(l.开始时机原文);
       body = `<div class="pi-rv-title"><b>线</b><span class="pi-badge is-accent">${main ? "主线" : "支线"}${l.编号 ? ` ${esc(l.编号)}` : ""}</span>${review.lines && !adoptedHere ? `<button type="button" class="pi-icon-btn pi-rv-end" data-act="rv-line-menu" data-vol="${esc(vol.id)}" title="更多">${ICONS.more}</button>` : ""}</div>
@@ -13227,7 +13327,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
           ${review.lines && !main ? windowField(view.project(), vol, locked) : ""}`;
     } else {
       let s = unitValue(review.draft, u.key), nodes = stageNodes(s.data).filter((n) => n.kind !== "world"), errs = mine.filter((x) => x.level === "error"), asks = mine.filter((x) => x.level !== "error"), answered = (review.dismissed || []).length + (review.shortsSure || []).length + (review.shortsNot || []).length, main = nodes.filter((n) => n.kind === "main"), side = nodes.filter((n) => n.kind !== "main"), time2 = !clueOn && clueText(s.data && s.data.时间范围);
-      body = `<div class="pi-rv-title"><b>${esc(stageLabel(s.key))}</b><span class="pi-meta">${time2 ? `时间：${esc(cut(time2, 20))}` : `${nodes.length} 个场景`}</span>${changed.has(u.key) && review.revised ? '<span class="pi-badge is-accent">已修改</span>' : ""}${nodes.length ? `<button type="button" class="pi-btn is-sm is-ghost pi-rv-fulltg pi-rv-end" data-act="rv-full">${full ? "收起完整内容" : "展开完整内容"}</button>` : ""}</div>
+      body = `<div class="pi-rv-title"><b>${esc(stageLabel(s.key))}</b><span class="pi-meta">${time2 ? `时间：${esc(cut(time2, 20))}` : `${nodes.length}个场景`}</span>${changed.has(u.key) && review.revised ? '<span class="pi-badge is-accent">已修改</span>' : ""}${nodes.length ? `<button type="button" class="pi-btn is-sm is-ghost pi-rv-fulltg pi-rv-end" data-act="rv-full">${full ? "收起完整内容" : "展开完整内容"}</button>` : ""}</div>
           ${(() => {
         let names2 = condNames([...view.project().outline.volumes, ...review.draft]), one = (n) => full ? nodeFull(n, clueOn, names2) : nodeLine2(n, clueOn);
         return clueOn ? nodes.map(one).join("") : main.map(one).join("") + (side.length ? `<div class="pi-rv-sec">支线</div>${side.map(one).join("")}` : "");
@@ -13236,23 +13336,23 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
           ${last && last.length ? `<div class="pi-rv-sec">本次修改</div>${last.map((t) => `<div class="pi-rv-chg">${esc(t)}</div>`).join("")}` : ""}
           ${errs.length ? `<div class="pi-rv-sec">问题（${errs.length}）${fillAll}</div>${errs.map((x) => issueCard(x, u.key, filled(x))).join("")}` : ""}
           ${asks.length ? `<div class="pi-rv-sec">待确认（${asks.length}）${errs.length ? "" : fillAll}</div>${asks.map((x) => issueCard(x, u.key, filled(x))).join("")}` : ""}
-          ${answered ? `<div class="pi-row pi-rv-answered"><span class="pi-hint">已确认 ${answered} 项</span><button type="button" class="pi-btn is-sm is-ghost" data-act="rv-undismiss">撤回</button></div>` : ""}`;
+          ${answered ? `<div class="pi-row pi-rv-answered"><span class="pi-hint">已确认${answered}项</span><button type="button" class="pi-btn is-sm is-ghost" data-act="rv-undismiss">撤回</button></div>` : ""}`;
     }
     let yamlText = u.kind === "line" ? stringifyYaml({ [VOLUME_LINE_KEY]: vol.line }) : stringifyYaml({ [unitValue(review.draft, u.key).key]: unitValue(review.draft, u.key).data }), canUndo = review.history && review.history.length, topNotes = notes.length ? `<details class="pi-rv-notes"><summary class="pi-hint">整理时的提示（${notes.length}）</summary>${notes.map((t) => `<p class="pi-hint">${esc(t)}</p>`).join("")}</details>` : "";
     return `${crumb}<div class="pi-card pi-rv${isDrop ? " is-drop" : ""}">${head}${topNotes}${nav}${body}
         ${canUndo ? `<div class="pi-row pi-rv-undo"><button type="button" class="pi-btn is-sm is-ghost" data-act="rv-undo">撤销上次修改</button><span class="pi-hint">（${esc(review.history[review.history.length - 1].label)}）</span></div>` : ""}
         ${locked ? `${comment.trim() ? `<div class="pi-field"><span>意见（未发送，只读）</span><textarea class="pi-ta" rows="3" readonly>${esc(comment)}</textarea></div>` : ""}<details><summary class="pi-hint">YAML</summary><pre class="pi-pre is-full">${esc(yamlText)}</pre></details>` : `<label class="pi-field"><span>意见</span><textarea class="pi-ta" rows="3" data-rv-comment="${esc(u.key)}" placeholder="对这一页的修改意见">${esc(comment)}</textarea></label>
-        <details${review.yamlOpen === u.key ? " open" : ""}><summary class="pi-hint">编辑 YAML</summary><textarea class="pi-ta is-mono pi-rv-yaml" data-rv-yaml="${esc(u.key)}">${esc(yamlText)}</textarea>
+        <details${review.yamlOpen === u.key ? " open" : ""}><summary class="pi-hint">编辑YAML</summary><textarea class="pi-ta is-mono pi-rv-yaml" data-rv-yaml="${esc(u.key)}">${esc(yamlText)}</textarea>
           <div class="pi-tools is-c1"><button type="button" class="pi-btn is-sm" data-act="rv-yaml-save" data-unit="${esc(u.key)}">保存并检查</button></div><p class="pi-status" data-rv-yaml-status></p></details>`}
         ${locked ? "" : trpgReviewButton(view, job)}
         <div class="pi-rv-foot"><button type="button" class="pi-btn${pending ? " is-primary" : ""}" data-act="rv-preview"${busy ? " disabled" : ""}>${busy ? '<span class="pi-spin"></span>修改中' : sendLabel(pending)}</button>${synced ? '<button type="button" class="pi-btn" data-act="import-adopt" disabled>已与大纲一致</button>' : `<button type="button" class="pi-btn${pending ? "" : " is-primary"}" data-act="import-adopt">${saveLabel(review, dirtyIds)}</button>`}</div></div>`;
   }
   function renderAdopted(view, job, review, crumb) {
-    let vol = review.draft[0], project = view.project(), live = project.outline.volumes.find((v) => v.id === (review.adoptedId || vol.id)), l = live && isPlainObject(live.line) ? live.line : null, when = l ? whenText(l, project.outline.volumes) : "", unsent = Object.values(review.comments || {}).filter((t) => String(t || "").trim()).length, unsentNote = unsent ? `<p class="pi-hint">还有 ${unsent} 页意见没发送，点「继续修改」可以接着看和发送。</p>` : "";
+    let vol = review.draft[0], project = view.project(), live = project.outline.volumes.find((v) => v.id === (review.adoptedId || vol.id)), l = live && isPlainObject(live.line) ? live.line : null, when = l ? whenText(l, project.outline.volumes) : "", unsent = Object.values(review.comments || {}).filter((t) => String(t || "").trim()).length, unsentNote = unsent ? `<p class="pi-hint">还有${unsent}页意见没发送，点「继续修改」可以接着看和发送。</p>` : "";
     return review.source === "proposal" ? `${crumb}<div class="pi-card pi-rv"><h3>审阅修改：${esc(volumeName(vol.key))}<span class="pi-spacer"></span></h3>
         <div class="pi-rv-ok">✓ 已保存到大纲：${esc(l && l.编号 ? `${l.编号} ` : "")}${esc(volumeName((live || vol).key))}</div>${unsentNote}
         <div class="pi-tools is-c2 is-end"><button type="button" class="pi-btn" data-act="rv-reopen">继续修改</button><button type="button" class="pi-btn is-primary" data-act="rv-to-outline">查看大纲</button></div></div>` : `${crumb}<div class="pi-card pi-rv"><h3>审阅：${esc(volumeName(vol.key))}<span class="pi-spacer"></span></h3>
-        <div class="pi-rv-ok">✓ 已保存到大纲：${esc(l && l.编号 ? `${l.编号} ` : "")}${esc(volumeName((live || vol).key))}（${(live || vol).stages.length} 个阶段）</div>
+        <div class="pi-rv-ok">✓ 已保存到大纲：${esc(l && l.编号 ? `${l.编号} ` : "")}${esc(volumeName((live || vol).key))}（${(live || vol).stages.length}个阶段）</div>
         ${when ? `<p class="pi-hint">开始时机：${esc(when)}。</p>` : ""}${unsentNote}
         <div class="pi-tools is-c2 is-end"><button type="button" class="pi-btn" data-act="rv-reopen">继续修改</button><button type="button" class="pi-btn is-primary" data-act="rv-to-outline">查看大纲</button></div></div>`;
   }
@@ -13359,10 +13459,10 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
         if (!c) return;
         let review = c.review, project = view.project(), units = reviewUnits(project, review), issues = reviewIssues(view, review, indexOf(c.job)), dirty = new Set(changedLines(project, review)), edit = review.source && review.source !== "import", mark = (v) => {
           let keys = units.filter((u) => u.volumeId === v.id).map((u) => u.key), errs = keys.reduce((n, k) => n + (issues[k] || []).filter((x) => x.level === "error").length, 0), notes = keys.filter((k) => String((review.comments || {})[k] || "").trim()).length;
-          return [errs ? `问题 ${errs}` : "", notes ? `意见 ${notes} 页` : "", edit && dirty.has(v.id) ? "已修改" : ""].filter(Boolean).join("，");
+          return [errs ? `问题${errs}` : "", notes ? `意见${notes}页` : "", edit && dirty.has(v.id) ? "已修改" : ""].filter(Boolean).join("，");
         }, pick = await menuDialog({
           title: reviewIsClue(project, review) ? "选择剧情线" : "选择卷",
-          items: review.draft.map((v) => ({ value: v.id, label: `${lineTitle(v)}　${v.stages.length} 个阶段${mark(v) ? `（${mark(v)}）` : ""}` }))
+          items: review.draft.map((v) => ({ value: v.id, label: `${lineTitle(v)}　${v.stages.length}个阶段${mark(v) ? `（${mark(v)}）` : ""}` }))
         });
         if (!pick) return;
         let i = units.findIndex((u) => u.volumeId === pick);
@@ -13392,7 +13492,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
           let r = view.data.imports.get(c.jobId).review, vid = Object.keys(r.lineIds || {}).find((k) => r.lineIds[k] === id), i = reviewUnits(view.project(), r).findIndex((u) => u.volumeId === vid);
           i >= 0 && await saveReview(view, c.jobId, (x) => ({ ...x, at: i }));
         }
-        res && toast(res.ok ? "success" : "warning", res.ok ? `已重新整理 ${id}，原来的内容可以在线页下面展开对照。` : `没有重新整理 ${id}：${res.why}。`), view.renderBody();
+        res && toast(res.ok ? "success" : "warning", res.ok ? `已重新整理${id}，原来的内容可以在线页下面展开对照。` : `没有重新整理${id}：${res.why}。`), view.renderBody();
       },
       async "rv-drop-open"(view, target) {
         let c = current(view), vid = target.dataset.vol;
@@ -13400,7 +13500,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
       },
       async "rv-tiers"(view, target) {
         let c = current(view), vid = target.dataset.vol, tiers = JSON.parse(target.dataset.tiers || "[]");
-        c && (await saveReview(view, c.jobId, (r) => editDraft(r, `确认档位顺序 ${tiers.join(" < ")}`, (d) => d.map((v) => v.id === vid ? confirmTierOrder([v], tiers)[0] : v))), view.renderBody());
+        c && (await saveReview(view, c.jobId, (r) => editDraft(r, `确认档位顺序${tiers.join(" < ")}`, (d) => d.map((v) => v.id === vid ? confirmTierOrder([v], tiers)[0] : v))), view.renderBody());
       },
       // 已保存的线：到大纲的审阅修改里接着改（打开项目的审阅修改，定位到这条线）
       async "rv-edit-saved"(view, target) {
@@ -13428,7 +13528,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
         } catch (error) {
           return status.textContent = `没有保存：${error.message}`, status.classList.add("is-err");
         }
-        await saveReview(view, c.jobId, (r) => ({ ...editDraft(r, "直接改 YAML", (d) => putUnit(d, key, parsed)), yamlOpen: key })), view.renderBody();
+        await saveReview(view, c.jobId, (r) => ({ ...editDraft(r, "直接改YAML", (d) => putUnit(d, key, parsed)), yamlOpen: key })), view.renderBody();
       },
       // 预览意见（用户 2026-11-16）：各页意见汇总可改，加整体意见、附带讨论记录，一次发送。
       async "rv-preview"(view) {
@@ -13436,10 +13536,10 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
         box0 && await reviewOnInput(view, box0, jobOf, { blur: !0 });
         let c = current(view);
         if (!c) return;
-        let review = c.review, units = reviewUnits(view.project(), review), labelOf = (key) => unitTitle(review, key), sendKeys = new Set(sendableNotes(view.project(), review)), list = units.filter((u) => sendKeys.has(u.key)), curVol = review.draft.find((v) => v.id === (units[Math.max(0, Math.min(units.length - 1, review.at || 0))] || units[0]).volumeId), curLocked = !curVol || lineLocked(review, curVol.id, view.project()), chat = await view.data.loadChat(view.projectId).catch(() => null), hasTalk = !!(chat && (chat.summary || (chat.messages || []).length)), stages = curVol ? curVol.stages.length : 0, curName = curVol ? review.draft.length > 1 ? lineTitle(curVol) : reviewIsClue(view.project(), review) ? "这条线" : "这一卷" : "", html = `<p class="pi-hint">以下意见一次发给 AI，改完的内容先进草稿，确认后再保存到大纲。可在此修改；点标题返回对应页。</p>
+        let review = c.review, units = reviewUnits(view.project(), review), labelOf = (key) => unitTitle(review, key), sendKeys = new Set(sendableNotes(view.project(), review)), list = units.filter((u) => sendKeys.has(u.key)), curVol = review.draft.find((v) => v.id === (units[Math.max(0, Math.min(units.length - 1, review.at || 0))] || units[0]).volumeId), curLocked = !curVol || lineLocked(review, curVol.id, view.project()), chat = await view.data.loadChat(view.projectId).catch(() => null), hasTalk = !!(chat && (chat.summary || (chat.messages || []).length)), stages = curVol ? curVol.stages.length : 0, curName = curVol ? review.draft.length > 1 ? lineTitle(curVol) : reviewIsClue(view.project(), review) ? "这条线" : "这一卷" : "", html = `<p class="pi-hint">以下意见一次发给AI，改完的内容先进草稿，确认后再保存到大纲。可在此修改；点标题返回对应页。</p>
                 ${list.map((u) => `<div class="pi-rv-q"><button type="button" class="pi-rv-q-go" data-dlg-value="go:${esc(u.key)}">${esc(labelOf(u.key))} ›</button><textarea class="pi-ta" rows="2" data-rv-q="${esc(u.key)}">${esc(review.comments[u.key])}</textarea></div>`).join("") || '<p class="pi-hint">各页还没有意见。</p>'}
-                ${curLocked ? "" : `<label class="pi-field"><span>对 ${esc(curName)} 的整体意见（可选）</span><textarea class="pi-ta" rows="2" data-rv-overall placeholder="例：人名统一；入口语气更轻松">${esc(review.overall || "")}</textarea></label>
-                <p class="pi-hint">整体意见只改${esc(curName)}，会发送它的全部内容（${stages} 个阶段），请求较长。别的线请在对应页写意见。</p>`}
+                ${curLocked ? "" : `<label class="pi-field"><span>对${esc(curName)}的整体意见（可选）</span><textarea class="pi-ta" rows="2" data-rv-overall placeholder="例：人名统一；入口语气更轻松">${esc(review.overall || "")}</textarea></label>
+                <p class="pi-hint">整体意见只改${esc(curName)}，会发送它的全部内容（${stages}个阶段），请求较长。别的线请在对应页写意见。</p>`}
                 ${hasTalk ? `<label class="pi-check"><input type="checkbox" data-rv-talk${review.noTalk ? "" : " checked"}><span>附带讨论记录</span></label>` : ""}`, read = (root) => ({
           comments: Object.fromEntries([...root.querySelectorAll("[data-rv-q]")].map((b) => [b.dataset.rvQ, b.value])),
           overall: root.querySelector("[data-rv-overall]") ? root.querySelector("[data-rv-overall]").value : "",
@@ -13527,7 +13627,7 @@ ${yamlOf(k)}`).join(`
           bad.push(k);
         }
     if (overall && !Object.keys(parsed).length) {
-      let why = Object.keys(reasons).length ? `AI 说明保持原样：${Object.entries(reasons).map(([k, r]) => `「${want.includes(k) ? labelOf(k) : k}」${r}`).join("；")}` : bad.length ? "回复格式无法读取" : "回复里没有修改内容";
+      let why = Object.keys(reasons).length ? `AI说明保持原样：${Object.entries(reasons).map(([k, r]) => `「${want.includes(k) ? labelOf(k) : k}」${r}`).join("；")}` : bad.length ? "回复格式无法读取" : "回复里没有修改内容";
       return toast("warning", `没有读到修改结果（${why}）。意见保留，可重试。`);
     }
     let need = overall ? [.../* @__PURE__ */ new Set([...commented, ...Object.keys(parsed), ...bad])] : want, groups = relatedGroups(review.draft, need), cur = view.data.imports.get(jobId).review, curBackground = view.project().outline.volumes.filter((v) => !cur.draft.some((d) => d.id === v.id)), okKeys = [], failed = [], outside = [];
@@ -13539,11 +13639,11 @@ ${yamlOf(k)}`).join(`
       }
       let after = g.reduce((acc, k) => putUnit(acc, k, parsed[k]), cur.draft), breaks = refBreaks(cur.draft, after, g, curBackground), inner = breaks.filter((x) => cur.draft.some((v) => v.id === x.key.split("/")[0])), missing = newMissingRefs(cur.draft, after, g, curBackground);
       if (missing.length) {
-        failed.push({ g, why: `「${missing.map((x) => labelOf(x.key)).join("、")}」新写的条件用到了找不到的 ${[...new Set(missing.flatMap((x) => x.refs))].join("、")}` });
+        failed.push({ g, why: `「${missing.map((x) => labelOf(x.key)).join("、")}」新写的条件用到了找不到的${[...new Set(missing.flatMap((x) => x.refs))].join("、")}` });
         continue;
       }
       if (inner.length) {
-        failed.push({ g, why: `「${g.map(labelOf).join("、")}」改掉了「${inner.map((x) => labelOf(x.key)).join("、")}」还在用的 ${[...new Set(inner.flatMap((x) => x.refs))].join("、")}，需要一起改` });
+        failed.push({ g, why: `「${g.map(labelOf).join("、")}」改掉了「${inner.map((x) => labelOf(x.key)).join("、")}」还在用的${[...new Set(inner.flatMap((x) => x.refs))].join("、")}，需要一起改` });
         continue;
       }
       outside.push(...breaks), okKeys.push(...g);
@@ -13568,11 +13668,11 @@ ${yamlOf(k)}`).join(`
     let tail = [
       failed.length ? `${failed.map((f) => f.why).join("；")}，相关意见保留。可写得更具体后重试` : "",
       newer.length ? `「${newer.map(labelOf).join("、")}」有新写的意见，还没发送` : "",
-      outside.length ? `别的线还在用改掉的内容：${outside.map((x) => `「${labelOf(x.key)}」用 ${x.refs.join("、")}`).join("；")}，需要另外修改那条线` : ""
+      outside.length ? `别的线还在用改掉的内容：${outside.map((x) => `「${labelOf(x.key)}」用${x.refs.join("、")}`).join("；")}，需要另外修改那条线` : ""
     ].filter(Boolean);
     toast(
       failed.length || outside.length ? "warning" : "success",
-      `已修改 ${changedKeys.length} 页${changedKeys.length ? `：${changedKeys.map(labelOf).join("、")}` : ""}${tail.length ? `。${tail.join("。")}` : ""}。`
+      `已修改${changedKeys.length}页${changedKeys.length ? `：${changedKeys.map(labelOf).join("、")}` : ""}${tail.length ? `。${tail.join("。")}` : ""}。`
     );
   }
   function adoptPlan(view, job, review) {
@@ -13752,7 +13852,7 @@ ${yamlOf(k)}`).join(`
       let lines2 = streamLines(p.items);
       return orderLooksBroken(lines2, p.width) && (lines2 = coordLines(p.items, p.width)), { no: i + 1, width: p.width, height: p.height, lines: lines2 };
     }), empty = pages.filter((p) => !p.lines.length).map((p) => p.no);
-    empty.length && warnings.push(`第 ${empty.join("、")} 页没有文字层（可能是图片或扫描页），没有转出文字。`);
+    empty.length && warnings.push(`第${empty.join("、")}页没有文字层（可能是图片或扫描页），没有转出文字。`);
     let toc = pages.filter((p) => p.lines.filter((l) => DOT_LEADER.test(l.text)).length >= 3);
     keepToc || toc.forEach((p) => p.lines = []);
     let margins = marginKeys(pages);
@@ -13790,7 +13890,7 @@ ${yamlOf(k)}`).join(`
     }).filter((t) => t.replace(/^[#-]+\s*/, "")).join(`
 
 `);
-    return toc.length && !keepToc && warnings.push(`第 ${toc.map((p) => p.no).join("、")} 页像是目录，已略过。`), { text: text2, warnings, pages: pages.length, chars: text2.replace(/\s/g, "").length };
+    return toc.length && !keepToc && warnings.push(`第${toc.map((p) => p.no).join("、")}页像是目录，已略过。`), { text: text2, warnings, pages: pages.length, chars: text2.replace(/\s/g, "").length };
   }
 
   // src/host/pdf-load.js
@@ -13811,7 +13911,7 @@ ${yamlOf(k)}`).join(`
         } catch (error) {
           errors.push(error && error.message ? error.message : String(error));
         }
-      throw new Error(`PDF 组件下载失败（${errors[errors.length - 1] || "网络不通"}）`);
+      throw new Error(`PDF组件下载失败（${errors[errors.length - 1] || "网络不通"}）`);
     })(), loading.catch(() => loading = null), loading);
   }
   function isPdfFile(file) {
@@ -13839,7 +13939,7 @@ ${yamlOf(k)}`).join(`
   // src/ui/trpg-kp.js
   var running = /* @__PURE__ */ new Set();
   async function runKpRules(view, projectId, text2) {
-    if (running.has(projectId)) return toast("info", "KP 规则还在整理中。");
+    if (running.has(projectId)) return toast("info", "KP规则还在整理中。");
     running.add(projectId);
     try {
       let parts = splitLongText(text2, { target: 12e3, overlap: 200 }), pieces = [];
@@ -13847,24 +13947,48 @@ ${yamlOf(k)}`).join(`
         let reply2 = String(await ask(view, "setting", kpRulesMessages({ part, total: parts.length })) || "").trim();
         reply2 && pieces.push(reply2);
       }
-      if (!pieces.length) return toast("warning", "KP 规则没有整理出内容，可以到设定页手动补。");
+      if (!pieces.length) return toast("warning", "KP规则没有整理出内容，可以到设定页手动补。");
       let merged = pieces.length > 1 ? String(await ask(view, "setting", kpMergeMessages(pieces)) || "").trim() || pieces.join(`
 
 `) : pieces[0], block = kpBlockText(merged);
-      if (!block) return toast("warning", "KP 规则没有整理出内容，可以到设定页手动补。");
+      if (!block) return toast("warning", "KP规则没有整理出内容，可以到设定页手动补。");
       view.data.updateProject(projectId, (p) => {
         let old = p.setting && p.setting.text || "";
         return { ...p, setting: { ...p.setting, text: old.trim() ? mergeBlocks(old, block, [KP_BLOCK]) : block } };
-      }), toast("success", "KP 规则已整理进设定（「KP规则」分块）。");
+      }), toast("success", "KP规则已整理进设定（「KP规则」分块）。");
     } catch (error) {
-      toast("error", `KP 规则整理失败：${error && error.message || error}`);
+      toast("error", `KP规则整理失败：${error && error.message || error}`);
     } finally {
       running.delete(projectId);
     }
   }
 
   // src/ui/long-import.js
-  var IMPORT_PART_CHARS = 8e3, sti = (view) => {
+  var IMPORT_PART_CHARS = 8e3, liveImport = /* @__PURE__ */ new Map(), liveSeq = 0;
+  function importLiveText(jobId) {
+    let m = liveImport.get(jobId);
+    return m && m.size ? `正在生成：${[...m.values()].map((x) => `${x.label}${x.chars ? `${x.chars}字` : ""}`).join("，")}` : "";
+  }
+  function paintLive(jobId) {
+    let text2 = importLiveText(jobId);
+    hostDocument().querySelectorAll("[data-imp-live]").forEach((el2) => el2.dataset.impLive === jobId && (el2.textContent = text2));
+  }
+  async function askLive(view, jobId, label, messages) {
+    let m = liveImport.get(jobId) || (liveImport.set(jobId, /* @__PURE__ */ new Map()), liveImport.get(jobId)), key = ++liveSeq, last = 0;
+    m.set(key, { label, chars: 0 }), paintLive(jobId);
+    try {
+      return await ask(view, "outline", messages, {
+        onText: (t) => {
+          m.set(key, { label, chars: t.length });
+          let now = Date.now();
+          now - last > 400 && (last = now, paintLive(jobId));
+        }
+      });
+    } finally {
+      m.delete(key), m.size || liveImport.delete(jobId), paintLive(jobId);
+    }
+  }
+  var sti = (view) => {
     let all = view.tabState("import"), id = view.projectId || "";
     return all[id] || (all[id] = {}), all[id];
   };
@@ -13884,37 +14008,45 @@ ${yamlOf(k)}`).join(`
     if (job.projectId !== task.projectId) throw new Error("这个导入任务不属于当前项目");
     let still = () => view.projectId === task.projectId && store.get(jobId), parts = job.parts && job.parts.length ? job.parts : splitLongText(text2, { target: IMPORT_PART_CHARS }).map(({ text: _t, ...p }) => p);
     job.parts && job.parts.length || await store.update(jobId, (j) => ({ ...j, parts, step: "index" }));
-    let partText = (p) => text2.slice(Math.max(0, p.start - p.lead), p.end), ok = (x) => isPlainObject(x) && !x.error, local = [...store.get(jobId).localIndex || []];
-    for (let p of parts) {
-      if (!still()) return;
-      if (ok(local[p.i])) continue;
-      let lines2 = job.mode === "lines", prevIdx = local.filter(ok).length ? {
-        ...mergeImportIndex(local.filter(ok)),
-        ...lines2 ? { 支线: mergeLineIdentity(local.filter(ok)).lines.map(({ parts: _p, ...l }) => l) } : {}
-      } : null, prev = prevIdx ? stringifyYaml(prevIdx) : "", base = importIndexMessages({ part: { ...p, text: partText(p) }, total: parts.length, prev, needs: job.needs }), msgs = lines2 ? importLineIndexMessages(base) : base, reply2 = await ask(view, "outline", msgs), parsed = null, read = (t) => {
-        let v = parseYaml(extractYaml(t));
-        if (!isPlainObject(v)) throw new Error("没有读到索引内容");
-        return v;
-      };
+    let partText = (p) => text2.slice(Math.max(0, p.start - p.lead), p.end), ok = (x) => isPlainObject(x) && !x.error, local = [...store.get(jobId).localIndex || []], lines2 = job.mode === "lines", okList = () => local.map((x) => ok(x) ? x : {}), read = (t) => {
+      let v = parseYaml(extractYaml(t));
+      if (!isPlainObject(v)) throw new Error("没有读到索引内容");
+      return v;
+    }, indexMsgs = (p) => {
+      let prevIdx = local.some(ok) ? {
+        ...mergeImportIndex(okList()),
+        ...lines2 ? { 支线: mergeLineIdentity(okList()).lines.map(({ parts: _p, ...l }) => l) } : {}
+      } : null, base = importIndexMessages({ part: { ...p, text: partText(p) }, total: parts.length, prev: prevIdx ? stringifyYaml(prevIdx) : "", needs: job.needs });
+      return lines2 ? importLineIndexMessages(base) : base;
+    }, sent = /* @__PURE__ */ new Map(), readPart = async (p) => {
+      if (!still() || ok(local[p.i])) return;
+      let msgs = indexMsgs(p), reply2 = await askLive(view, jobId, `第${p.i + 1}段`, msgs), parsed = null;
       try {
         parsed = read(reply2);
       } catch {
         try {
-          parsed = read(await ask(view, "outline", fixYamlMessages(extractYaml(reply2), "格式错误", "outline")));
+          parsed = read(await askLive(view, jobId, `第${p.i + 1}段`, fixYamlMessages(extractYaml(reply2), "格式错误", "outline")));
         } catch (error) {
-          parsed = { error: `第 ${p.i + 1} 段的索引读不出来：${error.message}` };
+          parsed = { error: `第${p.i + 1}段的索引读不出来：${error.message}` };
         }
       }
-      let miss = ok(parsed) ? importIndexMissing(parsed) : [];
-      if (miss.length)
+      ok(parsed) && sent.set(p.i, { msgs, reply: reply2 }), local[p.i] = parsed, await store.update(jobId, (j) => ({ ...j, localIndex: local, step: "index" })), view.renderBody();
+    }, todo = parts.filter((p) => !ok(local[p.i]));
+    if (todo.length && !local.some(ok) && await readPart(todo.shift()), !still() || (await runPool(todo.map((p) => () => readPart(p)), IMPORT_CONCURRENCY, still), !still())) return;
+    if (!mergeImportIndex(okList()).事实.length) {
+      let retry = async (p) => {
+        if (!still() || !sent.has(p.i) || !ok(local[p.i]) || !importIndexMissing(local[p.i]).length) return;
+        let miss = importIndexMissing(local[p.i]), was = sent.get(p.i);
         try {
-          let again = read(await ask(view, "outline", importIndexRetryMessages(msgs, reply2, miss)));
-          importIndexMissing(again).length < miss.length && (parsed = again);
+          let again = read(await askLive(view, jobId, `第${p.i + 1}段`, importIndexRetryMessages(was.msgs, was.reply, miss)));
+          if (!(importIndexMissing(again).length < miss.length)) return;
+          local[p.i] = again, await store.update(jobId, (j) => ({ ...j, localIndex: local, step: "index" })), view.renderBody();
         } catch {
         }
-      local[p.i] = parsed, await store.update(jobId, (j) => ({ ...j, localIndex: local, step: "index" })), view.renderBody();
+      };
+      if (await runPool(parts.map((p) => () => retry(p)), IMPORT_CONCURRENCY, still), !still()) return;
     }
-    let index = mergeImportIndex(local.filter(ok));
+    let index = mergeImportIndex(okList());
     if (await store.update(jobId, (j) => ({ ...j, index, step: "draft" })), job.mode === "lines")
       return runLineDrafts(
         view,
@@ -13933,12 +14065,13 @@ ${yamlOf(k)}`).join(`
         `
 `
       ).slice(-25).join(`
-`) : "", reply2 = await ask(
+`) : "", reply2 = await askLive(
         view,
-        "outline",
+        jobId,
+        `第${p.i + 1}段`,
         importDraftMessages({
           part: { ...p, text: partText(p) },
-          index: stringifyYaml(index),
+          index: stringifyYaml(importIndexForPart(index, p.i)),
           prevTail,
           mode: cur.mode,
           needs: cur.needs,
@@ -13947,7 +14080,7 @@ ${yamlOf(k)}`).join(`
           trpg: !!cur.trpg
         })
       ), r = parseOutlineReply(reply2);
-      r.ok && r.volumes.length || (r = parseOutlineReply(await ask(view, "outline", fixYamlMessages(r.yaml, r.error || "没有读到任何阶段", cur.mode))));
+      r.ok && r.volumes.length || (r = parseOutlineReply(await askLive(view, jobId, `第${p.i + 1}段`, fixYamlMessages(r.yaml, r.error || "没有读到任何阶段", cur.mode))));
       let entry = r.ok && r.volumes.length ? { yaml: r.yaml, volumes: r.volumes, notes: splitImportAuthorFields(r.volumes, p).notes } : { error: r.error || "没有读到任何阶段", yaml: r.yaml };
       await store.update(jobId, (j) => ({ ...j, drafts: { ...j.drafts, [p.i]: entry } })), view.renderBody();
     }
@@ -13961,7 +14094,7 @@ ${yamlOf(k)}`).join(`
   function importFailedParts(job) {
     let parts = job.parts || [], local = job.localIndex || [], drafts = job.drafts || {}, lines2 = job.mode === "lines";
     return parts.map((p) => {
-      let b = lines2 && drafts[p.i] && !drafts[p.i].error ? lineBatchState(job, p) : null, why = local[p.i] && local[p.i].error ? local[p.i].error : drafts[p.i] && drafts[p.i].error ? `第 ${p.i + 1} 段转写失败：${drafts[p.i].error}` : b && b.bad ? `第 ${p.i + 1} 段的 ${b.bad.only.join("、")} 转写失败：${b.bad.error}` : b && b.left ? `第 ${p.i + 1} 段有 ${b.left} 批未完成，其他结果已保存` : drafts[p.i] ? "" : `第 ${p.i + 1} 段还没整理`;
+      let b = lines2 && drafts[p.i] && !drafts[p.i].error ? lineBatchState(job, p) : null, why = local[p.i] && local[p.i].error ? local[p.i].error : drafts[p.i] && drafts[p.i].error ? `第${p.i + 1}段转写失败：${drafts[p.i].error}` : b && b.bad ? `第${p.i + 1}段的${b.bad.only.join("、")}转写失败：${b.bad.error}` : b && b.left ? `第${p.i + 1}段有${b.left}批未完成，其他结果已保存` : drafts[p.i] ? "" : `第${p.i + 1}段还没整理`;
       return why ? { i: p.i, title: p.title, why } : null;
     }).filter(Boolean);
   }
@@ -13973,7 +14106,7 @@ ${yamlOf(k)}`).join(`
     let project = view.project(), clue = isClueMode(project), issues = [], basis = "", names2 = new Set(take.map((st9) => stageLabel(st9.key))), added = [{ ...vol, stages: take }], applied = [...project.outline.volumes, ...added];
     if (issues.push(...checkImportDraft(added, { index, mode: clue ? "clue" : "outline" }).filter((x) => !/按大纲推演|替代途径/.test(x.text))), !clue) return { issues, basis };
     let c = view.runtime.activeId() === view.projectId ? view.runtime.clue.compute() : null, { known, claimed } = chatFactSets(c);
-    return basis = c ? `按当前聊天的进度判断（已确认 ${known.length} 个事实${claimed.length ? `，另有 ${claimed.length} 个已出现的说法` : ""}）。` : "这个项目没有在当前聊天启用，按大纲本身判断（不计任何聊天的进度）。", issues.push(...importReachIssues(applied, { only: names2, knownFacts: known, claimedFacts: claimed })), issues.push(
+    return basis = c ? `按当前聊天的进度判断（已确认${known.length}个事实${claimed.length ? `，另有${claimed.length}个已出现的说法` : ""}）。` : "这个项目没有在当前聊天启用，按大纲本身判断（不计任何聊天的进度）。", issues.push(...importReachIssues(applied, { only: names2, knownFacts: known, claimedFacts: claimed })), issues.push(
       ...checkClueDraft(added, project.outline.volumes, { isObtained: (id) => known.includes(id) }).filter((x) => /^事实编号 /.test(x)).map((text2) => ({ level: "warn", text: text2 }))
     ), { issues, basis };
   }
@@ -13981,7 +14114,7 @@ ${yamlOf(k)}`).join(`
     { value: "main", label: "一条主线", note: "一段完整的主线剧情" },
     { value: "side", label: "一条支线", note: "一段独立的支线剧情" },
     { value: "lines", label: "多条支线", note: "多段支线剧情，逐条整理" }
-  ], KIND_WORD = { main: "一条主线", side: "一条支线", lines: "多条支线", outline: "按阶段推进", legacy: "线索推进", edit: "审阅修改" }, IMPORT_NEEDS_SIDE = "这是一条支线。写清它什么时候能开始、由什么引出（比如「主线进行到当铺之后，罗莎打电话来」）；开头的人物表只给我自己看。", IMPORT_NEEDS_LINES = "文档里每条支线用「## 1 标题」「## 2 标题」分开；每条写清什么时候能开始。开头的总说明只给我自己看。";
+  ], KIND_WORD = { main: "一条主线", side: "一条支线", lines: "多条支线", outline: "按阶段推进", legacy: "线索推进", edit: "审阅修改" }, IMPORT_NEEDS_SIDE = "这是一条支线。写清它什么时候能开始、由什么引出（比如「主线进行到当铺之后，罗莎打电话来」）；开头的人物表只给我自己看。", IMPORT_NEEDS_LINES = "文档里每条支线用「## 1标题」「## 2标题」分开；每条写清什么时候能开始。开头的总说明只给我自己看。";
   function unsavedImports(view, project) {
     return importJobIds(project).map((id) => view.data.imports.get(id)).filter((j) => !j || importJobKind(j) === "edit" || j.step !== "review" || !j.review ? !1 : j.mode === "lines" && j.review.lines ? linesLeft(project, j) > 0 : !j.review.adoptedId && !projectAdopted(project).has(adoptKey(j.id, "review", 0)));
   }
@@ -13993,7 +14126,7 @@ ${yamlOf(k)}`).join(`
     let list = unsavedImports(view, project);
     return list.length ? `<div class="pi-rv-pending">${list.map((j) => {
       let n = j.mode === "lines" && j.review && j.review.lines ? linesLeft(project, j) : 0;
-      return `<p class="pi-hint">还有${n ? ` ${n} 条支线` : `一条${KIND_WORD[importJobKind(j)].replace(/^一条/, "")}`}未保存到大纲。<button type="button" class="pi-rv-fillall pi-rv-pending-btn" data-act="import-open" data-id="${esc(j.id)}">打开审阅</button></p>`;
+      return `<p class="pi-hint">还有${n ? `${n}条支线` : `一条${KIND_WORD[importJobKind(j)].replace(/^一条/, "")}`}未保存到大纲。<button type="button" class="pi-rv-fillall pi-rv-pending-btn" data-act="import-open" data-id="${esc(j.id)}">打开审阅</button></p>`;
     }).join("")}</div>` : "";
   }
   function jobState(j) {
@@ -14016,9 +14149,9 @@ ${yamlOf(k)}`).join(`
         }).finally(() => (s.loadingList = !1, view.renderBody())), '<div class="pi-empty"><span class="pi-spin"></span> 正在读取导入记录…</div>';
       let list = ids.map((id) => view.data.imports.get(id)).filter(Boolean), lost = (s.unreadable || []).filter((id) => ids.includes(id)), clue0 = s.mode ? s.mode === "clue" : isClueMode(project), kind0 = clue0 ? s.kind || "main" : "outline";
       return `${crumbs(0)}<div class="pi-card"><h3>导入长文<span class="pi-spacer"></span><button type="button" class="pi-btn is-sm is-ghost" data-act="import-close">回到大纲</button></h3>
-        <label class="pi-field"><span>原文</span><textarea class="pi-ta pi-imp-text" data-imp-text placeholder="粘贴剧情方案，或选择 txt / md${isTrpg(project) ? " / pdf" : ""} 文件">${esc(s.text || "")}</textarea></label>
+        <label class="pi-field"><span>原文</span><textarea class="pi-ta pi-imp-text" data-imp-text placeholder="粘贴剧情方案，或选择txt / md${isTrpg(project) ? " / pdf" : ""}文件">${esc(s.text || "")}</textarea></label>
         <div class="pi-row pi-imp-file"><button type="button" class="pi-btn is-sm" data-act="import-pick-file">选择文件…</button></div>
-        ${s.file ? `<div class="pi-imp-chip"><span class="pi-imp-chip-name">${esc(s.file.name)}</span><span class="pi-imp-chip-sub">${s.file.chars >= 1e4 ? `${(s.file.chars / 1e4).toFixed(1)} 万字` : `${s.file.chars} 字`}</span></div>` : ""}
+        ${s.file ? `<div class="pi-imp-chip"><span class="pi-imp-chip-name">${esc(s.file.name)}</span><span class="pi-imp-chip-sub">${s.file.chars >= 1e4 ? `${(s.file.chars / 1e4).toFixed(1)}万字` : `${s.file.chars}字`}</span></div>` : ""}
         <label class="pi-field"><span>推进方式</span><select class="pi-sel" data-imp-modesel>${options(
         [
           { value: "clue", label: "线索推进" },
@@ -14027,12 +14160,12 @@ ${yamlOf(k)}`).join(`
         clue0 ? "clue" : "outline"
       )}</select><span class="pi-hint">${clue0 ? "按查到的线索推进剧情。" : "按时间顺序一段段推进，整份文档整理成一卷。"}${clue0 === isClueMode(project) ? "" : "和项目现在的推进方式不同。保存后到执行页切换推进方式，剧情才会按这种方式推进。"}</span></label>
         ${clue0 ? `<div class="pi-field"><span>文档内容</span><div class="pi-imp-kind">${IMPORT_KINDS.map((k) => `<button type="button" class="pi-imp-kind-btn${kind0 === k.value ? " is-sel" : ""}" data-act="import-kind" data-kind="${k.value}"><b>${k.label}</b><span>${k.note}</span></button>`).join("")}</div></div>` : ""}
-        ${clue0 && kind0 !== "lines" && isTrpg(project) ? `<label class="pi-check"><input type="checkbox" data-imp-trpg${s.trpg ?? !0 ? " checked" : ""}><span>跑团模组（CoC 7 版）：带上检定，另外整理 KP 规则</span></label>` : ""}
+        ${clue0 && kind0 !== "lines" && isTrpg(project) ? `<label class="pi-check"><input type="checkbox" data-imp-trpg${s.trpg ?? !0 ? " checked" : ""}><span>跑团模组（CoC 7版）：带上检定，另外整理KP规则</span></label>` : ""}
         ${clue0 && !currentTables() ? '<p class="pi-hint is-warn">当前聊天读不到数据库表格。依赖表格的开始条件会先按手动开始整理；也可以到有表格的聊天里导入。</p>' : ""}
         <label class="pi-field"><span>要求（可空）</span><textarea class="pi-ta" rows="3" data-imp-needs placeholder="${esc(kind0 === "side" ? IMPORT_NEEDS_SIDE : kind0 === "lines" ? IMPORT_NEEDS_LINES : IMPORT_NEEDS_EXAMPLE)}">${esc(s.needs || "")}</textarea></label>
         <input type="hidden" data-imp-mode value="${clue0 ? kind0 === "lines" ? "lines" : "clue" : "outline"}"><input type="hidden" data-imp-kind value="${kind0}">
         <div class="pi-tools is-end is-c1"><button type="button" class="pi-btn is-primary" data-act="import-start">开始整理</button></div></div>
-        ${list.length || lost.length ? `<div class="pi-card"><h3>之前的导入</h3>${list.map((j) => `<div class="pi-set-row"><span>${esc(new Date(j.createdAt).toLocaleString("zh-CN", { hour12: !1 }))}，${j.chars} 字，${KIND_WORD[importJobKind(j)]}，${jobState(j)}</span><span class="pi-spacer"></span><button type="button" class="pi-btn is-sm" data-act="import-open" data-id="${esc(j.id)}">打开</button><button type="button" class="pi-btn is-sm is-ghost is-danger" data-act="import-drop" data-id="${esc(j.id)}">删除</button></div>`).join("")}${lost.map((id) => `<div class="pi-set-row"><span class="is-warn">读不到这条导入记录的文件</span><span class="pi-spacer"></span><button type="button" class="pi-btn is-sm is-ghost is-danger" data-act="import-drop" data-id="${esc(id)}">移除</button></div>`).join("")}</div>` : ""}`;
+        ${list.length || lost.length ? `<div class="pi-card"><h3>之前的导入</h3>${list.map((j) => `<div class="pi-set-row"><span>${esc(new Date(j.createdAt).toLocaleString("zh-CN", { hour12: !1 }))}，${j.chars}字，${KIND_WORD[importJobKind(j)]}，${jobState(j)}</span><span class="pi-spacer"></span><button type="button" class="pi-btn is-sm" data-act="import-open" data-id="${esc(j.id)}">打开</button><button type="button" class="pi-btn is-sm is-ghost is-danger" data-act="import-drop" data-id="${esc(j.id)}">删除</button></div>`).join("")}${lost.map((id) => `<div class="pi-set-row"><span class="is-warn">读不到这条导入记录的文件</span><span class="pi-spacer"></span><button type="button" class="pi-btn is-sm is-ghost is-danger" data-act="import-drop" data-id="${esc(id)}">移除</button></div>`).join("")}</div>` : ""}`;
     }
     let job = importJobOf(view, s.jobId);
     if (!job)
@@ -14041,7 +14174,7 @@ ${yamlOf(k)}`).join(`
       }).finally(() => (s.loadingJob = !1, view.renderBody()))), '<div class="pi-empty"><span class="pi-spin"></span> 正在读取导入任务…</div>';
     if (importJobKind(job) === "edit")
       return job.review ? renderReview(view, job, job.review, null, '<div class="pi-imp-crumb"><button type="button" class="pi-imp-crumb-a" data-act="import-close">大纲</button><span>›</span><b>审阅修改</b><button type="button" class="pi-imp-crumb-a pi-imp-crumb-end" data-act="edit-back-discuss">返回讨论</button></div>' + pendingImportNote(view, project)) : '<div class="pi-empty">这次修改的内容读不出来。</div>';
-    let parts = job.parts || [], indexed = (job.localIndex || []).filter((x) => isPlainObject(x) && !x.error).length, lines2 = job.mode === "lines", whole = (p) => job.drafts && job.drafts[p.i] && !job.drafts[p.i].error && (!lines2 || !lineBatchState(job, p).left), drafted = parts.filter(whole).length, total = parts.length, failed = importFailedParts(job).filter((f) => !/还没整理/.test(f.why) && !(busy && /批未完成/.test(f.why))), doing = busy && lines2 && parts.find((p) => !whole(p) && job.drafts && job.drafts[p.i]), bs = doing ? lineBatchState(job, doing) : null, progress = `<p class="pi-hint">共 ${total || "?"} 段，已读 ${indexed} 段，已整理 ${drafted} 段${job.step === "review" ? "，已完成" : ""}</p>${bs ? `<p class="pi-hint">正在整理第 ${doing.i + 1} 段，已完成 ${bs.ok} / ${bs.want} 批。</p>` : ""}${failed.map((f) => `<p class="pi-hint is-warn">${esc(f.why)}</p>`).join("")}`;
+    let parts = job.parts || [], indexed = (job.localIndex || []).filter((x) => isPlainObject(x) && !x.error).length, lines2 = job.mode === "lines", whole = (p) => job.drafts && job.drafts[p.i] && !job.drafts[p.i].error && (!lines2 || !lineBatchState(job, p).left), drafted = parts.filter(whole).length, total = parts.length, failed = importFailedParts(job).filter((f) => !/还没整理/.test(f.why) && !(busy && /批未完成/.test(f.why))), doing = busy && lines2 && parts.find((p) => !whole(p) && job.drafts && job.drafts[p.i]), bs = doing ? lineBatchState(job, doing) : null, progress = `<p class="pi-hint">共${total || "?"}段，已读${indexed}段，已整理${drafted}段${job.step === "review" ? "，已完成" : ""}</p>${bs ? `<p class="pi-hint">正在整理第${doing.i + 1}段，已完成${bs.ok} / ${bs.want}批。</p>` : ""}${busy ? `<p class="pi-hint" data-imp-live="${esc(job.id)}">${esc(importLiveText(job.id))}</p>` : ""}${failed.map((f) => `<p class="pi-hint is-warn">${esc(f.why)}</p>`).join("")}`;
     if (job.step !== "review")
       return `${crumbs(1)}<div class="pi-card"><h3>导入长文<span class="pi-spacer"></span><button type="button" class="pi-btn is-sm is-ghost" data-act="import-close">回到大纲</button></h3>${progress}
         <div class="pi-tools is-end"><button type="button" class="pi-btn is-primary is-sm" data-act="import-run"${busy ? " disabled" : ""}>${busy ? '<span class="pi-spin"></span>整理中' : failed.length ? "重试失败的段" : drafted || indexed ? "继续" : "开始"}</button></div></div>`;
@@ -14064,10 +14197,10 @@ ${yamlOf(k)}`).join(`
         ${pending.length ? `<p class="pi-hint"><b>请确认</b></p>${pending.map((x) => `<p class="pi-hint">${esc(x)}</p>`).join("")}` : ""}
         ${stages.map((st9) => {
       let key = adoptKey(job.id, 0, st9.key), nodes = stageNodes(st9.data), done = adopted.has(key);
-      return `<div class="pi-imp-stage"><div class="pi-set-row"><b>${esc(stageLabel(st9.key))}</b><span class="pi-hint">　${nodes.length} 个节点</span><span class="pi-spacer"></span>${done ? '<span class="pi-badge is-ok">已采用</span>' : `<label class="pi-check"><input type="checkbox" data-imp-pick="${esc(st9.key)}" checked><span>采用</span></label>`}</div>
+      return `<div class="pi-imp-stage"><div class="pi-set-row"><b>${esc(stageLabel(st9.key))}</b><span class="pi-hint">　${nodes.length}个节点</span><span class="pi-spacer"></span>${done ? '<span class="pi-badge is-ok">已采用</span>' : `<label class="pi-check"><input type="checkbox" data-imp-pick="${esc(st9.key)}" checked><span>采用</span></label>`}</div>
             ${nodes.map((n) => {
         let note = cand.notes[nodeUid(n.item)] || {};
-        return `<p class="pi-hint">${esc(n.name)}${note.段 ? `<span class="pi-meta">　第 ${note.段} 段</span>` : ""}${note.待确认 ? `<br><span class="is-warn">待确认：${esc(note.待确认)}</span>` : ""}</p>`;
+        return `<p class="pi-hint">${esc(n.name)}${note.段 ? `<span class="pi-meta">　第${note.段}段</span>` : ""}${note.待确认 ? `<br><span class="is-warn">待确认：${esc(note.待确认)}</span>` : ""}</p>`;
       }).join("")}
             <details><summary class="pi-hint">YAML</summary><pre class="pi-pre is-full">${esc(stringifyYaml({ [st9.key]: st9.data }))}</pre></details></div>`;
     }).join("")}
@@ -14120,12 +14253,12 @@ ${yamlOf(k)}`).join(`
       if (isPdfFile(files[0])) {
         let btn = target;
         try {
-          btn.disabled = !0, btn.textContent = "正在读取 PDF…";
-          let r = await pdfFileToText(files[0], { onProgress: (n, total) => btn.textContent = `正在读取第 ${n}/${total} 页…` });
-          if (!r.text.trim()) return toast("warning", `没有读到文字。${r.warnings.join("")}扫描版 PDF 需要先做文字识别。`);
+          btn.disabled = !0, btn.textContent = "正在读取PDF…";
+          let r = await pdfFileToText(files[0], { onProgress: (n, total) => btn.textContent = `正在读取第${n}/${total}页…` });
+          if (!r.text.trim()) return toast("warning", `没有读到文字。${r.warnings.join("")}扫描版PDF需要先做文字识别。`);
           text2 = r.text, r.warnings.length && toast("info", r.warnings.join(""));
         } catch (error) {
-          return toast("error", `PDF 读取失败：${error && error.message || error}`);
+          return toast("error", `PDF读取失败：${error && error.message || error}`);
         } finally {
           btn.disabled = !1, btn.textContent = "选择文件…";
         }
@@ -14182,7 +14315,7 @@ ${yamlOf(k)}`).join(`
       let { issues, basis } = importAdoptIssues(view, vol, take, cand.index), errs = issues.filter((x) => x.level === "error"), warns = issues.filter((x) => x.level !== "error");
       if ((errs.length || warns.length) && !await confirmDialog({
         title: errs.length ? "勾选的阶段有问题" : "请确认",
-        body: `${basis}追加 ${take.length} 个阶段后检查到：`,
+        body: `${basis}追加${take.length}个阶段后检查到：`,
         list: [...errs, ...warns].map((x) => x.text).slice(0, 10),
         okLabel: "仍然追加",
         danger: !!errs.length
@@ -14196,7 +14329,7 @@ ${yamlOf(k)}`).join(`
         let [reid, renamed] = reidConflicts(incoming, project.outline.volumes), existing = new Set(project.outline.volumes.map((v) => v.key));
         fresh = reid.map((v) => existing.has(v.key) ? { ...v, key: `${v.key}_导入${Date.now().toString(36).slice(-3)}` } : v), renamed.length && toast(
           "warning",
-          `有 ${renamed.length} 个节点 ID 与现有节点重复，已换成新 ID：${renamed.slice(0, 5).join("、")}${renamed.length > 5 ? "……" : ""}。`
+          `有${renamed.length}个节点ID与现有节点重复，已换成新ID：${renamed.slice(0, 5).join("、")}${renamed.length > 5 ? "……" : ""}。`
         );
       } catch (error) {
         return toast("error", `没有追加：${error.message}`);
@@ -14206,7 +14339,7 @@ ${yamlOf(k)}`).join(`
         // 先记大纲历史（GPT 代码审阅：按阶段推进的追加也要能撤回）
         outline: { ...p.outline, volumes: [...p.outline.volumes, ...fresh], history: pushOutlineHistory(p.outline.history, p.outline.volumes, "导入追加阶段") },
         importAdopted: [...projectAdopted(p), ...keys]
-      })), st(view).sel = fresh[0] && fresh[0].id, view.runtime.refresh && view.runtime.refresh(), toast("success", `已追加 ${take.length} 个阶段。`), view.renderBody(), afterAdopt(view), await store.update(jobId, (j) => ({ ...j, adopted: [.../* @__PURE__ */ new Set([...j.adopted || [], ...keys])] })).catch(() => {
+      })), st(view).sel = fresh[0] && fresh[0].id, view.runtime.refresh && view.runtime.refresh(), toast("success", `已追加${take.length}个阶段。`), view.renderBody(), afterAdopt(view), await store.update(jobId, (j) => ({ ...j, adopted: [.../* @__PURE__ */ new Set([...j.adopted || [], ...keys])] })).catch(() => {
       });
     }
   };
@@ -14223,7 +14356,7 @@ ${yamlOf(k)}`).join(`
     let half = incompleteTableLines(vols);
     if (!half.length) return !1;
     let i = reviewUnits(view.project(), review).findIndex((u) => u.volumeId === half[0].id && u.kind === "line");
-    return i >= 0 && await view.data.imports.update(jobId, (j) => ({ ...j, review: { ...j.review, at: i } })), view.renderBody(), toast("warning", `${half.map(lineTitle).join("、")} 的表格条件还没填完（表、行、列、值都要有），没有保存。也可以改选别的开始方式。`), !0;
+    return i >= 0 && await view.data.imports.update(jobId, (j) => ({ ...j, review: { ...j.review, at: i } })), view.renderBody(), toast("warning", `${half.map(lineTitle).join("、")}的表格条件还没填完（表、行、列、值都要有），没有保存。也可以改选别的开始方式。`), !0;
   }
   async function adoptLinesReview(view, jobId) {
     let projectId = view.projectId, job = importJobOf(view, jobId), review = job && job.review;
@@ -14232,7 +14365,7 @@ ${yamlOf(k)}`).join(`
     if (pending) {
       let pick = await choiceDialog({
         title: "还有意见没发送",
-        body: `有 ${pending} 页意见还没用于修改草稿。保存后意见仍会保留。`,
+        body: `有${pending}页意见还没用于修改草稿。保存后意见仍会保留。`,
         choices: [
           { label: "取消", value: null },
           { label: "保存到大纲，暂不发送意见", value: "save" },
@@ -14251,8 +14384,8 @@ ${yamlOf(k)}`).join(`
       ...Object.entries(pageIssues).filter(([k]) => k.split("/")[0] === v.id).flatMap(([, list]) => list.filter((x) => x.level === "error").map((x) => `${idOf2(v)}：${x.plain || x.text}`))
     ]);
     if (!await confirmDialog({
-      title: `保存 ${take.length} 条支线到大纲`,
-      body: errs.length ? `还有 ${errs.length} 处问题，有问题的线可能一直开始不了。保存后也可以在大纲页「审阅修改…」里再改：` : `要保存：${take.map(idOf2).join("、")}。`,
+      title: `保存${take.length}条支线到大纲`,
+      body: errs.length ? `还有${errs.length}处问题，有问题的线可能一直开始不了。保存后也可以在大纲页「审阅修改…」里再改：` : `要保存：${take.map(idOf2).join("、")}。`,
       list: errs.slice(0, 10),
       okLabel: errs.length ? "仍然保存" : "保存",
       danger: !!errs.length
@@ -14288,7 +14421,7 @@ ${yamlOf(k)}`).join(`
       );
       return { ...p, outline: w.outline, importAdopted: [...projectAdopted(p), ...keys], importLineMap: { ...p.importLineMap || {}, ...lineMap }, ...sec ? { secretNames: sec } : {} };
     }), !written) return toast("warning", "确认期间大纲又被改过了，没有写入。请再点一次「保存到大纲」。");
-    Object.keys(map).length && toast("warning", `有 ${Object.keys(map).length} 条支线的编号和已有的线重复，已换成：${Object.entries(map).map(([a, b]) => `${a}→${b}`).join("、")}（本批内部的引用一起改了）。`), renamed.length && toast("warning", `有 ${renamed.length} 个节点 ID 与现有节点重复，已换成新 ID。`);
+    Object.keys(map).length && toast("warning", `有${Object.keys(map).length}条支线的编号和已有的线重复，已换成：${Object.entries(map).map(([a, b]) => `${a}→${b}`).join("、")}（本批内部的引用一起改了）。`), renamed.length && toast("warning", `有${renamed.length}个节点ID与现有节点重复，已换成新ID。`);
     let saved = Object.fromEntries(take.map((v, i) => [v.id, String((fresh[i].line || {}).编号 || idOf2(v))]));
     await view.data.imports.update(jobId, (j) => ({
       ...j,
@@ -14298,7 +14431,7 @@ ${yamlOf(k)}`).join(`
       },
       adopted: [.../* @__PURE__ */ new Set([...j.adopted || [], ...keys])]
     })).catch(() => {
-    }), view.runtime.refresh && view.runtime.refresh(), toast("success", `已保存 ${take.length} 条支线到大纲。`), view.renderBody(), afterAdopt(view);
+    }), view.runtime.refresh && view.runtime.refresh(), toast("success", `已保存${take.length}条支线到大纲。`), view.renderBody(), afterAdopt(view);
   }
   function withShortAnswers(sec, ids, review) {
     let sure = review && review.shortsSure || [], not = review && review.shortsNot || [];
@@ -14320,15 +14453,15 @@ ${yamlOf(k)}`).join(`
     let isEdit = importJobKind(job) === "edit", line0 = review.draft[0] && review.draft[0].line;
     if (await blockHalfTable(view, jobId, review, isEdit || review.reopened ? editedVolumes(review) : review.draft)) return;
     if (!isEdit && isPlainObject(line0) && !line0.编号 && !line0.开启条件 && !line0.开始时机已选 && !line0.开启方式 && !line0.接上一条)
-      return await view.data.imports.update(jobId, (j) => ({ ...j, review: { ...j.review, at: 0 } })), view.renderBody(), toast("warning", "先在第 1 页选这条线什么时候开始。");
+      return await view.data.imports.update(jobId, (j) => ({ ...j, review: { ...j.review, at: 0 } })), view.renderBody(), toast("warning", "先在第1页选这条线什么时候开始。");
     let pending = Object.values(review.comments || {}).filter((c) => String(c || "").trim()).length, localOk = (job.localIndex || []).filter((x) => isPlainObject(x) && !x.error), index = localOk.length ? mergeImportIndex(localOk) : job.index || null, all = Object.values(reviewIssues(view, review, index)).flat(), errs = all.filter((x) => x.level === "error"), asks = all.filter((x) => x.level !== "error"), lines2 = [
-      errs.length ? `还有 ${errs.length} 个问题没解决：${errs.slice(0, 3).map((x) => x.plain || x.text).join("；")}` : "",
-      asks.length ? `另有 ${asks.length} 个问题你没回答，按原样保留。` : ""
+      errs.length ? `还有${errs.length}个问题没解决：${errs.slice(0, 3).map((x) => x.plain || x.text).join("；")}` : "",
+      asks.length ? `另有${asks.length}个问题你没回答，按原样保留。` : ""
     ].filter(Boolean);
     if (pending) {
       let pick = await choiceDialog({
         title: "还有意见没发送",
-        body: `有 ${pending} 页意见还没用于修改草稿。保存后意见仍会保留。`,
+        body: `有${pending}页意见还没用于修改草稿。保存后意见仍会保留。`,
         choices: [
           { label: "取消", value: null },
           { label: "保存到大纲，暂不发送意见", value: "save" },
@@ -14343,7 +14476,7 @@ ${yamlOf(k)}`).join(`
     if (isEdit && !reopen) return toast("warning", "大纲里找不到这些线了（可能删掉了），没有保存。");
     if (reopen) {
       let live = (id) => project.outline.volumes.find((v) => v.id === id), mine = editedVolumes(review), gone = mine.filter((v) => !live(v.id)).map(lineTitle);
-      if (draft = mine.filter((v) => live(v.id) && draftDiffers([live(v.id)], [v])), gone.length && toast("warning", `${gone.join("、")} 在大纲里已经删掉了，这些线的修改没有保存。`), !draft.length) return toast("info", "和大纲里现在的一样，没有要保存的。");
+      if (draft = mine.filter((v) => live(v.id) && draftDiffers([live(v.id)], [v])), gone.length && toast("warning", `${gone.join("、")}在大纲里已经删掉了，这些线的修改没有保存。`), !draft.length) return toast("info", "和大纲里现在的一样，没有要保存的。");
       let elsewhere = draft.flatMap((v) => {
         let opened = (review.base || []).find((x) => x.id === v.id), now = live(v.id);
         return opened && now && draftDiffers([opened], [now]) ? draftChanges([opened], [now]).flatMap((c) => c.changes).map((t) => draft.length > 1 || review.draft.length > 1 ? `${lineTitle(v)}：${t}` : t) : [];
@@ -14404,7 +14537,7 @@ ${yamlOf(k)}`).join(`
       );
       return { ...p, outline: w.outline, importAdopted: [...projectAdopted(p), ...keys], ...sec ? { secretNames: sec } : {} };
     }), !written) return toast("warning", "确认期间大纲又被改过了，没有写入。请再点一次「保存到大纲」。");
-    if (prep.restored.length && toast("info", `已保留已经完成的节点：${prep.restored.join("、")}（完成条件不变）。`), renamed.length && toast("warning", `有 ${renamed.length} 个节点 ID 与现有节点重复，已换成新 ID。`), isEdit) {
+    if (prep.restored.length && toast("info", `已保留已经完成的节点：${prep.restored.join("、")}（完成条件不变）。`), renamed.length && toast("warning", `有${renamed.length}个节点ID与现有节点重复，已换成新ID。`), isEdit) {
       let byId = new Map(prep.volumes.filter((v) => savedIds.includes(v.id)).map((v) => [v.id, v]));
       return await view.data.imports.update(jobId, (j) => ({
         ...j,
@@ -14418,7 +14551,7 @@ ${yamlOf(k)}`).join(`
           savedAt: Date.now()
         }
       })).catch(() => {
-      }), view.runtime.refresh && view.runtime.refresh(), toast("success", `已保存到大纲${byId.size > 1 ? `（${byId.size} 条）` : ""}。`), view.renderBody(), afterAdopt(view);
+      }), view.runtime.refresh && view.runtime.refresh(), toast("success", `已保存到大纲${byId.size > 1 ? `（${byId.size}条）` : ""}。`), view.renderBody(), afterAdopt(view);
     }
     let saved = prep.volumes.find((v) => v.id === draft[0].id) || draft[0];
     await view.data.imports.update(jobId, (j) => ({
@@ -14449,7 +14582,7 @@ ${yamlOf(k)}`).join(`
     if (open)
       return await view.data.imports.update(open.id, (j) => {
         let r = { ...syncEditSession(project, j.review), mode: mode2 };
-        keys.length && (r = editDraft(r, "讨论里 AI 给的修改", (d) => keys.reduce((acc, k) => putUnit(acc, k, parts[k]), d)));
+        keys.length && (r = editDraft(r, "讨论里AI给的修改", (d) => keys.reduce((acc, k) => putUnit(acc, k, parts[k]), d)));
         let units2 = unitsOf(r.draft), at2 = keys.length ? units2.findIndex((u) => keys.includes(u.key)) : units2.findIndex((u) => u.volumeId === volumeId);
         return { ...j, review: { ...r, at: Math.max(0, at2) } };
       }), open.id;
@@ -14457,7 +14590,7 @@ ${yamlOf(k)}`).join(`
     return await view.data.imports.update(job.id, (j) => ({
       ...j,
       step: "review",
-      review: { ...session, mode: mode2, draft, at: Math.max(0, at), revised: keys.length > 0, lastChanges: ch, history: keys.length ? [{ label: "讨论里 AI 给的修改", at: Date.now(), draft: session.base }] : [] }
+      review: { ...session, mode: mode2, draft, at: Math.max(0, at), revised: keys.length > 0, lastChanges: ch, history: keys.length ? [{ label: "讨论里AI给的修改", at: Date.now(), draft: session.base }] : [] }
     })), view.data.updateProject(project.id, (p) => ({ ...p, imports: [...importJobIds(p), job.id] })), job.id;
   }
   function showEditReview(view, jobId) {
@@ -14501,12 +14634,13 @@ ${yamlOf(k)}`).join(`
         mergeImportByLine(
           Object.values(cur.drafts).flatMap((d) => (d.list || []).filter((x) => x && !x.error).flatMap((x) => x.volumes || []))
         )
-      ), draft = (ids) => ask(
+      ), draft = (ids) => askLive(
         view,
-        "outline",
+        jobId,
+        `第${p.i + 1}段第${g + 1}批`,
         importLineDraftMessages({
           part: { ...p, text: partText(p) },
-          index: stringifyYaml(index),
+          index: stringifyYaml(importIndexForPart(index, p.i)),
           lines: ident.lines,
           only: ids,
           mainLines: mains,
@@ -14515,7 +14649,7 @@ ${yamlOf(k)}`).join(`
           done
         })
       ), r = parseOutlineReply(await draft(only));
-      r.ok && r.volumes.length || (r = parseOutlineReply(await ask(view, "outline", fixYamlMessages(r.yaml, r.error || "没有读到任何剧情线（YAML 顶层的卷）", "clue"))));
+      r.ok && r.volumes.length || (r = parseOutlineReply(await askLive(view, jobId, `第${p.i + 1}段第${g + 1}批`, fixYamlMessages(r.yaml, r.error || "没有读到任何剧情线（YAML 顶层的卷）", "clue"))));
       let lost = r.ok ? lineIdsMissing(r.volumes, only) : [];
       if (lost.length && still()) {
         let r2 = parseOutlineReply(await draft(lost));
@@ -14526,7 +14660,7 @@ ${r2.yaml}`,
           volumes: [...r.volumes, ...r2.volumes]
         }), lost = lineIdsMissing(r.volumes, only);
       }
-      let entry = r.ok && r.volumes.length && !lost.length ? { only, yaml: r.yaml, volumes: r.volumes, notes: splitImportAuthorFields(r.volumes, p).notes } : { only, error: lost.length ? `AI 没写 ${lost.join("、")}` : r.error || "没有读到任何剧情线", yaml: r.yaml };
+      let entry = r.ok && r.volumes.length && !lost.length ? { only, yaml: r.yaml, volumes: r.volumes, notes: splitImportAuthorFields(r.volumes, p).notes } : { only, error: lost.length ? `AI没写${lost.join("、")}` : r.error || "没有读到任何剧情线", yaml: r.yaml };
       await store.update(jobId, (j) => {
         let list = [...j.drafts[p.i] && j.drafts[p.i].list || []];
         return list[g] = entry, { ...j, drafts: { ...j.drafts, [p.i]: { list } } };
@@ -14562,15 +14696,15 @@ ${r2.yaml}`,
       r.ok || (r = parseOutlineReply(await ask(view, "outline", fixYamlMessages(r.yaml, r.error || "格式错误", "clue")))), r.ok && got.push(...r.volumes.filter((v) => isPlainObject(v.line) && String(v.line.编号 || "").trim() === lineId));
     }
     if (!importJobOf(view, jobId)) return { ok: !1, why: "确认期间切换了项目" };
-    if (!got.length) return { ok: !1, why: "AI 没有写出这条线" };
+    if (!got.length) return { ok: !1, why: "AI没有写出这条线" };
     let merged = splitImportAuthorFields(mergeImportByLine(got)).volumes.find((v) => isPlainObject(v.line));
-    if (!merged) return { ok: !1, why: "AI 没有写出这条线" };
+    if (!merged) return { ok: !1, why: "AI没有写出这条线" };
     let touched = !1;
     return await store.update(jobId, (j) => {
       let r = j.review && j.review.lines ? j.review : null, volId = vid0, cur = r && r.draft.find((v) => v.id === volId);
       if (!cur) return j;
       if (JSON.stringify(cur) !== snapVol) return touched = !0, j;
-      let type0 = String((cur && cur.line || {}).类型 || "").trim(), vol = { ...merged, id: volId, line: { ...merged.line, 编号: lineId, ...type0 ? { 类型: type0 } : {} }, stages: matchStages(cur.stages, merged.stages).stages }, next = editDraft(r, `重新整理 ${lineId}`, (d) => d.map((v) => v.id === volId ? vol : v));
+      let type0 = String((cur && cur.line || {}).类型 || "").trim(), vol = { ...merged, id: volId, line: { ...merged.line, 编号: lineId, ...type0 ? { 类型: type0 } : {} }, stages: matchStages(cur.stages, merged.stages).stages }, next = editDraft(r, `重新整理${lineId}`, (d) => d.map((v) => v.id === volId ? vol : v));
       return { ...j, review: { ...next, prev: { ...r.prev || {}, [volId]: cur } } };
     }), touched ? { ok: !1, why: "等待期间这条线被改过，没有替换（你的修改和意见都还在），需要的话再点一次" } : { ok: !0 };
   }
@@ -14591,7 +14725,7 @@ ${r2.yaml}`,
       (book, b) => `<p class="pi-hint"><b>${esc(book.name)}</b> <span class="pi-badge">${esc(book.source)}</span>${book.error ? ` <span class="pi-badge is-danger">${esc(book.error)}</span>` : ""}</p>
         ${book.entries.map(
         (entry, e) => `<label class="pi-check${entry.disabled ? " is-off" : ""}"><input type="checkbox" data-pick="${b}:${e}">
-        <span>${esc(entry.title)} <span class="pi-badge">≈${entry.content.length} 字</span></span></label>`
+        <span>${esc(entry.title)} <span class="pi-badge">≈${entry.content.length}字</span></span></label>`
       ).join("")}`
     ).join(""), picked = await openDialog({
       title: title2,
@@ -14632,7 +14766,7 @@ ${r2.yaml}`,
     if (!entries.length) return;
     let choice = await choiceDialog({
       title: "世界书里的原条目",
-      body: `原条目和注入内容会重复。关闭只改「禁用」，可随时在世界书里重新打开。${authorCount ? `其中 ${authorCount} 条导入为仅作者资料：原条目如果保持开启，世界书仍会把它注入正文，建议关闭。` : ""}`,
+      body: `原条目和注入内容会重复。关闭只改「禁用」，可随时在世界书里重新打开。${authorCount ? `其中${authorCount}条导入为仅作者资料：原条目如果保持开启，世界书仍会把它注入正文，建议关闭。` : ""}`,
       choices: [
         { label: "保留", value: "keep" },
         { label: "删除", value: "delete", danger: !0 },
@@ -14652,9 +14786,9 @@ ${r2.yaml}`,
   }
   async function chooseSettingKinds(entries) {
     if (!entries.length) return [];
-    let html = `<p class="pi-hint">这些条目不是大纲格式，会放进「设定」。<b>公开设定</b>每轮都会注入正文；<b>仅作者资料</b>用 &lt;仅作者&gt; 包住，不注入，只在讨论和让 AI 写大纲时使用。剧情走向、真相、未来安排请选仅作者。</p>
+    let html = `<p class="pi-hint">这些条目不是大纲格式，会放进「设定」。<b>公开设定</b>每轮都会注入正文；<b>仅作者资料</b>用 &lt;仅作者&gt; 包住，不注入，只在讨论和让AI写大纲时使用。剧情走向、真相、未来安排请选仅作者。</p>
         ${entries.map(
-      (entry, i) => `<div class="pi-wbkind"><span>${esc(entry.title)} <span class="pi-badge">≈${entry.content.length} 字</span></span>
+      (entry, i) => `<div class="pi-wbkind"><span>${esc(entry.title)} <span class="pi-badge">≈${entry.content.length}字</span></span>
         <label class="pi-check"><input type="radio" name="wbk${i}" value="author" data-kind="${i}" checked><span>仅作者</span></label>
         <label class="pi-check"><input type="radio" name="wbk${i}" value="public" data-kind="${i}"><span>公开设定</span></label></div>`
     ).join("")}`;
@@ -14694,7 +14828,7 @@ ${r2.yaml}`,
     let talks = chat ? chat.messages.length + (chat.summary ? 1 : 0) : 0, wb = wbSummary(view, refs, rerender, `gen-${scope}`);
     return `<div class="pi-refs">${label ? '<span class="pi-hint">参考：</span>' : ""}
         <button type="button" class="pi-chip${refs.talk && talks ? " is-on" : ""}" data-act="gen-talk"${talks ? "" : ' disabled title="讨论页还没有记录"'}>讨论记录</button>
-        <button type="button" class="pi-chip${wb && wb.count ? " is-on" : ""}" data-act="gen-wb">世界书 ${wb ? `${wb.count} 条` : "…"}</button></div>`;
+        <button type="button" class="pi-chip${wb && wb.count ? " is-on" : ""}" data-act="gen-wb">世界书${wb ? `${wb.count}条` : "…"}</button></div>`;
   }
   async function genRefTexts(view, limit) {
     let refs = refsOf(view.project());
@@ -14708,7 +14842,7 @@ ${r2.yaml}`,
       update(view, { talk: !refsOf(view.project()).talk }), view.renderBody();
     },
     async "gen-wb"(view) {
-      let result = await pickRefs(refsOf(view.project()), "AI 写作参考的世界书条目");
+      let result = await pickRefs(refsOf(view.project()), "AI写作参考的世界书条目");
       if (result) {
         if (result.none) return toast("info", "当前卡没有关联的世界书。");
         update(view, { wb: result.wb, memo: result.memo }), view.renderBody();
@@ -14725,14 +14859,14 @@ ${r2.yaml}`,
     main: { 名称: "", 地点: "", 事件: "", 偏转: "" },
     side: { 名称: "", 地点: "", 事件: "", 触发: "" },
     world: { 类型: "", 来源: "", 内容: "" }
-  }, st = (view) => view.tabState("outline"), STAGE_DRAFT = { "stage-refine": "细化节点", "stage-split": "拆成两段", "stage-merge": "与下一段合并" }, fmtTime = (time2) => new Date(time2).toLocaleString(), ERR_PREFIX = /^(?:YAML 格式错误(?:（第 \d+ 行）)?|第 \d+ 行)[：:]\s*/;
+  }, st = (view) => view.tabState("outline"), STAGE_DRAFT = { "stage-refine": "细化节点", "stage-split": "拆成两段", "stage-merge": "与下一段合并" }, fmtTime = (time2) => new Date(time2).toLocaleString(), ERR_PREFIX = /^(?:YAML格式错误(?:（第 \d+ 行）)?|第 \d+ 行)[：:]\s*/;
   function errParts(error, line) {
-    let text2 = String(error && error.message || error || ""), no = line || error && error.line || Number((/第 (\d+) 行/.exec(text2) || [])[1]) || 0, detail = text2.replace(ERR_PREFIX, "").trim(), yaml = !!no || /^YAML 格式错误/.test(text2) && !/[一-鿿]/.test(detail);
+    let text2 = String(error && error.message || error || ""), no = line || error && error.line || Number((/第 (\d+) 行/.exec(text2) || [])[1]) || 0, detail = text2.replace(ERR_PREFIX, "").trim(), yaml = !!no || /^YAML格式错误/.test(text2) && !/[一-鿿]/.test(detail);
     return { no, detail, yaml };
   }
   function errHtml(error, line, tag = "p") {
     let { no, detail, yaml } = errParts(error, line);
-    return yaml ? `<${tag} class="pi-hint">${no ? `第 ${no} 行格式有误` : "格式有误"}</${tag}>${detail ? `<details class="pi-err"><summary>错误详情</summary><div class="pi-meta">${esc(detail)}</div></details>` : ""}` : `<${tag} class="pi-hint">${esc(detail)}</${tag}>`;
+    return yaml ? `<${tag} class="pi-hint">${no ? `第${no}行格式有误` : "格式有误"}</${tag}>${detail ? `<details class="pi-err"><summary>错误详情</summary><div class="pi-meta">${esc(detail)}</div></details>` : ""}` : `<${tag} class="pi-hint">${esc(detail)}</${tag}>`;
   }
   function historyHtml(project, at) {
     let list = project.outline.history;
@@ -14741,7 +14875,7 @@ ${r2.yaml}`,
     return `<div class="pi-card"><h3>历史版本</h3>
         ${list.map(
       (item, i) => `<div class="pi-hist"><span class="pi-grow">${item.label ? `${esc(item.label)}前` : "历史版本"}<span class="pi-meta pi-block">${esc(fmtTime(item.at))}</span></span>
-            <span class="pi-meta pi-hist-n">${item.text.length} 字</span>
+            <span class="pi-meta pi-hist-n">${item.text.length}字</span>
             <button type="button" class="pi-btn is-sm${i === at ? " is-primary" : ""}" data-act="hist-view" data-i="${i}">预览</button>
             <button type="button" class="pi-btn is-sm" data-act="hist-restore" data-i="${i}">恢复</button></div>`
     ).join("")}
@@ -14774,11 +14908,11 @@ ${r2.yaml}`,
       let id = idOf2(x), body = `<span class="pi-pname">${esc(x.plain || x.text)}</span>${x.fix ? `<span class="pi-hint pi-check-fix">怎么改：${esc(x.fix)}</span>` : ""}`;
       return id ? `<button type="button" class="pi-titem is-issue pi-check-item" data-act="issue-go" data-id="${esc(id)}">${body}</button>` : `<div class="pi-titem is-issue pi-check-item">${body}</div>`;
     };
-    return total ? `<div class="pi-card"><h3>大纲检查<span class="pi-meta">${total} 项</span></h3>
-        ${clue ? '<p class="pi-hint">点一条跳到那个阶段。想让 AI 改：点「审阅修改…」，在那条线的页上写意见。</p>' : ""}
+    return total ? `<div class="pi-card"><h3>大纲检查<span class="pi-meta">${total}项</span></h3>
+        ${clue ? '<p class="pi-hint">点一条跳到那个阶段。想让AI改：点「审阅修改…」，在那条线的页上写意见。</p>' : ""}
         ${errs.length ? `<div class="pi-rv-sec">要处理的问题（${errs.length}）</div>${errs.map(row2).join("")}` : ""}
         ${base.length ? `${clue ? `<div class="pi-rv-sec">格式（${base.length}）</div>` : ""}${base.map(row2).join("")}` : ""}
-        ${asks.length ? `<details><summary class="pi-hint">另有 ${asks.length} 项需确认</summary>${asks.map(row2).join("")}</details>` : ""}</div>` : `<div class="pi-card"><h3>大纲检查</h3><p class="pi-hint">没有发现问题。${clue ? "（按线索推进检查了：走不走得通、拿不拿得到线索、替代途径。）" : ""}</p></div>`;
+        ${asks.length ? `<details><summary class="pi-hint">另有${asks.length}项需确认</summary>${asks.map(row2).join("")}</details>` : ""}</div>` : `<div class="pi-card"><h3>大纲检查</h3><p class="pi-hint">没有发现问题。${clue ? "（按线索推进检查了：走不走得通、拿不拿得到线索、替代途径。）" : ""}</p></div>`;
   }
   function overviewHtml(view, project) {
     let { runtime } = view, units = flattenUnits(project.outline.volumes), states = runtime.activeId() === project.id ? unitStates(units, runtime.progress()) : {};
@@ -14811,7 +14945,7 @@ ${r2.yaml}`,
     时限: "激活后的楼数，或写「本卷」",
     错过: "过期未接时的后果",
     步骤: "每行一步，按顺序推进",
-    进度钟: "总格数，如 4、6、8",
+    进度钟: "总格数，如4、6、8",
     前兆: "过半时透露的风声",
     后果: "发生后写进状态变化"
   }, PLAY_LONG = /* @__PURE__ */ new Set(["错过", "步骤", "前兆", "后果"]), PLAY_SHORT = /* @__PURE__ */ new Set(["进度钟", "时限"]);
@@ -14852,7 +14986,7 @@ ${r2.yaml}`,
             ${playEditor(meta2, value, index)}${clueOn ? clueNodeFields(meta2, index, value) : ""}</div>`;
     }).join("");
     return `<div class="pi-card"><h3>${esc(clueOn ? nodeWord(meta2, !0) : meta2.field)}<span class="pi-spacer"></span><button type="button" class="pi-btn is-sm" data-act="node-add" data-field="${esc(meta2.field)}" data-kind="${meta2.kind}">添加</button></h3>
-        ${items || '<p class="pi-hint">无</p>'}</div>`;
+        ${items}</div>`;
   }
   function nodeTabs(stage, kind, clueOn = !1) {
     let count = (meta2) => Array.isArray(stage.data[meta2.field]) ? stage.data[meta2.field].length : 0;
@@ -14865,7 +14999,7 @@ ${r2.yaml}`,
   }
   function condWordsShort(c) {
     let r = conditionRefs(c);
-    return [...r.facts].map((f) => `拿到 ${f}`).concat([...r.nodes].map((n) => `${n} 完成`), [...r.lines].map((l) => `${l} 完成`)).slice(0, 3).join("、") || "已写";
+    return [...r.facts].map((f) => `拿到${f}`).concat([...r.nodes].map((n) => `${n}完成`), [...r.lines].map((l) => `${l}完成`)).slice(0, 3).join("、") || "已写";
   }
   function stageCondFold(stage) {
     let keys = ["进入条件", "结束条件"], has = keys.filter((k) => stage.data[k] != null && stage.data[k] !== ""), brief = has.length ? has.map((k) => `${k.slice(0, 2)}：${condBrief(stage.data[k])}`).join("；") : "都没写", yamlOf = (k) => stage.data[k] == null ? "" : typeof stage.data[k] == "string" ? stage.data[k] : stringifyYaml(stage.data[k]).trim();
@@ -14880,17 +15014,18 @@ ${r2.yaml}`,
       ...NODE_FIELDS.map((item) => item.field),
       ...CLUE_STAGE_KEYS
     ]), extra = Object.keys(stage.data).filter((key) => !known.has(key)), head = `<div class="pi-card"><h3>阶段<span class="pi-spacer"></span><button type="button" class="pi-icon-btn" data-act="stage-menu" title="更多">${ICONS.more}</button></h3>
-        <p class="pi-hint pi-ol-auto">${raw ? "改完点「应用」。" : "修改自动保存；条件填写后点别处生效。"}</p><p class="pi-hint">所属：${esc(volumeShowName(volume))}</p>`;
+        ${raw ? '<p class="pi-hint pi-ol-auto">改完点「应用」。</p>' : ""}<p class="pi-hint">所属：${esc(volumeShowName(volume))}</p>`;
     return raw ? `${head}<textarea class="pi-ta is-mono is-tall" data-raw>${esc(stageToText(stage))}</textarea>
-            <div class="pi-tools is-c1 is-end"><button type="button" class="pi-btn is-primary is-sm" data-act="raw-apply">应用</button></div><p class="pi-status" data-raw-status></p></div>` : `${head}<div class="pi-pair2"><label class="pi-field"><span>阶段名</span><input class="pi-inp" data-stage-key value="${esc(stage.key)}" placeholder="阶段N_标题"></label>
-        <label class="pi-field"><span>时间范围</span><input class="pi-inp" data-stage-field="时间范围" value="${esc(stage.data.时间范围 ?? "")}" placeholder="可空"></label></div>
-        <label class="pi-field"><span>AI指令</span><textarea class="pi-ta pi-ta-auto" rows="2" data-stage-field="AI指令" placeholder="可空">${esc(stage.data.AI指令 ?? "")}</textarea></label>
+            <div class="pi-tools is-c1 is-end"><button type="button" class="pi-btn is-primary is-sm" data-act="raw-apply">应用</button></div><p class="pi-status" data-raw-status></p></div>` : `${head}<label class="pi-field"><span>阶段名</span><input class="pi-inp" data-stage-key value="${esc(stage.key)}" placeholder="阶段N_标题"></label>
+        <details class="pi-fold"${stage.data.时间范围 || stage.data.AI指令 ? " open" : ""}><summary><b>AI指令 / 时间范围</b></summary>
+        <label class="pi-field"><span>时间范围</span><input class="pi-inp" data-stage-field="时间范围" value="${esc(stage.data.时间范围 ?? "")}" placeholder="可空"></label>
+        <label class="pi-field"><span>AI指令</span><textarea class="pi-ta pi-ta-auto" rows="2" data-stage-field="AI指令" placeholder="可空">${esc(stage.data.AI指令 ?? "")}</textarea></label></details>
         <label class="pi-field"><span>状态变化</span><textarea class="pi-ta pi-ta-auto" rows="2" data-stage-list="${CHANGE_FIELD}" placeholder="每行一条，本阶段演完后注入">${esc(
       changeLines(stage.data).join(`
 `)
     )}</textarea></label>
         ${clueOn ? stageCondFold(stage) : ""}
-${extra.length ? `<p class="pi-hint">另有字段：${esc(extra.join("、"))}（在 YAML 原文里编辑）</p>` : ""}</div>
+${extra.length ? `<p class="pi-hint">另有字段：${esc(extra.join("、"))}（在YAML原文里编辑）</p>` : ""}</div>
         ${nodeTabs(stage, kind, clueOn)}${nodeEditor(
       stage,
       NODE_FIELDS.find((meta2) => meta2.kind === kind),
@@ -14898,20 +15033,18 @@ ${extra.length ? `<p class="pi-hint">另有字段：${esc(extra.join("、"))}（
     )}`;
   }
   function volumeEditor(volume, project = null) {
-    return `<div class="pi-card"><h3>${vq(project, "卷", "剧情线")}<span class="pi-spacer"></span><button type="button" class="pi-btn is-sm" data-act="review-open" data-id="${esc(volume.id)}">审阅修改</button><button type="button" class="pi-icon-btn" data-act="vol-menu" title="更多">${ICONS.more}</button></h3>
-        <div class="pi-tools is-c1"><button type="button" class="pi-btn is-sm" data-act="stage-add">＋新阶段</button></div>
-        <label class="pi-field"><span>${vq(project, "卷名（剧情_卷X_标题）", "剧情线名（YAML 里的顶层键，如 剧情_M1_标题）")}</span><input class="pi-inp" data-vol-key value="${esc(volume.key)}"></label>
-        <p class="pi-hint">${volume.stages.length} 个阶段</p></div>`;
+    return `<div class="pi-card"><h3>${vq(project, "卷", "剧情线")}<span class="pi-spacer"></span><button type="button" class="pi-btn is-sm" data-act="stage-add">＋新阶段</button><button type="button" class="pi-icon-btn" data-act="vol-menu" title="更多">${ICONS.more}</button></h3>
+        <label class="pi-field"><span>${vq(project, "卷名（剧情_卷X_标题）", "剧情线名（YAML里的顶层键，如 剧情_M1_标题）")}</span><input class="pi-inp" data-vol-key value="${esc(volume.key)}"></label></div>`;
   }
   function multiHtml(view, draft) {
     let busy = view.busy.outline, good = draft.items.filter((item) => item.ok), rows2 = draft.items.map((item, i) => {
-      let head = `<div class="pi-vrow"><span class="pi-grow">第 ${draft.volumeNo + i} ${vq(view, "卷", "条")}${item.ok && item.volumes[0] ? ` <b>${esc(volumeName(item.volumes[0].key))}</b>` : ""}</span>
+      let head = `<div class="pi-vrow"><span class="pi-grow">第${draft.volumeNo + i} ${vq(view, "卷", "条")}${item.ok && item.volumes[0] ? ` <b>${esc(volumeName(item.volumes[0].key))}</b>` : ""}</span>
             <span class="pi-meta">${item.ok ? "已解析" : "格式错误"}</span>
             <button type="button" class="pi-icon-btn" data-act="multi-menu" data-i="${i}" title="更多">${ICONS.more}</button></div>`;
       return item.ok ? `<div class="pi-vitem">${head}</div>` : `<div class="pi-vitem">${head}${errHtml(item.error, item.line)}
             <textarea class="pi-ta is-mono" rows="${Math.min(14, Math.max(6, String(item.yaml).split(`
 `).length + 1))}" data-draft-yaml>${esc(item.yaml)}</textarea>
-            <div class="pi-tools is-c1 is-end"><button type="button" class="pi-btn is-primary is-sm" data-act="multi-fix" data-i="${i}"${busy ? " disabled" : ""}>让 AI 修正格式</button></div></div>`;
+            <div class="pi-tools is-c1 is-end"><button type="button" class="pi-btn is-primary is-sm" data-act="multi-fix" data-i="${i}"${busy ? " disabled" : ""}>让AI修正格式</button></div></div>`;
     }).join(""), ready = good.length === draft.items.length && good.length > 0, partial = draft.items.length < draft.n, clueIssues = [];
     if (isClueMode(view.project())) {
       let current = view.runtime.activeId() === view.projectId ? view.runtime.clue.compute() : null, { known, claimed } = chatFactSets(current);
@@ -14921,31 +15054,31 @@ ${extra.length ? `<p class="pi-hint">另有字段：${esc(extra.join("、"))}（
         { isObtained: (id) => known.includes(id), obtainedFacts: known, claimedFacts: claimed }
       );
     }
-    return `<div class="pi-card"><h3>AI 写的大纲<span class="pi-meta">${good.length}/${draft.n} ${vq(view, "卷", "条")}</span></h3>
+    return `<div class="pi-card"><h3>AI写的大纲<span class="pi-meta">${good.length}/${draft.n} ${vq(view, "卷", "条")}</span></h3>
         ${draft.scope ? '<p class="pi-hint">' + esc(draft.scope) + "</p>" : ""}
         ${isClueMode(view.project()) ? "<details><summary>线索结构检查（" + clueIssues.length + "）</summary>" + clueIssues.map((issue) => '<p class="pi-hint is-warn">' + esc(issue) + "</p>").join("") + "</details>" : ""}
         ${rows2}
-        <div class="pi-tools is-c2 is-end"><button type="button" class="pi-btn is-primary is-sm" data-act="multi-append"${ready && !busy ? "" : " disabled"}>${partial ? `追加已写完的 ${good.length} ${vq(view, "卷", "条")}` : "追加"}</button>
+        <div class="pi-tools is-c2 is-end"><button type="button" class="pi-btn is-primary is-sm" data-act="multi-append"${ready && !busy ? "" : " disabled"}>${partial ? `追加已写完的${good.length} ${vq(view, "卷", "条")}` : "追加"}</button>
         <button type="button" class="pi-btn is-sm" data-act="multi-drop"${busy ? " disabled" : ""}>丢弃</button></div></div>`;
   }
   function draftHtml(view, draft) {
     if (!draft) return "";
     if (draft.mode === "multi") return multiHtml(view, draft);
-    let title2 = STAGE_DRAFT[draft.mode] || (draft.mode === "rewrite" ? "改写后续阶段" : "AI 写的大纲");
+    let title2 = STAGE_DRAFT[draft.mode] || (draft.mode === "rewrite" ? "改写后续阶段" : "AI写的大纲");
     if (!draft.ok)
       return `<div class="pi-card"><h3>${title2}<span class="pi-badge is-danger">格式错误</span></h3>
             ${errHtml(draft.error, draft.line)}
             <textarea class="pi-ta is-mono is-tall" data-draft-yaml>${esc(draft.yaml)}</textarea>
-            <div class="pi-tools is-c3 is-end"><button type="button" class="pi-btn is-primary is-sm" data-act="draft-fix"${view.busy.outline ? " disabled" : ""}>让 AI 修正格式</button>
+            <div class="pi-tools is-c3 is-end"><button type="button" class="pi-btn is-primary is-sm" data-act="draft-fix"${view.busy.outline ? " disabled" : ""}>让AI修正格式</button>
             <button type="button" class="pi-btn is-sm" data-act="draft-reparse">重新解析</button>
             <button type="button" class="pi-btn is-sm is-danger" data-act="draft-drop">丢弃</button></div></div>`;
     let issues = draft.issues || [], conds = draft.tableConds || [], summary = draft.volumes.map(
       (volume) => `<p class="pi-hint"><b>${esc(volumeName(volume.key))}</b>：${volume.stages.map((stage) => esc(stageLabel(stage.key))).join("、")}</p>`
-    ).join("") + (draft.scope ? `<p class="pi-hint">${esc(draft.scope)}</p>` : "") + (conds.length ? `<p class="pi-hint">读表格的条件：</p>${conds.map((x) => `<p class="pi-hint${x.level === "ok" ? "" : " is-warn"}">${esc(x.where)}：${esc(x.raw)}　现在：${esc(x.now || "（读不到）")}${x.level === "ok" ? " ✓" : ""}</p>`).join("")}` : "") + (issues.length ? `<p class="pi-hint is-warn">线索结构检查（${issues.length}）：</p>${issues.map((i) => `<p class="pi-hint is-warn">${esc(i)}</p>`).join("")}` : draft.clue ? '<p class="pi-hint">线索结构检查：没有发现问题。</p>' : ""), single = !!STAGE_DRAFT[draft.mode], buttons = single ? '<button type="button" class="pi-btn is-primary is-sm" data-act="draft-stage">替换</button>' : draft.mode === "rewrite" ? '<button type="button" class="pi-btn is-primary is-sm" data-act="draft-rest">替换剩余阶段</button>' : `<button type="button" class="pi-btn is-primary is-sm" data-act="draft-new">${draft.volumes.length > 1 ? `全部追加 ${draft.volumes.length} ${vq(view, "卷", "条")}` : vq(view, "存为新卷", "存为新剧情线")}</button>
+    ).join("") + (draft.scope ? `<p class="pi-hint">${esc(draft.scope)}</p>` : "") + (conds.length ? `<details class="pi-fold"${conds.some((x) => x.level !== "ok") ? " open" : ""}><summary><b>读表格的条件</b></summary>${conds.map((x) => `<p class="pi-hint${x.level === "ok" ? "" : " is-warn"}">${esc(x.where)}：${esc(x.raw)}　现在：${esc(x.now || "（读不到）")}${x.level === "ok" ? " ✓" : ""}</p>`).join("")}</details>` : "") + (issues.length ? `<details class="pi-fold" open><summary><b>线索结构检查（${issues.length}）</b></summary>${issues.map((i) => `<p class="pi-hint is-warn">${esc(i)}</p>`).join("")}</details>` : draft.clue ? '<details class="pi-fold"><summary><b>线索结构检查</b></summary><p class="pi-hint">没有发现问题。</p></details>' : ""), single = !!STAGE_DRAFT[draft.mode], buttons = single ? '<button type="button" class="pi-btn is-primary is-sm" data-act="draft-stage">替换</button>' : draft.mode === "rewrite" ? '<button type="button" class="pi-btn is-primary is-sm" data-act="draft-rest">替换剩余阶段</button>' : `<button type="button" class="pi-btn is-primary is-sm" data-act="draft-new">${draft.volumes.length > 1 ? `全部追加${draft.volumes.length} ${vq(view, "卷", "条")}` : vq(view, "存为新卷", "存为新剧情线")}</button>
            <button type="button" class="pi-btn is-sm" data-act="draft-replace">${vq(view, "替换选中卷", "替换选中的剧情线")}</button>
            <button type="button" class="pi-btn is-sm" data-act="draft-append">追加为新阶段</button>`;
     return `<div class="pi-card"><h3>${title2}<span class="pi-badge is-ok">已解析</span></h3>${summary}
-        <details><summary class="pi-hint">YAML 原文</summary><pre class="pi-pre">${esc(draft.yaml)}</pre></details>
+        <details><summary class="pi-hint">YAML原文</summary><pre class="pi-pre">${esc(draft.yaml)}</pre></details>
         <div class="pi-tools is-end ${draft.mode === "rewrite" || single ? "is-c2" : "is-c4"}">${buttons}<button type="button" class="pi-btn is-sm" data-act="draft-drop">丢弃</button></div></div>`;
   }
   var parkedDrafts = /* @__PURE__ */ new Map();
@@ -14958,8 +15091,8 @@ ${extra.length ? `<p class="pi-hint">另有字段：${esc(extra.join("、"))}（
     syncDraft(view, s);
     let { volume, stage } = findSel(project, s.sel), busy = view.busy.outline, kind = NODE_FIELDS.some((meta2) => meta2.kind === s.nodeKind) ? s.nodeKind : NODE_FIELDS[0].kind, editor2 = stage ? stageEditor(volume, stage, s.raw, kind, isClueMode(project)) : volume ? volumeEditor(volume, project) : `<div class="pi-card"><p class="pi-hint">从左边选${vq(project, "一卷", "一条剧情线")}或一个阶段编辑。</p></div>`, writing = s.multi && s.multi.projectId === view.projectId, hasVols = project.outline.volumes.length > 0, dirtyN = hasVols ? editDraftCount(view, project) : 0, errN = hasVols ? checkErrorCount(view, project) : 0;
     return `<div class="pi-card"><h3>大纲<span class="pi-spacer"></span><button type="button" class="pi-icon-btn" data-act="outline-menu" title="更多">${ICONS.more}</button></h3>
-        ${writing ? `<button type="button" class="pi-btn is-primary pi-ol-write" data-act="multi-stop"><span class="pi-spin"></span>写作中 ${s.multi.k}/${s.multi.n}，点击停止</button>` : `<button type="button" class="pi-btn is-primary pi-ol-write" data-act="ai-volume"${busy ? " disabled" : ""}>${busy ? '<span class="pi-spin"></span>写作中' : vq(project, `AI 写第 ${project.outline.volumes.length + 1} 卷`, "AI 写新剧情线")}</button>`}
-        <div class="pi-ol-tools"><button type="button" class="pi-btn is-sm" data-act="review-open"${hasVols ? "" : " disabled"} title="逐页查看各条线，在对应页写意见后一次发给 AI，确认后保存到大纲">审阅修改${dirtyN ? `<span class="pi-badge is-warn">${dirtyN}</span>` : ""}</button>
+        ${writing ? `<button type="button" class="pi-btn is-primary pi-ol-write" data-act="multi-stop"><span class="pi-spin"></span>写作中${s.multi.k}/${s.multi.n}，点击停止</button>` : `<button type="button" class="pi-btn is-primary pi-ol-write" data-act="ai-volume"${busy ? " disabled" : ""}>${busy ? '<span class="pi-spin"></span>写作中' : vq(project, `AI写第${project.outline.volumes.length + 1}卷`, "AI写新剧情线")}</button>`}
+        <div class="pi-ol-tools"><button type="button" class="pi-btn is-sm" data-act="review-open"${hasVols ? "" : " disabled"} title="逐页查看各条线，在对应页写意见后一次发给AI，确认后保存到大纲">审阅修改${dirtyN ? `<span class="pi-badge is-warn">${dirtyN}</span>` : ""}</button>
             <button type="button" class="pi-btn is-sm" data-act="import-open-panel">导入长文</button>
             <button type="button" class="pi-btn is-sm${s.check ? " is-primary" : ""}" data-act="check-toggle">检查${errN ? `<span class="pi-badge is-warn">${errN}</span>` : ""}</button></div>
         </div>
@@ -15016,7 +15149,7 @@ ${extra.length ? `<p class="pi-hint">另有字段：${esc(extra.join("、"))}（
     );
     return renamed.length && toast(
       "warning",
-      `导入内容有 ${renamed.length} 个节点 ID 与现有节点重复，已换成新 ID：${renamed.slice(0, 5).join("、")}${renamed.length > 5 ? "……" : ""}。引用这些 ID 的条件需要检查。`
+      `导入内容有${renamed.length}个节点ID与现有节点重复，已换成新ID：${renamed.slice(0, 5).join("、")}${renamed.length > 5 ? "……" : ""}。引用这些ID的条件需要检查。`
     ), update2(view, (volumes) => [...volumes, ...fresh], label), st(view).sel = fresh[0] && fresh[0].id, view.runtime.refresh(), fresh;
   }
   async function importTexts(view, texts) {
@@ -15027,7 +15160,7 @@ ${extra.length ? `<p class="pi-hint">另有字段：${esc(extra.join("、"))}（
       } catch (error) {
         failed.push({ name, error });
       }
-    added.length && addVolumes(view, added), added.length && toast("success", `已导入 ${added.length} ${vq(view, "卷", "条剧情线")}。`), view.renderBody(), failed.length && await openDialog({
+    added.length && addVolumes(view, added), added.length && toast("success", `已导入${added.length} ${vq(view, "卷", "条剧情线")}。`), view.renderBody(), failed.length && await openDialog({
       title: "导入失败",
       html: failed.map((item) => `<p class="pi-hint"><b>${esc(item.name)}</b></p>${errHtml(item.error)}`).join(""),
       actions: [{ label: "关闭", value: !0, primary: !0 }]
@@ -15078,8 +15211,8 @@ ${extra.length ? `<p class="pi-hint">另有字段：${esc(extra.join("、"))}（
       (u) => clueCur.state.current ? u.id === clueCur.state.current.id : !clueCur.state.stageStates.get(u.id).done
     ) : -1;
     if (isClueMode(project) && clueCur && clueFrom < 0)
-      return toast("info", "所有阶段都已结束，没有剩余阶段可以改写。要继续剧情，请用大纲页的「AI 写新剧情线」另起一条。"), void 0;
-    let task = taskContext(view), from = isClueMode(project) ? Math.max(0, clueFrom) : Math.max(0, currentIndex(units, view.runtime.progress())), reason = await promptDialog({ title: "让 AI 改写后续阶段", label: "偏转说明（可空）：剧情哪里和大纲不一样了", multiline: !0 });
+      return toast("info", "所有阶段都已结束，没有剩余阶段可以改写。要继续剧情，请用大纲页的「AI写新剧情线」另起一条。"), void 0;
+    let task = taskContext(view), from = isClueMode(project) ? Math.max(0, clueFrom) : Math.max(0, currentIndex(units, view.runtime.progress())), reason = await promptDialog({ title: "让AI改写后续阶段", label: "偏转说明（可空）：剧情哪里和大纲不一样了", multiline: !0 });
     if (reason == null) return;
     if (!taskStillValid(view, task)) return staleTaskNotice(view, task);
     view.go("outline");
@@ -15131,7 +15264,7 @@ ${extra.length ? `<p class="pi-hint">另有字段：${esc(extra.join("、"))}（
   var MAX_VOLUMES = 5;
   async function writeDialog(view) {
     let picked = await openDialog({
-      title: vq(view, "AI 写新卷", "AI 写新剧情线"),
+      title: vq(view, "AI写新卷", "AI写新剧情线"),
       html: `<label class="pi-field"><span>${vq(view, "卷数", "写几条")}</span><select class="pi-sel" data-wv-n>${options(
         Array.from({ length: MAX_VOLUMES }, (_, i) => ({ value: i + 1, label: `${i + 1} ${vq(view, "卷", "条")}` })),
         1
@@ -15176,7 +15309,7 @@ ${extra.length ? `<p class="pi-hint">另有字段：${esc(extra.join("、"))}（
       refs: wb,
       volumes,
       volumeNo: no,
-      request: n > 1 ? `共写 ${n} ${vq(project, "卷", "条剧情线")}，这是第 ${k} ${vq(project, "卷", "条")}。${request || ""}` : request,
+      request: n > 1 ? `共写${n} ${vq(project, "卷", "条剧情线")}，这是第${k} ${vq(project, "卷", "条")}。${request || ""}` : request,
       mode: isClueMode(project) ? "clue" : "outline",
       clueIndex: isClueMode(project) ? clueIndexText(volumes) : "",
       progress: material?.progress || "",
@@ -15192,7 +15325,7 @@ ${extra.length ? `<p class="pi-hint">另有字段：${esc(extra.join("、"))}（
     let task = taskContext(view), id = view.projectId;
     if ((st(view).draft && st(view).draft.projectId === id ? st(view).draft : parkedDrafts.get(id)) && !await confirmDialog({
       title: "覆盖草稿",
-      body: "草稿区还有未处理的 AI 结果，开始写作后会被新草稿替换。",
+      body: "草稿区还有未处理的AI结果，开始写作后会被新草稿替换。",
       okLabel: "开始写作",
       danger: !0
     }))
@@ -15253,7 +15386,7 @@ ${extra.length ? `<p class="pi-hint">另有字段：${esc(extra.join("、"))}（
               { signal: controller.signal }
             );
           } catch (error) {
-            controller.signal.aborted || toast("error", `第 ${k} ${vq(view, "卷", "条")}写作失败：${error.message}。已写好的 ${draft.items.length} ${vq(view, "卷", "条")}保留在草稿里。`);
+            controller.signal.aborted || toast("error", `第${k} ${vq(view, "卷", "条")}写作失败：${error.message}。已写好的${draft.items.length} ${vq(view, "卷", "条")}保留在草稿里。`);
             break;
           }
           if (controller.signal.aborted) break;
@@ -15343,7 +15476,7 @@ ${extra.length ? `<p class="pi-hint">另有字段：${esc(extra.join("、"))}（
       let { volume } = findSel(view.project(), st(view).sel);
       !volume || !await confirmDialog({
         title: `删除「${volumeName(volume.key)}」`,
-        body: `连同 ${volume.stages.length} 个阶段一起删除，不能撤销。想留一份的话先点「导出」。`,
+        body: `连同${volume.stages.length}个阶段一起删除，不能撤销。想留一份的话先点「导出」。`,
         okLabel: "删除",
         danger: !0
       }) || (update2(view, (volumes) => volumes.filter((item) => item.id !== volume.id), "删除卷"), st(view).sel = "", view.runtime.refresh(), view.renderBody());
@@ -15381,7 +15514,7 @@ ${extra.length ? `<p class="pi-hint">另有字段：${esc(extra.join("、"))}（
           { label: "上移", value: "stage-up" },
           { label: "下移", value: "stage-down" },
           { label: "移到…", value: "stage-move" },
-          { label: st(view).raw ? "表单编辑" : "YAML 原文", value: "raw" },
+          { label: st(view).raw ? "表单编辑" : "YAML原文", value: "raw" },
           { label: "删除阶段", value: "stage-del", danger: !0 }
         ]
       });
@@ -15397,7 +15530,7 @@ ${extra.length ? `<p class="pi-hint">另有字段：${esc(extra.join("、"))}（
       let { volume, stage } = findSel(view.project(), st(view).sel);
       !stage || !await confirmDialog({
         title: `删除「${stageLabel(stage.key)}」`,
-        body: `连同里面的 ${stageNodes(stage.data).length} 个场景一起删除，删除前会保存到大纲历史。`,
+        body: `连同里面的${stageNodes(stage.data).length}个场景一起删除，删除前会保存到大纲历史。`,
         okLabel: "删除",
         danger: !0
       }) || (updateVolume(
@@ -15416,7 +15549,7 @@ ${extra.length ? `<p class="pi-hint">另有字段：${esc(extra.join("、"))}（
       try {
         let parsed = parseOutlineText(box.querySelector("[data-raw]").value), next = parsed[0] && parsed[0].stages[0];
         if (!next || parsed.length > 1 || parsed[0].stages.length > 1) throw new Error("原文里只能有一个阶段");
-        updateStage(view, stage.id, (item) => ({ ...item, key: next.key, data: next.data }), "YAML 原文应用"), view.runtime.refresh(), st(view).raw = !1, view.renderBody();
+        updateStage(view, stage.id, (item) => ({ ...item, key: next.key, data: next.data }), "YAML原文应用"), view.runtime.refresh(), st(view).raw = !1, view.renderBody();
       } catch (error) {
         status.innerHTML = errHtml(error, 0, "span"), status.classList.add("is-err");
       }
@@ -15475,8 +15608,8 @@ ${extra.length ? `<p class="pi-hint">另有字段：${esc(extra.join("、"))}（
         items: [
           { label: st(view).overview ? "收起总览" : "总览", value: "overview-toggle" },
           { label: `${st(view).history ? "收起历史" : "历史"}（${view.project().outline.history.length}）`, value: "history" },
-          { label: "导入 YAML", value: "import-file" },
-          { label: "粘贴 YAML", value: "import-paste" },
+          { label: "导入YAML", value: "import-file" },
+          { label: "粘贴YAML", value: "import-paste" },
           { label: "从世界书导入", value: "import-wb" },
           { label: "导出", value: "export", disabled: !view.project().outline.volumes.length }
         ]
@@ -15494,7 +15627,7 @@ ${extra.length ? `<p class="pi-hint">另有字段：${esc(extra.join("、"))}（
     },
     async "import-paste"(view) {
       let text2 = await promptDialog({
-        title: "粘贴剧情 YAML",
+        title: "粘贴剧情YAML",
         multiline: !0,
         placeholder: `剧情_卷一_标题:
   阶段一_标题:
@@ -15518,7 +15651,7 @@ ${extra.length ? `<p class="pi-hint">另有字段：${esc(extra.join("、"))}（
         return { ...project, setting: { ...project.setting, text: text2 } };
       }), toast(
         "success",
-        `${outline.length} 条进大纲，${setting.length - authorCount} 条进公开设定，${authorCount} 条作为仅作者资料（不注入）。`
+        `${outline.length}条进大纲，${setting.length - authorCount}条进公开设定，${authorCount}条作为仅作者资料（不注入）。`
       ), view.runtime.refresh(), view.renderBody(), await afterImport(picked, { authorCount });
     },
     async export(view) {
@@ -15555,9 +15688,9 @@ ${extra.length ? `<p class="pi-hint">另有字段：${esc(extra.join("、"))}（
       let draft = st(view).draft, i = Number(target.dataset.i), item = draft && draft.items[i];
       if (!item) return;
       let busy = view.busy.outline, pick = await menuDialog({
-        title: `第 ${draft.volumeNo + i} ${vq(view, "卷", "条")}`,
+        title: `第${draft.volumeNo + i} ${vq(view, "卷", "条")}`,
         items: [
-          ...item.ok ? [{ label: "YAML 原文", value: "multi-yaml" }] : [],
+          ...item.ok ? [{ label: "YAML原文", value: "multi-yaml" }] : [],
           { label: vq(view, "重写这一卷", "重写这一条"), value: "multi-redo", disabled: busy },
           ...item.ok ? [] : [
             { label: "修正格式", value: "multi-fix", disabled: busy },
@@ -15570,7 +15703,7 @@ ${extra.length ? `<p class="pi-hint">另有字段：${esc(extra.join("、"))}（
     async "multi-yaml"(view, target) {
       let item = st(view).draft.items[Number(target.dataset.i)];
       await openDialog({
-        title: "YAML 原文",
+        title: "YAML原文",
         html: `<pre class="pi-pre">${esc(item.yaml)}</pre>`,
         actions: [{ label: "关闭", value: !0, primary: !0 }]
       });
@@ -15616,7 +15749,7 @@ ${yaml}
       if (!draft || draft.items.some((item) => !item.ok)) return;
       if (!taskStillValid(view, draft.task)) return staleTaskNotice(view, draft.task);
       let volumes = draft.items.flatMap((item) => item.volumes);
-      addVolumes(view, volumes, "AI 追加多卷"), st(view).draft = null, view.renderBody();
+      addVolumes(view, volumes, "AI追加多卷"), st(view).draft = null, view.renderBody();
     },
     // 修格式 / 重新解析沿用草稿原来的身份（15.2-1）：先核对、修正请求返回后再核对，不会把草稿改绑到当前聊天。
     async "draft-fix"(view, target) {
@@ -15660,7 +15793,7 @@ ${yaml}
       putDraft(view, view.projectId, null), view.renderBody();
     },
     "draft-new"(view) {
-      addVolumes(view, st(view).draft.volumes, "AI 新建卷"), putDraft(view, view.projectId, null), view.renderBody(), afterAdopt(view);
+      addVolumes(view, st(view).draft.volumes, "AI新建卷"), putDraft(view, view.projectId, null), view.renderBody(), afterAdopt(view);
     },
     async "draft-replace"(view) {
       let { volume } = findSel(view.project(), st(view).sel);
@@ -15669,11 +15802,11 @@ ${yaml}
       if (isPlainObject(volume.line) && incoming.length) {
         let head = incoming[0], { volumes: put } = putVolume([volume], volume.id, { ...head, key: volume.key, line: void 0 }, { allowLine: [] }), prepare = () => {
           let p = view.project(), cur = isClueMode(p) && view.runtime.activeId() === projectId ? view.runtime.clue.compute() : null;
-          return prepareCommit(p, [put[0]], { clue: cur ? { snap: cur.snap, prog: cur.prog, config: normalizeClue(p.clue) } : null, label: "AI 替换剧情线" });
+          return prepareCommit(p, [put[0]], { clue: cur ? { snap: cur.snap, prog: cur.prog, config: normalizeClue(p.clue) } : null, label: "AI替换剧情线" });
         }, effects = (pr) => [...pr.guard ? [...pr.guard.diffs, ...pr.guard.notes] : [], ...pr.restored.length ? [`已经完成的节点会保留：${pr.restored.join("、")}（完成条件不变）`] : []], prep = prepare(), shown = effects(prep), stamp0 = targetStamp(view.project(), [volume.id]);
         if (!await confirmDialog({
           title: `替换「${volumeName(volume.key)}」`,
-          body: `这条剧情线的阶段换成 AI 写的内容（编号和线头保留）${shown.length ? "；按这个聊天的进度：" : "。"}`,
+          body: `这条剧情线的阶段换成AI写的内容（编号和线头保留）${shown.length ? "；按这个聊天的进度：" : "。"}`,
           list: [...prep.changes.flatMap((c) => c.changes).slice(0, 12), ...shown],
           okLabel: "替换",
           danger: !0
@@ -15695,16 +15828,16 @@ ${yaml}
       }
       await confirmDialog({
         title: `替换「${volumeName(volume.key)}」`,
-        body: vq(view, "该卷原有阶段全部换成 AI 写的内容。", "这条剧情线原有的阶段全部换成 AI 写的内容。"),
+        body: vq(view, "该卷原有阶段全部换成AI写的内容。", "这条剧情线原有的阶段全部换成AI写的内容。"),
         okLabel: "替换",
         danger: !0
-      }) && (update2(view, (volumes) => volumes.flatMap((item) => item.id === volume.id ? incoming : [item]), "AI 替换整卷"), st(view).draft = null, st(view).sel = incoming[0].id, view.runtime.refresh(), view.renderBody(), afterAdopt(view));
+      }) && (update2(view, (volumes) => volumes.flatMap((item) => item.id === volume.id ? incoming : [item]), "AI替换整卷"), st(view).draft = null, st(view).sel = incoming[0].id, view.runtime.refresh(), view.renderBody(), afterAdopt(view));
     },
     "draft-append"(view) {
       let { volume } = findSel(view.project(), st(view).sel);
       if (!volume) throw new Error(vq(view, "先在左边选中要追加到的卷", "先在左边选中要追加到的剧情线"));
       let stages = st(view).draft.volumes.flatMap((item) => item.stages);
-      updateVolume(view, volume.id, (item) => ({ ...item, stages: [...item.stages, ...stages] }), "AI 追加阶段"), st(view).draft = null, view.runtime.refresh(), view.renderBody(), afterAdopt(view);
+      updateVolume(view, volume.id, (item) => ({ ...item, stages: [...item.stages, ...stages] }), "AI追加阶段"), st(view).draft = null, view.runtime.refresh(), view.renderBody(), afterAdopt(view);
     },
     async "draft-rest"(view) {
       let draft = getDraft(view);
@@ -15904,14 +16037,14 @@ ${yaml}
   }
   var CLUE_TEXT_KEYS = ["入口", "场景", "作者备注"], CLUE_YAML_KEYS = ["必需", "开放条件", "提前条件", "完成条件", "发现", "相关事实"];
   function clueNodeFields(meta2, index, value) {
-    let yamlOf = (v) => v == null || v === "" ? "" : typeof v == "string" ? v : stringifyYaml(v).trim(), has = (k) => value[k] !== void 0 && value[k] !== null && value[k] !== "", text2 = (key, hint = "") => `<label class="pi-field"><span>${esc(key)}</span><textarea class="pi-ta pi-ta-auto" rows="2" data-node-field="${esc(meta2.field)}" data-i="${index}" data-k="${esc(key)}"${hint ? ` placeholder="${esc(hint)}"` : ""}>${esc(value[key] ?? "")}</textarea></label>`, yaml = (key) => `<label class="pi-field"><span>${esc(key)}</span><textarea class="pi-ta is-mono pi-ta-auto" rows="2" data-node-yaml="${esc(meta2.field)}" data-i="${index}" data-k="${esc(key)}" placeholder="${esc(CLUE_PLACEHOLDER[key] || "")}">${esc(yamlOf(value[key]))}</textarea></label>`, gets = discoveryList(value).map((d) => d.fact).filter(Boolean), condSum = [has("完成条件") ? `完成：${condBrief(value.完成条件)}` : "", gets.length ? `获得 ${gets.join("、")}` : ""].filter(Boolean).join("；") || "都没写", moreKeys = ["事件", "偏转", "触发", "作者备注", "开放条件", "提前条件", "相关事实"].filter((k) => k in value || ["作者备注", "开放条件", "提前条件", "相关事实"].includes(k)), moreHas = moreKeys.filter(has), moreSum = moreHas.length ? `已写：${moreHas.join("、")}` : "都没写", moreField = (k) => CLUE_YAML_KEYS.includes(k) ? yaml(k) : k === "作者备注" ? text2(k, "只给作者看，不注入") : `<label class="pi-field"><span>${esc(k)}</span><textarea class="pi-ta pi-ta-auto" rows="2" data-node-field="${esc(meta2.field)}" data-i="${index}" data-k="${esc(k)}">${esc(value[k] ?? "")}</textarea></label>`;
+    let yamlOf = (v) => v == null || v === "" ? "" : typeof v == "string" ? v : stringifyYaml(v).trim(), has = (k) => value[k] !== void 0 && value[k] !== null && value[k] !== "", text2 = (key, hint = "") => `<label class="pi-field"><span>${esc(key)}</span><textarea class="pi-ta pi-ta-auto" rows="2" data-node-field="${esc(meta2.field)}" data-i="${index}" data-k="${esc(key)}"${hint ? ` placeholder="${esc(hint)}"` : ""}>${esc(value[key] ?? "")}</textarea></label>`, yaml = (key) => `<label class="pi-field"><span>${esc(key)}</span><textarea class="pi-ta is-mono pi-ta-auto" rows="2" data-node-yaml="${esc(meta2.field)}" data-i="${index}" data-k="${esc(key)}" placeholder="${esc(CLUE_PLACEHOLDER[key] || "")}">${esc(yamlOf(value[key]))}</textarea></label>`, gets = discoveryList(value).map((d) => d.fact).filter(Boolean), condSum = [has("完成条件") ? `完成：${condBrief(value.完成条件)}` : "", gets.length ? `获得${gets.join("、")}` : ""].filter(Boolean).join("；") || "都没写", moreKeys = ["事件", "偏转", "触发", "作者备注", "开放条件", "提前条件", "相关事实"].filter((k) => k in value || ["作者备注", "开放条件", "提前条件", "相关事实"].includes(k)), moreHas = moreKeys.filter(has), moreSum = moreHas.length ? `已写：${moreHas.join("、")}` : "都没写", moreField = (k) => CLUE_YAML_KEYS.includes(k) ? yaml(k) : k === "作者备注" ? text2(k, "只给作者看，不注入") : `<label class="pi-field"><span>${esc(k)}</span><textarea class="pi-ta pi-ta-auto" rows="2" data-node-field="${esc(meta2.field)}" data-i="${index}" data-k="${esc(k)}">${esc(value[k] ?? "")}</textarea></label>`;
     return `${text2("入口", "开放后告诉正文可以去做")}${text2("场景", "成为焦点时注入")}
         <details class="pi-fold"${has("完成条件") || gets.length ? " open" : ""}><summary><b>线索条件</b><span>${esc(condSum)}</span></summary>${yaml("完成条件")}${yaml("发现")}</details>
         <details class="pi-fold"${moreHas.length ? " open" : ""}><summary><b>更多</b><span>${esc(moreSum)}</span></summary>${moreKeys.map(moreField).join("")}<p class="pi-hint">ID ${esc(value.id || "保存后自动补")}</p></details>
         <p class="pi-status" data-node-yaml-status="${index}"></p>`;
   }
   var CLUE_PLACEHOLDER = {
-    必需: "主线默认必需；可选写 false",
+    必需: "主线默认必需；可选写false",
     开放条件: `全部:
   - 事实: F00`,
     提前条件: `任一:
@@ -15952,23 +16085,23 @@ ${yaml}
       progress = c ? clueProgressText(c.state, c.snap, c.prog, { problems: c.snap.problems }) : clue ? "" : progressText(view);
     }
     let floorsN = Math.max(0, Number(r.floors) || 0), recent = floorsN ? view.runtime.recentFloors(floorsN).map(
-      (f) => `【第 ${f.index} 楼】
+      (f) => `【第${f.index}楼】
 ${f.text}`
     ).join(`
 
 `) : "", combined = [...extra, ...refs, ...writing.wb].filter(
       (ref, index, list) => list.findIndex((other) => other.title === ref.title && other.text === ref.text) === index
     ), fitted = fitRefs(combined), parts = [];
-    talk ? parts.push(`讨论记录（${full.length} 字${full.length > talk.length ? `，只附了最近 ${talk.length} 字` : ""}）`) : parts.push("讨论记录：没有");
+    talk ? parts.push(`讨论记录（${full.length}字${full.length > talk.length ? `，只附了最近${talk.length}字` : ""}）`) : parts.push("讨论记录：没有");
     for (let rep of fitted.report)
       parts.push(
-        rep.kept === rep.chars ? `${rep.title}（${rep.chars} 字）` : rep.kept ? `${rep.title}（${rep.chars} 字，只附了前 ${rep.kept} 字）` : `${rep.title}（${rep.chars} 字，超出预算未附带）`
+        rep.kept === rep.chars ? `${rep.title}（${rep.chars}字）` : rep.kept ? `${rep.title}（${rep.chars}字，只附了前${rep.kept}字）` : `${rep.title}（${rep.chars}字，超出预算未附带）`
       );
     return r.progress && parts.push(
       progress ? clue ? "线索进度（当前聊天）" : "剧情进度" : clue ? "线索进度：本项目不是当前聊天启用的项目，没有附带" : "剧情进度：没有"
     ), task === "rewrite" && parts.push(
-      recent ? `最近 ${floorsN} 楼正文` : floorsN ? `最近正文：勾选了 ${floorsN} 楼，但本聊天还没有可附的正文` : "最近正文：讨论区勾选的楼数为 0，没有附带"
-    ), task === "rewrite" && r.outline && parts.push("当前大纲：改写只附「需要改写的剩余阶段」，前面已经演过的阶段没有附带"), task === "volume" && floorsN && parts.push(recent ? `最近 ${floorsN} 楼正文` : `最近正文：勾选了 ${floorsN} 楼，但本聊天还没有可附的正文`), task === "volume" && clue && parts.push("已有节点与事实编号索引（固定附带）"), { project, talk, refs: fitted.refs, progress, recent, clue, scope: `本次附带的材料：${parts.join("、")}` };
+      recent ? `最近${floorsN}楼正文` : floorsN ? `最近正文：勾选了${floorsN}楼，但本聊天还没有可附的正文` : "最近正文：讨论区勾选的楼数为0，没有附带"
+    ), task === "rewrite" && r.outline && parts.push("当前大纲：改写只附「需要改写的剩余阶段」，前面已经演过的阶段没有附带"), task === "volume" && floorsN && parts.push(recent ? `最近${floorsN}楼正文` : `最近正文：勾选了${floorsN}楼，但本聊天还没有可附的正文`), task === "volume" && clue && parts.push("已有节点与事实编号索引（固定附带）"), { project, talk, refs: fitted.refs, progress, recent, clue, scope: `本次附带的材料：${parts.join("、")}` };
   }
   function rewriteGuardNow(view, draft) {
     let project = view.project(), unit = flattenUnits(project.outline.volumes).find((item) => item.id === draft.fromUnitId);
@@ -16041,7 +16174,7 @@ ${f.text}`
     return `<div class="pi-diff">${diffLines(a, b).map((line) => `<div class="${line.op === "+" ? "is-add" : line.op === "-" ? "is-del" : ""}">${esc(line.text) || " "}</div>`).join("")}</div>`;
   }
   function checkBadge(check) {
-    return check ? `<span class="pi-badge ${check === "PASS" ? "is-ok" : "is-danger"}">速查 ${esc(check)}</span>` : "";
+    return check ? `<span class="pi-badge ${check === "PASS" ? "is-ok" : "is-danger"}">速查${esc(check)}</span>` : "";
   }
   function fixesHtml(fixes, where) {
     return fixes.length ? `<p class="pi-hint">补定（替你补齐的项）：</p>${fixes.map(
@@ -16059,7 +16192,7 @@ ${f.text}`
             <span class="pi-etitle">${esc(block.title)}</span>${status}</div>
             ${open ? `<div class="pi-entry-bd">${diffHtml(old ? old.text : "", block.text)}</div>` : ""}</div>`;
     }).join("");
-    return `<div class="pi-card"><h3>新稿对比 ${checkBadge(draft.check)}</h3>
+    return `<div class="pi-card"><h3>新稿对比${checkBadge(draft.check)}</h3>
         <p class="pi-hint">勾选的分块替换旧稿，新分块追加到末尾。</p>${rows2}
         ${fixesHtml(draft.fixes, "draft")}
         <div class="pi-tools is-c3 is-end"><button type="button" class="pi-btn is-sm is-primary" data-act="draft-all">全部采用</button>
@@ -16072,7 +16205,7 @@ ${f.text}`
     let fmt = (time2) => new Date(time2).toLocaleString(), chosen = list[at];
     return `<div class="pi-card"><h3>历史版本</h3>
         ${list.map(
-      (item, i) => `<div class="pi-row"><span class="pi-grow">${esc(fmt(item.at))}，${item.text.length} 字</span>
+      (item, i) => `<div class="pi-row"><span class="pi-grow">${esc(fmt(item.at))}，${item.text.length}字</span>
             <button type="button" class="pi-btn is-sm" data-act="hist-diff" data-i="${i}">对比当前</button>
             <button type="button" class="pi-btn is-sm" data-act="hist-restore" data-i="${i}">回退到此版</button></div>`
     ).join("")}
@@ -16081,12 +16214,12 @@ ${f.text}`
   function render2(view) {
     let project = view.project(), s = st2(view), text2 = project.setting.text, blocks = splitBlocks(text2).filter((block) => block.title !== "开头"), mute2 = new Set(project.setting.mute), muted = blocks.some((block) => mute2.has(block.key)), busy = view.busy.setting, hasOutline = project.outline.volumes.some((volume) => volume.stages.length), chip = (block) => `<span class="pi-chip pi-block-chip${mute2.has(block.key) ? " is-mute" : ""}"><button type="button" data-act="jump" data-key="${esc(block.key)}" title="跳到这一块">${esc(block.title)}</button><button type="button" class="pi-block-eye" data-act="block-mute" data-key="${esc(block.key)}" title="${mute2.has(block.key) ? "已设为不注入，点击恢复注入" : "注入正文，点击设为不注入"}">${mute2.has(block.key) ? ICONS.eyeOff : ICONS.eye}</button><button type="button" class="pi-block-del" data-act="block-del" data-key="${esc(block.key)}" title="删除整个分块">${ICONS.close}</button></span>`;
     return `${s.draft ? draftHtml2(view, project, s.draft) : ""}
-        <div class="pi-card"><h3>设定 ${checkBadge(project.setting.check)}<span class="pi-spacer"></span><button type="button" class="pi-btn is-primary is-sm" data-act="setting-save">保存</button></h3>
+        <div class="pi-card"><h3>设定${checkBadge(project.setting.check)}<span class="pi-spacer"></span><button type="button" class="pi-btn is-primary is-sm" data-act="setting-save">保存</button></h3>
         <div class="pi-tools is-c4">
-            <button type="button" class="pi-btn is-sm is-primary" data-act="from-talk"${busy ? " disabled" : ""}>${busy ? '<span class="pi-spin"></span>整理中' : "AI 整理"}</button>
+            <button type="button" class="pi-btn is-sm is-primary" data-act="from-talk"${busy ? " disabled" : ""}>${busy ? '<span class="pi-spin"></span>整理中' : "AI整理"}</button>
             <button type="button" class="pi-btn is-sm" data-act="sync-outline"${busy || !hasOutline || !text2.trim() ? " disabled" : ""}>按大纲校对</button>
             <button type="button" class="pi-btn is-sm" data-act="import-wb">从世界书导入</button>
-            <button type="button" class="pi-btn is-sm${s.history ? " is-primary" : ""}" data-act="history">历史版本 ${project.setting.history.length}</button>
+            <button type="button" class="pi-btn is-sm${s.history ? " is-primary" : ""}" data-act="history">历史版本${project.setting.history.length}</button>
             <label class="pi-check"><input type="checkbox" data-append${s.append ? " checked" : ""}><span>只追加，不改动已有分块</span></label></div>
         ${genRefsBar(view, "setting")}
         ${blocks.length ? `<div class="pi-toc">${blocks.map(chip).join("")}</div>` : ""}
@@ -16126,7 +16259,7 @@ ${f.text}`
         { label: "取消", value: null },
         { label: "只从列表移除", value: { listOnly: !0 } },
         {
-          label: "让 AI 从正文删掉",
+          label: "让AI从正文删掉",
           primary: !0,
           danger: !0,
           value: (box) => blocks.length ? { key: readKey(box), drop: !0 } : { listOnly: !0 }
@@ -16134,7 +16267,7 @@ ${f.text}`
       ] : [
         { label: "取消", value: null },
         {
-          label: "让 AI 重写该分块",
+          label: "让AI重写该分块",
           primary: !0,
           value: (box) => ({ key: readKey(box), text: box.querySelector("[data-f=text]").value.trim() })
         }
@@ -16157,7 +16290,7 @@ ${f.text}`
       let tail = parts.slice(1).findIndex((b) => !b.author && !b.cont);
       rewritten = parts[0] && { text: joinBlocks(parts.slice(0, tail < 0 ? parts.length : tail + 1)) };
     }
-    if (!rewritten) throw new Error("AI 没有返回分块内容");
+    if (!rewritten) throw new Error("AI没有返回分块内容");
     let merged = joinBlocks(
       blocks.map((item) => item.key === block.key ? { ...item, text: rewritten.text } : item).filter((item) => item.text.trim())
     ), rest = fixes.filter((_, i) => i !== index);
@@ -16180,7 +16313,7 @@ ${f.text}`
       );
       if (!reply2) return;
       let parsed = parseSettingReply(reply2);
-      if (!parsed.body) throw new Error("AI 回复里没有世界观正文");
+      if (!parsed.body) throw new Error("AI回复里没有世界观正文");
       let body = append ? `${project.setting.text.trim()}
 
 ${parsed.body}` : parsed.body;
@@ -16254,7 +16387,7 @@ ${parsed.body}` : parsed.body;
         [project.setting.text, ...chosen.pieces].filter((item) => item.trim()).join(`
 
 `)
-      ), toast("success", `${picked.length - chosen.authorCount} 条进公开设定，${chosen.authorCount} 条作为仅作者资料（不注入）。`), view.renderBody(), await afterImport(picked, { authorCount: chosen.authorCount });
+      ), toast("success", `${picked.length - chosen.authorCount}条进公开设定，${chosen.authorCount}条作为仅作者资料（不注入）。`), view.renderBody(), await afterImport(picked, { authorCount: chosen.authorCount });
     },
     history(view) {
       st2(view).history = !st2(view).history, st2(view).historyAt = void 0, view.renderBody();
@@ -16318,23 +16451,23 @@ ${parsed.body}` : parsed.body;
     let chat = view.data.chat(view.projectId);
     if (!chat)
       return view.data.loadChat(view.projectId).then(() => view.renderBody()).catch((error) => toast("error", `读取讨论记录失败：${error.message}`)), '<div class="pi-empty"><span class="pi-spin"></span> 正在读取讨论记录…</div>';
-    let busy = view.busy[`discuss:${view.projectId}`], refs = chat.refs, folded = chat.messages.filter((msg) => msg.folded).length, live = chat.messages.filter((msg) => !msg.folded), clueWord = isClueMode(view.project()), unanswered = live.length && live[live.length - 1].role === "user" ? live[live.length - 1] : null, wb = wbSummary(view, chat.refs, () => view.renderBody()), canProgress = !!progressText(view), persona = view.data.settings().persona.trim(), refsOn = [refs.setting && "设定", refs.outline && "大纲", refs.progress && canProgress && "剧情进度", refs.floors && `正文 ${refs.floors} 楼`, wb && wb.count && `世界书 ${wb.count} 条`].filter(Boolean), open = !!st3(view).refsOpen, chips = `<div class="pi-dc-bar"><button type="button" class="pi-dc-refs" data-act="refs-toggle" aria-expanded="${open}">参考 <i>${refsOn.length}</i><small>${esc(refsOn.join("、") || "无")}</small><span class="pi-dc-caret">${open ? "▴" : "▾"}</span></button>
+    let busy = view.busy[`discuss:${view.projectId}`], refs = chat.refs, folded = chat.messages.filter((msg) => msg.folded).length, live = chat.messages.filter((msg) => !msg.folded), clueWord = isClueMode(view.project()), lastAiMsg = [...live].reverse().find((msg) => msg.role !== "user"), unanswered = live.length && live[live.length - 1].role === "user" ? live[live.length - 1] : null, wb = wbSummary(view, chat.refs, () => view.renderBody()), canProgress = !!progressText(view), persona = view.data.settings().persona.trim(), refsOn = [refs.setting && "设定", refs.outline && "大纲", refs.progress && canProgress && "剧情进度", refs.floors && `正文${refs.floors}楼`, wb && wb.count && `世界书${wb.count}条`].filter(Boolean), open = !!st3(view).refsOpen, chips = `<div class="pi-dc-bar"><button type="button" class="pi-dc-refs" data-act="refs-toggle" aria-expanded="${open}">参考 <i>${refsOn.length}</i><small>${esc(refsOn.join("、") || "无")}</small><span class="pi-dc-caret">${open ? "▴" : "▾"}</span></button>
         <button type="button" class="pi-dc-act" data-act="review-pick" title="选一条剧情线，逐页查看各阶段，在对应页填写意见后统一发送">${ICONS.pencil}<span>审阅修改</span></button></div>
         ${open ? `<div class="pi-dc-refs-open">
-        <button type="button" class="pi-chip${persona ? " is-on" : ""}" data-act="persona" title="${esc(persona || "指定 AI 讨论时的说话人格")}">人格${persona ? "" : "：未设置"}</button>
+        <button type="button" class="pi-chip${persona ? " is-on" : ""}" data-act="persona" title="${esc(persona || "指定AI讨论时的说话人格")}">人格${persona ? "" : "：未设置"}</button>
         <button type="button" class="pi-chip${refs.setting ? " is-on" : ""}" data-act="ref" data-ref="setting">设定</button>
         <button type="button" class="pi-chip${refs.outline ? " is-on" : ""}" data-act="ref" data-ref="outline">大纲</button>
         <button type="button" class="pi-chip${refs.progress && canProgress ? " is-on" : ""}" data-act="ref" data-ref="progress"${canProgress ? "" : ' disabled title="本项目不是当前聊天启用的项目"'}>剧情进度</button>
-        <button type="button" class="pi-chip${refs.floors ? " is-on" : ""}" data-act="ref-floors">正文 ${refs.floors} 楼</button>
-        <button type="button" class="pi-chip${wb && wb.count ? " is-on" : ""}" data-act="ref-wb">世界书 ${wb ? `${wb.count} 条` : "…"}</button></div>` : ""}`, messages = live.map((msg) => {
-      let isUser = msg.role === "user", tools = `<div class="pi-msg-tools">${isUser ? "" : `<button type="button" class="pi-btn is-sm is-ghost" data-act="to-setting">整理成设定</button>
+        <button type="button" class="pi-chip${refs.floors ? " is-on" : ""}" data-act="ref-floors">正文${refs.floors}楼</button>
+        <button type="button" class="pi-chip${wb && wb.count ? " is-on" : ""}" data-act="ref-wb">世界书${wb ? `${wb.count}条` : "…"}</button></div>` : ""}`, messages = live.map((msg) => {
+      let isUser = msg.role === "user", tools = `<div class="pi-msg-tools">${isUser || msg !== lastAiMsg ? "" : `<button type="button" class="pi-btn is-sm is-ghost" data-act="to-setting">整理成设定</button>
             <button type="button" class="pi-btn is-sm is-ghost" data-act="to-outline">${clueWord ? "写新剧情线" : "写新卷"}</button>`}${msg === unanswered && !busy ? '<button type="button" class="pi-btn is-sm is-ghost" data-act="resend">重新发送</button>' : ""}<span class="pi-msg-gap"></span><button type="button" class="pi-icon-btn pi-msg-more" data-act="msg-more" data-id="${esc(msg.id)}" title="更多">⋯</button></div>`;
       return `<div class="pi-msg ${isUser ? "is-user" : "is-ai"}"><div class="pi-md">${renderMarkdown(msg.content)}</div>${tools}</div>`;
-    }).join(""), empty = chat.messages.length ? "" : '<div class="pi-empty">说说你想写的剧情或设定，一句话也行。<br>AI 会帮你把世界观、人物和剧情走向想清楚；想好了，可以在 AI 的回复下面点「写新剧情线」。</div>';
+    }).join(""), empty = chat.messages.length ? "" : '<div class="pi-empty">说说你想写的剧情或设定，一句话也行。<br>AI会帮你把世界观、人物和剧情走向想清楚；想好了，可以在AI的回复下面点「写新剧情线」。</div>';
     return `${chips}<div class="pi-chat">
-        ${folded ? `<button type="button" class="pi-msg-fold" data-act="summary">更早的 ${folded} 条已折成摘要，查看</button>` : ""}
+        ${folded ? `<button type="button" class="pi-msg-fold" data-act="summary">更早的${folded}条已折成摘要，查看</button>` : ""}
         ${empty}${messages}${busy ? '<div class="pi-msg is-ai"><span class="pi-spin"></span></div>' : ""}</div>
-        <div class="pi-compose">${chat.messages.length ? `<button type="button" class="pi-compose-side" data-act="clear-talk" title="清空讨论">${ICONS.trash}</button>` : ""}<textarea class="pi-ta" data-compose placeholder="Ctrl+Enter 发送">${esc(st3(view).draft || "")}</textarea>
+        <div class="pi-compose">${chat.messages.length ? `<button type="button" class="pi-compose-side" data-act="clear-talk" title="清空讨论">${ICONS.trash}</button>` : ""}<textarea class="pi-ta" data-compose placeholder="Ctrl+Enter发送">${esc(st3(view).draft || "")}</textarea>
         ${busy ? `<button type="button" class="pi-send" data-act="stop" title="停止回复">${ICONS.close}</button>` : `<button type="button" class="pi-send" data-act="send" title="发送（Ctrl+Enter）">${ICONS.send}</button>`}</div>`;
   }
   var controllers = /* @__PURE__ */ new Map();
@@ -16398,7 +16531,7 @@ ${parsed.body}` : parsed.body;
       if (!chat || !chat.messages.length) return;
       let choice = await choiceDialog({
         title: "清空讨论",
-        body: `删除这个项目的全部 ${chat.messages.length} 条讨论消息和摘要。设定、大纲和附带参考不受影响。`,
+        body: `删除这个项目的全部${chat.messages.length}条讨论消息和摘要。设定、大纲和附带参考不受影响。`,
         choices: [
           { label: "取消", value: null },
           { label: "直接清空", value: "clear", danger: !0 },
@@ -16438,7 +16571,8 @@ ${parsed.body}` : parsed.body;
       let live = chat.messages.filter((item) => !item.folded), lastAi = [...live].reverse().find((item) => item.role !== "user"), busy = view.busy[`discuss:${view.projectId}`], items = [
         { value: "msg-edit", label: "编辑" },
         ...msg === lastAi && !busy ? [{ value: "regen", label: "重新生成" }] : [],
-        ...msg.role !== "user" && hasYamlBlock(msg.content) ? [{ value: "use-yaml", label: "把 YAML 送到大纲" }] : [],
+        ...msg.role !== "user" && msg !== lastAi ? [{ value: "to-setting", label: "整理成设定" }, { value: "to-outline", label: isClueMode(view.project()) ? "写新剧情线" : "写新卷" }] : [],
+        ...msg.role !== "user" && hasYamlBlock(msg.content) ? [{ value: "use-yaml", label: "把YAML送到大纲" }] : [],
         { value: "msg-del", label: "删除此条消息", danger: !0 }
       ], pick = await menuDialog({ title: "这条消息", items });
       pick && actions3[pick](view, target);
@@ -16473,7 +16607,7 @@ ${parsed.body}` : parsed.body;
     async persona(view) {
       let value = await promptDialog({
         title: "说话人格",
-        label: "讨论时 AI 以什么身份、什么风格回复，留空为默认",
+        label: "讨论时AI以什么身份、什么风格回复，留空为默认",
         value: view.data.settings().persona,
         multiline: !0,
         placeholder: "例：你是一位熟悉原作的资深编辑，说话直接，敢于否定不合理的设定。"
@@ -16485,7 +16619,7 @@ ${parsed.body}` : parsed.body;
       updateChat(view, (chat) => ({ ...chat, refs: { ...chat.refs, [key]: !chat.refs[key] } })), view.renderBody();
     },
     async "ref-floors"(view) {
-      let chat = view.data.chat(view.projectId), value = await promptDialog({ title: "附带最近正文", label: "楼数（0 为不附带，最多 50）", value: String(chat.refs.floors) });
+      let chat = view.data.chat(view.projectId), value = await promptDialog({ title: "附带最近正文", label: "楼数（0为不附带，最多50）", value: String(chat.refs.floors) });
       if (value == null) return;
       let floors = Math.max(0, Math.min(50, Math.round(Number(value) || 0)));
       updateChat(view, (current) => ({ ...current, refs: { ...current.refs, floors } })), view.renderBody();
@@ -16513,7 +16647,7 @@ ${parsed.body}` : parsed.body;
       if (!project || !project.outline.volumes.length) return toast("info", "大纲里还没有内容。");
       let clue = isClueMode(project), name = (v) => isPlainObject(v.line) && v.line.编号 && !volumeName(v.key).startsWith(v.line.编号) ? `${v.line.编号} ${volumeName(v.key)}` : volumeName(v.key), id = await menuDialog({
         title: "审阅修改",
-        items: project.outline.volumes.map((v) => ({ value: v.id, label: `${name(v)}　${v.stages.length} 个阶段` }))
+        items: project.outline.volumes.map((v) => ({ value: v.id, label: `${name(v)}　${v.stages.length}个阶段` }))
       });
       if (!id || view.projectId !== project.id) return;
       let jobId = await openEditReview(view, id, {}, { note: clue ? "剧情线" : "卷" });
@@ -16552,7 +16686,7 @@ ${parsed.body}` : parsed.body;
     try {
       data = JSON.parse(text2);
     } catch {
-      throw new Error("文件不是有效的 JSON");
+      throw new Error("文件不是有效的JSON");
     }
     if (!data || data.kind !== PERSONA_FILE_KIND || !Array.isArray(data.lines)) throw new Error("这不是剧情注入器导出的人设文件");
     let { lines: lines2 } = normalizePersonas({ lines: data.lines });
@@ -16622,9 +16756,9 @@ ${parsed.body}` : parsed.body;
       let cond = match[2] ?? match[3] ?? "", node = { type: "if", cond, raw: match[0], parsed: parseCond(cond), children: [], depth: stack.length - 1, inline: isInline(stack[stack.length - 1].children) };
       push(node), stack.push(node);
     }
-    pushText(source.slice(last)), stack.length > 1 && issues.push({ level: "error", text: `有 ${stack.length - 1} 个 <if> 没有写 </if>` });
+    pushText(source.slice(last)), stack.length > 1 && issues.push({ level: "error", text: `有${stack.length - 1}个 <if> 没有写 </if>` });
     let found = (source.match(/<if\b/gi) || []).length;
-    return found !== open && issues.push({ level: "error", text: `有 ${found - open} 个 <if> 标签写法无法识别（只支持 cell= 与 cond=）` }), { nodes: root.children, issues };
+    return found !== open && issues.push({ level: "error", text: `有${found - open}个 <if> 标签写法无法识别（只支持cell= 与cond=）` }), { nodes: root.children, issues };
   }
   function* walkIfs(nodes) {
     for (let node of nodes)
@@ -16674,7 +16808,7 @@ ${parsed.body}` : parsed.body;
         let picked = ctx2.picks.get(one);
         (node.parsed.or ? node.parsed.terms.some((term) => term.value === picked) : node.parsed.terms.every((term) => term.value === picked)) && (out += body());
       } else
-        ctx2.issue("error", `嵌套了无法拆分的 if「${node.cond.replace(/cell:/g, "")}」`), out += renderNodes(node.children, ctx2);
+        ctx2.issue("error", `嵌套了无法拆分的if「${node.cond.replace(/cell:/g, "")}」`), out += renderNodes(node.children, ctx2);
     }
     return out;
   }
@@ -16770,7 +16904,7 @@ ${suffix.trim()}` : body;
         } else
           for (let term of part.node.parsed.terms) {
             if (term.op !== "==") {
-              report(entry, "error", `文字变量「${line.name}」用了 ${term.op}`);
+              report(entry, "error", `文字变量「${line.name}」用了${term.op}`);
               continue;
             }
             let old = line.stages.get(term.value);
@@ -16830,15 +16964,15 @@ ${suffix.trim()}` : body;
             <span class="pi-wb-bulk"><button type="button" class="pi-btn is-sm is-ghost" data-pi-all="${esc(book.name)}">${all ? "取消全选" : "全选"}</button></span></div>
             ${book.entries.map((entry) => `<label class="pi-wb-row"><input type="checkbox" data-pi-pick="${esc(entry.key)}" data-pi-book="${esc(entry.book)}"${picked.has(idOf(entry)) ? " checked" : ""}>
                 <span class="pi-wb-title" title="${esc(entry.title)}">${esc(entry.title)}</span><span class="pi-meta">≈${estimateTokens(entry.content)}</span></label>`).join("")}</div>`;
-    }).join("") : '<p class="pi-hint">当前启用的世界书里没有含 if 条件的手写条目。</p>';
+    }).join("") : '<p class="pi-hint">当前启用的世界书里没有含if条件的手写条目。</p>';
   }
   function varChoices(item) {
-    let fix = item.values.map((value) => ({ value: `fix:${value}`, label: `写死为 ${value}` })), line = item.canLine ? [{ value: "line", label: "拆成阶段" }] : [];
+    let fix = item.values.map((value) => ({ value: `fix:${value}`, label: `写死为${value}` })), line = item.canLine ? [{ value: "line", label: "拆成阶段" }] : [];
     return item.kind === "fixed" ? [...fix, ...line] : [...line, ...fix];
   }
   function previewHtml(plan) {
     let issues = plan.issues.map((issue) => `<p class="pi-hint is-warn">${esc(issue.title)}：${esc(issue.text)}</p>`).join(""), lines2 = plan.lines.map((line) => `<div class="pi-wb-hit"><span class="pi-wb-title">${esc(line.group ? `${line.group}：` : "")}${esc(line.name)}</span>
-        <span class="pi-meta">${line.mode === "fame" ? "读声望" : line.mode === "check" ? "条件检测" : "手动"}，${line.stages.length} 阶段</span></div>`).join(""), vars = plan.vars.filter((item) => item.kind !== "num").map((item) => `<div class="pi-wb-hit"><span class="pi-wb-title" title="${esc(item.path)}">${esc(item.name)}</span>
+        <span class="pi-meta">${line.mode === "fame" ? "读声望" : line.mode === "check" ? "条件检测" : "手动"}，${line.stages.length}阶段</span></div>`).join(""), vars = plan.vars.filter((item) => item.kind !== "num").map((item) => `<div class="pi-wb-hit"><span class="pi-wb-title" title="${esc(item.path)}">${esc(item.name)}</span>
         <select class="pi-sel" data-pi-kind="${esc(item.path)}">${options(varChoices(item), item.kind === "fixed" ? `fix:${item.pick}` : "line")}</select></div>`).join("");
     return `${issues}
         <div class="pi-wb-sec-hd">人设线<small>${plan.lines.length}</small></div>${lines2 || '<p class="pi-hint">没有可转入的内容。</p>'}
@@ -16855,7 +16989,7 @@ ${suffix.trim()}` : body;
     }
     let all = books.flatMap((book) => book.entries), picked = /* @__PURE__ */ new Set(), overrides = {}, picks = {}, step = "list", chosen = () => all.filter((entry) => picked.has(idOf(entry))), plan = () => buildPlan(chosen(), { overrides, picks }), draw = (box) => {
       let body = box.querySelector("[data-f=body]");
-      body.innerHTML = step === "list" ? listHtml(books, picked) : previewHtml(plan()), box.querySelector("[data-f=count]").textContent = step === "list" ? `已选 ${picked.size} 条` : "预览";
+      body.innerHTML = step === "list" ? listHtml(books, picked) : previewHtml(plan()), box.querySelector("[data-f=count]").textContent = step === "list" ? `已选${picked.size}条` : "预览";
       for (let btn of box.querySelectorAll("[data-dlg]"))
         (btn.textContent === "返回选择" || btn.textContent === "转入") && (btn.hidden = step === "list"), btn.textContent === "预览" && (btn.hidden = step !== "list");
     }, result = await openDialog({
@@ -16901,7 +17035,7 @@ ${suffix.trim()}` : body;
     let byBook = /* @__PURE__ */ new Map();
     for (let entry of ok) byBook.set(entry.book, [...byBook.get(entry.book) || [], entry.key]);
     for (let [book, keys] of byBook) await setEntriesDisabled(book, keys, !0);
-    return view.runtime.refresh(), toast("success", `已转入 ${plan.lines.length} 条人设线，关闭了 ${ok.length} 个原条目。`), !0;
+    return view.runtime.refresh(), toast("success", `已转入${plan.lines.length}条人设线，关闭了${ok.length}个原条目。`), !0;
   }
   async function restoreImported(view, item) {
     let choice = await openDialog({
@@ -16957,7 +17091,7 @@ ${suffix.trim()}` : body;
   }
   function fameHint(view, line, info, bar) {
     if (!info.active) return "当前聊天没有使用本项目，这里不读声望。";
-    if (info.lost) return `没有读到这条${line.fame.source === "favor" ? "角色数据" : "声望"}，请检查名称是否和 IGS 里的一致。读不到时沿用手动选的阶段。`;
+    if (info.lost) return `没有读到这条${line.fame.source === "favor" ? "角色数据" : "声望"}，请检查名称是否和IGS里的一致。读不到时沿用手动选的阶段。`;
     let value = fameReading(line, view.runtime.fame()), base = value === null ? "" : `当前读到的数值：${value}。`;
     if (info.miss) return `${base}这个数值不在任何阶段的区间内，现在显示「${info.stage.name}」。请给每个阶段填上下限。`;
     let noPairs = line.fame.source !== "favor" && bar && Array.isArray(bar.pairs) && !bar.pairs.length ? "这条声望还没有搭档记录，现在按整体读。" : "";
@@ -16996,27 +17130,21 @@ ${suffix.trim()}` : body;
             <span class="pi-meta">${esc(info.stage ? info.stage.name : "")}${note ? `，${note}` : ""}</span>
             <input type="checkbox" title="启用" data-pl-on="${esc(line.id)}"${line.enabled ? " checked" : ""}></div>${open ? lineBody(view, line, units) : ""}</div>`;
   }
-  function fileCard(all) {
-    return `<div class="pi-card"><h3>导出与导入</h3>
-        <div class="pi-tools is-c2"><button type="button" class="pi-btn is-sm" data-act="pf-export"${all.lines.length ? "" : " disabled"}>导出人设</button>
-            <button type="button" class="pi-btn is-sm" data-act="pf-import">导入人设</button></div></div>`;
-  }
   function importedCard(all) {
     let rows2 = all.imported.map((item, index) => `<div class="pi-wb-row"><span class="pi-wb-title" title="${esc(item.book)}">${esc(item.title || item.key)}<small> ${esc(item.book)}</small></span>
         <button type="button" class="pi-btn is-sm" data-act="imp-restore" data-i="${index}">恢复</button></div>`).join("");
-    return `<div class="pi-card"><h3>世界书转入<span class="pi-spacer"></span><button type="button" class="pi-btn is-sm" data-act="imp-open">转入人设</button></h3>
-        ${rows2 || '<p class="pi-hint">还没有从世界书转入过条目。</p>'}${rows2 ? '<p class="pi-hint">转入时关闭了原条目，点恢复可重新开启。</p>' : ""}</div>`;
+    return rows2 ? `<div class="pi-card"><h3>世界书转入</h3>
+        ${rows2}<p class="pi-hint">转入时关闭了原条目，点恢复可重新开启。</p></div>` : "";
   }
   function render4(view) {
     let project = view.project(), all = personas(view), s = st4(view), units = flattenUnits(project.outline.volumes), collapsed = new Set(s.collapsed || []), groups = groupLines(all.lines).map((group) => {
       let key = group.name || "::none", shut = collapsed.has(key), head = `<button type="button" class="pi-group-hd" data-act="pg-fold" data-group="${esc(key)}">${shut ? ICONS.caret : ICONS.caretDown}${esc(group.name || "未分组")}<small>${group.lines.length}</small></button>`;
       return `<div class="pi-group${shut ? " is-collapsed" : ""}">${head}${shut ? "" : group.lines.map((line) => lineRow(view, line, s.open === line.id, units)).join("")}</div>`;
     }).join("");
-    return `<div class="pi-card"><h3>人设<span class="pi-meta">${all.lines.length} 条线</span><span class="pi-spacer"></span>
-            <button type="button" class="pi-btn is-sm is-primary" data-act="pl-add">${ICONS.plus}新建人设线</button></h3>
+    return `<div class="pi-card"><h3>人设<span class="pi-meta">${all.lines.length}条线</span><span class="pi-spacer"></span>
+            <button type="button" class="pi-btn is-sm is-primary" data-act="pl-add">${ICONS.plus}新建人设线</button><button type="button" class="pi-icon-btn" data-act="persona-menu" title="导出、导入与世界书转入">${ICONS.more}</button></h3>
         ${groups || '<p class="pi-hint">还没有人设线。新建一条，或从世界书转入。</p>'}</div>
-        ${importedCard(all)}
-        ${fileCard(all)}`;
+        ${importedCard(all)}`;
   }
   var LINE_PATCH = {
     name: (value) => ({ name: value.trim() || "未命名" }),
@@ -17079,24 +17207,35 @@ ${suffix.trim()}` : body;
       let s = st4(view), set = new Set(s.collapsed || []);
       set.has(target.dataset.group) ? set.delete(target.dataset.group) : set.add(target.dataset.group), s.collapsed = [...set], view.renderBody();
     },
+    async "persona-menu"(view) {
+      let pick = await menuDialog({
+        title: "人设",
+        items: [
+          { label: "导出人设", value: "pf-export", disabled: !personas(view).lines.length },
+          { label: "导入人设", value: "pf-import" },
+          { label: "从世界书转入人设", value: "imp-open" }
+        ]
+      });
+      pick && await actions4[pick](view);
+    },
     "pf-export"(view) {
       let project = view.project();
-      downloadBlob(`人设-${project.name}-${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}.json`, JSON.stringify(buildPersonaFile(personas(view), { project: project.name, version: view.version }), null, 2)), toast("success", `已导出 ${personas(view).lines.length} 条人设线。`);
+      downloadBlob(`人设-${project.name}-${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}.json`, JSON.stringify(buildPersonaFile(personas(view), { project: project.name, version: view.version }), null, 2)), toast("success", `已导出${personas(view).lines.length}条人设线。`);
     },
     async "pf-import"(view) {
       let [file] = await pickFiles({ accept: ".json,application/json" });
       if (!file) return;
       let parsed = parsePersonaFile(await file.text()), same2 = parsed.lines.filter((line) => personas(view).lines.some((item) => item.group === line.group && item.name === line.name)).length, mode2 = "both";
       if (same2) {
-        if (mode2 = await choiceDialog({ title: `导入 ${parsed.lines.length} 条人设线`, body: `其中 ${same2} 条与现有人设线同组同名，怎么处理？`, choices: [
+        if (mode2 = await choiceDialog({ title: `导入${parsed.lines.length}条人设线`, body: `其中${same2}条与现有人设线同组同名，怎么处理？`, choices: [
           { label: "都保留（新的加「（导入）」）", value: "both", primary: !0 },
           { label: "替换同名", value: "replace" },
           { label: "跳过同名", value: "skip" },
           { label: "取消", value: null }
         ] }), !mode2) return;
-      } else if (!await confirmDialog({ title: "导入人设", body: `将加入 ${parsed.lines.length} 条人设线。跟随大纲的阶段绑定不会带入，需要重新选。`, okLabel: "导入" })) return;
+      } else if (!await confirmDialog({ title: "导入人设", body: `将加入${parsed.lines.length}条人设线。跟随大纲的阶段绑定不会带入，需要重新选。`, okLabel: "导入" })) return;
       let merged = mergePersonaLines(personas(view).lines, parsed.lines, mode2);
-      patchPersonas(view, (all) => ({ ...all, lines: merged.lines })), view.renderBody(), toast("success", `导入完成：新增 ${merged.added}，替换 ${merged.replaced}，跳过 ${merged.skipped}。`);
+      patchPersonas(view, (all) => ({ ...all, lines: merged.lines })), view.renderBody(), toast("success", `导入完成：新增${merged.added}，替换${merged.replaced}，跳过${merged.skipped}。`);
     },
     "pl-add"(view) {
       let line = newLine("新人设线", "");
@@ -17170,7 +17309,7 @@ ${suffix.trim()}` : body;
   var nodeRow2 = (unitId, node, off, from = "", mark = "") => `<div class="pi-node-row${off ? " is-off" : ""}"${from ? ` title="来自${esc(from)}"` : ""}>
         <span class="pi-node-name"><span class="pi-badge pi-kind is-${esc(node.kind)}">${esc(node.label)}</span> <span class="pi-node-txt">${esc(node.name)}</span></span>${mark || `<button type="button" class="pi-meta pi-meta-btn" data-act="node-toggle" data-node="${esc(node.id)}" data-unit="${esc(unitId)}">${off ? "已演" : "未演"}</button>`}</div>`;
   function hookRow(hook) {
-    let chain = hook.steps.length && (hook.status === "active" || hook.status === "queue"), mark = hook.status === "done" ? "已演" : chain ? `第 ${hook.step + 1}/${hook.steps.length} 步${hook.status === "queue" ? "，排队" : ""}` : { wait: "待触发", active: "已激活", queue: "排队" }[hook.status], markHtml = mark ? `<button type="button" class="pi-meta pi-meta-btn${hook.status === "active" ? " is-dot" : ""}" data-act="hook-menu" data-key="${esc(hook.key)}">${esc(mark)}</button>` : "";
+    let chain = hook.steps.length && (hook.status === "active" || hook.status === "queue"), mark = hook.status === "done" ? "已演" : chain ? `第${hook.step + 1}/${hook.steps.length}步${hook.status === "queue" ? "，排队" : ""}` : { wait: "待触发", active: "已激活", queue: "排队" }[hook.status], markHtml = mark ? `<button type="button" class="pi-meta pi-meta-btn${hook.status === "active" ? " is-dot" : ""}" data-act="hook-menu" data-key="${esc(hook.key)}">${esc(mark)}</button>` : "";
     return nodeRow2(
       hook.unit.id,
       hook.node,
@@ -17185,7 +17324,7 @@ ${suffix.trim()}` : body;
       (hook) => `<div class="pi-hook is-quiet"><span class="pi-node-row is-quiet"><span class="pi-node-name">${esc(hook.node.name)}</span></span>
         <button type="button" class="pi-meta pi-meta-btn" data-act="hook-menu" data-key="${esc(hook.key)}">已过期</button></div>`
     ).join("") : "";
-    return `<p class="pi-hint"><button type="button" class="pi-meta pi-meta-btn" data-act="expired-toggle">已过期 ${hooks.length} 条</button></p>${rows2}`;
+    return `<p class="pi-hint"><button type="button" class="pi-meta pi-meta-btn" data-act="expired-toggle">已过期${hooks.length}条</button></p>${rows2}`;
   }
   function worldRow(live) {
     if (!live.clocks.length) return "";
@@ -17259,7 +17398,7 @@ ${suffix.trim()}` : body;
         ${entries.filter((entry) => entry.kind !== "persona").length ? entries.filter((entry) => entry.kind !== "persona").map((entry) => entryRow(entry, st9.open === entry.slotId)).join("") : '<p class="pi-hint">设定和大纲都为空，没有可注入的内容。</p>'}
         </div>
         ${personaCard(view, project, progress, st9)}
-        <div class="pi-card"><h3>阶段<span class="pi-meta">${gap > 0 ? `${gap} 楼后检测` : "下一楼检测"}</span><span class="pi-spacer"></span>
+        <div class="pi-card"><h3>阶段<span class="pi-meta">${gap > 0 ? `${gap}楼后检测` : "下一楼检测"}</span><span class="pi-spacer"></span>
             ${units.length ? `<button type="button" class="pi-btn is-sm is-ghost" data-act="index-toggle">${st9.indexOpen ? "收起索引" : "剧情索引"}</button>` : ""}</h3>
         ${units.length ? `${st9.indexOpen ? `<pre class="pi-pre pi-index">${esc(buildIndexText(units, states, progress, { carryOver: settings.carryOver, hookCap: settings.hookCap }))}</pre>` : ""}
         <div class="pi-pace"><span class="pi-pace-label">推进速度</span><div class="pi-seg">${PACES.map((pace) => `<button type="button" class="pi-seg-btn${pace.value === progress.pace ? " is-sel" : ""}" data-act="pace" data-pace="${pace.value}">${pace.label}</button>`).join("")}</div></div>
@@ -17268,7 +17407,7 @@ ${suffix.trim()}` : body;
             <button type="button" class="pi-btn is-primary is-sm" data-act="next">打开下一段</button>
             <button type="button" class="pi-btn is-sm" data-act="check"${checking ? " disabled" : ""}>${checking ? '<span class="pi-spin"></span>检测中' : "立即检测"}</button>
             <button type="button" class="pi-btn is-sm" data-act="rewrite">改写后续</button></div>
-        ${timeline(units, states, progress, settings.carryOver ? carriedNodes(units, states, progress, { withOff: !0 }) : [], liveOf(units, states, progress, settings), sw, st9.expiredOpen)}` : '<p class="pi-hint">大纲为空。到「大纲」页导入剧情 YAML、导入长文，或让 AI 写。</p>'}
+        ${timeline(units, states, progress, settings.carryOver ? carriedNodes(units, states, progress, { withOff: !0 }) : [], liveOf(units, states, progress, settings), sw, st9.expiredOpen)}` : '<p class="pi-hint">大纲为空。到「大纲」页导入剧情YAML、导入长文，或让AI写。</p>'}
         </div>`;
   }
   function liveOf(units, states, progress, settings) {
@@ -17398,7 +17537,7 @@ ${suffix.trim()}` : body;
       let entries = view.runtime.entries().filter((entry) => entry.enabled && entry.content), html = entries.length ? POSITIONS.map((pos) => {
         let list = entries.filter((entry) => entry.position === pos.value).sort((a, b) => a.order - b.order);
         return list.length ? list.map(
-          (entry) => `<p class="pi-hint">${esc(positionLabel(entry))}，${esc(entry.title)}，顺序 ${entry.order}</p><pre class="pi-pre">${esc(entry.content)}</pre>`
+          (entry) => `<p class="pi-hint">${esc(positionLabel(entry))}，${esc(entry.title)}，顺序${entry.order}</p><pre class="pi-pre">${esc(entry.content)}</pre>`
         ).join("") : "";
       }).join("") : '<p class="pi-hint">没有启用的条目。</p>';
       return openDialog({ title: "最终注入预览", html: `${html}`, actions: [{ label: "关闭", value: !0, primary: !0 }] });
@@ -17461,7 +17600,7 @@ ${suffix.trim()}` : body;
   }
   function worldRow2(world, open, currentId) {
     let badges = world.id === currentId ? '<span class="pi-badge is-ok">当前</span>' : "", body = open ? `<div class="pi-entry-bd">
-        <p class="pi-hint">${esc(world.dice.horror)}｜周期 ${esc(world.dice.cycle)}｜${esc(world.dice.client)}｜情欲${esc(world.dice.lust)}</p>
+        <p class="pi-hint">${esc(world.dice.horror)}｜周期${esc(world.dice.cycle)}｜${esc(world.dice.client)}｜情欲${esc(world.dice.lust)}</p>
         <pre class="pi-pre">${esc(world.body)}</pre>
         <div class="pi-tools is-c2">
             <button type="button" class="pi-btn is-sm" data-act="world-reopen" data-id="${esc(world.id)}"${currentId ? " disabled" : ""}>重新打开</button>
@@ -17474,7 +17613,7 @@ ${suffix.trim()}` : body;
     if (view.runtime.activeId() !== view.projectId)
       return '<div class="pi-card"><h3>世界库</h3><p class="pi-hint">世界库随聊天保存。把这个项目设为当前聊天使用后，才能看到这条聊天里的世界。</p></div>';
     let inf = view.runtime.progress().infinite, worlds = inf ? inf.worlds : [], currentId = inf && inf.phase === "world" ? inf.worldId : "";
-    return `<div class="pi-card"><h3>世界库<span class="pi-meta">${worlds.length} 份</span></h3>
+    return `<div class="pi-card"><h3>世界库<span class="pi-meta">${worlds.length}份</span></h3>
         ${worlds.length ? [...worlds].reverse().map((world) => worldRow2(world, s.open === world.id, currentId)).join("") : '<p class="pi-hint">这条聊天里还没有世界。到「执行」页点「进入新世界」，或等检测到下车时自动写出档案。</p>'}</div>`;
   }
   function render6(view) {
@@ -17550,7 +17689,7 @@ ${suffix.trim()}` : body;
     let { inf, infinite } = state, cfg = infinite.config, hubName = resolveHub(cfg).hubName, labels = phaseLabels(cfg), blanked = blankedWordKeys(cfg), world = inf.phase === "world" ? findWorld(inf.worlds, inf.worldId) : null, entries = runtime.entries(), total = entries.filter((entry) => entry.enabled).reduce((sum, entry) => sum + estimateTokens(entry.content), 0), opening = runtime.isOpening(), book = runtime.injectMode() === "virtual" ? "" : '<span class="pi-badge is-warn">专用世界书</span>', meta2 = describeRead(runtime.lastRead(), cfg);
     return `<div class="pi-card"><h3>当前状态<span class="pi-meta">${esc(meta2)}</span></h3>
         <div class="pi-row"><span class="pi-badge is-accent">${esc(labels[inf.phase])}</span>${world ? `<span class="pi-badge">${esc(world.title)}</span>` : ""}
-            <span class="pi-badge">世界库 ${inf.worlds.length} 份</span></div>
+            <span class="pi-badge">世界库${inf.worlds.length}份</span></div>
         <div class="pi-tools is-c2">
             <button type="button" class="pi-btn is-primary is-sm" data-act="inf-enter"${inf.phase !== "train" || opening ? " disabled" : ""}>${opening ? '<span class="pi-spin"></span>造世界' : "进入新世界"}</button>
             <button type="button" class="pi-btn is-sm" data-act="inf-return"${inf.phase !== "world" ? " disabled" : ""}>回到${esc(hubName)}</button></div>
@@ -17624,7 +17763,7 @@ ${suffix.trim()}` : body;
     let open = st6(view).guideOpen, g = resolveGuide(s), preset = GUIDE_PRESETS.find((x) => x.value === s.guidePreset) || GUIDE_PRESETS[0], custom = s.guidePreset === "custom";
     return `<div class="pi-card"><h3>写作基准<span class="pi-spacer"></span>
             <button type="button" class="pi-btn is-sm is-ghost" data-act="guide-toggle">${open ? "收起" : "查看"}</button></h3>
-        <p class="pi-hint">在讨论页聊设定和剧情、在设定页整理设定时，AI 按这份基准来写。正文模型看不到它。</p>
+        <p class="pi-hint">在讨论页聊设定和剧情、在设定页整理设定时，AI按这份基准来写。正文模型看不到它。</p>
         <label class="pi-field"><span>使用哪一份</span><select class="pi-sel" data-guide-preset>${options(
       GUIDE_PRESETS.map((x) => ({ value: x.value, label: x.value === "generic" ? "通用（默认）" : x.label })),
       preset.value
@@ -17637,7 +17776,7 @@ ${suffix.trim()}` : body;
       value: item.value,
       label: `${item.label}${item.value === current ? "（当前聊天使用）" : ""}${s.paceText[item.value] ? "（已改）" : ""}`
     }));
-    return `<div class="pi-set-row"><span>推进速度说明</span>${changed.length ? `<span class="pi-badge">已修改 ${changed.join("、")}</span>` : ""}<span class="pi-spacer"></span>
+    return `<div class="pi-set-row"><span>推进速度说明</span>${changed.length ? `<span class="pi-badge">已修改${changed.join("、")}</span>` : ""}<span class="pi-spacer"></span>
             <button type="button" class="pi-btn is-sm is-ghost" data-act="pace-toggle">${open ? "收起" : "编辑"}</button></div>
         ${open ? `<div class="pi-set-sub"><label class="pi-field"><span>编辑哪一档的说明</span><select class="pi-sel" data-pace-pick>${options(pick, pace)}</select></label>
         <textarea class="pi-ta" rows="3" data-pace-text="${pace}">${esc(paceText(s, pace))}</textarea>
@@ -17679,12 +17818,10 @@ ${suffix.trim()}` : body;
         ${paceRow(view, s)}</div>
         ${llmCard(view, s)}
         ${guideCard(view, s)}
-        <div class="pi-card"><h3>新手教程</h3>
-        <p class="pi-hint">每个页面右上角的「?」可以播放这一页的教程。想从头再看一遍时，点下面的按钮：先播放总览，之后第一次打开插件时也会再播一次。</p>
-        <div class="pi-tools is-c1"><button type="button" class="pi-btn is-sm" data-act="tour-reset">重新播放全部教程</button></div></div>
         <div class="pi-card"><h3>实验功能</h3>
         <label class="pi-check"><input type="checkbox" data-set="trpgLab"${s.trpgLab ? " checked" : ""}><span>跑团模式（新建项目时可选）</span></label>
-        ${s.trpgLab ? `<label class="pi-field"><span>检定写法</span><select class="pi-sel" data-set="trpgCheck">${options(CHECK_MODES, s.trpgCheck === "anke" ? "anke" : "text")}</select></label>` : ""}</div>`;
+        ${s.trpgLab ? `<label class="pi-field"><span>检定写法</span><select class="pi-sel" data-set="trpgCheck">${options(CHECK_MODES, s.trpgCheck === "anke" ? "anke" : "text")}</select></label>` : ""}</div>
+        <div class="pi-tools is-c1"><button type="button" class="pi-btn is-sm is-ghost" data-act="tour-reset" title="先播放总览，之后第一次打开插件时也会再播一次">重新播放教程</button></div>`;
   }
   var NUMERIC = /* @__PURE__ */ new Set(["checkEvery", "checkFloors", "hookCap"]);
   function readValue(target) {
@@ -17840,7 +17977,7 @@ ${suffix.trim()}` : body;
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return await res.json();
     } catch (error) {
-      throw controller.signal.aborted ? new Error(`连接超时（${ms / 1e3} 秒）`) : error;
+      throw controller.signal.aborted ? new Error(`连接超时（${ms / 1e3}秒）`) : error;
     } finally {
       clearTimeout(timer);
     }
@@ -17876,16 +18013,16 @@ ${suffix.trim()}` : body;
     latest.state || checkLatest(view);
     let newer = latest.state === "done" && compareVersions(latest.version, view.version) > 0, status = {
       checking: '<span class="pi-spin"></span>正在检测最新版本…',
-      done: newer ? `最新版本 v${esc(latest.version)}，可以更新。` : "已是最新版本。",
+      done: newer ? `最新版本v${esc(latest.version)}，可以更新。` : "已是最新版本。",
       error: `检测失败：${esc(latest.error)}`
     }[latest.state] || "", pinned = settings.loaderRef, note = "";
-    newer && !viaLoader() ? note = "当前是单文件版，需重新导入新版 JSON 才能更新。" : newer && pinned && (note = `已指定 ${esc(pinned)}，清空指定版本后才会更新。`);
-    let updateBtn = newer && viaLoader() ? `<button type="button" class="pi-btn is-sm is-primary" data-act="update-now">更新到 v${esc(latest.version)}</button>` : "";
+    newer && !viaLoader() ? note = "当前是单文件版，需重新导入新版JSON才能更新。" : newer && pinned && (note = `已指定${esc(pinned)}，清空指定版本后才会更新。`);
+    let updateBtn = newer && viaLoader() ? `<button type="button" class="pi-btn is-sm is-primary" data-act="update-now">更新到v${esc(latest.version)}</button>` : "";
     return `<div class="pi-card"><h3>版本更新</h3>
-        <p class="pi-hint">当前版本 v${esc(view.version)}。${status}</p>
+        <p class="pi-hint">当前版本v${esc(view.version)}。${status}</p>
         ${note ? `<p class="pi-hint is-warn">${note}</p>` : ""}
         <div class="pi-tools ${updateBtn ? "is-c2" : "is-c1"} pi-acts"><button type="button" class="pi-btn is-sm" data-act="check-update"${latest.state === "checking" ? " disabled" : ""}>检查更新</button>${updateBtn}</div>
-        <label class="pi-field"><span>指定版本</span><input class="pi-inp" data-set="loaderRef" value="${esc(settings.loaderRef)}" placeholder="留空跟随最新版本，可填 v0.1.0 或 main"></label></div>`;
+        <label class="pi-field"><span>指定版本</span><input class="pi-inp" data-set="loaderRef" value="${esc(settings.loaderRef)}" placeholder="留空跟随最新版本，可填v0.1.0或main"></label></div>`;
   }
   function referenced(index) {
     let names2 = /* @__PURE__ */ new Set([INDEX_FILE]);
@@ -17947,10 +18084,10 @@ ${suffix.trim()}` : body;
     if (target.dataset.set !== "loaderRef") return;
     let ref = target.value.trim();
     if (/^\d+\.\d+\.\d+$/.test(ref) && (ref = `v${ref}`), ref && ref !== "main" && !/^v\d+\.\d+\.\d+$/.test(ref)) {
-      toast("warning", "版本号格式应为 v0.1.0 这样的三段数字，或填 main；未保存。"), target.value = view.data.settings().loaderRef;
+      toast("warning", "版本号格式应为v0.1.0这样的三段数字，或填main；未保存。"), target.value = view.data.settings().loaderRef;
       return;
     }
-    target.value = ref, view.data.updateSettings({ loaderRef: ref }), toast("success", ref ? `已指定 ${ref}，刷新酒馆页面生效。` : "已改为跟随最新版本，刷新酒馆页面生效。");
+    target.value = ref, view.data.updateSettings({ loaderRef: ref }), toast("success", ref ? `已指定${ref}，刷新酒馆页面生效。` : "已改为跟随最新版本，刷新酒馆页面生效。");
   }
   async function verify(view) {
     let s = st7(view);
@@ -17971,7 +18108,7 @@ ${suffix.trim()}` : body;
     // 加载器把最新版本号缓存 30 分钟；清掉缓存再刷新，才会马上取到新版。
     async "update-now"(view) {
       let pinned = view.data.settings().loaderRef, body = pinned ? `将清空指定版本（${pinned}），改为跟随最新版本，然后刷新酒馆页面。` : "将刷新酒馆页面，载入最新版本。";
-      await confirmDialog({ title: `更新到 v${latest.version}`, body, okLabel: "更新并刷新" }) && (pinned && (view.data.updateSettings({ loaderRef: "" }), await view.data.flush()), writeUi({ loader: null }), hostWindow().location.reload());
+      await confirmDialog({ title: `更新到v${latest.version}`, body, okLabel: "更新并刷新" }) && (pinned && (view.data.updateSettings({ loaderRef: "" }), await view.data.flush()), writeUi({ loader: null }), hostWindow().location.reload());
     },
     verify(view) {
       return st7(view).verified = null, verify(view);
@@ -17992,14 +18129,14 @@ ${suffix.trim()}` : body;
       await view.data.flush().catch(() => {
       });
       let project = await exportTarget(view), sum = projectSummary(project), parts = [
-        sum.lines ? `${sum.lines} 条剧情线` : "",
-        sum.labels ? `${sum.labels} 条线索标签` : "",
+        sum.lines ? `${sum.lines}条剧情线` : "",
+        sum.labels ? `${sum.labels}条线索标签` : "",
         project.secretNames ? "保密名单" : "",
         `推进方式（${sum.clue ? "线索推进" : "按阶段推进"}）和注入设置`
       ].filter(Boolean), pick = await openDialog({
         title: `导出「${project.name}」`,
         html: `<p class="pi-hint">包含：${esc(parts.join("、"))}。</p>
-                ${sum.personas ? `<label class="pi-check"><input type="checkbox" data-f="personas" checked><span>人设（${sum.personas} 条）</span></label>` : ""}
+                ${sum.personas ? `<label class="pi-check"><input type="checkbox" data-f="personas" checked><span>人设（${sum.personas}条）</span></label>` : ""}
                 ${sum.setting ? '<label class="pi-check"><input type="checkbox" data-f="setting" checked><span>设定</span></label>' : ""}
                 ${sum.personas || sum.setting ? '<p class="pi-hint">人设、设定已经写进世界书的，可以不勾。</p>' : ""}
                 <p class="pi-hint">不含讨论记录、聊天进度和导入草稿。</p>`,
@@ -18031,7 +18168,7 @@ ${suffix.trim()}` : body;
         `剧情注入器人设-${/* @__PURE__ */ (/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}.zip`,
         buildZip(files),
         "application/zip"
-      ), toast("success", `已导出 ${files.length} 个项目的人设。`);
+      ), toast("success", `已导出${files.length}个项目的人设。`);
     },
     async "delete-file"(view, target) {
       let name = target.dataset.name;
@@ -18140,7 +18277,7 @@ ${suffix.trim()}` : body;
   }
   function pickRow(entry, picked) {
     return `<label class="pi-wb-row${entry.disabled ? " is-off" : ""}"><input type="checkbox" data-wb-pick="${esc(entry.key)}"${picked.has(entry.key) ? " checked" : ""}>
-        ${title(entry)}<span class="pi-badge">顺序 ${entry.order}</span></label>`;
+        ${title(entry)}<span class="pi-badge">顺序${entry.order}</span></label>`;
   }
   var bulkBtn = (attrs, label, disabled) => `<button type="button" class="pi-btn is-sm is-ghost" ${attrs}${disabled ? " disabled" : ""}>${label}</button>`;
   function section(name, entries, empty, bulk, openKey, picked, advOpen) {
@@ -18151,7 +18288,7 @@ ${suffix.trim()}` : body;
   function tokenText(s) {
     if (!s.tokens) return '<span class="pi-meta">统计中…</span>';
     let mark = s.tokens.exact ? "" : "≈";
-    return `<span class="pi-meta">开启 ${mark}${s.tokens.on}，全部 ${mark}${s.tokens.all} token</span>`;
+    return `<span class="pi-meta">开启${mark}${s.tokens.on}，全部${mark}${s.tokens.all} token</span>`;
   }
   var tbtn = (act, icon, label, { danger = !1, disabled = !1 } = {}) => `<button type="button" class="pi-tbtn${danger ? " is-danger" : ""}" data-act="${act}"${disabled ? " disabled" : ""}>${ICONS[icon]}<span>${label}</span></button>`, moreBtn = (act) => `<button type="button" class="pi-tbtn is-more" data-act="${act}" title="更多">${ICONS.more}</button>`;
   function bookBar(s, entries) {
@@ -18164,7 +18301,7 @@ ${suffix.trim()}` : body;
     return `<div class="pi-tbar">${tbtn("wb-move", "move", "迁移", { disabled: none })}${tbtn("wb-order", "sort", "重排", { disabled: none })}
         ${tbtn("wb-regex", "replace", "替换", { disabled: none })}${tbtn("wb-pick-delete", "trash", "删除", { danger: !0, disabled: none })}${moreBtn("pick-more")}</div>`;
   }
-  var SORTS = [{ value: "", label: "原顺序" }, { value: "order", label: "顺序值" }, { value: "tokens", label: "token 从大到小" }, { value: "title", label: "标题" }], tokenOf = (s) => (entry) => s.tokenMap && s.tokenMap.has(entry.key) ? s.tokenMap.get(entry.key) : estimateTokens(entry.content), sortList = (s, list) => sortEntries(list, s.sort, tokenOf(s)), UNDO_MAX = 10, undoStacks = /* @__PURE__ */ new Map(), undoStack = (name) => undoStacks.get(name) || [];
+  var SORTS = [{ value: "", label: "原顺序" }, { value: "order", label: "顺序值" }, { value: "tokens", label: "token从大到小" }, { value: "title", label: "标题" }], tokenOf = (s) => (entry) => s.tokenMap && s.tokenMap.has(entry.key) ? s.tokenMap.get(entry.key) : estimateTokens(entry.content), sortList = (s, list) => sortEntries(list, s.sort, tokenOf(s)), UNDO_MAX = 10, undoStacks = /* @__PURE__ */ new Map(), undoStack = (name) => undoStacks.get(name) || [];
   async function snap(view, label, merge = "") {
     let name = st8(view).book;
     if (merge && undoStack(name).at(-1)?.merge === merge) return;
@@ -18176,7 +18313,7 @@ ${suffix.trim()}` : body;
   }
   var shownEntries = (s) => (s.entries || []).filter((entry) => entryHit(entry, norm2(s.query)));
   function bookBody(s, allEntries) {
-    let picked = s.picking ? s.picked : null, q = norm2(s.query), entries = shownEntries(s), on = sortList(s, GROUPS.on(entries)), off = sortList(s, GROUPS.off(entries)), all = picked && handwritten(entries).length && handwritten(entries).every((entry) => picked.has(entry.key)), info = picked ? `<div class="pi-wb-info is-pick"><span class="pi-wb-count">已选 ${picked.size} 条</span><span class="pi-spacer"></span>
+    let picked = s.picking ? s.picked : null, q = norm2(s.query), entries = shownEntries(s), on = sortList(s, GROUPS.on(entries)), off = sortList(s, GROUPS.off(entries)), all = picked && handwritten(entries).length && handwritten(entries).every((entry) => picked.has(entry.key)), info = picked ? `<div class="pi-wb-info is-pick"><span class="pi-wb-count">已选${picked.size}条</span><span class="pi-spacer"></span>
             <button type="button" class="pi-btn is-sm is-ghost" data-act="wb-pick-all">${all ? "取消全选" : "全选"}</button>
             <button type="button" class="pi-btn is-sm is-ghost" data-act="wb-picking">完成</button></div>` : `<div class="pi-wb-info"><span class="pi-wb-tokens">${tokenText(s)}</span></div>`, sorter = `<div class="pi-wb-sort"><span class="pi-meta">排序</span><select class="pi-sel" data-wb-sort>${options(SORTS, s.sort || "")}</select></div>`, head = `${info}${bookBar(s, allEntries)}${s.search === "entry" && allEntries.length ? searchBox("entry", s.query, "搜索条目标题、关键词、内容") : ""}${allEntries.length ? sorter : ""}`;
     return allEntries.length ? entries.length ? picked ? `${head}${section("已开启", on, "没有开启的条目", "", "", picked)}
@@ -18276,16 +18413,16 @@ ${suffix.trim()}` : body;
     let box = hostDocument().querySelector(".pi-wb-tokens");
     box && (box.innerHTML = tokenText(s));
   }
-  var handwritten = (entries) => entries.filter((entry) => !acuField(entry.title)), pickedEntries = (s) => handwritten(s.entries || []).filter((entry) => s.picked.has(entry.key)), PREVIEW_MAX = 30, previewList = (lines2) => lines2.length > PREVIEW_MAX ? [...lines2.slice(0, PREVIEW_MAX), `另有 ${lines2.length - PREVIEW_MAX} 条`] : lines2;
+  var handwritten = (entries) => entries.filter((entry) => !acuField(entry.title)), pickedEntries = (s) => handwritten(s.entries || []).filter((entry) => s.picked.has(entry.key)), PREVIEW_MAX = 30, previewList = (lines2) => lines2.length > PREVIEW_MAX ? [...lines2.slice(0, PREVIEW_MAX), `另有${lines2.length - PREVIEW_MAX}条`] : lines2;
   async function applyPatches(view, plan, { label, backup = !1 }) {
     let s = st8(view);
     await snap(view, label);
     let result = await patchEntries(s.book, plan.map((item) => ({ key: item.key, patch: item.patch })));
-    backup && downloadBlob(`${s.book}-${label}前备份.json`, JSON.stringify(result, null, 2)), toast("success", `${label}：已修改 ${plan.length} 条。`), await reloadBook(view);
+    backup && downloadBlob(`${s.book}-${label}前备份.json`, JSON.stringify(result, null, 2)), toast("success", `${label}：已修改${plan.length}条。`), await reloadBook(view);
   }
   async function regexDialog(scope) {
     let check = (f, label, on = !1) => `<label class="pi-check"><input type="checkbox" data-f="${f}"${on ? " checked" : ""}><span>${label}</span></label>`, html = `<label class="pi-field"><span>查找</span><input class="pi-inp is-mono" data-f="find" placeholder="如：旧名字 或 \\d+"></label>
-        <label class="pi-field"><span>替换为</span><input class="pi-inp is-mono" data-f="replace" placeholder="留空即删除；正则可用 $1"></label>
+        <label class="pi-field"><span>替换为</span><input class="pi-inp is-mono" data-f="replace" placeholder="留空即删除；正则可用$1"></label>
         <div class="pi-field"><span>查找方式</span><div class="pi-pair is-c3">${check("regex", "正则表达式", !0)}${check("ignoreCase", "忽略大小写")}</div></div>
         <div class="pi-field"><span>替换范围</span><div class="pi-pair is-c3">${check("content", "内容", !0)}${check("comment", "标题")}${check("keys", "关键词")}</div></div>`;
     return openDialog({
@@ -18302,7 +18439,7 @@ ${suffix.trim()}` : body;
         <label class="pi-field"><span>或新建世界书</span><input class="pi-inp" data-f="name" placeholder="填写名字即新建，优先于上一项"></label>
         <label class="pi-field"><span>方式</span><select class="pi-sel" data-f="mode">${options([{ value: "copy", label: "复制（原世界书保留）" }, { value: "move", label: "移动（从原世界书删除）" }], "copy")}</select></label>`;
     return openDialog({
-      title: `迁移到其他世界书（已选 ${count} 条）`,
+      title: `迁移到其他世界书（已选${count}条）`,
       html,
       actions: [{ label: "取消", value: null }, { label: "下一步", primary: !0, value: (box) => ({ to: box.querySelector('[data-f="name"]').value.trim() || box.querySelector('[data-f="book"]').value, move: box.querySelector('[data-f="mode"]').value === "move" }) }]
     });
@@ -18312,7 +18449,7 @@ ${suffix.trim()}` : body;
             <label class="pi-field"><span>间隔</span><input class="pi-inp" type="number" min="1" data-f="step" value="1"></label></div>
         <label class="pi-field"><span>排列依据</span><select class="pi-sel" data-f="by">${options([{ value: "list", label: "按列表中的先后" }, { value: "order", label: "按原有顺序值（保持相对先后）" }], "list")}</select></label>`;
     return openDialog({
-      title: `顺序重排（已选 ${count} 条）`,
+      title: `顺序重排（已选${count}条）`,
       html,
       actions: [{ label: "取消", value: null }, { label: "预览", primary: !0, value: (box) => ({ start: box.querySelector('[data-f="start"]').value, step: box.querySelector('[data-f="step"]').value, by: box.querySelector('[data-f="by"]').value }) }]
     });
@@ -18362,11 +18499,11 @@ ${suffix.trim()}` : body;
       try {
         data = JSON.parse(await file.text());
       } catch {
-        throw new Error("文件不是有效的 JSON");
+        throw new Error("文件不是有效的JSON");
       }
       if (!data || typeof data.entries != "object" || Array.isArray(data.entries)) throw new Error("文件里没有世界书条目（entries）");
       let name = file.name.replace(/\.json$/i, "");
-      allBookNames().includes(name) && (name = await promptDialog({ title: "导入世界书", label: `已有「${name}」，请换一个名字`, value: `${name}-导入` }), name == null) || (await openBook(view, await createBook(name, data)), toast("success", `已导入「${name.trim()}」，${Object.keys(data.entries).length} 条。`));
+      allBookNames().includes(name) && (name = await promptDialog({ title: "导入世界书", label: `已有「${name}」，请换一个名字`, value: `${name}-导入` }), name == null) || (await openBook(view, await createBook(name, data)), toast("success", `已导入「${name.trim()}」，${Object.keys(data.entries).length}条。`));
     },
     async "book-open"(view) {
       let shown = new Set(listedBooks(st8(view)).map((book) => book.name)), names2 = allBookNames().filter((name2) => !shown.has(name2));
@@ -18392,7 +18529,7 @@ ${suffix.trim()}` : body;
     },
     async "book-delete"(view) {
       let s = st8(view), name = s.book;
-      if (!await confirmDialog({ title: `删除世界书「${name}」`, body: "先下载整本备份，再删除并解除聊天、角色卡和全局的绑定，无法撤销。", list: [`${s.entries.length} 条条目`], okLabel: "删除", danger: !0 })) return;
+      if (!await confirmDialog({ title: `删除世界书「${name}」`, body: "先下载整本备份，再删除并解除聊天、角色卡和全局的绑定，无法撤销。", list: [`${s.entries.length}条条目`], okLabel: "删除", danger: !0 })) return;
       downloadBlob(`${name}-备份.json`, JSON.stringify(await loadBook(name), null, 2));
       let result = await removeBook(name);
       undoStacks.delete(name), result.failed.length ? toast("warning", `已删除，但${result.failed.join("、")}的绑定没能解除，请在酒馆里检查。`) : toast("success", `已删除「${name}」。`), s.book = "", s.entries = null, s.extra = (s.extra || []).filter((item) => item !== name), view.renderBody();
@@ -18438,7 +18575,7 @@ ${suffix.trim()}` : body;
       if (pick) return actions10[pick](view, target, event);
     },
     async "pick-more"(view, target, event) {
-      let pick = await menuDialog({ title: `已选 ${st8(view).picked.size} 条`, items: [
+      let pick = await menuDialog({ title: `已选${st8(view).picked.size}条`, items: [
         { label: "开启", value: "wb-pick-on", icon: ICONS.eye },
         { label: "关闭", value: "wb-pick-off", icon: ICONS.eyeOff }
       ] });
@@ -18448,7 +18585,7 @@ ${suffix.trim()}` : body;
     "wb-pick-off": (view) => setPicked(view, !0),
     async "wb-pick-delete"(view) {
       let s = st8(view), entries = pickedEntries(s);
-      if (!await confirmDialog({ title: `从「${s.book}」删除 ${entries.length} 条`, body: "删除前会下载这些条目的备份。", list: previewList(entries.map((entry) => entry.title)), okLabel: "删除", danger: !0 })) return;
+      if (!await confirmDialog({ title: `从「${s.book}」删除${entries.length}条`, body: "删除前会下载这些条目的备份。", list: previewList(entries.map((entry) => entry.title)), okLabel: "删除", danger: !0 })) return;
       await snap(view, "批量删除");
       let backup = await deleteEntries(s.book, entries.map((entry) => entry.key));
       downloadBlob(`${s.book}-已删条目备份.json`, JSON.stringify(backup, null, 2)), s.picked = /* @__PURE__ */ new Set(), await reloadBook(view);
@@ -18466,22 +18603,22 @@ ${suffix.trim()}` : body;
     async "wb-punct"(view) {
       let s = st8(view), plan = punctPlan(handwritten(s.entries || []));
       if (!plan.length) return toast("info", "关键词没有需要修复的标点。");
-      await confirmDialog({ title: `修复关键词标点（${plan.length} 条）`, body: "以下条目的关键词将改为：", list: previewList(plan.map((item) => `${item.title}：${item.before} → ${item.after}`)), okLabel: "修复" }) && await applyPatches(view, plan, { label: "修复关键词标点" });
+      await confirmDialog({ title: `修复关键词标点（${plan.length}条）`, body: "以下条目的关键词将改为：", list: previewList(plan.map((item) => `${item.title}：${item.before} → ${item.after}`)), okLabel: "修复" }) && await applyPatches(view, plan, { label: "修复关键词标点" });
     },
     async "wb-regex"(view) {
-      let s = st8(view), usePicked = s.picking && s.picked.size, entries = usePicked ? pickedEntries(s) : handwritten(s.entries || []), input2 = await regexDialog(usePicked ? `已选 ${entries.length} 条` : `全部手写条目 ${entries.length} 条`);
+      let s = st8(view), usePicked = s.picking && s.picked.size, entries = usePicked ? pickedEntries(s) : handwritten(s.entries || []), input2 = await regexDialog(usePicked ? `已选${entries.length}条` : `全部手写条目${entries.length}条`);
       if (!input2) return;
       if (!input2.fields.content && !input2.fields.comment && !input2.fields.keys) throw new Error("请至少选择一个替换范围");
       let plan = regexPlan(entries, buildPattern(input2.find, input2), input2.replace, input2.fields);
       if (!plan.length) return toast("info", "没有匹配的内容。");
       let total = plan.reduce((sum, item) => sum + item.hits, 0);
-      await confirmDialog({ title: `正则替换（${plan.length} 条，共 ${total} 处）`, body: "替换前会下载这些条目的备份。", list: previewList(plan.map((item) => `${item.title}：${item.hits} 处`)), okLabel: "替换", danger: !0 }) && await applyPatches(view, plan, { label: "正则替换", backup: !0 });
+      await confirmDialog({ title: `正则替换（${plan.length}条，共${total}处）`, body: "替换前会下载这些条目的备份。", list: previewList(plan.map((item) => `${item.title}：${item.hits}处`)), okLabel: "替换", danger: !0 }) && await applyPatches(view, plan, { label: "正则替换", backup: !0 });
     },
     async "wb-order"(view) {
       let s = st8(view), input2 = await orderDialog(s.picked.size);
       if (!input2) return;
       let plan = orderPlan(pickedEntries(s), input2);
-      await confirmDialog({ title: `顺序重排（${plan.length} 条）`, list: previewList(plan.map((item) => `${item.title}：${item.from} → ${item.to}`)), okLabel: "重排" }) && await applyPatches(view, plan.map((item) => ({ key: item.key, patch: { order: item.to } })), { label: "顺序重排" });
+      await confirmDialog({ title: `顺序重排（${plan.length}条）`, list: previewList(plan.map((item) => `${item.title}：${item.from} → ${item.to}`)), okLabel: "重排" }) && await applyPatches(view, plan.map((item) => ({ key: item.key, patch: { order: item.to } })), { label: "顺序重排" });
     },
     async "wb-move"(view) {
       let s = st8(view), input2 = await moveDialog(s.book, s.picked.size);
@@ -18501,7 +18638,7 @@ ${suffix.trim()}` : body;
       }
       input2.move && await snap(view, "迁移（移动）");
       let result = await transferEntries(s.book, input2.to, entries.map((entry) => entry.key), { move: input2.move });
-      toast("success", `已${input2.move ? "移动" : "复制"} ${result.copied} 条到「${input2.to}」${result.created ? "（新建）" : ""}。`), s.picked = /* @__PURE__ */ new Set(), await reloadBook(view);
+      toast("success", `已${input2.move ? "移动" : "复制"} ${result.copied}条到「${input2.to}」${result.created ? "（新建）" : ""}。`), s.picked = /* @__PURE__ */ new Set(), await reloadBook(view);
     },
     "wb-adv"(view, target) {
       let s = st8(view), open = new Set(s.advOpen || []);
@@ -18516,14 +18653,14 @@ ${suffix.trim()}` : body;
       let s = st8(view), entries = handwritten(s.entries || []), tk = tokenOf(s), row2 = (item, extra) => `<div class="pi-wb-hit"><span class="pi-wb-title" title="${esc(item.title)}">${esc(item.title)}</span><span class="pi-meta">${extra}${item.tokens} token</span></div>`, group = (name, list, extra) => list.length ? `<div class="pi-wb-sec-hd">${name}<small>${list.length}</small></div>${list.map((item) => row2(item, extra(item))).join("")}` : "", run = (box) => {
         let text2 = box.querySelector('[data-f="text"]').value, globals = worldInfoMatchSettings(), result = triggerTest(entries, text2, tk, globals), body = group("常驻", result.constant, () => "") + group("关键词命中", result.keyword, (item) => `${esc(item.matched.join("、"))}：`);
         box.querySelector('[data-f="result"]').innerHTML = `${body || '<p class="pi-hint">没有命中的条目</p>'}
-                <p class="pi-meta">合计 ${result.tokens.total} token（常驻 ${result.tokens.constant}，关键词 ${result.tokens.keyword}）</p>
+                <p class="pi-meta">合计${result.tokens.total} token（常驻${result.tokens.constant}，关键词${result.tokens.keyword}）</p>
                 <p class="pi-meta">未计算递归、概率、分组与扫描深度</p>${globals.known ? "" : '<p class="pi-meta">未读到酒馆全局匹配设置，按不区分大小写、不全词匹配计算</p>'}`;
       };
       await openDialog({
         title: "触发测试",
         html: `<label class="pi-field"><span>测试文字</span><textarea class="pi-ta" rows="5" data-f="text"></textarea></label>
                 <div class="pi-pair"><label class="pi-field"><span>最近楼层数</span><input class="pi-inp" type="number" min="1" data-f="count" value="5"></label>
-                <div class="pi-field"><span>&nbsp;</span><button type="button" class="pi-btn" data-f="fetch">取最近 N 楼</button></div></div>
+                <div class="pi-field"><span>&nbsp;</span><button type="button" class="pi-btn" data-f="fetch">取最近N楼</button></div></div>
                 <div data-f="result"></div>`,
         actions: [{ label: "关闭", value: null }, { label: "测试", primary: !0, value: (box) => {
           run(box);
@@ -18541,10 +18678,10 @@ ${suffix.trim()}` : body;
       let s = st8(view), entries = handwritten(s.entries || []), report = healthCheck(entries, tokenOf(s)), punct = punctPlan(entries), item = (key, name, detail = "") => `<button type="button" class="pi-menu-item" data-dlg-value="${esc(key)}"><span>${esc(name)}</span>${detail ? `<span class="pi-meta">${esc(detail)}</span>` : ""}</button>`, sec = (name, list, build) => list.length ? `<div class="pi-wb-sec-hd">${name}<small>${list.length}</small></div><div class="pi-menu-list">${list.map(build).join("")}</div>` : "", c = report.constant, html = `${sec("过短的关键词", report.shortKeys, (x) => item(x.key, x.title, x.words.join("、")))}
             ${sec("没有主要关键词的开启条目", report.noKeys, (x) => item(x.key, x.title))}
             ${sec("多个条目共用的关键词", report.shared, (x) => item(x.entries[0].key, x.word, x.entries.map((e) => e.title).join("、")))}
-            ${sec("标题重复", report.dupTitles, (x) => item(x.entries[0].key, x.title, `${x.entries.length} 条`))}
-            ${punct.length ? `<div class="pi-wb-sec-hd">关键词标点<small>${punct.length}</small></div><div class="pi-menu-list">${item("::punct", "修复关键词标点", `${punct.length} 条`)}</div>` : ""}
+            ${sec("标题重复", report.dupTitles, (x) => item(x.entries[0].key, x.title, `${x.entries.length}条`))}
+            ${punct.length ? `<div class="pi-wb-sec-hd">关键词标点<small>${punct.length}</small></div><div class="pi-menu-list">${item("::punct", "修复关键词标点", `${punct.length}条`)}</div>` : ""}
             <div class="pi-wb-sec-hd">常驻条目</div>
-            <p class="${c.warn ? "pi-hint is-warn" : "pi-meta"}">${c.count} 条，${c.tokens} token，占开启条目 ${Math.round(c.ratio * 100)}%${c.warn ? "，占比偏高" : ""}</p>`, pick = await openDialog({ title: "体检", html, actions: [{ label: "关闭", value: null }] });
+            <p class="${c.warn ? "pi-hint is-warn" : "pi-meta"}">${c.count}条，${c.tokens} token，占开启条目${Math.round(c.ratio * 100)}%${c.warn ? "，占比偏高" : ""}</p>`, pick = await openDialog({ title: "体检", html, actions: [{ label: "关闭", value: null }] });
       if (pick) {
         if (pick === "::punct") return actions10["wb-punct"](view, target, event);
         s.picking = !1, s.query = "", s.search === "entry" && (s.search = ""), s.openKey = pick, view.renderBody(), [...hostDocument().querySelectorAll(".pi-root .pi-wb-name")].find((node) => node.dataset.key === pick)?.scrollIntoView({ block: "center" });
@@ -18613,17 +18750,17 @@ ${suffix.trim()}` : body;
     let out = [];
     (!info.hasContext || !info.hasEventSource) && out.push({ text: "读不到酒馆的事件接口，酒馆版本可能过旧。", fix: "" });
     let missing = info.events.filter((item) => NEED.includes(item.key) && !item.name);
-    missing.length && out.push({ text: `酒馆没有提供事件：${missing.map((item) => item.key).join("、")}。`, fix: "" }), info.events.filter((item) => NEED.includes(item.key) && item.name && !item.bound).length && out.push({ text: "检测所需的事件没有绑定。", fix: "rebind" }), info.cardKey ? info.id ? info.units || out.push({ text: "启用项目的大纲为空，没有可检测的阶段。", fix: "" }) : out.push({ text: `「${info.card}」没有启用项目，自动检测不会运行。`, fix: "" }) : out.push({ text: "当前没有打开角色卡聊天。", fix: "" }), info.progress && Number(info.progress.lastFailFloor) > info.floors && out.push({ text: `上次检测失败记在第 ${info.progress.lastFailFloor} 楼，当前只有 ${info.floors} 楼。`, fix: "reset-base" }), info.progress && info.progress.lastCheckFloor > info.floors && out.push({ text: `上次检测记在第 ${info.progress.lastCheckFloor} 楼，当前只有 ${info.floors} 楼。`, fix: "reset-base" }), info.llm.source === "custom" && !String(info.llm.model || "").trim() && out.push({ text: "进度检测用独立接口，但没有选择模型。", fix: "" });
+    missing.length && out.push({ text: `酒馆没有提供事件：${missing.map((item) => item.key).join("、")}。`, fix: "" }), info.events.filter((item) => NEED.includes(item.key) && item.name && !item.bound).length && out.push({ text: "检测所需的事件没有绑定。", fix: "rebind" }), info.cardKey ? info.id ? info.units || out.push({ text: "启用项目的大纲为空，没有可检测的阶段。", fix: "" }) : out.push({ text: `「${info.card}」没有启用项目，自动检测不会运行。`, fix: "" }) : out.push({ text: "当前没有打开角色卡聊天。", fix: "" }), info.progress && Number(info.progress.lastFailFloor) > info.floors && out.push({ text: `上次检测失败记在第${info.progress.lastFailFloor}楼，当前只有${info.floors}楼。`, fix: "reset-base" }), info.progress && info.progress.lastCheckFloor > info.floors && out.push({ text: `上次检测记在第${info.progress.lastCheckFloor}楼，当前只有${info.floors}楼。`, fix: "reset-base" }), info.llm.source === "custom" && !String(info.llm.model || "").trim() && out.push({ text: "进度检测用独立接口，但没有选择模型。", fix: "" });
     let received = info.events.find((item) => item.key === "MESSAGE_RECEIVED");
     return received && received.bound && !received.count && info.floors - info.chatStartFloors >= 2 && out.push({ text: "打开聊天后已有新回复，但没有收到「收到回复」事件。", fix: "rebind" }), out;
   }
   function nextText(info) {
     if (!info.progress) return "—";
     let gap = info.floors - Math.max(info.progress.lastCheckFloor, Number(info.progress.lastFailFloor) || 0), left = info.settings.checkEvery - gap;
-    return left > 0 ? `还差 ${left} 楼` : "下一条回复后检测";
+    return left > 0 ? `还差${left}楼` : "下一条回复后检测";
   }
   function rows(info) {
-    let clueOn = info.mode === "clue", state = info.checking ? "检测中" : info.pending ? "等待主回复生成结束" : info.generating ? "主回复生成中" : "空闲", llm = info.llm.source === "custom" ? `独立接口 ${info.llm.model || "（未选模型）"}` : "酒馆当前接口";
+    let clueOn = info.mode === "clue", state = info.checking ? "检测中" : info.pending ? "等待主回复生成结束" : info.generating ? "主回复生成中" : "空闲", llm = info.llm.source === "custom" ? `独立接口${info.llm.model || "（未选模型）"}` : "酒馆当前接口";
     return [
       ["版本", `v${info.version}`],
       ["角色卡", info.card || "—"],
@@ -18633,7 +18770,7 @@ ${suffix.trim()}` : body;
       ...clueOn ? [] : [
         ["上次检测楼层", info.progress ? String(info.progress.lastCheckFloor) : "—"],
         ...info.progress && info.progress.lastFailFloor ? [["上次检测失败楼层", String(info.progress.lastFailFloor)]] : [],
-        ["检测间隔", `每 ${info.settings.checkEvery} 楼`],
+        ["检测间隔", `每${info.settings.checkEvery}楼`],
         ["下次检测", nextText(info)]
       ],
       ["检测接口", llm],
@@ -18644,7 +18781,7 @@ ${suffix.trim()}` : body;
     let lines2 = ["【剧情注入器诊断】", ...rows(info).map(([k, v]) => `${k}：${v}`), "", "【事件】"];
     for (let item of info.events)
       lines2.push(
-        `${item.key}（${item.name || "酒馆未提供"}）：${item.bound ? `已绑定，收到 ${item.count} 次，最近 ${time(item.at)}` : "未绑定"}`
+        `${item.key}（${item.name || "酒馆未提供"}）：${item.bound ? `已绑定，收到${item.count}次，最近${time(item.at)}` : "未绑定"}`
       );
     let list = problems(info);
     return lines2.push("", "【问题】", ...list.length ? list.map((item) => `- ${item.text}`) : ["无"]), lines2.push("", "【最近记录】", ...info.logs.length ? info.logs.map((item) => `${time(item.at)} ${item.text}`) : ["无"]), lines2.join(`
@@ -18656,13 +18793,13 @@ ${suffix.trim()}` : body;
     ).join("") : '<p class="pi-hint">没有发现问题。</p>', events = info.events.map(
       (item) => `<tr><td>${esc(EVENT_LABELS[item.key] || item.key)}</td>
         <td>${item.name ? item.bound ? '<span class="pi-badge is-ok">已绑定</span>' : '<span class="pi-badge is-warn">未绑定</span>' : '<span class="pi-badge is-danger">酒馆未提供</span>'}</td>
-        <td>${item.count} 次</td><td>${time(item.at)}</td></tr>`
+        <td>${item.count}次</td><td>${time(item.at)}</td></tr>`
     ).join(""), logs = info.logs.length ? info.logs.slice().reverse().map((item) => `${time(item.at)}  ${item.text}`).join(`
 `) : "暂无记录";
-    return `<div class="pi-card"><h3>自动检测${list.length ? `<span class="pi-badge is-warn">${list.length} 个问题</span>` : '<span class="pi-badge is-ok">正常</span>'}</h3>
+    return `<div class="pi-card"><h3>自动检测${list.length ? `<span class="pi-badge is-warn">${list.length}个问题</span>` : '<span class="pi-badge is-ok">正常</span>'}</h3>
         <table class="pi-files"><tbody>${rows(info).map(([k, v]) => `<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`).join("")}</tbody></table>
         <div class="pi-tools is-c4 is-end">
-            <button type="button" class="pi-btn is-sm is-primary" data-act="check"${info.checking ? " disabled" : ""} title="${info.mode === "clue" ? "让 AI 看看本轮场景演完没有，只给建议，不改进度" : "现在就让 AI 检查这一阶段演到哪了"}">立即检测</button>
+            <button type="button" class="pi-btn is-sm is-primary" data-act="check"${info.checking ? " disabled" : ""} title="${info.mode === "clue" ? "让AI看看本轮场景演完没有，只给建议，不改进度" : "现在就让AI检查这一阶段演到哪了"}">立即检测</button>
             ${info.mode === "clue" ? "" : `<button type="button" class="pi-btn is-sm" data-act="reset-base"${info.progress ? "" : " disabled"} title="下次检测从当前楼开始数">从当前楼重新计数</button>`}
             <button type="button" class="pi-btn is-sm" data-act="rebind" title="插件收不到酒馆消息时用：重新挂上监听">重新绑定事件</button>
             <button type="button" class="pi-btn is-sm" data-act="copy">复制诊断</button></div></div>
@@ -18707,11 +18844,11 @@ ${suffix.trim()}` : body;
       ["数据库插件", yes(d.api)],
       ["计算依据", "数据库最近一次填好的表格"],
       ["主线开关", d.enabled === null ? "—" : yes(d.enabled)],
-      ["最近表格更新", d.lastTableUpdate ? `${time(d.lastTableUpdate)}（${Math.round(d.tableAgeMs / 1e3)} 秒前）` : "本次打开后还没有"]
+      ["最近表格更新", d.lastTableUpdate ? `${time(d.lastTableUpdate)}（${Math.round(d.tableAgeMs / 1e3)}秒前）` : "本次打开后还没有"]
     ].map(([k, v]) => `<tr><th>${esc(k)}</th><td>${v}</td></tr>`).join("")}</tbody></table>
         ${d.problems.length ? d.problems.map((p) => `<p class="pi-hint is-warn">${esc(p)}</p>`).join("") : ""}
         ${auditHtml(d.lastAudit)}
-        ${last ? `<p class="pi-hint">上次实际注入（${time(last.at)}）${last.facts.length ? `，涉及事实 ${esc(last.facts.join("、"))}` : ""}：</p><pre class="pi-pre">${esc(last.content || `（空：${last.reason}）`)}</pre>` : '<p class="pi-hint">本次打开后还没有注入记录。</p>'}
+        ${last ? `<p class="pi-hint">上次实际注入（${time(last.at)}）${last.facts.length ? `，涉及事实${esc(last.facts.join("、"))}` : ""}：</p><pre class="pi-pre">${esc(last.content || `（空：${last.reason}）`)}</pre>` : '<p class="pi-hint">本次打开后还没有注入记录。</p>'}
         ${d.events.length ? `<pre class="pi-pre">${esc(
       d.events.slice().reverse().map((e) => `${time(e.at)}  ${e.text}`).join(`
 `)
@@ -18719,8 +18856,8 @@ ${suffix.trim()}` : body;
   }
   function auditHtml(a, what = "线索内容") {
     if (!a) return '<p class="pi-hint">最终请求核验：本次打开后还没有正文请求。</p>';
-    let head = `最终请求核验（${time(a.at)}，请求约 ${a.chars} 字）：`;
-    return !a.leaks.length && !a.duplicated ? `<p class="pi-hint">${head}<span class="pi-badge is-ok">未发现不该出现的剧情</span>${a.projectionCount === 1 ? `，${what}出现 1 次` : ""}</p>` : `<p class="pi-hint is-warn">${head}${a.duplicated ? `${what}出现 ${a.projectionCount} 次（重复注入）。` : ""}${a.leaks.length ? `发现 ${a.leaks.length} 处不该出现的剧情：` : ""}</p>${a.leaks.length ? `<ul class="pi-clue-why">${a.leaks.slice(0, 12).map((l) => `<li>${esc(l.source)}：「${esc(l.sample)}…」</li>`).join(
+    let head = `最终请求核验（${time(a.at)}，请求约${a.chars}字）：`;
+    return !a.leaks.length && !a.duplicated ? `<p class="pi-hint">${head}<span class="pi-badge is-ok">未发现不该出现的剧情</span>${a.projectionCount === 1 ? `，${what}出现1次` : ""}</p>` : `<p class="pi-hint is-warn">${head}${a.duplicated ? `${what}出现${a.projectionCount}次（重复注入）。` : ""}${a.leaks.length ? `发现${a.leaks.length}处不该出现的剧情：` : ""}</p>${a.leaks.length ? `<ul class="pi-clue-why">${a.leaks.slice(0, 12).map((l) => `<li>${esc(l.source)}：「${esc(l.sample)}…」</li>`).join(
       ""
     )}</ul><p class="pi-hint">这些内容不是剧情注入器的注入带进去的。常见来源：大纲或设定被复制进了其它世界书、其它插件的注入、数据库表格里写了未来剧情。</p>` : ""}`;
   }
@@ -18945,7 +19082,7 @@ ${suffix.trim()}` : body;
       return picked === NEW_GROUP ? box.querySelector("[data-f=new-group]").value.trim() : picked;
     }
     function trpgField(on) {
-      return data.settings().trpgLab || on ? `<label class="pi-check"><input type="checkbox" data-f="trpg"${on ? " checked" : ""}><span>跑团模式（CoC 7 版，线索推进）</span></label>` : "";
+      return data.settings().trpgLab || on ? `<label class="pi-check"><input type="checkbox" data-f="trpg"${on ? " checked" : ""}><span>跑团模式（CoC 7版，线索推进）</span></label>` : "";
     }
     function readTrpgField(box) {
       let el2 = box.querySelector("[data-f=trpg]");
@@ -19003,16 +19140,16 @@ ${suffix.trim()}` : body;
       }
       let { project, summary } = parsed, name = importedName(project.name, data.index().projects.map((p) => p.name)), what = [
         summary.clue ? "线索推进" : "按阶段推进",
-        summary.lines ? `${summary.lines} 条剧情线` : "",
-        summary.labels ? `${summary.labels} 条标签` : "",
-        summary.personas ? `${summary.personas} 条人设` : "",
+        summary.lines ? `${summary.lines}条剧情线` : "",
+        summary.labels ? `${summary.labels}条标签` : "",
+        summary.personas ? `${summary.personas}条人设` : "",
         summary.setting ? "设定" : ""
       ].filter(Boolean), missing = summary.clue ? missingBoundTables(project, currentTables()) : [];
       if (await openDialog({
         // 排法 A（用户 2026-11-17 选定）：灰色小标题、大号项目名、一排小标签、细线下一句提示
         html: `<div><p class="pi-pf-imp-ttl">导入项目</p><p class="pi-pf-imp-name">${esc(name)}</p>
                 <div class="pi-pf-imp-pills">${what.map((w) => `<span class="pi-badge">${esc(w)}</span>`).join("")}</div>
-                ${summary.clue ? `<p class="pi-pf-imp-note${missing && missing.length ? " is-warn" : ""}">${missing && missing.length ? `当前聊天缺少${esc(missing.join("、"))}。` : ""}游玩前在执行页点「生成线索模板」。</p>` : ""}</div>`,
+                ${summary.clue ? `<p class="pi-pf-imp-note${missing && missing.length ? " is-warn" : ""}">${missing && missing.length ? `当前聊天缺少${esc(missing.join("、"))}。` : ""}游玩前在执行页点「创建模板」。</p>` : ""}</div>`,
         actions: [
           { label: "取消", value: null },
           { label: "导入", primary: !0, value: !0 }
@@ -19252,7 +19389,7 @@ ${suffix.trim()}` : body;
   }
 
   // src/index.js
-  var VERSION = "0.3.4", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.3.5", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")
@@ -19264,7 +19401,7 @@ ${suffix.trim()}` : body;
     host.__plotInjectorBootError = "";
     let yaml = libs().yaml;
     if (!yaml) {
-      host.__plotInjectorBootError = "当前酒馆没有提供 YAML 解析库（SillyTavern.libs.yaml），需要更新酒馆。", toast("error", host.__plotInjectorBootError);
+      host.__plotInjectorBootError = "当前酒馆没有提供YAML解析库（SillyTavern.libs.yaml），需要更新酒馆。", toast("error", host.__plotInjectorBootError);
       return;
     }
     setYamlLib(yaml), ensureStyle();

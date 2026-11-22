@@ -71,7 +71,7 @@ function entryRow(entry, open, adv) {
 // 批量选择时勾选框改为「选中」，不再是开关；顺序值放在行尾，排序前后好对照。
 function pickRow(entry, picked) {
     return `<label class="pi-wb-row${entry.disabled ? ' is-off' : ''}"><input type="checkbox" data-wb-pick="${esc(entry.key)}"${picked.has(entry.key) ? ' checked' : ''}>
-        ${title(entry)}<span class="pi-badge">顺序 ${entry.order}</span></label>`;
+        ${title(entry)}<span class="pi-badge">顺序${entry.order}</span></label>`;
 }
 
 const bulkBtn = (attrs, label, disabled) => `<button type="button" class="pi-btn is-sm is-ghost" ${attrs}${disabled ? ' disabled' : ''}>${label}</button>`;
@@ -85,7 +85,7 @@ function section(name, entries, empty, bulk, openKey, picked, advOpen) {
 function tokenText(s) {
     if (!s.tokens) return '<span class="pi-meta">统计中…</span>';
     const mark = s.tokens.exact ? '' : '≈';
-    return `<span class="pi-meta">开启 ${mark}${s.tokens.on}，全部 ${mark}${s.tokens.all} token</span>`;
+    return `<span class="pi-meta">开启${mark}${s.tokens.on}，全部${mark}${s.tokens.all} token</span>`;
 }
 
 // 工具条：小图标 + 短名横排成一行色块，次要操作收进「更多」。
@@ -104,7 +104,7 @@ function bookBar(s, entries) {
         ${tbtn('wb-regex', 'replace', '替换', { disabled: none })}${tbtn('wb-pick-delete', 'trash', '删除', { danger: true, disabled: none })}${moreBtn('pick-more')}</div>`;
 }
 
-const SORTS = [{ value: '', label: '原顺序' }, { value: 'order', label: '顺序值' }, { value: 'tokens', label: 'token 从大到小' }, { value: 'title', label: '标题' }];
+const SORTS = [{ value: '', label: '原顺序' }, { value: 'order', label: '顺序值' }, { value: 'tokens', label: 'token从大到小' }, { value: 'title', label: '标题' }];
 const tokenOf = s => entry => (s.tokenMap && s.tokenMap.has(entry.key) ? s.tokenMap.get(entry.key) : estimateTokens(entry.content));
 const sortList = (s, list) => sortEntries(list, s.sort, tokenOf(s));
 
@@ -136,7 +136,7 @@ function bookBody(s, allEntries) {
     const off = sortList(s, GROUPS.off(entries));
     const all = picked && handwritten(entries).length && handwritten(entries).every(entry => picked.has(entry.key));
     const info = picked
-        ? `<div class="pi-wb-info is-pick"><span class="pi-wb-count">已选 ${picked.size} 条</span><span class="pi-spacer"></span>
+        ? `<div class="pi-wb-info is-pick"><span class="pi-wb-count">已选${picked.size}条</span><span class="pi-spacer"></span>
             <button type="button" class="pi-btn is-sm is-ghost" data-act="wb-pick-all">${all ? '取消全选' : '全选'}</button>
             <button type="button" class="pi-btn is-sm is-ghost" data-act="wb-picking">完成</button></div>`
         : `<div class="pi-wb-info"><span class="pi-wb-tokens">${tokenText(s)}</span></div>`;
@@ -313,21 +313,21 @@ const pickedEntries = s => handwritten(s.entries || []).filter(entry => s.picked
 
 // 预览列表最多列这么多行，其余合并成「另有 N 条」。
 const PREVIEW_MAX = 30;
-const previewList = lines => (lines.length > PREVIEW_MAX ? [...lines.slice(0, PREVIEW_MAX), `另有 ${lines.length - PREVIEW_MAX} 条`] : lines);
+const previewList = lines => (lines.length > PREVIEW_MAX ? [...lines.slice(0, PREVIEW_MAX), `另有${lines.length - PREVIEW_MAX}条`] : lines);
 
 async function applyPatches(view, plan, { label, backup = false }) {
     const s = st(view);
     await snap(view, label);
     const result = await patchEntries(s.book, plan.map(item => ({ key: item.key, patch: item.patch })));
     if (backup) downloadBlob(`${s.book}-${label}前备份.json`, JSON.stringify(result, null, 2));
-    toast('success', `${label}：已修改 ${plan.length} 条。`);
+    toast('success', `${label}：已修改${plan.length}条。`);
     await reloadBook(view);
 }
 
 async function regexDialog(scope) {
     const check = (f, label, on = false) => `<label class="pi-check"><input type="checkbox" data-f="${f}"${on ? ' checked' : ''}><span>${label}</span></label>`;
     const html = `<label class="pi-field"><span>查找</span><input class="pi-inp is-mono" data-f="find" placeholder="如：旧名字 或 \\d+"></label>
-        <label class="pi-field"><span>替换为</span><input class="pi-inp is-mono" data-f="replace" placeholder="留空即删除；正则可用 $1"></label>
+        <label class="pi-field"><span>替换为</span><input class="pi-inp is-mono" data-f="replace" placeholder="留空即删除；正则可用$1"></label>
         <div class="pi-field"><span>查找方式</span><div class="pi-pair is-c3">${check('regex', '正则表达式', true)}${check('ignoreCase', '忽略大小写')}</div></div>
         <div class="pi-field"><span>替换范围</span><div class="pi-pair is-c3">${check('content', '内容', true)}${check('comment', '标题')}${check('keys', '关键词')}</div></div>`;
     return openDialog({
@@ -346,7 +346,7 @@ function moveDialog(from, count) {
         <label class="pi-field"><span>或新建世界书</span><input class="pi-inp" data-f="name" placeholder="填写名字即新建，优先于上一项"></label>
         <label class="pi-field"><span>方式</span><select class="pi-sel" data-f="mode">${options([{ value: 'copy', label: '复制（原世界书保留）' }, { value: 'move', label: '移动（从原世界书删除）' }], 'copy')}</select></label>`;
     return openDialog({
-        title: `迁移到其他世界书（已选 ${count} 条）`,
+        title: `迁移到其他世界书（已选${count}条）`,
         html,
         actions: [{ label: '取消', value: null }, { label: '下一步', primary: true, value: box => ({ to: box.querySelector('[data-f="name"]').value.trim() || box.querySelector('[data-f="book"]').value, move: box.querySelector('[data-f="mode"]').value === 'move' }) }],
     });
@@ -357,7 +357,7 @@ function orderDialog(count) {
             <label class="pi-field"><span>间隔</span><input class="pi-inp" type="number" min="1" data-f="step" value="1"></label></div>
         <label class="pi-field"><span>排列依据</span><select class="pi-sel" data-f="by">${options([{ value: 'list', label: '按列表中的先后' }, { value: 'order', label: '按原有顺序值（保持相对先后）' }], 'list')}</select></label>`;
     return openDialog({
-        title: `顺序重排（已选 ${count} 条）`,
+        title: `顺序重排（已选${count}条）`,
         html,
         actions: [{ label: '取消', value: null }, { label: '预览', primary: true, value: box => ({ start: box.querySelector('[data-f="start"]').value, step: box.querySelector('[data-f="step"]').value, by: box.querySelector('[data-f="by"]').value }) }],
     });
@@ -426,7 +426,7 @@ export const actions = {
         const [file] = await pickFiles({ accept: '.json,application/json' });
         if (!file) return;
         let data;
-        try { data = JSON.parse(await file.text()); } catch { throw new Error('文件不是有效的 JSON'); }
+        try { data = JSON.parse(await file.text()); } catch { throw new Error('文件不是有效的JSON'); }
         if (!data || typeof data.entries !== 'object' || Array.isArray(data.entries)) throw new Error('文件里没有世界书条目（entries）');
         let name = file.name.replace(/\.json$/i, '');
         if (allBookNames().includes(name)) {
@@ -434,7 +434,7 @@ export const actions = {
             if (name == null) return;
         }
         await openBook(view, await createBook(name, data));
-        toast('success', `已导入「${name.trim()}」，${Object.keys(data.entries).length} 条。`);
+        toast('success', `已导入「${name.trim()}」，${Object.keys(data.entries).length}条。`);
     },
     async 'book-open'(view) {
         const shown = new Set(listedBooks(st(view)).map(book => book.name));
@@ -470,7 +470,7 @@ export const actions = {
     async 'book-delete'(view) {
         const s = st(view);
         const name = s.book;
-        const ok = await confirmDialog({ title: `删除世界书「${name}」`, body: '先下载整本备份，再删除并解除聊天、角色卡和全局的绑定，无法撤销。', list: [`${s.entries.length} 条条目`], okLabel: '删除', danger: true });
+        const ok = await confirmDialog({ title: `删除世界书「${name}」`, body: '先下载整本备份，再删除并解除聊天、角色卡和全局的绑定，无法撤销。', list: [`${s.entries.length}条条目`], okLabel: '删除', danger: true });
         if (!ok) return;
         downloadBlob(`${name}-备份.json`, JSON.stringify(await loadBook(name), null, 2));
         const result = await removeBook(name);
@@ -528,7 +528,7 @@ export const actions = {
         if (pick) return actions[pick](view, target, event);
     },
     async 'pick-more'(view, target, event) {
-        const pick = await menuDialog({ title: `已选 ${st(view).picked.size} 条`, items: [
+        const pick = await menuDialog({ title: `已选${st(view).picked.size}条`, items: [
             { label: '开启', value: 'wb-pick-on', icon: ICONS.eye },
             { label: '关闭', value: 'wb-pick-off', icon: ICONS.eyeOff },
         ] });
@@ -539,7 +539,7 @@ export const actions = {
     async 'wb-pick-delete'(view) {
         const s = st(view);
         const entries = pickedEntries(s);
-        if (!(await confirmDialog({ title: `从「${s.book}」删除 ${entries.length} 条`, body: '删除前会下载这些条目的备份。', list: previewList(entries.map(entry => entry.title)), okLabel: '删除', danger: true }))) return;
+        if (!(await confirmDialog({ title: `从「${s.book}」删除${entries.length}条`, body: '删除前会下载这些条目的备份。', list: previewList(entries.map(entry => entry.title)), okLabel: '删除', danger: true }))) return;
         await snap(view, '批量删除');
         const backup = await deleteEntries(s.book, entries.map(entry => entry.key));
         downloadBlob(`${s.book}-已删条目备份.json`, JSON.stringify(backup, null, 2));
@@ -567,20 +567,20 @@ export const actions = {
         const s = st(view);
         const plan = punctPlan(handwritten(s.entries || []));
         if (!plan.length) return toast('info', '关键词没有需要修复的标点。');
-        const ok = await confirmDialog({ title: `修复关键词标点（${plan.length} 条）`, body: '以下条目的关键词将改为：', list: previewList(plan.map(item => `${item.title}：${item.before} → ${item.after}`)), okLabel: '修复' });
+        const ok = await confirmDialog({ title: `修复关键词标点（${plan.length}条）`, body: '以下条目的关键词将改为：', list: previewList(plan.map(item => `${item.title}：${item.before} → ${item.after}`)), okLabel: '修复' });
         if (ok) await applyPatches(view, plan, { label: '修复关键词标点' });
     },
     async 'wb-regex'(view) {
         const s = st(view);
         const usePicked = s.picking && s.picked.size;
         const entries = usePicked ? pickedEntries(s) : handwritten(s.entries || []);
-        const input = await regexDialog(usePicked ? `已选 ${entries.length} 条` : `全部手写条目 ${entries.length} 条`);
+        const input = await regexDialog(usePicked ? `已选${entries.length}条` : `全部手写条目${entries.length}条`);
         if (!input) return;
         if (!input.fields.content && !input.fields.comment && !input.fields.keys) throw new Error('请至少选择一个替换范围');
         const plan = regexPlan(entries, buildPattern(input.find, input), input.replace, input.fields);
         if (!plan.length) return toast('info', '没有匹配的内容。');
         const total = plan.reduce((sum, item) => sum + item.hits, 0);
-        const ok = await confirmDialog({ title: `正则替换（${plan.length} 条，共 ${total} 处）`, body: '替换前会下载这些条目的备份。', list: previewList(plan.map(item => `${item.title}：${item.hits} 处`)), okLabel: '替换', danger: true });
+        const ok = await confirmDialog({ title: `正则替换（${plan.length}条，共${total}处）`, body: '替换前会下载这些条目的备份。', list: previewList(plan.map(item => `${item.title}：${item.hits}处`)), okLabel: '替换', danger: true });
         if (ok) await applyPatches(view, plan, { label: '正则替换', backup: true });
     },
     async 'wb-order'(view) {
@@ -588,7 +588,7 @@ export const actions = {
         const input = await orderDialog(s.picked.size);
         if (!input) return;
         const plan = orderPlan(pickedEntries(s), input);
-        const ok = await confirmDialog({ title: `顺序重排（${plan.length} 条）`, list: previewList(plan.map(item => `${item.title}：${item.from} → ${item.to}`)), okLabel: '重排' });
+        const ok = await confirmDialog({ title: `顺序重排（${plan.length}条）`, list: previewList(plan.map(item => `${item.title}：${item.from} → ${item.to}`)), okLabel: '重排' });
         if (ok) await applyPatches(view, plan.map(item => ({ key: item.key, patch: { order: item.to } })), { label: '顺序重排' });
     },
     async 'wb-move'(view) {
@@ -612,7 +612,7 @@ export const actions = {
         }
         if (input.move) await snap(view, '迁移（移动）');
         const result = await transferEntries(s.book, input.to, entries.map(entry => entry.key), { move: input.move });
-        toast('success', `已${input.move ? '移动' : '复制'} ${result.copied} 条到「${input.to}」${result.created ? '（新建）' : ''}。`);
+        toast('success', `已${input.move ? '移动' : '复制'} ${result.copied}条到「${input.to}」${result.created ? '（新建）' : ''}。`);
         s.picked = new Set();
         await reloadBook(view);
     },
@@ -648,14 +648,14 @@ export const actions = {
             const result = triggerTest(entries, text, tk, globals);
             const body = group('常驻', result.constant, () => '') + group('关键词命中', result.keyword, item => `${esc(item.matched.join('、'))}：`);
             box.querySelector('[data-f="result"]').innerHTML = `${body || '<p class="pi-hint">没有命中的条目</p>'}
-                <p class="pi-meta">合计 ${result.tokens.total} token（常驻 ${result.tokens.constant}，关键词 ${result.tokens.keyword}）</p>
+                <p class="pi-meta">合计${result.tokens.total} token（常驻${result.tokens.constant}，关键词${result.tokens.keyword}）</p>
                 <p class="pi-meta">未计算递归、概率、分组与扫描深度</p>${globals.known ? '' : '<p class="pi-meta">未读到酒馆全局匹配设置，按不区分大小写、不全词匹配计算</p>'}`;
         };
         await openDialog({
             title: '触发测试',
             html: `<label class="pi-field"><span>测试文字</span><textarea class="pi-ta" rows="5" data-f="text"></textarea></label>
                 <div class="pi-pair"><label class="pi-field"><span>最近楼层数</span><input class="pi-inp" type="number" min="1" data-f="count" value="5"></label>
-                <div class="pi-field"><span>&nbsp;</span><button type="button" class="pi-btn" data-f="fetch">取最近 N 楼</button></div></div>
+                <div class="pi-field"><span>&nbsp;</span><button type="button" class="pi-btn" data-f="fetch">取最近N楼</button></div></div>
                 <div data-f="result"></div>`,
             actions: [{ label: '关闭', value: null }, { label: '测试', primary: true, value: box => { run(box); } }],
             onMount: box => box.querySelector('[data-f="fetch"]').addEventListener('click', () => {
@@ -678,10 +678,10 @@ export const actions = {
         const html = `${sec('过短的关键词', report.shortKeys, x => item(x.key, x.title, x.words.join('、')))}
             ${sec('没有主要关键词的开启条目', report.noKeys, x => item(x.key, x.title))}
             ${sec('多个条目共用的关键词', report.shared, x => item(x.entries[0].key, x.word, x.entries.map(e => e.title).join('、')))}
-            ${sec('标题重复', report.dupTitles, x => item(x.entries[0].key, x.title, `${x.entries.length} 条`))}
-            ${punct.length ? `<div class="pi-wb-sec-hd">关键词标点<small>${punct.length}</small></div><div class="pi-menu-list">${item('::punct', '修复关键词标点', `${punct.length} 条`)}</div>` : ''}
+            ${sec('标题重复', report.dupTitles, x => item(x.entries[0].key, x.title, `${x.entries.length}条`))}
+            ${punct.length ? `<div class="pi-wb-sec-hd">关键词标点<small>${punct.length}</small></div><div class="pi-menu-list">${item('::punct', '修复关键词标点', `${punct.length}条`)}</div>` : ''}
             <div class="pi-wb-sec-hd">常驻条目</div>
-            <p class="${c.warn ? 'pi-hint is-warn' : 'pi-meta'}">${c.count} 条，${c.tokens} token，占开启条目 ${Math.round(c.ratio * 100)}%${c.warn ? '，占比偏高' : ''}</p>`;
+            <p class="${c.warn ? 'pi-hint is-warn' : 'pi-meta'}">${c.count}条，${c.tokens} token，占开启条目${Math.round(c.ratio * 100)}%${c.warn ? '，占比偏高' : ''}</p>`;
         const pick = await openDialog({ title: '体检', html, actions: [{ label: '关闭', value: null }] });
         if (!pick) return;
         if (pick === '::punct') return actions['wb-punct'](view, target, event);

@@ -6,7 +6,7 @@ export function setYamlLib(value) {
 }
 
 export function getYamlLib() {
-    if (!lib) throw new Error('YAML 解析库未就绪');
+    if (!lib) throw new Error('YAML解析库未就绪');
     return lib;
 }
 

@@ -11,6 +11,7 @@ import {
     importIndexMessages,
     importIndexMissing,
     importIndexRetryMessages,
+    importIndexForPart,
     importDoneText,
     mergeImportParts,
     importDraftMessages,
@@ -44,7 +45,7 @@ import { chatFactSets, checkClueDraft } from '../core/clue-project.js';
 
 import { esc, options, pickFiles, confirmDialog, choiceDialog } from './dom.js';
 
-import { toast } from '../host/st.js';
+import { toast, hostDocument } from '../host/st.js';
 import { adoptKey } from '../app/import-store.js';
 // 跑团模式（core/trpg.js）：PDF 转文字、跑团模组导入
 import { isPdfFile, pdfFileToText } from '../host/pdf-load.js';
@@ -52,6 +53,38 @@ import { isTrpg } from '../core/trpg.js';
 import { runKpRules } from './trpg-kp.js';
 
 export const IMPORT_PART_CHARS = 8e3;
+
+// 导入时正在生成的请求：jobId → Map(请求 → {label, chars})。独立接口流式时实时更新字数，
+// 直接改进度行的文字，不整页重画（用户 2026-11-22：看不出进度）。
+const liveImport = new Map();
+let liveSeq = 0;
+export function importLiveText(jobId) {
+    let m = liveImport.get(jobId);
+    return m && m.size ? `正在生成：${[...m.values()].map((x) => `${x.label}${x.chars ? `${x.chars}字` : ''}`).join('，')}` : '';
+}
+function paintLive(jobId) {
+    let text = importLiveText(jobId);
+    hostDocument()
+        .querySelectorAll('[data-imp-live]')
+        .forEach((el) => el.dataset.impLive === jobId && (el.textContent = text));
+}
+async function askLive(view, jobId, label, messages) {
+    let m = liveImport.get(jobId) || (liveImport.set(jobId, new Map()), liveImport.get(jobId)),
+        key = ++liveSeq,
+        last = 0;
+    (m.set(key, { label, chars: 0 }), paintLive(jobId));
+    try {
+        return await ask(view, 'outline', messages, {
+            onText: (t) => {
+                m.set(key, { label, chars: t.length });
+                let now = Date.now();
+                now - last > 400 && ((last = now), paintLive(jobId));
+            },
+        });
+    } finally {
+        (m.delete(key), m.size || liveImport.delete(jobId), paintLive(jobId));
+    }
+}
 
 export const sti = (view) => {
     let all = view.tabState('import'),
@@ -85,45 +118,68 @@ export async function runImportJob(view, jobId) {
     (job.parts && job.parts.length) || (await store.update(jobId, (j) => ({ ...j, parts, step: 'index' })));
     let partText = (p) => text.slice(Math.max(0, p.start - p.lead), p.end),
         ok = (x) => isPlainObject(x) && !x.error,
-        local = [...(store.get(jobId).localIndex || [])];
-    for (let p of parts) {
-        if (!still()) return;
-        if (ok(local[p.i])) continue;
-        let lines = job.mode === 'lines',
-            prevIdx = local.filter(ok).length
-                ? {
-                      ...mergeImportIndex(local.filter(ok)),
-                      ...(lines ? { 支线: mergeLineIdentity(local.filter(ok)).lines.map(({ parts: _p, ...l }) => l) } : {}),
-                  }
-                : null,
-            prev = prevIdx ? stringifyYaml(prevIdx) : '',
-            base = importIndexMessages({ part: { ...p, text: partText(p) }, total: parts.length, prev, needs: job.needs }),
-            msgs = lines ? importLineIndexMessages(base) : base,
-            reply2 = await ask(view, 'outline', msgs),
-            parsed = null,
-            read = (t) => {
-                let v = parseYaml(extractYaml(t));
-                if (!isPlainObject(v)) throw new Error('没有读到索引内容');
-                return v;
-            };
-        try {
-            parsed = read(reply2);
-        } catch {
+        local = [...(store.get(jobId).localIndex || [])],
+        lines = job.mode === 'lines',
+        // 按段的位置传（失败的段用空索引占位），「第几段」「段」才和原文段号对得上。
+        okList = () => local.map((x) => (ok(x) ? x : {})),
+        read = (t) => {
+            let v = parseYaml(extractYaml(t));
+            if (!isPlainObject(v)) throw new Error('没有读到索引内容');
+            return v;
+        },
+        indexMsgs = (p) => {
+            let prevIdx = local.some(ok)
+                    ? {
+                          ...mergeImportIndex(okList()),
+                          ...(lines ? { 支线: mergeLineIdentity(okList()).lines.map(({ parts: _p, ...l }) => l) } : {}),
+                      }
+                    : null,
+                base = importIndexMessages({ part: { ...p, text: partText(p) }, total: parts.length, prev: prevIdx ? stringifyYaml(prevIdx) : '', needs: job.needs });
+            return lines ? importLineIndexMessages(base) : base;
+        },
+        sent = new Map(),
+        readPart = async (p) => {
+            if (!still() || ok(local[p.i])) return;
+            let msgs = indexMsgs(p),
+                reply2 = await askLive(view, jobId, `第${p.i + 1}段`, msgs),
+                parsed = null;
             try {
-                parsed = read(await ask(view, 'outline', fixYamlMessages(extractYaml(reply2), '格式错误', 'outline')));
-            } catch (error) {
-                parsed = { error: `第 ${p.i + 1} 段的索引读不出来：${error.message}` };
+                parsed = read(reply2);
+            } catch {
+                try {
+                    parsed = read(await askLive(view, jobId, `第${p.i + 1}段`, fixYamlMessages(extractYaml(reply2), '格式错误', 'outline')));
+                } catch (error) {
+                    parsed = { error: `第${p.i + 1}段的索引读不出来：${error.message}` };
+                }
             }
-        }
-        let miss = ok(parsed) ? importIndexMissing(parsed) : [];
-        if (miss.length)
+            ok(parsed) && sent.set(p.i, { msgs, reply: reply2 });
+            ((local[p.i] = parsed), await store.update(jobId, (j) => ({ ...j, localIndex: local, step: 'index' })), view.renderBody());
+        };
+    // 阅读（用户 2026-11-22：太慢）：第一段单独读，定下人物和事实编号；之后最多 IMPORT_CONCURRENCY 段同时读，
+    // 每段带上开始时已经读完的索引（同一批的几段互相看不到，跨段重复的事实靠合并和整理时的「待确认」兜底）。
+    let todo = parts.filter((p) => !ok(local[p.i]));
+    todo.length && !local.some(ok) && (await readPart(todo.shift()));
+    if (!still()) return;
+    await runPool(todo.map((p) => () => readPart(p)), IMPORT_CONCURRENCY, still);
+    if (!still()) return;
+    // 缺「事实」的补问：原来每段缺了都整段重发一次，但开头、人物表、过渡章节本来就可能没有可查的事实。
+    // 改为整份材料一条事实都没读出来时，才对缺事实的段补问。
+    if (!mergeImportIndex(okList()).事实.length) {
+        let retry = async (p) => {
+            // 只补问这次刚读的段：材料本来就没有事实时，点「继续」不会每次都再问一遍。
+            if (!still() || !sent.has(p.i) || !ok(local[p.i]) || !importIndexMissing(local[p.i]).length) return;
+            let miss = importIndexMissing(local[p.i]),
+                was = sent.get(p.i);
             try {
-                let again = read(await ask(view, 'outline', importIndexRetryMessages(msgs, reply2, miss)));
-                importIndexMissing(again).length < miss.length && (parsed = again);
+                let again = read(await askLive(view, jobId, `第${p.i + 1}段`, importIndexRetryMessages(was.msgs, was.reply, miss)));
+                if (!(importIndexMissing(again).length < miss.length)) return;
+                ((local[p.i] = again), await store.update(jobId, (j) => ({ ...j, localIndex: local, step: 'index' })), view.renderBody());
             } catch {}
-        ((local[p.i] = parsed), await store.update(jobId, (j) => ({ ...j, localIndex: local, step: 'index' })), view.renderBody());
+        };
+        await runPool(parts.map((p) => () => retry(p)), IMPORT_CONCURRENCY, still);
+        if (!still()) return;
     }
-    let index = mergeImportIndex(local.filter(ok));
+    let index = mergeImportIndex(okList());
     if ((await store.update(jobId, (j) => ({ ...j, index, step: 'draft' })), job.mode === 'lines'))
         return runLineDrafts(
             view,
@@ -150,12 +206,13 @@ export async function runImportJob(view, jobId) {
                           .slice(-25).join(`
 `)
                     : '',
-            reply2 = await ask(
+            reply2 = await askLive(
                 view,
-                'outline',
+                jobId,
+                `第${p.i + 1}段`,
                 importDraftMessages({
                     part: { ...p, text: partText(p) },
-                    index: stringifyYaml(index),
+                    index: stringifyYaml(importIndexForPart(index, p.i)),
                     prevTail,
                     mode: cur.mode,
                     needs: cur.needs,
@@ -166,7 +223,7 @@ export async function runImportJob(view, jobId) {
             ),
             r = parseOutlineReply(reply2);
         (r.ok && r.volumes.length) ||
-            (r = parseOutlineReply(await ask(view, 'outline', fixYamlMessages(r.yaml, r.error || '没有读到任何阶段', cur.mode))));
+            (r = parseOutlineReply(await askLive(view, jobId, `第${p.i + 1}段`, fixYamlMessages(r.yaml, r.error || '没有读到任何阶段', cur.mode))));
         let entry =
             r.ok && r.volumes.length
                 ? { yaml: r.yaml, volumes: r.volumes, notes: splitImportAuthorFields(r.volumes, p).notes }
@@ -200,14 +257,14 @@ export function importFailedParts(job) {
                     local[p.i] && local[p.i].error
                         ? local[p.i].error
                         : drafts[p.i] && drafts[p.i].error
-                          ? `第 ${p.i + 1} 段转写失败：${drafts[p.i].error}`
+                          ? `第${p.i + 1}段转写失败：${drafts[p.i].error}`
                           : b && b.bad
-                            ? `第 ${p.i + 1} 段的 ${b.bad.only.join('、')} 转写失败：${b.bad.error}`
+                            ? `第${p.i + 1}段的${b.bad.only.join('、')}转写失败：${b.bad.error}`
                             : b && b.left
-                              ? `第 ${p.i + 1} 段有 ${b.left} 批未完成，其他结果已保存`
+                              ? `第${p.i + 1}段有${b.left}批未完成，其他结果已保存`
                               : drafts[p.i]
                                 ? ''
-                                : `第 ${p.i + 1} 段还没整理`;
+                                : `第${p.i + 1}段还没整理`;
             return why ? { i: p.i, title: p.title, why } : null;
         })
         .filter(Boolean);
@@ -242,7 +299,7 @@ export function importAdoptIssues(view, vol, take, index) {
     let c = view.runtime.activeId() === view.projectId ? view.runtime.clue.compute() : null,
         { known, claimed } = chatFactSets(c);
     basis = c
-        ? `按当前聊天的进度判断（已确认 ${known.length} 个事实${claimed.length ? `，另有 ${claimed.length} 个已出现的说法` : ''}）。`
+        ? `按当前聊天的进度判断（已确认${known.length}个事实${claimed.length ? `，另有${claimed.length}个已出现的说法` : ''}）。`
         : '这个项目没有在当前聊天启用，按大纲本身判断（不计任何聊天的进度）。';
     issues.push(...importReachIssues(applied, { only: names, knownFacts: known, claimedFacts: claimed }));
     issues.push(
@@ -260,7 +317,7 @@ const IMPORT_KINDS = [
 ];
 const KIND_WORD = { main: '一条主线', side: '一条支线', lines: '多条支线', outline: '按阶段推进', legacy: '线索推进', edit: '审阅修改' };
 const IMPORT_NEEDS_SIDE = '这是一条支线。写清它什么时候能开始、由什么引出（比如「主线进行到当铺之后，罗莎打电话来」）；开头的人物表只给我自己看。';
-const IMPORT_NEEDS_LINES = '文档里每条支线用「## 1 标题」「## 2 标题」分开；每条写清什么时候能开始。开头的总说明只给我自己看。';
+const IMPORT_NEEDS_LINES = '文档里每条支线用「## 1标题」「## 2标题」分开；每条写清什么时候能开始。开头的总说明只给我自己看。';
 // 审阅修改只含大纲里已有的线。导入审阅完、还没保存到大纲的线不在这里（实测：从导入页切出去后找不到支线）：
 // 列出这些导入，给一个回去的入口。只算从来没保存进大纲的：单条导入保存过（adoptedId）、之后点「继续修改」的不算（GPT 第五轮 U1）；
 // 多条支线看还剩几条既没保存、也没设成不导入。打开审阅修改前已经把这个项目的导入记录都载入了。
@@ -284,7 +341,7 @@ function pendingImportNote(view, project) {
         ? `<div class="pi-rv-pending">${list
               .map((j) => {
                   let n = j.mode === 'lines' && j.review && j.review.lines ? linesLeft(project, j) : 0;
-                  return `<p class="pi-hint">还有${n ? ` ${n} 条支线` : `一条${KIND_WORD[importJobKind(j)].replace(/^一条/, '')}`}未保存到大纲。<button type="button" class="pi-rv-fillall pi-rv-pending-btn" data-act="import-open" data-id="${esc(j.id)}">打开审阅</button></p>`;
+                  return `<p class="pi-hint">还有${n ? `${n}条支线` : `一条${KIND_WORD[importJobKind(j)].replace(/^一条/, '')}`}未保存到大纲。<button type="button" class="pi-rv-fillall pi-rv-pending-btn" data-act="import-open" data-id="${esc(j.id)}">打开审阅</button></p>`;
               })
               .join('')}</div>`
         : '';
@@ -330,9 +387,9 @@ export function renderImport(view) {
         let clue0 = s.mode ? s.mode === 'clue' : isClueMode(project),
             kind0 = clue0 ? s.kind || 'main' : 'outline';
         return `${crumbs(0)}<div class="pi-card"><h3>导入长文<span class="pi-spacer"></span><button type="button" class="pi-btn is-sm is-ghost" data-act="import-close">回到大纲</button></h3>
-        <label class="pi-field"><span>原文</span><textarea class="pi-ta pi-imp-text" data-imp-text placeholder="粘贴剧情方案，或选择 txt / md${isTrpg(project) ? ' / pdf' : ''} 文件">${esc(s.text || '')}</textarea></label>
+        <label class="pi-field"><span>原文</span><textarea class="pi-ta pi-imp-text" data-imp-text placeholder="粘贴剧情方案，或选择txt / md${isTrpg(project) ? ' / pdf' : ''}文件">${esc(s.text || '')}</textarea></label>
         <div class="pi-row pi-imp-file"><button type="button" class="pi-btn is-sm" data-act="import-pick-file">选择文件…</button></div>
-        ${s.file ? `<div class="pi-imp-chip"><span class="pi-imp-chip-name">${esc(s.file.name)}</span><span class="pi-imp-chip-sub">${s.file.chars >= 1e4 ? `${(s.file.chars / 1e4).toFixed(1)} 万字` : `${s.file.chars} 字`}</span></div>` : ''}
+        ${s.file ? `<div class="pi-imp-chip"><span class="pi-imp-chip-name">${esc(s.file.name)}</span><span class="pi-imp-chip-sub">${s.file.chars >= 1e4 ? `${(s.file.chars / 1e4).toFixed(1)}万字` : `${s.file.chars}字`}</span></div>` : ''}
         <label class="pi-field"><span>推进方式</span><select class="pi-sel" data-imp-modesel>${options(
             [
                 { value: 'clue', label: '线索推进' },
@@ -345,12 +402,12 @@ export function renderImport(view) {
                 ? `<div class="pi-field"><span>文档内容</span><div class="pi-imp-kind">${IMPORT_KINDS.map((k) => `<button type="button" class="pi-imp-kind-btn${kind0 === k.value ? ' is-sel' : ''}" data-act="import-kind" data-kind="${k.value}"><b>${k.label}</b><span>${k.note}</span></button>`).join('')}</div></div>`
                 : ''
         }
-        ${clue0 && kind0 !== 'lines' && isTrpg(project) ? `<label class="pi-check"><input type="checkbox" data-imp-trpg${(s.trpg ?? !0) ? ' checked' : ''}><span>跑团模组（CoC 7 版）：带上检定，另外整理 KP 规则</span></label>` : ''}
+        ${clue0 && kind0 !== 'lines' && isTrpg(project) ? `<label class="pi-check"><input type="checkbox" data-imp-trpg${(s.trpg ?? !0) ? ' checked' : ''}><span>跑团模组（CoC 7版）：带上检定，另外整理KP规则</span></label>` : ''}
         ${clue0 && !currentTables() ? '<p class="pi-hint is-warn">当前聊天读不到数据库表格。依赖表格的开始条件会先按手动开始整理；也可以到有表格的聊天里导入。</p>' : ''}
         <label class="pi-field"><span>要求（可空）</span><textarea class="pi-ta" rows="3" data-imp-needs placeholder="${esc(kind0 === 'side' ? IMPORT_NEEDS_SIDE : kind0 === 'lines' ? IMPORT_NEEDS_LINES : IMPORT_NEEDS_EXAMPLE)}">${esc(s.needs || '')}</textarea></label>
         <input type="hidden" data-imp-mode value="${clue0 ? (kind0 === 'lines' ? 'lines' : 'clue') : 'outline'}"><input type="hidden" data-imp-kind value="${kind0}">
         <div class="pi-tools is-end is-c1"><button type="button" class="pi-btn is-primary" data-act="import-start">开始整理</button></div></div>
-        ${list.length || lost.length ? `<div class="pi-card"><h3>之前的导入</h3>${list.map((j) => `<div class="pi-set-row"><span>${esc(new Date(j.createdAt).toLocaleString('zh-CN', { hour12: !1 }))}，${j.chars} 字，${KIND_WORD[importJobKind(j)]}，${jobState(j)}</span><span class="pi-spacer"></span><button type="button" class="pi-btn is-sm" data-act="import-open" data-id="${esc(j.id)}">打开</button><button type="button" class="pi-btn is-sm is-ghost is-danger" data-act="import-drop" data-id="${esc(j.id)}">删除</button></div>`).join('')}${lost.map((id) => `<div class="pi-set-row"><span class="is-warn">读不到这条导入记录的文件</span><span class="pi-spacer"></span><button type="button" class="pi-btn is-sm is-ghost is-danger" data-act="import-drop" data-id="${esc(id)}">移除</button></div>`).join('')}</div>` : ''}`;
+        ${list.length || lost.length ? `<div class="pi-card"><h3>之前的导入</h3>${list.map((j) => `<div class="pi-set-row"><span>${esc(new Date(j.createdAt).toLocaleString('zh-CN', { hour12: !1 }))}，${j.chars}字，${KIND_WORD[importJobKind(j)]}，${jobState(j)}</span><span class="pi-spacer"></span><button type="button" class="pi-btn is-sm" data-act="import-open" data-id="${esc(j.id)}">打开</button><button type="button" class="pi-btn is-sm is-ghost is-danger" data-act="import-drop" data-id="${esc(j.id)}">删除</button></div>`).join('')}${lost.map((id) => `<div class="pi-set-row"><span class="is-warn">读不到这条导入记录的文件</span><span class="pi-spacer"></span><button type="button" class="pi-btn is-sm is-ghost is-danger" data-act="import-drop" data-id="${esc(id)}">移除</button></div>`).join('')}</div>` : ''}`;
     }
     let job = importJobOf(view, s.jobId);
     if (!job)
@@ -382,7 +439,7 @@ export function renderImport(view) {
         failed = importFailedParts(job).filter((f) => !/还没整理/.test(f.why) && !(busy && /批未完成/.test(f.why))),
         doing = busy && lines && parts.find((p) => !whole(p) && job.drafts && job.drafts[p.i]),
         bs = doing ? lineBatchState(job, doing) : null,
-        progress = `<p class="pi-hint">共 ${total || '?'} 段，已读 ${indexed} 段，已整理 ${drafted} 段${job.step === 'review' ? '，已完成' : ''}</p>${bs ? `<p class="pi-hint">正在整理第 ${doing.i + 1} 段，已完成 ${bs.ok} / ${bs.want} 批。</p>` : ''}${failed.map((f) => `<p class="pi-hint is-warn">${esc(f.why)}</p>`).join('')}`;
+        progress = `<p class="pi-hint">共${total || '?'}段，已读${indexed}段，已整理${drafted}段${job.step === 'review' ? '，已完成' : ''}</p>${bs ? `<p class="pi-hint">正在整理第${doing.i + 1}段，已完成${bs.ok} / ${bs.want}批。</p>` : ''}${busy ? `<p class="pi-hint" data-imp-live="${esc(job.id)}">${esc(importLiveText(job.id))}</p>` : ''}${failed.map((f) => `<p class="pi-hint is-warn">${esc(f.why)}</p>`).join('')}`;
     if (job.step !== 'review')
         return `${crumbs(1)}<div class="pi-card"><h3>导入长文<span class="pi-spacer"></span><button type="button" class="pi-btn is-sm is-ghost" data-act="import-close">回到大纲</button></h3>${progress}
         <div class="pi-tools is-end"><button type="button" class="pi-btn is-primary is-sm" data-act="import-run"${busy ? ' disabled' : ''}>${busy ? '<span class="pi-spin"></span>整理中' : failed.length ? '重试失败的段' : drafted || indexed ? '继续' : '开始'}</button></div></div>`;
@@ -427,11 +484,11 @@ export function renderImport(view) {
                 let key = adoptKey(job.id, 0, st.key),
                     nodes = stageNodes(st.data),
                     done = adopted.has(key);
-                return `<div class="pi-imp-stage"><div class="pi-set-row"><b>${esc(stageLabel(st.key))}</b><span class="pi-hint">　${nodes.length} 个节点</span><span class="pi-spacer"></span>${done ? '<span class="pi-badge is-ok">已采用</span>' : `<label class="pi-check"><input type="checkbox" data-imp-pick="${esc(st.key)}" checked><span>采用</span></label>`}</div>
+                return `<div class="pi-imp-stage"><div class="pi-set-row"><b>${esc(stageLabel(st.key))}</b><span class="pi-hint">　${nodes.length}个节点</span><span class="pi-spacer"></span>${done ? '<span class="pi-badge is-ok">已采用</span>' : `<label class="pi-check"><input type="checkbox" data-imp-pick="${esc(st.key)}" checked><span>采用</span></label>`}</div>
             ${nodes
                 .map((n) => {
                     let note = cand.notes[nodeUid(n.item)] || {};
-                    return `<p class="pi-hint">${esc(n.name)}${note.段 ? `<span class="pi-meta">　第 ${note.段} 段</span>` : ''}${note.待确认 ? `<br><span class="is-warn">待确认：${esc(note.待确认)}</span>` : ''}</p>`;
+                    return `<p class="pi-hint">${esc(n.name)}${note.段 ? `<span class="pi-meta">　第${note.段}段</span>` : ''}${note.待确认 ? `<br><span class="is-warn">待确认：${esc(note.待确认)}</span>` : ''}</p>`;
                 })
                 .join('')}
             <details><summary class="pi-hint">YAML</summary><pre class="pi-pre is-full">${esc(stringifyYaml({ [st.key]: st.data }))}</pre></details></div>`;
@@ -492,13 +549,13 @@ export const importActions = {
             let btn = target;
             try {
                 btn.disabled = !0;
-                btn.textContent = '正在读取 PDF…';
-                let r = await pdfFileToText(files[0], { onProgress: (n, total) => (btn.textContent = `正在读取第 ${n}/${total} 页…`) });
-                if (!r.text.trim()) return toast('warning', `没有读到文字。${r.warnings.join('')}扫描版 PDF 需要先做文字识别。`);
+                btn.textContent = '正在读取PDF…';
+                let r = await pdfFileToText(files[0], { onProgress: (n, total) => (btn.textContent = `正在读取第${n}/${total}页…`) });
+                if (!r.text.trim()) return toast('warning', `没有读到文字。${r.warnings.join('')}扫描版PDF需要先做文字识别。`);
                 text = r.text;
                 r.warnings.length && toast('info', r.warnings.join(''));
             } catch (error) {
-                return toast('error', `PDF 读取失败：${(error && error.message) || error}`);
+                return toast('error', `PDF读取失败：${(error && error.message) || error}`);
             } finally {
                 ((btn.disabled = !1), (btn.textContent = '选择文件…'));
             }
@@ -595,7 +652,7 @@ export const importActions = {
             (errs.length || warns.length) &&
             !(await confirmDialog({
                 title: errs.length ? '勾选的阶段有问题' : '请确认',
-                body: `${basis}追加 ${take.length} 个阶段后检查到：`,
+                body: `${basis}追加${take.length}个阶段后检查到：`,
                 list: [...errs, ...warns].map((x) => x.text).slice(0, 10),
                 okLabel: '仍然追加',
                 danger: !!errs.length,
@@ -615,7 +672,7 @@ export const importActions = {
                 renamed.length &&
                     toast(
                         'warning',
-                        `有 ${renamed.length} 个节点 ID 与现有节点重复，已换成新 ID：${renamed.slice(0, 5).join('、')}${renamed.length > 5 ? '……' : ''}。`,
+                        `有${renamed.length}个节点ID与现有节点重复，已换成新ID：${renamed.slice(0, 5).join('、')}${renamed.length > 5 ? '……' : ''}。`,
                     ));
         } catch (error) {
             return toast('error', `没有追加：${error.message}`);
@@ -628,7 +685,7 @@ export const importActions = {
         })),
             (st(view).sel = fresh[0] && fresh[0].id),
             view.runtime.refresh && view.runtime.refresh(),
-            toast('success', `已追加 ${take.length} 个阶段。`),
+            toast('success', `已追加${take.length}个阶段。`),
             view.renderBody(),
             afterAdopt(view),
             await store
@@ -662,7 +719,7 @@ async function blockHalfTable(view, jobId, review, vols) {
     let i = reviewUnits(view.project(), review).findIndex((u) => u.volumeId === half[0].id && u.kind === 'line');
     i >= 0 && (await view.data.imports.update(jobId, (j) => ({ ...j, review: { ...j.review, at: i } })));
     view.renderBody();
-    toast('warning', `${half.map(lineTitle).join('、')} 的表格条件还没填完（表、行、列、值都要有），没有保存。也可以改选别的开始方式。`);
+    toast('warning', `${half.map(lineTitle).join('、')}的表格条件还没填完（表、行、列、值都要有），没有保存。也可以改选别的开始方式。`);
     return !0;
 }
 // 保存「好几条支线」导入（第二批 b）：规则和旧逐条审阅页的采用一样——
@@ -678,7 +735,7 @@ async function adoptLinesReview(view, jobId) {
     if (pending) {
         let pick = await choiceDialog({
             title: '还有意见没发送',
-            body: `有 ${pending} 页意见还没用于修改草稿。保存后意见仍会保留。`,
+            body: `有${pending}页意见还没用于修改草稿。保存后意见仍会保留。`,
             choices: [
                 { label: '取消', value: null },
                 { label: '保存到大纲，暂不发送意见', value: 'save' },
@@ -710,8 +767,8 @@ async function adoptLinesReview(view, jobId) {
         ]);
     if (
         !(await confirmDialog({
-            title: `保存 ${take.length} 条支线到大纲`,
-            body: errs.length ? `还有 ${errs.length} 处问题，有问题的线可能一直开始不了。保存后也可以在大纲页「审阅修改…」里再改：` : `要保存：${take.map(idOf).join('、')}。`,
+            title: `保存${take.length}条支线到大纲`,
+            body: errs.length ? `还有${errs.length}处问题，有问题的线可能一直开始不了。保存后也可以在大纲页「审阅修改…」里再改：` : `要保存：${take.map(idOf).join('、')}。`,
             list: errs.slice(0, 10),
             okLabel: errs.length ? '仍然保存' : '保存',
             danger: !!errs.length,
@@ -760,8 +817,8 @@ async function adoptLinesReview(view, jobId) {
     });
     if (!written) return toast('warning', '确认期间大纲又被改过了，没有写入。请再点一次「保存到大纲」。');
     Object.keys(map).length &&
-        toast('warning', `有 ${Object.keys(map).length} 条支线的编号和已有的线重复，已换成：${Object.entries(map).map(([a, b]) => `${a}→${b}`).join('、')}（本批内部的引用一起改了）。`);
-    renamed.length && toast('warning', `有 ${renamed.length} 个节点 ID 与现有节点重复，已换成新 ID。`);
+        toast('warning', `有${Object.keys(map).length}条支线的编号和已有的线重复，已换成：${Object.entries(map).map(([a, b]) => `${a}→${b}`).join('、')}（本批内部的引用一起改了）。`);
+    renamed.length && toast('warning', `有${renamed.length}个节点ID与现有节点重复，已换成新ID。`);
     // 会话里记下保存过的线（卷 id → 大纲里的编号）。这些线的意见留着只读（保存前说过「意见会留在页上」，GPT 第二轮 N6），不再发送
     let saved = Object.fromEntries(take.map((v, i) => [v.id, String((fresh[i].line || {}).编号 || idOf(v))]));
     await view.data.imports
@@ -774,7 +831,7 @@ async function adoptLinesReview(view, jobId) {
             adopted: [...new Set([...(j.adopted || []), ...keys])],
         }))
         .catch(() => {});
-    (view.runtime.refresh && view.runtime.refresh(), toast('success', `已保存 ${take.length} 条支线到大纲。`), view.renderBody(), afterAdopt(view));
+    (view.runtime.refresh && view.runtime.refresh(), toast('success', `已保存${take.length}条支线到大纲。`), view.renderBody(), afterAdopt(view));
 }
 // 审阅里回答过的疑似短名（是同一人 / 不是）写进这几条线的保密名单（用户 2026-11-17），以后审阅修改、检查、发给 AI 都按它。
 function withShortAnswers(sec, ids, review) {
@@ -803,7 +860,7 @@ async function adoptReview(view, jobId) {
     if (await blockHalfTable(view, jobId, review, isEdit || review.reopened ? editedVolumes(review) : review.draft)) return;
     if (!isEdit && isPlainObject(line0) && !line0.编号 && !line0.开启条件 && !line0.开始时机已选 && !line0.开启方式 && !line0.接上一条) {
         (await view.data.imports.update(jobId, (j) => ({ ...j, review: { ...j.review, at: 0 } })), view.renderBody());
-        return toast('warning', '先在第 1 页选这条线什么时候开始。');
+        return toast('warning', '先在第1页选这条线什么时候开始。');
     }
     let pending = Object.values(review.comments || {}).filter((c) => String(c || '').trim()).length,
         localOk = (job.localIndex || []).filter((x) => isPlainObject(x) && !x.error),
@@ -812,14 +869,14 @@ async function adoptReview(view, jobId) {
         errs = all.filter((x) => x.level === 'error'),
         asks = all.filter((x) => x.level !== 'error'),
         lines = [
-            errs.length ? `还有 ${errs.length} 个问题没解决：${errs.slice(0, 3).map((x) => x.plain || x.text).join('；')}` : '',
-            asks.length ? `另有 ${asks.length} 个问题你没回答，按原样保留。` : '',
+            errs.length ? `还有${errs.length}个问题没解决：${errs.slice(0, 3).map((x) => x.plain || x.text).join('；')}` : '',
+            asks.length ? `另有${asks.length}个问题你没回答，按原样保留。` : '',
         ].filter(Boolean);
     // 还有意见没发给 AI（用户 2026-11-16：流程要闭合，提示要能直接去发送）
     if (pending) {
         let pick = await choiceDialog({
             title: '还有意见没发送',
-            body: `有 ${pending} 页意见还没用于修改草稿。保存后意见仍会保留。`,
+            body: `有${pending}页意见还没用于修改草稿。保存后意见仍会保留。`,
             choices: [
                 { label: '取消', value: null },
                 { label: '保存到大纲，暂不发送意见', value: 'save' },
@@ -844,7 +901,7 @@ async function adoptReview(view, jobId) {
             mine = editedVolumes(review),
             gone = mine.filter((v) => !live(v.id)).map(lineTitle);
         draft = mine.filter((v) => live(v.id) && draftDiffers([live(v.id)], [v]));
-        gone.length && toast('warning', `${gone.join('、')} 在大纲里已经删掉了，这些线的修改没有保存。`);
+        gone.length && toast('warning', `${gone.join('、')}在大纲里已经删掉了，这些线的修改没有保存。`);
         if (!draft.length) return toast('info', '和大纲里现在的一样，没有要保存的。');
         let elsewhere = draft.flatMap((v) => {
             let opened = (review.base || []).find((x) => x.id === v.id),
@@ -923,7 +980,7 @@ async function adoptReview(view, jobId) {
     });
     if (!written) return toast('warning', '确认期间大纲又被改过了，没有写入。请再点一次「保存到大纲」。');
     prep.restored.length && toast('info', `已保留已经完成的节点：${prep.restored.join('、')}（完成条件不变）。`);
-    renamed.length && toast('warning', `有 ${renamed.length} 个节点 ID 与现有节点重复，已换成新 ID。`);
+    renamed.length && toast('warning', `有${renamed.length}个节点ID与现有节点重复，已换成新ID。`);
     if (isEdit) {
         // 审阅修改（项目里的线）：保存过的线以大纲为新基准，留在审阅页；没发送的意见留着（保存时说过「意见会留在页上」）
         let byId = new Map(prep.volumes.filter((v) => savedIds.includes(v.id)).map((v) => [v.id, v]));
@@ -941,7 +998,7 @@ async function adoptReview(view, jobId) {
                 },
             }))
             .catch(() => {});
-        return (view.runtime.refresh && view.runtime.refresh(), toast('success', `已保存到大纲${byId.size > 1 ? `（${byId.size} 条）` : ''}。`), view.renderBody(), afterAdopt(view));
+        return (view.runtime.refresh && view.runtime.refresh(), toast('success', `已保存到大纲${byId.size > 1 ? `（${byId.size}条）` : ''}。`), view.renderBody(), afterAdopt(view));
     }
     let saved = prep.volumes.find((v) => v.id === draft[0].id) || draft[0];
     await view.data.imports
@@ -995,7 +1052,7 @@ export async function openEditReview(view, volumeId, parts = {}, { note = '' } =
     if (open) {
         await view.data.imports.update(open.id, (j) => {
             let r = { ...syncEditSession(project, j.review), mode };
-            keys.length && (r = editDraft(r, '讨论里 AI 给的修改', (d) => keys.reduce((acc, k) => putUnit(acc, k, parts[k]), d)));
+            keys.length && (r = editDraft(r, '讨论里AI给的修改', (d) => keys.reduce((acc, k) => putUnit(acc, k, parts[k]), d)));
             let units = unitsOf(r.draft),
                 at = keys.length ? units.findIndex((u) => keys.includes(u.key)) : units.findIndex((u) => u.volumeId === volumeId);
             return { ...j, review: { ...r, at: Math.max(0, at) } };
@@ -1011,7 +1068,7 @@ export async function openEditReview(view, volumeId, parts = {}, { note = '' } =
     await view.data.imports.update(job.id, (j) => ({
         ...j,
         step: 'review',
-        review: { ...session, mode, draft, at: Math.max(0, at), revised: keys.length > 0, lastChanges: ch, history: keys.length ? [{ label: '讨论里 AI 给的修改', at: Date.now(), draft: session.base }] : [] },
+        review: { ...session, mode, draft, at: Math.max(0, at), revised: keys.length > 0, lastChanges: ch, history: keys.length ? [{ label: '讨论里AI给的修改', at: Date.now(), draft: session.base }] : [] },
     }));
     view.data.updateProject(project.id, (p) => ({ ...p, imports: [...importJobIds(p), job.id] }));
     return job.id;
@@ -1078,12 +1135,13 @@ export async function runLineDrafts(view, jobId, parts, partText, local, index, 
                     ),
                 ),
                 draft = (ids) =>
-                    ask(
+                    askLive(
                         view,
-                        'outline',
+                        jobId,
+                        `第${p.i + 1}段第${g + 1}批`,
                         importLineDraftMessages({
                             part: { ...p, text: partText(p) },
-                            index: stringifyYaml(index),
+                            index: stringifyYaml(importIndexForPart(index, p.i)),
                             lines: ident.lines,
                             only: ids,
                             mainLines: mains,
@@ -1094,7 +1152,7 @@ export async function runLineDrafts(view, jobId, parts, partText, local, index, 
                     ),
                 r = parseOutlineReply(await draft(only));
             (r.ok && r.volumes.length) ||
-                (r = parseOutlineReply(await ask(view, 'outline', fixYamlMessages(r.yaml, r.error || '没有读到任何剧情线（YAML 顶层的卷）', 'clue'))));
+                (r = parseOutlineReply(await askLive(view, jobId, `第${p.i + 1}段第${g + 1}批`, fixYamlMessages(r.yaml, r.error || '没有读到任何剧情线（YAML 顶层的卷）', 'clue'))));
             let lost = r.ok ? lineIdsMissing(r.volumes, only) : [];
             if (lost.length && still()) {
                 let r2 = parseOutlineReply(await draft(lost));
@@ -1110,7 +1168,7 @@ ${r2.yaml}`,
             let entry =
                 r.ok && r.volumes.length && !lost.length
                     ? { only, yaml: r.yaml, volumes: r.volumes, notes: splitImportAuthorFields(r.volumes, p).notes }
-                    : { only, error: lost.length ? `AI 没写 ${lost.join('、')}` : r.error || '没有读到任何剧情线', yaml: r.yaml };
+                    : { only, error: lost.length ? `AI没写${lost.join('、')}` : r.error || '没有读到任何剧情线', yaml: r.yaml };
             (await store.update(jobId, (j) => {
                 let list = [...((j.drafts[p.i] && j.drafts[p.i].list) || [])];
                 return ((list[g] = entry), { ...j, drafts: { ...j.drafts, [p.i]: { list } } });
@@ -1165,9 +1223,9 @@ export async function redraftLine(view, jobId, lineId) {
         r.ok && got.push(...r.volumes.filter((v) => isPlainObject(v.line) && String(v.line.编号 || '').trim() === lineId));
     }
     if (!importJobOf(view, jobId)) return { ok: !1, why: '确认期间切换了项目' };
-    if (!got.length) return { ok: !1, why: 'AI 没有写出这条线' };
+    if (!got.length) return { ok: !1, why: 'AI没有写出这条线' };
     let merged = splitImportAuthorFields(mergeImportByLine(got)).volumes.find((v) => isPlainObject(v.line));
-    if (!merged) return { ok: !1, why: 'AI 没有写出这条线' };
+    if (!merged) return { ok: !1, why: 'AI没有写出这条线' };
     let touched = !1;
     await store.update(jobId, (j) => {
         let r = j.review && j.review.lines ? j.review : null,
@@ -1181,7 +1239,7 @@ export async function redraftLine(view, jobId, lineId) {
             vol = { ...merged, id: volId, line: { ...merged.line, 编号: lineId, ...(type0 ? { 类型: type0 } : {}) }, stages: matchStages(cur.stages, merged.stages).stages };
         // 审阅会话：换掉这条线的草稿（记一笔撤回点），记下重新整理前的内容。
         // 意见都留着：重新整理不带意见发给 AI，没有「处理过」的意见可清（GPT 第二轮 N7）；用户看过新稿后自己删或发送
-        let next = editDraft(r, `重新整理 ${lineId}`, (d) => d.map((v) => (v.id === volId ? vol : v)));
+        let next = editDraft(r, `重新整理${lineId}`, (d) => d.map((v) => (v.id === volId ? vol : v)));
         return { ...j, review: { ...next, prev: { ...(r.prev || {}), [volId]: cur } } };
     });
     if (touched) return { ok: !1, why: '等待期间这条线被改过，没有替换（你的修改和意见都还在），需要的话再点一次' };

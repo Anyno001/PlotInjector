@@ -56,9 +56,9 @@ function problems(info) {
     else if (!info.id) out.push({ text: `「${info.card}」没有启用项目，自动检测不会运行。`, fix: '' });
     else if (!info.units) out.push({ text: '启用项目的大纲为空，没有可检测的阶段。', fix: '' });
     if (info.progress && Number(info.progress.lastFailFloor) > info.floors)
-        out.push({ text: `上次检测失败记在第 ${info.progress.lastFailFloor} 楼，当前只有 ${info.floors} 楼。`, fix: 'reset-base' });
+        out.push({ text: `上次检测失败记在第${info.progress.lastFailFloor}楼，当前只有${info.floors}楼。`, fix: 'reset-base' });
     if (info.progress && info.progress.lastCheckFloor > info.floors)
-        out.push({ text: `上次检测记在第 ${info.progress.lastCheckFloor} 楼，当前只有 ${info.floors} 楼。`, fix: 'reset-base' });
+        out.push({ text: `上次检测记在第${info.progress.lastCheckFloor}楼，当前只有${info.floors}楼。`, fix: 'reset-base' });
     if (info.llm.source === 'custom' && !String(info.llm.model || '').trim())
         out.push({ text: '进度检测用独立接口，但没有选择模型。', fix: '' });
     const received = info.events.find((item) => item.key === 'MESSAGE_RECEIVED');
@@ -72,13 +72,13 @@ function nextText(info) {
     if (!info.progress) return '—';
     const gap = info.floors - Math.max(info.progress.lastCheckFloor, Number(info.progress.lastFailFloor) || 0);
     const left = info.settings.checkEvery - gap;
-    return left > 0 ? `还差 ${left} 楼` : '下一条回复后检测';
+    return left > 0 ? `还差${left}楼` : '下一条回复后检测';
 }
 
 function rows(info) {
     let clueOn = info.mode === 'clue',
         state = info.checking ? '检测中' : info.pending ? '等待主回复生成结束' : info.generating ? '主回复生成中' : '空闲',
-        llm = info.llm.source === 'custom' ? `独立接口 ${info.llm.model || '（未选模型）'}` : '酒馆当前接口';
+        llm = info.llm.source === 'custom' ? `独立接口${info.llm.model || '（未选模型）'}` : '酒馆当前接口';
     return [
         ['版本', `v${info.version}`],
         ['角色卡', info.card || '—'],
@@ -90,7 +90,7 @@ function rows(info) {
             : [
                   ['上次检测楼层', info.progress ? String(info.progress.lastCheckFloor) : '—'],
                   ...(info.progress && info.progress.lastFailFloor ? [['上次检测失败楼层', String(info.progress.lastFailFloor)]] : []),
-                  ['检测间隔', `每 ${info.settings.checkEvery} 楼`],
+                  ['检测间隔', `每${info.settings.checkEvery}楼`],
                   ['下次检测', nextText(info)],
               ]),
         ['检测接口', llm],
@@ -102,7 +102,7 @@ function plainText(info) {
     const lines = ['【剧情注入器诊断】', ...rows(info).map(([k, v]) => `${k}：${v}`), '', '【事件】'];
     for (const item of info.events)
         lines.push(
-            `${item.key}（${item.name || '酒馆未提供'}）：${item.bound ? `已绑定，收到 ${item.count} 次，最近 ${time(item.at)}` : '未绑定'}`,
+            `${item.key}（${item.name || '酒馆未提供'}）：${item.bound ? `已绑定，收到${item.count}次，最近${time(item.at)}` : '未绑定'}`,
         );
     const list = problems(info);
     lines.push('', '【问题】', ...(list.length ? list.map((item) => `- ${item.text}`) : ['无']));
@@ -126,7 +126,7 @@ export function render(view) {
             .map(
                 (item) => `<tr><td>${esc(EVENT_LABELS[item.key] || item.key)}</td>
         <td>${item.name ? (item.bound ? '<span class="pi-badge is-ok">已绑定</span>' : '<span class="pi-badge is-warn">未绑定</span>') : '<span class="pi-badge is-danger">酒馆未提供</span>'}</td>
-        <td>${item.count} 次</td><td>${time(item.at)}</td></tr>`,
+        <td>${item.count}次</td><td>${time(item.at)}</td></tr>`,
             )
             .join(''),
         logs = info.logs.length
@@ -136,12 +136,12 @@ export function render(view) {
                   .map((item) => `${time(item.at)}  ${item.text}`).join(`
 `)
             : '暂无记录';
-    return `<div class="pi-card"><h3>自动检测${list.length ? `<span class="pi-badge is-warn">${list.length} 个问题</span>` : '<span class="pi-badge is-ok">正常</span>'}</h3>
+    return `<div class="pi-card"><h3>自动检测${list.length ? `<span class="pi-badge is-warn">${list.length}个问题</span>` : '<span class="pi-badge is-ok">正常</span>'}</h3>
         <table class="pi-files"><tbody>${rows(info)
             .map(([k, v]) => `<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`)
             .join('')}</tbody></table>
         <div class="pi-tools is-c4 is-end">
-            <button type="button" class="pi-btn is-sm is-primary" data-act="check"${info.checking ? ' disabled' : ''} title="${info.mode === 'clue' ? '让 AI 看看本轮场景演完没有，只给建议，不改进度' : '现在就让 AI 检查这一阶段演到哪了'}">立即检测</button>
+            <button type="button" class="pi-btn is-sm is-primary" data-act="check"${info.checking ? ' disabled' : ''} title="${info.mode === 'clue' ? '让AI看看本轮场景演完没有，只给建议，不改进度' : '现在就让AI检查这一阶段演到哪了'}">立即检测</button>
             ${info.mode === 'clue' ? '' : `<button type="button" class="pi-btn is-sm" data-act="reset-base"${info.progress ? '' : ' disabled'} title="下次检测从当前楼开始数">从当前楼重新计数</button>`}
             <button type="button" class="pi-btn is-sm" data-act="rebind" title="插件收不到酒馆消息时用：重新挂上监听">重新绑定事件</button>
             <button type="button" class="pi-btn is-sm" data-act="copy">复制诊断</button></div></div>
@@ -200,13 +200,13 @@ export function clueDiagCard(view) {
         ['数据库插件', yes(d.api)],
         ['计算依据', '数据库最近一次填好的表格'],
         ['主线开关', d.enabled === null ? '—' : yes(d.enabled)],
-        ['最近表格更新', d.lastTableUpdate ? `${time(d.lastTableUpdate)}（${Math.round(d.tableAgeMs / 1e3)} 秒前）` : '本次打开后还没有'],
+        ['最近表格更新', d.lastTableUpdate ? `${time(d.lastTableUpdate)}（${Math.round(d.tableAgeMs / 1e3)}秒前）` : '本次打开后还没有'],
     ]
         .map(([k, v]) => `<tr><th>${esc(k)}</th><td>${v}</td></tr>`)
         .join('')}</tbody></table>
         ${d.problems.length ? d.problems.map((p) => `<p class="pi-hint is-warn">${esc(p)}</p>`).join('') : ''}
         ${auditHtml(d.lastAudit)}
-        ${last ? `<p class="pi-hint">上次实际注入（${time(last.at)}）${last.facts.length ? `，涉及事实 ${esc(last.facts.join('、'))}` : ''}：</p><pre class="pi-pre">${esc(last.content || `（空：${last.reason}）`)}</pre>` : '<p class="pi-hint">本次打开后还没有注入记录。</p>'}
+        ${last ? `<p class="pi-hint">上次实际注入（${time(last.at)}）${last.facts.length ? `，涉及事实${esc(last.facts.join('、'))}` : ''}：</p><pre class="pi-pre">${esc(last.content || `（空：${last.reason}）`)}</pre>` : '<p class="pi-hint">本次打开后还没有注入记录。</p>'}
         ${
             d.events.length
                 ? `<pre class="pi-pre">${esc(
@@ -222,10 +222,10 @@ export function clueDiagCard(view) {
 
 export function auditHtml(a, what = '线索内容') {
     if (!a) return '<p class="pi-hint">最终请求核验：本次打开后还没有正文请求。</p>';
-    let head = `最终请求核验（${time(a.at)}，请求约 ${a.chars} 字）：`;
+    let head = `最终请求核验（${time(a.at)}，请求约${a.chars}字）：`;
     return !a.leaks.length && !a.duplicated
-        ? `<p class="pi-hint">${head}<span class="pi-badge is-ok">未发现不该出现的剧情</span>${a.projectionCount === 1 ? `，${what}出现 1 次` : ''}</p>`
-        : `<p class="pi-hint is-warn">${head}${a.duplicated ? `${what}出现 ${a.projectionCount} 次（重复注入）。` : ''}${a.leaks.length ? `发现 ${a.leaks.length} 处不该出现的剧情：` : ''}</p>${
+        ? `<p class="pi-hint">${head}<span class="pi-badge is-ok">未发现不该出现的剧情</span>${a.projectionCount === 1 ? `，${what}出现1次` : ''}</p>`
+        : `<p class="pi-hint is-warn">${head}${a.duplicated ? `${what}出现${a.projectionCount}次（重复注入）。` : ''}${a.leaks.length ? `发现${a.leaks.length}处不该出现的剧情：` : ''}</p>${
               a.leaks.length
                   ? `<ul class="pi-clue-why">${a.leaks
                         .slice(0, 12)

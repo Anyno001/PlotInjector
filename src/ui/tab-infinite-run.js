@@ -28,7 +28,7 @@ export function render(view) {
     const meta = describeRead(runtime.lastRead(), cfg);
     return `<div class="pi-card"><h3>当前状态<span class="pi-meta">${esc(meta)}</span></h3>
         <div class="pi-row"><span class="pi-badge is-accent">${esc(labels[inf.phase])}</span>${world ? `<span class="pi-badge">${esc(world.title)}</span>` : ''}
-            <span class="pi-badge">世界库 ${inf.worlds.length} 份</span></div>
+            <span class="pi-badge">世界库${inf.worlds.length}份</span></div>
         <div class="pi-tools is-c2">
             <button type="button" class="pi-btn is-primary is-sm" data-act="inf-enter"${inf.phase !== 'train' || opening ? ' disabled' : ''}>${opening ? '<span class="pi-spin"></span>造世界' : '进入新世界'}</button>
             <button type="button" class="pi-btn is-sm" data-act="inf-return"${inf.phase !== 'world' ? ' disabled' : ''}>回到${esc(hubName)}</button></div>

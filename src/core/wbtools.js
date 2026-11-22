@@ -100,8 +100,8 @@ export function regexPlan(entries, pattern, replace, fields) {
 export function orderPlan(entries, { start, step, by = 'list' }) {
     const begin = Math.round(Number(start));
     const gap = Math.round(Number(step));
-    if (!Number.isFinite(begin) || begin < 0) throw new Error('起始数字需为不小于 0 的整数');
-    if (!Number.isFinite(gap) || gap < 1) throw new Error('间隔需为不小于 1 的整数');
+    if (!Number.isFinite(begin) || begin < 0) throw new Error('起始数字需为不小于0的整数');
+    if (!Number.isFinite(gap) || gap < 1) throw new Error('间隔需为不小于1的整数');
     const list = by === 'order' ? entries.map((entry, index) => ({ entry, index })).sort((a, b) => a.entry.order - b.entry.order || a.index - b.index).map(item => item.entry) : entries;
     return list.map((entry, index) => ({ key: entry.key, title: entry.title, from: entry.order, to: begin + index * gap }));
 }

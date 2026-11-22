@@ -9,7 +9,7 @@ import { toast } from '../host/st.js';
 const running = new Set();
 
 export async function runKpRules(view, projectId, text) {
-    if (running.has(projectId)) return toast('info', 'KP 规则还在整理中。');
+    if (running.has(projectId)) return toast('info', 'KP规则还在整理中。');
     running.add(projectId);
     try {
         let parts = splitLongText(text, { target: 12e3, overlap: 200 }),
@@ -18,17 +18,17 @@ export async function runKpRules(view, projectId, text) {
             let reply = String((await ask(view, 'setting', kpRulesMessages({ part, total: parts.length }))) || '').trim();
             reply && pieces.push(reply);
         }
-        if (!pieces.length) return toast('warning', 'KP 规则没有整理出内容，可以到设定页手动补。');
+        if (!pieces.length) return toast('warning', 'KP规则没有整理出内容，可以到设定页手动补。');
         let merged = pieces.length > 1 ? String((await ask(view, 'setting', kpMergeMessages(pieces))) || '').trim() || pieces.join('\n\n') : pieces[0],
             block = kpBlockText(merged);
-        if (!block) return toast('warning', 'KP 规则没有整理出内容，可以到设定页手动补。');
+        if (!block) return toast('warning', 'KP规则没有整理出内容，可以到设定页手动补。');
         view.data.updateProject(projectId, (p) => {
             let old = (p.setting && p.setting.text) || '';
             return { ...p, setting: { ...p.setting, text: old.trim() ? mergeBlocks(old, block, [KP_BLOCK]) : block } };
         });
-        toast('success', 'KP 规则已整理进设定（「KP规则」分块）。');
+        toast('success', 'KP规则已整理进设定（「KP规则」分块）。');
     } catch (error) {
-        toast('error', `KP 规则整理失败：${(error && error.message) || error}`);
+        toast('error', `KP规则整理失败：${(error && error.message) || error}`);
     } finally {
         running.delete(projectId);
     }

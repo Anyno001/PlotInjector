@@ -99,7 +99,7 @@ test('J3: comments on two pages → 预览意见 lists them (editable) + talk �
   await goPage(t, 3);
   await t.blur('[data-rv-comment]', '入口写清楚');
   assert.equal(doc.querySelectorAll('.pi-rv-dot.is-note').length, 2, 'pages with comments are marked');
-  assert.match(doc.querySelector('[data-act="rv-preview"]').textContent, /发送意见（2 页）/);
+  assert.match(doc.querySelector('[data-act="rv-preview"]').textContent, /发送意见（2页）/);
   await t.click('[data-act="rv-preview"]');
   const dlg = doc.querySelector('.pi-dialog');
   assert.match(dlg.textContent, /发送意见/);
@@ -149,7 +149,7 @@ test('J3: overall comment sends the whole line and accepts only the parts the AI
   const req = host.llmCalls.at(-1).body;
   for (const k of ['v1/line', 'v1/s1', 'v1/s2', 'v1/s3']) assert.match(req, new RegExp(`【单位：${k.replace('/', '\\/')}】`), `whole line sent: ${k}`);
   assert.match(req, /【整体意见】/);
-  assert.ok(toasts.some((x) => /^success:已修改 1 页/.test(x)), toasts.join(' | '));
+  assert.ok(toasts.some((x) => /^success:已修改1页/.test(x)), toasts.join(' | '));
   const job = inst.data.imports.get(inst.data.project(t.pid).imports.at(-1));
   assert.equal(job.review.draft[0].stages[2].data.主线节点[0].入口, '去码头找n3');
   await inst.destroy();

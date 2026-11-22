@@ -14,7 +14,7 @@ const WHOLE_MAX = 3e4;
 export function trpgReviewButton(view, job) {
     if (!job || !job.trpg) return '';
     let busy = view.busy[`trpg-check:${job.id}`];
-    return `<div class="pi-tools is-c1"><button type="button" class="pi-btn is-sm" data-act="rv-ai-check"${busy ? ' disabled' : ''}>${busy ? '<span class="pi-spin"></span>AI 检查中' : 'AI 检查（对照模组原文）'}</button></div>`;
+    return `<div class="pi-tools is-c1"><button type="button" class="pi-btn is-sm" data-act="rv-ai-check"${busy ? ' disabled' : ''}>${busy ? '<span class="pi-spin"></span>AI检查中' : 'AI检查（对照模组原文）'}</button></div>`;
 }
 
 // current、saveReview、reviewUnits、lineLocked 由审阅页传进来，不在这里重写审阅的状态管理。
@@ -43,15 +43,15 @@ export function trpgReviewActions({ current, saveReview, reviewUnits, lineLocked
                 let found = parseReviewReply(await ask(view, 'outline', trpgReviewMessages({ units: list, whole })), list.length),
                     pages = Object.keys(found).length,
                     lines = Object.values(found).flat().length;
-                if (!lines) return toast('success', 'AI 检查没有发现问题。');
+                if (!lines) return toast('success', 'AI检查没有发现问题。');
                 await saveReview(view, c.jobId, (r) => {
                     let comments = { ...r.comments };
                     for (let [i, items] of Object.entries(found)) for (let x of items) comments[list[i].key] = appendComment(comments[list[i].key], `${AI_CHECK_TAG}${x}`);
                     return { ...r, comments };
                 });
-                toast('info', `AI 检查找到 ${lines} 个问题（${pages} 页），已加入各页意见。看过、删掉不同意的，再点「按意见修改」。`);
+                toast('info', `AI检查找到${lines}个问题（${pages}页），已加入各页意见。看过、删掉不同意的，再点「按意见修改」。`);
             } catch (error) {
-                toast('error', `AI 检查失败：${(error && error.message) || error}`);
+                toast('error', `AI检查失败：${(error && error.message) || error}`);
             } finally {
                 ((view.busy[key] = !1), view.renderBody());
             }

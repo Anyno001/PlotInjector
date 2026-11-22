@@ -32,27 +32,28 @@ export function render(view) {
         folded = chat.messages.filter((msg) => msg.folded).length,
         live = chat.messages.filter((msg) => !msg.folded),
         clueWord = isClueMode(view.project()),
+        lastAiMsg = [...live].reverse().find((msg) => msg.role !== 'user'),
         unanswered = live.length && live[live.length - 1].role === 'user' ? live[live.length - 1] : null,
         wb = wbSummary(view, chat.refs, () => view.renderBody()),
         canProgress = !!progressText(view),
         persona = view.data.settings().persona.trim(),
-        refsOn = [refs.setting && '设定', refs.outline && '大纲', refs.progress && canProgress && '剧情进度', refs.floors && `正文 ${refs.floors} 楼`, wb && wb.count && `世界书 ${wb.count} 条`].filter(Boolean),
+        refsOn = [refs.setting && '设定', refs.outline && '大纲', refs.progress && canProgress && '剧情进度', refs.floors && `正文${refs.floors}楼`, wb && wb.count && `世界书${wb.count}条`].filter(Boolean),
         open = !!st(view).refsOpen,
         chips = `<div class="pi-dc-bar"><button type="button" class="pi-dc-refs" data-act="refs-toggle" aria-expanded="${open}">参考 <i>${refsOn.length}</i><small>${esc(refsOn.join('、') || '无')}</small><span class="pi-dc-caret">${open ? '▴' : '▾'}</span></button>
         <button type="button" class="pi-dc-act" data-act="review-pick" title="选一条剧情线，逐页查看各阶段，在对应页填写意见后统一发送">${ICONS.pencil}<span>审阅修改</span></button></div>
         ${open ? `<div class="pi-dc-refs-open">
-        <button type="button" class="pi-chip${persona ? ' is-on' : ''}" data-act="persona" title="${esc(persona || '指定 AI 讨论时的说话人格')}">人格${persona ? '' : '：未设置'}</button>
+        <button type="button" class="pi-chip${persona ? ' is-on' : ''}" data-act="persona" title="${esc(persona || '指定AI讨论时的说话人格')}">人格${persona ? '' : '：未设置'}</button>
         <button type="button" class="pi-chip${refs.setting ? ' is-on' : ''}" data-act="ref" data-ref="setting">设定</button>
         <button type="button" class="pi-chip${refs.outline ? ' is-on' : ''}" data-act="ref" data-ref="outline">大纲</button>
         <button type="button" class="pi-chip${refs.progress && canProgress ? ' is-on' : ''}" data-act="ref" data-ref="progress"${canProgress ? '' : ' disabled title="本项目不是当前聊天启用的项目"'}>剧情进度</button>
-        <button type="button" class="pi-chip${refs.floors ? ' is-on' : ''}" data-act="ref-floors">正文 ${refs.floors} 楼</button>
-        <button type="button" class="pi-chip${wb && wb.count ? ' is-on' : ''}" data-act="ref-wb">世界书 ${wb ? `${wb.count} 条` : '…'}</button></div>` : ''}`,
+        <button type="button" class="pi-chip${refs.floors ? ' is-on' : ''}" data-act="ref-floors">正文${refs.floors}楼</button>
+        <button type="button" class="pi-chip${wb && wb.count ? ' is-on' : ''}" data-act="ref-wb">世界书${wb ? `${wb.count}条` : '…'}</button></div>` : ''}`,
         messages = live
             .map((msg) => {
                 let isUser = msg.role === 'user',
                     // 回复下的按钮排成一行（用户 2026-11-16 选 B）：常用的放外面，编辑、删除此条消息、重新生成收进「⋯」
                     tools = `<div class="pi-msg-tools">${
-                        isUser
+                        isUser || msg !== lastAiMsg
                             ? ''
                             : `<button type="button" class="pi-btn is-sm is-ghost" data-act="to-setting">整理成设定</button>
             <button type="button" class="pi-btn is-sm is-ghost" data-act="to-outline">${clueWord ? '写新剧情线' : '写新卷'}</button>`
@@ -62,11 +63,11 @@ export function render(view) {
             .join(''),
         empty = chat.messages.length
             ? ''
-            : '<div class="pi-empty">说说你想写的剧情或设定，一句话也行。<br>AI 会帮你把世界观、人物和剧情走向想清楚；想好了，可以在 AI 的回复下面点「写新剧情线」。</div>';
+            : '<div class="pi-empty">说说你想写的剧情或设定，一句话也行。<br>AI会帮你把世界观、人物和剧情走向想清楚；想好了，可以在AI的回复下面点「写新剧情线」。</div>';
     return `${chips}<div class="pi-chat">
-        ${folded ? `<button type="button" class="pi-msg-fold" data-act="summary">更早的 ${folded} 条已折成摘要，查看</button>` : ''}
+        ${folded ? `<button type="button" class="pi-msg-fold" data-act="summary">更早的${folded}条已折成摘要，查看</button>` : ''}
         ${empty}${messages}${busy ? '<div class="pi-msg is-ai"><span class="pi-spin"></span></div>' : ''}</div>
-        <div class="pi-compose">${chat.messages.length ? `<button type="button" class="pi-compose-side" data-act="clear-talk" title="清空讨论">${ICONS.trash}</button>` : ''}<textarea class="pi-ta" data-compose placeholder="Ctrl+Enter 发送">${esc(st(view).draft || '')}</textarea>
+        <div class="pi-compose">${chat.messages.length ? `<button type="button" class="pi-compose-side" data-act="clear-talk" title="清空讨论">${ICONS.trash}</button>` : ''}<textarea class="pi-ta" data-compose placeholder="Ctrl+Enter发送">${esc(st(view).draft || '')}</textarea>
         ${busy ? `<button type="button" class="pi-send" data-act="stop" title="停止回复">${ICONS.close}</button>` : `<button type="button" class="pi-send" data-act="send" title="发送（Ctrl+Enter）">${ICONS.send}</button>`}</div>`;
 }
 
@@ -143,7 +144,7 @@ export const actions = {
         if (!chat || !chat.messages.length) return;
         const choice = await choiceDialog({
             title: '清空讨论',
-            body: `删除这个项目的全部 ${chat.messages.length} 条讨论消息和摘要。设定、大纲和附带参考不受影响。`,
+            body: `删除这个项目的全部${chat.messages.length}条讨论消息和摘要。设定、大纲和附带参考不受影响。`,
             choices: [
                 { label: '取消', value: null },
                 { label: '直接清空', value: 'clear', danger: !0 },
@@ -203,7 +204,8 @@ export const actions = {
             items = [
                 { value: 'msg-edit', label: '编辑' },
                 ...(msg === lastAi && !busy ? [{ value: 'regen', label: '重新生成' }] : []),
-                ...(msg.role !== 'user' && hasYamlBlock(msg.content) ? [{ value: 'use-yaml', label: '把 YAML 送到大纲' }] : []),
+                ...(msg.role !== 'user' && msg !== lastAi ? [{ value: 'to-setting', label: '整理成设定' }, { value: 'to-outline', label: isClueMode(view.project()) ? '写新剧情线' : '写新卷' }] : []),
+                ...(msg.role !== 'user' && hasYamlBlock(msg.content) ? [{ value: 'use-yaml', label: '把YAML送到大纲' }] : []),
                 { value: 'msg-del', label: '删除此条消息', danger: !0 },
             ],
             pick = await menuDialog({ title: '这条消息', items });
@@ -249,7 +251,7 @@ export const actions = {
     async persona(view) {
         const value = await promptDialog({
             title: '说话人格',
-            label: '讨论时 AI 以什么身份、什么风格回复，留空为默认',
+            label: '讨论时AI以什么身份、什么风格回复，留空为默认',
             value: view.data.settings().persona,
             multiline: !0,
             placeholder: '例：你是一位熟悉原作的资深编辑，说话直接，敢于否定不合理的设定。',
@@ -262,7 +264,7 @@ export const actions = {
     },
     async 'ref-floors'(view) {
         const chat = view.data.chat(view.projectId),
-            value = await promptDialog({ title: '附带最近正文', label: '楼数（0 为不附带，最多 50）', value: String(chat.refs.floors) });
+            value = await promptDialog({ title: '附带最近正文', label: '楼数（0为不附带，最多50）', value: String(chat.refs.floors) });
         if (value == null) return;
         const floors = Math.max(0, Math.min(50, Math.round(Number(value) || 0)));
         (updateChat(view, (current) => ({ ...current, refs: { ...current.refs, floors } })), view.renderBody());
@@ -293,7 +295,7 @@ export const actions = {
             name = (v) => (isPlainObject(v.line) && v.line.编号 && !volumeName(v.key).startsWith(v.line.编号) ? `${v.line.编号} ${volumeName(v.key)}` : volumeName(v.key)),
             id = await menuDialog({
                 title: '审阅修改',
-                items: project.outline.volumes.map((v) => ({ value: v.id, label: `${name(v)}　${v.stages.length} 个阶段` })),
+                items: project.outline.volumes.map((v) => ({ value: v.id, label: `${name(v)}　${v.stages.length}个阶段` })),
             });
         if (!id || view.projectId !== project.id) return;
         let jobId = await outlineTab.openEditReview(view, id, {}, { note: clue ? '剧情线' : '卷' });

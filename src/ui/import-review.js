@@ -252,7 +252,7 @@ export function changedLines(project, review) {
 function lineIssueCard(x, volId) {
     let btn =
         x.fix === 'redraft'
-            ? x.lines.map((id) => `<button type="button" class="pi-btn is-sm" data-act="rv-redraft" data-line="${esc(id)}">重新整理 ${esc(id)}</button>`).join('')
+            ? x.lines.map((id) => `<button type="button" class="pi-btn is-sm" data-act="rv-redraft" data-line="${esc(id)}">重新整理${esc(id)}</button>`).join('')
             : x.fix === 'drop-open'
               ? `<button type="button" class="pi-btn is-sm" data-act="rv-drop-open" data-vol="${esc(volId)}" title="删掉整条开启条件和开启时段（不是只删多出来的那一项）">去掉开启条件和时段</button>`
               : x.fix === 'tiers'
@@ -292,7 +292,7 @@ function tableForm(vol, locked = !1) {
                 t.value === ''
                     ? '填上比较的值。'
                     : r
-                      ? `${r.now ? `现在：${r.now}` : '现在：表里还没有这一格的值'}${num != null ? `。表格说明里「${t.value}」是 ${num}，比大小请填数字` : r.notes.length ? `。${r.notes[0]}` : ''}`
+                      ? `${r.now ? `现在：${r.now}` : '现在：表里还没有这一格的值'}${num != null ? `。表格说明里「${t.value}」是${num}，比大小请填数字` : r.notes.length ? `。${r.notes[0]}` : ''}`
                       : errs.join('；');
             // 满足 / 未满足：胶囊小标签（用户 2026-11-16：中性表述，带背景色）
             badge = v === 'true' ? '<span class="pi-badge is-ok">已满足</span>' : v === 'false' ? '<span class="pi-badge is-warn">未满足</span>' : '';
@@ -301,8 +301,8 @@ function tableForm(vol, locked = !1) {
     return `<div class="pi-rv-tbl">
       ${field('table', sheets.map((x) => x.name), '选择表')}
       <div class="pi-row pi-rv-tbl-row">${field('row', rows, '选择行')}${field('col', cols, '选择列')}</div>
-      <div class="pi-row pi-rv-tbl-row is-cmp"><select class="pi-sel is-sm" ${attr('op')}>${opt(TABLE_OPS, t.op)}</select><input class="pi-inp is-sm" ${attr('value')} value="${esc(t.value)}" placeholder="值，如 2 或 熟悉"></div>
-      ${isPlainObject(l.表格条件草稿) ? '<p class="pi-hint is-warn">条件还没填完，保存前要补全。</p>' : ''}${status ? `<p class="pi-hint pi-rv-tbl-now">${esc(status)}${badge}</p>` : '<p class="pi-hint">选好表、行、列，填比较的值。</p>'}${tierFix && !locked ? `<div class="pi-row"><button type="button" class="pi-btn is-sm" data-act="rv-tbl-num" data-vol="${esc(tierFix.vol)}" data-value="${esc(tierFix.value)}">改成 ${esc(tierFix.value)}</button></div>` : ''}
+      <div class="pi-row pi-rv-tbl-row is-cmp"><select class="pi-sel is-sm" ${attr('op')}>${opt(TABLE_OPS, t.op)}</select><input class="pi-inp is-sm" ${attr('value')} value="${esc(t.value)}" placeholder="值，如2或 熟悉"></div>
+      ${isPlainObject(l.表格条件草稿) ? '<p class="pi-hint is-warn">条件还没填完，保存前要补全。</p>' : ''}${status ? `<p class="pi-hint pi-rv-tbl-now">${esc(status)}${badge}</p>` : '<p class="pi-hint">选好表、行、列，填比较的值。</p>'}${tierFix && !locked ? `<div class="pi-row"><button type="button" class="pi-btn is-sm" data-act="rv-tbl-num" data-vol="${esc(tierFix.vol)}" data-value="${esc(tierFix.value)}">改成${esc(tierFix.value)}</button></div>` : ''}
     </div>`;
 }
 // 开启时段（只给支线）：限定在某条主线的某几个阶段里才能开始。
@@ -339,8 +339,8 @@ export function lineLevelIssues(view, job, review) {
 // 审阅页顶部的灰字状态（第四批）：项目级审阅写明几条线、几条待保存
 function stateLine(review, dirtyIds, dirty) {
     let edit = review.source !== 'import' || review.reopened;
-    if (edit && review.draft.length > 1) return `本项目 ${review.draft.length} 条线，${dirtyIds.length ? `${dirtyIds.length} 条待保存` : '和大纲一致'}`;
-    if (review.lines) return `导入的支线 ${review.draft.length} 条，${saveCount(review)} 条待保存`;
+    if (edit && review.draft.length > 1) return `本项目${review.draft.length}条线，${dirtyIds.length ? `${dirtyIds.length}条待保存` : '和大纲一致'}`;
+    if (review.lines) return `导入的支线${review.draft.length}条，${saveCount(review)}条待保存`;
     return dirty ? '草稿已保存，未应用到大纲' : '和大纲一致';
 }
 function saveCount(review, dirtyIds = []) {
@@ -348,10 +348,10 @@ function saveCount(review, dirtyIds = []) {
 }
 function saveLabel(review, dirtyIds) {
     let n = saveCount(review, dirtyIds);
-    return n ? `保存到大纲（${n} 条线）` : '保存到大纲';
+    return n ? `保存到大纲（${n}条线）` : '保存到大纲';
 }
 // 发送意见按钮（用户 2026-11-16：按钮要写明会发送）。点了先弹预览框，可改意见、加整体意见。
-const sendLabel = (n) => (n ? `发送意见（${n} 页）` : '发送意见');
+const sendLabel = (n) => (n ? `发送意见（${n}页）` : '发送意见');
 export function renderReview(view, job, review, index, crumb, notes = []) {
     let units = reviewUnits(view.project(), review),
         issues = reviewIssues(view, review, index),
@@ -403,7 +403,7 @@ export function renderReview(view, job, review, index, crumb, notes = []) {
         synced = !dirty && (isEdit || review.reopened),
         // 顶部（第四批）：标题一行，问题数在右；下面一句灰字说明范围和状态（项目级审阅写明几条线、几条待保存）
         stateText = stateLine(review, dirtyIds, dirty),
-        head = `<h3>${isEdit ? '审阅修改' : '审阅'}${vols.length > 1 ? (review.lines ? '：导入的支线' : '') : `：${esc(volumeName(vol.key))}`}<span class="pi-rv-end">${errCount ? `<button type="button" class="pi-badge is-warn pi-rv-issues" data-act="rv-first-issue" title="跳到有问题的页">问题 ${errCount} ›</button>` : review.revised ? '<span class="pi-badge is-ok">检查通过</span>' : ''}</span></h3><div class="pi-rv-state${dirty ? ' is-draft' : ''}">${stateText}</div>${picker}`,
+        head = `<h3>${isEdit ? '审阅修改' : '审阅'}${vols.length > 1 ? (review.lines ? '：导入的支线' : '') : `：${esc(volumeName(vol.key))}`}<span class="pi-rv-end">${errCount ? `<button type="button" class="pi-badge is-warn pi-rv-issues" data-act="rv-first-issue" title="跳到有问题的页">问题${errCount} ›</button>` : review.revised ? '<span class="pi-badge is-ok">检查通过</span>' : ''}</span></h3><div class="pi-rv-state${dirty ? ' is-draft' : ''}">${stateText}</div>${picker}`,
         nav = `<div class="pi-rv-nav"><div class="pi-rv-dots">${mineUnits.map(dot).join('')}</div></div>`,
         body = '';
     if (u.kind === 'line') {
@@ -433,7 +433,7 @@ export function renderReview(view, job, review, index, crumb, notes = []) {
         let main = nodes.filter((n) => n.kind === 'main'),
             side = nodes.filter((n) => n.kind !== 'main'),
             time = !clueOn && clueText(s.data && s.data.时间范围);
-        body = `<div class="pi-rv-title"><b>${esc(stageLabel(s.key))}</b><span class="pi-meta">${time ? `时间：${esc(cut(time, 20))}` : `${nodes.length} 个场景`}</span>${changed.has(u.key) && review.revised ? '<span class="pi-badge is-accent">已修改</span>' : ''}${nodes.length ? `<button type="button" class="pi-btn is-sm is-ghost pi-rv-fulltg pi-rv-end" data-act="rv-full">${full ? '收起完整内容' : '展开完整内容'}</button>` : ''}</div>
+        body = `<div class="pi-rv-title"><b>${esc(stageLabel(s.key))}</b><span class="pi-meta">${time ? `时间：${esc(cut(time, 20))}` : `${nodes.length}个场景`}</span>${changed.has(u.key) && review.revised ? '<span class="pi-badge is-accent">已修改</span>' : ''}${nodes.length ? `<button type="button" class="pi-btn is-sm is-ghost pi-rv-fulltg pi-rv-end" data-act="rv-full">${full ? '收起完整内容' : '展开完整内容'}</button>` : ''}</div>
           ${(() => {
               let names = condNames([...view.project().outline.volumes, ...review.draft]),
                   one = (n) => (full ? nodeFull(n, clueOn, names) : nodeLine(n, clueOn));
@@ -443,7 +443,7 @@ export function renderReview(view, job, review, index, crumb, notes = []) {
           ${last && last.length ? `<div class="pi-rv-sec">本次修改</div>${last.map((t) => `<div class="pi-rv-chg">${esc(t)}</div>`).join('')}` : ''}
           ${errs.length ? `<div class="pi-rv-sec">问题（${errs.length}）${fillAll}</div>${errs.map((x) => issueCard(x, u.key, filled(x))).join('')}` : ''}
           ${asks.length ? `<div class="pi-rv-sec">待确认（${asks.length}）${errs.length ? '' : fillAll}</div>${asks.map((x) => issueCard(x, u.key, filled(x))).join('')}` : ''}
-          ${answered ? `<div class="pi-row pi-rv-answered"><span class="pi-hint">已确认 ${answered} 项</span><button type="button" class="pi-btn is-sm is-ghost" data-act="rv-undismiss">撤回</button></div>` : ''}`;
+          ${answered ? `<div class="pi-row pi-rv-answered"><span class="pi-hint">已确认${answered}项</span><button type="button" class="pi-btn is-sm is-ghost" data-act="rv-undismiss">撤回</button></div>` : ''}`;
     }
     let yamlText = u.kind === 'line' ? stringifyYaml({ [VOLUME_LINE_KEY]: vol.line }) : stringifyYaml({ [unitValue(review.draft, u.key).key]: unitValue(review.draft, u.key).data }),
         canUndo = review.history && review.history.length;
@@ -454,7 +454,7 @@ export function renderReview(view, job, review, index, crumb, notes = []) {
              locked
                  ? `${comment.trim() ? `<div class="pi-field"><span>意见（未发送，只读）</span><textarea class="pi-ta" rows="3" readonly>${esc(comment)}</textarea></div>` : ''}<details><summary class="pi-hint">YAML</summary><pre class="pi-pre is-full">${esc(yamlText)}</pre></details>`
                  : `<label class="pi-field"><span>意见</span><textarea class="pi-ta" rows="3" data-rv-comment="${esc(u.key)}" placeholder="对这一页的修改意见">${esc(comment)}</textarea></label>
-        <details${review.yamlOpen === u.key ? ' open' : ''}><summary class="pi-hint">编辑 YAML</summary><textarea class="pi-ta is-mono pi-rv-yaml" data-rv-yaml="${esc(u.key)}">${esc(yamlText)}</textarea>
+        <details${review.yamlOpen === u.key ? ' open' : ''}><summary class="pi-hint">编辑YAML</summary><textarea class="pi-ta is-mono pi-rv-yaml" data-rv-yaml="${esc(u.key)}">${esc(yamlText)}</textarea>
           <div class="pi-tools is-c1"><button type="button" class="pi-btn is-sm" data-act="rv-yaml-save" data-unit="${esc(u.key)}">保存并检查</button></div><p class="pi-status" data-rv-yaml-status></p></details>`
          }
         ${locked ? '' : trpgReviewButton(view, job)}
@@ -472,13 +472,13 @@ export function renderAdopted(view, job, review, crumb) {
         l = live && isPlainObject(live.line) ? live.line : null,
         when = l ? whenText(l, project.outline.volumes) : '',
         unsent = Object.values(review.comments || {}).filter((t) => String(t || '').trim()).length,
-        unsentNote = unsent ? `<p class="pi-hint">还有 ${unsent} 页意见没发送，点「继续修改」可以接着看和发送。</p>` : '';
+        unsentNote = unsent ? `<p class="pi-hint">还有${unsent}页意见没发送，点「继续修改」可以接着看和发送。</p>` : '';
     if (review.source === 'proposal')
         return `${crumb}<div class="pi-card pi-rv"><h3>审阅修改：${esc(volumeName(vol.key))}<span class="pi-spacer"></span></h3>
         <div class="pi-rv-ok">✓ 已保存到大纲：${esc(l && l.编号 ? `${l.编号} ` : '')}${esc(volumeName((live || vol).key))}</div>${unsentNote}
         <div class="pi-tools is-c2 is-end"><button type="button" class="pi-btn" data-act="rv-reopen">继续修改</button><button type="button" class="pi-btn is-primary" data-act="rv-to-outline">查看大纲</button></div></div>`;
     return `${crumb}<div class="pi-card pi-rv"><h3>审阅：${esc(volumeName(vol.key))}<span class="pi-spacer"></span></h3>
-        <div class="pi-rv-ok">✓ 已保存到大纲：${esc(l && l.编号 ? `${l.编号} ` : '')}${esc(volumeName((live || vol).key))}（${(live || vol).stages.length} 个阶段）</div>
+        <div class="pi-rv-ok">✓ 已保存到大纲：${esc(l && l.编号 ? `${l.编号} ` : '')}${esc(volumeName((live || vol).key))}（${(live || vol).stages.length}个阶段）</div>
         ${when ? `<p class="pi-hint">开始时机：${esc(when)}。</p>` : ''}${unsentNote}
         <div class="pi-tools is-c2 is-end"><button type="button" class="pi-btn" data-act="rv-reopen">继续修改</button><button type="button" class="pi-btn is-primary" data-act="rv-to-outline">查看大纲</button></div></div>`;
 }
@@ -623,11 +623,11 @@ export function reviewActions({ jobOf, crumbBack, redraftLine, openSaved = null 
                     let keys = units.filter((u) => u.volumeId === v.id).map((u) => u.key),
                         errs = keys.reduce((n, k) => n + (issues[k] || []).filter((x) => x.level === 'error').length, 0),
                         notes = keys.filter((k) => String((review.comments || {})[k] || '').trim()).length;
-                    return [errs ? `问题 ${errs}` : '', notes ? `意见 ${notes} 页` : '', edit && dirty.has(v.id) ? '已修改' : ''].filter(Boolean).join('，');
+                    return [errs ? `问题${errs}` : '', notes ? `意见${notes}页` : '', edit && dirty.has(v.id) ? '已修改' : ''].filter(Boolean).join('，');
                 },
                 pick = await menuDialog({
                     title: reviewIsClue(project, review) ? '选择剧情线' : '选择卷',
-                    items: review.draft.map((v) => ({ value: v.id, label: `${lineTitle(v)}　${v.stages.length} 个阶段${mark(v) ? `（${mark(v)}）` : ''}` })),
+                    items: review.draft.map((v) => ({ value: v.id, label: `${lineTitle(v)}　${v.stages.length}个阶段${mark(v) ? `（${mark(v)}）` : ''}` })),
                 });
             if (!pick) return;
             let i = units.findIndex((u) => u.volumeId === pick);
@@ -665,7 +665,7 @@ export function reviewActions({ jobOf, crumbBack, redraftLine, openSaved = null 
                     i = reviewUnits(view.project(), r).findIndex((u) => u.volumeId === vid);
                 i >= 0 && (await saveReview(view, c.jobId, (x) => ({ ...x, at: i })));
             }
-            res && toast(res.ok ? 'success' : 'warning', res.ok ? `已重新整理 ${id}，原来的内容可以在线页下面展开对照。` : `没有重新整理 ${id}：${res.why}。`);
+            res && toast(res.ok ? 'success' : 'warning', res.ok ? `已重新整理${id}，原来的内容可以在线页下面展开对照。` : `没有重新整理${id}：${res.why}。`);
             view.renderBody();
         },
         async 'rv-drop-open'(view, target) {
@@ -677,7 +677,7 @@ export function reviewActions({ jobOf, crumbBack, redraftLine, openSaved = null 
             let c = current(view),
                 vid = target.dataset.vol,
                 tiers = JSON.parse(target.dataset.tiers || '[]');
-            c && (await saveReview(view, c.jobId, (r) => editDraft(r, `确认档位顺序 ${tiers.join(' < ')}`, (d) => d.map((v) => (v.id === vid ? confirmTierOrder([v], tiers)[0] : v)))), view.renderBody());
+            c && (await saveReview(view, c.jobId, (r) => editDraft(r, `确认档位顺序${tiers.join(' < ')}`, (d) => d.map((v) => (v.id === vid ? confirmTierOrder([v], tiers)[0] : v)))), view.renderBody());
         },
         // 已保存的线：到大纲的审阅修改里接着改（打开项目的审阅修改，定位到这条线）
         async 'rv-edit-saved'(view, target) {
@@ -709,7 +709,7 @@ export function reviewActions({ jobOf, crumbBack, redraftLine, openSaved = null 
             } catch (error) {
                 return ((status.textContent = `没有保存：${error.message}`), status.classList.add('is-err'));
             }
-            await saveReview(view, c.jobId, (r) => ({ ...editDraft(r, '直接改 YAML', (d) => putUnit(d, key, parsed)), yamlOpen: key }));
+            await saveReview(view, c.jobId, (r) => ({ ...editDraft(r, '直接改YAML', (d) => putUnit(d, key, parsed)), yamlOpen: key }));
             view.renderBody();
         },
         // 预览意见（用户 2026-11-16）：各页意见汇总可改，加整体意见、附带讨论记录，一次发送。
@@ -730,13 +730,13 @@ export function reviewActions({ jobOf, crumbBack, redraftLine, openSaved = null 
                 hasTalk = !!(chat && (chat.summary || (chat.messages || []).length)),
                 stages = curVol ? curVol.stages.length : 0,
                 curName = curVol ? (review.draft.length > 1 ? lineTitle(curVol) : reviewIsClue(view.project(), review) ? '这条线' : '这一卷') : '',
-                html = `<p class="pi-hint">以下意见一次发给 AI，改完的内容先进草稿，确认后再保存到大纲。可在此修改；点标题返回对应页。</p>
+                html = `<p class="pi-hint">以下意见一次发给AI，改完的内容先进草稿，确认后再保存到大纲。可在此修改；点标题返回对应页。</p>
                 ${list.map((u) => `<div class="pi-rv-q"><button type="button" class="pi-rv-q-go" data-dlg-value="go:${esc(u.key)}">${esc(labelOf(u.key))} ›</button><textarea class="pi-ta" rows="2" data-rv-q="${esc(u.key)}">${esc(review.comments[u.key])}</textarea></div>`).join('') || '<p class="pi-hint">各页还没有意见。</p>'}
                 ${
                      curLocked
                          ? ''
-                         : `<label class="pi-field"><span>对 ${esc(curName)} 的整体意见（可选）</span><textarea class="pi-ta" rows="2" data-rv-overall placeholder="例：人名统一；入口语气更轻松">${esc(review.overall || '')}</textarea></label>
-                <p class="pi-hint">整体意见只改${esc(curName)}，会发送它的全部内容（${stages} 个阶段），请求较长。别的线请在对应页写意见。</p>`
+                         : `<label class="pi-field"><span>对${esc(curName)}的整体意见（可选）</span><textarea class="pi-ta" rows="2" data-rv-overall placeholder="例：人名统一；入口语气更轻松">${esc(review.overall || '')}</textarea></label>
+                <p class="pi-hint">整体意见只改${esc(curName)}，会发送它的全部内容（${stages}个阶段），请求较长。别的线请在对应页写意见。</p>`
                  }
                 ${hasTalk ? `<label class="pi-check"><input type="checkbox" data-rv-talk${review.noTalk ? '' : ' checked'}><span>附带讨论记录</span></label>` : ''}`,
                 read = (root) => ({
@@ -878,7 +878,7 @@ async function reviseUnits(view, jobId, c, index, jobOf, opts = {}) {
     // 但一个可用的部分都没读到，不算「整体意见改好了」（GPT 代码审阅 R4）：意见保留，提示可重试。
     if (overall && !Object.keys(parsed).length) {
         let why = Object.keys(reasons).length
-            ? `AI 说明保持原样：${Object.entries(reasons).map(([k, r]) => `「${want.includes(k) ? labelOf(k) : k}」${r}`).join('；')}`
+            ? `AI说明保持原样：${Object.entries(reasons).map(([k, r]) => `「${want.includes(k) ? labelOf(k) : k}」${r}`).join('；')}`
             : bad.length
               ? '回复格式无法读取'
               : '回复里没有修改内容';
@@ -904,11 +904,11 @@ async function reviseUnits(view, jobId, c, index, jobOf, opts = {}) {
             // 新写进去、但哪儿都找不到的节点 / 事实（GPT 第二轮 N8）：整组不用，意见保留
             missing = newMissingRefs(cur.draft, after, g, curBackground);
         if (missing.length) {
-            failed.push({ g, why: `「${missing.map((x) => labelOf(x.key)).join('、')}」新写的条件用到了找不到的 ${[...new Set(missing.flatMap((x) => x.refs))].join('、')}` });
+            failed.push({ g, why: `「${missing.map((x) => labelOf(x.key)).join('、')}」新写的条件用到了找不到的${[...new Set(missing.flatMap((x) => x.refs))].join('、')}` });
             continue;
         }
         if (inner.length) {
-            failed.push({ g, why: `「${g.map(labelOf).join('、')}」改掉了「${inner.map((x) => labelOf(x.key)).join('、')}」还在用的 ${[...new Set(inner.flatMap((x) => x.refs))].join('、')}，需要一起改` });
+            failed.push({ g, why: `「${g.map(labelOf).join('、')}」改掉了「${inner.map((x) => labelOf(x.key)).join('、')}」还在用的${[...new Set(inner.flatMap((x) => x.refs))].join('、')}，需要一起改` });
             continue;
         }
         outside.push(...breaks);
@@ -950,11 +950,11 @@ async function reviseUnits(view, jobId, c, index, jobOf, opts = {}) {
     let tail = [
         failed.length ? `${failed.map((f) => f.why).join('；')}，相关意见保留。可写得更具体后重试` : '',
         newer.length ? `「${newer.map(labelOf).join('、')}」有新写的意见，还没发送` : '',
-        outside.length ? `别的线还在用改掉的内容：${outside.map((x) => `「${labelOf(x.key)}」用 ${x.refs.join('、')}`).join('；')}，需要另外修改那条线` : '',
+        outside.length ? `别的线还在用改掉的内容：${outside.map((x) => `「${labelOf(x.key)}」用${x.refs.join('、')}`).join('；')}，需要另外修改那条线` : '',
     ].filter(Boolean);
     toast(
         failed.length || outside.length ? 'warning' : 'success',
-        `已修改 ${changedKeys.length} 页${changedKeys.length ? `：${changedKeys.map(labelOf).join('、')}` : ''}${tail.length ? `。${tail.join('。')}` : ''}。`,
+        `已修改${changedKeys.length}页${changedKeys.length ? `：${changedKeys.map(labelOf).join('、')}` : ''}${tail.length ? `。${tail.join('。')}` : ''}。`,
     );
 }
 

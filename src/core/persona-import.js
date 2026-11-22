@@ -71,9 +71,9 @@ export function parseEntry(content) {
         stack.push(node);
     }
     pushText(source.slice(last));
-    if (stack.length > 1) issues.push({ level: 'error', text: `有 ${stack.length - 1} 个 <if> 没有写 </if>` });
+    if (stack.length > 1) issues.push({ level: 'error', text: `有${stack.length - 1}个 <if> 没有写 </if>` });
     const found = (source.match(/<if\b/gi) || []).length;
-    if (found !== open) issues.push({ level: 'error', text: `有 ${found - open} 个 <if> 标签写法无法识别（只支持 cell= 与 cond=）` });
+    if (found !== open) issues.push({ level: 'error', text: `有${found - open}个 <if> 标签写法无法识别（只支持cell= 与cond=）` });
     return { nodes: root.children, issues };
 }
 
@@ -163,7 +163,7 @@ function renderNodes(nodes, ctx) {
             const hit = node.parsed.or ? node.parsed.terms.some(term => term.value === picked) : node.parsed.terms.every(term => term.value === picked);
             if (hit) out += body();
         } else {
-            ctx.issue('error', `嵌套了无法拆分的 if「${node.cond.replace(/cell:/g, '')}」`);
+            ctx.issue('error', `嵌套了无法拆分的if「${node.cond.replace(/cell:/g, '')}」`);
             out += renderNodes(node.children, ctx);
         }
     }
@@ -299,7 +299,7 @@ export function buildPlan(entries, { overrides = {}, picks = {} } = {}) {
                 line.stages.set(id, { range, text: join(old ? old.text : '', text) });
             } else {
                 for (const term of part.node.parsed.terms) {
-                    if (term.op !== '==') { report(entry, 'error', `文字变量「${line.name}」用了 ${term.op}`); continue; }
+                    if (term.op !== '==') { report(entry, 'error', `文字变量「${line.name}」用了${term.op}`); continue; }
                     const old = line.stages.get(term.value);
                     line.stages.set(term.value, { value: term.value, text: join(old ? old.text : '', text) });
                 }

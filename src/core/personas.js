@@ -367,7 +367,7 @@ export function resolveMoves(items, moves) {
     return out;
 }
 
-export const moveText = move => `${itemLabel(move.item)}：${move.item.from} → ${move.item.to}${move.floor || move.reason ? `（${move.floor ? `第 ${move.floor} 楼` : ''}${move.floor && move.reason ? '：' : ''}${move.reason}）` : ''}`;
+export const moveText = move => `${itemLabel(move.item)}：${move.item.from} → ${move.item.to}${move.floor || move.reason ? `（${move.floor ? `第${move.floor}楼` : ''}${move.floor && move.reason ? '：' : ''}${move.reason}）` : ''}`;
 
 // 采用：推到下一阶段，并清掉「手动」标记（自动判断又推进了）。返回新进度。
 export function applyMoves(progress, project, moves) {

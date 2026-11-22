@@ -40,7 +40,7 @@ export function parseProjectFile(text) {
     try {
         data = JSON.parse(text);
     } catch {
-        throw new Error('文件不是有效的 JSON');
+        throw new Error('文件不是有效的JSON');
     }
     if (!isPlainObject(data) || data.kind !== PROJECT_FILE_KIND || !isPlainObject(data.project)) throw new Error('这不是剧情注入器导出的项目文件');
     if (Number(data.version) > 1) throw new Error('这个项目文件来自更新的插件版本，请先更新插件');

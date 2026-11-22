@@ -384,7 +384,7 @@ test('上次检测楼层大于现有楼数时自动回到现有楼数；诊断�
     doc.querySelector('.pi-side [data-act="page"][data-page="diag"]').click();
     await tick(10);
     const body = doc.querySelector('.pi-body');
-    assert.match(body.textContent, /当前只有 3 楼/);
+    assert.match(body.textContent, /当前只有3楼/);
     assert.match(body.textContent, /收到回复/);
     body.querySelector('.pi-diag-row [data-act="reset-base"]').click();
     await tick(10);
@@ -496,7 +496,7 @@ test('世界书管理：token 统计、修复关键词标点、批量选择后�
     await tick(10);
     doc.querySelector('[data-act="open-book"]').click();
     await tick(30);
-    assert.match(doc.querySelector('.pi-wb-tokens').textContent, /开启 6，全部/);
+    assert.match(doc.querySelector('.pi-wb-tokens').textContent, /开启6，全部/);
 
     doc.querySelector('[data-act="book-more"]').click();
     await tick(10);
@@ -670,10 +670,10 @@ test('讨论页附带参考：世界书只显示条数；默认带手写条目�
     const doc = host.win.document;
     doc.querySelector('[data-act="tab"][data-tab="discuss"]').click();
     await tick(30);
-    assert.match(doc.querySelector('.pi-dc-refs').textContent, /世界书 12 条/, '收起时顶栏写出开着的参考');
+    assert.match(doc.querySelector('.pi-dc-refs').textContent, /世界书12条/, '收起时顶栏写出开着的参考');
     doc.querySelector('[data-act="refs-toggle"]').click();
     await tick(30);
-    assert.match(doc.querySelector('[data-act="ref-wb"]').textContent, /世界书 12 条/);
+    assert.match(doc.querySelector('[data-act="ref-wb"]').textContent, /世界书12条/);
     assert.equal(doc.querySelectorAll('.pi-dc-refs-open .pi-chip').length, 6, '展开后不逐条列出条目（人格及五项参考）');
     doc.querySelector('[data-compose]').value = '接下来第三章怎么走';
     doc.querySelector('[data-act="send"]').click();
@@ -685,7 +685,7 @@ test('讨论页附带参考：世界书只显示条数；默认带手写条目�
     assert.match(system, /纪要-3】/);
     assert.doesNotMatch(system, /CustomExport-纪要-2】|CustomExport-人物档案-1/);
     assert.match(system, /【参考·剧情进度/);
-    assert.match(system, /【参考·最近 10 楼正文】[\s\S]*正文甲/);
+    assert.match(system, /【参考·最近10楼正文】[\s\S]*正文甲/);
     assert.equal(host.win.__errors.length, 0, host.win.__errors.join('\n'));
     await host.instance.destroy();
 });
@@ -720,7 +720,7 @@ test('不走讨论直接写大纲：大纲页选世界书「全选」后，全�
     picker.querySelector('.pi-dlg-acts .is-primary').click();
     await tick(30);
     assert.ok(write.isConnected, '写作弹框还在');
-    assert.match(write.querySelector('[data-act="gen-wb"]').textContent, /世界书 14 条/);
+    assert.match(write.querySelector('[data-act="gen-wb"]').textContent, /世界书14条/);
     write.querySelector('.pi-dlg-acts .is-primary').click();
     await tick(40);
     const user = host.llmCalls.at(-1)[1].content;
@@ -1066,7 +1066,7 @@ test('无限流项目：AI 楼层状态块「停站」开副本注入档案，sw
     instance.runtime.returnToTrain();
     assert.equal(infNow().phase, 'train');
     assert.equal('trigger' in infNow(), false, '手动操作清掉触发记录');
-    assert.match(body(), /上次读到：第 \d+ 楼 列车：/);
+    assert.match(body(), /上次读到：第\d+楼列车：/);
 
     // 档案还没生成完用户就发下一条：酒馆的加载事件等它，生成完成后档案进入本次注入。
     let release = null;
@@ -1326,7 +1326,7 @@ test('分阶段人设：条件检测并入定期检测请求，采用后推进�
     assert.doesNotMatch(host.llmCalls[0][0].content + host.llmCalls[0][1].content, /充满敌意|她动摇了/);
     const card = host.win.document.querySelector('[data-notice="persona"]');
     assert.ok(card);
-    assert.match(card.textContent, /柳云岚 · 对顾小川：敌对 → 动摇（第 1 楼：顾小川帮了她）/);
+    assert.match(card.textContent, /柳云岚 · 对顾小川：敌对 → 动摇（第1楼：顾小川帮了她）/);
     const stage = () => (host.instance.runtime.progress().personas || {}).pl1;
     assert.equal(stage(), undefined);
     clickText(host.win.document, '[data-notice="persona"] button', '采用');
@@ -1387,7 +1387,9 @@ test('分阶段人设：世界书转入，勾选预览后转入并关闭原条�
     const doc = host.win.document;
     doc.querySelector('[data-act="tab"][data-tab="persona"]').click();
     await tick(10);
-    doc.querySelector('[data-act="imp-open"]').click();
+    doc.querySelector('[data-act="persona-menu"]').click();
+    await tick(10);
+    doc.querySelector('.pi-dialog [data-dlg-value="imp-open"]').click();
     await tick(30);
     const rows = [...doc.querySelectorAll('.pi-dialog [data-pi-pick]')];
     assert.equal(rows.length, 5, '只列含 if 的条目');
@@ -1399,7 +1401,7 @@ test('分阶段人设：世界书转入，勾选预览后转入并关闭原条�
     clickText(doc, '.pi-dialog [data-dlg]', '预览');
     await tick(10);
     assert.match(doc.querySelector('.pi-dialog').textContent, /对顾小川/);
-    assert.match(doc.querySelector('.pi-dialog').textContent, /4 阶段/);
+    assert.match(doc.querySelector('.pi-dialog').textContent, /4阶段/);
     clickText(doc, '.pi-dialog [data-dlg]', '转入');
     await tick(50);
     const now = host.instance.data.project(project.id);

@@ -34,7 +34,7 @@ function hubCard(infinite) {
 function worldRow(world, open, currentId) {
     const badges = world.id === currentId ? '<span class="pi-badge is-ok">当前</span>' : '';
     const body = open ? `<div class="pi-entry-bd">
-        <p class="pi-hint">${esc(world.dice.horror)}｜周期 ${esc(world.dice.cycle)}｜${esc(world.dice.client)}｜情欲${esc(world.dice.lust)}</p>
+        <p class="pi-hint">${esc(world.dice.horror)}｜周期${esc(world.dice.cycle)}｜${esc(world.dice.client)}｜情欲${esc(world.dice.lust)}</p>
         <pre class="pi-pre">${esc(world.body)}</pre>
         <div class="pi-tools is-c2">
             <button type="button" class="pi-btn is-sm" data-act="world-reopen" data-id="${esc(world.id)}"${currentId ? ' disabled' : ''}>重新打开</button>
@@ -52,7 +52,7 @@ function libraryCard(view, s) {
     const inf = view.runtime.progress().infinite;
     const worlds = inf ? inf.worlds : [];
     const currentId = inf && inf.phase === 'world' ? inf.worldId : '';
-    return `<div class="pi-card"><h3>世界库<span class="pi-meta">${worlds.length} 份</span></h3>
+    return `<div class="pi-card"><h3>世界库<span class="pi-meta">${worlds.length}份</span></h3>
         ${worlds.length ? [...worlds].reverse().map(world => worldRow(world, s.open === world.id, currentId)).join('') : '<p class="pi-hint">这条聊天里还没有世界。到「执行」页点「进入新世界」，或等检测到下车时自动写出档案。</p>'}</div>`;
 }
 

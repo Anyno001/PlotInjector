@@ -19,7 +19,7 @@ test('H: 接上一条 waits for the previous main line to END (done or abandoned
   const vols = () => [main('M1'), main('M2', { 接上一条: true }), main('M3', { 接上一条: true, 开启条件: { 线: 'M1 == 完成' } })];
   let r = run(vols());
   assert.equal(r.of('M1').state, '进行中');
-  assert.match(r.of('M2').waitMain, /排在主线 M1 后面/);
+  assert.match(r.of('M2').waitMain, /排在主线M1后面/);
   r = run(vols(), { lines: { M1: { started: true, state: 'abandon' } } });
   assert.equal(r.of('M2').state, '进行中', 'abandoning M1 lets M2 start (it is not stuck forever)');
   assert.notEqual(r.of('M3').state, '进行中', 'M3 also needs M1 done, and abandoned is not done');
@@ -40,11 +40,11 @@ test('H: reordering only changes which line waits for which; a line that already
   let r = run(a, {}, ['F_M1a']);
   assert.equal(r.of('M1').state, '完成');
   assert.equal(r.of('M2').state, '进行中');
-  assert.match(r.of('M3').waitMain, /排在主线 M2 后面/);
+  assert.match(r.of('M3').waitMain, /排在主线M2后面/);
   const swapped = [a[0], a[2], a[1]];
   r = run(swapped, {}, ['F_M1a']);
   assert.equal(r.of('M3').state, '进行中', 'M3 is now right after M1');
-  assert.match(r.of('M2').waitMain, /排在主线 M3 后面/);
+  assert.match(r.of('M2').waitMain, /排在主线M3后面/);
   r = run(swapped, { lines: { M2: { started: true } } }, ['F_M1a']);
   assert.equal(r.of('M2').state, '进行中', 'M2 had already started: moving it later does not lock it back');
 });

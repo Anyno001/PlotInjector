@@ -173,7 +173,7 @@ test('R5: an overall reply that renames a fact a returned-less page still uses i
     await send('第一阶段入口写得更具体', '【单位：v1/s1】\n```yaml\n阶段1_开头:\n  主线节点:\n    - {id: n1, 名称: n1名, 入口: 去n1的店铺后门, 发现: [{事实: F1, 内容: F1内容}], 完成条件: {事实: F1}}\n```');
     assert.equal(job(t).review.draft[0].stages[0].data.主线节点[0].入口, '去n1的店铺后门');
     assert.equal(job(t).review.overall, '');
-    assert.ok(toasts.some((x) => x.startsWith('success:已修改 1 页')), toasts.join('|'));
+    assert.ok(toasts.some((x) => x.startsWith('success:已修改1页')), toasts.join('|'));
   } finally { await t.inst.destroy(); }
 });
 
@@ -289,7 +289,7 @@ test('batch1: same-cause issues on one page merge into one card listing the node
   const merged = C.mergeSameIssues([issue('甲', 'a'), issue('乙', 'b'), { level: 'error', kind: 'x', id: 'c', plain: '别的问题' }, issue('丙', 'd')]);
   assert.equal(merged.length, 2);
   assert.deepEqual(merged[0].names, ['甲', '乙', '丙']);
-  assert.match(merged[0].plain, /下面 3 个节点一直开不了/);
+  assert.match(merged[0].plain, /下面3个节点一直开不了/);
   assert.match(C.issueCommentLine(merged[0]), /「甲」、「乙」、「丙」/);
   assert.equal(merged[1].plain, '别的问题');
   // 只有一条时不改
@@ -309,7 +309,7 @@ test('batch1: review page shows the draft state line and expands the full node c
     assert.match(full.textContent, /入口[\s\S]*去n1[\s\S]*获得[\s\S]*F1内容[\s\S]*完成/);
     assert.match(t.doc.querySelector('[data-act="rv-full"]').textContent, /收起完整内容/);
     await editYaml(t, '去n1', '去n1的后门');
-    assert.match(t.doc.querySelector('.pi-rv-state').textContent, /1 条待保存/);
+    assert.match(t.doc.querySelector('.pi-rv-state').textContent, /1条待保存/);
     assert.ok(t.doc.querySelector('.pi-rv-full'), 'stays expanded across pages / edits');
     assert.doesNotMatch(t.doc.querySelector('.pi-rv').textContent, /·/, 'no middle dot on the review page');
   } finally { await t.inst.destroy(); }
@@ -343,11 +343,11 @@ test('flow: comments on pages → 发送意见 → reply lands in the draft (pag
     assert.equal(send().textContent.trim(), '发送意见', 'no comments yet: plain label');
     await DE.goPage(t, 2); await t.blur('[data-rv-comment]', '加一个码头的旁证');
     await DE.goPage(t, 3); await t.blur('[data-rv-comment]', '入口改到码头');
-    assert.match(send().textContent, /发送意见（2 页）/);
+    assert.match(send().textContent, /发送意见（2页）/);
     t.host.llm.reply = DE.REPLY;
     send().click(); await tick();
     const dlg = [...t.doc.querySelectorAll('.pi-dialog')].pop();
-    assert.match(dlg.textContent, /发送意见[\s\S]*一次发给 AI[\s\S]*加一个码头的旁证[\s\S]*入口改到码头/);
+    assert.match(dlg.textContent, /发送意见[\s\S]*一次发给AI[\s\S]*加一个码头的旁证[\s\S]*入口改到码头/);
     await t.dlgBtn('发送'); await done(t);
     const r = job(t).review;
     assert.match(JSON.stringify(r.draft), /老水手/);
@@ -355,7 +355,7 @@ test('flow: comments on pages → 发送意见 → reply lands in the draft (pag
     assert.deepEqual(Object.values(r.comments).filter((x) => String(x).trim()), [], 'sent comments cleared');
     assert.equal(t.doc.querySelectorAll('.pi-rv-dot.is-chg').length + (t.doc.querySelector('.pi-rv-dot.is-cur') ? 1 : 0) >= 2, true, 'changed pages marked');
     assert.equal(send().textContent.trim(), '发送意见');
-    assert.match(t.doc.querySelector('.pi-rv-state').textContent, /1 条待保存/);
+    assert.match(t.doc.querySelector('.pi-rv-state').textContent, /1条待保存/);
     assert.equal(live(t)[0].stages[1].data.主线节点.length, 1, 'outline untouched before saving');
     await t.click('[data-act="import-adopt"]');
     const text = [...t.doc.querySelectorAll('.pi-dialog')].pop().textContent;
@@ -399,8 +399,8 @@ test('batch2: 审阅修改 holds every line; the picker switches lines and pages
     await t.blur('[data-rv-line="简介"]', 'S01 的新简介');
     assert.equal(job(t).review.draft[1].line.简介, 'S01 的新简介');
     assert.equal(job(t).review.draft[0].line.简介, '旧简介');
-    assert.match(t.doc.querySelector('.pi-rv-state').textContent, /本项目 2 条线，1 条待保存/);
-    assert.match(t.doc.querySelector('[data-act="import-adopt"]').textContent, /保存到大纲（1 条线）/);
+    assert.match(t.doc.querySelector('.pi-rv-state').textContent, /本项目2条线，1条待保存/);
+    assert.match(t.doc.querySelector('[data-act="import-adopt"]').textContent, /保存到大纲（1条线）/);
     // 选线列表
     await t.click('[data-act="rv-lines"]');
     const items = [...t.doc.querySelectorAll('.pi-dialog .pi-menu-item')].map((b) => b.textContent);

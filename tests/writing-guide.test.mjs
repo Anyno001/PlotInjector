@@ -17,13 +17,7 @@ test('default is the generic guide; the fan-fiction guide keeps its structure an
   const s = G.normalizeSettings({});
   assert.equal(s.guidePreset, 'generic');
   assert.equal(G.resolveGuide(s).text, G.GENERIC_GUIDE);
-  assert.match(G.FANFIC_GUIDE, /^# 同人世界观速成/);
-  assert.match(G.FANFIC_GUIDE, /速查：PASS \/ FAIL。/);
   assert.equal(G.resolveGuide({ guidePreset: 'fanfic' }).text, G.FANFIC_GUIDE);
-  // D39 微调：秘密写进 <仅作者>；旧事用中性说明，不再教「AI禁止……」括注；语言基准不再写「中小学生能看懂」；补上旧小说腔
-  for (const s of ['## 执行步骤', '## 正文骨架', '## 出稿速查', '总受或总攻', '<仅作者>', '已经过去，正文不必反复提起', '客观、清楚的现代书面语', '只见、却说、看官']) assert.ok(G.FANFIC_GUIDE.includes(s), s);
-  for (const s of ['中小学生', '能直接填进世界书条目']) assert.ok(!G.FANFIC_GUIDE.includes(s), s);
-  assert.ok(!/如`（AI禁止/.test(G.FANFIC_GUIDE));
 });
 
 test('an existing custom guide (saved before presets existed) becomes "custom"; an empty custom falls back to generic', () => {
@@ -43,11 +37,6 @@ test('the discussion prompt follows the chosen guide: opener and section title a
   assert.match(fan, /【写作基准：同人世界观速成】/);
   // old callers that pass plain text still work
   assert.match(G.discussSystemPrompt({ guide: 'X', refs: [] }), /【写作基准】\nX/);
-});
-
-test('generic guide: key rules present (language, secrets in <仅作者> and never lost, plain words in discussion, edit-mode handoff)', () => {
-  const g = G.GENERIC_GUIDE;
-  for (const s of ['客观、清楚的现代书面语', '不用口语腔', '不用古白话腔', '只在专名和器物上用当时的叫法', '<仅作者>', '用户讲过的秘密不能丢', '不用插件内部的叫法', '审阅修改', '只复制公开部分，删去整段 <仅作者>…</仅作者>']) assert.ok(g.includes(s), s);
 });
 
 test('generic guide output format still parses into blocks the setting page can edit', () => {

@@ -427,7 +427,7 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
                 (setProgress(step.progress),
                     notice.show({
                         id: 'advance',
-                        title: `已切到 ${placeOf(step.to)}`,
+                        title: `已切到${placeOf(step.to)}`,
                         body: reason || '检测判断本阶段已演完。',
                         actions: [{ label: '撤销', run: () => backTo(unit.id) }],
                         timeout: 12e3,
@@ -436,7 +436,7 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
             }
             notice.show({
                 id: 'advance',
-                title: `${placeOf(unit)} 已演完`,
+                title: `${placeOf(unit)}已演完`,
                 body: reason || '检测判断本阶段已演完。',
                 actions: [
                     { label: '打开下一段', primary: !0, run: () => openNext() },
@@ -553,7 +553,7 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
         }
         notice.show({
             id: 'offtrack',
-            title: `${placeOf(unit)} 偏离大纲`,
+            title: `${placeOf(unit)}偏离大纲`,
             body: `${reason || '正文走向与后续阶段冲突。'}后续阶段可能接不上，建议改写。`,
             actions: [
                 {
@@ -578,11 +578,11 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
     function threadEventText(event) {
         return (
             {
-                'clock-tick': `进度钟「${event.name}」推进到 ${event.filled}/${event.total}`,
+                'clock-tick': `进度钟「${event.name}」推进到${event.filled}/${event.total}`,
                 'clock-due': `进度钟「${event.name}」已满格，本段必须发生`,
                 'clock-done': `世界动态「${event.name}」已发生`,
                 'hook-on': `支线「${event.name}」条件满足，已激活`,
-                'chain-step': `支线链「${event.name}」进入第 ${event.step + 1}/${event.total} 步`,
+                'chain-step': `支线链「${event.name}」进入第${event.step + 1}/${event.total}步`,
                 'hook-done': `支线「${event.name}」已演完`,
                 'hook-expired': `支线「${event.name}」超过时限，已过期`,
             }[event.type] || event.type
@@ -744,7 +744,7 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
                 notice.show({
                     id: 'inf-wait',
                     title: '世界档案还没生成完',
-                    body: `已等待 ${WORLD_WAIT_MS / 1e3} 秒，本次回复先不带档案，生成完成后从下一次回复起带上。`,
+                    body: `已等待${WORLD_WAIT_MS / 1e3}秒，本次回复先不带档案，生成完成后从下一次回复起带上。`,
                     timeout: 12e3,
                 })));
     }
@@ -953,7 +953,7 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
                     notice.show({
                         id: 'checkfail',
                         title: '进度检测失败',
-                        body: `已自动重试 ${CHECK_RETRIES} 次：${error.message}`,
+                        body: `已自动重试${CHECK_RETRIES}次：${error.message}`,
                         actions: [
                             { label: '重试', primary: !0, run: () => checkNow({ manual }) },
                             { label: '关闭', run: () => {} },
@@ -1040,7 +1040,7 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
                   notice.show({
                       id: 'checkfail',
                       title: '进度检测失败',
-                      body: `已自动重试 ${CHECK_RETRIES} 次：${error.message}`,
+                      body: `已自动重试${CHECK_RETRIES}次：${error.message}`,
                       actions: [
                           { label: '重试', primary: !0, run: () => checkNow({ manual }) },
                           { label: '关闭', run: () => {} },

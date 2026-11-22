@@ -45,7 +45,7 @@ export function floorsText(view, count) {
     if (!count) return '';
     return view.runtime
         .recentFloors(count)
-        .map((floor) => `【第 ${floor.index} 楼】\n${floor.text}`)
+        .map((floor) => `【第${floor.index}楼】\n${floor.text}`)
         .join('\n\n');
 }
 
@@ -73,7 +73,7 @@ export async function resolveRefs(view, chat, project, { skip = [] } = {}) {
         text && refs.push({ title: '剧情进度（已演、进行中与之后的阶段）', text });
     }
     const floors = floorsText(view, r.floors);
-    return (floors && refs.push({ title: `最近 ${r.floors} 楼正文`, text: floors }), [...refs, ...(await wbRefTexts(r.wb, r.memo))]);
+    return (floors && refs.push({ title: `最近${r.floors}楼正文`, text: floors }), [...refs, ...(await wbRefTexts(r.wb, r.memo))]);
 }
 
 // 按规则取世界书条目正文：[{ title, text }]。讨论页与设定、大纲页的 AI 写作共用。
@@ -194,7 +194,7 @@ export async function pickRefs(refs, title = '附带的世界书条目') {
             const sum = () => {
                 const ids = [...box.querySelectorAll('[data-ref-id]:checked')].map((input) => input.dataset.refId);
                 const tokens = ids.reduce((total, id) => total + estimateTokens(byId.get(id)?.content || ''), 0);
-                box.querySelector('[data-ref-sum]').textContent = `已选 ${ids.length} 条，约 ${tokens} token`;
+                box.querySelector('[data-ref-sum]').textContent = `已选${ids.length}条，约${tokens} token`;
             };
             const applyMemo = () => {
                 const n = Math.max(0, Math.round(Number(box.querySelector('[data-ref-memo]')?.value) || 0));
@@ -273,7 +273,7 @@ export function fitRefs(refs, limit = 24e3) {
         let kept =
             text.length > left
                 ? `${text.slice(0, left)}
-……（以下 ${text.length - left} 字因长度限制未附带）`
+……（以下${text.length - left}字因长度限制未附带）`
                 : text;
         (used.push({ title: ref.title, text: kept }),
             report.push({ title: ref.title, chars: text.length, kept: Math.min(text.length, left) }),

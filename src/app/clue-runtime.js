@@ -52,6 +52,7 @@ import {
 
 import { hostWindow, chatMessages, ctx, toast } from '../host/st.js';
 import { isTrpg, trpgCheckResults } from '../core/trpg.js';
+import { trpgWantFacts } from '../core/trpg-rows.js';
 import { isClueMode, withNodeIds } from '../core/clue-model.js';
 
 import { isPlainObject } from '../core/outline.js';
@@ -331,14 +332,14 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
                         }),
                         ls = ev && c.state.lineStates.find((s) => s.line.id === ev.line);
                     if (
-                        (proof.ok || note(`当前场景是入口 ${value}，但${proof.reason}，先不算进入（可以在执行页点「进入」）`),
+                        (proof.ok || note(`当前场景是入口${value}，但${proof.reason}，先不算进入（可以在执行页点「进入」）`),
                         ev && ls && !ls.started && !ls.manual.state)
                     ) {
                         let slots = sideSlots(c.state.lineStates, p.clue.sideLimit || 1),
                             busy = ls.line.kind === 'main' ? mainSlotTaken(c.state.lineStates, ls.line.id) : '';
-                        if (busy) note(`没有开始 ${ev.line}：${busy}`);
-                        else if (ls.line.kind === 'main' && c.prog.mainPaused) note(`主线已全部暂停：没有开始 ${ev.line}`);
-                        else if (ls.line.kind === 'side' && c.prog.sidePaused) note(`支线已全部暂停：没有开始 ${ev.line}`);
+                        if (busy) note(`没有开始${ev.line}：${busy}`);
+                        else if (ls.line.kind === 'main' && c.prog.mainPaused) note(`主线已全部暂停：没有开始${ev.line}`);
+                        else if (ls.line.kind === 'side' && c.prog.sidePaused) note(`支线已全部暂停：没有开始${ev.line}`);
                         else if (ls.line.kind === 'side' && slots.full) {
                             let off = slots.used.length === 1 ? c.state.lineStates.find((x) => x.line.id === slots.used[0]) : null;
                             lineToast(`full:${ev.key}`, '支线已满', ls.line.name, '切换', () =>
@@ -347,7 +348,7 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
                         } else
                             (addOps([{ kind: 'line', target: ev.line, value: 'start', text: ev.key, note: '走进了入口', atIndex: lastAi }]),
                                 (changed = !0),
-                                note(`线 ${ev.line} 开始：第 ${lastAi} 楼走进了入口 ${ev.uid}`),
+                                note(`线${ev.line}开始：第${lastAi}楼走进了入口${ev.uid}`),
                                 lineToast(`start:${ev.key}`, ls.line.kind === 'side' ? '支线开始' : '主线开始', ls.line.name, '取消', () =>
                                     denyStart(ev.line, ev.key),
                                 ));
@@ -365,12 +366,12 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
                                 kind: 'line',
                                 target: c.plan.due,
                                 value: 'skip',
-                                note: '提示了 3 次没有进入，先让后面的上来',
+                                note: '提示了3次没有进入，先让后面的上来',
                                 atIndex: lastAi,
                             },
                         ]),
                         (changed = !0),
-                        note(`支线 ${c.plan.due} 提示了 3 次没有进入，排到后面`)),
+                        note(`支线${c.plan.due}提示了3次没有进入，排到后面`)),
                     !ticketValid(t0))
                 )
                     return;
@@ -404,18 +405,18 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
         if (c.prog.sidePaused) return toast('info', '支线已全部暂停，没有切换。先点「继续全部支线」。');
         let off = pauseId || (used.length === 1 ? used[0] : '');
         if (used.length >= (p.clue.sideLimit || 1) && !used.includes(off))
-            return toast('info', `现在有 ${used.length} 条支线在进行，请到执行页「剧情线」里先暂停其中一条，再点这条的「进入」。`);
+            return toast('info', `现在有${used.length}条支线在进行，请到执行页「剧情线」里先暂停其中一条，再点这条的「进入」。`);
         let ops = [];
         (used.includes(off) &&
             used.length >= (p.clue.sideLimit || 1) &&
-            ops.push({ kind: 'line', target: off, value: 'pause', note: `切换到 ${id}` }),
+            ops.push({ kind: 'line', target: off, value: 'pause', note: `切换到${id}` }),
             s.manual.state === 'pause' && ops.push({ kind: 'line', target: id, value: 'resume' }),
             ops.push({
                 kind: 'line',
                 target: id,
                 value: 'start',
                 text: key || 'manual',
-                note: ops.length ? `从 ${off} 切换过来` : '人工进入',
+                note: ops.length ? `从${off}切换过来` : '人工进入',
                 ...(Number.isInteger(floor) ? { atIndex: floor } : {}),
             }),
             (!key || key === 'manual') && uid && ops.push({ kind: 'focus', target: uid, value: !0, sceneAt: sceneNow() }));
@@ -436,7 +437,7 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
         if (s.line.kind === 'side' && sideSlots(c.state.lineStates, p.clue.sideLimit || 1).full)
             return switchSide(id, 'manual', void 0, pauseId, entry);
         (addOps([
-            ...(other ? [{ kind: 'line', target: other.line.id, value: 'pause', note: `换成 ${id}` }] : []),
+            ...(other ? [{ kind: 'line', target: other.line.id, value: 'pause', note: `换成${id}` }] : []),
             { kind: 'line', target: id, value: 'start', text: 'manual', note: '人工进入' },
             ...(entry ? [{ kind: 'focus', target: entry, value: !0, sceneAt: sceneNow() }] : []),
         ]),
@@ -463,7 +464,7 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
         let { col: colOf, rows } = sheetRows(found.sheet),
             ci = colOf(col),
             hits = findRow(rows, row);
-        if (ci < 0) return catalogMissing || ((catalogMissing = !0), note(`线索控制表还没有「${col}」这一列：点一次「生成线索模板」补上`));
+        if (ci < 0) return catalogMissing || ((catalogMissing = !0), note(`线索控制表还没有「${col}」这一列：点一次「创建模板」补上`));
         if (hits.length !== 1 || cellText(hits[0][ci]) === want || !ticketValid(t0)) return;
         let index = found.sheet.content.indexOf(hits[0]);
         if (index < 1) return;
@@ -496,7 +497,10 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
                 let s = started.get(lid);
                 return !!s && (s.manual.startAt === void 0 || s.manual.startAt < 0 || target >= s.manual.startAt);
             },
-            wantFact = (code) => triggers.has(code) || !factLines.has(code) || [...factLines.get(code)].some(lineReady),
+            // 跑团项目只补眼前要用的线索（core/trpg-rows.js）；普通项目 trpgSet 为 null，和原来一样
+            trpgSet = isTrpg(p) ? trpgWantFacts(c.compiled, c.state, c.snap, c.prog, p.clue) : null,
+            wantFact = (code) =>
+                triggers.has(code) || !factLines.has(code) || ([...factLines.get(code)].some(lineReady) && (!trpgSet || trpgSet.has(code))),
             diff = prebuildDiff(
                 { ...plan, facts: plan.facts.filter((f) => wantFact(f.code)), knows: plan.knows.filter((k) => wantFact(k.fact)) },
                 c.snap,
@@ -508,7 +512,7 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
         if (
             (waiting &&
                 !labelsWarned &&
-                ((labelsWarned = !0), note(`有 ${waiting} 条事实还没有标签，先不补行（采用大纲时会自动生成；也可以用「按大纲补表格行」）`)),
+                ((labelsWarned = !0), note(`有${waiting}条事实还没有标签，先不补行（采用大纲时会自动生成；也可以用「补全表格」）`)),
             !ready.length && !diff.newKnows.length)
         )
             return;
@@ -532,7 +536,7 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
                         done.push(k.key));
             }
         done.length &&
-            (note(`自动补了 ${done.length} 行：${done.slice(0, 6).join('、')}${done.length > 6 ? '……' : ''}`), invalidate('clue-rows'));
+            (note(`自动补了${done.length}行：${done.slice(0, 6).join('、')}${done.length > 6 ? '……' : ''}`), invalidate('clue-rows'));
     }
     function lineAct(id, value, uid = '', s0 = null) {
         if (s0 && !scopeValid(s0)) throw new Error('已经切换了聊天、项目或推进方式，这次操作没有执行，请重新点一次');
@@ -556,7 +560,7 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
             if (other || mark.length)
                 return (
                     addOps([
-                        ...(other ? [{ kind: 'line', target: other.line.id, value: 'pause', note: `换成 ${id}` }] : []),
+                        ...(other ? [{ kind: 'line', target: other.line.id, value: 'pause', note: `换成${id}` }] : []),
                         { kind: 'line', target: id, value: 'resume' },
                         ...mark,
                     ]),
@@ -651,7 +655,7 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
         let r = await voidTables(p, id, s0.ticket, s0.iso).catch((e) => ({ table: 'none', why: (e && e.message) || String(e) }));
         return (
             invalidate('clue-void'),
-            note(r.table === 'ok' ? `作废 ${id}：表格已改回未获得` : `作废 ${id}：${r.why || '表格没改'}`),
+            note(r.table === 'ok' ? `作废${id}：表格已改回未获得` : `作废${id}：${r.why || '表格没改'}`),
             { done: !0, ...r }
         );
     }
@@ -664,7 +668,7 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
         if (typeof api.executeSqlMutation != 'function' || typeof api.querySql != 'function')
             return {
                 table: 'none',
-                why: '数据库不是 SQLite 存储模式（或还没就绪），插件没法安全改表；需要的话请到数据库里把这条改回「未获得」',
+                why: '数据库不是SQLite存储模式（或还没就绪），插件没法安全改表；需要的话请到数据库里把这条改回「未获得」',
             };
         let unknown = Array.isArray(kb && kb.未知值) ? kb.未知值[0] : (kb && kb.未知值) || '未知',
             jobs = [
@@ -714,7 +718,7 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
             fr.problems.length ? `事实表读不到：${fr.problems[0]}` : !factOk && '事实表这条还不是「未获得」',
             kr && kr.problems.length
                 ? `知情表读不到：${kr.problems[0]}`
-                : !knowOk && `知情表还有 ${knows.map((k) => k.actor).join('、')} 记着知道`,
+                : !knowOk && `知情表还有${knows.map((k) => k.actor).join('、')}记着知道`,
         ]
             .filter(Boolean)
             .join('；');
@@ -906,7 +910,7 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
                   ? op.value ? '暂停全部主线' : '继续全部主线'
                   : op.value ? '暂停剧情' : '继续剧情';
         if (op.kind === 'line')
-            return `${{ start: '开启', pause: '暂停', resume: '继续', done: '标记完成', abandon: '放弃', deny: '取消开启', skip: '跳过', '': '还原手动操作' }[String(op.value || '')] || op.value}线 ${op.target}${op.note ? `（${op.note}）` : ''}`;
+            return `${{ start: '开启', pause: '暂停', resume: '继续', done: '标记完成', abandon: '放弃', deny: '取消开启', skip: '跳过', '': '还原手动操作' }[String(op.value || '')] || op.value}线${op.target}${op.note ? `（${op.note}）` : ''}`;
         let names = {
                 open: { force: '手动开放', block: '暂时停用', '': '开放改回按条件判断' },
                 done: { force: '手动完成', undo: '算作没完成', '': '完成改回按表格判断' },
@@ -916,7 +920,7 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
             },
             label = (names[op.kind] && names[op.kind][String(op.value ?? '')]) || op.kind;
         return op.kind === 'focus' && op.value && op.target.startsWith(AWAY_PREFIX)
-            ? `主角离开 ${op.target.slice(AWAY_PREFIX.length)}`
+            ? `主角离开${op.target.slice(AWAY_PREFIX.length)}`
             : `${label} ${op.target}${op.note ? `（${op.note}）` : ''}`;
     }
     function sceneNow() {

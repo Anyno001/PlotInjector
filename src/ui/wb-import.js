@@ -28,7 +28,7 @@ export async function pickWorldbookEntries(title = '从世界书导入') {
         ${book.entries
             .map(
                 (entry, e) => `<label class="pi-check${entry.disabled ? ' is-off' : ''}"><input type="checkbox" data-pick="${b}:${e}">
-        <span>${esc(entry.title)} <span class="pi-badge">≈${entry.content.length} 字</span></span></label>`,
+        <span>${esc(entry.title)} <span class="pi-badge">≈${entry.content.length}字</span></span></label>`,
             )
             .join('')}`,
         )
@@ -80,7 +80,7 @@ export async function afterImport(entries, { authorCount = 0 } = {}) {
     if (!entries.length) return;
     let choice = await choiceDialog({
         title: '世界书里的原条目',
-        body: `原条目和注入内容会重复。关闭只改「禁用」，可随时在世界书里重新打开。${authorCount ? `其中 ${authorCount} 条导入为仅作者资料：原条目如果保持开启，世界书仍会把它注入正文，建议关闭。` : ''}`,
+        body: `原条目和注入内容会重复。关闭只改「禁用」，可随时在世界书里重新打开。${authorCount ? `其中${authorCount}条导入为仅作者资料：原条目如果保持开启，世界书仍会把它注入正文，建议关闭。` : ''}`,
         choices: [
             { label: '保留', value: 'keep' },
             { label: '删除', value: 'delete', danger: !0 },
@@ -103,13 +103,13 @@ export async function afterImport(entries, { authorCount = 0 } = {}) {
 
 export async function chooseSettingKinds(entries) {
     if (!entries.length) return [];
-    let html = `<p class="pi-hint">这些条目不是大纲格式，会放进「设定」。<b>公开设定</b>每轮都会注入正文；<b>仅作者资料</b>用 &lt;仅作者&gt; 包住，不注入，只在讨论和让 AI 写大纲时使用。剧情走向、真相、未来安排请选仅作者。</p>
+    let html = `<p class="pi-hint">这些条目不是大纲格式，会放进「设定」。<b>公开设定</b>每轮都会注入正文；<b>仅作者资料</b>用 &lt;仅作者&gt; 包住，不注入，只在讨论和让AI写大纲时使用。剧情走向、真相、未来安排请选仅作者。</p>
         ${entries
             .map(
                 (
                     entry,
                     i,
-                ) => `<div class="pi-wbkind"><span>${esc(entry.title)} <span class="pi-badge">≈${entry.content.length} 字</span></span>
+                ) => `<div class="pi-wbkind"><span>${esc(entry.title)} <span class="pi-badge">≈${entry.content.length}字</span></span>
         <label class="pi-check"><input type="radio" name="wbk${i}" value="author" data-kind="${i}" checked><span>仅作者</span></label>
         <label class="pi-check"><input type="radio" name="wbk${i}" value="public" data-kind="${i}"><span>公开设定</span></label></div>`,
             )

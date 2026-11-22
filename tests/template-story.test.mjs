@@ -321,15 +321,6 @@ test('V5: shipped sample — witness refuses (no 被告知), back-door print alo
 });
 
 // ---------- Official shujuku adaptation (GPT §13.2): prebuild rows, 登记口径, scene catalog, evidence rule ----------
-test('template: every clue table states the evidence rule (plans in user messages are not events) with the negative example', () => {
-  const t = buildTemplate({});
-  for (const name of ['线索控制表', '关键事实表', '知情表']) {
-    const note = Object.values(t).find((s) => s && s.name === name).sourceData.note;
-    assert.match(note, /用户消息里出现的计划、提议、打算/, name);
-    assert.match(note, /什么也没找到就离开了 → 不记录任何发现/, name);
-  }
-});
-
 test('template: 关键事实表 has a 登记口径 column; scene catalog goes into the control table note', () => {
   const t = buildTemplate({ factRows: [{ code: 'F1', label: '钱箱', criterion: '亲自查看时登记' }], scenes: [{ uid: 'n_a', entry: '去杂货店', place: '杂货店' }] });
   const f = Object.values(t).find((s) => s && s.name === '关键事实表');

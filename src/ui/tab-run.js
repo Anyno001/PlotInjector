@@ -66,7 +66,7 @@ function hookRow(hook) {
         hook.status === 'done'
             ? '已演'
             : chain
-              ? `第 ${hook.step + 1}/${hook.steps.length} 步${hook.status === 'queue' ? '，排队' : ''}`
+              ? `第${hook.step + 1}/${hook.steps.length}步${hook.status === 'queue' ? '，排队' : ''}`
               : { wait: '待触发', active: '已激活', queue: '排队' }[hook.status];
     const markHtml = mark
         ? `<button type="button" class="pi-meta pi-meta-btn${hook.status === 'active' ? ' is-dot' : ''}" data-act="hook-menu" data-key="${esc(hook.key)}">${esc(mark)}</button>`
@@ -93,7 +93,7 @@ function expiredRows(hooks, open) {
               )
               .join('')
         : '';
-    return `<p class="pi-hint"><button type="button" class="pi-meta pi-meta-btn" data-act="expired-toggle">已过期 ${hooks.length} 条</button></p>${rows}`;
+    return `<p class="pi-hint"><button type="button" class="pi-meta pi-meta-btn" data-act="expired-toggle">已过期${hooks.length}条</button></p>${rows}`;
 }
 
 // 世界进度钟：每钟一行，圆点按格数，深色为已填；点整行开手动菜单。
@@ -242,7 +242,7 @@ export function render(view) {
         }
         </div>
         ${personaCard(view, project, progress, st)}
-        <div class="pi-card"><h3>阶段<span class="pi-meta">${gap > 0 ? `${gap} 楼后检测` : '下一楼检测'}</span><span class="pi-spacer"></span>
+        <div class="pi-card"><h3>阶段<span class="pi-meta">${gap > 0 ? `${gap}楼后检测` : '下一楼检测'}</span><span class="pi-spacer"></span>
             ${units.length ? `<button type="button" class="pi-btn is-sm is-ghost" data-act="index-toggle">${st.indexOpen ? '收起索引' : '剧情索引'}</button>` : ''}</h3>
         ${
             units.length
@@ -254,7 +254,7 @@ export function render(view) {
             <button type="button" class="pi-btn is-sm" data-act="check"${checking ? ' disabled' : ''}>${checking ? '<span class="pi-spin"></span>检测中' : '立即检测'}</button>
             <button type="button" class="pi-btn is-sm" data-act="rewrite">改写后续</button></div>
         ${timeline(units, states, progress, settings.carryOver ? carriedNodes(units, states, progress, { withOff: !0 }) : [], liveOf(units, states, progress, settings), sw, st.expiredOpen)}`
-                : '<p class="pi-hint">大纲为空。到「大纲」页导入剧情 YAML、导入长文，或让 AI 写。</p>'
+                : '<p class="pi-hint">大纲为空。到「大纲」页导入剧情YAML、导入长文，或让AI写。</p>'
         }
         </div>`;
 }
@@ -430,7 +430,7 @@ export const actions = {
                           ? list
                                 .map(
                                     (entry) =>
-                                        `<p class="pi-hint">${esc(positionLabel(entry))}，${esc(entry.title)}，顺序 ${entry.order}</p><pre class="pi-pre">${esc(entry.content)}</pre>`,
+                                        `<p class="pi-hint">${esc(positionLabel(entry))}，${esc(entry.title)}，顺序${entry.order}</p><pre class="pi-pre">${esc(entry.content)}</pre>`,
                                 )
                                 .join('')
                           : '';

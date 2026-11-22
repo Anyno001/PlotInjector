@@ -342,7 +342,7 @@ const fromText = item => (item.carried ? `（来自${splitStageKey(item.unit.sta
 const indexName = item => (item.label === item.node.name ? `${item.node.name}${fromText(item)}` : item.label);
 
 function stepText(hook) {
-    return hook.steps.length ? `第 ${Math.min(hook.step + 1, hook.steps.length)}/${hook.steps.length} 步` : '';
+    return hook.steps.length ? `第${Math.min(hook.step + 1, hook.steps.length)}/${hook.steps.length}步` : '';
 }
 
 function hookLine(hook) {

@@ -158,3 +158,29 @@ test('multi-line outline: the scene catalog is written into the control seed row
   assert.doesNotMatch(doc.body.textContent, /标签还没准备好/);
   await inst.destroy();
 });
+
+test('bound project, new chat without clue tables: 需要处理 has a 创建模板 button even with run settings folded', async () => {
+  const ctx = await setup(dailyTables());
+  ctx.inst.data.updateProject(ctx.pid, (x) => ({ ...x, clue: { ...x.clue, bindings: { facts: [{ 表: '关键事实表', 编号列: '编号', 状态列: '状态', 已核实值: '已核实' }], knowledge: [] } } }));
+  await ctx.host.eventSource.emit(ctx.host.eventTypes.CHAT_CHANGED);
+  await ctx.host.settle(); await tick();
+  await ctx.click('[data-act="tab"][data-tab="run"]');
+  assert.ok(ctx.doc.querySelector('[data-act="run-set-toggle"][aria-expanded="false"]'), 'run settings folded');
+  const btn = ctx.doc.querySelector('.pi-hint.is-warn [data-act="clue-gen-template"]');
+  assert.ok(btn);
+  btn.click(); await tick();
+  assert.ok(ctx.doc.querySelector('.pi-dialog'), 'opens the template dialog');
+  await ctx.inst.destroy();
+});
+
+// 跑团项目（用户 11-22）：模板只放眼前的线索行；标签全部存进项目。普通项目见第一条测试（5条全给）。
+test('trpg project: template seeds only the near facts, all labels kept', async () => {
+  const ctx = await setup(dailyTables());
+  ctx.inst.data.updateProject(ctx.pid, (x) => ({ ...x, trpg: { on: true } }));
+  ctx.inst.runtime.clue.invalidate();
+  const dlg = await openGen(ctx); fillLabels(dlg); await confirm(dlg);
+  const seeded = byName(ctx.api.templateCalls[0].tpl, '关键事实表').content.slice(1).map((r) => r[1]);
+  assert.ok(seeded.length > 0 && seeded.length < 5, `seeded ${seeded}`);
+  assert.equal(Object.keys(ctx.inst.data.project(ctx.pid).clue.labels).length, 5, 'all labels kept in the project');
+  await ctx.inst.destroy();
+});

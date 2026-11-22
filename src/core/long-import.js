@@ -117,6 +117,22 @@ export function importIndexMessages({ part, total, prev = '', needs = '' }) {
     ];
 }
 
+// 整理第 partNo 段（从 0 起）时给模型看的作者索引（用户 2026-11-22：越往后请求越长）。
+// 本段和前后各一段读出的事实照原样给；更远的段只留编号、内容、性质（条件引用编号要用），
+// 「谁说的」「玩家怎么能知道」那几段已经整理过，不再每段重复。人物、地点、门槛、作者资料不动。
+export function importIndexForPart(index, partNo) {
+    if (!isPlainObject(index) || !Array.isArray(index.事实)) return index;
+    let here = Number(partNo) + 1;
+    return {
+        ...index,
+        事实: index.事实.map((f) =>
+            !isPlainObject(f) || !Number.isFinite(Number(f.段)) || Math.abs(Number(f.段) - here) <= 1
+                ? f
+                : Object.fromEntries(['编号', '内容', '性质', '段'].filter((k) => f[k] != null && f[k] !== '').map((k) => [k, f[k]])),
+        ),
+    };
+}
+
 export function mergeImportIndex(list) {
     let out = { 梗概: [], 人物: [], 地点: [], 事实: [], 门槛: [], 并行: [], 作者资料: [], 待确认: [] },
         people = /* @__PURE__ */ new Map(),
@@ -453,7 +469,7 @@ export function mergeSameIssues(list) {
         return {
             ...x,
             id: x.parts.map((y) => y.id).join('+'),
-            plain: `「${x.same.stage}」：下面 ${names.length} 个节点一直开不了（它们的开放条件要的线索，前面拿不到），这几条路走不通。`,
+            plain: `「${x.same.stage}」：下面${names.length}个节点一直开不了（它们的开放条件要的线索，前面拿不到），这几条路走不通。`,
             names,
             fix: '看看它们的开放条件：要的线索是不是写错了，或者前面阶段漏了产出这条线索的地方。',
             text: x.parts.map((y) => y.text).join('\n'),
@@ -808,14 +824,14 @@ export function importReachIssues(applied, { only = null, knownFacts = [], claim
             ? out.push({
                   ...base,
                   level: 'error',
-                  text: `替代途径走不通：${r.stage}·${r.node} 单独走完时，${r.why}。常见原因：这条线产出的事实不在阶段结束条件 / 下一阶段进入条件的「任一」里`,
+                  text: `替代途径走不通：${r.stage}·${r.node}单独走完时，${r.why}。常见原因：这条线产出的事实不在阶段结束条件 / 下一阶段进入条件的「任一」里`,
                   ...routePlain(r, facts),
               })
             : r.verdict === 'unknown' &&
               out.push({
                   ...base,
                   level: 'warn',
-                  text: `替代途径要到运行时才能确认：${r.stage}·${r.node} 单独走完时，${r.why}`,
+                  text: `替代途径要到运行时才能确认：${r.stage}·${r.node}单独走完时，${r.why}`,
                   plain: `「${r.stage}」：玩家只走${r.nodeNames.map((n) => `「${n}」`).join('、然后')}时能不能继续，要看游戏里表格、时间这些情况。`,
                   fix: '多半不用改；想确定的话，看看这一阶段的结束条件是不是依赖表格或时间。',
               });
@@ -836,7 +852,7 @@ export function importReachIssues(applied, { only = null, knownFacts = [], claim
             plain: `按现在的条件推下去，有地方永远走不到：${stuck
                 .slice(0, 4)
                 .map((x) => `「${x.stage}${x.node ? `·${x.nodeName || x.node}` : ''}」`)
-                .join('、')}${after ? `，以及后面 ${after} 处因此走不到` : ''}。`,
+                .join('、')}${after ? `，以及后面${after}处因此走不到` : ''}。`,
             fix: '看看这些地方的进入条件或开放条件：要的线索是不是前面根本拿不到。',
             text: `按大纲推演走不通：${stuck
                 .slice(0, 6)
@@ -960,11 +976,11 @@ export function mergeImportParts(vols, { rewrite = !1 } = {}) {
 }
 
 export function importConflictText(c) {
-    if (c.rewrite) return `线 ${c.line} 跨了几段，后面的段把前面已经写过的内容又写了一遍（${c.rewrite} 处），以前一段为准，后面只补了新的阶段和场景。需要的话在审阅页对照原文改`;
+    if (c.rewrite) return `线${c.line}跨了几段，后面的段把前面已经写过的内容又写了一遍（${c.rewrite}处），以前一段为准，后面只补了新的阶段和场景。需要的话在审阅页对照原文改`;
     if (c.lines)
-        return `草稿里写了好几条剧情线（${c.lines.join('、')}），长文导入暂时只能合成一条：保留了「${c.lines[0]}」，其余几条的阶段并进了这一条，它们的线编号和开启条件没有保留。要分开成几条线，采用后在大纲页让 AI 另写新的剧情线`;
+        return `草稿里写了好几条剧情线（${c.lines.join('、')}），长文导入暂时只能合成一条：保留了「${c.lines[0]}」，其余几条的阶段并进了这一条，它们的线编号和开启条件没有保留。要分开成几条线，采用后在大纲页让AI另写新的剧情线`;
     let s = (v) => (typeof v == 'string' ? v : JSON.stringify(v)).slice(0, 80);
-    return `${c.stage}${c.node ? `·${c.node}` : ''} 的「${c.field}」两段写得不一样：保留了前一段的「${s(c.kept)}」，后一段是「${s(c.other)}」。需要的话在采用后手动改`;
+    return `${c.stage}${c.node ? `·${c.node}` : ''}的「${c.field}」两段写得不一样：保留了前一段的「${s(c.kept)}」，后一段是「${s(c.other)}」。需要的话在采用后手动改`;
 }
 
 export const IMPORT_NEEDS_EXAMPLE =
@@ -1014,7 +1030,7 @@ export function mergeLineIdentity(list) {
             (out.push(entry),
                 byId.set(id, entry),
                 no && byNo.has(no) && byNo.get(no) !== id
-                    ? notes.push(`文档里第 ${no} 条支线被编了两个编号（${byNo.get(no)}、${id}），请确认是不是同一条`)
+                    ? notes.push(`文档里第${no}条支线被编了两个编号（${byNo.get(no)}、${id}），请确认是不是同一条`)
                     : no && byNo.set(no, id));
         }
     for (let l of out)
@@ -1128,7 +1144,7 @@ export function importLineDuplicates(vols) {
                     a: { id: a.id, stage: a.stage },
                     b: { id: b.id, stage: b.stage },
                     nodes: shared,
-                    text: `这段内容同时出现在 ${a.id}「${a.stage}」和 ${b.id}「${b.stage}」${shared.length ? `（重复的节点：${shared.slice(0, 4).join('、')}${shared.length > 4 ? '……' : ''}）` : ''}，请核对归属。可能是整理时放错了线，可以重新整理其中一条。`,
+                    text: `这段内容同时出现在${a.id}「${a.stage}」和${b.id}「${b.stage}」${shared.length ? `（重复的节点：${shared.slice(0, 4).join('、')}${shared.length > 4 ? '……' : ''}）` : ''}，请核对归属。可能是整理时放错了线，可以重新整理其中一条。`,
                 });
         }
     return out;
@@ -1161,7 +1177,7 @@ export function importLineIssues(drafts, existing, { index = null, known = [], c
                 let got = known.includes(d.fact);
                 add(idOf(v), {
                     level: got ? 'error' : 'warn',
-                    text: `线索编号 ${d.fact} 项目里已经有了（「${old.node}」：${old.text}），这条线的「${n.name}」又用它表示「${d.text}」。${got ? '这个聊天里它已经拿到了，采用后这条线会被当成已经查到。' : ''}如果是同一件事的另一条查法可以保留；不是同一件事的话，写意见让 AI 换一个编号`,
+                    text: `线索编号${d.fact}项目里已经有了（「${old.node}」：${old.text}），这条线的「${n.name}」又用它表示「${d.text}」。${got ? '这个聊天里它已经拿到了，采用后这条线会被当成已经查到。' : ''}如果是同一件事的另一条查法可以保留；不是同一件事的话，写意见让AI换一个编号`,
                 });
             }
     let all = [...(existing || []), ...(drafts || [])],
@@ -1181,7 +1197,7 @@ export function importLineIssues(drafts, existing, { index = null, known = [], c
             hard.length &&
                 add(id, {
                     level: 'error',
-                    text: `这条线走不通：${say(hard)}。常见原因是阶段的进入条件要等本阶段自己才能查到的线索，写意见让 AI 改`,
+                    text: `这条线走不通：${say(hard)}。常见原因是阶段的进入条件要等本阶段自己才能查到的线索，写意见让AI改`,
                 }),
             !hard.length &&
                 soft.length &&
@@ -1312,25 +1328,25 @@ export function inventedOpenIssue(vol, ident, mains = []) {
         others = atoms.filter((a) => a.kind !== 'line'),
         problems = [];
     return (
-        unbacked.length && problems.push(`要等 ${unbacked.join('、')}，但文档没提到${unbacked.length > 1 ? '它们' : '它'}`),
-        stance === 'free' && others.length && problems.push(`多了 ${others.map((a) => a.raw || a.kind).join('、')}`),
+        unbacked.length && problems.push(`要等${unbacked.join('、')}，但文档没提到${unbacked.length > 1 ? '它们' : '它'}`),
+        stance === 'free' && others.length && problems.push(`多了${others.map((a) => a.raw || a.kind).join('、')}`),
         stance !== 'free' &&
             lineAtoms.length > unbacked.length &&
             others.length &&
-            problems.push(`除了等线，还多了 ${others.map((a) => a.raw || a.kind).join('、')}，请核对原文有没有这一项`),
+            problems.push(`除了等线，还多了${others.map((a) => a.raw || a.kind).join('、')}，请核对原文有没有这一项`),
         stance === 'free' && win && problems.push(`加了开启时段（${String(win.主线).trim()}）`),
         stance === 'stated' &&
             !lineAtoms.length &&
             others.length &&
-            problems.push(`是 ${others.map((a) => a.raw || a.kind).join('、')}，请核对原文是不是这个意思`),
+            problems.push(`是${others.map((a) => a.raw || a.kind).join('、')}，请核对原文是不是这个意思`),
         problems.length
             ? {
-                  text: `${stance === 'free' ? `文档里这条是独立的（${said}）` : stance === 'stated' ? `文档写的是：${said}` : '文档没写这条的开启前提'}；AI 写的开启条件${problems.join('；')}`,
+                  text: `${stance === 'free' ? `文档里这条是独立的（${said}）` : stance === 'stated' ? `文档写的是：${said}` : '文档没写这条的开启前提'}；AI写的开启条件${problems.join('；')}`,
                   level: stance === 'free' || unbacked.length ? 'error' : 'warn',
                   canDrop: stance === 'free',
               }
             : stance === 'silent' && hasCond && !lineAtoms.length
-              ? { text: '文档没写这条的开启前提，AI 写了开启条件，请核对原文', level: 'warn', canDrop: !1 }
+              ? { text: '文档没写这条的开启前提，AI写了开启条件，请核对原文', level: 'warn', canDrop: !1 }
               : null
     );
 }
@@ -1343,9 +1359,9 @@ export function droppedLineRefs(kept, dropped, existingVolumes = []) {
         for (let id of conditionRefs(l.open).lines)
             gone.has(id) &&
                 out.push(
-                    `线 ${l.id}「${l.name}」的开启条件要等 ${id}，但 ${id} 不要了：${l.id} 会一直开不了，可以写意见让 AI 改条件，或者一起不要`,
+                    `线 ${l.id}「${l.name}」的开启条件要等${id}，但${id}不要了：${l.id}会一直开不了，可以写意见让AI改条件，或者一起不要`,
                 );
-    for (let l of comp.lines || []) l.window && gone.has(l.window.main) && out.push(`线 ${l.id} 的开启时段引用了 ${l.window.main}`);
+    for (let l of comp.lines || []) l.window && gone.has(l.window.main) && out.push(`线 ${l.id} 的开启时段引用了${l.window.main}`);
     return out;
 }
 
