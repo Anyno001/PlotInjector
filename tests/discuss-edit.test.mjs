@@ -99,10 +99,10 @@ test('J3: comments on two pages → 预览意见 lists them (editable) + talk �
   await goPage(t, 3);
   await t.blur('[data-rv-comment]', '入口写清楚');
   assert.equal(doc.querySelectorAll('.pi-rv-dot.is-note').length, 2, 'pages with comments are marked');
-  assert.match(doc.querySelector('[data-act="rv-preview"]').textContent, /发送意见（2页）/);
+  assert.match(doc.querySelector('[data-act="rv-send"]').textContent, /发送意见（2页）/);
   await t.click('[data-act="rv-preview"]');
   const dlg = doc.querySelector('.pi-dialog');
-  assert.match(dlg.textContent, /发送意见/);
+  assert.match(dlg.textContent, /整体意见/);
   assert.equal(dlg.querySelectorAll('[data-rv-q]').length, 2);
   assert.ok(dlg.querySelector('[data-rv-talk]').checked, 'talk attached by default');
   dlg.querySelector('[data-rv-q="v1/s3"]').value = '入口写清楚是码头';
@@ -121,13 +121,13 @@ test('J3: comments on two pages → 预览意见 lists them (editable) + talk �
   assert.ok(rv.querySelectorAll('.pi-rv-dot.is-chg, .pi-rv-dot.is-cur').length >= 2);
   // 保存
   const hist0 = inst.data.project(pid).outline.history.length;
-  await t.click('[data-act="import-adopt"]');
-  assert.match(doc.querySelector('.pi-dialog').textContent, /新增节点「老水手」/);
-  await t.dlgBtn('保存');
+  await t.click('.pi-rv-foot [data-act="import-adopt"]');
+  assert.equal(doc.querySelector('.pi-dialog'), null, 'editing an existing line with no error/progress change saves directly');
   const v1 = inst.data.project(pid).outline.volumes[0];
   assert.deepEqual([...v1.stages.map((s) => s.id)], ['s1', 's2', 's3']);
   assert.deepEqual({ ...v1.line }, { 编号: 'M1', 类型: '主线', 简介: '旧简介' });
   assert.equal(v1.stages[1].data.主线节点.length, 2);
+  assert.ok(v1.stages[1].data.主线节点.some((n) => n.名称 === '老水手'), 'new node saved');
   assert.equal(v1.stages[2].data.主线节点[0].入口, '去码头找n3');
   assert.equal(inst.data.project(pid).outline.history.length, hist0 + 1);
   assert.match(doc.querySelector('.pi-rv-state').textContent, /和大纲一致/, 'stays on the review page, now matching the outline');

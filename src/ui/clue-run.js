@@ -20,6 +20,7 @@ import { PLOT_MODES, isClueMode, normalizeClue } from '../core/clue-model.js';
 import { stringifyYaml, parseYaml } from '../core/yaml.js';
 import { acuApi } from '../app/clue-runtime.js';
 import { isTrpg } from '../core/trpg.js';
+import { kpCard } from './trpg-kp-card.js';
 import { trpgWantFacts, trpgRowFilter } from '../core/trpg-rows.js';
 import { NODE_STATUS_LABELS, AWAY_PREFIX } from '../core/clue-rules.js';
 import { ICONS } from './styles.js';
@@ -35,6 +36,7 @@ import { chatMessages, ctx, toast, cardKey } from '../host/st.js';
 import { importSecretNames } from '../core/long-import.js';
 
 import { ask } from './ai.js';
+import { progressHtml, startProgress, clearProgress } from './progress.js';
 
 import { clueTplMismatch, synthesizeClueTemplate, clueTplHeader, findGlobalTable } from '../core/clue-template.js';
 
@@ -95,7 +97,7 @@ export function bindingCard(project, st7, tables = null, inner = !1) {
                 : ''
         }
         <div class="pi-tools"><button type="button" class="pi-btn is-sm is-primary is-wide" data-act="clue-gen-template" title="生成线索模板：在当前聊天的表格上加入三张线索表（带上大纲要用的行），并调整默认表的规则；先预览，确认后才导入">创建模板</button></div>
-        <div class="pi-tools is-c${hasCatalog ? 2 : 3}"><button type="button" class="pi-btn is-sm" data-act="clue-prebuild" title="按大纲补表格行：大纲里加了新线索以后，把缺的行补进关键事实表、知情表；已有的行不动">补全表格…</button><button type="button" class="pi-btn is-sm" data-act="clue-labels-edit" title="修改线索标签：修改关键事实表里已有线索的标签和登记口径">修改线索…</button>
+        <div class="pi-tools is-c${hasCatalog ? 2 : 3}"><button type="button" class="pi-btn is-sm" data-act="clue-prebuild" title="按大纲补表格行：表已经建好、大纲后来又加了线索时用，把缺的行补进关键事实表、知情表；已有的行不动。「创建模板」导入后需要时会自动接着做这一步">补全表格…</button><button type="button" class="pi-btn is-sm" data-act="clue-labels-edit" title="修改线索标签：修改关键事实表里已有线索的标签和登记口径">修改线索…</button>
         ${hasCatalog ? '' : '<button type="button" class="pi-btn is-sm" data-act="clue-catalog" title="手动贴场景目录：旧聊天的线索表没有「场景目录」列、又不想重新生成模板时用，复制一段对照文字，手动贴进表格说明">场景目录</button>'}</div></div>`;
 }
 
@@ -266,7 +268,7 @@ export function renderClueRun(view, project, st7) {
     problems = problems.filter((p) => !lack.includes(p));
     let todo = [...(lackRow ? [lackRow] : []), ...problems.map((p) => `<p class="pi-hint is-warn">${esc(noDb && p === c.snap.problems[0] ? '没有检测到数据库插件（shujuku），当前无法注入。剧情线的进度不受影响，装好并开启数据库插件后接着用。' : p)}</p>`), ...(labelRow ? [labelRow] : [])];
     return `${todo.length ? `<div class="pi-card"><h3>需要处理<span class="pi-badge is-warn">${todo.length}</span></h3>${todo.join('')}</div>` : ''}
-        ${mainlineCard(c)}${lineCard(c, project)}
+        ${mainlineCard(c)}${isTrpg(project) ? kpCard(view, project, c, d) : ''}${lineCard(c, project)}
         <div class="pi-card"><h3>本轮场景${enabled}${paused}<span class="pi-spacer"></span>
             <button type="button" class="pi-btn is-sm is-ghost" data-act="clue-refresh">重新读表</button>
             <button type="button" class="pi-btn is-sm is-ghost" data-act="preview">预览</button></h3>
@@ -320,29 +322,42 @@ export function factRowsHtml(facts, prefix, volumes, stored = {}, { intro = !0 }
             have = f.now || storedLabel(stored, f.code, c),
             where = [c.stage, c.nodeName].filter(Boolean).join('，');
         return `<div class="pi-prebuild-row" data-fr-row="${i}">
-          <div class="pi-fr-hd"><b>${esc(where || f.code)}</b><span class="pi-meta">${esc(f.code)}</span>${f.orphan || c.orphan ? '<span class="pi-badge is-warn">大纲里没有节点产出它</span>' : ''}</div>
+          <div class="pi-fr-hd"><b>${esc(where || f.code)}</b><span class="pi-meta">${esc(f.code)}</span>${f.orphan || c.orphan ? '<span class="pi-badge is-warn">大纲里没有节点产出它</span>' : ''}<span class="pi-badge pi-fr-st${have && have.label ? ' is-ok' : ''}" data-fr-st="${i}">${have && have.label ? '已填' : '待填'}</span></div>
           ${c.answer ? `<p class="pi-fr-answer">这条线索查到的是：${esc(c.answer)}<span class="pi-meta">（只给你看，不会写进表格）</span></p>` : ''}
           <label class="pi-field"><span>标签：给它起个不透露答案的名字</span><input class="pi-inp" data-${prefix}-label="${i}" value="${esc(have ? have.label : '')}"></label>
           <label class="pi-field"><span>正文写到哪一步，才算主角拿到了它</span><textarea class="pi-ta" rows="2" data-${prefix}-crit="${i}">${esc(have ? have.criterion : '')}</textarea></label>
           <div class="pi-fr-warn" data-fr-warn="${i}"></div></div>`;
     };
+    // 用户 2026-11-23：「自动填写」要一眼看到、点了知道开始了、看得到进度；说明收起，不挡按钮
+    let n = facts.length,
+        filledN = facts.filter((f) => {
+            let c = ctx.get(f.code) || {},
+                have = f.now || storedLabel(stored, f.code, c);
+            return have && have.label;
+        }).length;
     return `<div class="pi-fr" data-fr="${prefix}">
-          <div class="pi-fr-intro"${intro ? '' : ' hidden'}><p><b>这一步在做什么</b></p>
+          <div class="pi-fr-start"${intro ? '' : ' hidden'}><button type="button" class="pi-btn is-primary is-lg${filledN >= n ? ' is-done' : ''}" data-fr-auto>${startFace(filledN >= n ? '' : filledN ? `开始自动填写 · 还有${n - filledN}条` : `开始自动填写 · 共${n}条`)}</button>
+          ${(clearProgress(`fr-${prefix}`), progressHtml(`fr-${prefix}`))}</div>
+          <p class="pi-hint" data-fr-status>${intro ? (filledN >= n ? '已经按以前填过的内容填好了。想重新生成某条，先清空它的框再点上面的按钮。' : 'AI按大纲写好标签和判定说明，你只需要检查标黄的地方。也可以自己填。') : '标黄的地方是插件检查出的问题，照着改框里的字就行。'}</p>
+          <details class="pi-fr-intro"${intro ? '' : ' hidden'}><summary>这一步在做什么</summary>
           <p>每轮正文写完后，数据库的填表模型会对照这里的说明，判断主角有没有拿到某条线索；拿到了，后面的剧情才会开放。</p>
           <p>所以每条线索要两样东西：一个<b>标签</b>，让填表模型认出是哪一条；一句<b>「写到哪一步才算拿到」</b>。这句写得太宽，主角还没真正查到就会被算作拿到，剧情会提前推进。</p>
           <p>这两样每一轮都会发给填表模型，所以<b>不能写出答案</b>：写「打开抽屉、读到单据时」，不写单据上写了什么。</p>
-          <p class="is-example">例　标签：抽屉里的单据　｜　写到哪一步：主角打开抽屉、读到单据内容时算拿到；只看到锁着的抽屉不算</p></div>
-          <div class="pi-tools is-c1"${intro ? '' : ' hidden'}><button type="button" class="pi-btn is-sm" data-fr-auto>自动填写</button></div>
-          <p class="pi-hint" data-fr-status>${intro ? '建议先点「自动填写」，由AI按大纲写好，你只需要检查标黄的地方。也可以自己填。' : '标黄的地方是插件检查出的问题，照着改框里的字就行。'}</p>
+          <p class="is-example">例　标签：抽屉里的单据　｜　写到哪一步：主角打开抽屉、读到单据内容时算拿到；只看到锁着的抽屉不算</p></details>
           ${facts.map(row).join('')}</div>`;
 }
+
+// 大按钮的字：空串 = 都填好了
+const startFace = (text) => (text ? `${ICONS.spark}<span>${text}</span>` : `${ICONS.check}<span>已全部填好</span>`);
 
 function storedLabel(stored, code, c) {
     let have = stored && stored[code];
     return have && have.label && have.sig === factLabelSig(c && c.code ? c : { code, usedBy: [] }) ? have : null;
 }
 
-export function mountFactRows(view, root, facts, prefix, volumes) {
+// opts.gate：弹窗主按钮原来的字。标签没填完时主按钮变灰、写明还差几条（用户 2026-11-23：以前能点，点了才说没填完，窗口还关了）。
+// opts.keep：自动填写完就把标签存进项目，窗口关了再开不用重来（改已有标签的弹窗不传，那边有自己的保存）。
+export function mountFactRows(view, root, facts, prefix, volumes, { gate = '', keep = !1 } = {}) {
     let box = root.querySelector(`[data-fr="${prefix}"]`);
     if (!box) return;
     let project = view.project(),
@@ -389,9 +404,26 @@ export function mountFactRows(view, root, facts, prefix, volumes) {
                     ...notes.map((x) => `<p class="pi-note-line">${esc(x)}</p>`),
                 ].join('')),
                 box.querySelector(`[data-fr-row="${i}"]`).classList.toggle('is-warn', warns.length > 0),
+                rowState(i, warns.length > 0),
                 warns.length
             );
+        },
+        rowState = (i, warn) => {
+            let b = box.querySelector(`[data-fr-st="${i}"]`);
+            if (!b) return;
+            let has = !!field(i, 'label').value.trim();
+            ((b.className = `pi-badge pi-fr-st${!has ? '' : warn ? ' is-warn' : ' is-ok'}`), (b.textContent = !has ? '待填' : warn ? '标黄' : '已填'), sync());
+        },
+        dlg = root.closest ? root.closest('.pi-dialog') || root : root,
+        mainBtn = gate ? [...dlg.querySelectorAll('[data-dlg]')].find((b) => b.classList.contains('is-primary')) : null,
+        startBtn = box.querySelector('[data-fr-auto]'),
+        running = !1,
+        sync = () => {
+            let left = facts.filter((_, i) => !field(i, 'label').value.trim()).length;
+            mainBtn && ((mainBtn.disabled = running || left > 0), (mainBtn.textContent = running ? '正在填写…' : left ? `还差${left}条没填` : gate));
+            startBtn && !running && (startBtn.classList.remove('is-busy'), startBtn.classList.toggle('is-done', !left), (startBtn.innerHTML = startFace(left ? `开始自动填写 · 还有${left}条` : '')));
         };
+    sync();
     box.addEventListener('input', (event) => {
         let m = event.target.closest('[data-fr-row]');
         m && (unsure.delete(facts[Number(m.dataset.frRow)].code), check(Number(m.dataset.frRow)));
@@ -445,11 +477,22 @@ export function mountFactRows(view, root, facts, prefix, volumes) {
         let btn = event.currentTarget,
             todo = facts.map((f, i) => ({ f, i })).filter(({ i }) => !field(i, 'label').value.trim() || !field(i, 'crit').value.trim());
         if (!todo.length) return (status.textContent = '都已经填好了。要重新生成，先清空对应的框。');
-        ((btn.disabled = !0), (status.innerHTML = '<span class="pi-spin"></span> 正在生成…'));
+        let prog = startProgress(`fr-${prefix}`).step(`第1步：AI写标签（共${todo.length}条）`, 70, 20000 + todo.length * 4000);
+        ((running = !0), (btn.disabled = !0), btn.classList.add('is-busy'), (btn.innerHTML = '<span class="pi-spin"></span><span>正在自动填写</span>'), (status.textContent = '生成期间可以先往下翻着看，写好后会一起填进框里。'), sync());
+        for (let { i } of todo) {
+            let b = box.querySelector(`[data-fr-st="${i}"]`);
+            b && ((b.className = 'pi-badge pi-fr-st is-accent'), (b.textContent = '生成中'));
+        }
         try {
             await secretsReady;
             let items = todo.map(({ f }) => ctx.get(f.code) || { code: f.code, usedBy: [], orphan: !0 }),
-                reply = await ask(view, 'outline', factLabelMessages(items, { secrets })),
+                // 流式时按回复里已经出现的编号算条数（只有独立接口流式；酒馆接口按用时估）
+                reply = await ask(view, 'outline', factLabelMessages(items, { secrets }), {
+                    onText: (t) => {
+                        let got = items.filter((x) => t.includes(x.code)).length;
+                        prog.real((got / items.length) * 70, `已写${got}/${items.length}条`);
+                    },
+                }),
                 r = parseFactLabels(
                     reply,
                     items.map((x) => x.code),
@@ -461,7 +504,8 @@ export function mountFactRows(view, root, facts, prefix, volumes) {
                     field(i, 'crit').value.trim() || (field(i, 'crit').value = got.criterion),
                     got.unsure && unsure.set(f.code, got.unsure));
             }
-            status.innerHTML = '<span class="pi-spin"></span> 正在检查有没有透露答案…';
+            todo.forEach(({ i }) => check(i));
+            prog.step('第2步：检查有没有透露答案', 97, 25000);
             let fixed = 0,
                 reviewFailed = '';
             try {
@@ -469,12 +513,20 @@ export function mountFactRows(view, root, facts, prefix, volumes) {
             } catch (error) {
                 reviewFailed = `检查没完成（${error.message}），下面按字面比对标出了可能透露答案的地方。`;
             }
-            let warned = facts.reduce((n, _, i) => n + (check(i) ? 1 : 0), 0);
+            let warned = facts.reduce((n, _, i) => n + (check(i) ? 1 : 0), 0),
+                got2 = todo.filter(({ i }) => field(i, 'label').value.trim()).length;
+            prog.done(`完成：已填好${got2}/${todo.length}条${warned ? `，${warned}条标黄` : ''}`);
+            keep &&
+                got2 &&
+                keepLabels(
+                    view,
+                    facts.map((f, i) => ({ code: f.code, label: field(i, 'label').value.trim(), criterion: field(i, 'crit').value.trim() })),
+                );
             status.textContent = `${secretsNote}${reviewFailed}已填好${todo.length - r.missing.length}条${r.missing.length ? `，${r.missing.length}条没生成（${r.missing.join('、')}），可以再点一次或自己填` : ''}。${fixed ? `${fixed}条原来的写法会透露答案，已经自动改好。` : ''}${warned ? `${warned}条标黄：黄字说明了原因，照着改一下框里的字就行，改完黄色会消失。觉得没问题也可以不改，标黄不会挡住导入。` : '没有发现问题，可以直接确认。'}`;
         } catch (error) {
-            status.textContent = `生成失败：${error.message}。可以再试一次，或者自己填。`;
+            (prog.fail(), (status.textContent = `生成失败：${error.message}。可以再试一次，或者自己填。`));
         } finally {
-            btn.disabled = !1;
+            ((running = !1), (btn.disabled = !1), facts.forEach((_, i) => rowState(i, box.querySelector(`[data-fr-row="${i}"]`).classList.contains('is-warn'))), sync());
         }
     });
 }
@@ -921,7 +973,7 @@ export const clueActions = {
             picked = await openDialog({
                 title: '按大纲补表格行',
                 html,
-                onMount: (root) => mountFactRows(view, root, diff.newFacts, 'pb', project.outline.volumes),
+                onMount: (root) => mountFactRows(view, root, diff.newFacts, 'pb', project.outline.volumes, { gate: '写入', keep: !0 }),
                 actions: [
                     { label: '取消', value: null },
                     {
@@ -1035,11 +1087,11 @@ export const clueActions = {
           <p>原有的表和数据都会保留，不会删除任何东西，也不影响别的聊天。</p></div>
           ${preview.problems.length ? `<p class="pi-hint is-warn"><b>需要你注意：</b></p><ul>${preview.problems.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
           <details class="pi-fr-more"><summary class="pi-hint">具体会改哪些地方（${preview.changes.length}处）</summary><p class="pi-hint">目标聊天：${esc(scope.chatLabel || '当前聊天')}</p><ul>${preview.changes.map((x) => `<li>${esc(x)}</li>`).join('') || '<li>没有需要改动的地方</li>'}</ul></details>
-          ${hasFacts ? '<p class="pi-hint">这个聊天已经有关键事实表，不在模板里追加行。新线索请在导入后用「补全表格」。</p>' : plan.facts.length ? `<h4 class="pi-fr-title">这份大纲里有${plan.facts.length}条要追踪的线索</h4>${factRowsHtml(plan.facts, 'gt', project.outline.volumes, project.clue.labels)}` : '<p class="pi-hint">大纲里还没有线索编号，线索表先建成空表。</p>'}`,
+          ${hasFacts ? '<p class="pi-hint">这个聊天已经有关键事实表，不在模板里追加行。导入后如果大纲里有表里还没有的线索，会接着打开「补全表格」补上。</p>' : plan.facts.length ? `<h4 class="pi-fr-title">这份大纲里有${plan.facts.length}条要追踪的线索</h4>${factRowsHtml(plan.facts, 'gt', project.outline.volumes, project.clue.labels)}` : '<p class="pi-hint">大纲里还没有线索编号，线索表先建成空表。</p>'}`,
             picked = await openDialog({
                 title: '生成线索模板',
                 html,
-                onMount: (root) => hasFacts || mountFactRows(view, root, plan.facts, 'gt', project.outline.volumes),
+                onMount: (root) => hasFacts || mountFactRows(view, root, plan.facts, 'gt', project.outline.volumes, { gate: '导入到当前聊天', keep: !0 }),
                 actions: [
                     { label: '取消', value: null },
                     {
@@ -1133,6 +1185,12 @@ export const clueActions = {
                     'success',
                     `已导入。${gen.changes.length}处改动${gen.problems.length ? `，${gen.problems.length}处需要注意（见预览）` : ''}。插件绑定已更新。`,
                 );
+        // 已有线索表：模板只更新场景等，缺的线索行接着补（用户 2026-11-23：分不清什么时候用「补全表格」）
+        if (hasFacts && res.runtimeReady !== !1 && !lost.length && after) {
+            let p2 = view.project(),
+                d2 = prebuildDiff(prebuildPlan(p2.outline.volumes), after.snap, p2.clue.bindings);
+            d2.factTable && (d2.newFacts.length || d2.newKnows.length) && (await clueActions['clue-prebuild'](view));
+        }
     },
     async 'clue-catalog'(view) {
         let plan = prebuildPlan(view.project().outline.volumes),

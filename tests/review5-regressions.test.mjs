@@ -152,9 +152,9 @@ test('15.2-3: same chat, database switched to another branch between preview and
   (() => { const t = doc.querySelector('[data-act="run-set-toggle"][aria-expanded="false"]'); t && t.click(); })(); await tick();
   doc.querySelector('[data-act="clue-prebuild"]').click(); await tick();
   const dlg = doc.querySelector('.pi-dialog');
-  dlg.querySelectorAll('[data-pb-label]').forEach((el, i) => { el.value = `标签${i}`; });
+  dlg.querySelectorAll('[data-pb-label]').forEach((el, i) => { el.value = `标签${i}`; el.dispatchEvent(new el.ownerDocument.defaultView.Event('input', { bubbles: true })); });
   host.db.setTables(liveTables(buildTemplate({ controlRow: ['主线', ''], factRows: [{ code: 'F_other', label: 'b' }], knowRows: [] })));
-  dlg.querySelector('.pi-btn.is-primary').click(); await tick(); await tick();
+  dlg.querySelector('.pi-dlg-acts .pi-btn.is-primary').click(); await tick(); await tick();
   assert.equal(host.w.AutoCardUpdaterAPI.inserted.length, 0, 'nothing written into the other branch');
   await inst.destroy();
 });
@@ -166,12 +166,12 @@ test('15.2-3 (P2): a previewed row that is already present again at confirm is s
   (() => { const t = doc.querySelector('[data-act="run-set-toggle"][aria-expanded="false"]'); t && t.click(); })(); await tick();
   doc.querySelector('[data-act="clue-prebuild"]').click(); await tick();
   const dlg = doc.querySelector('.pi-dialog');
-  dlg.querySelectorAll('[data-pb-label]').forEach((el, i) => { el.value = `标签${i}`; });
+  dlg.querySelectorAll('[data-pb-label]').forEach((el, i) => { el.value = `标签${i}`; el.dispatchEvent(new el.ownerDocument.defaultView.Event('input', { bubbles: true })); });
   // while the dialog is open, the fill model adds F_ledger itself → it must not be inserted twice
   const s2 = Object.values(t).find((x) => x && x.name === '关键事实表');
   s2.content.push([s2.content.length, 'F_ledger', '填表加的', '', '未获得', '', '']);
   host.db.setTables(t);
-  dlg.querySelector('.pi-btn.is-primary').click(); await tick(); await tick();
+  dlg.querySelector('.pi-dlg-acts .pi-btn.is-primary').click(); await tick(); await tick();
   const codes = host.w.AutoCardUpdaterAPI.inserted.map((x) => x.data['编号']).filter(Boolean);
   assert.ok(!codes.includes('F_ledger'), 'already present → skipped');
   assert.ok(codes.length > 0 && codes.every((c) => ['F_seen', 'F_print', 'F_talk'].includes(c)), 'only previewed, still-missing rows');

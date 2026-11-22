@@ -31,6 +31,12 @@ function observe(t) {
   return toasts;
 }
 async function done(t) { for (let i = 0; i < 100 && t.inst.__view.busy[`review:${t.pid}`]; i++) await tick(); await tick(); }
+const editYaml = async (t, from, to) => {
+  const box = t.doc.querySelector('[data-rv-yaml]');
+  assert.ok(from.test(box.value), `yaml has ${from}`);
+  box.value = box.value.replace(from, to);
+  await t.click('[data-act="rv-yaml-save"]');
+};
 const setLive = (t, id, fn) => t.inst.data.updateProject(t.pid, (p) => ({ ...p, outline: { ...p.outline, volumes: p.outline.volumes.map((v) => (v.id === id ? fn(v) : v)) } }));
 const lastDialog = (t) => [...t.doc.querySelectorAll('.pi-dialog')].pop();
 const waitDialog = async (t) => { for (let i = 0; i < 30 && !lastDialog(t); i++) await tick(); return lastDialog(t); };
@@ -44,11 +50,9 @@ test('N1: saving A does not list or roll back B that was only changed elsewhere;
     setLive(t, 'vS', (v) => ({ ...v, line: { ...v.line, 简介: 'B 在大纲里的新简介' } }));
     t.inst.__view.renderBody(); await tick();
     assert.match(t.doc.querySelector('.pi-rv-state').textContent, /本项目2条线，1条待保存/, 'B is not counted');
-    await t.click('[data-act="import-adopt"]');
-    const text = (await waitDialog(t)).textContent;
-    assert.doesNotMatch(text, /已有新改动/, 'B is not an overwrite target');
-    assert.doesNotMatch(text, /S01/);
-    await t.dlgBtn('保存');
+    await t.click('.pi-rv-foot [data-act="import-adopt"]');
+    const d0 = lastDialog(t);
+    assert.equal(d0, undefined, 'B is not an overwrite target: no confirm for a plain edit ' + (d0 ? d0.textContent : ''));
     assert.equal(live(t)[0].line.简介, 'A 的新简介');
     assert.equal(live(t)[1].line.简介, 'B 在大纲里的新简介', 'B keeps the newer outline value');
   } finally { await t.inst.destroy(); }
@@ -58,15 +62,18 @@ test('N1: the target line changing (or being deleted) while the save confirmatio
   for (const kind of ['change', 'delete']) {
     const t = await DE.boot(DE.clueVols(), 'clue', false); const toasts = observe(t);
     try {
+      // 保存确认只在有确定的问题（或会改动已玩进度）时才弹（11-23）：让 S01 的开启条件指向不存在的线，制造一个问题
+      setLive(t, 'vS', (v) => ({ ...v, line: { ...v.line, 开启条件: { 线: 'M404 == 完成' } } }));
       await DE.openReview(t, 'v1');
       await t.blur('[data-rv-line="简介"]', 'A 草稿');
-      await t.click('[data-act="import-adopt"]');
-      await waitDialog(t);
+      await t.click('.pi-rv-foot [data-act="import-adopt"]');
+      const dlg = await waitDialog(t);
+      assert.ok(dlg, 'confirmation shown when there are problems');
       kind === 'change'
         ? setLive(t, 'v1', (v) => ({ ...v, line: { ...v.line, 简介: '确认期间别处改的' } }))
         : t.inst.data.updateProject(t.pid, (p) => ({ ...p, outline: { ...p.outline, volumes: p.outline.volumes.filter((v) => v.id !== 'v1') } }));
       await t.dlgBtn('保存');
-      if (kind === 'change') assert.equal(live(t)[0].line.简介, '确认期间别处改的', 'newer value not overwritten');
+      if (kind === 'change') assert.equal(live(t).find((v) => v.id === 'v1').line.简介, '确认期间别处改的', 'newer value not overwritten');
       else assert.ok(!live(t).some((v) => v.id === 'v1'), 'deleted line not brought back');
       assert.ok(toasts.some((x) => /确认期间大纲里这些线又被改过/.test(x)), toasts.join('|'));
       assert.equal(job(t).review.draft.find((v) => v.id === 'v1').line.简介, 'A 草稿', 'draft kept');
@@ -210,7 +217,8 @@ test('N5: a saved bulk line is read-only and its comment is never sent; drop lin
     await LI.openJob(inst, doc, click, pid, [LI.vol('S01'), LI.vol('S02')]);
     await LI.gotoLine(doc, 'S02');
     await click('[data-act="rv-line-menu"]'); await LI.dlg(doc, 'drop');
-    await click('[data-act="import-adopt"]'); await LI.dlg(doc, '保存');
+    await click('.pi-rv-foot [data-act="import-adopt"]');
+    assert.ok(!doc.querySelector('.pi-dialog'), 'no error-level issue: bulk save has no confirm');
     await LI.gotoLine(doc, 'S01');
     assert.match(doc.querySelector('.pi-rv').textContent, /已经保存到大纲（S01），这里只读/);
     assert.ok(doc.querySelector('[data-act="rv-edit-saved"]'), '到大纲审阅修改');
@@ -221,13 +229,13 @@ test('N5: a saved bulk line is read-only and its comment is never sent; drop lin
     const j = LI.lineJob(inst, pid), v1 = LI.volOf(j, 'S01'), v2 = LI.volOf(j, 'S02');
     await inst.data.imports.update(j.id, (x) => ({ ...x, review: { ...x.review, comments: { [`${v1}/line`]: '旧意见', [`${v2}/line`]: '不导入线的意见' } } }));
     inst.__view.renderBody(); await tick();
-    assert.equal(doc.querySelector('[data-act="rv-preview"]').textContent.trim(), '发送意见', 'nothing to send');
-    const calls = host.llmCalls.length;
-    await click('[data-act="rv-preview"]');
-    const d = [...doc.querySelectorAll('.pi-dialog')].pop();
-    assert.match(d.textContent, /各页还没有意见/);
-    assert.ok(!d.querySelector('[data-rv-overall]'), 'no overall comment for a saved line');
-    [...d.querySelectorAll('.pi-btn')].find((b) => b.textContent === '发送').click(); await tick(); await tick();
+    assert.equal(doc.querySelector('[data-act="rv-send"]').textContent.trim(), '发送意见', 'nothing to send');
+    assert.ok(!doc.querySelector('[data-act="rv-preview"]'), 'no overall-comment entry on a saved (locked) line');
+    const calls = host.llmCalls.length, said = [];
+    host.w.toastr.info = (m) => said.push(m);
+    await click('[data-act="rv-send"]');
+    assert.match(said.join('|'), /各页还没有意见/);
+    assert.ok(!doc.querySelector('.pi-dialog'), 'no dialog');
     assert.equal(host.llmCalls.length, calls, 'no API call');
     // 到大纲审阅修改：打开项目的审阅修改，定位到 S01
     await click('[data-act="rv-edit-saved"]');
@@ -250,7 +258,7 @@ test('N5: an old bulk job whose S01 was adopted (importLineMap only) shows S01 a
     for (let i = 0; i < 20 && !Object.keys(LI.lineJob(inst, pid).review.adoptedLines || {}).length; i++) await tick();
     await LI.gotoLine(doc, 'S01');
     assert.match(doc.querySelector('.pi-rv-lname').textContent, /已保存/);
-    assert.match(doc.querySelector('[data-act="import-adopt"]').textContent, /（1条线）/, 'only S02 left to save');
+    assert.match(doc.querySelector('.pi-rv-foot [data-act="import-adopt"]').textContent, /（1条线）/, 'only S02 left to save');
   } finally { await inst.destroy(); }
 });
 
@@ -286,7 +294,7 @@ test('N6: a line deleted from the outline that only had a comment stays visible 
     const text = t.doc.querySelector('.pi-rv').textContent;
     assert.match(text, /在大纲里已经删掉了/);
     assert.match(text, /S01 的意见/);
-    assert.equal(t.doc.querySelector('[data-act="rv-preview"]').textContent.trim(), '发送意见', 'not counted for sending');
+    assert.equal(t.doc.querySelector('[data-act="rv-send"]').textContent.trim(), '发送意见', 'not counted for sending');
   } finally { await t.inst.destroy(); }
 });
 
@@ -354,8 +362,7 @@ test('N8: a reply that adds a condition on a node that does not exist is held ba
     await t.blur('[data-rv-comment]', '加个前置');
     const before = JSON.stringify(job(t).review.draft);
     t.host.llm.reply = ['【单位：v1/s2】', '```yaml', '阶段2_中段:', '  主线节点:', '    - {id: n2, 名称: n2名, 入口: 去n2, 开放条件: {节点: node_does_not_exist}, 发现: [{事实: F2, 内容: F2内容}], 完成条件: {事实: F2}}', '```'].join('\n');
-    await t.click('[data-act="rv-preview"]');
-    await t.dlgBtn('发送'); await done(t);
+    await t.click('[data-act="rv-send"]'); await done(t);
     assert.equal(JSON.stringify(job(t).review.draft), before, 'not applied');
     assert.equal(job(t).review.comments['v1/s2'], '加个前置', 'comment kept');
     assert.ok(toasts.some((x) => /找不到的node_does_not_exist/.test(x)), toasts.join('|'));
@@ -432,7 +439,7 @@ async function halfTable(env) {
 const NEW_COND = { 任一: [{ 事实: 'F_B' }, { 事实: 'F_C' }] };
 const lineYaml = (extra) => ['线:', '  编号: S01', '  类型: 支线', '  简介: 已改为有效条件', ...extra].join('\n');
 async function saveAll(doc, click, inst, pid) {
-  await click('[data-act="import-adopt"]');
+  await click('.pi-rv-foot [data-act="import-adopt"]');
   for (let i = 0; i < 4; i++) {
     const d = [...doc.querySelectorAll('.pi-dialog')].pop();
     if (!d) break;
@@ -468,8 +475,7 @@ test('round 4 N1: table half filled → AI sets a new complex condition → savi
     const vid = LI.lineJob(inst, pid).review.draft[0].id;
     await LI.blur(doc, doc.querySelector('[data-rv-comment]'), '开始条件改成 F_B 或 F_C');
     host.llm.reply = [`【单位：${vid}/line】`, '```yaml', lineYaml(['  开启条件:', '    任一:', '      - 事实: F_B', '      - 事实: F_C']), '```'].join('\n');
-    await click('[data-act="rv-preview"]');
-    await LI.dlg(doc, '发送');
+    await click('[data-act="rv-send"]');
     for (let i = 0; i < 60 && inst.__view.busy[`review:${pid}`]; i++) await tick();
     await tick();
     assert.equal(JSON.stringify(line().开启条件), JSON.stringify(NEW_COND), 'AI change applied');

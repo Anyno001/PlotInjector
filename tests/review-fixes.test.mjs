@@ -68,11 +68,9 @@ test('R1: outline-mode review that only changes a node 事件 saves to the outli
     toasts.length = 0;
     await editYaml(t, '老板娘报案', '老板娘撤回报案');
     assert.equal(job(t).review.draft[0].stages[0].data.主线节点[0].事件, '老板娘撤回报案');
-    await t.click('[data-act="import-adopt"]');
-    const dlg = t.doc.querySelector('.pi-dialog');
-    assert.ok(dlg, 'save confirmation shown');
-    assert.match(dlg.textContent, /事件改了/);
-    await t.dlgBtn('保存');
+    assert.ok(!t.doc.querySelector('.pi-rv-foot [data-act="import-adopt"]').disabled, 'a 事件-only change enables save');
+    await t.click('.pi-rv-foot [data-act="import-adopt"]');
+    assert.equal(t.doc.querySelector('.pi-dialog'), null, 'editing an existing line: no error / progress change → saves directly');
     assert.equal(live(t)[0].stages[0].data.主线节点[0].事件, '老板娘撤回报案');
     assert.ok(!toasts.some((x) => x.includes('没有要保存')));
   } finally { await t.inst.destroy(); }
@@ -84,7 +82,7 @@ async function staleScenario(t, toasts) {
   y.value = y.value.replace('查出埃利奥特·维恩组织这笔交易', '查出是谁组织这笔交易');
   await t.click('[data-act="rv-yaml-save"]');
   t.inst.data.updateProject(t.pid, (p) => ({ ...p, outline: { ...p.outline, volumes: p.outline.volumes.map((v) => ({ ...v, line: { ...v.line, 简介: '大纲页刚刚手动更新的新简介' } })) } }));
-  await t.click('[data-act="import-adopt"]');
+  await t.click('.pi-rv-foot [data-act="import-adopt"]');
   const text = await IR.answer(t.doc, '取消');
   assert.match(text, /已有新改动/);
   assert.match(text, /简介/, 'lists what changed elsewhere');
@@ -96,12 +94,12 @@ test('R2: reopened imported review does not silently overwrite a newer outline e
   try {
     await IR.importMain(t);
     const radio = t.$('[data-rv-when="any"]'); radio.checked = true; radio.dispatchEvent(new t.host.w.Event('input', { bubbles: true })); await tick();
-    await t.click('[data-act="import-adopt"]'); if (t.doc.querySelector('.pi-dialog')) await IR.answer(t.doc, '仍然保存');
+    await t.click('.pi-rv-foot [data-act="import-adopt"]'); if (t.doc.querySelector('.pi-dialog')) await IR.answer(t.doc, '仍然保存');
     await t.click('[data-act="rv-reopen"]'); await t.click('[data-act="rv-go"][data-i="2"]');
     await staleScenario(t, toasts);
     // 只有别的线变了：不拦
     t.inst.data.updateProject(t.pid, (p) => ({ ...p, outline: { ...p.outline, volumes: [...p.outline.volumes.map((v) => ({ ...v, line: { ...v.line, 简介: job(t).review.base[0].line.简介 } })), { id: 'other', key: '剧情_卷X', stages: [] }] } }));
-    await t.click('[data-act="import-adopt"]');
+    await t.click('.pi-rv-foot [data-act="import-adopt"]');
     const txt = await IR.answer(t.doc, '保存');
     assert.doesNotMatch(txt, /已有新改动/);
     assert.match(JSON.stringify(live(t)[0]), /查出是谁组织这笔交易/);
@@ -115,7 +113,7 @@ test('R3: a comment rewritten while waiting survives the old reply; an unchanged
     await DE.openReview(t, 'v1'); await DE.goPage(t, 3);
     await t.blur('[data-rv-comment]', '入口改成码头');
     let release; t.host.llm.respond = () => new Promise((r) => (release = r));
-    await t.click('[data-act="rv-preview"]'); await t.dlgBtn('发送');
+    await t.click('[data-act="rv-send"]');
     assert.ok(release, 'request in flight');
     await t.blur('[data-rv-comment]', '补充新意见：同时让船长在场');
     release(DE.S3_ONLY); await done(t);
@@ -125,7 +123,7 @@ test('R3: a comment rewritten while waiting survives the old reply; an unchanged
     // 意见没动：照常清掉
     await t.blur('[data-rv-comment]', '入口再改成码头');
     t.host.llm.respond = null; t.host.llm.reply = DE.S3_ONLY.replace('去码头找n3', '去码头仓库找n3');
-    await t.click('[data-act="rv-preview"]'); await t.dlgBtn('发送'); await done(t);
+    await t.click('[data-act="rv-send"]'); await done(t);
     assert.equal(job(t).review.comments['v1/s3'], '');
   } finally { await t.inst.destroy(); }
 });
@@ -184,7 +182,7 @@ test('R6: reviewing a side line that depends on a main-line node sends that node
     await DE.openReview(t, 'vS'); await DE.goPage(t, 1);
     await t.blur('[data-rv-comment]', '核对和 n3 的衔接，保留前置要求');
     t.host.llm.reply = '【单位：v1/s3】\n```yaml\n阶段3_收尾:\n  主线节点:\n    - {id: n3, 名称: 被改了, 入口: x, 发现: [{事实: F3, 内容: y}], 完成条件: {事实: F3}}\n```';
-    await t.click('[data-act="rv-preview"]'); await t.dlgBtn('发送'); await done(t);
+    await t.click('[data-act="rv-send"]'); await done(t);
     const prompt = t.host.llmCalls.at(-1).body;
     assert.match(prompt, /相关的其他部分（只读/);
     assert.match(prompt, /F3/, 'n3 completion fact included');
@@ -204,7 +202,7 @@ test('R7: an outline-mode project with a leftover line head shows no line page a
     await DE.goPage(t, 0);
     await t.blur('[data-rv-comment]', '给报案事件补一句对话');
     t.host.llm.reply = '没有修改';
-    await t.click('[data-act="rv-preview"]'); await t.dlgBtn('发送'); await done(t);
+    await t.click('[data-act="rv-send"]'); await done(t);
     const prompt = t.host.llmCalls.at(-1).body;
     assert.doesNotMatch(prompt, /完成条件必须写/);
     assert.doesNotMatch(prompt, /【单位：o1\/line】/);
@@ -225,25 +223,26 @@ test('keepReasons reads 保持原样 before the marker or between marker and blo
 });
 
 // ---------- R8：保存前的确认框写出对剧情进度的影响（按这个聊天的进度算好的最终结果）----------
-test('R8: the save confirmation shows the progress effect (a node becomes done directly); cancel writes nothing', async () => {
+test('R8: the save confirmation shows the progress effect (a finished node would revert; its completion condition is kept); cancel writes nothing', async () => {
   const t = await DE.boot(DE.clueVols().slice(0, 1), 'clue', false);
   try {
     const compute = t.inst.runtime.clue.compute;
-    const snap = { facts: new Map([['F1', { id: 'F1', status: 'confirmed', text: '', raw: '已核实' }]]), knowledge: [], tables: {}, problems: [] };
+    const snap = { facts: new Map([['F2', { id: 'F2', status: 'confirmed', text: '', raw: '已核实' }]]), knowledge: [], tables: {}, problems: [] };
     const prog = C.emptyClueProgress(), config = C.normalizeClue({ mode: 'clue' });
     t.inst.runtime.clue.compute = () => { const c = compute(); return { ...c, snap, prog, state: C.computeClueState(C.compileClue(live(t)), snap, prog, config) }; };
     await DE.openReview(t, 'v1'); await DE.goPage(t, 2);
-    await editYaml(t, /(完成条件:\s*\n\s*事实:) F2/, '$1 F1');
-    assert.equal(job(t).review.draft[0].stages[1].data.主线节点[0].完成条件.事实, 'F1');
-    await t.click('[data-act="import-adopt"]');
+    // 保存确认只在有错误或「已完成的节点会被改回」这类进度改动时弹出：把已完成节点的完成条件改成没达成的事实
+    await editYaml(t, /(完成条件:\s*\n\s*事实:) F2/, '$1 F9');
+    assert.equal(job(t).review.draft[0].stages[1].data.主线节点[0].完成条件.事实, 'F9');
+    await t.click('.pi-rv-foot [data-act="import-adopt"]');
     const text = [...t.doc.querySelectorAll('.pi-dialog')].pop().textContent;
     assert.match(text, /按这个聊天的进度/);
-    assert.match(text, /直接变成已完成|调查会被跳过/);
+    assert.match(text, /已完成，改写后会变回/);
     await t.dlgBtn('取消');
     assert.equal(live(t)[0].stages[1].data.主线节点[0].完成条件.事实, 'F2', 'cancel writes nothing');
-    assert.equal(job(t).review.draft[0].stages[1].data.主线节点[0].完成条件.事实, 'F1', 'draft kept');
-    await t.click('[data-act="import-adopt"]'); await t.dlgBtn('保存');
-    assert.equal(live(t)[0].stages[1].data.主线节点[0].完成条件.事实, 'F1');
+    assert.equal(job(t).review.draft[0].stages[1].data.主线节点[0].完成条件.事实, 'F9', 'draft kept');
+    await t.click('.pi-rv-foot [data-act="import-adopt"]'); await t.dlgBtn('保存');
+    assert.equal(live(t)[0].stages[1].data.主线节点[0].完成条件.事实, 'F2', 'finished node keeps its original completion condition');
   } finally { await t.inst.destroy(); }
 });
 
@@ -339,16 +338,16 @@ test('flow: comments on pages → 发送意见 → reply lands in the draft (pag
   const t = await DE.boot(DE.clueVols(), 'clue', false);
   try {
     await DE.openReview(t, 'v1');
-    const send = () => t.doc.querySelector('[data-act="rv-preview"]');
+    const send = () => t.doc.querySelector('[data-act="rv-send"]');
     assert.equal(send().textContent.trim(), '发送意见', 'no comments yet: plain label');
     await DE.goPage(t, 2); await t.blur('[data-rv-comment]', '加一个码头的旁证');
     await DE.goPage(t, 3); await t.blur('[data-rv-comment]', '入口改到码头');
     assert.match(send().textContent, /发送意见（2页）/);
     t.host.llm.reply = DE.REPLY;
     send().click(); await tick();
-    const dlg = [...t.doc.querySelectorAll('.pi-dialog')].pop();
-    assert.match(dlg.textContent, /发送意见[\s\S]*一次发给AI[\s\S]*加一个码头的旁证[\s\S]*入口改到码头/);
-    await t.dlgBtn('发送'); await done(t);
+    assert.equal(t.doc.querySelector('.pi-dialog'), null, 'sent straight away, no dialog');
+    await done(t);
+    assert.match(t.host.llmCalls.at(-1).body, /加一个码头的旁证[\s\S]*入口改到码头|入口改到码头[\s\S]*加一个码头的旁证/, 'both stored comments were sent');
     const r = job(t).review;
     assert.match(JSON.stringify(r.draft), /老水手/);
     assert.match(JSON.stringify(r.draft), /去码头找n3/);
@@ -357,10 +356,8 @@ test('flow: comments on pages → 发送意见 → reply lands in the draft (pag
     assert.equal(send().textContent.trim(), '发送意见');
     assert.match(t.doc.querySelector('.pi-rv-state').textContent, /1条待保存/);
     assert.equal(live(t)[0].stages[1].data.主线节点.length, 1, 'outline untouched before saving');
-    await t.click('[data-act="import-adopt"]');
-    const text = [...t.doc.querySelectorAll('.pi-dialog')].pop().textContent;
-    assert.doesNotMatch(text, /还没发送/, 'no unsent-comment prompt');
-    await t.dlgBtn('保存');
+    await t.click('.pi-rv-foot [data-act="import-adopt"]');
+    assert.equal(t.doc.querySelector('.pi-dialog'), null, 'no unsent-comment prompt, no confirm: saved directly');
     assert.equal(live(t)[0].stages[1].data.主线节点.length, 2, 'saved into the outline');
     assert.match(t.doc.querySelector('.pi-rv-state').textContent, /和大纲一致/);
   } finally { await t.inst.destroy(); }
@@ -410,10 +407,8 @@ test('batch2: 审阅修改 holds every line; the picker switches lines and pages
     assert.match(t.doc.querySelector('.pi-rv-lname').textContent, /M1/);
     // 保存：只写 S01；M1 没动
     const m1 = JSON.stringify(live(t)[0]);
-    await t.click('[data-act="import-adopt"]');
-    const text = [...t.doc.querySelectorAll('.pi-dialog')].pop().textContent;
-    assert.match(text, /简介/);
-    await t.dlgBtn('保存');
+    await t.click('.pi-rv-foot [data-act="import-adopt"]');
+    assert.equal(t.doc.querySelector('.pi-dialog'), null, 'bulk save without errors: no confirm');
     assert.equal(live(t)[1].line.简介, 'S01 的新简介');
     assert.equal(JSON.stringify(live(t)[0]), m1, 'unchanged line not rewritten');
     assert.match(t.doc.querySelector('.pi-rv-state').textContent, /和大纲一致/);
@@ -434,7 +429,7 @@ test('batch2: a line changed elsewhere is listed with its name; other lines chan
     await DE.openReview(t, 'vS');
     await t.blur('[data-rv-line="简介"]', 'S01 草稿简介');
     t.inst.data.updateProject(t.pid, (p) => ({ ...p, outline: { ...p.outline, volumes: p.outline.volumes.map((v) => (v.id === 'vS' ? { ...v, line: { ...v.line, 入口提示: '别处加的入口' } } : v)) } }));
-    await t.click('[data-act="import-adopt"]');
+    await t.click('.pi-rv-foot [data-act="import-adopt"]');
     let text = [...t.doc.querySelectorAll('.pi-dialog')].pop().textContent;
     assert.match(text, /已有新改动[\s\S]*S01[\s\S]*入口/);
     await t.dlgBtn('取消');

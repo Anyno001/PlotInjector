@@ -52,6 +52,7 @@ import { reidLines, mainLinesText } from '../core/long-import.js';
 import { esc, openDialog, menuDialog } from './dom.js';
 import { transcript } from '../core/prompts.js';
 import { ask, runTask } from './ai.js';
+import { progressHtml, startProgress, clearProgress } from './progress.js';
 import { toast, hostDocument } from '../host/st.js';
 import { currentTables } from './tab-outline.js';
 import { projectSecretNames } from '../core/store.js';
@@ -448,7 +449,21 @@ export function renderReview(view, job, review, index, crumb, notes = []) {
     let yamlText = u.kind === 'line' ? stringifyYaml({ [VOLUME_LINE_KEY]: vol.line }) : stringifyYaml({ [unitValue(review.draft, u.key).key]: unitValue(review.draft, u.key).data }),
         canUndo = review.history && review.history.length;
     let topNotes = notes.length ? `<details class="pi-rv-notes"><summary class="pi-hint">整理时的提示（${notes.length}）</summary>${notes.map((t) => `<p class="pi-hint">${esc(t)}</p>`).join('')}</details>` : '';
-    return `${crumb}<div class="pi-card pi-rv${isDrop ? ' is-drop' : ''}">${head}${topNotes}${nav}${body}
+    // 改完的提示条（用户 2026-11-23：发完意见不知道下一步要保存）：列出改了的页，可点过去看，旁边直接保存
+    let doneKeys = Object.entries(review.lastChanges || {})
+            .filter(([k, v]) => changed.has(k) && !(Array.isArray(v) && v.length === 1 && /^(未修改|保持原样)/.test(v[0])))
+            .map(([k]) => k),
+        doneBar =
+            !busy && !locked && review.revised && dirty && !synced && doneKeys.length && !pending
+                ? `<div class="pi-rv-done"><span>✓ AI改好了${doneKeys.length}页：${doneKeys
+                      .slice(0, 6)
+                      .map((k) => {
+                          let i = units.findIndex((x) => x.key === k);
+                          return i < 0 ? '' : `<button type="button" class="pi-btn is-sm is-ghost" data-act="rv-go" data-i="${i}">${esc(unitTitle(review, k))}</button>`;
+                      })
+                      .join('')}${doneKeys.length > 6 ? '…' : ''}</span><button type="button" class="pi-btn is-sm is-primary" data-act="import-adopt">${saveLabel(review, dirtyIds)}</button></div>`
+                : '';
+    return `${crumb}<div class="pi-card pi-rv${isDrop ? ' is-drop' : ''}">${head}${doneBar}${topNotes}${nav}${body}
         ${canUndo ? `<div class="pi-row pi-rv-undo"><button type="button" class="pi-btn is-sm is-ghost" data-act="rv-undo">撤销上次修改</button><span class="pi-hint">（${esc(review.history[review.history.length - 1].label)}）</span></div>` : ''}
         ${
              locked
@@ -458,7 +473,8 @@ export function renderReview(view, job, review, index, crumb, notes = []) {
           <div class="pi-tools is-c1"><button type="button" class="pi-btn is-sm" data-act="rv-yaml-save" data-unit="${esc(u.key)}">保存并检查</button></div><p class="pi-status" data-rv-yaml-status></p></details>`
          }
         ${locked ? '' : trpgReviewButton(view, job)}
-        <div class="pi-rv-foot"><button type="button" class="pi-btn${pending ? ' is-primary' : ''}" data-act="rv-preview"${busy ? ' disabled' : ''}>${busy ? '<span class="pi-spin"></span>修改中' : sendLabel(pending)}</button>${
+        ${locked || busy ? '' : `<div class="pi-row pi-rv-extra"><button type="button" class="pi-btn is-sm is-ghost" data-act="rv-preview" title="对整条线的意见、是否附带讨论记录；也能一次看全各页意见">整体意见${String(review.overall || '').trim() ? '（已写）' : ''}…</button></div>`}
+        <div class="pi-rv-foot">${busy ? progressHtml(`rv-${view.projectId}`) : ''}<button type="button" class="pi-btn${pending ? ' is-primary' : ''}" data-act="rv-send"${busy ? ' disabled' : ''}>${busy ? '<span class="pi-spin"></span>修改中' : sendLabel(pending)}</button>${
             synced
                 ? '<button type="button" class="pi-btn" data-act="import-adopt" disabled>已与大纲一致</button>'
                 : `<button type="button" class="pi-btn${pending ? '' : ' is-primary'}" data-act="import-adopt">${saveLabel(review, dirtyIds)}</button>`
@@ -527,8 +543,43 @@ export function reviewActions({ jobOf, crumbBack, redraftLine, openSaved = null 
         indexOf = (job) => {
             let ok = (job.localIndex || []).filter((x) => isPlainObject(x) && !x.error);
             return ok.length ? mergeImportIndex(ok) : job.index;
+        },
+        // 当前这条线（整体意见只改它）
+        curLine = (view, review) => {
+            let units = reviewUnits(view.project(), review),
+                vol = review.draft.find((v) => v.id === (units[Math.max(0, Math.min(units.length - 1, review.at || 0))] || units[0]).volumeId);
+            return { vol, locked: !vol || lineLocked(review, vol.id, view.project()) };
+        },
+        // 发给AI并显示进度（用户 2026-11-23：发送后只有按钮上一个小转圈，不知道走到哪了）
+        sendRevise = async (view, c2, opts) => {
+            let projectId = view.projectId,
+                key = `rv-${projectId}`,
+                n = sendableNotes(view.project(), c2.review).length,
+                prog = startProgress(key).step(`AI正在按${n ? `${n}页意见` : '整体意见'}修改`, 92, 40000 + n * 15000),
+                ok = !0;
+            await runTask(view, `review:${projectId}`, () =>
+                reviseUnits(view, c2.jobId, c2, indexOf(c2.job), jobOf, { ...opts, onText: (t) => prog.real(0, `已收到${t.length}字`) }),
+            ).catch((e) => ((ok = !1), toast('error', `修改中断：${e.message}。意见保留，可重试。`)));
+            ok ? prog.done('改好了') : prog.fail();
+            clearProgress(key);
+            view.renderBody();
         };
     let actions = {
+        // 发送意见（用户 2026-11-23）：直接发，不再先弹预览框；整体意见、附带讨论记录在「整体意见…」里设
+        async 'rv-send'(view) {
+            let box0 = hostDocument().querySelector('.pi-rv [data-rv-comment]');
+            box0 && (await reviewOnInput(view, box0, jobOf, { blur: !0 }));
+            let c = current(view);
+            if (!c) return;
+            let review = c.review,
+                { vol, locked } = curLine(view, review),
+                overall = locked ? '' : String(review.overall || '').trim();
+            if (!sendableNotes(view.project(), review).length && !overall)
+                return toast('info', '各页还没有意见。在页下面的「意见」框里写，写完点「发送意见」一次发给AI。');
+            let chat = review.noTalk ? null : await view.data.loadChat(view.projectId).catch(() => null),
+                talk = chat && (chat.summary || (chat.messages || []).length) ? transcript(chat.summary, chat.messages, 8e3) : '';
+            await sendRevise(view, c, { overall, overallVol: vol && vol.id, talk });
+        },
         async 'rv-go'(view, target) {
             let c = current(view);
             c && (await saveReview(view, c.jobId, (r) => ({ ...r, at: Number(target.dataset.i) || 0 })), view.renderBody());
@@ -730,7 +781,7 @@ export function reviewActions({ jobOf, crumbBack, redraftLine, openSaved = null 
                 hasTalk = !!(chat && (chat.summary || (chat.messages || []).length)),
                 stages = curVol ? curVol.stages.length : 0,
                 curName = curVol ? (review.draft.length > 1 ? lineTitle(curVol) : reviewIsClue(view.project(), review) ? '这条线' : '这一卷') : '',
-                html = `<p class="pi-hint">以下意见一次发给AI，改完的内容先进草稿，确认后再保存到大纲。可在此修改；点标题返回对应页。</p>
+                html = `<p class="pi-hint">以下意见会一次发给AI，改完先进草稿。可在此修改；点标题返回对应页。</p>
                 ${list.map((u) => `<div class="pi-rv-q"><button type="button" class="pi-rv-q-go" data-dlg-value="go:${esc(u.key)}">${esc(labelOf(u.key))} ›</button><textarea class="pi-ta" rows="2" data-rv-q="${esc(u.key)}">${esc(review.comments[u.key])}</textarea></div>`).join('') || '<p class="pi-hint">各页还没有意见。</p>'}
                 ${
                      curLocked
@@ -746,12 +797,12 @@ export function reviewActions({ jobOf, crumbBack, redraftLine, openSaved = null 
                 }),
                 typed = null,
                 pick = await openDialog({
-                    title: '发送意见',
+                    title: '整体意见',
                     html,
                     // 点标题回到那一页之前，先记下框里改过的内容（GPT 第二轮 N6）
                     onMount: (root) => root.addEventListener('click', (e) => e.target.closest('[data-dlg-value]') && (typed = read(root)), !0),
                     actions: [
-                        { label: '返回', value: (root) => ({ ...read(root), act: 'back' }) },
+                        { label: '存下，先不发', value: (root) => ({ ...read(root), act: 'back' }) },
                         { label: '发送', primary: !0, value: (root) => ({ ...read(root), act: 'send' }) },
                     ],
                 });
@@ -768,10 +819,8 @@ export function reviewActions({ jobOf, crumbBack, redraftLine, openSaved = null 
             if (pick.act !== 'send') return view.renderBody();
             let c2 = current(view);
             if (!sendableNotes(view.project(), c2.review).length && !String(pick.overall || '').trim()) return toast('info', '没有要发送的意见。');
-            let talk = pick.talk && chat ? transcript(chat.summary, chat.messages, 8e3) : '',
-                projectId = view.projectId;
-            await runTask(view, `review:${projectId}`, () => reviseUnits(view, c2.jobId, c2, indexOf(c2.job), jobOf, { overall: curLocked ? '' : pick.overall, overallVol: curVol && curVol.id, talk })).catch((e) => toast('error', `修改中断：${e.message}。意见保留，可重试。`));
-            view.renderBody();
+            let talk = pick.talk && chat ? transcript(chat.summary, chat.messages, 8e3) : '';
+            await sendRevise(view, c2, { overall: curLocked ? '' : pick.overall, overallVol: curVol && curVol.id, talk });
         },
 
         async 'rv-reopen'(view) {
@@ -858,6 +907,7 @@ async function reviseUnits(view, jobId, c, index, jobOf, opts = {}) {
                 talk: opts.talk || '',
                 mode: clue ? 'clue' : 'outline',
             }),
+            { onText: opts.onText },
         );
     if (view.projectId !== project.id || !jobOf(view, jobId)) return;
     let parts = splitUnitReplies(reply, want.map((k) => ({ key: k, name: k.endsWith('/line') ? VOLUME_LINE_KEY : unitValue(review.draft, k).key }))),
@@ -1008,7 +1058,7 @@ export async function reviewOnInput(view, target, jobOf, { blur = false } = {}) 
         // 不重画整页：只改按钮上的页数、当前页码的小红点
         let n = Object.values(view.data.imports.get(jobId).review.comments).filter((c) => String(c || '').trim()).length,
             card = target.closest('.pi-rv'),
-            b = card && card.querySelector('[data-act="rv-preview"]'),
+            b = card && card.querySelector('[data-act="rv-send"]'),
             dot = card && card.querySelector('.pi-rv-dot.is-cur');
         b && !view.busy[`review:${view.projectId}`] && ((b.textContent = sendLabel(n)), b.classList.toggle('is-primary', n > 0));
         dot && dot.classList.toggle('is-note', !!String(text).trim());
@@ -1034,7 +1084,7 @@ export async function reviewOnInput(view, target, jobOf, { blur = false } = {}) 
             stEl.textContent = stateLine(r1, ids, ids.length > 0);
         }
         if (save && edit) {
-            let hasNotes = !!card.querySelector('[data-act="rv-preview"].is-primary');
+            let hasNotes = !!card.querySelector('[data-act="rv-send"].is-primary');
             save.disabled = !ids.length;
             save.textContent = ids.length ? saveLabel(r1, ids) : '已与大纲一致';
             save.classList.toggle('is-primary', ids.length > 0 && !hasNotes);

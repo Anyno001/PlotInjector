@@ -22,7 +22,7 @@ test('review page: page tabs name the pages; header says project scope; two fixe
     assert.ok(!t.doc.querySelector('.pi-rv-nav .pi-btn'), 'no prev / next buttons');
     assert.match(t.doc.querySelector('.pi-rv-state').textContent, /本项目2条线，和大纲一致/);
     const foot = [...t.doc.querySelectorAll('.pi-rv-foot .pi-btn')];
-    assert.deepEqual(foot.map((b) => b.dataset.act), ['rv-preview', 'import-adopt'], 'send left, save right');
+    assert.deepEqual(foot.map((b) => b.dataset.act), ['rv-send', 'import-adopt'], 'send left, save right');
     assert.ok(foot[1].disabled && /已与大纲一致/.test(foot[1].textContent));
     assert.ok(!t.doc.querySelector('.pi-rv-foot [data-act="rv-fill-all"]'), '全部加入意见 is not in the footer');
     // 改一处：保存变成主按钮，状态写待保存
@@ -36,7 +36,7 @@ test('review page: page tabs name the pages; header says project scope; two fixe
     await t.blur('[data-rv-comment]', '意见');
     t.inst.__view.renderBody(); await tick();
     const foot2 = [...t.doc.querySelectorAll('.pi-rv-foot .pi-btn')];
-    assert.deepEqual(foot2.map((b) => b.dataset.act), ['rv-preview', 'import-adopt']);
+    assert.deepEqual(foot2.map((b) => b.dataset.act), ['rv-send', 'import-adopt']);
     assert.ok(foot2[0].classList.contains('is-primary') && !foot2[1].classList.contains('is-primary'));
   } finally { await t.inst.destroy(); }
 });

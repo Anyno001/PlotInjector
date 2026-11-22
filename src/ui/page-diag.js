@@ -229,10 +229,21 @@ export function auditHtml(a, what = '线索内容') {
               a.leaks.length
                   ? `<ul class="pi-clue-why">${a.leaks
                         .slice(0, 12)
-                        .map((l) => `<li>${esc(l.source)}：「${esc(l.sample)}…」</li>`)
-                        .join(
-                            '',
-                        )}</ul><p class="pi-hint">这些内容不是剧情注入器的注入带进去的。常见来源：大纲或设定被复制进了其它世界书、其它插件的注入、数据库表格里写了未来剧情。</p>`
+                        .map((l) => `<li>${esc(l.source)}：「${esc(l.sample)}…」${l.where ? `<b>（在${l.where === 'setting' ? '设定' : '数据库表格'}里）</b>` : ''}</li>`)
+                        .join('')}</ul>${leakFixHtml(a.leaks)}`
                   : ''
           }`;
+}
+
+// 按命中位置说怎么改（用户 2026-11-23：看完诊断不知道怎么修）
+function leakFixHtml(leaks) {
+    let has = (w) => leaks.some((l) => (l.where || '') === w),
+        tips = [];
+    has('setting') &&
+        tips.push('在设定里：设定每轮都会发给正文AI，写在里面的线索答案等于提前剧透。到「设定」页找到这句删掉，或用「仅作者」框起来（只给你看、不注入），也可以把整个分块设成不注入。');
+    has('table') &&
+        tips.push('在数据库表格里：多半是填表模型把还没发生的事写进了表格（比如纪要）。到数据库里找到这行删掉或改掉。');
+    has('') && tips.push('位置没认出来：可能在预设、角色卡描述、开场白或别的插件里。在酒馆「提示词查看」里搜引号里的这几个字，找到后删掉。');
+    tips.push('如果这句其实是公开信息（主角一开始就知道），说明大纲把它写成了要查才知道的线索，到大纲里改掉这条发现就不会再报。');
+    return tips.map((t) => `<p class="pi-hint">${esc(t)}</p>`).join('');
 }

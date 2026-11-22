@@ -42,7 +42,7 @@ async function setup(tables) {
   return { host, inst, doc, click, pid: p.id, api: host.w.AutoCardUpdaterAPI };
 }
 async function openGen(ctx) { (() => { const t = ctx.doc.querySelector('[data-act="run-set-toggle"][aria-expanded="false"]'); t && t.click(); })(); await tick(); ctx.doc.querySelector('[data-act="clue-gen-template"]').click(); await tick(); return ctx.doc.querySelector('.pi-dialog'); }
-function fillLabels(dlg) { dlg.querySelectorAll('[data-gt-label]').forEach((el, i) => { el.value = `标签${i}`; }); }
+function fillLabels(dlg) { dlg.querySelectorAll('[data-gt-label]').forEach((el, i) => { el.value = `标签${i}`; el.dispatchEvent(new el.ownerDocument.defaultView.Event('input', { bubbles: true })); }); }
 async function confirm(dlg) { [...dlg.querySelectorAll('.pi-btn')].find((b) => b.textContent === '导入到当前聊天').click(); await tick(); await tick(); }
 
 test('new chat on the default tables: preview lists the changes; import uses scope chat + seed; binding written; clue tables live', async () => {

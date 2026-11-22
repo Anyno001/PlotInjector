@@ -126,8 +126,9 @@ test('edit review: an unsaved multi-line import is pointed to, with an 打开 bu
     for (let i = 0; i < 20 && !/导入的支线/.test(doc.querySelector('.pi-rv h3')?.textContent || ''); i++) await tick();
     assert.match(doc.querySelector('.pi-rv h3').textContent, /导入的支线/, 'opens the bulk import');
     // 全部保存后，提示消失
-    await click('[data-act="import-adopt"]');
-    await LI.dlg(doc, '保存');
+    // 没有问题时直接保存，不再弹确认（11-23）
+    await click('.pi-rv-foot [data-act="import-adopt"]');
+    assert.ok(!doc.querySelector('.pi-dialog'), 'no confirm when nothing is wrong');
     await click('[data-act="import-close"]');
     await click('[data-act="review-open"]');
     for (let i = 0; i < 20 && !doc.querySelector('.pi-rv'); i++) await tick();

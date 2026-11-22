@@ -68,9 +68,9 @@ test('17.1 P1: prebuild preview on branch A, confirm on branch B (same F_box cod
   doc.querySelector('[data-act="clue-prebuild"]').click(); await tick();
   const dlg = doc.querySelector('.pi-dialog');
   assert.ok(dlg, 'preview open');
-  dlg.querySelectorAll('[data-pb-label]').forEach((el, i) => { el.value = `标签${i}`; });
+  dlg.querySelectorAll('[data-pb-label]').forEach((el, i) => { el.value = `标签${i}`; el.dispatchEvent(new el.ownerDocument.defaultView.Event('input', { bubbles: true })); });
   host.db.setTables(branch('B的标签')); // same code F_box, other branch
-  dlg.querySelector('.pi-btn.is-primary').click(); await tick(); await tick();
+  dlg.querySelector('.pi-dlg-acts .pi-btn.is-primary').click(); await tick(); await tick();
   assert.equal(host.w.AutoCardUpdaterAPI.inserted.length, 0, 'nothing written into branch B');
   await inst.destroy();
 });

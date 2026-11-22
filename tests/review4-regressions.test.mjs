@@ -273,9 +273,9 @@ test('W1: prebuild confirmed after switching to chat B writes nothing into B', a
   doc.querySelector('[data-act="clue-prebuild"]').click(); await tick();
   const dlg = doc.querySelector('.pi-dialog');
   assert.ok(dlg, 'prebuild dialog in A');
-  dlg.querySelectorAll('[data-pb-label]').forEach((el, i) => { el.value = `标签${i}`; });
+  dlg.querySelectorAll('[data-pb-label]').forEach((el, i) => { el.value = `标签${i}`; el.dispatchEvent(new el.ownerDocument.defaultView.Event('input', { bubbles: true })); });
   await switchChat(host, inst, 'chat-B');
-  dlg.querySelector('.pi-btn.is-primary').click(); await tick(); await tick();
+  dlg.querySelector('.pi-dlg-acts .pi-btn.is-primary').click(); await tick(); await tick();
   assert.equal(host.db.inserted ? host.db.inserted.length : host.w.AutoCardUpdaterAPI.inserted.length, 0, 'nothing written after the chat changed');
   await inst.destroy();
 });
@@ -290,8 +290,8 @@ test('W1/§14.3: a failed fact insert does not create its knowledge rows; column
   (() => { const t = doc.querySelector('[data-act="run-set-toggle"][aria-expanded="false"]'); t && t.click(); })(); await tick();
   doc.querySelector('[data-act="clue-prebuild"]').click(); await tick();
   const dlg = doc.querySelector('.pi-dialog');
-  dlg.querySelectorAll('[data-pb-label]').forEach((el, i) => { el.value = `标签${i}`; });
-  dlg.querySelector('.pi-btn.is-primary').click(); await tick(); await tick();
+  dlg.querySelectorAll('[data-pb-label]').forEach((el, i) => { el.value = `标签${i}`; el.dispatchEvent(new el.ownerDocument.defaultView.Event('input', { bubbles: true })); });
+  dlg.querySelector('.pi-dlg-acts .pi-btn.is-primary').click(); await tick(); await tick();
   const keys = api.inserted.map((x) => x.data['键']).filter(Boolean);
   assert.ok(!keys.includes('F_seen@user'), 'no knowledge row for the failed fact');
   assert.ok(keys.includes('F_ledger@user'), 'other knowledge rows still written');

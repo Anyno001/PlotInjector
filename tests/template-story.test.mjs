@@ -369,9 +369,9 @@ test('prebuild through the run page: only missing rows are inserted via the offi
   assert.ok(dlg.querySelector('[data-fr-auto]'), 'auto-fill button');
   assert.ok(!/仅供参考，可能含答案/.test(dlg.textContent));
   // author fills neutral labels; leaves criteria as proposed
-  dlg.querySelectorAll('[data-pb-label]').forEach((el, i) => { el.value = `标签${i}`; });
+  dlg.querySelectorAll('[data-pb-label]').forEach((el, i) => { el.value = `标签${i}`; el.dispatchEvent(new el.ownerDocument.defaultView.Event('input', { bubbles: true })); });
   dlg.querySelector('[data-pb-crit="0"]').value = '主角亲自读到这页时登记';
-  dlg.querySelector('.pi-btn.is-primary').click(); await tick(); await tick();
+  dlg.querySelector('.pi-dlg-acts .pi-btn.is-primary').click(); await tick(); await tick();
   const factRows = host.db.tables && Object.values(host.db.tables).find((x) => x && x.name === '关键事实表').content.slice(1);
   assert.deepEqual(factRows.map((r) => r[1]), ['F_box', 'F_ledger', 'F_seen', 'F_print', 'F_talk']);
   assert.equal(factRows[0][factRows[0].length - 3], '已核实', 'existing F_box progress untouched');

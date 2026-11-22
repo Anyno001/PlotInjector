@@ -186,8 +186,7 @@ test('UI: bulk side import → one page per line → comment saved → 本次不
   await nextLine(doc);
   assert.match(doc.querySelector('.pi-rv').textContent, /S04.*要等S03，但S03不要了/);
   // 发送意见：只发 S02 的线页
-  await click('[data-act="rv-preview"]');
-  await dlg(doc, '发送');
+  await click('[data-act="rv-send"]');
   for (let i = 0; i < 40 && !revised; i++) await tick();
   for (let i = 0; i < 10 && inst.__view.busy[`review:${pid}`]; i++) await tick();
   await tick();
@@ -198,7 +197,7 @@ test('UI: bulk side import → one page per line → comment saved → 本次不
   assert.equal(job.review.comments[`${s02.id}/line`] || '', '', 'sent comment cleared');
   // 保存：S03 不导入；S01 和已有的撞号 → 换号
   const hist0 = (inst.data.project(pid).outline.history || []).length;
-  await click('[data-act="import-adopt"]');
+  await click('.pi-rv-foot [data-act="import-adopt"]');
   await dlg(doc, '仍然保存');
   assert.equal((inst.data.project(pid).outline.history || []).length, hist0 + 1, 'R1: saving records outline history first');
   const ids = [...inst.data.project(pid).outline.volumes.map((v) => v.line && v.line.编号)];
@@ -257,7 +256,8 @@ test('UI: save S01 alone (it clashes and is renumbered), then S03 that waits on 
   // S03 先不导入，只保存 S01
   await gotoLine(doc, 'S03');
   await click('[data-act="rv-line-menu"]'); await dlg(doc, 'drop');
-  await click('[data-act="import-adopt"]'); await dlg(doc, '保存');
+  await click('.pi-rv-foot [data-act="import-adopt"]');
+  assert.equal(doc.querySelector('.pi-dialog'), null, 'no error-level issue → saves without a confirm');
   const ids = () => [...inst.data.project(pid).outline.volumes.map((v) => v.line.编号)];
   assert.deepEqual(ids(), ['S01', 'S02', 'S04'], 'S01 clashes → S04 (S03 is the batch\'s own id)');
   // 留在审阅页：S01 标已保存、不能再改
@@ -267,7 +267,8 @@ test('UI: save S01 alone (it clashes and is renumbered), then S03 that waits on 
   // S03 撤回不导入，再保存
   await gotoLine(doc, 'S03');
   await click('[data-act="rv-line-menu"]'); await dlg(doc, 'undrop');
-  await click('[data-act="import-adopt"]'); await dlg(doc, '保存');
+  await click('.pi-rv-foot [data-act="import-adopt"]');
+  assert.equal(doc.querySelector('.pi-dialog'), null, 'no error-level issue → saves without a confirm');
   const vols = inst.data.project(pid).outline.volumes;
   assert.deepEqual(ids(), ['S01', 'S02', 'S04', 'S03']);
   assert.equal(vols[3].line.开启条件.线, 'S04 == 完成', 'waits on the line saved earlier, not the project\'s own S01');
@@ -407,7 +408,7 @@ test('migration: an old multi-line job keeps reviewed edits, per-line comments, 
   assert.equal(JSON.stringify(r.dropped), JSON.stringify([volOf({ review: r }, 'S03')]));
   assert.match(JSON.stringify(r.prev), /重新整理前/);
   assert.match(doc.querySelector('.pi-rv').textContent, /整理时的提示（1）/, 'merge conflicts shown');
-  assert.match(doc.querySelector('[data-act="rv-preview"]').textContent, /发送意见（1页）/);
+  assert.match(doc.querySelector('[data-act="rv-send"]').textContent, /发送意见（1页）/);
   await gotoLine(doc, 'S03');
   assert.match(doc.querySelector('.pi-rv').textContent, /本次不导入/);
   assert.match(doc.querySelector('.pi-rv-lname').textContent, /不导入/);
@@ -436,7 +437,8 @@ test('table start condition: pick table / row / column from the database, type a
   assert.match(doc.querySelector('.pi-rv-tbl').textContent, /现在：1/, 'shows the current cell value');
   assert.equal(doc.querySelector('.pi-rv-tbl .pi-badge.is-warn').textContent, '未满足', 'and a 未满足 pill');
   assert.ok(doc.querySelector('[data-rv-when="table"]').checked, 'stays on the table option');
-  await click('[data-act="import-adopt"]'); await dlg(doc, '保存');
+  await click('.pi-rv-foot [data-act="import-adopt"]');
+  assert.equal(doc.querySelector('.pi-dialog'), null, 'no error-level issue → saves without a confirm');
   const saved = inst.data.project(pid).outline.volumes[0].line;
   assert.equal(JSON.stringify(saved.开启条件), JSON.stringify({ 表: '重要角色表/巴基/阶段 >= 2' }));
   assert.ok(!('开始方式表格' in saved) && !('表格条件草稿' in saved) && !('开始时机已选' in saved), 'no review-only marks in the outline');

@@ -1,5 +1,6 @@
 import { isClueMode } from '../core/clue-model.js';
 import { renderClueRun, modeCard, clueActions, clueOnChange } from './clue-run.js';
+import { kpActions } from './trpg-kp-card.js';
 
 import { DEFAULT_PARAMS, PACES, POSITIONS, ROLES, buildIndexText, carriedNodes, positionLabel } from '../core/inject.js';
 import { flattenUnits, stageLabel, stageNodes, volumeShowName } from '../core/outline.js';
@@ -277,6 +278,7 @@ function setSlot(view, slotId, patch) {
 
 export const actions = {
     ...clueActions,
+    ...kpActions,
     activate: (view) => view.runtime.switchProject(view.projectId, 'chat'),
     'activate-card': (view) => view.runtime.switchProject(view.projectId, 'card'),
     // 推进速度随聊天保存，改完立即换掉详细条目开头的说明。

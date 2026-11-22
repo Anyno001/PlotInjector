@@ -55,10 +55,8 @@ async function importMain(ctx, kind = 'main', reply = DRAFT) {
 const jobOf = (ctx) => ctx.inst.data.imports.get(ctx.inst.data.project(ctx.pid).imports[0]);
 // 按意见修改：打开「预览意见」，点「发送修改」（用户 2026-11-16：意见统一预览后一次发送）。
 async function sendRevise(ctx) {
-  await ctx.click('[data-act="rv-preview"]');
-  const b = [...ctx.doc.querySelectorAll('.pi-dialog .pi-btn')].find((x) => x.textContent === '发送');
-  assert.ok(b, 'send dialog with 发送');
-  b.click(); await tick();
+  await ctx.click('[data-act="rv-send"]');
+  assert.equal(ctx.doc.querySelector('.pi-dialog'), null, 'sends immediately, no dialog');
 }
 async function answer(doc, label) {
   for (let i = 0; i < 20 && !doc.querySelector('.pi-dialog'); i++) await tick();
@@ -131,7 +129,7 @@ test('fill / fill-all append to the comment without overwriting or duplicating; 
   assert.equal(c.split('\n').length, 2, 'the same problem is not added twice');
   const all = Object.values(jobOf(ctx).review.comments).filter((x) => x.trim());
   assert.equal(all.length, 2, 'stage 7 got its own comment too');
-  assert.match(ctx.$('[data-act="rv-preview"]').textContent, /发送意见（2页）/);
+  assert.match(ctx.$('[data-act="rv-send"]').textContent, /发送意见（2页）/);
   await ctx.inst.destroy();
 });
 
@@ -203,13 +201,13 @@ test('adopt (side line): the start time must be chosen first; the page goes back
   await importMain(ctx, 'side', DRAFT.replace('类型: 主线', '类型: 支线'));
   assert.match(ctx.$('.pi-rv-when').textContent, /文档未写开始条件/);
   await ctx.click('[data-act="rv-go"][data-i="2"]');
-  ctx.$('[data-act="import-adopt"]').click(); await tick(); await tick();
+  ctx.$('.pi-rv-foot [data-act="import-adopt"]').click(); await tick(); await tick();
   assert.ok(!ctx.doc.querySelector('.pi-dialog'), 'no confirm: it sends you back to choose first');
   assert.equal(ctx.inst.data.project(ctx.pid).outline.volumes.length, 0);
   assert.match(ctx.$('.pi-rv-title').textContent, /^线/, 'back on page 1');
   const radio = ctx.$('[data-rv-when="any"]');
   radio.checked = true; radio.dispatchEvent(new ctx.host.w.Event('input', { bubbles: true })); await tick(); await tick();
-  ctx.$('[data-act="import-adopt"]').click(); await tick();
+  ctx.$('.pi-rv-foot [data-act="import-adopt"]').click(); await tick();
   ctx.doc.querySelector('.pi-dialog') && (await answer(ctx.doc, '仍然保存'));
   const v = ctx.inst.data.project(ctx.pid).outline.volumes;
   assert.equal(v.length, 1);
@@ -222,7 +220,7 @@ test('adopt: a main line is numbered after existing lines and waits for the prev
   ctx.inst.data.updateProject(ctx.pid, (p) => ({ ...p, outline: { ...p.outline, volumes: [{ id: 'vOld', key: '剧情_M1_旧案', line: { 编号: 'M1', 类型: '主线' }, stages: [{ id: 'sOld', key: '阶段1_x', data: { 主线节点: [{ id: 'old1', 名称: '旧', 入口: '去', 发现: [{ 事实: 'F_old', 内容: 'x' }], 完成条件: { 事实: 'F_old' } }] } }] }] } }));
   await importMain(ctx);
   assert.match(ctx.$('.pi-rv-when').textContent, /前一条主线结束后/);
-  ctx.$('[data-act="import-adopt"]').click(); await tick();
+  ctx.$('.pi-rv-foot [data-act="import-adopt"]').click(); await tick();
   const text = await answer(ctx.doc, '仍然保存');
   assert.match(text, /还有2个问题没解决/);
   const p = ctx.inst.data.project(ctx.pid);
@@ -242,13 +240,13 @@ test('adopt: a main line is numbered after existing lines and waits for the prev
   // 任务文件写入失败（「已采用」和改过的草稿都没存上，还是采用前那份）：以项目里的标记为准，仍然不写第二份
   await ctx.inst.data.imports.update(jobOf(ctx).id, (j) => ({ ...j, review: { ...j.review, adoptedId: '', reopened: false, draft: j.review.draft.map((v) => ({ ...v, id: 'vFresh', line: { ...v.line, 编号: undefined, 接上一条: true } })) } }));
   ctx.inst.__view.renderBody(); await tick();
-  assert.ok(ctx.$('[data-act="import-adopt"]'), 'the review page (with its adopt button) is back, as after a lost write');
-  ctx.$('[data-act="import-adopt"]').click(); await tick(); ctx.doc.querySelector('.pi-dialog') && (await answer(ctx.doc, '仍然保存'));
+  assert.ok(ctx.$('.pi-rv-foot [data-act="import-adopt"]'), 'the review page (with its adopt button) is back, as after a lost write');
+  ctx.$('.pi-rv-foot [data-act="import-adopt"]').click(); await tick(); ctx.doc.querySelector('.pi-dialog') && (await answer(ctx.doc, '仍然保存'));
   assert.equal(ctx.inst.data.project(ctx.pid).outline.volumes.length, 2, 'project mark wins');
   await ctx.inst.destroy();
 });
 
-test('save with unsent comments: 取消 writes nothing; 先发送意见 opens the send dialog; 保存到大纲，暂不发送意见 saves and keeps the comments', async () => {
+test('save with unsent comments: 取消 writes nothing; 先发送意见 sends straight away; 保存到大纲，暂不发送意见 saves and keeps the comments', async () => {
   const ctx = await boot();
   await importMain(ctx);
   const radio = ctx.$('[data-rv-when="any"]');
@@ -256,21 +254,23 @@ test('save with unsent comments: 取消 writes nothing; 先发送意见 opens th
   // 第四批：「全部加入意见」在问题标题旁边；标题上的「问题 N」跳到有问题的页
   await ctx.click('[data-act="rv-first-issue"]');
   await ctx.click('[data-act="rv-fill-all"]');
-  assert.match(ctx.$('[data-act="rv-preview"]').textContent, /发送意见（2页）/);
-  assert.ok(ctx.$('[data-act="rv-preview"]').classList.contains('is-primary'), 'send is the main button while comments are pending');
-  ctx.$('[data-act="import-adopt"]').click(); await tick();
+  assert.match(ctx.$('[data-act="rv-send"]').textContent, /发送意见（2页）/);
+  assert.ok(ctx.$('[data-act="rv-send"]').classList.contains('is-primary'), 'send is the main button while comments are pending');
+  ctx.$('.pi-rv-foot [data-act="import-adopt"]').click(); await tick();
   let text = await answer(ctx.doc, '取消');
   assert.match(text, /有2页意见还没用于修改草稿[\s\S]*保存到大纲，暂不发送意见[\s\S]*先发送意见/);
   assert.equal(ctx.inst.data.project(ctx.pid).outline.volumes.length, 0);
-  // 先发送意见 → 直接打开发送框
-  ctx.$('[data-act="import-adopt"]').click(); await tick();
+  // 先发送意见 → 直接发送，不再弹发送框；发送期间不写大纲
+  const calls = ctx.host.llmCalls.length;
+  ctx.$('.pi-rv-foot [data-act="import-adopt"]').click(); await tick();
   await answer(ctx.doc, '先发送意见');
-  for (let i = 0; i < 10 && ![...ctx.doc.querySelectorAll('.pi-dialog')].some((d) => /发送意见/.test(d.textContent)); i++) await tick();
-  text = await answer(ctx.doc, '返回');
-  assert.match(text, /一次发给AI/);
+  for (let i = 0; i < 40 && ctx.host.llmCalls.length === calls; i++) await tick();
+  assert.ok(ctx.host.llmCalls.length > calls, 'the request went out directly');
+  for (let i = 0; i < 40 && ctx.inst.__view.busy[`review:${ctx.pid}`]; i++) await tick();
+  assert.equal(ctx.doc.querySelector('.pi-dialog'), null, 'no dialog in between');
   assert.equal(ctx.inst.data.project(ctx.pid).outline.volumes.length, 0);
   // 保存到大纲，暂不发送意见 → 再过一次问题确认 → 写进大纲；意见留着（GPT 第二轮 N6）
-  ctx.$('[data-act="import-adopt"]').click(); await tick();
+  ctx.$('.pi-rv-foot [data-act="import-adopt"]').click(); await tick();
   await answer(ctx.doc, '保存到大纲，暂不发送意见');
   ctx.doc.querySelector('.pi-dialog') && (await answer(ctx.doc, '仍然保存'));
   assert.equal(ctx.inst.data.project(ctx.pid).outline.volumes.length, 1);
@@ -279,7 +279,7 @@ test('save with unsent comments: 取消 writes nothing; 先发送意见 opens th
   assert.match(ctx.$('.pi-rv').textContent, /还有2页意见没发送/);
   // 继续修改：意见回到对应的页上
   await ctx.click('[data-act="rv-reopen"]');
-  assert.match(ctx.$('[data-act="rv-preview"]').textContent, /发送意见（2页）/);
+  assert.match(ctx.$('[data-act="rv-send"]').textContent, /发送意见（2页）/);
   await ctx.inst.destroy();
 });
 
@@ -288,7 +288,7 @@ test('reopen after adopt: edits stay in the draft until saved; saving keeps volu
   await importMain(ctx);
   const radio = ctx.$('[data-rv-when="any"]');
   radio.checked = true; radio.dispatchEvent(new ctx.host.w.Event('input', { bubbles: true })); await tick(); await tick();
-  ctx.$('[data-act="import-adopt"]').click(); await tick();
+  ctx.$('.pi-rv-foot [data-act="import-adopt"]').click(); await tick();
   await answer(ctx.doc, '仍然保存');
   const live = ctx.inst.data.project(ctx.pid).outline.volumes[0];
   await ctx.click('[data-act="rv-reopen"]');
@@ -297,7 +297,7 @@ test('reopen after adopt: edits stay in the draft until saved; saving keeps volu
   y.value = y.value.replace('查出埃利奥特·维恩组织这笔交易', '查出是谁组织这笔交易');
   await ctx.click('[data-act="rv-yaml-save"]');
   assert.equal(ctx.inst.data.project(ctx.pid).outline.volumes[0].stages[1].data.AI指令, '查出埃利奥特·维恩组织这笔交易', 'project untouched while reviewing');
-  ctx.$('[data-act="import-adopt"]').click(); await tick();
+  ctx.$('.pi-rv-foot [data-act="import-adopt"]').click(); await tick();
   // 改已有的线：确认框列出最终改动（GPT 代码审阅 R8）
   assert.match(await answer(ctx.doc, '保存'), /保存到大纲[\s\S]*AI指令/);
   const after = ctx.inst.data.project(ctx.pid).outline.volumes;

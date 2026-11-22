@@ -140,6 +140,7 @@ test('dialog: 自动填写 fills only empty boxes, flags rows that need a look, 
   crit.dispatchEvent(new host.w.Event('input', { bubbles: true }));
   assert.equal(warnOf('F_doc'), '');
   dlg.querySelector(`[data-gt-label="${idx('F_key')}"]`).value = '钥匙';
+  dlg.querySelector(`[data-gt-label="${idx('F_key')}"]`).dispatchEvent(new host.w.Event('input', { bubbles: true }));
   [...dlg.querySelectorAll('.pi-btn')].find((b) => b.textContent === '导入到当前聊天').click(); await tick(); await tick();
   const facts = Object.values(host.db.tables).find((s) => s && s.name === '关键事实表').content.slice(1);
   const byCode = Object.fromEntries(facts.map((r) => [r[1], r]));
@@ -207,6 +208,11 @@ test('review: a literal overlap the review clears stays grey; a failed review fa
   assert.ok(!row.classList.contains('is-warn'));
   assert.match(dlg.querySelector('[data-fr-status]').textContent, /1条标黄/, 'only F_key (no node produces it) stays yellow');
   [...dlg.querySelectorAll('.pi-btn')].find((b) => b.textContent === '取消').click(); await tick();
+  // auto-filled labels are kept in the project: reopening shows them filled (11-23)
+  dlg = await open();
+  assert.equal(dlg.querySelector(`[data-gt-label="${idx('F_han')}"]`).value, '看守的证词', 'kept after closing');
+  [...dlg.querySelectorAll('.pi-btn')].find((b) => b.textContent === '取消').click(); await tick();
+  inst.data.updateProject(p.id, (x) => ({ ...x, clue: { ...x.clue, labels: {} } }));
   // the review call fails: the script's literal overlap is shown in yellow, and the status says the check did not finish
   dlg = await open();
   host.llm.respond = (body) => { if (/有没有剧透/.test(body)) throw new Error('超时'); return write; };

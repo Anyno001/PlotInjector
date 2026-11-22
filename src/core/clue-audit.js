@@ -100,7 +100,8 @@ export function countOccurrences(hay, needle) {
     return n;
 }
 
-export function auditRequest(requestText, project, state, projection, { history = [], isRevealed } = {}) {
+// places：{ setting, tables } 原文，用来说明命中的内容在哪（用户 2026-11-23：只说「不是注入器带进去的」，看完不知道怎么修）
+export function auditRequest(requestText, project, state, projection, { history = [], isRevealed, places = {} } = {}) {
     let hay = normText(requestText),
         leaks = [],
         strip = (text, piece) => (piece && piece.length >= AUDIT_MIN ? text.split(piece).join('') : text);
@@ -112,12 +113,16 @@ export function auditRequest(requestText, project, state, projection, { history 
     for (let src of restrictedSources(project, state, isRevealed)) {
         let where = src.scope === 'author' ? scan : scanNoHistory,
             hit = src.prints.find((p) => where.includes(p));
-        hit && leaks.push({ source: src.label, sample: hit, level: 'leak' });
+        hit && leaks.push({ source: src.label, sample: hit, level: 'leak', where: leakPlace(hit, places) });
     }
     for (let n of restrictedNames(project))
         scanNoHistory.includes(n.print) && leaks.push({ source: n.label, sample: n.print, level: 'hint' });
     let projectionCount = projFlat ? countOccurrences(hay, projFlat) : 0;
     return { leaks, projectionCount, duplicated: projectionCount > 1, chars: hay.length };
+}
+
+export function leakPlace(hit, { setting = '', tables = '' } = {}) {
+    return setting && normText(setting).includes(hit) ? 'setting' : tables && normText(tables).includes(hit) ? 'table' : '';
 }
 
 export function auditOutlineRequest(requestText, project, states, projection, { history = [] } = {}) {

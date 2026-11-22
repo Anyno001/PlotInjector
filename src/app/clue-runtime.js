@@ -1,3 +1,4 @@
+import { injectedSetting } from '../core/setting.js';
 import {
     withLineIds,
     lineToManual,
@@ -52,6 +53,7 @@ import {
 
 import { hostWindow, chatMessages, ctx, toast } from '../host/st.js';
 import { isTrpg, trpgCheckResults } from '../core/trpg.js';
+import { kpInject } from '../core/trpg-kp.js';
 import { trpgWantFacts } from '../core/trpg-rows.js';
 import { isClueMode, withNodeIds } from '../core/clue-model.js';
 
@@ -768,6 +770,17 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
                 // 跑团模式：从聊天记录算出各检定的结果（core/trpg.js）；不是跑团项目不算
                 checks: isTrpg(project()) ? trpgCheckResults(chatMessages()) : null,
             });
+        // 跑团模式的 KP 推一把（core/trpg-kp.js）；普通线索项目不进这里
+        isTrpg(project()) &&
+            (out = kpInject(out, {
+                state: c.state,
+                snap: c.snap,
+                prog: c.prog,
+                checks: trpgCheckResults(chatMessages()),
+                settings: data.settings(),
+                push: prog && prog.trpgKp && prog.trpgKp.push,
+                floors: aiFloors(),
+            }));
         return {
             ...out,
             reason: out.content ? '' : '当前没有可演的线索场景',
@@ -858,7 +871,10 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
             isRevealed = (id) => effectiveFact(id, c.snap, c.prog).confirmed,
             injectedFocus = (fresh && out && lastInjected.focus) || '',
             auditState = { ...c.state, focus: { ...c.state.focus, uid: injectedFocus } },
-            result = auditRequest(text, p, auditState, out, { history, isRevealed }),
+            tablesText = Object.values((c.snap && c.snap.tables) || {})
+                .map((sh) => (sh && Array.isArray(sh.content) ? sh.content.map((r) => (Array.isArray(r) ? r.join(' ') : '')).join(' ') : ''))
+                .join(' '),
+            result = auditRequest(text, p, auditState, out, { history, isRevealed, places: { setting: injectedSetting(p.setting), tables: tablesText } }),
             leaks = result.leaks.filter((l) => l.level === 'leak');
         return (
             (lastAudit = { ...result, at: Date.now(), via: lastInjected ? lastInjected.via : '' }),
@@ -869,7 +885,7 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
                         .map((l) => l.source)
                         .join('、')}${leaks.length > 3 ? '……' : ''}）`,
                 ),
-                toast('warning', `本轮请求里混进了还不该出现的剧情（${leaks[0].source}），不是剧情注入器带进去的，请到诊断页查看。`)),
+                toast('warning', `本轮请求里提前出现了还没开放的剧情（${leaks[0].source}）${leaks[0].where === 'setting' ? '，在这个项目的设定里' : leaks[0].where === 'table' ? '，在数据库表格里' : ''}。到诊断页看怎么处理。`)),
             result.duplicated &&
                 (note(`最终请求核验：本轮线索内容出现了 ${result.projectionCount} 次（重复注入）`),
                 toast('warning', '本轮线索内容在正文请求里出现了不止一次，请检查是否同时启用了别的注入路径。')),

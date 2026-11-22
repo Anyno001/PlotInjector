@@ -750,7 +750,7 @@ async function adoptLinesReview(view, jobId) {
                 { label: '先发送意见', value: 'send', primary: !0 },
             ],
         });
-        if (pick === 'send') return rvActions['rv-preview'](view);
+        if (pick === 'send') return rvActions['rv-send'](view);
         if (pick !== 'save') return;
         if (view.projectId !== projectId || !importJobOf(view, jobId)) return toast('warning', '确认期间切换了项目，没有保存。');
     }
@@ -774,6 +774,7 @@ async function adoptLinesReview(view, jobId) {
                 .flatMap(([, list]) => list.filter((x) => x.level === 'error').map((x) => `${idOf(v)}：${x.plain || x.text}`)),
         ]);
     if (
+        errs.length &&
         !(await confirmDialog({
             title: `保存${take.length}条支线到大纲`,
             body: errs.length ? `还有${errs.length}处问题，有问题的线可能一直开始不了。保存后也可以在大纲页「审阅修改…」里再改：` : `要保存：${take.map(idOf).join('、')}。`,
@@ -891,7 +892,7 @@ async function adoptReview(view, jobId) {
                 { label: '先发送意见', value: 'send', primary: !0 },
             ],
         });
-        if (pick === 'send') return rvActions['rv-preview'](view);
+        if (pick === 'send') return rvActions['rv-send'](view);
         if (pick !== 'save') return;
         if (view.projectId !== projectId || !importJobOf(view, jobId)) return toast('warning', '确认期间切换了项目，没有保存。');
     }
@@ -952,7 +953,7 @@ async function adoptReview(view, jobId) {
         shown = effects(prep),
         // 确认框弹出时目标线在大纲里的样子：确认期间被改过或删掉就不写（GPT 第二轮 N1：重算进度可以，不能顺手接受新的大纲内容）
         stamp0 = reopen ? targetStamp(view.project(), savedIds) : '';
-    if (reopen) {
+    if (reopen && (errs.length || (prep.guard && prep.guard.diffs.length))) {
         let titleOf = (key) => lineTitle(draft.find((v) => v.id === key.split('/')[0]) || { key: '' }),
             changes = prep.changes.flatMap((c) => (draft.length > 1 ? c.changes.map((t) => `${titleOf(c.key)}：${t}`) : c.changes));
         if (
@@ -965,7 +966,7 @@ async function adoptReview(view, jobId) {
             }))
         )
             return;
-    } else if (lines.length && !(await confirmDialog({ title: `保存「${volumeLabelOf(review)}」到大纲`, body: lines.join('\n'), okLabel: '仍然保存', danger: !!errs.length }))) return;
+    } else if (!reopen && errs.length && !(await confirmDialog({ title: `保存「${volumeLabelOf(review)}」到大纲`, body: lines.join('\n'), okLabel: '仍然保存', danger: !!errs.length }))) return;
     if (view.projectId !== projectId || !importJobOf(view, jobId)) return toast('warning', '确认期间切换了项目，没有保存。');
     if (reopen && targetStamp(view.project(), savedIds) !== stamp0) return toast('warning', '确认期间大纲里这些线又被改过（或删掉了），没有保存。草稿和意见都还在，请再点一次核对。');
     // 确认期间聊天进度变了（比如又推进了一楼）：按新进度重算；影响和刚才显示的不一样就不写，请用户再核对
