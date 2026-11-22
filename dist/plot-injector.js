@@ -1,4 +1,4 @@
-// PlotInjector v0.3.6
+// PlotInjector v0.3.7
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -10980,6 +10980,67 @@ ${part.text}`
       }
     ];
   }
+  function fixImportIndexMessages(text2, error) {
+    return [
+      {
+        role: "system",
+        content: `修正下面作者索引 YAML 的格式错误，内容一字不改，只改缩进、冒号、引号。含冒号、方括号、尖括号的文字整句加引号；列表里的每一条要么是一句文字，要么是 {键: 值} 对象，不要在文字下面再挂子列表。
+格式：
+${IMPORT_INDEX_FORMAT}`
+      },
+      { role: "user", content: `【错误】${error}
+
+${text2}` }
+    ];
+  }
+  var INDEX_LIST_KEYS = /* @__PURE__ */ new Set(["人物", "地点", "事实", "门槛", "并行", "支线"]);
+  function salvageImportIndex(text2) {
+    let lines2 = String(text2 || "").replace(/\r\n?/g, `
+`).split(`
+`), secs = [], cur = null;
+    for (let line of lines2) {
+      let m = /^([^\s#\-][^:：]*?)\s*[:：](.*)$/.exec(line);
+      m ? secs.push(cur = { key: m[1].trim(), head: m[2], body: [] }) : cur && cur.body.push(line);
+    }
+    let value = {}, keep = [], lost = 0, dedent = (ls) => {
+      let n = Math.min(...ls.filter((l) => l.trim()).map((l) => /^ */.exec(l)[0].length));
+      return ls.map((l) => l.slice(Number.isFinite(n) ? n : 0));
+    }, plain = (ls) => ls.map((l) => l.trim().replace(/^#.*$/, "")).filter(Boolean).join(`
+`);
+    for (let s of secs) {
+      let src = `${s.key}:${s.head}
+${s.body.join(`
+`)}`;
+      try {
+        let v = parseYaml(src);
+        if (isPlainObject(v)) {
+          value[s.key] = v[s.key];
+          continue;
+        }
+      } catch {
+      }
+      if (!INDEX_LIST_KEYS.has(s.key)) {
+        keep.push(`${s.key}：${plain([s.head, ...s.body])}`);
+        continue;
+      }
+      let body = dedent(s.body.filter((l) => l.trim() && !/^\s*#/.test(l))), items = [], list = [];
+      for (let l of body) /^- /.test(l) || !items.length ? items.push([l]) : items[items.length - 1].push(l);
+      for (let it of items) {
+        try {
+          let v = parseYaml(it.join(`
+`));
+          if (Array.isArray(v)) {
+            list.push(...v);
+            continue;
+          }
+        } catch {
+        }
+        lost++, keep.push(`${s.key}（格式有误，原样保留）：${plain(it)}`);
+      }
+      value[s.key] = list;
+    }
+    return keep.length && (value.作者资料 = [].concat(value.作者资料 == null ? [] : value.作者资料, keep)), { value: secs.length ? value : null, lost };
+  }
   function importIndexForPart(index, partNo) {
     if (!isPlainObject(index) || !Array.isArray(index.事实)) return index;
     let here = Number(partNo) + 1;
@@ -14056,12 +14117,15 @@ ${yamlOf(k)}`).join(`
       let msgs = indexMsgs(p), reply2 = await askLive(view, jobId, `第${p.i + 1}段`, msgs), parsed = null;
       try {
         parsed = read(reply2);
-      } catch {
-        try {
-          parsed = read(await askLive(view, jobId, `第${p.i + 1}段`, fixYamlMessages(extractYaml(reply2), "格式错误", "outline")));
-        } catch (error) {
-          parsed = { error: `第${p.i + 1}段的索引读不出来：${error.message}` };
-        }
+      } catch (error) {
+        let raw = extractYaml(reply2), saved = salvageImportIndex(raw), good = saved.value && Object.keys(saved.value).length ? saved.value : null;
+        if (good && !saved.lost) parsed = good;
+        else
+          try {
+            parsed = read(await askLive(view, jobId, `第${p.i + 1}段`, fixImportIndexMessages(raw, error.message)));
+          } catch (error2) {
+            parsed = good || { error: `第${p.i + 1}段的索引读不出来：${error2.message}` };
+          }
       }
       ok(parsed) && sent.set(p.i, { msgs, reply: reply2 }), local[p.i] = parsed, await store.update(jobId, (j) => ({ ...j, localIndex: local, step: "index" })), view.renderBody();
     }, todo = parts.filter((p) => !ok(local[p.i]));
@@ -19429,7 +19493,7 @@ ${suffix.trim()}` : body;
   }
 
   // src/index.js
-  var VERSION = "0.3.6", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.3.7", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")

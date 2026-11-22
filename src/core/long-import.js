@@ -117,6 +117,71 @@ export function importIndexMessages({ part, total, prev = '', needs = '' }) {
     ];
 }
 
+// 索引 YAML 格式坏了时修格式用（原来借用大纲的修格式提示，规则对不上，修完常常还是坏的）。
+export function fixImportIndexMessages(text, error) {
+    return [
+        {
+            role: 'system',
+            content: `修正下面作者索引 YAML 的格式错误，内容一字不改，只改缩进、冒号、引号。含冒号、方括号、尖括号的文字整句加引号；列表里的每一条要么是一句文字，要么是 {键: 值} 对象，不要在文字下面再挂子列表。\n格式：\n${IMPORT_INDEX_FORMAT}`,
+        },
+        { role: 'user', content: `【错误】${error}\n\n${text}` },
+    ];
+}
+
+// 本地逐块抢救坏掉的索引 YAML（用户 2026-11-22：第4段一处缩进错，整份索引读不出，后面的段都卡住）。
+// 按顶层键切块，各块单独解析；坏块是列表的逐条解析，坏条和坏掉的文字块原样收进「作者资料」，不丢内容。
+// 返回 { value, lost }：lost 是原样保留下来的坏条数（0 = 只有文字块坏了、结构没丢）。
+const INDEX_LIST_KEYS = new Set(['人物', '地点', '事实', '门槛', '并行', '支线']);
+export function salvageImportIndex(text) {
+    let lines = String(text || '').replace(/\r\n?/g, '\n').split('\n'),
+        secs = [],
+        cur = null;
+    for (let line of lines) {
+        let m = /^([^\s#\-][^:：]*?)\s*[:：](.*)$/.exec(line);
+        m ? secs.push((cur = { key: m[1].trim(), head: m[2], body: [] })) : cur && cur.body.push(line);
+    }
+    let value = {},
+        keep = [],
+        lost = 0,
+        dedent = (ls) => {
+            let n = Math.min(...ls.filter((l) => l.trim()).map((l) => /^ */.exec(l)[0].length));
+            return ls.map((l) => l.slice(Number.isFinite(n) ? n : 0));
+        },
+        plain = (ls) => ls.map((l) => l.trim().replace(/^#.*$/, '')).filter(Boolean).join('\n');
+    for (let s of secs) {
+        let src = `${s.key}:${s.head}\n${s.body.join('\n')}`;
+        try {
+            let v = parseYaml(src);
+            if (isPlainObject(v)) {
+                value[s.key] = v[s.key];
+                continue;
+            }
+        } catch {}
+        if (!INDEX_LIST_KEYS.has(s.key)) {
+            keep.push(`${s.key}：${plain([s.head, ...s.body])}`);
+            continue;
+        }
+        // 列表块：按最外层的「- 」切条，逐条解析。
+        let body = dedent(s.body.filter((l) => l.trim() && !/^\s*#/.test(l))),
+            items = [],
+            list = [];
+        for (let l of body) /^- /.test(l) || !items.length ? items.push([l]) : items[items.length - 1].push(l);
+        for (let it of items) {
+            try {
+                let v = parseYaml(it.join('\n'));
+                if (Array.isArray(v)) {
+                    list.push(...v);
+                    continue;
+                }
+            } catch {}
+            (lost++, keep.push(`${s.key}（格式有误，原样保留）：${plain(it)}`));
+        }
+        value[s.key] = list;
+    }
+    keep.length && (value.作者资料 = [].concat(value.作者资料 == null ? [] : value.作者资料, keep));
+    return { value: secs.length ? value : null, lost };
+}
+
 // 整理第 partNo 段（从 0 起）时给模型看的作者索引（用户 2026-11-22：越往后请求越长）。
 // 本段和前后各一段读出的事实照原样给；更远的段只留编号、内容、性质（条件引用编号要用），
 // 「谁说的」「玩家怎么能知道」那几段已经整理过，不再每段重复。人物、地点、门槛、作者资料不动。

@@ -12,6 +12,8 @@ import {
     importIndexMissing,
     importIndexRetryMessages,
     importIndexForPart,
+    salvageImportIndex,
+    fixImportIndexMessages,
     importDoneText,
     mergeImportParts,
     importDraftMessages,
@@ -145,12 +147,18 @@ export async function runImportJob(view, jobId) {
                 parsed = null;
             try {
                 parsed = read(reply2);
-            } catch {
-                try {
-                    parsed = read(await askLive(view, jobId, `第${p.i + 1}段`, fixYamlMessages(extractYaml(reply2), '格式错误', 'outline')));
-                } catch (error) {
-                    parsed = { error: `第${p.i + 1}段的索引读不出来：${error.message}` };
-                }
+            } catch (error) {
+                // 格式坏了：先本地逐块抢救，只有文字块坏了就直接用；结构有丢失再请模型修一次，修不好仍用抢救结果。
+                let raw = extractYaml(reply2),
+                    saved = salvageImportIndex(raw),
+                    good = saved.value && Object.keys(saved.value).length ? saved.value : null;
+                if (good && !saved.lost) parsed = good;
+                else
+                    try {
+                        parsed = read(await askLive(view, jobId, `第${p.i + 1}段`, fixImportIndexMessages(raw, error.message)));
+                    } catch (error2) {
+                        parsed = good || { error: `第${p.i + 1}段的索引读不出来：${error2.message}` };
+                    }
             }
             ok(parsed) && sent.set(p.i, { msgs, reply: reply2 });
             ((local[p.i] = parsed), await store.update(jobId, (j) => ({ ...j, localIndex: local, step: 'index' })), view.renderBody());
