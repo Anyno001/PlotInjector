@@ -37,6 +37,27 @@ function connection(llm) {
     };
 }
 
+// 有的接口无视 stream:false 硬回 SSE：把 data: 块拼回一条普通回复
+function sseToJson(text) {
+    let content = '',
+        seen = false;
+    for (const line of String(text || '').split('\n')) {
+        const m = /^data:\s?(.*)$/.exec(line.trim());
+        if (!m || m[1] === '[DONE]') continue;
+        let chunk;
+        try {
+            chunk = JSON.parse(m[1]);
+        } catch {
+            continue;
+        }
+        seen = true;
+        if (chunk && chunk.error) return { error: chunk.error };
+        const delta = chunk && chunk.choices && chunk.choices[0] && (chunk.choices[0].delta || chunk.choices[0].message);
+        if (delta && typeof delta.content === 'string') content += delta.content;
+    }
+    return seen ? { choices: [{ message: { content } }] } : null;
+}
+
 async function postBackend(route, body, llm, signal) {
     const res = await hostWindow().fetch(`/api/backends/chat-completions/${route}`, {
         method: 'POST',
@@ -50,7 +71,7 @@ async function postBackend(route, body, llm, signal) {
     try {
         data = JSON.parse(text);
     } catch {
-        /* 下面统一报错 */
+        data = res.ok ? sseToJson(text) : null;
     }
     if (!res.ok || (data && data.error)) {
         const detail = safeDetail((data && data.error && (data.error.message || data.error)) || (data && data.message) || text, llm.apiKey);
@@ -101,8 +122,9 @@ async function viaCustomStream(body, llm, signal, onText) {
         headers: { ...requestHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...body, stream: true }),
     });
-    const type = String((res.headers && res.headers.get && res.headers.get('content-type')) || '');
-    if (!res.ok || !res.body || !/event-stream/i.test(type)) {
+    // 不看 content-type：有的中转把 SSE 标成 text/plain 或 application/json（用户 2026-11-22 报错原文就是 keep-alive+data: 块）。
+    // 按内容判断：出现 data: 行就当流读，一行都没有再按整段 JSON 读。
+    if (!res.ok || !res.body) {
         const text = await res.text();
         let data = null;
         try {
@@ -119,10 +141,14 @@ async function viaCustomStream(body, llm, signal, onText) {
     const reader = res.body.getReader(),
         decoder = new TextDecoder();
     let buf = '',
+        raw = '',
+        sawData = false,
         out = '';
     const take = (line) => {
         const m = /^data:\s?(.*)$/.exec(line.trim());
-        if (!m || m[1] === '[DONE]') return;
+        if (!m) return;
+        sawData = true;
+        if (m[1] === '[DONE]') return;
         let data;
         try {
             data = JSON.parse(m[1]);
@@ -138,19 +164,37 @@ async function viaCustomStream(body, llm, signal, onText) {
     for (;;) {
         const { value, done } = await reader.read();
         if (done) break;
-        buf += decoder.decode(value, { stream: true });
+        const chunk = decoder.decode(value, { stream: true });
+        if (!sawData) raw += chunk;
+        buf += chunk;
         const rows = buf.split('\n');
         buf = rows.pop();
         rows.forEach(take);
     }
-    (buf += decoder.decode()) && take(buf);
-    return out;
+    const tail = decoder.decode();
+    if (!sawData) raw += tail;
+    (buf += tail) && take(buf);
+    if (sawData) return out;
+    // 接口没按流式回，整段是普通 JSON
+    let data = null;
+    try {
+        data = JSON.parse(raw);
+    } catch {
+        /* 下面统一报错 */
+    }
+    if (!data || data.error) {
+        const detail = safeDetail((data && data.error && (data.error.message || data.error)) || (data && data.message) || raw, llm.apiKey);
+        throw new Error(`接口请求失败${detail ? `：${detail}` : ''}`);
+    }
+    return String((data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '');
 }
 
 // signal 中止时立即以 AbortError 结束。走酒馆当前 API 时底层请求取消不了，迟到的结果直接丢弃。
 // onText：只有独立接口会流式回调已生成的文字；这时超时按「多久没收到新内容」算，长回复不会因为总时长被掐断。
 export async function requestLlm(messages, llm, { timeoutMs = 180000, signal, onText } = {}) {
     const view = hostWindow();
+    // 关了流式就收不到中途进度，超时只能按总时长算：调用方本想流式（长回复）的，放宽到 10 分钟
+    if (onText && llm.source === 'custom' && llm.stream === 'off') ((onText = null), (timeoutMs = Math.max(timeoutMs, 600000)));
     const controller = new view.AbortController();
     let timer;
     let onAbort = null;

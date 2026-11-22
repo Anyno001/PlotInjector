@@ -1,4 +1,4 @@
-// PlotInjector v0.3.5
+// PlotInjector v0.3.6
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -2698,7 +2698,7 @@ ${u.yaml}`].filter(Boolean).join(`
     { key: "discuss", label: "讨论" },
     { key: "outline", label: "写设定与大纲" },
     { key: "check", label: "进度检测" }
-  ], DEFAULT_LLM = { source: "tavern", endpoint: "", apiKey: "", model: "", temperature: "" }, CONN_KEYS = ["endpoint", "apiKey", "model", "temperature"];
+  ], DEFAULT_LLM = { source: "tavern", endpoint: "", apiKey: "", model: "", temperature: "", stream: "" }, CONN_KEYS = ["endpoint", "apiKey", "model", "temperature", "stream"];
   function pickConn(src) {
     let out = {};
     for (let key of CONN_KEYS) out[key] = String(src && src[key] != null ? src[key] : "").trim();
@@ -5974,6 +5974,24 @@ ${floor.text}`)].join(`
       custom_include_headers: JSON.stringify({ Authorization: key ? `Bearer ${key}` : "" })
     };
   }
+  function sseToJson(text2) {
+    let content = "", seen = !1;
+    for (let line of String(text2 || "").split(`
+`)) {
+      let m = /^data:\s?(.*)$/.exec(line.trim());
+      if (!m || m[1] === "[DONE]") continue;
+      let chunk;
+      try {
+        chunk = JSON.parse(m[1]);
+      } catch {
+        continue;
+      }
+      if (seen = !0, chunk && chunk.error) return { error: chunk.error };
+      let delta = chunk && chunk.choices && chunk.choices[0] && (chunk.choices[0].delta || chunk.choices[0].message);
+      delta && typeof delta.content == "string" && (content += delta.content);
+    }
+    return seen ? { choices: [{ message: { content } }] } : null;
+  }
   async function postBackend(route, body, llm, signal) {
     let res = await hostWindow().fetch(`/api/backends/chat-completions/${route}`, {
       method: "POST",
@@ -5985,6 +6003,7 @@ ${floor.text}`)].join(`
     try {
       data = JSON.parse(text2);
     } catch {
+      data = res.ok ? sseToJson(text2) : null;
     }
     if (!res.ok || data && data.error) {
       let detail = safeDetail(data && data.error && (data.error.message || data.error) || data && data.message || text2, llm.apiKey);
@@ -6022,44 +6041,58 @@ ${mark}` } : m) : [{ role: "system", content: mark }, ...messages];
       signal,
       headers: { ...requestHeaders(), "Content-Type": "application/json" },
       body: JSON.stringify({ ...body, stream: !0 })
-    }), type = String(res.headers && res.headers.get && res.headers.get("content-type") || "");
-    if (!res.ok || !res.body || !/event-stream/i.test(type)) {
-      let text2 = await res.text(), data = null;
+    });
+    if (!res.ok || !res.body) {
+      let text2 = await res.text(), data2 = null;
       try {
-        data = JSON.parse(text2);
+        data2 = JSON.parse(text2);
       } catch {
       }
-      if (!res.ok || !data || data.error) {
-        let detail = safeDetail(data && data.error && (data.error.message || data.error) || data && data.message || text2, llm.apiKey);
+      if (!res.ok || !data2 || data2.error) {
+        let detail = safeDetail(data2 && data2.error && (data2.error.message || data2.error) || data2 && data2.message || text2, llm.apiKey);
         throw new Error(`接口请求失败${res.ok ? "" : `（HTTP ${res.status}）`}${detail ? `：${detail}` : ""}`);
       }
-      return String(data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content || "");
+      return String(data2.choices && data2.choices[0] && data2.choices[0].message && data2.choices[0].message.content || "");
     }
-    let reader = res.body.getReader(), decoder = new TextDecoder(), buf = "", out = "", take = (line) => {
+    let reader = res.body.getReader(), decoder = new TextDecoder(), buf = "", raw = "", sawData = !1, out = "", take = (line) => {
       let m = /^data:\s?(.*)$/.exec(line.trim());
-      if (!m || m[1] === "[DONE]") return;
-      let data;
+      if (!m || (sawData = !0, m[1] === "[DONE]")) return;
+      let data2;
       try {
-        data = JSON.parse(m[1]);
+        data2 = JSON.parse(m[1]);
       } catch {
         return;
       }
-      if (data && data.error) throw new Error(`接口请求失败：${safeDetail(data.error.message || data.error, llm.apiKey)}`);
-      let delta = data && data.choices && data.choices[0] && (data.choices[0].delta || data.choices[0].message), piece = delta && typeof delta.content == "string" ? delta.content : "";
+      if (data2 && data2.error) throw new Error(`接口请求失败：${safeDetail(data2.error.message || data2.error, llm.apiKey)}`);
+      let delta = data2 && data2.choices && data2.choices[0] && (data2.choices[0].delta || data2.choices[0].message), piece = delta && typeof delta.content == "string" ? delta.content : "";
       out += piece, onText(out);
     };
     for (; ; ) {
       let { value, done } = await reader.read();
       if (done) break;
-      buf += decoder.decode(value, { stream: !0 });
+      let chunk = decoder.decode(value, { stream: !0 });
+      sawData || (raw += chunk), buf += chunk;
       let rows2 = buf.split(`
 `);
       buf = rows2.pop(), rows2.forEach(take);
     }
-    return (buf += decoder.decode()) && take(buf), out;
+    let tail = decoder.decode();
+    if (sawData || (raw += tail), (buf += tail) && take(buf), sawData) return out;
+    let data = null;
+    try {
+      data = JSON.parse(raw);
+    } catch {
+    }
+    if (!data || data.error) {
+      let detail = safeDetail(data && data.error && (data.error.message || data.error) || data && data.message || raw, llm.apiKey);
+      throw new Error(`接口请求失败${detail ? `：${detail}` : ""}`);
+    }
+    return String(data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content || "");
   }
   async function requestLlm(messages, llm, { timeoutMs = 18e4, signal, onText } = {}) {
-    let view = hostWindow(), controller = new view.AbortController(), timer, onAbort = null, fail = null, arm = () => {
+    let view = hostWindow();
+    onText && llm.source === "custom" && llm.stream === "off" && (onText = null, timeoutMs = Math.max(timeoutMs, 6e5));
+    let controller = new view.AbortController(), timer, onAbort = null, fail = null, arm = () => {
       view.clearTimeout(timer), timer = view.setTimeout(() => {
         controller.abort(), fail && fail(new Error("请求超时"));
       }, timeoutMs);
@@ -17745,7 +17778,14 @@ ${suffix.trim()}` : body;
         ${custom ? `<label class="pi-field"><span>接口地址</span><input class="pi-inp" data-llm="${role}" data-k="endpoint" value="${esc(llm.endpoint)}" placeholder="https://api.example.com/v1"></label>
         <label class="pi-field"><span>API密钥</span><input class="pi-inp" type="password" autocomplete="off" data-llm="${role}" data-k="apiKey" value="${esc(llm.apiKey)}"></label>
         ${modelField(view, role, llm)}
-        <label class="pi-field"><span>温度</span><input class="pi-inp" data-llm="${role}" data-k="temperature" value="${esc(llm.temperature)}" placeholder="默认"></label>` : ""}
+        <label class="pi-field"><span>温度</span><input class="pi-inp" data-llm="${role}" data-k="temperature" value="${esc(llm.temperature)}" placeholder="默认"></label>
+        <label class="pi-field"><span>流式输出</span><select class="pi-sel" data-llm="${role}" data-k="stream">${options(
+      [
+        { value: "", label: "开启（导入长文时显示字数进度）" },
+        { value: "off", label: "关闭（整段返回）" }
+      ],
+      llm.stream === "off" ? "off" : ""
+    )}</select></label>` : ""}
         <div class="pi-tools is-c2 is-end"><button type="button" class="pi-btn is-sm" data-act="preset-load"${s.presets.length ? "" : " disabled"}>载入预设</button>
             <button type="button" class="pi-btn is-sm" data-act="preset-save"${custom ? "" : " disabled"}>保存为预设</button></div>
         </div>`;
@@ -17860,7 +17900,7 @@ ${suffix.trim()}` : body;
     }
     target.dataset.set && (target.type === "checkbox" || target.tagName === "SELECT") && (view.data.updateSettings({ [target.dataset.set]: readValue(target) }), view.runtime.refresh(), view.renderBody()), target.dataset.llm && target.tagName === "SELECT" && (target.value === "__manual" ? st6(view).manual = { ...st6(view).manual, [target.dataset.llm]: !0 } : setRole(view, target.dataset.llm, { [target.dataset.k]: target.value }), view.renderBody()), target.dataset.set && target.tagName !== "SELECT" && target.type !== "checkbox" && view.runtime.refresh();
   }
-  var CONN_KEYS2 = ["endpoint", "apiKey", "model", "temperature"], actions8 = {
+  var CONN_KEYS2 = ["endpoint", "apiKey", "model", "temperature", "stream"], actions8 = {
     async models(view, target) {
       let role = target.dataset.role, s = st6(view);
       if (!s.loading) {
@@ -19389,7 +19429,7 @@ ${suffix.trim()}` : body;
   }
 
   // src/index.js
-  var VERSION = "0.3.5", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.3.6", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")

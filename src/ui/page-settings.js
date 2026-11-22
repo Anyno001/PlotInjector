@@ -53,7 +53,14 @@ function llmCard(view, s) {
                 ? `<label class="pi-field"><span>接口地址</span><input class="pi-inp" data-llm="${role}" data-k="endpoint" value="${esc(llm.endpoint)}" placeholder="https://api.example.com/v1"></label>
         <label class="pi-field"><span>API密钥</span><input class="pi-inp" type="password" autocomplete="off" data-llm="${role}" data-k="apiKey" value="${esc(llm.apiKey)}"></label>
         ${modelField(view, role, llm)}
-        <label class="pi-field"><span>温度</span><input class="pi-inp" data-llm="${role}" data-k="temperature" value="${esc(llm.temperature)}" placeholder="默认"></label>`
+        <label class="pi-field"><span>温度</span><input class="pi-inp" data-llm="${role}" data-k="temperature" value="${esc(llm.temperature)}" placeholder="默认"></label>
+        <label class="pi-field"><span>流式输出</span><select class="pi-sel" data-llm="${role}" data-k="stream">${options(
+            [
+                { value: '', label: '开启（导入长文时显示字数进度）' },
+                { value: 'off', label: '关闭（整段返回）' },
+            ],
+            llm.stream === 'off' ? 'off' : '',
+        )}</select></label>`
                 : ''
         }
         <div class="pi-tools is-c2 is-end"><button type="button" class="pi-btn is-sm" data-act="preset-load"${s.presets.length ? '' : ' disabled'}>载入预设</button>
@@ -223,7 +230,7 @@ export function onChange(view, target) {
         target.dataset.set && target.tagName !== 'SELECT' && target.type !== 'checkbox' && view.runtime.refresh());
 }
 
-const CONN_KEYS = ['endpoint', 'apiKey', 'model', 'temperature'];
+const CONN_KEYS = ['endpoint', 'apiKey', 'model', 'temperature', 'stream'];
 
 export const actions = {
     async models(view, target) {

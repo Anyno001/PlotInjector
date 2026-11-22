@@ -19,8 +19,9 @@ export const LLM_ROLES = [
 ];
 
 // 每个用途各存一套连接（同 v0.1.4）。接口预设只是存下来的连接，载入时复制进某个用途，之后互不影响。
-export const DEFAULT_LLM = { source: 'tavern', endpoint: '', apiKey: '', model: '', temperature: '' };
-const CONN_KEYS = ['endpoint', 'apiKey', 'model', 'temperature'];
+// stream：'' 为流式（默认），'off' 为一次性返回（用户 2026-11-22：有的中转流式不稳，要能自己关）。
+export const DEFAULT_LLM = { source: 'tavern', endpoint: '', apiKey: '', model: '', temperature: '', stream: '' };
+const CONN_KEYS = ['endpoint', 'apiKey', 'model', 'temperature', 'stream'];
 
 function pickConn(src) {
     const out = {};

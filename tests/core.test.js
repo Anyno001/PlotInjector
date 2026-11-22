@@ -237,13 +237,13 @@ test('zip 备份结构与 CRC 正确', () => {
 test('接口设置：v0.1.5 引用预设的用途展开回独立接口；预设只做存档', () => {
     const preset = { id: 'a1', name: 'DS', endpoint: 'https://a.example/v1', apiKey: 'k', model: 'm1', temperature: '' };
     const s = normalizeSettings({ presets: [preset], llm: { discuss: { source: 'preset', presetId: 'a1' }, outline: { source: 'preset', presetId: 'gone' } } });
-    assert.deepEqual(s.llm.discuss, { source: 'custom', endpoint: 'https://a.example/v1', apiKey: 'k', model: 'm1', temperature: '' });
+    assert.deepEqual(s.llm.discuss, { source: 'custom', endpoint: 'https://a.example/v1', apiKey: 'k', model: 'm1', temperature: '', stream: '' });
     assert.equal(s.llm.outline.source, 'tavern');
     assert.equal(s.llm.check.source, 'tavern');
     assert.equal(s.presets.length, 1);
     assert.deepEqual(normalizeSettings(s), s);
     const old = normalizeSettings({ llm: { check: { source: 'custom', endpoint: 'https://b/v1', apiKey: '', model: 'x', temperature: '0.3' } } });
-    assert.deepEqual(resolveLlm(old, 'check'), { source: 'custom', endpoint: 'https://b/v1', apiKey: '', model: 'x', temperature: '0.3' });
+    assert.deepEqual(resolveLlm(old, 'check'), { source: 'custom', endpoint: 'https://b/v1', apiKey: '', model: 'x', temperature: '0.3', stream: '' });
     assert.deepEqual(resolveLlm(old, 'discuss'), { source: 'tavern' });
     assert.deepEqual(old.presets, []);
 });
