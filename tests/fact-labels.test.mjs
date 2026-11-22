@@ -79,7 +79,7 @@ test('dialog: 自动填写 fills only empty boxes, flags rows that need a look, 
   const doc = host.w.document;
   doc.querySelector(`[data-act="project"][data-id="${p.id}"]`).click(); await tick();
   doc.querySelector('[data-act="tab"][data-tab="run"]').click(); await tick();
-  (() => { const t = doc.querySelector('[data-act="run-set-toggle"][aria-expanded="false"]'); t && t.click(); })(); await tick();
+  (() => { const t = doc.querySelector('[data-act="run-set-toggle"][aria-expanded="false"]'); t && t.click(); })(); await tick(); (() => { const t = doc.querySelector('[data-act="run-fold"][data-key="advOpen"][aria-expanded="false"]'); t && t.click(); })(); await tick();
   doc.querySelector('[data-act="clue-gen-template"]').click(); await tick();
   const dlg = doc.querySelector('.pi-dialog');
   assert.match(dlg.textContent, /这份大纲里有4条要追踪的线索/);
@@ -141,7 +141,7 @@ test('dialog: 自动填写 fills only empty boxes, flags rows that need a look, 
   assert.equal(warnOf('F_doc'), '');
   dlg.querySelector(`[data-gt-label="${idx('F_key')}"]`).value = '钥匙';
   dlg.querySelector(`[data-gt-label="${idx('F_key')}"]`).dispatchEvent(new host.w.Event('input', { bubbles: true }));
-  [...dlg.querySelectorAll('.pi-btn')].find((b) => b.textContent === '导入到当前聊天').click(); await tick(); await tick();
+  [...dlg.querySelectorAll('.pi-btn')].find((b) => b.textContent === '写入当前聊天').click(); await tick(); await tick();
   const facts = Object.values(host.db.tables).find((s) => s && s.name === '关键事实表').content.slice(1);
   const byCode = Object.fromEntries(facts.map((r) => [r[1], r]));
   assert.equal(byCode.F_han[2], '我自己写的');
@@ -190,7 +190,7 @@ test('review: a literal overlap the review clears stays grey; a failed review fa
   const doc = host.w.document;
   doc.querySelector(`[data-act="project"][data-id="${p.id}"]`).click(); await tick();
   doc.querySelector('[data-act="tab"][data-tab="run"]').click(); await tick();
-  (() => { const t = doc.querySelector('[data-act="run-set-toggle"][aria-expanded="false"]'); t && t.click(); })(); await tick();
+  (() => { const t = doc.querySelector('[data-act="run-set-toggle"][aria-expanded="false"]'); t && t.click(); })(); await tick(); (() => { const t = doc.querySelector('[data-act="run-fold"][data-key="advOpen"][aria-expanded="false"]'); t && t.click(); })(); await tick();
   const open = async () => { doc.querySelector('[data-act="clue-gen-template"]').click(); await tick(); return doc.querySelector('.pi-dialog'); };
   const write = yamlReply([
     '- {编号: F_han, 标签: 看守的证词, 口径: 看守当面说出那晚看到了什么时登记，记为存疑；推托没开口不算}',
@@ -247,7 +247,7 @@ test('R5: editing a row while the review is pending keeps the edit; the old verd
   const doc = host.w.document;
   doc.querySelector(`[data-act="project"][data-id="${p.id}"]`).click(); await tick();
   doc.querySelector('[data-act="tab"][data-tab="run"]').click(); await tick();
-  (() => { const t = doc.querySelector('[data-act="run-set-toggle"][aria-expanded="false"]'); t && t.click(); })(); await tick();
+  (() => { const t = doc.querySelector('[data-act="run-set-toggle"][aria-expanded="false"]'); t && t.click(); })(); await tick(); (() => { const t = doc.querySelector('[data-act="run-fold"][data-key="advOpen"][aria-expanded="false"]'); t && t.click(); })(); await tick();
   doc.querySelector('[data-act="clue-gen-template"]').click(); await tick();
   const dlg = doc.querySelector('.pi-dialog');
   const idx = (code) => [...dlg.querySelectorAll('[data-fr-row]')].findIndex((r) => r.querySelector('.pi-fr-hd .pi-meta').textContent === code);

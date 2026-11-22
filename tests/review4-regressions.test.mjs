@@ -125,7 +125,7 @@ test('V3: rewrite draft that changes a done node is flagged; applying keeps the 
   assert.equal(status().n_ledger, 'done');
   await click('[data-act="tab"][data-tab="run"]');
   host.llm.reply = REWRITE_BAD;
-  doc.querySelector('[data-act="rewrite"]').click(); await tick();
+  { const pm = doc.querySelector('[data-act="run-prog-menu"]'); if (pm) { pm.click(); await tick(); doc.querySelector('[data-dlg-value="rewrite"]').click(); } else doc.querySelector('[data-act="rewrite"]').click(); } await tick();
   doc.querySelector('.pi-dialog textarea, .pi-dialog input').value = 'x';
   doc.querySelector('.pi-dialog .pi-btn.is-primary').click(); await tick(); await tick();
   const body = doc.querySelector('.pi-body').textContent;
@@ -147,7 +147,7 @@ test('V3: draft stays while the story advances one more floor → apply re-check
   set('关键事实表', 'F_box', '状态', '已核实'); commit();
   await click('[data-act="tab"][data-tab="run"]');
   host.llm.reply = REWRITE_BAD;
-  doc.querySelector('[data-act="rewrite"]').click(); await tick();
+  { const pm = doc.querySelector('[data-act="run-prog-menu"]'); if (pm) { pm.click(); await tick(); doc.querySelector('[data-dlg-value="rewrite"]').click(); } else doc.querySelector('[data-act="rewrite"]').click(); } await tick();
   doc.querySelector('.pi-dialog textarea, .pi-dialog input').value = 'x';
   doc.querySelector('.pi-dialog .pi-btn.is-primary').click(); await tick(); await tick();
   // at draft time n_ledger was not done → no history warning; now the ledger gets found
@@ -166,7 +166,7 @@ test('V3: all stages finished → 改写后续 says there is nothing left, sends
   assert.equal(inst.runtime.clue.compute().state.current, null, 'story finished');
   await click('[data-act="tab"][data-tab="run"]');
   const calls = host.llmCalls.length;
-  doc.querySelector('[data-act="rewrite"]').click(); await tick();
+  { const pm = doc.querySelector('[data-act="run-prog-menu"]'); if (pm) { pm.click(); await tick(); doc.querySelector('[data-dlg-value="rewrite"]').click(); } else doc.querySelector('[data-act="rewrite"]').click(); } await tick();
   assert.equal(doc.querySelector('.pi-dialog'), null, 'no reason dialog');
   assert.equal(host.llmCalls.length, calls, 'no model call');
   await inst.destroy();
@@ -269,7 +269,7 @@ test('W1: prebuild confirmed after switching to chat B writes nothing into B', a
   const t = liveTables(buildTemplate({ controlRow: ['主线', ''], factRows: [{ code: 'F_box', label: 'a' }], knowRows: [] }));
   host.db.setTables(t);
   await tick();
-  (() => { const t = doc.querySelector('[data-act="run-set-toggle"][aria-expanded="false"]'); t && t.click(); })(); await tick();
+  (() => { const t = doc.querySelector('[data-act="run-set-toggle"][aria-expanded="false"]'); t && t.click(); })(); await tick(); (() => { const t = doc.querySelector('[data-act="run-fold"][data-key="advOpen"][aria-expanded="false"]'); t && t.click(); })(); await tick();
   doc.querySelector('[data-act="clue-prebuild"]').click(); await tick();
   const dlg = doc.querySelector('.pi-dialog');
   assert.ok(dlg, 'prebuild dialog in A');
@@ -287,7 +287,7 @@ test('W1/§14.3: a failed fact insert does not create its knowledge rows; column
   const api = host.w.AutoCardUpdaterAPI, orig = api.insertRow;
   api.insertRow = async (a, b) => ((typeof a === 'object' ? a.data : b)['编号'] === 'F_seen' ? -1 : orig(a, b));
   await tick();
-  (() => { const t = doc.querySelector('[data-act="run-set-toggle"][aria-expanded="false"]'); t && t.click(); })(); await tick();
+  (() => { const t = doc.querySelector('[data-act="run-set-toggle"][aria-expanded="false"]'); t && t.click(); })(); await tick(); (() => { const t = doc.querySelector('[data-act="run-fold"][data-key="advOpen"][aria-expanded="false"]'); t && t.click(); })(); await tick();
   doc.querySelector('[data-act="clue-prebuild"]').click(); await tick();
   const dlg = doc.querySelector('.pi-dialog');
   dlg.querySelectorAll('[data-pb-label]').forEach((el, i) => { el.value = `标签${i}`; el.dispatchEvent(new el.ownerDocument.defaultView.Event('input', { bubbles: true })); });
@@ -303,7 +303,7 @@ test('W1/§14.3: a failed fact insert does not create its knowledge rows; column
   fs2.content[0].splice(ci, 1);
   host.db.setTables(bad);
   const before = api.inserted.length;
-  (() => { const t = doc.querySelector('[data-act="run-set-toggle"][aria-expanded="false"]'); t && t.click(); })(); await tick();
+  (() => { const t = doc.querySelector('[data-act="run-set-toggle"][aria-expanded="false"]'); t && t.click(); })(); await tick(); (() => { const t = doc.querySelector('[data-act="run-fold"][data-key="advOpen"][aria-expanded="false"]'); t && t.click(); })(); await tick();
   doc.querySelector('[data-act="clue-prebuild"]').click(); await tick();
   assert.equal(doc.querySelector('.pi-dialog'), null, 'no dialog when the table structure does not match');
   assert.equal(api.inserted.length, before);
@@ -333,7 +333,7 @@ test('W3: a rewrite draft generated in chat A cannot be applied in chat B (share
   set('关键事实表', 'F_box', '状态', '已核实'); set('关键事实表', 'F_ledger', '状态', '已核实'); commit();
   await click('[data-act="tab"][data-tab="run"]');
   host.llm.reply = REWRITE_BAD;
-  doc.querySelector('[data-act="rewrite"]').click(); await tick();
+  { const pm = doc.querySelector('[data-act="run-prog-menu"]'); if (pm) { pm.click(); await tick(); doc.querySelector('[data-dlg-value="rewrite"]').click(); } else doc.querySelector('[data-act="rewrite"]').click(); } await tick();
   doc.querySelector('.pi-dialog textarea, .pi-dialog input').value = 'x';
   doc.querySelector('.pi-dialog .pi-btn.is-primary').click(); await tick(); await tick();
   await switchChat(host, inst, 'chat-B');
@@ -351,7 +351,7 @@ test('V3 result-based: rewrite that would directly complete an in-progress node 
   set('关键事实表', 'F_box', '状态', '已核实'); set('关键事实表', 'F_talk', '状态', '已核实'); commit();
   await click('[data-act="tab"][data-tab="run"]');
   host.llm.reply = '```yaml\n剧情_卷一_小镇失窃案:\n  阶段二_调查:\n    主线节点:\n      - id: n_ledger\n        名称: 查账本\n        入口: 翻账本\n        发现: [{事实: F_ledger, 内容: c}]\n        完成条件: {事实: F_talk}\n```';
-  doc.querySelector('[data-act="rewrite"]').click(); await tick();
+  { const pm = doc.querySelector('[data-act="run-prog-menu"]'); if (pm) { pm.click(); await tick(); doc.querySelector('[data-dlg-value="rewrite"]').click(); } else doc.querySelector('[data-act="rewrite"]').click(); } await tick();
   doc.querySelector('.pi-dialog textarea, .pi-dialog input').value = 'x';
   doc.querySelector('.pi-dialog .pi-btn.is-primary').click(); await tick(); await tick();
   assert.match(doc.querySelector('.pi-body').textContent, /这次改写会让 n_ledger「查账本」直接变成已完成/);

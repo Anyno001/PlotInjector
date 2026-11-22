@@ -96,7 +96,7 @@ test('clue mode: run page 改写后续 uses the clue rewrite prompt from the clu
   await click('[data-act="tab"][data-tab="run"]');
   host.llm.reply = '```yaml\n剧情_卷一_小镇失窃案:\n  阶段二_调查:\n    主线节点:\n      - {id: n_ledger, 名称: 查账本, 入口: 翻账本, 发现: [{事实: F_ledger, 内容: c}], 完成条件: {事实: F_ledger}}\n```';
   // the rewrite asks for a reason through a prompt dialog → answer it
-  doc.querySelector('[data-act="rewrite"]').click();
+  { const pm = doc.querySelector('[data-act="run-prog-menu"]'); if (pm) { pm.click(); await tick(); doc.querySelector('[data-dlg-value="rewrite"]').click(); } else doc.querySelector('[data-act="rewrite"]').click(); }
   await tick();
   const dlgInput = doc.querySelector('.pi-dialog textarea, .pi-dialog input');
   assert.ok(dlgInput, 'reason dialog');
@@ -189,7 +189,7 @@ test('V6 rewrite: the discussion record listed is actually in the request; 0 flo
   await host.addMessage('正文：主角走进杂货店', false);
   await click('[data-act="tab"][data-tab="run"]');
   host.llm.reply = '```yaml\n剧情_卷一_小镇失窃案:\n  阶段一_报案:\n    主线节点:\n      - {id: n_report, 名称: a, 入口: e, 发现: [{事实: F_box, 内容: c}], 完成条件: {事实: F_box}}\n```';
-  doc.querySelector('[data-act="rewrite"]').click(); await tick();
+  { const pm = doc.querySelector('[data-act="run-prog-menu"]'); if (pm) { pm.click(); await tick(); doc.querySelector('[data-dlg-value="rewrite"]').click(); } else doc.querySelector('[data-act="rewrite"]').click(); } await tick();
   doc.querySelector('.pi-dialog textarea, .pi-dialog input').value = 'x';
   doc.querySelector('.pi-dialog .pi-btn.is-primary').click(); await tick(); await tick();
   const [, user] = lastPrompt(host);
@@ -202,7 +202,7 @@ test('V6 rewrite: the discussion record listed is actually in the request; 0 flo
   await setRefs(inst, id, { floors: 2 });
   doc.querySelector('[data-act="draft-drop"]').click(); await tick();
   await click('[data-act="tab"][data-tab="run"]');
-  doc.querySelector('[data-act="rewrite"]').click(); await tick();
+  { const pm = doc.querySelector('[data-act="run-prog-menu"]'); if (pm) { pm.click(); await tick(); doc.querySelector('[data-dlg-value="rewrite"]').click(); } else doc.querySelector('[data-act="rewrite"]').click(); } await tick();
   doc.querySelector('.pi-dialog textarea, .pi-dialog input').value = 'x';
   doc.querySelector('.pi-dialog .pi-btn.is-primary').click(); await tick(); await tick();
   assert.match(lastPrompt(host)[1].content, /【最近正文】[\s\S]*主角走进杂货店/);

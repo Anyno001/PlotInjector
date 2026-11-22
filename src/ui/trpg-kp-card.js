@@ -1,9 +1,10 @@
 // 跑团模式执行页的「KP」卡：卡住了吗（体检+推一把）、对照剧本、察觉卡关。逻辑在 core/trpg-kp.js。
-import { esc } from './dom.js';
+import { esc, menuDialog } from './dom.js';
+import { ICONS } from './styles.js';
 import { chatMessages, toast } from '../host/st.js';
 import { chatFactSets } from '../core/clue-project.js';
 import { trpgCheckResults } from '../core/trpg.js';
-import { steerActions, sceneHintHtml, timelineHintHtml, steerResultHtml } from './trpg-steer.js';
+import { steerActions, timelineHintHtml, steerResultHtml } from './trpg-steer.js';
 import { readGameClock } from '../core/trpg-timeline.js';
 import { trpgHealth, kpPushTarget, aiFloorCount, KP_LEVELS, KP_STUCK_ROUNDS } from '../core/trpg-kp.js';
 
@@ -39,9 +40,9 @@ export function kpCard(view, project, c, d) {
         busy = view.busy['kp-steer'],
         bind = project.clue.bindings.time;
     return `<div class="pi-card"><h3>KP<span class="pi-spacer"></span>
-        <button type="button" class="pi-btn is-sm" data-act="kp-health" title="推演凭已经拿到的线索，主线还能不能走通，并可以推一把；只给结论，展开才剧透">卡住了吗</button>
-        <button type="button" class="pi-btn is-sm" data-act="kp-steer" title="对照最近的正文和模组原文，看正文有没有跑偏"${busy ? ' disabled' : ''}>${busy ? '<span class="pi-spin"></span>检查中' : '对照剧本'}</button></h3>
-        ${sceneHintHtml(c)}${timelineHintHtml(project, readGameClock(c.snap.tables, bind && bind.路径))}${steerResultHtml(project)}
+        <button type="button" class="pi-btn is-sm is-ghost" data-act="kp-health" title="推演凭已经拿到的线索，主线还能不能走通，并可以推一把；只给结论，展开才剧透">卡住了吗</button>
+        ${busy ? '<span class="pi-spin"></span>' : `<button type="button" class="pi-icon-btn" data-act="kp-menu" title="更多" aria-label="更多">${ICONS.more}</button>`}</h3>
+        ${timelineHintHtml(project, readGameClock(c.snap.tables, bind && bind.路径))}${steerResultHtml(project)}
         ${
             mine
                 ? `<p class="pi-hint"><span class="pi-badge ${BADGE[mine.level][0]}">${BADGE[mine.level][1]}</span> ${esc(mine.lines.join('；'))}${
@@ -50,7 +51,7 @@ export function kpCard(view, project, c, d) {
                       leaks ? `<p class="pi-hint is-warn">最近一次请求里疑似提前写出了${leaks}处线索</p>` : ''
                   }${
                       mine.fact && !push
-                          ? `<p class="pi-hint">要推一把的话，下一轮：</p><div class="pi-tools is-c3">${KP_LEVELS.map((x) => `<button type="button" class="pi-btn is-sm" data-act="kp-push" data-level="${x.level}">${esc(x.label)}</button>`).join('')}</div>`
+                          ? `<div class="pi-tools is-c3">${KP_LEVELS.map((x) => `<button type="button" class="pi-btn is-sm" data-act="kp-push" data-level="${x.level}">${esc(x.label)}</button>`).join('')}</div>`
                           : mine.fact || push ? '' : '<p class="pi-hint">眼下没有能推的线索。</p>'
                   }`
                 : ''
@@ -58,13 +59,17 @@ export function kpCard(view, project, c, d) {
         ${push ? `<p class="pi-hint">下一轮：${esc(pushLabel)} <button type="button" class="pi-btn is-sm is-ghost" data-act="kp-cancel">取消</button></p>` : ''}
         ${
             stuck >= KP_STUCK_ROUNDS && !push
-                ? `<p class="pi-hint is-warn">已经${stuck}轮没拿到新线索，要不要推一把？ <button type="button" class="pi-btn is-sm" data-act="kp-health">卡住了吗</button></p>`
+                ? `<p class="pi-hint is-warn">已经${stuck}轮没拿到新线索。</p>`
                 : ''
         }</div>`;
 }
 
 export const kpActions = {
     ...steerActions,
+    async 'kp-menu'(view) {
+        let pick = await menuDialog({ title: 'KP', items: [{ label: '对照剧本', value: 'kp-steer' }] });
+        pick && kpActions[pick](view);
+    },
     'kp-health'(view) {
         let c = view.runtime.clue.compute();
         if (!c) return;

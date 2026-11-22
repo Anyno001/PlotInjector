@@ -191,7 +191,7 @@ test('run page: pause / resume buttons; all-done card offers 开始下一段主�
   doc.querySelector('[data-act="tab"][data-tab="run"]').click(); await tick();
   doc.querySelector('[data-act="clue-pause"][data-value="1"]').click(); await tick();
   assert.equal(inst.runtime.clue.diagnose().paused, true);
-  assert.match(doc.body.textContent, /日常游玩中/);
+  assert.match(doc.body.textContent, /已暂停/);
   assert.equal(inst.runtime.clue.projection().reason, '主线已暂停（日常游玩）');
   doc.querySelector('[data-act="clue-pause"][data-value=""]').click(); await tick();
   assert.equal(inst.runtime.clue.diagnose().paused, false);

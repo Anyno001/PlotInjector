@@ -41,9 +41,9 @@ async function setup(tables) {
   await click('[data-act="tab"][data-tab="run"]');
   return { host, inst, doc, click, pid: p.id, api: host.w.AutoCardUpdaterAPI };
 }
-async function openGen(ctx) { (() => { const t = ctx.doc.querySelector('[data-act="run-set-toggle"][aria-expanded="false"]'); t && t.click(); })(); await tick(); ctx.doc.querySelector('[data-act="clue-gen-template"]').click(); await tick(); return ctx.doc.querySelector('.pi-dialog'); }
+async function openGen(ctx) { (() => { const t = ctx.doc.querySelector('[data-act="run-set-toggle"][aria-expanded="false"]'); t && t.click(); })(); await tick(); (() => { const t = ctx.doc.querySelector('[data-act="run-fold"][data-key="advOpen"][aria-expanded="false"]'); t && t.click(); })(); await tick(); ctx.doc.querySelector('[data-act="clue-gen-template"]').click(); await tick(); return ctx.doc.querySelector('.pi-dialog'); }
 function fillLabels(dlg) { dlg.querySelectorAll('[data-gt-label]').forEach((el, i) => { el.value = `标签${i}`; el.dispatchEvent(new el.ownerDocument.defaultView.Event('input', { bubbles: true })); }); }
-async function confirm(dlg) { [...dlg.querySelectorAll('.pi-btn')].find((b) => b.textContent === '导入到当前聊天').click(); await tick(); await tick(); }
+async function confirm(dlg) { [...dlg.querySelectorAll('.pi-btn')].find((b) => b.textContent === '写入当前聊天').click(); await tick(); await tick(); }
 
 test('new chat on the default tables: preview lists the changes; import uses scope chat + seed; binding written; clue tables live', async () => {
   const ctx = await setup(dailyTables());
@@ -113,7 +113,7 @@ test('import failure: binding untouched; template read failure / mismatch: nothi
   ctx.api.getTableTemplate = () => ({ ...orig(), sheet_other: { uid: 'sheet_other', name: '别的模板的表', content: [['row_id', 'x']], sourceData: {}, updateConfig: {}, exportConfig: {} } });
   let d = await openGen(ctx);
   assert.match(d.textContent, /没有生成线索模板[\s\S]*模板里有、当前聊天没有：别的模板的表/);
-  assert.ok(![...d.querySelectorAll('.pi-btn')].some((b) => b.textContent === '导入到当前聊天'), 'no import button');
+  assert.ok(![...d.querySelectorAll('.pi-btn')].some((b) => b.textContent === '写入当前聊天'), 'no import button');
   [...d.querySelectorAll('.pi-btn')].find((b) => b.textContent === '关闭').click(); await tick();
   assert.equal(ctx.api.templateCalls.length, 0);
   await ctx.inst.destroy();
@@ -166,7 +166,7 @@ test('bound project, new chat without clue tables: 需要处理 has a 创建模�
   await ctx.host.settle(); await tick();
   await ctx.click('[data-act="tab"][data-tab="run"]');
   assert.ok(ctx.doc.querySelector('[data-act="run-set-toggle"][aria-expanded="false"]'), 'run settings folded');
-  const btn = ctx.doc.querySelector('.pi-hint.is-warn [data-act="clue-gen-template"]');
+  const btn = ctx.doc.querySelector('.pi-row.is-todo [data-act="clue-gen-template"]');
   assert.ok(btn);
   btn.click(); await tick();
   assert.ok(ctx.doc.querySelector('.pi-dialog'), 'opens the template dialog');

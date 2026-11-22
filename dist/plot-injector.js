@@ -1,4 +1,4 @@
-// PlotInjector v0.3.10
+// PlotInjector v0.3.11
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -9312,6 +9312,9 @@ ${finds.map((d) => `- ${d.text}`).join(`
 .pi-field{display:flex;flex-direction:column;gap:3px;margin-bottom:8px;min-width:0}
 .pi-field>span{font-size:12px;color:var(--pi-txt2);font-weight:500}
 .pi-row.is-top{align-items:flex-start}
+.pi-row.is-todo{flex-wrap:nowrap;margin:8px 0}
+.pi-row.is-todo>.pi-hint{flex:1;min-width:0;margin:0}
+.pi-row.is-todo>.pi-btn{flex:none;white-space:nowrap}
 .pi-inline{display:flex;gap:8px;align-items:stretch}
 .pi-inline>.pi-inp,.pi-inline>.pi-sel{flex:1;min-width:0}
 .pi-inline>.pi-btn{min-height:0;flex-shrink:0;width:96px}
@@ -9322,6 +9325,8 @@ ${finds.map((d) => `- ${d.text}`).join(`
 .pi-equal.is-one,.pi-tools.is-c1{--pi-cols:1}
 .pi-tools.is-c2{--pi-cols:2}
 .pi-tools.is-c3{--pi-cols:3}
+.pi-tools.is-c3>.pi-btn{white-space:nowrap}
+@media(max-width:420px){.pi-tools.is-c3>.pi-btn{padding:0 2px}}
 .pi-tools.is-c4{--pi-cols:4}
 .pi-tools{margin:2px 0 10px}
 .pi-tools.is-end{margin:10px 0 0}
@@ -9594,9 +9599,15 @@ label.pi-wb-row{cursor:pointer}
 .pi-diff .is-add{background:var(--pi-add)}
 .pi-diff .is-del{background:var(--pi-del);text-decoration:line-through;color:var(--pi-txt2)}
 .pi-toc{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px}
-.pi-files{width:100%;border-collapse:collapse;font-size:12px}
-.pi-files td,.pi-files th{padding:6px 4px;border-bottom:1px solid var(--pi-line);text-align:left}
-.pi-files th{color:var(--pi-txt2);font-weight:600}
+.pi-files{display:flex;flex-direction:column;gap:6px;font-size:12px}.pi-file{background:var(--pi-fill);border-radius:var(--pi-r-in);padding:8px 10px}.pi-file-name{font-weight:600;overflow-wrap:anywhere;margin-bottom:2px}.pi-file-row{display:flex;align-items:center;gap:4px;min-height:28px}.pi-file-k{color:var(--pi-txt2);flex:none;width:5.5em}.pi-file-row>.pi-meta{flex:1 1 auto;min-width:0}.pi-file-row .pi-btn{flex:none;white-space:nowrap;padding:0 8px}
+
+
+
+
+
+
+
+
 .pi-files .is-missing{color:var(--pi-danger)}
 .pi-diag-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--pi-line);font-size:12px}
 .pi-diag-row:last-child{border-bottom:0}
@@ -9650,6 +9661,10 @@ label.pi-wb-row{cursor:pointer}
 .pi-notice{width:auto}
 .pi-dialog{align-items:flex-start;box-sizing:border-box;padding-top:calc(56px + env(safe-area-inset-top,0px))}
 .pi-dialog-box{max-height:calc(100dvh - 80px)}
+.pi-dialog-box{display:flex;flex-direction:column;overflow:hidden}
+.pi-dialog-box>h4{flex:none}
+.pi-dialog-box>.pi-dlg-body{flex:1 1 auto;min-height:0;overflow-y:auto;scrollbar-width:none}
+.pi-dialog-box>.pi-dlg-acts{flex:none}
 }
 /* wb-tools v0.1.23 */
 .pi-wb-sort{display:flex;align-items:center;gap:8px;margin:0 0 8px}
@@ -9780,11 +9795,7 @@ label.pi-wb-row{cursor:pointer}
 .pi-root .pi-fold[open]>summary::before{content:'▾'}
 .pi-fold>summary b{font-weight:500;color:var(--pi-dark);white-space:nowrap}
 .pi-fold>summary span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pi-clue-stage{margin:8px 0 12px;padding:0 0 0 10px;border-left:3px solid var(--pi-rule)}
-.pi-clue-stage.is-active{border-left-color:var(--pi-accent)}
-.pi-clue-stage.is-done{border-left-color:var(--pi-txt2);opacity:.8}
 .pi-clue-node{background:var(--pi-fill);border-radius:var(--pi-r-in);padding:4px 8px;margin:4px 0}
-.pi-clue-node.is-focus{box-shadow:inset 0 0 0 2px var(--pi-accent)}
 .pi-clue-hd{display:flex;align-items:center;gap:8px;min-height:30px;cursor:pointer}
 .pi-clue-name{flex:1;min-width:0;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pi-clue-why{margin:2px 0 4px;padding-left:20px;font-size:12px;color:var(--pi-txt2)}
@@ -9899,10 +9910,51 @@ label.pi-wb-row{cursor:pointer}
 .pi-line-row>.pi-row{flex-wrap:nowrap}
 .pi-line-row>.pi-row>.pi-badge,.pi-line-row>.pi-row>.pi-btn{flex:none}
 .pi-line-row>.pi-row>.pi-spacer{flex:1 1 auto;min-width:4px}
+.pi-rl-stack{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
+.pi-rl-stack .pi-row.is-todo,.pi-rl-stack>.pi-hint{background:var(--pi-warn-soft);border-radius:var(--pi-r-in);padding:8px 10px;margin:0}
+.pi-rl-stack .pi-btn{background:var(--pi-dark);color:var(--pi-on-dark)}
+.pi-root:not(#pi-x) .pi-rl-cur .pi-hint.is-warn{font-weight:400!important;font-size:13px}
+.pi-rl-lines .pi-btn.is-primary{background:var(--pi-bg);color:var(--pi-txt)}
+.pi-rl-status{margin-bottom:10px;flex-wrap:nowrap}
+.pi-rl-status>b{flex:none}
+.pi-rl-status .pi-grow{flex:1 1 0;min-width:0}
+.pi-rl-focus{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--pi-fill);border-radius:var(--pi-r-in);padding:10px 12px;font-size:13px}
+.pi-rl-focus.is-col{flex-direction:column;align-items:stretch}
+.pi-rl-focus>.pi-grow{flex:1;min-width:60px}
+.pi-rl-focus .pi-btn:not(.is-primary),.pi-rl-lines .pi-btn:not(.is-primary),.pi-rl-sec .pi-btn:not(.is-primary),.pi-rl-sec .pi-sel{background:var(--pi-bg)}
+.pi-rl-foot{margin:10px 0 0}
+.pi-rl-lines{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+.pi-rl-lines .pi-line-row{background:var(--pi-fill);border-radius:var(--pi-r-in);padding:6px 6px 6px 12px;border-top:0}
+.pi-rl-lines .pi-line-head{align-items:center;gap:6px}
+.pi-rl-lines .pi-line-head .pi-line-name{padding-top:0;font-weight:600;font-size:13px}
+.pi-rl-lines .pi-line-row .pi-hint{margin:2px 6px 4px 0}
+.pi-rl-kind{padding:1px 8px;border-radius:10px;font-size:11px;flex:none}
+.pi-tl-hd.is-fold{cursor:pointer}
+.pi-tl-hd.is-fold .pi-tl-state:last-child{font-size:13px}
+.pi-tl>.pi-tl-item{padding-bottom:4px}
+.pi-tl-nodes .pi-clue-node{background:transparent;padding:0;margin:0}
+.pi-tl-nodes .pi-clue-node.is-focus{background:var(--pi-accent-soft)}
+.pi-tl-nodes .pi-clue-hd{padding:0 0 0 8px}
+.pi-tl-nodes .pi-clue-name{flex:1;min-width:0}
+.pi-rl-sec{background:var(--pi-fill);border-radius:var(--pi-r-in);padding:10px 12px;margin-top:8px;display:flex;flex-direction:column;gap:8px}
+.pi-rl-sec .pi-run-sec{border-top:0;padding:0}
+.pi-rl-sec .pi-run-fold{align-self:flex-start}
+.pi-rl-sec .pi-pace,.pi-rl-sec .pi-line-opts{padding-top:0;border-top:0;margin:0}
+.pi-rl-sec .pi-ta{background:var(--pi-bg)}
+.pi-rl-sec .pi-status:empty{display:none}
+.pi-rl-sec .pi-tools .pi-btn.is-wide{width:100%;flex:1}
+.pi-rl-status .pi-meta{white-space:normal}
+.pi-rl-sec .pi-seg,.pi-rl-focus .pi-sel{background:var(--pi-bg)}
+.pi-rl-sec .pi-seg-btn.is-sel{background:var(--pi-accent-soft);color:var(--pi-accent);box-shadow:none;font-weight:600}
+.pi-rl-sec .pi-inp,.pi-rl-sec .pi-sel,.pi-rl-focus .pi-inp{background:var(--pi-bg)}
+.pi-root:not(#pi-x) .pi-tl-item.is-active .pi-tl-state.is-left{color:var(--pi-txt2);font-weight:400!important;font-size:12px}
+.pi-tl-hd .pi-tl-name{flex:0 1 auto;margin-right:auto}
+.pi-run-set h3{flex-wrap:nowrap}
+.pi-run-set h3 .pi-run-fold{flex:none}
+.pi-run-set h3 .pi-meta{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pi-card h3 .pi-pause-menu{margin-left:auto}
 .pi-line-menu{position:absolute;right:0;left:auto;top:calc(100% + 4px);z-index:5;display:flex;flex-direction:column;min-width:120px;padding:4px;background:var(--pi-bg);border-radius:10px;box-shadow:var(--pi-shadow)}
 .pi-line-menu .pi-btn{width:100%;justify-content:flex-start}
-.pi-line-foot{margin-top:8px}
 .pi-rv-tbl{display:flex;flex-direction:column;gap:6px;margin:6px 0 0 26px;padding:8px 10px;background:var(--pi-fill);border-radius:var(--pi-r-in)}
 .pi-rv-tbl-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
 .pi-rv-tbl-row.is-cmp{grid-template-columns:auto minmax(0,1fr)}
@@ -10158,7 +10210,7 @@ label.pi-wb-row{cursor:pointer}
       {
         target: ".pi-top-end [data-page=settings]",
         title: "设置",
-        body: "模型接口、写作基准、注入方式都在这里。第一次用请先配好「模型接口」：讨论和写大纲都要用到AI。",
+        body: "模型接口、阶段推进、注入方式都在这里，写作基准和实验功能收在最下面的「高级」里。第一次用请先配好「模型接口」：讨论和写大纲都要用到AI。",
         side: "bottom"
       },
       {
@@ -10407,9 +10459,9 @@ label.pi-wb-row{cursor:pointer}
         side: "bottom"
       },
       {
-        target: "[data-guide-preset]",
-        title: "写作基准",
-        body: "讨论和整理设定时，AI照这份基准来写。默认是通用版；写同人选「同人世界观速成」；也可以选「自定义」自己改。",
+        target: '[data-act="adv-toggle"]',
+        title: "高级",
+        body: "写作基准和实验功能收在这里。写作基准是讨论和整理设定时AI照着写的那份要求，默认是通用版；写同人可选「同人世界观速成」，也可以选「自定义」自己改。",
         side: "top"
       },
       {
@@ -11305,15 +11357,19 @@ ${block}`
     });
     let stuck = kp.pulse && kp.pulse.facts === confirmed ? floors - kp.pulse.floor : 0, push = kp.push && kp.push.floor === floors ? kp.push : null, mine = shown && shown.projectId === project.id ? shown : null, leaks = d && d.lastAudit ? (d.lastAudit.leaks || []).filter((l) => l.level === "leak").length : 0, pushLabel = push ? push.kind === "steer" ? "按建议拉回" : (KP_LEVELS.find((x) => x.level === push.level) || {}).label : "", busy = view.busy["kp-steer"], bind = project.clue.bindings.time;
     return `<div class="pi-card"><h3>KP<span class="pi-spacer"></span>
-        <button type="button" class="pi-btn is-sm" data-act="kp-health" title="推演凭已经拿到的线索，主线还能不能走通，并可以推一把；只给结论，展开才剧透">卡住了吗</button>
-        <button type="button" class="pi-btn is-sm" data-act="kp-steer" title="对照最近的正文和模组原文，看正文有没有跑偏"${busy ? " disabled" : ""}>${busy ? '<span class="pi-spin"></span>检查中' : "对照剧本"}</button></h3>
-        ${sceneHintHtml(c)}${timelineHintHtml(project, readGameClock(c.snap.tables, bind && bind.路径))}${steerResultHtml(project)}
-        ${mine ? `<p class="pi-hint"><span class="pi-badge ${BADGE[mine.level][0]}">${BADGE[mine.level][1]}</span> ${esc(mine.lines.join("；"))}${mine.spoil.length ? ` <button type="button" class="pi-btn is-sm is-ghost" data-act="kp-spoil">${mine.open ? "收起" : "展开（会剧透）"}</button>` : ""}</p>${mine.open ? mine.spoil.map((t) => `<p class="pi-hint">${esc(t)}</p>`).join("") : ""}${leaks ? `<p class="pi-hint is-warn">最近一次请求里疑似提前写出了${leaks}处线索</p>` : ""}${mine.fact && !push ? `<p class="pi-hint">要推一把的话，下一轮：</p><div class="pi-tools is-c3">${KP_LEVELS.map((x) => `<button type="button" class="pi-btn is-sm" data-act="kp-push" data-level="${x.level}">${esc(x.label)}</button>`).join("")}</div>` : mine.fact || push ? "" : '<p class="pi-hint">眼下没有能推的线索。</p>'}` : ""}
+        <button type="button" class="pi-btn is-sm is-ghost" data-act="kp-health" title="推演凭已经拿到的线索，主线还能不能走通，并可以推一把；只给结论，展开才剧透">卡住了吗</button>
+        ${busy ? '<span class="pi-spin"></span>' : `<button type="button" class="pi-icon-btn" data-act="kp-menu" title="更多" aria-label="更多">${ICONS.more}</button>`}</h3>
+        ${timelineHintHtml(project, readGameClock(c.snap.tables, bind && bind.路径))}${steerResultHtml(project)}
+        ${mine ? `<p class="pi-hint"><span class="pi-badge ${BADGE[mine.level][0]}">${BADGE[mine.level][1]}</span> ${esc(mine.lines.join("；"))}${mine.spoil.length ? ` <button type="button" class="pi-btn is-sm is-ghost" data-act="kp-spoil">${mine.open ? "收起" : "展开（会剧透）"}</button>` : ""}</p>${mine.open ? mine.spoil.map((t) => `<p class="pi-hint">${esc(t)}</p>`).join("") : ""}${leaks ? `<p class="pi-hint is-warn">最近一次请求里疑似提前写出了${leaks}处线索</p>` : ""}${mine.fact && !push ? `<div class="pi-tools is-c3">${KP_LEVELS.map((x) => `<button type="button" class="pi-btn is-sm" data-act="kp-push" data-level="${x.level}">${esc(x.label)}</button>`).join("")}</div>` : mine.fact || push ? "" : '<p class="pi-hint">眼下没有能推的线索。</p>'}` : ""}
         ${push ? `<p class="pi-hint">下一轮：${esc(pushLabel)} <button type="button" class="pi-btn is-sm is-ghost" data-act="kp-cancel">取消</button></p>` : ""}
-        ${stuck >= KP_STUCK_ROUNDS && !push ? `<p class="pi-hint is-warn">已经${stuck}轮没拿到新线索，要不要推一把？ <button type="button" class="pi-btn is-sm" data-act="kp-health">卡住了吗</button></p>` : ""}</div>`;
+        ${stuck >= KP_STUCK_ROUNDS && !push ? `<p class="pi-hint is-warn">已经${stuck}轮没拿到新线索。</p>` : ""}</div>`;
   }
   var kpActions = {
     ...steerActions,
+    async "kp-menu"(view) {
+      let pick = await menuDialog({ title: "KP", items: [{ label: "对照剧本", value: "kp-steer" }] });
+      pick && kpActions[pick](view);
+    },
     "kp-health"(view) {
       let c = view.runtime.clue.compute();
       if (!c) return;
@@ -12413,13 +12469,10 @@ ${mainLines}`,
     ].filter(Boolean).join("，") || "还没有绑定", path = b.scene && b.scene.路径, hasCatalog = !!(tables && path && catalogKnown(tables, path));
     return `<div class="${inner ? "pi-run-sec" : "pi-card"}"><${inner ? 'div class="pi-run-sec-hd"' : "h3"}>表格绑定<span class="pi-meta">${esc(summary)}</span><span class="pi-spacer"></span>
         <button type="button" class="pi-btn is-sm is-ghost" data-act="clue-bind-toggle">${open ? "收起" : "编辑"}</button></${inner ? "div" : "h3"}>
-        ${open ? `<p class="pi-hint">告诉插件去数据库的哪张表、哪一列读线索。用「创建模板」建的表，点「填入示例」再「应用」就行；自己的表照着示例改表名和列名。</p>
-        <textarea class="pi-ta is-mono is-tall" data-clue-bindings>${esc(bindingText(b))}</textarea>
+        ${open ? `<textarea class="pi-ta is-mono is-tall" data-clue-bindings>${esc(bindingText(b))}</textarea>
         <div class="pi-tools is-c2 is-end"><button type="button" class="pi-btn is-sm" data-act="clue-bind-example">填入示例</button>
         <button type="button" class="pi-btn is-primary is-sm" data-act="clue-bind-apply">应用</button></div><p class="pi-status" data-clue-bind-status></p>` : ""}
-        <div class="pi-tools"><button type="button" class="pi-btn is-sm is-primary is-wide" data-act="clue-gen-template" title="生成线索模板：在当前聊天的表格上加入三张线索表（带上大纲要用的行），并调整默认表的规则；先预览，确认后才导入">创建模板</button></div>
-        <div class="pi-tools is-c${hasCatalog ? 2 : 3}"><button type="button" class="pi-btn is-sm" data-act="clue-prebuild" title="按大纲补表格行：表已经建好、大纲后来又加了线索时用，把缺的行补进关键事实表、知情表；已有的行不动。「创建模板」导入后需要时会自动接着做这一步">补全表格…</button><button type="button" class="pi-btn is-sm" data-act="clue-labels-edit" title="修改线索标签：修改关键事实表里已有线索的标签和登记口径">修改线索…</button>
-        ${hasCatalog ? "" : '<button type="button" class="pi-btn is-sm" data-act="clue-catalog" title="手动贴场景目录：旧聊天的线索表没有「场景目录」列、又不想重新生成模板时用，复制一段对照文字，手动贴进表格说明">场景目录</button>'}</div></div>`;
+        ${hasCatalog ? "" : '<div class="pi-tools is-c1"><button type="button" class="pi-btn is-sm is-wide" data-act="clue-catalog" title="手动贴场景目录：旧聊天的线索表没有「场景目录」列、又不想重新生成模板时用，复制一段对照文字，手动贴进表格说明">场景目录</button></div>'}</div>`;
   }
   var BINDING_EXAMPLE = `facts:
   - {表: 关键事实表, 编号列: 编号, 状态列: 状态, 已核实值: 已核实, 说法值: 存疑, 内容列: 内容, 来源列: 依据}
@@ -12427,9 +12480,27 @@ knowledge:
   - {表: 知情表, 事实列: 事实, 角色列: 角色, 方式列: 获知方式, 可信度列: 可信度, 已核实值: 已核实, 来源列: 依据, 有效值: [亲见, 被告知, 听说, 推测]}
 scene: {路径: 线索控制表/主线/当前场景, 离场值: 无}
 time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主线/当前时间]}
-`;
+`, FACT_NAMES = /* @__PURE__ */ new Map();
+  function buildFactNames(project, c) {
+    let labels = isPlainObject(project.clue.labels) ? project.clue.labels : {}, map = /* @__PURE__ */ new Map();
+    for (let s of c.state.nodeStates)
+      for (let d of discoveryList(isPlainObject(s.node.item) ? s.node.item : {}))
+        d.fact && !map.has(d.fact) && map.set(d.fact, labels[d.fact] && labels[d.fact].label || (d.text.length > 20 ? `${d.text.slice(0, 20)}…` : d.text));
+    for (let k of Object.keys(labels)) labels[k] && labels[k].label && map.set(k, labels[k].label);
+    return map;
+  }
+  function factName(code) {
+    return FACT_NAMES.get(code) || "";
+  }
+  function factNamesText(codes) {
+    let names2 = codes.map(factName).filter(Boolean);
+    return names2.length ? `${names2.slice(0, 3).join("、")}${codes.length > 3 ? `等${codes.length}条` : ""}` : `${codes.length}条线索`;
+  }
+  function maskFacts(text2) {
+    return [...FACT_NAMES.keys()].sort((a, b) => b.length - a.length).reduce((t, k) => t.split(k).join(`「${FACT_NAMES.get(k) || "一条线索"}」`), String(text2));
+  }
   function reasonList(result2) {
-    return result2 && result2.reasons && result2.reasons.length ? result2.reasons.slice(0, 4).map((r) => `<li>${esc(r)}</li>`).join("") : "";
+    return result2 && result2.reasons && result2.reasons.length ? result2.reasons.slice(0, 4).map((r) => `<li>${esc(maskFacts(r))}</li>`).join("") : "";
   }
   function nodeRow(s, focusUid, open) {
     let badge = CLUE_STATUS_BADGE[s.status], flags = [
@@ -12445,31 +12516,13 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
             <span class="pi-clue-name">${esc(s.node.name)}</span>
             ${flags ? `<span class="pi-meta">${esc(flags)}</span>` : ""}
             ${s.node.uid ? `<button type="button" class="pi-icon-btn" data-act="clue-node-menu" data-uid="${esc(s.node.uid)}" title="手动调整" aria-label="手动调整">${ICONS.more}</button>` : ""}</div>
-        ${open || why ? `<ul class="pi-clue-why">${open ? reasonList(s.open) + reasonList(s.done) : why}</ul>` : ""}</div>`;
+        ${open ? `<ul class="pi-clue-why">${reasonList(s.open) + reasonList(s.done)}</ul>` : ""}</div>`;
   }
-  function stageBlock(unit, stage, nodes, focusUid, st72) {
-    let state = stage.done ? "已结束" : stage.entered.v === "true" ? "进行中" : "未进入", left = stage.requiredLeft.length && stage.entered.v === "true" ? `还差必需节点：${stage.requiredLeft.map((n) => n.name).join("、")}` : "", endWhy = stage.entered.v === "true" && !stage.done && !stage.requiredLeft.length && stage.end.v !== "true" ? `结束条件：${stage.end.reasons.join("；")}` : "", enterWhy = stage.entered.v !== "true" ? stage.entered.reasons.join("；") : "";
-    return `<div class="pi-clue-stage is-${stage.done ? "done" : stage.entered.v === "true" ? "active" : "todo"}">
-        <div class="pi-tl-hd"><span class="pi-tl-name">${esc(stageLabel(unit.stage.key))}</span><span class="pi-tl-state">${esc(state)}</span></div>
-        ${[left, endWhy, enterWhy].filter(Boolean).map((t) => `<p class="pi-hint">${esc(t)}</p>`).join("")}
-        ${nodes.map((s) => nodeRow(s, focusUid, st72.nodeOpen === s.node.uid)).join("")}</div>`;
-  }
-  function mainlineCard(c) {
-    let units = c.compiled.units, multi = (c.state.lineStates || []).length > 0, done = units.length > 0 && units.every((u) => (c.state.stageStates.get(u.id) || {}).done), leads = c.state.nodeStates.filter((s) => s.status === "available" && !s.disabled).length, title2 = multi ? "剧情" : "主线";
-    return c.prog.paused ? `<div class="pi-card"><h3>${title2}<span class="pi-badge is-warn">已暂停</span><span class="pi-spacer"></span>
-        <button type="button" class="pi-btn is-sm is-primary" data-act="clue-pause" data-value="">继续剧情</button></h3>
-        <p class="pi-hint">日常游玩中：不注入线索，只保留设定；进度都保留，继续后接着推。</p></div>` : done && !multi ? `<div class="pi-card"><h3>主线<span class="pi-badge is-ok">已全部完成</span><span class="pi-spacer"></span>
-        <button type="button" class="pi-btn is-sm" data-act="clue-pause" data-value="1">暂停剧情</button>
-        <button type="button" class="pi-btn is-sm is-primary" data-act="clue-next">开始下一段主线…</button></h3>
-        <p class="pi-hint">${leads ? `还有${leads}个没走过的可选节点会作为「可以去做的事」提供给正文；不想要就暂停剧情。` : "已经没有可去做的线索事项。"}想接着玩，点「开始下一段主线」写一条新的主线。</p></div>` : `<div class="pi-card"><h3>${title2}<span class="pi-badge is-ok">进行中</span><span class="pi-spacer"></span>
-        ${multi ? pauseMenu(c) : '<button type="button" class="pi-btn is-sm" data-act="clue-pause" data-value="1" title="去玩日常：所有线索内容都不注入，进度保留">暂停剧情</button>'}</h3>${multi ? `<p class="pi-hint">${esc(lineSummary(c))}</p>` : ""}</div>`;
-  }
-  function nodeGroups(groups, c, st72) {
-    if (!groups.length) return "";
-    let live2 = groups.filter((g) => g.live), rest = groups.filter((g) => !g.live);
-    if (!live2.length || !rest.length) return groups.map((g) => g.html).join("");
-    let open = !!st72.stagesOpen;
-    return `${live2.map((g) => g.html).join("")}<button type="button" class="pi-run-fold is-sub" data-act="run-stages-toggle" aria-expanded="${open}">${open ? "▾" : "▸"}其他阶段（${rest.length}）</button>${open ? rest.map((g) => g.html).join("") : ""}`;
+  function stageBlock(unit, stage, nodes, focusUid, st72, { next = !1, expand = !1 } = {}) {
+    let live2 = stage.entered.v === "true" && !stage.done, key = `st:${unit.id}`, open = live2 || expand || !!st72[key], state = stage.done ? "已结束" : live2 ? "进行中" : next ? "下一个" : "", left = stage.requiredLeft.length && live2 ? `还差${stage.requiredLeft.length}个` : "", endWhy = live2 && !stage.requiredLeft.length && stage.end.v !== "true" ? `结束条件：${stage.end.reasons.join("；")}` : "", enterWhy = !live2 && !stage.done ? stage.entered.reasons.join("；") : "", cls = stage.done ? "done" : live2 ? "active" : next ? "next" : "todo", head = `<span class="pi-tl-name">${esc(stageLabel(unit.stage.key))}</span>${left ? `<span class="pi-tl-state is-left">${left}</span>` : ""}${state ? `<span class="pi-tl-state">${state}</span>` : ""}`;
+    return `<div class="pi-tl-item is-${cls}"><span class="pi-tl-dot"></span><div class="pi-tl-box">
+        ${live2 ? `<div class="pi-tl-hd">${head}</div>` : `<div class="pi-tl-hd is-fold" data-act="run-fold" data-key="${esc(key)}" role="button" aria-expanded="${open}">${head}<span class="pi-tl-state">${open ? "▾" : "▸"}</span></div>`}
+        ${open ? `${[endWhy, enterWhy].filter(Boolean).map((t) => `<p class="pi-hint">${esc(t)}</p>`).join("")}<div class="pi-tl-nodes">${nodes.map((s) => nodeRow(s, focusUid, st72.nodeOpen === s.node.uid)).join("")}</div>` : ""}</div></div>`;
   }
   function lineDisplayName(l) {
     let name = String(l.name || "").replace(/·/g, " ");
@@ -12483,8 +12536,8 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
     let list = c.state.lineStates || [], mains = list.filter((s) => s.line.kind === "main").length, sides = list.filter((s) => s.line.kind === "side").length;
     return `<details class="pi-line-more pi-pause-menu"><summary class="pi-btn is-sm">暂停 ▾</summary><div class="pi-line-menu">
         <button type="button" class="pi-btn is-sm is-ghost" data-act="clue-pause" data-value="1" title="去玩日常：所有线索内容都不注入，进度保留">暂停全部剧情</button>
-        ${mains && !c.prog.mainPaused ? '<button type="button" class="pi-btn is-sm is-ghost" data-act="clue-pause-mains" data-value="1" title="所有主线都不推进、不注入；支线照常">只暂停主线</button>' : ""}
-        ${sides && !c.prog.sidePaused ? '<button type="button" class="pi-btn is-sm is-ghost" data-act="clue-pause-side" data-value="1" title="所有支线都不注入、不提示新的；主线照常，进度和名额都保留">只暂停支线</button>' : ""}</div></details>`;
+        ${mains ? `<button type="button" class="pi-btn is-sm is-ghost" data-act="clue-pause-mains" data-value="${c.prog.mainPaused ? "" : "1"}" title="${c.prog.mainPaused ? "主线恢复注入；原来进行中的主线接着演" : "所有主线都不推进、不注入；支线照常"}">${c.prog.mainPaused ? "继续主线" : "只暂停主线"}</button>` : ""}
+        ${sides ? `<button type="button" class="pi-btn is-sm is-ghost" data-act="clue-pause-side" data-value="${c.prog.sidePaused ? "" : "1"}" title="${c.prog.sidePaused ? "支线恢复注入和提示；原来进行中的支线接着演" : "所有支线都不注入、不提示新的；主线照常，进度和名额都保留"}">${c.prog.sidePaused ? "继续支线" : "只暂停支线"}</button>` : ""}</div></details>`;
   }
   function lineOpts(c, project) {
     if (!(c.state.lineStates || []).filter((s) => s.line.kind === "side").length) return "";
@@ -12501,42 +12554,45 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
   function renderClueRun(view, project, st72) {
     let { runtime } = view, clue = runtime.clue, c = clue.compute(), d = clue.diagnose();
     if (!c) return modeCard(project);
-    let problems2 = [...c.snap.problems, ...c.compiled.errors, ...c.state.cycles.map((u) => `节点${u}条件循环引用`)], focus = c.state.focus, focusNode = c.state.nodeStates.find((s) => s.node.uid === focus.uid), entries = runtime.entries(), clueEntry = entries.find((e) => e.slotId === CLUE_SLOT), enabled = c.snap.enabled === !1 ? '<span class="pi-badge is-warn">主线关闭</span>' : "", paused = c.prog.paused ? '<span class="pi-badge is-warn">已暂停</span>' : "", groups = [];
-    for (let unit of c.compiled.units) {
-      let stage = c.state.stageStates.get(unit.id);
-      groups.push({
-        live: stage.entered.v === "true" && !stage.done,
-        html: stageBlock(unit, stage, c.state.nodeStates.filter((s) => s.node.unit === unit), focus.uid, st72)
-      });
+    FACT_NAMES = buildFactNames(project, c);
+    let lines0 = c.state.lineStates || [], multi0 = lines0.length > 0, problems2 = [...c.snap.problems, ...c.compiled.errors, ...c.state.cycles.map((u) => `节点${u}条件循环引用`)], focus = c.state.focus, focusNode = c.state.nodeStates.find((s) => s.node.uid === focus.uid), entries = runtime.entries(), clueEntry = entries.find((e) => e.slotId === CLUE_SLOT), enabled = c.snap.enabled === !1 ? '<span class="pi-badge is-warn">主线关闭</span>' : "", paused = c.prog.paused ? '<span class="pi-badge is-warn">已暂停</span>' : "", mainLine = multi0 ? lines0.find((x) => x.line.kind === "main" && x.state === "进行中") || lines0.find((x) => x.line.kind === "main") : null, shownUnits = mainLine && c.compiled.units.filter((u) => u.line && u.line.id === mainLine.line.id) || [], tlUnits = shownUnits.length ? shownUnits : c.compiled.units, anyLive = tlUnits.some((u) => {
+      let st9 = c.state.stageStates.get(u.id);
+      return st9.entered.v === "true" && !st9.done;
+    }), nextDone = !1, groups = [];
+    for (let unit of tlUnits) {
+      let stage = c.state.stageStates.get(unit.id), live2 = stage.entered.v === "true" && !stage.done, next = !live2 && !stage.done && !nextDone && (nextDone = !0);
+      groups.push(stageBlock(unit, stage, c.state.nodeStates.filter((s) => s.node.unit === unit), focus.uid, st72, { next, expand: !anyLive }));
     }
-    let last = clue.lastInjected(), b0 = project.clue.bindings, unbound = !(b0.facts.length || b0.knowledge.length), setOpen = st72.setOpen !== void 0 ? st72.setOpen : unbound || !c.snap.api, mode0 = (PLOT_MODES.find((m) => m.value === project.clue.mode) || PLOT_MODES[0]).label, setSummary = [mode0, unbound ? "表格未绑定" : "表格已绑定", `推进速度${(PACES.find((x) => x.value === runtime.progress().pace) || PACES[1]).label}`].join("，"), settings = `<div class="pi-card pi-run-set"><h3><button type="button" class="pi-run-fold" data-act="run-set-toggle" aria-expanded="${setOpen}">${setOpen ? "▾" : "▸"}运行设置</button>${setOpen ? "" : `<span class="pi-meta">${esc(setSummary)}</span>`}</h3>
-        ${setOpen ? `${modeCard(project, !0)}${bindingCard(project, st72, c.snap.api ? c.snap.tables : null, !0)}${lineOpts(c, project)}<div class="pi-pace"><span class="pi-pace-label">推进速度</span><div class="pi-seg">${PACES.map((pace) => `<button type="button" class="pi-seg-btn${pace.value === runtime.progress().pace ? " is-sel" : ""}" data-act="pace" data-pace="${pace.value}">${pace.label}</button>`).join("")}</div></div>` : ""}</div>`, labelRow = (c.state.lineStates || []).length ? labelsPendingHtml(project, c) : "", noDb = !c.snap.api, lack = noDb ? [] : problems2.filter((p) => /^缺少表「/.test(p)), lackRow = lack.length ? `<p class="pi-hint is-warn">当前聊天还没有线索表（${esc(lack.map((p) => p.replace(/^缺少表/, "")).join("、"))}）。<button type="button" class="pi-btn is-sm is-primary" data-act="clue-gen-template">创建模板</button></p>` : "";
-    problems2 = problems2.filter((p) => !lack.includes(p));
-    let todo = [...lackRow ? [lackRow] : [], ...problems2.map((p) => `<p class="pi-hint is-warn">${esc(noDb && p === c.snap.problems[0] ? "没有检测到数据库插件（shujuku），当前无法注入。剧情线的进度不受影响，装好并开启数据库插件后接着用。" : p)}</p>`), ...labelRow ? [labelRow] : []];
-    return `${todo.length ? `<div class="pi-card"><h3>需要处理<span class="pi-badge is-warn">${todo.length}</span></h3>${todo.join("")}</div>` : ""}
-        ${mainlineCard(c)}${isTrpg(project) ? kpCard(view, project, c, d) : ""}${lineCard(c, project)}
-        <div class="pi-card"><h3>本轮场景${enabled}${paused}<span class="pi-spacer"></span>
-            <button type="button" class="pi-btn is-sm is-ghost" data-act="clue-refresh">重新读表</button>
-            <button type="button" class="pi-btn is-sm is-ghost" data-act="preview">预览</button></h3>
-        <p class="pi-hint">${hereText(c)}本轮场景：${focusNode ? `<b>${esc(focusNode.node.name)}</b>（${esc(FOCUS_SOURCE[focus.source])}）` : esc(FOCUS_SOURCE[focus.source])}${focusNode ? ` <button type="button" class="pi-btn is-sm is-ghost" data-act="clue-leave" data-uid="${esc(focusNode.node.uid)}" title="主角已经离开这件事：不再注入它的场景和发现，只给入口">已离开</button>` : ""}${c.prog.focus ? ` <button type="button" class="pi-btn is-sm is-ghost" data-act="clue-unfocus" title="回到按填表判断本轮场景">${c.prog.focus.startsWith(AWAY_PREFIX) ? "其实没离开" : "取消我选的场景"}</button>` : ""}</p>
+    let last = clue.lastInjected(), b0 = project.clue.bindings, unbound = !(b0.facts.length || b0.knowledge.length), setOpen = st72.setOpen !== void 0 ? st72.setOpen : unbound || !c.snap.api, mode0 = (PLOT_MODES.find((m) => m.value === project.clue.mode) || PLOT_MODES[0]).label, opN = clueOpCount(runtime), setSummary = [mode0, unbound ? "表格未绑定" : "表格已绑定", `推进速度${(PACES.find((x) => x.value === runtime.progress().pace) || PACES[1]).label}`, ...opN ? [`记录${opN}条`] : []].join("，"), advOpen = !!st72.advOpen, settings = `<div class="pi-card pi-run-set"><h3><button type="button" class="pi-run-fold" data-act="run-set-toggle" aria-expanded="${setOpen}">${setOpen ? "▾" : "▸"}设置与记录</button>${setOpen ? "" : `<span class="pi-meta">${esc(setSummary)}</span>`}</h3>
+        ${setOpen ? `<div class="pi-rl-sec"><div class="pi-run-sec-hd">线索表格</div><div class="pi-tools is-c2"><button type="button" class="pi-btn is-sm" data-act="clue-prebuild" title="按大纲补表格行：表已经建好、大纲后来又加了线索时用，把缺的行补进关键事实表、知情表；已有的行不动">补全表格…</button><button type="button" class="pi-btn is-sm" data-act="clue-labels-edit" title="修改线索标签：修改关键事实表里已有线索的标签和登记口径">修改线索…</button></div></div>
+        <div class="pi-rl-sec"><div class="pi-run-sec-hd">推进</div><div class="pi-pace"><span class="pi-pace-label">推进速度</span><div class="pi-seg">${PACES.map((pace) => `<button type="button" class="pi-seg-btn${pace.value === runtime.progress().pace ? " is-sel" : ""}" data-act="pace" data-pace="${pace.value}">${pace.label}</button>`).join("")}</div></div>${lineOpts(c, project)}</div>
+        <div class="pi-rl-sec"><button type="button" class="pi-run-fold" data-act="run-fold" data-key="advOpen" aria-expanded="${advOpen}">${advOpen ? "▾" : "▸"}高级</button>${advOpen ? `${modeCard(project, !0)}${bindingCard(project, st72, c.snap.api ? c.snap.tables : null, !0)}<div class="pi-tools is-c1"><button type="button" class="pi-btn is-sm is-wide" data-act="clue-gen-template" title="生成线索模板：在当前聊天的表格上加入三张线索表（带上大纲要用的行），并调整默认表的规则；先预览，确认后才写入">创建模板</button></div>` : ""}</div>
+        ${clueLogCard(runtime, st72)}` : ""}</div>`, labelRow = (c.state.lineStates || []).length ? labelsPendingHtml(project, c) : "", noDb = !c.snap.api, lack = noDb ? [] : problems2.filter((p) => /^缺少表「/.test(p)), lackRow = lack.length ? `<div class="pi-row is-todo"><p class="pi-hint is-warn">当前聊天还没有线索表（${esc(lack.map((p) => p.replace(/^缺少表/, "")).join("、"))}）。</p><button type="button" class="pi-btn is-sm is-primary" data-act="clue-gen-template">创建模板</button></div>` : "", rowBtn = (text2, act, label, tip = "") => `<div class="pi-row is-todo"><p class="pi-hint is-warn"${tip ? ` title="${esc(tip)}"` : ""}>${esc(text2)}</p><button type="button" class="pi-btn is-sm" data-act="${act}">${label}</button></div>`, gapHit = !1, problemRows = problems2.filter((p) => !lack.includes(p)).map((p) => {
+      let gap = /^事实表里没有这些编号的行：(.+?)（/.exec(p);
+      return gap ? (gapHit = !0, rowBtn(`关键事实表里还没有这些线索的行：${factNamesText(gap[1].split("、").filter(Boolean))}。`, "clue-prebuild", "补全表格", gap[1])) : /^表「.*缺少.*列|已核实值|方式列/.test(p) ? rowBtn(p, "run-set-open", "打开表格绑定") : `<p class="pi-hint is-warn">${esc(noDb && p === c.snap.problems[0] ? "没有检测到数据库插件（shujuku），当前无法注入。剧情线的进度不受影响，装好并开启数据库插件后接着用。" : p)}</p>`;
+    }), newRow = "";
+    if (!noDb && !lack.length && !gapHit && c.snap.facts instanceof Map) {
+      let notReady = new Set(labelsToPrepare(project.outline.volumes, project.clue.labels).filter((x) => !c.snap.facts.has(x.code)).map((x) => x.code)), miss = prebuildPlan(project.outline.volumes).facts.filter((f) => !c.snap.facts.has(f.code) && !notReady.has(f.code));
+      miss.length && (newRow = rowBtn(`大纲里有${miss.length}条线索在表格里还没有行。`, "clue-prebuild", "补全表格"));
+    }
+    let todo = [...lackRow ? [lackRow] : [], ...problemRows, ...newRow ? [newRow] : [], ...labelRow ? [labelRow] : []], multi = (c.state.lineStates || []).length > 0, units = c.compiled.units, allDone = units.length > 0 && units.every((u) => (c.state.stageStates.get(u.id) || {}).done), ellip = `<button type="button" class="pi-icon-btn" data-act="run-cur-menu" title="更多" aria-label="更多">${ICONS.more}</button>`, statusRow = `<div class="pi-row pi-rl-status"><b>${multi ? "剧情" : "主线"}</b>${enabled}${c.prog.paused ? '<span class="pi-badge is-warn">已暂停</span>' : allDone && !multi ? '<span class="pi-badge is-ok">已全部完成</span>' : '<span class="pi-badge is-accent">进行中</span>'}<span class="pi-meta pi-grow">${multi && !c.prog.paused ? esc(lineSummary(c)) : ""}</span>${c.prog.paused ? '<button type="button" class="pi-btn is-sm is-primary" data-act="clue-pause" data-value="">继续剧情</button>' : allDone && !multi ? '<button type="button" class="pi-btn is-sm is-primary" data-act="clue-next">开始下一段主线…</button>' : multi ? pauseMenu(c) : '<button type="button" class="pi-btn is-sm" data-act="clue-pause" data-value="1" title="去玩日常：所有线索内容都不注入，进度保留">暂停</button>'}${ellip}</div>`, focusLabel = [hereText(c), focusNode ? esc(focusNode.node.name) : ""].filter(Boolean).join(" · ") || esc(FOCUS_SOURCE[focus.source]), hint = isTrpg(project) ? sceneHintHtml(c) : "", focusRow = hint ? `<div class="pi-rl-focus is-col">${hint}</div>` : `<div class="pi-rl-focus"><b class="pi-grow">${focusLabel}</b>${focusNode ? `<button type="button" class="pi-btn is-sm" data-act="clue-leave" data-uid="${esc(focusNode.node.uid)}" title="主角已经离开这件事：不再注入它的场景和发现，只给入口">已离开</button>` : ""}${c.prog.focus ? `<button type="button" class="pi-btn is-sm" data-act="clue-unfocus" title="回到按填表判断本轮场景">${c.prog.focus.startsWith(AWAY_PREFIX) ? "其实没离开" : "换场景"}</button>` : ""}</div>`, cur = `<div class="pi-card pi-rl-cur"><h3>当前</h3>
+        ${todo.length ? `<div class="pi-rl-stack">${todo.join("")}</div>` : ""}
+        ${statusRow}${focusRow}
         ${stayNotice(view, c)}
-        ${unofferedHtml(c)}
+        ${unofferedHtml(c, project)}
         ${(c.hints || []).map((h) => `<p class="pi-hint is-warn">两表核对：${esc(h)}</p>`).join("")}
-        ${c.notReady && c.notReady.size && focusNode && discoveryList(isPlainObject(focusNode.node.item) ? focusNode.node.item : {}).some((d2) => d2.fact && c.notReady.has(d2.fact)) ? `<p class="pi-hint is-warn">这一场有线索还在准备，这一轮先不给正文：${esc(
-      discoveryList(focusNode.node.item).filter((d2) => d2.fact && c.notReady.has(d2.fact)).map((d2) => d2.fact).join("、")
-    )}。下一次填表后会自动补；一直补不上可以用「补全表格」。</p>` : ""}
         ${!c.prog.paused && d.plot && d.plot.items.length ? `<p class="pi-hint is-warn">数据库剧情推进预设「${esc(d.plot.preset)}」里启用了召回以外的任务：${esc(d.plot.items.map((x) => `「${x.task}」（输出${x.tags.join("、")}）`).join("、"))}。它们会替角色安排行动，可能和线索剧情抢方向。建议在数据库里先关掉，只留召回（插件不会替你改）。</p>` : ""}
-        <p class="pi-hint" title="按数据库最近一次填好的表格计算。上一轮还没填完就发送，新线索会晚一轮生效。">这一轮要注入${clueEntry && clueEntry.content ? `约${estimateTokens(clueEntry.content)} token` : `的内容为空${c.snap.api ? clueEntry && clueEntry.reason ? `（${esc(clueEntry.reason)}）` : "" : "（数据库未连接）"}`}${last ? `；上次实际注入${new Date(last.at).toLocaleTimeString("zh-CN", { hour12: !1 })}，${last.chars}字` : ""}${d.lastTableUpdate ? `；表格${new Date(d.lastTableUpdate).toLocaleTimeString("zh-CN", { hour12: !1 })}更新` : ""}。</p>
-        </div>
-        <div class="pi-card"><h3>节点<span class="pi-meta">点节点看条件，「⋯」手动调整</span><span class="pi-spacer"></span>
-            <button type="button" class="pi-btn is-sm is-ghost" data-act="rewrite" title="按已发生的剧情和线索进度，让AI改写未结束的阶段；结果先进草稿，不会直接覆盖">改写后续</button></h3>
-        ${nodeGroups(groups, c, st72) || '<p class="pi-hint">大纲为空。</p>'}</div>
-        ${settings}
-        ${clueLogCard(runtime)}`;
+        <p class="pi-meta pi-rl-foot">${clueEntry && clueEntry.content ? `本轮注入约${estimateTokens(clueEntry.content)} token` : `本轮注入内容为空${clueEntry && clueEntry.reason && c.snap.api ? `（${esc(clueEntry.reason)}）` : ""}`}${last ? ` · 上次注入${new Date(last.at).toLocaleTimeString("zh-CN", { hour12: !1 })}，${last.chars}字` : ""}${d.lastTableUpdate ? ` · 表格${new Date(d.lastTableUpdate).toLocaleTimeString("zh-CN", { hour12: !1 })}更新` : ""}</p></div>`, prog = `<div class="pi-card"><h3>进度<span class="pi-spacer"></span><button type="button" class="pi-icon-btn" data-act="run-prog-menu" title="更多" aria-label="更多">${ICONS.more}</button></h3>
+        ${lineCard(c, project)}
+        ${groups.length ? `<div class="pi-tl">${groups.join("")}</div>` : '<p class="pi-hint">大纲为空。</p>'}</div>`;
+    return `${cur}${isTrpg(project) ? kpCard(view, project, c, d) : ""}${prog}${settings}`;
   }
-  function clueLogCard(runtime) {
-    let prog = runtime.progress(), allOps = normalizeClueOps(prog.clue).ops, ops = allOps.slice(-12).reverse(), chat = chatMessages();
-    return ops.length ? `<div class="pi-card"><details class="pi-fold"><summary><b>操作记录（${allOps.length}）</b></summary>${ops.map((op) => `<p class="pi-hint${anchorValid(op.at, chat) ? "" : " is-off"}">${new Date(op.time).toLocaleString("zh-CN", { hour12: !1 })}　${esc(runtime.clue.opLabel(op))}${anchorValid(op.at, chat) ? "" : "（所在楼层已回退，未生效）"}</p>`).join("")}</details></div>` : "";
+  function clueOpCount(runtime) {
+    return normalizeClueOps(runtime.progress().clue).ops.length;
+  }
+  function clueLogCard(runtime, st72) {
+    let prog = runtime.progress(), allOps = normalizeClueOps(prog.clue).ops, ops = allOps.slice(-12).reverse(), open = !!st72.logOpen, chat = chatMessages();
+    return ops.length ? `<div class="pi-rl-sec"><button type="button" class="pi-run-fold" data-act="run-fold" data-key="logOpen" aria-expanded="${open}">${open ? "▾" : "▸"}操作记录（${allOps.length}）</button>${open ? ops.map((op) => `<p class="pi-hint${anchorValid(op.at, chat) ? "" : " is-off"}">${new Date(op.time).toLocaleString("zh-CN", { hour12: !1 })}　${esc(runtime.clue.opLabel(op))}${anchorValid(op.at, chat) ? "" : "（所在楼层已回退，未生效）"}</p>`).join("") : ""}</div>` : "";
   }
   function factRowsHtml(facts, prefix, volumes, stored = {}, { intro = !0 } = {}) {
     let ctx2 = new Map(
@@ -12758,13 +12814,18 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
         okLabel: "切换"
       }) || (view.runtime.bumpEpoch(), view.data.updateProject(view.projectId, (p) => ({ ...p, clue: normalizeClue({ ...p.clue, mode: mode2 }) })), view.runtime.clue.hideLineBar(), view.runtime.clue.invalidate(), mode2 === "clue" && view.runtime.clue.scheduleSync(), view.runtime.refresh(), view.renderBody());
     },
+    "run-set-open"(view) {
+      let st72 = view.tabState("run");
+      st72.setOpen = !0, st72.advOpen = !0, view.renderBody();
+    },
     "run-set-toggle"(view, target) {
       let st72 = view.tabState("run");
       st72.setOpen = !(target && target.getAttribute("aria-expanded") === "true"), view.renderBody();
     },
-    "run-stages-toggle"(view) {
-      let st72 = view.tabState("run");
-      st72.stagesOpen = !st72.stagesOpen, view.renderBody();
+    // 执行页各处折叠：data-key 是 tabState 里的键
+    "run-fold"(view, target) {
+      let st72 = view.tabState("run"), key = target.dataset.key;
+      st72[key] = !st72[key], view.renderBody();
     },
     "clue-bind-toggle"(view) {
       let st72 = view.tabState("run");
@@ -12997,11 +13058,11 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
           ${diff.newFacts.length ? `<h4 class="pi-fr-title">要补的线索：${diff.newFacts.length}条</h4>${factRowsHtml(diff.newFacts, "pb", project.outline.volumes, project.clue.labels)}` : ""}`, picked = await openDialog({
         title: "按大纲补表格行",
         html,
-        onMount: (root) => mountFactRows(view, root, diff.newFacts, "pb", project.outline.volumes, { gate: "写入", keep: !0 }),
+        onMount: (root) => mountFactRows(view, root, diff.newFacts, "pb", project.outline.volumes, { gate: "写入当前聊天", keep: !0 }),
         actions: [
           { label: "取消", value: null },
           {
-            label: "写入",
+            label: "写入当前聊天",
             primary: !0,
             value: (root) => diff.newFacts.map((f, i) => ({
               ...f,
@@ -13079,14 +13140,14 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
           <p>原有的表和数据都会保留，不会删除任何东西，也不影响别的聊天。</p></div>
           ${preview.problems.length ? `<p class="pi-hint is-warn"><b>需要你注意：</b></p><ul>${preview.problems.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
           <details class="pi-fr-more"><summary class="pi-hint">具体会改哪些地方（${preview.changes.length}处）</summary><p class="pi-hint">目标聊天：${esc(scope.chatLabel || "当前聊天")}</p><ul>${preview.changes.map((x) => `<li>${esc(x)}</li>`).join("") || "<li>没有需要改动的地方</li>"}</ul></details>
-          ${hasFacts ? '<p class="pi-hint">这个聊天已经有关键事实表，不在模板里追加行。导入后如果大纲里有表里还没有的线索，会接着打开「补全表格」补上。</p>' : plan.facts.length ? `<h4 class="pi-fr-title">这份大纲里有${plan.facts.length}条要追踪的线索</h4>${factRowsHtml(plan.facts, "gt", project.outline.volumes, project.clue.labels)}` : '<p class="pi-hint">大纲里还没有线索编号，线索表先建成空表。</p>'}`, picked = await openDialog({
+          ${hasFacts ? '<p class="pi-hint">这个聊天已经有关键事实表，不在模板里追加行。写入后如果大纲里有表里还没有的线索，会接着打开「补全表格」补上。</p>' : plan.facts.length ? `<h4 class="pi-fr-title">这份大纲里有${plan.facts.length}条要追踪的线索</h4>${factRowsHtml(plan.facts, "gt", project.outline.volumes, project.clue.labels)}` : '<p class="pi-hint">大纲里还没有线索编号，线索表先建成空表。</p>'}`, picked = await openDialog({
         title: "生成线索模板",
         html,
-        onMount: (root) => hasFacts || mountFactRows(view, root, plan.facts, "gt", project.outline.volumes, { gate: "导入到当前聊天", keep: !0 }),
+        onMount: (root) => hasFacts || mountFactRows(view, root, plan.facts, "gt", project.outline.volumes, { gate: "写入当前聊天", keep: !0 }),
         actions: [
           { label: "取消", value: null },
           {
-            label: "导入到当前聊天",
+            label: "写入当前聊天",
             primary: !0,
             value: (root) => plan.facts.map((f, i) => {
               let l = root.querySelector(`[data-gt-label="${i}"]`), k = root.querySelector(`[data-gt-crit="${i}"]`);
@@ -13273,22 +13334,19 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
     let sides = list.filter((s) => s.line.kind === "side"), mains = list.filter((s) => s.line.kind === "main"), limit = c.plan ? c.plan.slots.limit : 1, used = c.plan ? c.plan.slots.used.length : 0, row2 = (s) => {
       let l = s.line, wait = lineWaitText(s, c, isPlainObject(project.clue.labels) ? project.clue.labels : {}), btn = (v, label, cls = "", tip = "") => `<button type="button" class="pi-btn is-sm${cls}" data-act="clue-line" data-id="${esc(l.id)}" data-value="${v}"${tip ? ` title="${esc(tip)}"` : ""}>${label}</button>`, canEnter = !s.started && !s.manual.state && s.eligible && (l.kind === "main" ? !c.prog.mainPaused : !s.waitMain), inQueue = l.kind === "side" && l.mode !== "manual" && s.state === "可开启" && s.entries.length && c.plan && !c.plan.slots.full && !c.prog.sidePaused, undo = s.manual.evidence && s.manual.evidence !== "manual" && !s.manual.evidence.startsWith("auto@") && s.state === "进行中" ? btn("deny", "取消开启", " is-ghost", "插件认错了：这条线回到可开启，同一次依据不再自动开启") : s.manual.started || s.manual.state ? btn("", "还原", " is-ghost", "把你在这条线上点过的进入 / 暂停 / 完成 / 放弃还原，回到按条件自动判断") : "", checks = !s.started && !s.manual.state && l.mode !== "manual" ? tableCondChecks(l.open, c.snap.tables || {}) : [], stuck = checks.filter((x) => x.stuck), fix = stuck.length ? `<p class="pi-hint is-warn">开启条件读不出来：${esc(stuck.flatMap((x) => x.notes).join("；"))}。这样它会一直开不了。 <button type="button" class="pi-btn is-sm" data-act="clue-line-manual" data-id="${esc(l.id)}" title="开启条件挪到「原开启条件」里留着看，不再自动判断；执行页出现「进入」按钮，玩家想玩时点它">改成手动开始</button></p>` : "", orig = l.origCond ? `<p class="pi-hint">原来的开启要求（自己判断什么时候点「进入」）：${esc(l.origCond)}</p>` : "", tierBtns = checks.filter((x) => x.tierPending).map(
         (x) => `<p class="pi-hint is-warn">档位顺序是AI推断的：${esc(x.tierPending.join(" < "))}。确认前这个条件一直是未知。 <button type="button" class="pi-btn is-sm" data-act="clue-tiers" data-tiers="${esc(JSON.stringify(x.tierPending))}" title="大纲里用同样档位的条件都算确认">从低到高没错</button> <button type="button" class="pi-btn is-sm is-ghost" data-act="clue-line-manual" data-id="${esc(l.id)}">改成手动开始</button></p>`
-      ).join(""), group = l.kind === "side" ? sides : mains, k = group.indexOf(s), arrows = group.length > 1 ? `<button type="button" class="pi-btn is-sm is-ghost" data-act="clue-line-move" data-id="${esc(l.id)}" data-dir="-1"${k <= 0 ? " disabled" : ""}>往前排</button><button type="button" class="pi-btn is-sm is-ghost" data-act="clue-line-move" data-id="${esc(l.id)}" data-dir="1"${k >= group.length - 1 ? " disabled" : ""}>往后排</button>` : "", title2 = lineDisplayName(l), main0 = canEnter ? btn("enter", "进入", " is-primary", l.mode === "manual" ? "想玩这条线了：现在开始" : "主角已经开始做这件事了（填表没认出来时用），或者你现在就想开始") : s.state === "暂停" ? btn("resume", "继续", " is-primary") : "", g1 = [...canEnter || s.state === "进行中" ? [btn("pause", "暂停", " is-ghost")] : []].join("") + arrows, g2 = [
+      ).join(""), group = l.kind === "side" ? sides : mains, k = group.indexOf(s), arrows = group.length > 1 ? `<button type="button" class="pi-btn is-sm is-ghost" data-act="clue-line-move" data-id="${esc(l.id)}" data-dir="-1"${k <= 0 ? " disabled" : ""}>往前排</button><button type="button" class="pi-btn is-sm is-ghost" data-act="clue-line-move" data-id="${esc(l.id)}" data-dir="1"${k >= group.length - 1 ? " disabled" : ""}>往后排</button>` : "", title2 = String(l.name || "").replace(/·/g, " ").replace(/^卷[^\s]*\s+/, "").replace(l.id ? new RegExp(`^${l.id}\\s*`) : /^$/, "") || lineDisplayName(l), main0 = canEnter ? btn("enter", "进入", " is-primary", l.mode === "manual" ? "想玩这条线了：现在开始" : "主角已经开始做这件事了（填表没认出来时用），或者你现在就想开始") : s.state === "暂停" ? btn("resume", "继续", " is-primary") : "", g1 = [...canEnter || s.state === "进行中" ? [btn("pause", "暂停", " is-ghost")] : []].join("") + arrows, g2 = [
         ...s.state === "进行中" ? [btn("done", "标记完成", " is-ghost")] : [],
         ...canEnter && inQueue ? [btn("skip", "跳过", " is-ghost")] : [],
         ...s.state === "进行中" || s.state === "暂停" ? [btn("abandon", "放弃", " is-ghost is-danger")] : []
       ].join(""), groups3 = [g1, g2, undo].filter(Boolean), more = groups3.length ? `<details class="pi-line-more"><summary class="pi-icon-btn" title="更多">${ICONS.more}</summary><div class="pi-line-menu">${groups3.map((g) => `<div class="pi-line-menu-g">${g}</div>`).join("")}</div></details>` : "";
-      return `<div class="pi-line-row"><div class="pi-line-head"><b class="pi-line-name">${esc(title2)}</b><div class="pi-line-acts">${main0}${more}</div></div>
-          <div class="pi-line-tags"><span class="pi-badge">${l.kind === "main" ? "主线" : "支线"}</span><span class="pi-badge ${s.missed ? "" : LINE_BADGE[s.state] || ""}">${esc(s.missed ? "已错过" : s.state)}</span>${l.kind === "side" && c.prog.sidePaused && s.state === "进行中" ? '<span class="pi-meta">全部支线已暂停</span>' : ""}</div>
-          ${l.brief ? `<p class="pi-hint">${esc(l.brief)}</p>` : ""}${wait ? `<p class="pi-hint">${esc(wait)}</p>` : ""}${orig}${fix}${tierBtns}</div>`;
-    }, mainBtn = mains.length > 1 || c.prog.mainPaused ? `<button type="button" class="pi-btn is-sm${c.prog.mainPaused ? " is-primary" : ""}" data-act="clue-pause-mains" data-value="${c.prog.mainPaused ? "" : "1"}" title="${c.prog.mainPaused ? "主线恢复注入；原来进行中的主线接着演" : "所有主线都不推进、不注入；支线照常"}">${c.prog.mainPaused ? "继续全部主线" : "暂停全部主线"}</button>` : "", sideBtn = sides.length ? `<button type="button" class="pi-btn is-sm${c.prog.sidePaused ? " is-primary" : ""}" data-act="clue-pause-side" data-value="${c.prog.sidePaused ? "" : "1"}" title="${c.prog.sidePaused ? "支线恢复注入和提示；原来进行中的支线接着演" : "所有支线都不注入、不提示新的；主线照常，进度和名额都保留"}">${c.prog.sidePaused ? "继续全部支线" : "暂停全部支线"}</button>` : "";
-    return `<div class="pi-card"><h3>剧情线${c.prog.mainPaused || c.prog.sidePaused ? `<span class="pi-spacer"></span>${c.prog.mainPaused ? mainBtn : ""}${c.prog.sidePaused ? sideBtn : ""}` : ""}</h3>
-        ${list.map(row2).join("")}
-        <p class="pi-hint pi-line-foot">条件满足后，正文会找机会提一句入口，主角走进去才算开始。你点的「进入」「跳过」「暂停」记在当前这一楼，删楼或重新生成会一起撤回。</p></div>`;
+      return `<div class="pi-line-row"><div class="pi-line-head"><b class="pi-line-name" title="${esc(l.id)}">${esc(title2)}</b><span class="pi-kind pi-rl-kind">${l.kind === "main" ? "主线" : "支线"}</span><span class="pi-badge ${s.missed ? "" : LINE_BADGE[s.state] || ""}">${esc(s.missed ? "已错过" : s.state)}</span>${l.kind === "side" && c.prog.sidePaused && s.state === "进行中" ? '<span class="pi-meta">全部支线已暂停</span>' : ""}<div class="pi-line-acts">${main0}${more}</div></div>
+          ${l.brief ? `<p class="pi-hint">${esc(l.brief)}</p>` : ""}${wait && /^已离开/.test(wait) ? `<p class="pi-hint">${esc(wait)}</p>` : ""}${orig}${fix}${tierBtns}</div>`;
+    };
+    return `<div class="pi-rl-lines">${list.map(row2).join("")}</div>`;
   }
   function hereText(c) {
     let g = findGlobalTable(Object.values(c.snap.tables || {})), cell = g && g.place ? readCell(c.snap.tables || {}, `${g.name}/${g.row}/${g.place}`) : { state: "unknown" }, here = cell.state === "ok" ? cellText(cell.value) : "", focus = c.state.nodeStates.find((s) => s.node.uid && s.node.uid === c.state.focus.uid), place = focus ? clueText(isPlainObject(focus.node.item) ? focus.node.item.地点 : "") : "";
-    return here || place ? `主角当前位置：${esc(here || "（表格没记）")}${focus ? `；这一场的地点：${esc(place || "（大纲没写）")}` : ""}<br>` : "";
+    return esc(here || place);
   }
   function stayNotice(view, c) {
     let info = view.runtime.clue.stayInfo(), st9 = info && info.key ? stayState(view.runtime.progress().stays, chatMessages(), info) : null;
@@ -13380,12 +13438,12 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
   }
   function labelsPendingHtml(project, c) {
     let have = c && c.snap.facts || /* @__PURE__ */ new Map(), todo = labelsToPrepare(project.outline.volumes, project.clue.labels).filter((x) => !have.has(x.code));
-    return todo.length ? `<div class="pi-row pi-labels-todo"><p class="pi-hint is-warn" title="${esc(todo.map((x) => x.code).join("、"))}">${todo.length}条线索的标签还没准备好，这些线开始后暂时补不了表格行。</p><button type="button" class="pi-btn is-sm" data-act="clue-labels">${labelJob ? "正在准备…" : "现在准备"}</button></div>` : "";
+    return todo.length ? `<div class="pi-row is-todo pi-labels-todo"><p class="pi-hint is-warn" title="${esc(todo.map((x) => x.code).join("、"))}">${todo.length}条线索的标签还没准备好。</p><button type="button" class="pi-btn is-sm" data-act="clue-labels">${labelJob ? "正在准备…" : "现在准备"}</button></div>` : "";
   }
-  function unofferedHtml(c) {
+  function unofferedHtml(c, project) {
     return (c.unoffered || []).map((x) => {
-      let text2 = clueText(x.text) || `${x.id}（表里没写内容）`, short = text2.length > 40 ? `${text2.slice(0, 40)}…` : text2;
-      return x.revoked ? `<p class="pi-hint pi-unoffered">已作废（按没拿到算）：<span title="${esc(text2)}">${esc(short)}</span> <button type="button" class="pi-btn is-sm is-ghost" data-act="clue-fact-restore" data-id="${esc(x.id)}" title="解除作废，重新按表格判断；不会还原被清掉的记录">解除作废</button></p>` : `<p class="pi-hint is-warn pi-unoffered">⚠ 正文可能自己编了：<span title="${esc(text2)}">${esc(short)}</span> <button type="button" class="pi-btn is-sm is-ghost" data-act="clue-fact-keep" data-id="${esc(x.id)}" title="就当发生了，剧情照常走">保留</button><button type="button" class="pi-btn is-sm is-ghost" data-act="clue-fact-void" data-id="${esc(x.id)}" title="当作没发生，之后可以重新查">作废</button><span class="pi-unoffered-tip">保留＝就当发生了；作废＝当作没发生</span></p>`;
+      let labels = project && isPlainObject(project.clue.labels) ? project.clue.labels : {}, text2 = labels[x.id] && labels[x.id].label || clueText(x.text) || factName(x.id) || "一条线索", short = text2.length > 40 ? `${text2.slice(0, 40)}…` : text2;
+      return x.revoked ? `<p class="pi-hint pi-unoffered">已作废（按没拿到算）：<span title="${esc(`${x.id} ${text2}`)}">${esc(short)}</span> <button type="button" class="pi-btn is-sm is-ghost" data-act="clue-fact-restore" data-id="${esc(x.id)}" title="解除作废，重新按表格判断；不会还原被清掉的记录">解除作废</button></p>` : `<p class="pi-hint is-warn pi-unoffered">⚠ 正文可能自己编了：<span title="${esc(`${x.id} ${text2}`)}">${esc(short)}</span> <button type="button" class="pi-btn is-sm is-ghost" data-act="clue-fact-keep" data-id="${esc(x.id)}" title="保留：就当发生了，剧情照常走">保留</button><button type="button" class="pi-btn is-sm is-ghost" data-act="clue-fact-void" data-id="${esc(x.id)}" title="作废：当作没发生，之后可以重新查">作废</button></p>`;
     }).join("");
   }
 
@@ -18076,6 +18134,14 @@ ${suffix.trim()}` : body;
   var actions5 = {
     ...clueActions,
     ...kpActions,
+    // 执行页「当前」「进度」卡右上角的「⋯」
+    async "run-cur-menu"(view) {
+      let pick = await menuDialog({ title: "当前", items: [{ label: "预览注入内容", value: "preview" }, { label: "重新读表", value: "clue-refresh" }] });
+      pick === "preview" ? actions5.preview(view) : pick && clueActions[pick](view);
+    },
+    async "run-prog-menu"(view) {
+      await menuDialog({ title: "进度", items: [{ label: "改写后续", value: "rewrite" }] }) === "rewrite" && startRewrite(view);
+    },
     activate: (view) => view.runtime.switchProject(view.projectId, "chat"),
     "activate-card": (view) => view.runtime.switchProject(view.projectId, "card"),
     // 推进速度随聊天保存，改完立即换掉详细条目开头的说明。
@@ -18459,13 +18525,8 @@ ${suffix.trim()}` : body;
       { value: "ask", label: "弹出确认" },
       { value: "auto", label: "自动收录为支线" },
       { value: "off", label: "不识别" }
-    ];
-    return `<div class="pi-card"><h3>注入内容</h3>
-        <label class="pi-field"><span>详细条目的标签名</span><input class="pi-inp" data-set="tagName" value="${esc(s.tagName)}"></label>
-        <div class="pi-set-row"><label class="pi-check"><input type="checkbox" data-set="bodyGuide"${s.bodyGuide ? " checked" : ""}><span>正文通用提示</span></label>${s.bodyGuideText ? '<span class="pi-badge">已修改</span>' : ""}<span class="pi-spacer"></span>
-            <button type="button" class="pi-btn is-sm is-ghost" data-act="body-guide-toggle">${st6(view).bodyGuideOpen ? "收起" : "编辑"}</button></div>
-        ${st6(view).bodyGuideOpen ? `<div class="pi-set-sub"><textarea class="pi-ta is-tall" data-body-guide>${esc(bodyGuideText({ ...s, bodyGuide: !0 }))}</textarea>
-        <div class="pi-tools is-c1 is-end"><button type="button" class="pi-btn is-sm" data-act="body-guide-reset"${s.bodyGuideText ? "" : " disabled"}>恢复默认</button></div></div>` : ""}</div>
+    ], advOpen = !!st6(view).advOpen;
+    return `${llmCard(view, s)}
         <div class="pi-card"><h3>阶段推进</h3>
         <div class="pi-pair"><label class="pi-field"><span>检测间隔（楼）</span><input class="pi-inp" type="number" min="1" data-set="checkEvery" value="${s.checkEvery}"></label>
             <label class="pi-field"><span>每次读取楼数</span><input class="pi-inp" type="number" min="1" data-set="checkFloors" value="${s.checkFloors}"></label></div>
@@ -18476,11 +18537,17 @@ ${suffix.trim()}` : body;
         <div class="pi-pair"><label class="pi-field"><span>同时注入的激活支线</span><input class="pi-inp" type="number" min="1" max="6" data-set="hookCap" value="${s.hookCap}"></label>
             <label class="pi-field"><span>正文出现大纲外的新线时</span><select class="pi-sel" data-set="newThreadMode">${options(threadModes, s.newThreadMode)}</select></label></div>
         ${paceRow(view, s)}</div>
-        ${llmCard(view, s)}
-        ${guideCard(view, s)}
+        <div class="pi-card"><h3>注入内容</h3>
+        <label class="pi-field"><span>详细条目的标签名</span><input class="pi-inp" data-set="tagName" value="${esc(s.tagName)}"></label>
+        <div class="pi-set-row"><label class="pi-check"><input type="checkbox" data-set="bodyGuide"${s.bodyGuide ? " checked" : ""}><span>正文通用提示</span></label>${s.bodyGuideText ? '<span class="pi-badge">已修改</span>' : ""}<span class="pi-spacer"></span>
+            <button type="button" class="pi-btn is-sm is-ghost" data-act="body-guide-toggle">${st6(view).bodyGuideOpen ? "收起" : "编辑"}</button></div>
+        ${st6(view).bodyGuideOpen ? `<div class="pi-set-sub"><textarea class="pi-ta is-tall" data-body-guide>${esc(bodyGuideText({ ...s, bodyGuide: !0 }))}</textarea>
+        <div class="pi-tools is-c1 is-end"><button type="button" class="pi-btn is-sm" data-act="body-guide-reset"${s.bodyGuideText ? "" : " disabled"}>恢复默认</button></div></div>` : ""}</div>
+        <div class="pi-card pi-run-set"><h3><button type="button" class="pi-run-fold" data-act="adv-toggle" aria-expanded="${advOpen}">${advOpen ? "▾" : "▸"}高级</button>${advOpen ? "" : '<span class="pi-meta">写作基准、实验功能</span>'}</h3></div>
+        ${advOpen ? `${guideCard(view, s)}
         <div class="pi-card"><h3>实验功能</h3>
         <label class="pi-check"><input type="checkbox" data-set="trpgLab"${s.trpgLab ? " checked" : ""}><span>跑团模式（新建项目时可选）</span></label>
-        ${s.trpgLab ? `<label class="pi-field"><span>检定写法</span><select class="pi-sel" data-set="trpgCheck">${options(CHECK_MODES, s.trpgCheck === "anke" ? "anke" : "text")}</select></label>` : ""}</div>
+        ${s.trpgLab ? `<label class="pi-field"><span>检定写法</span><select class="pi-sel" data-set="trpgCheck">${options(CHECK_MODES, s.trpgCheck === "anke" ? "anke" : "text")}</select></label>` : ""}</div>` : ""}
         <div class="pi-tools is-c1"><button type="button" class="pi-btn is-sm is-ghost" data-act="tour-reset" title="先播放总览，之后第一次打开插件时也会再播一次">重新播放教程</button></div>`;
   }
   var NUMERIC = /* @__PURE__ */ new Set(["checkEvery", "checkFloors", "hookCap"]);
@@ -18577,6 +18644,9 @@ ${suffix.trim()}` : body;
     },
     "pace-reset"(view, target) {
       view.data.updateSettings({ paceText: { ...view.data.settings().paceText, [target.dataset.pace]: "" } }), view.runtime.refresh(), view.renderBody();
+    },
+    "adv-toggle"(view) {
+      st6(view).advOpen = !st6(view).advOpen, view.renderBody();
     },
     "guide-toggle"(view) {
       st6(view).guideOpen = !st6(view).guideOpen, view.renderBody();
@@ -18692,17 +18762,17 @@ ${suffix.trim()}` : body;
     }
     return names2;
   }
-  function fileCell(view, name, bytes) {
+  function fileCell(view, label, name, bytes) {
     let verified = st7(view).verified, missing = verified && verified[name] === !1;
-    return !view.data.index().files.includes(name) && !bytes ? '<td class="pi-hint">—</td>' : `<td class="${missing ? "is-missing" : ""}">${missing ? "已丢失" : formatBytes(bytes)}
+    return !view.data.index().files.includes(name) && !bytes ? `<div class="pi-file-row"><span class="pi-file-k">${label}</span><span class="pi-meta pi-grow">—</span></div>` : `<div class="pi-file-row"><span class="pi-file-k">${label}</span><span class="pi-meta pi-grow${missing ? " is-missing" : ""}">${missing ? "已丢失" : formatBytes(bytes)}</span>
         ${missing ? "" : `<button type="button" class="pi-btn is-sm is-ghost" data-act="export-file" data-name="${esc(name)}">导出</button>`}
-        <button type="button" class="pi-btn is-sm is-ghost is-danger" data-act="delete-file" data-name="${esc(name)}">删除</button></td>`;
+        <button type="button" class="pi-btn is-sm is-ghost is-danger" data-act="delete-file" data-name="${esc(name)}">删除</button></div>`;
   }
   function filesTable(view) {
-    return `<table class="pi-files"><thead><tr><th>项目</th><th>设定+大纲</th><th>讨论记录</th></tr></thead><tbody>${view.data.index().projects.map(
-      (item) => `<tr><td>${esc(item.group ? `${item.group}／` : "")}${esc(item.name)}</td>
-        ${fileCell(view, projectFile(item.id), item.bytes.project)}${fileCell(view, chatFile(item.id), item.bytes.chat)}</tr>`
-    ).join("") || '<tr><td colspan="3" class="pi-hint">没有项目</td></tr>'}</tbody></table>`;
+    return `<div class="pi-files">${view.data.index().projects.map(
+      (item) => `<div class="pi-file"><div class="pi-file-name">${esc(item.group ? `${item.group}／` : "")}${esc(item.name)}</div>
+        ${fileCell(view, "设定+大纲", projectFile(item.id), item.bytes.project)}${fileCell(view, "讨论记录", chatFile(item.id), item.bytes.chat)}</div>`
+    ).join("") || '<p class="pi-hint">没有项目</p>'}</div>`;
   }
   function render9(view) {
     let s = st7(view);
@@ -18712,7 +18782,7 @@ ${suffix.trim()}` : body;
         ${filesTable(view)}
         <div class="pi-equal pi-acts"><button type="button" class="pi-btn is-sm" data-act="verify">${s.verifying ? '<span class="pi-spin"></span>' : ""}重新核对</button>
             <button type="button" class="pi-btn is-sm" data-act="orphans"${orphans.length ? "" : " disabled"}>清理孤立文件${orphans.length ? `（${orphans.length}）` : ""}</button>
-            <button type="button" class="pi-btn is-sm" data-act="clear-chats">清空全部讨论记录</button></div></div>
+            <button type="button" class="pi-btn is-sm" data-act="clear-chats" title="清空全部项目的讨论记录">清空讨论记录</button></div></div>
         ${exportCard(view)}
         <div class="pi-card"><h3>人设备份</h3>
         <p class="pi-hint">只导出各项目的人设线，不含大纲、设定和讨论。导入在项目的「人设」页。</p>
@@ -18732,7 +18802,7 @@ ${suffix.trim()}` : body;
       pick
     )}</select></label>
         <p class="pi-hint">完整项目可以在别的酒馆用「新项目」导入，带上线索标签、保密名单和推进设置；不含讨论记录和聊天进度。</p>
-        <div class="pi-equal pi-acts"><button type="button" class="pi-btn is-sm" data-act="export-outline">导出大纲</button><button type="button" class="pi-btn is-sm is-primary" data-act="export-project">导出完整项目</button></div></div>`;
+        <div class="pi-tools is-c3 pi-acts"><button type="button" class="pi-btn is-sm" data-act="export-outline" title="只导出大纲">导出大纲</button><button type="button" class="pi-btn is-sm is-primary" data-act="export-project" title="导出完整项目：带上线索标签、保密名单和推进设置">导出项目</button><button type="button" class="pi-btn is-sm is-danger" data-act="delete-current" title="删除当前选中的项目">删除项目</button></div></div>`;
   }
   async function exportTarget(view) {
     let id = st7(view).exportId, project = view.data.project(id) || await view.data.loadProject(id).catch(() => null);
@@ -18779,6 +18849,15 @@ ${suffix.trim()}` : body;
       let text2 = await readRawFile(target.dataset.name);
       if (text2 == null) throw new Error("文件读取失败");
       downloadBlob(target.dataset.name, text2);
+    },
+    async "delete-current"(view) {
+      let id = st7(view).exportId, item = view.data.index().projects.find((p) => p.id === id);
+      item && await confirmDialog({
+        title: `删除「${item.name}」`,
+        body: "删除后不能恢复，建议先导出完整项目。聊天里记录的该项目进度保留。",
+        okLabel: "删除",
+        danger: !0
+      }) && (await view.data.deleteProject(id), view.projectId === id && (view.projectId = ""), view.runtime.refresh(), st7(view).verified = null, st7(view).exportId = "", view.render());
     },
     async "export-outline"(view) {
       let project = await exportTarget(view);
@@ -20051,7 +20130,7 @@ ${suffix.trim()}` : body;
   }
 
   // src/index.js
-  var VERSION = "0.3.10", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.3.11", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")

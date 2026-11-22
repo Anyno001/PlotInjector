@@ -65,25 +65,25 @@ function referenced(index) {
     return names;
 }
 
-function fileCell(view, name, bytes) {
+function fileCell(view, label, name, bytes) {
     const verified = st(view).verified;
     const missing = verified && verified[name] === false;
     const known = view.data.index().files.includes(name);
-    if (!known && !bytes) return '<td class="pi-hint">—</td>';
-    return `<td class="${missing ? 'is-missing' : ''}">${missing ? '已丢失' : formatBytes(bytes)}
+    if (!known && !bytes) return `<div class="pi-file-row"><span class="pi-file-k">${label}</span><span class="pi-meta pi-grow">—</span></div>`;
+    return `<div class="pi-file-row"><span class="pi-file-k">${label}</span><span class="pi-meta pi-grow${missing ? ' is-missing' : ''}">${missing ? '已丢失' : formatBytes(bytes)}</span>
         ${missing ? '' : `<button type="button" class="pi-btn is-sm is-ghost" data-act="export-file" data-name="${esc(name)}">导出</button>`}
-        <button type="button" class="pi-btn is-sm is-ghost is-danger" data-act="delete-file" data-name="${esc(name)}">删除</button></td>`;
+        <button type="button" class="pi-btn is-sm is-ghost is-danger" data-act="delete-file" data-name="${esc(name)}">删除</button></div>`;
 }
 
 function filesTable(view) {
     const index = view.data.index();
     const rows = index.projects
         .map(
-            (item) => `<tr><td>${esc(item.group ? `${item.group}／` : '')}${esc(item.name)}</td>
-        ${fileCell(view, projectFile(item.id), item.bytes.project)}${fileCell(view, chatFile(item.id), item.bytes.chat)}</tr>`,
+            (item) => `<div class="pi-file"><div class="pi-file-name">${esc(item.group ? `${item.group}／` : '')}${esc(item.name)}</div>
+        ${fileCell(view, '设定+大纲', projectFile(item.id), item.bytes.project)}${fileCell(view, '讨论记录', chatFile(item.id), item.bytes.chat)}</div>`,
         )
         .join('');
-    return `<table class="pi-files"><thead><tr><th>项目</th><th>设定+大纲</th><th>讨论记录</th></tr></thead><tbody>${rows || '<tr><td colspan="3" class="pi-hint">没有项目</td></tr>'}</tbody></table>`;
+    return `<div class="pi-files">${rows || '<p class="pi-hint">没有项目</p>'}</div>`;
 }
 
 export function render(view) {
@@ -95,7 +95,7 @@ export function render(view) {
         ${filesTable(view)}
         <div class="pi-equal pi-acts"><button type="button" class="pi-btn is-sm" data-act="verify">${s.verifying ? '<span class="pi-spin"></span>' : ''}重新核对</button>
             <button type="button" class="pi-btn is-sm" data-act="orphans"${orphans.length ? '' : ' disabled'}>清理孤立文件${orphans.length ? `（${orphans.length}）` : ''}</button>
-            <button type="button" class="pi-btn is-sm" data-act="clear-chats">清空全部讨论记录</button></div></div>
+            <button type="button" class="pi-btn is-sm" data-act="clear-chats" title="清空全部项目的讨论记录">清空讨论记录</button></div></div>
         ${exportCard(view)}
         <div class="pi-card"><h3>人设备份</h3>
         <p class="pi-hint">只导出各项目的人设线，不含大纲、设定和讨论。导入在项目的「人设」页。</p>
@@ -119,7 +119,7 @@ function exportCard(view) {
             pick,
         )}</select></label>
         <p class="pi-hint">完整项目可以在别的酒馆用「新项目」导入，带上线索标签、保密名单和推进设置；不含讨论记录和聊天进度。</p>
-        <div class="pi-equal pi-acts"><button type="button" class="pi-btn is-sm" data-act="export-outline">导出大纲</button><button type="button" class="pi-btn is-sm is-primary" data-act="export-project">导出完整项目</button></div></div>`;
+        <div class="pi-tools is-c3 pi-acts"><button type="button" class="pi-btn is-sm" data-act="export-outline" title="只导出大纲">导出大纲</button><button type="button" class="pi-btn is-sm is-primary" data-act="export-project" title="导出完整项目：带上线索标签、保密名单和推进设置">导出项目</button><button type="button" class="pi-btn is-sm is-danger" data-act="delete-current" title="删除当前选中的项目">删除项目</button></div></div>`;
 }
 
 async function exportTarget(view) {
@@ -181,6 +181,21 @@ export const actions = {
         let text = await readRawFile(target.dataset.name);
         if (text == null) throw new Error('文件读取失败');
         downloadBlob(target.dataset.name, text);
+    },
+    async 'delete-current'(view) {
+        const id = st(view).exportId,
+            item = view.data.index().projects.find((p) => p.id === id);
+        if (!item) return;
+        if (
+            !(await confirmDialog({
+                title: `删除「${item.name}」`,
+                body: '删除后不能恢复，建议先导出完整项目。聊天里记录的该项目进度保留。',
+                okLabel: '删除',
+                danger: !0,
+            }))
+        )
+            return;
+        (await view.data.deleteProject(id), view.projectId === id && (view.projectId = ''), view.runtime.refresh(), (st(view).verified = null), (st(view).exportId = ''), view.render());
     },
     async 'export-outline'(view) {
         const project = await exportTarget(view);

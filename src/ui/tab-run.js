@@ -279,6 +279,15 @@ function setSlot(view, slotId, patch) {
 export const actions = {
     ...clueActions,
     ...kpActions,
+    // 执行页「当前」「进度」卡右上角的「⋯」
+    async 'run-cur-menu'(view) {
+        const pick = await menuDialog({ title: '当前', items: [{ label: '预览注入内容', value: 'preview' }, { label: '重新读表', value: 'clue-refresh' }] });
+        pick === 'preview' ? actions.preview(view) : pick && clueActions[pick](view);
+    },
+    async 'run-prog-menu'(view) {
+        const pick = await menuDialog({ title: '进度', items: [{ label: '改写后续', value: 'rewrite' }] });
+        pick === 'rewrite' && startRewrite(view);
+    },
     activate: (view) => view.runtime.switchProject(view.projectId, 'chat'),
     'activate-card': (view) => view.runtime.switchProject(view.projectId, 'card'),
     // 推进速度随聊天保存，改完立即换掉详细条目开头的说明。

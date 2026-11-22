@@ -141,16 +141,8 @@ export function render(view) {
         { value: 'auto', label: '自动收录为支线' },
         { value: 'off', label: '不识别' },
     ];
-    return `<div class="pi-card"><h3>注入内容</h3>
-        <label class="pi-field"><span>详细条目的标签名</span><input class="pi-inp" data-set="tagName" value="${esc(s.tagName)}"></label>
-        <div class="pi-set-row"><label class="pi-check"><input type="checkbox" data-set="bodyGuide"${s.bodyGuide ? ' checked' : ''}><span>正文通用提示</span></label>${s.bodyGuideText ? '<span class="pi-badge">已修改</span>' : ''}<span class="pi-spacer"></span>
-            <button type="button" class="pi-btn is-sm is-ghost" data-act="body-guide-toggle">${st(view).bodyGuideOpen ? '收起' : '编辑'}</button></div>
-        ${
-            st(view).bodyGuideOpen
-                ? `<div class="pi-set-sub"><textarea class="pi-ta is-tall" data-body-guide>${esc(bodyGuideText({ ...s, bodyGuide: !0 }))}</textarea>
-        <div class="pi-tools is-c1 is-end"><button type="button" class="pi-btn is-sm" data-act="body-guide-reset"${s.bodyGuideText ? '' : ' disabled'}>恢复默认</button></div></div>`
-                : ''
-        }</div>
+    let advOpen = !!st(view).advOpen;
+    return `${llmCard(view, s)}
         <div class="pi-card"><h3>阶段推进</h3>
         <div class="pi-pair"><label class="pi-field"><span>检测间隔（楼）</span><input class="pi-inp" type="number" min="1" data-set="checkEvery" value="${s.checkEvery}"></label>
             <label class="pi-field"><span>每次读取楼数</span><input class="pi-inp" type="number" min="1" data-set="checkFloors" value="${s.checkFloors}"></label></div>
@@ -161,11 +153,21 @@ export function render(view) {
         <div class="pi-pair"><label class="pi-field"><span>同时注入的激活支线</span><input class="pi-inp" type="number" min="1" max="6" data-set="hookCap" value="${s.hookCap}"></label>
             <label class="pi-field"><span>正文出现大纲外的新线时</span><select class="pi-sel" data-set="newThreadMode">${options(threadModes, s.newThreadMode)}</select></label></div>
         ${paceRow(view, s)}</div>
-        ${llmCard(view, s)}
-        ${guideCard(view, s)}
+        <div class="pi-card"><h3>注入内容</h3>
+        <label class="pi-field"><span>详细条目的标签名</span><input class="pi-inp" data-set="tagName" value="${esc(s.tagName)}"></label>
+        <div class="pi-set-row"><label class="pi-check"><input type="checkbox" data-set="bodyGuide"${s.bodyGuide ? ' checked' : ''}><span>正文通用提示</span></label>${s.bodyGuideText ? '<span class="pi-badge">已修改</span>' : ''}<span class="pi-spacer"></span>
+            <button type="button" class="pi-btn is-sm is-ghost" data-act="body-guide-toggle">${st(view).bodyGuideOpen ? '收起' : '编辑'}</button></div>
+        ${
+            st(view).bodyGuideOpen
+                ? `<div class="pi-set-sub"><textarea class="pi-ta is-tall" data-body-guide>${esc(bodyGuideText({ ...s, bodyGuide: !0 }))}</textarea>
+        <div class="pi-tools is-c1 is-end"><button type="button" class="pi-btn is-sm" data-act="body-guide-reset"${s.bodyGuideText ? '' : ' disabled'}>恢复默认</button></div></div>`
+                : ''
+        }</div>
+        <div class="pi-card pi-run-set"><h3><button type="button" class="pi-run-fold" data-act="adv-toggle" aria-expanded="${advOpen}">${advOpen ? '▾' : '▸'}高级</button>${advOpen ? '' : '<span class="pi-meta">写作基准、实验功能</span>'}</h3></div>
+        ${advOpen ? `${guideCard(view, s)}
         <div class="pi-card"><h3>实验功能</h3>
         <label class="pi-check"><input type="checkbox" data-set="trpgLab"${s.trpgLab ? ' checked' : ''}><span>跑团模式（新建项目时可选）</span></label>
-        ${s.trpgLab ? `<label class="pi-field"><span>检定写法</span><select class="pi-sel" data-set="trpgCheck">${options(CHECK_MODES, s.trpgCheck === 'anke' ? 'anke' : 'text')}</select></label>` : ''}</div>
+        ${s.trpgLab ? `<label class="pi-field"><span>检定写法</span><select class="pi-sel" data-set="trpgCheck">${options(CHECK_MODES, s.trpgCheck === 'anke' ? 'anke' : 'text')}</select></label>` : ''}</div>` : ''}
         <div class="pi-tools is-c1"><button type="button" class="pi-btn is-sm is-ghost" data-act="tour-reset" title="先播放总览，之后第一次打开插件时也会再播一次">重新播放教程</button></div>`;
 }
 
@@ -307,6 +309,9 @@ export const actions = {
         (view.data.updateSettings({ paceText: { ...view.data.settings().paceText, [target.dataset.pace]: '' } }),
             view.runtime.refresh(),
             view.renderBody());
+    },
+    'adv-toggle'(view) {
+        ((st(view).advOpen = !st(view).advOpen), view.renderBody());
     },
     'guide-toggle'(view) {
         ((st(view).guideOpen = !st(view).guideOpen), view.renderBody());

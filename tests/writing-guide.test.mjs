@@ -54,6 +54,7 @@ test('settings page: switch to 同人, then to 自定义 (seeded from the guide 
   inst.open(); await tick();
   const doc = host.w.document;
   inst.__view.page = 'settings'; inst.__view.render(); await tick();
+  doc.querySelector('[data-act="adv-toggle"]').click(); await tick();
   const pick = () => doc.querySelector('[data-guide-preset]');
   assert.ok(pick(), 'preset select');
   assert.equal(pick().value, 'generic');

@@ -64,7 +64,7 @@ async function makeRewriteDraft(ctx, reply) {
   const { host, doc, click } = ctx;
   await click('[data-act="tab"][data-tab="run"]');
   host.llm.reply = reply;
-  doc.querySelector('[data-act="rewrite"]').click(); await tick();
+  { const pm = doc.querySelector('[data-act="run-prog-menu"]'); if (pm) { pm.click(); await tick(); doc.querySelector('[data-dlg-value="rewrite"]').click(); } else doc.querySelector('[data-act="rewrite"]').click(); } await tick();
   doc.querySelector('.pi-dialog textarea, .pi-dialog input').value = 'x';
   doc.querySelector('.pi-dialog .pi-btn.is-primary').click(); await tick(); await tick();
   await click('[data-act="tab"][data-tab="outline"]');
@@ -149,7 +149,7 @@ test('15.3: the final confirm lists outcomes computed NOW (fact confirmed while 
 test('15.2-3: same chat, database switched to another branch between preview and confirm → nothing written', async () => {
   const { host, inst, doc } = await setup();
   host.db.setTables(liveTables(buildTemplate({ controlRow: ['主线', ''], factRows: [{ code: 'F_box', label: 'a' }], knowRows: [] }))); await tick();
-  (() => { const t = doc.querySelector('[data-act="run-set-toggle"][aria-expanded="false"]'); t && t.click(); })(); await tick();
+  (() => { const t = doc.querySelector('[data-act="run-set-toggle"][aria-expanded="false"]'); t && t.click(); })(); await tick(); (() => { const t = doc.querySelector('[data-act="run-fold"][data-key="advOpen"][aria-expanded="false"]'); t && t.click(); })(); await tick();
   doc.querySelector('[data-act="clue-prebuild"]').click(); await tick();
   const dlg = doc.querySelector('.pi-dialog');
   dlg.querySelectorAll('[data-pb-label]').forEach((el, i) => { el.value = `标签${i}`; el.dispatchEvent(new el.ownerDocument.defaultView.Event('input', { bubbles: true })); });
@@ -163,7 +163,7 @@ test('15.2-3 (P2): a previewed row that is already present again at confirm is s
   const { host, inst, doc } = await setup();
   const t = liveTables(buildTemplate({ controlRow: ['主线', ''], factRows: [{ code: 'F_box', label: 'a' }], knowRows: [] }));
   host.db.setTables(t); await tick();
-  (() => { const t = doc.querySelector('[data-act="run-set-toggle"][aria-expanded="false"]'); t && t.click(); })(); await tick();
+  (() => { const t = doc.querySelector('[data-act="run-set-toggle"][aria-expanded="false"]'); t && t.click(); })(); await tick(); (() => { const t = doc.querySelector('[data-act="run-fold"][data-key="advOpen"][aria-expanded="false"]'); t && t.click(); })(); await tick();
   doc.querySelector('[data-act="clue-prebuild"]').click(); await tick();
   const dlg = doc.querySelector('.pi-dialog');
   dlg.querySelectorAll('[data-pb-label]').forEach((el, i) => { el.value = `标签${i}`; el.dispatchEvent(new el.ownerDocument.defaultView.Event('input', { bubbles: true })); });

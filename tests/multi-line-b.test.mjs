@@ -651,7 +651,7 @@ test('line card: side pause is labelled 暂停全部支线 and running side line
   assert.ok(s01.querySelector('.pi-line-more [data-act="clue-line"][data-value="pause"]'), 'single pause kept (in ⋯)');
   inst.runtime.clue.setPaused(true, 'side');
   text = await view();
-  assert.match(text, /继续全部支线/);
+  assert.match(text, /继续支线/);
   const row = [...doc.querySelectorAll('.pi-line-row')].find((r) => /S01/.test(r.textContent) && /支线/.test(r.textContent));
   assert.match(row.textContent, /进行中全部支线已暂停/, 'running side line marked');
   assert.doesNotMatch(row.querySelector('.pi-line-name').textContent, /·/, 'no middle dot in the line name');
@@ -742,20 +742,24 @@ test('line confirm (real DOM): 标记完成 / 放弃 confirmed after switching p
 });
 
 // 第三批（用户 2026-11-16）：执行页按「需要处理 → 剧情 → 剧情线 → 本轮场景 → 节点 → 运行设置」排；运行设置表格已绑定时收起，展开后有推进方式、表格绑定、支线名额、推进速度；节点只展开进行中的阶段
-test('run page layout: order, collapsed 运行设置 (opens on click), only the live stage is expanded, pause menu keeps the three kinds', async () => {
+test('run page layout: order, collapsed 设置与记录 (opens on click), only the live stage is expanded, pause menu keeps the three kinds', async () => {
   const { host, inst } = await boot(2, [MAIN(), side('S01'), side('S02')]);
   inst.open(); await new Promise((r) => setTimeout(r, 20));
   const doc = host.w.document, tick = () => new Promise((r) => setTimeout(r, 30));
   doc.querySelector('[data-act="tab"][data-tab="run"]').click(); await tick();
   const heads = [...doc.querySelectorAll('.pi-body .pi-card > h3')].map((h) => h.textContent.replace(/\s+/g, '')).filter(Boolean);
   const at = (re) => heads.findIndex((h) => re.test(h));
-  assert.ok(at(/^剧情进行中/) >= 0 && at(/^剧情线/) > at(/^剧情进行中/) && at(/^本轮场景/) > at(/^剧情线/) && at(/^节点/) > at(/^本轮场景/) && at(/运行设置/) > at(/^节点/), heads.join(' | '));
+  assert.ok(at(/^当前/) >= 0 && at(/^进度/) > at(/^当前/) && at(/设置与记录/) > at(/^进度/), heads.join(' | '));
+  assert.ok(doc.querySelector('.pi-tl .pi-tl-item.is-active .pi-tl-nodes'), 'live stage expanded as a ring timeline');
   const fold = doc.querySelector('[data-act="run-set-toggle"]');
   assert.equal(fold.getAttribute('aria-expanded'), 'false', 'tables bound → settings collapsed');
   assert.match(fold.closest('h3').textContent, /线索推进，表格已绑定，推进速度/);
   assert.equal(doc.querySelector('[data-act="clue-mode"]'), null);
   fold.click(); await tick();
-  for (const sel of ['[data-act="clue-mode"]', '[data-act="clue-bind-toggle"]', '[data-act="clue-gen-template"]', '[data-clue-sidelimit]', '[data-act="pace"]']) assert.ok(doc.querySelector(sel), `${sel} in 运行设置`);
+  for (const sel of ['[data-act="clue-prebuild"]', '[data-clue-sidelimit]', '[data-act="pace"]']) assert.ok(doc.querySelector(sel), `${sel} in 设置与记录`);
+  assert.equal(doc.querySelector('[data-act="clue-mode"]'), null, 'advanced folded');
+  doc.querySelector('[data-act="run-fold"][data-key="advOpen"]').click(); await tick();
+  for (const sel of ['[data-act="clue-mode"]', '[data-act="clue-bind-toggle"]', '[data-act="clue-gen-template"]']) assert.ok(doc.querySelector(sel), `${sel} in 高级`);
   const menu = doc.querySelector('.pi-pause-menu');
   assert.ok(menu.querySelector('[data-act="clue-pause"][data-value="1"]') && menu.querySelector('[data-act="clue-pause-mains"]') && menu.querySelector('[data-act="clue-pause-side"]'), '暂停全部剧情 / 只暂停主线 / 只暂停支线 all in the menu');
   const names = [...doc.querySelectorAll('.pi-line-name')].map((b) => b.textContent);

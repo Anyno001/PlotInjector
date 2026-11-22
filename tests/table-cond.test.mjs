@@ -249,7 +249,7 @@ test('run page: a line whose table condition can never be read shows 改成人�
   const doc = host.w.document, tick = () => new Promise((r) => setTimeout(r, 20));
   doc.querySelector(`[data-act="project"][data-id="${p.id}"]`).click(); await tick();
   doc.querySelector('[data-act="tab"][data-tab="run"]').click(); await tick();
-  const card = () => [...doc.querySelectorAll('.pi-card')].find((c) => /剧情线/.test(c.querySelector('h3')?.textContent || ''));
+  const card = () => [...doc.querySelectorAll('.pi-card')].find((c) => /^进度/.test(c.querySelector('h3')?.textContent || ''));
   assert.match(card().textContent, /开启条件读不出来：「重要角色表」没有「声望」这一列/);
   card().querySelector('[data-act="clue-line-manual"][data-id="S01"]').click(); await tick();
   doc.querySelector('.pi-dialog .pi-btn.is-primary').click(); await tick();

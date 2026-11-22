@@ -37,7 +37,7 @@ export const TOUR_STEPS = {
         {
             target: '.pi-top-end [data-page=settings]',
             title: '设置',
-            body: '模型接口、写作基准、注入方式都在这里。第一次用请先配好「模型接口」：讨论和写大纲都要用到AI。',
+            body: '模型接口、阶段推进、注入方式都在这里，写作基准和实验功能收在最下面的「高级」里。第一次用请先配好「模型接口」：讨论和写大纲都要用到AI。',
             side: 'bottom',
         },
         {
@@ -286,9 +286,9 @@ export const TOUR_STEPS = {
             side: 'bottom',
         },
         {
-            target: '[data-guide-preset]',
-            title: '写作基准',
-            body: '讨论和整理设定时，AI照这份基准来写。默认是通用版；写同人选「同人世界观速成」；也可以选「自定义」自己改。',
+            target: '[data-act="adv-toggle"]',
+            title: '高级',
+            body: '写作基准和实验功能收在这里。写作基准是讨论和整理设定时AI照着写的那份要求，默认是通用版；写同人可选「同人世界观速成」，也可以选「自定义」自己改。',
             side: 'top',
         },
         {
