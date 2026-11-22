@@ -3,6 +3,7 @@ import { discoveryList, clueReachability, chatFactSets } from './clue-project.js
 import { effectiveFact, conditionRefs } from './clue-rules.js';
 import { checkRule, GOT_ANYWAY } from './trpg.js';
 import { isPlainObject } from './outline.js';
+import { timelineStep } from './trpg-timeline.js';
 
 export const KP_LEVELS = [
     { level: 1, label: '给点暗示' },
@@ -10,6 +11,18 @@ export const KP_LEVELS = [
     { level: 3, label: '直接给线索' },
 ];
 export const KP_STUCK_ROUNDS = 4;
+
+// 每轮固定附在 KP 段末尾：跑团里「由用户选择，不要强行引导」改成 KP 的口径
+export const KP_HOST_RULE = [
+    'KP 主持口径：你是本模组的 KP，上面「由用户选择，不要强行引导」在跑团里按下面执行：',
+    '- 玩家偏离模组时，通过在场 NPC、环境变化或时间线事件，把注意力自然引回当前场景或上面列出的入口；不替玩家行动，不强制。',
+    '- 不要新增模组里没有的重要人物、地点、线索或事件。',
+    '- 玩家坚持做别的事，就写合理的后果，不为他编新剧情。',
+].join('\n');
+
+// 场景没定下来的来源（正文只拿到入口）
+export const KP_UNSET_SOURCES = ['none', 'away', 'stale', 'manualDone'];
+export const KP_UNSET_HINT = '本轮场景还没确定，正文只拿到入口，容易自由发挥。';
 
 export function aiFloorCount(messages) {
     return (messages || []).filter((m) => m && !m.is_user).length;
@@ -49,7 +62,7 @@ function stripFacts(value, dead) {
     return out;
 }
 
-export function trpgHealth({ volumes, state, snap, prog, checks }) {
+export function trpgHealth({ volumes, state, snap, prog, checks, focus }) {
     let { known, claimed } = chatFactSets({ snap, prog }),
         dead = deadDiscoveries(state, snap, prog, checks),
         deadSet = new Set(dead.map((d) => d.fact)),
@@ -73,6 +86,7 @@ export function trpgHealth({ volumes, state, snap, prog, checks }) {
         if (ns.status === 'available' || ns.status === 'active')
             near += discoveryList(itemOf(ns.node)).filter((d) => d.fact && !deadSet.has(d.fact) && !got(d.fact, snap, prog)).length;
     near && lines.push(`眼前能拿到的线索${near}条`);
+    focus && KP_UNSET_SOURCES.includes(focus.source) && lines.push(KP_UNSET_HINT);
     for (let n of reach.stuckNodes) spoil.push(`${n.nodeName}（${n.stage}）：${n.why}`);
     for (let d of dead) spoil.push(`判定失败 #${d.fact}（${d.node}）：${d.text}`);
     return { level: reach.verdict === 'blocked' ? 'bad' : reach.verdict === 'unknown' || dead.length ? 'warn' : 'ok', lines, spoil };
@@ -142,8 +156,15 @@ export function kpFind(state, fact) {
     return null;
 }
 
-// 钩子用：把推一把的文字并进投影。out = buildClueProjection 的返回；返回新的 out
-export function kpInject(out, { state, snap, prog, checks, settings, push, floors }) {
+function entryList(state) {
+    return state.nodeStates
+        .filter((ns) => ns.status === 'available' && !ns.disabled && ns.node.uid && textOf(itemOf(ns.node).入口))
+        .map((ns) => textOf(itemOf(ns.node).入口));
+}
+
+// 钩子用：把 KP 的文字并进投影。out = buildClueProjection 的返回；返回新的 out
+// 推一把、拉回、时间线到点、主持口径都从这里进；timeline = { events, now, clock, onClock }
+export function kpInject(out, { state, snap, prog, checks, settings, push, floors, timeline }) {
     let lines = [],
         seen = /* @__PURE__ */ new Set(),
         add = (p) => {
@@ -152,14 +173,90 @@ export function kpInject(out, { state, snap, prog, checks, settings, push, floor
             let r = kpPushLines(p, hit.discovery, hit.node, checks, settings);
             (lines.push(...r.lines), r.reveal && out.used.candidates.push({ fact: p.fact, record: hit.discovery.record }), seen.add(p.fact));
         };
-    push && push.floor === floors && add(push);
+    if (push && push.floor === floors) {
+        if (push.kind === 'steer') textOf(push.text) && lines.push(`KP 拉回（只管这一轮）：${textOf(push.text)}`);
+        else add(push);
+    }
     for (let [code, r] of Object.entries(checks || {}))
         if (r.fresh && /-KP$/.test(code) && !seen.has(code.slice(0, -3))) add({ fact: code.slice(0, -3), level: 2 });
-    if (!lines.length) return out;
+    if (timeline) {
+        let step = timelineStep({ events: timeline.events || [], now: timeline.now, clock: timeline.clock, floors });
+        (lines.push(...step.lines), step.next && timeline.onClock && timeline.onClock(step.next));
+    }
+    let entries = entryList(state),
+        host = !!(out.content || entries.length);
+    if (!lines.length && !host) return out;
     let tag = String(settings.tagName || '剧情参考').trim() || '剧情参考',
         close = `</${tag}>`,
-        body = ['KP 的安排（只管这一轮）：', ...lines].join('\n');
-    if (!out.content) return { ...out, content: `<${tag}>\n${body}\n${close}` };
+        body = [...(lines.length ? ['KP 的安排（只管这一轮）：', ...lines] : []), ...(host ? [KP_HOST_RULE] : [])].join('\n');
+    if (!out.content) {
+        let list = entries.length ? `目前可以去做的事：\n${entries.map((t) => `- ${t}`).join('\n')}\n` : '';
+        return { ...out, content: `<${tag}>\n${list}${body}\n${close}` };
+    }
     let at = out.content.lastIndexOf(close);
     return at < 0 ? out : { ...out, content: `${out.content.slice(0, at)}${body}\n${out.content.slice(at)}` };
+}
+
+// ---------- 「对照剧本」检查 ----------
+export const STEER_VERDICTS = ['跟着剧本', '有点偏', '跑偏了'];
+
+export function steerMessages({ recent, stage, rules, facts }) {
+    return [
+        {
+            role: 'system',
+            content: [
+                '你是跑团模组的审稿人。对照模组内容，检查最近的正文有没有偏离剧本。只判断，不续写。',
+                '重点看：编了模组里没有的人物、地点、线索或事件；跳过了当前该进行的场景；提前揭示了还没到时机的内容；该发生的事件（时间线）没有发生。',
+                '严格按下面格式输出，不要写别的：',
+                '结论：跟着剧本 / 有点偏 / 跑偏了（三选一）',
+                '不剧透：',
+                '- 只说偏在哪一类（如：编了模组外的人物、跳过了场景、提前揭示、该发生的事件没发生），不写名字和真相',
+                '剧透：',
+                '- 具体哪里编了、模组里本来该是什么',
+                '拉回建议：',
+                '一段给正文的 KP 指示：不含玩家不该知道的真相；可以写引回到哪个场景或入口、让哪个 NPC 出现。',
+                '没偏的话「不剧透」「剧透」各写「- 无」，拉回建议写「无」。',
+            ].join('\n'),
+        },
+        {
+            role: 'user',
+            content: [
+                `【最近正文】\n${recent.map((m) => `${m.user ? '玩家' : '正文'}：${String(m.text || '').slice(0, 1500)}`).join('\n\n') || '（没有）'}`,
+                `【当前阶段的模组内容（作者视角，含仅作者部分）】\n${stage || '（没有进行中的阶段）'}`,
+                rules && `【KP规则】\n${rules}`,
+                `【已确认的事实】\n${facts.length ? facts.map((f) => `- ${f}`).join('\n') : '（暂无）'}`,
+            ]
+                .filter(Boolean)
+                .join('\n\n'),
+        },
+    ];
+}
+
+// 回复 → { verdict, plain[], spoil[], steer }；没认出结论时 verdict 为 ''
+export function parseSteerReply(text) {
+    let out = { verdict: '', plain: [], spoil: [], steer: '' },
+        sec = '',
+        steer = [],
+        none = (t) => /^无[。.]?$/.test(t);
+    for (let raw of String(text || '')
+        .replace(/\r/g, '')
+        .split('\n')) {
+        let m = /^[\s#*>]*(结论|不剧透|剧透|拉回建议)[*\s]*[:：]\s*\**\s*(.*)$/.exec(raw);
+        if (m) {
+            sec = m[1];
+            let rest = m[2].trim();
+            if (sec === '结论') out.verdict = STEER_VERDICTS.find((v) => rest.includes(v)) || '';
+            else if (sec === '拉回建议' && rest) steer.push(rest);
+            continue;
+        }
+        let item = /^\s*[-•]\s*(.+)$/.exec(raw);
+        if (sec === '不剧透' && item) out.plain.push(item[1].trim());
+        else if (sec === '剧透' && item) out.spoil.push(item[1].trim());
+        else if (sec === '拉回建议' && raw.trim()) steer.push(raw.trim());
+    }
+    out.plain = out.plain.filter((t) => !none(t));
+    out.spoil = out.spoil.filter((t) => !none(t));
+    out.steer = steer.join('\n').trim();
+    none(out.steer) && (out.steer = '');
+    return out;
 }

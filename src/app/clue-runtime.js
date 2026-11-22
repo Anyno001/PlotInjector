@@ -54,6 +54,7 @@ import {
 import { hostWindow, chatMessages, ctx, toast } from '../host/st.js';
 import { isTrpg, trpgCheckResults } from '../core/trpg.js';
 import { kpInject } from '../core/trpg-kp.js';
+import { parseTimeline, readGameClock } from '../core/trpg-timeline.js';
 import { trpgWantFacts } from '../core/trpg-rows.js';
 import { isClueMode, withNodeIds } from '../core/clue-model.js';
 
@@ -780,11 +781,30 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
                 settings: data.settings(),
                 push: prog && prog.trpgKp && prog.trpgKp.push,
                 floors: aiFloors(),
+                timeline: trpgTimeline(prog),
             }));
         return {
             ...out,
             reason: out.content ? '' : '当前没有可演的线索场景',
             lineOnly: !out.content && !!(out.used && out.used.recognize && out.used.recognize.length),
+        };
+    }
+    // 跑团时间线：事件来自设定的「KP规则」，时间读绑定的表格；时钟记进 progress.trpgKp.clock（微任务里写，不在投影中同步写）
+    function trpgTimeline(prog) {
+        let p = project(),
+            events = parseTimeline(p && p.setting && p.setting.text);
+        if (!events.length) return null;
+        let c = compute(),
+            now = c ? readGameClock(c.snap.tables, p.clue.bindings.time && p.clue.bindings.time.路径) : null;
+        return {
+            events,
+            now,
+            clock: prog && prog.trpgKp && prog.trpgKp.clock,
+            onClock: (next) =>
+                Promise.resolve().then(() => {
+                    let cur = getProgress() || {};
+                    setProgress({ ...cur, trpgKp: { ...(cur.trpgKp || {}), clock: next } }, 'trpg-kp');
+                }),
         };
     }
     function stayInfo(cc) {

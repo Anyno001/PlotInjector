@@ -1,4 +1,4 @@
-// PlotInjector v0.3.8
+// PlotInjector v0.3.9
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -2093,9 +2093,9 @@ ${clocks.map(clockLine).join(`
       readTo: int(readTo)
     };
   }
-  function applyCheck(progress, live2, result, { floor = 0 } = {}) {
-    let next = progress, events = [], writes = /* @__PURE__ */ new Map(), write = (item, patch) => writes.set(item, { ...writes.get(item) || {}, ...patch }), label = (item) => item.label || item.node.name, done = new Set((result.done || []).map(str));
-    for (let tick of result.clocks || []) {
+  function applyCheck(progress, live2, result2, { floor = 0 } = {}) {
+    let next = progress, events = [], writes = /* @__PURE__ */ new Map(), write = (item, patch) => writes.set(item, { ...writes.get(item) || {}, ...patch }), label = (item) => item.label || item.node.name, done = new Set((result2.done || []).map(str));
+    for (let tick of result2.clocks || []) {
       let clock = live2.clocks.find((item) => !item.done && label(item) === tick.name);
       if (!clock || writes.has(clock)) continue;
       if (tick.happened) {
@@ -2108,7 +2108,7 @@ ${clocks.map(clockLine).join(`
       let filled = clamp(clock.filled + step, 0, clock.total);
       filled !== clock.filled && (write(clock, { filled, done: !1, lastTickFloor: floor || void 0 }), events.push({ type: filled >= clock.total ? "clock-due" : "clock-tick", name: clock.node.name, filled, total: clock.total }));
     }
-    let triggered = new Set((result.hooks || []).map(str)), freed = /* @__PURE__ */ new Set();
+    let triggered = new Set((result2.hooks || []).map(str)), freed = /* @__PURE__ */ new Set();
     for (let hook of live2.hooks) {
       if (hook.status === "done") continue;
       let name = label(hook), at = hook.at, step = hook.step, expired = hook.status === "expired", fresh = !1;
@@ -2572,8 +2572,8 @@ ${u.yaml}`].filter(Boolean).join(`
     return w ? { word: w[1] } : null;
   }
   function cocJudge(die, value, level = "普通") {
-    let fumble = die >= 100 || value < 50 && die >= 96, tier = die === 1 ? "大成功" : fumble ? "大失败" : die <= Math.floor(value / 5) ? "极难成功" : die <= Math.floor(value / 2) ? "困难成功" : die <= value ? "成功" : "失败", need = level === "极难" ? Math.floor(value / 5) : level === "困难" ? Math.floor(value / 2) : value;
-    return { tier, ok: die === 1 || !fumble && die <= need, need };
+    let fumble = die >= 100 || value < 50 && die >= 96, tier = die <= 5 ? "大成功" : fumble ? "大失败" : die <= Math.floor(value / 5) ? "极难成功" : die <= Math.floor(value / 2) ? "困难成功" : die <= value ? "成功" : "失败", need = level === "极难" ? Math.floor(value / 5) : level === "困难" ? Math.floor(value / 2) : value;
+    return { tier, ok: die <= 5 || !fumble && die <= need, need };
   }
   function trpgCheckResults(messages) {
     let open = [], out = {};
@@ -4454,8 +4454,8 @@ ${guide ? `${guide}
     };
     function nodeDone(node) {
       if (node.uid && doneMemo.has(node.uid)) return doneMemo.get(node.uid);
-      let over = node.uid && overrides[node.uid] || {}, result;
-      return over.done === "force" ? result = { v: TRI.t, reasons: ["人工标记完成"], manual: !0 } : over.done === "undo" ? result = { v: TRI.f, reasons: ["人工撤销完成"], manual: !0 } : node.done ? node.uid && visiting.has(node.uid) ? (cycles.push(node.uid), result = { v: TRI.u, reasons: [`节点${node.uid}条件循环引用`] }) : (node.uid && visiting.add(node.uid), result = evalCondition(node.done, env), node.uid && visiting.delete(node.uid)) : result = { v: TRI.f, reasons: ["没有完成条件，需人工标记"] }, node.uid && doneMemo.set(node.uid, result), result;
+      let over = node.uid && overrides[node.uid] || {}, result2;
+      return over.done === "force" ? result2 = { v: TRI.t, reasons: ["人工标记完成"], manual: !0 } : over.done === "undo" ? result2 = { v: TRI.f, reasons: ["人工撤销完成"], manual: !0 } : node.done ? node.uid && visiting.has(node.uid) ? (cycles.push(node.uid), result2 = { v: TRI.u, reasons: [`节点${node.uid}条件循环引用`] }) : (node.uid && visiting.add(node.uid), result2 = evalCondition(node.done, env), node.uid && visiting.delete(node.uid)) : result2 = { v: TRI.f, reasons: ["没有完成条件，需人工标记"] }, node.uid && doneMemo.set(node.uid, result2), result2;
     }
     let stageStates = /* @__PURE__ */ new Map();
     function stageChain(list, firstEntered) {
@@ -4507,7 +4507,7 @@ ${guide ? `${guide}
       lineVisiting.add(l.id);
       let man = (clueProg.lines || {})[l.id] || {}, legacy = !man.started && legacySeen(l), evidence = !!man.started || legacy, settled = man.state && (evidence || man.state !== "pause"), cond = settled ? { v: TRI.t, reasons: [] } : evalCondition(l.open, env), win = settled || evidence ? { v: TRI.t, reasons: [] } : windowOf(l), eligible = cond.v === TRI.t && win.v === TRI.t, started = evidence, why = man.started ? man.how || "已开始" : legacy ? `开场事实${l.legacyFact}已出现` : "", waitMain = "", after = !evidence && !man.state && l.kind === "main" ? prevMainDone(l) : { v: TRI.t, reasons: [] };
       !evidence && !man.state && eligible && l.kind === "main" && l.mode === "auto" && ((waitMain = after.v !== TRI.t ? after.reasons.join("；") || "要等前一条主线结束" : clueProg.mainPaused ? "主线已全部暂停" : mainBusy(l)) || (started = !0, why = "开启条件已满足"));
-      let state = man.state === "abandon" ? "放弃" : man.state === "done" ? "完成" : man.state === "pause" ? "暂停" : started ? "进行中" : eligible ? "可开启" : "未触发", result = {
+      let state = man.state === "abandon" ? "放弃" : man.state === "done" ? "完成" : man.state === "pause" ? "暂停" : started ? "进行中" : eligible ? "可开启" : "未触发", result2 = {
         line: l,
         state,
         started,
@@ -4524,9 +4524,9 @@ ${guide ? `${guide}
       if (state === "进行中") {
         stageChain(l.units, () => ({ v: TRI.t, reasons: [`线${l.id}进行中（${why}）`] }));
         let last = stageStates.get(l.units[l.units.length - 1].id);
-        last && last.done && (result.state = "完成", result.why = "最后一个阶段已结束");
+        last && last.done && (result2.state = "完成", result2.why = "最后一个阶段已结束");
       }
-      return lineVisiting.delete(l.id), lineMemo.set(l.id, result), result;
+      return lineVisiting.delete(l.id), lineMemo.set(l.id, result2), result2;
     }
     let free = units.filter((u) => !u.line);
     stageChain(free, null);
@@ -4948,12 +4948,96 @@ ${guide ? `${guide}
 `) : "（暂时没有可以去做的剧情，当前场景写「无」）";
   }
 
+  // src/core/trpg-timeline.js
+  var PERIOD = "凌晨|清晨|早上|早晨|上午|中午|下午|傍晚|晚上|夜里|夜晚|深夜", CLOCK_SRC = `(${PERIOD})?\\s*(\\d{1,2})(?:[:：](\\d{2})|点(半|(\\d{1,2})分?)?|时)`;
+  function toMinutes(period, h, m) {
+    return h = Number(h), m = Number(m) || 0, h > 24 || m > 59 ? null : (/下午|傍晚|晚上|夜里|夜晚/.test(period || "") && h < 12 || period === "深夜" && h >= 6 && h < 12 ? h += 12 : period === "凌晨" && h === 12 && (h = 0), h % 24 * 60 + m);
+  }
+  function minutesOf(match) {
+    let [, period, h, hm, half, dm] = match;
+    return toMinutes(period, h, hm ?? (half === "半" ? 30 : dm || 0));
+  }
+  function clockText(minutes) {
+    let t = (minutes % 1440 + 1440) % 1440;
+    return `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
+  }
+  function readClock(value) {
+    let text2 = (Array.isArray(value) ? value.join(" ") : value == null ? "" : String(value)).trim(), last = null;
+    for (let m of text2.matchAll(new RegExp(CLOCK_SRC, "g"))) {
+      let v = minutesOf(m);
+      v != null && (last = v);
+    }
+    return last;
+  }
+  function readGameClock(tables, paths) {
+    for (let path of [].concat(paths || []).filter(Boolean)) {
+      let cell = readCell(tables || {}, path);
+      if (cell.state === "ok") {
+        let v = readClock(cell.value);
+        if (v != null) return v;
+      }
+    }
+    return null;
+  }
+  function parseTimeline(settingText) {
+    let block = splitBlocks(settingText).find((b) => b.title === KP_BLOCK && !b.cont), out = [];
+    if (!block) return out;
+    let inSection = !1, day = 0, last = -1;
+    for (let line of block.text.split(`
+`)) {
+      let head = /^\s*【([^】]+)】\s*$/.exec(line);
+      if (head) {
+        inSection = head[1].trim() === "时间线";
+        continue;
+      }
+      if (!inSection) continue;
+      let m = new RegExp(`^\\s*-\\s*${CLOCK_SRC}`).exec(line);
+      if (!m) continue;
+      let base = minutesOf(m);
+      if (base == null) continue;
+      let minutes = base + day * 1440;
+      for (; minutes < last; ) day += 1, minutes += 1440;
+      last = minutes, out.push({ minutes, clock: clockText(minutes), text: line.slice(m[0].length).replace(/^[\s:：,，、\-—]+/, "").trim() });
+    }
+    return out.filter((e) => e.text);
+  }
+  function dueEvents(events, prev, now) {
+    if (!events.length || prev == null || now == null) return [];
+    let end = now;
+    if (end < prev) {
+      if (prev - end < 720) return [];
+      end += 1440;
+    }
+    let hit = (t) => t > prev && t <= end;
+    return events.filter((e) => hit(e.minutes) || e.minutes >= 1440 && hit(e.minutes - 1440) || hit(e.minutes + 1440));
+  }
+  function timelineLines(due, now) {
+    return due.length ? [
+      `模组时间线：现在 ${clockText(now)}。以下事件已经到点，这一轮或下一轮要让它发生（写法可以随玩家行动调整，不能取消）：`,
+      ...due.map((e) => `- ${e.clock} ${e.text}`)
+    ] : [];
+  }
+  function timelineStep({ events, now, clock, floors }) {
+    if (!events.length || now == null) return { lines: [], next: null };
+    let c = clock && Number.isFinite(clock.minutes) ? clock : null, from = c ? c.floor < floors ? c.minutes : c.floor === floors ? c.from ?? null : null : null;
+    return {
+      lines: timelineLines(dueEvents(events, from, now), now),
+      next: !c || c.floor !== floors ? { floor: floors, minutes: now, from } : null
+    };
+  }
+
   // src/core/trpg-kp.js
   var KP_LEVELS = [
     { level: 1, label: "给点暗示" },
     { level: 2, label: "再给一次检定" },
     { level: 3, label: "直接给线索" }
-  ], KP_STUCK_ROUNDS = 4;
+  ], KP_STUCK_ROUNDS = 4, KP_HOST_RULE = [
+    "KP 主持口径：你是本模组的 KP，上面「由用户选择，不要强行引导」在跑团里按下面执行：",
+    "- 玩家偏离模组时，通过在场 NPC、环境变化或时间线事件，把注意力自然引回当前场景或上面列出的入口；不替玩家行动，不强制。",
+    "- 不要新增模组里没有的重要人物、地点、线索或事件。",
+    "- 玩家坚持做别的事，就写合理的后果，不为他编新剧情。"
+  ].join(`
+`), KP_UNSET_SOURCES = ["none", "away", "stale", "manualDone"], KP_UNSET_HINT = "本轮场景还没确定，正文只拿到入口，容易自由发挥。";
   function aiFloorCount(messages) {
     return (messages || []).filter((m) => m && !m.is_user).length;
   }
@@ -4982,7 +5066,7 @@ ${guide ? `${guide}
       out[k] = k === "发现" && Array.isArray(v) ? v.filter((d) => !(isPlainObject(d) && dead.has(String(d.事实 || d.id || "").trim()))).map((d) => stripFacts(d, dead)) : stripFacts(v, dead);
     return out;
   }
-  function trpgHealth({ volumes, state, snap: snap2, prog, checks }) {
+  function trpgHealth({ volumes, state, snap: snap2, prog, checks, focus }) {
     let { known, claimed } = chatFactSets({ snap: snap2, prog }), dead = deadDiscoveries(state, snap2, prog, checks), deadSet = new Set(dead.map((d) => d.fact)), opts = { knownFacts: known, claimedFacts: claimed }, reach = clueReachability(stripFacts(volumes || [], deadSet), opts), base = dead.length ? clueReachability(volumes || [], opts) : reach, lines2 = [], spoil = [];
     reach.verdict === "ok" ? lines2.push(dead.length ? `有${dead.length}条判定失败的线索，暂时不影响主线` : "主线走得通") : reach.verdict === "blocked" ? lines2.push(
       dead.length && base.verdict !== "blocked" ? `有${dead.length}条判定失败的线索，主线因此卡住，可以用「我卡住了」补救` : "主线现在走不通，需要检查剧本或表格"
@@ -4992,7 +5076,7 @@ ${guide ? `${guide}
     let near = 0;
     for (let ns of state.nodeStates)
       (ns.status === "available" || ns.status === "active") && (near += discoveryList(itemOf(ns.node)).filter((d) => d.fact && !deadSet.has(d.fact) && !got(d.fact, snap2, prog)).length);
-    near && lines2.push(`眼前能拿到的线索${near}条`);
+    near && lines2.push(`眼前能拿到的线索${near}条`), focus && KP_UNSET_SOURCES.includes(focus.source) && lines2.push(KP_UNSET_HINT);
     for (let n of reach.stuckNodes) spoil.push(`${n.nodeName}（${n.stage}）：${n.why}`);
     for (let d of dead) spoil.push(`判定失败 #${d.fact}（${d.node}）：${d.text}`);
     return { level: reach.verdict === "blocked" ? "bad" : reach.verdict === "unknown" || dead.length ? "warn" : "ok", lines: lines2, spoil };
@@ -5038,25 +5122,96 @@ ${guide ? `${guide}
     }
     return null;
   }
-  function kpInject(out, { state, snap: snap2, prog, checks, settings, push, floors }) {
+  function entryList(state) {
+    return state.nodeStates.filter((ns) => ns.status === "available" && !ns.disabled && ns.node.uid && textOf(itemOf(ns.node).入口)).map((ns) => textOf(itemOf(ns.node).入口));
+  }
+  function kpInject(out, { state, snap: snap2, prog, checks, settings, push, floors, timeline: timeline2 }) {
     let lines2 = [], seen = /* @__PURE__ */ new Set(), add = (p) => {
       let hit = kpFind(state, p.fact);
       if (!hit || got(p.fact, snap2, prog)) return;
       let r = kpPushLines(p, hit.discovery, hit.node, checks, settings);
       lines2.push(...r.lines), r.reveal && out.used.candidates.push({ fact: p.fact, record: hit.discovery.record }), seen.add(p.fact);
     };
-    push && push.floor === floors && add(push);
+    push && push.floor === floors && (push.kind === "steer" ? textOf(push.text) && lines2.push(`KP 拉回（只管这一轮）：${textOf(push.text)}`) : add(push));
     for (let [code, r] of Object.entries(checks || {}))
       r.fresh && /-KP$/.test(code) && !seen.has(code.slice(0, -3)) && add({ fact: code.slice(0, -3), level: 2 });
-    if (!lines2.length) return out;
-    let tag = String(settings.tagName || "剧情参考").trim() || "剧情参考", close = `</${tag}>`, body = ["KP 的安排（只管这一轮）：", ...lines2].join(`
+    if (timeline2) {
+      let step = timelineStep({ events: timeline2.events || [], now: timeline2.now, clock: timeline2.clock, floors });
+      lines2.push(...step.lines), step.next && timeline2.onClock && timeline2.onClock(step.next);
+    }
+    let entries = entryList(state), host = !!(out.content || entries.length);
+    if (!lines2.length && !host) return out;
+    let tag = String(settings.tagName || "剧情参考").trim() || "剧情参考", close = `</${tag}>`, body = [...lines2.length ? ["KP 的安排（只管这一轮）：", ...lines2] : [], ...host ? [KP_HOST_RULE] : []].join(`
 `);
-    if (!out.content) return { ...out, content: `<${tag}>
-${body}
+    if (!out.content) {
+      let list = entries.length ? `目前可以去做的事：
+${entries.map((t) => `- ${t}`).join(`
+`)}
+` : "";
+      return { ...out, content: `<${tag}>
+${list}${body}
 ${close}` };
+    }
     let at = out.content.lastIndexOf(close);
     return at < 0 ? out : { ...out, content: `${out.content.slice(0, at)}${body}
 ${out.content.slice(at)}` };
+  }
+  var STEER_VERDICTS = ["跟着剧本", "有点偏", "跑偏了"];
+  function steerMessages({ recent, stage, rules, facts }) {
+    return [
+      {
+        role: "system",
+        content: [
+          "你是跑团模组的审稿人。对照模组内容，检查最近的正文有没有偏离剧本。只判断，不续写。",
+          "重点看：编了模组里没有的人物、地点、线索或事件；跳过了当前该进行的场景；提前揭示了还没到时机的内容；该发生的事件（时间线）没有发生。",
+          "严格按下面格式输出，不要写别的：",
+          "结论：跟着剧本 / 有点偏 / 跑偏了（三选一）",
+          "不剧透：",
+          "- 只说偏在哪一类（如：编了模组外的人物、跳过了场景、提前揭示、该发生的事件没发生），不写名字和真相",
+          "剧透：",
+          "- 具体哪里编了、模组里本来该是什么",
+          "拉回建议：",
+          "一段给正文的 KP 指示：不含玩家不该知道的真相；可以写引回到哪个场景或入口、让哪个 NPC 出现。",
+          "没偏的话「不剧透」「剧透」各写「- 无」，拉回建议写「无」。"
+        ].join(`
+`)
+      },
+      {
+        role: "user",
+        content: [
+          `【最近正文】
+${recent.map((m) => `${m.user ? "玩家" : "正文"}：${String(m.text || "").slice(0, 1500)}`).join(`
+
+`) || "（没有）"}`,
+          `【当前阶段的模组内容（作者视角，含仅作者部分）】
+${stage || "（没有进行中的阶段）"}`,
+          rules && `【KP规则】
+${rules}`,
+          `【已确认的事实】
+${facts.length ? facts.map((f) => `- ${f}`).join(`
+`) : "（暂无）"}`
+        ].filter(Boolean).join(`
+
+`)
+      }
+    ];
+  }
+  function parseSteerReply(text2) {
+    let out = { verdict: "", plain: [], spoil: [], steer: "" }, sec = "", steer = [], none = (t) => /^无[。.]?$/.test(t);
+    for (let raw of String(text2 || "").replace(/\r/g, "").split(`
+`)) {
+      let m = /^[\s#*>]*(结论|不剧透|剧透|拉回建议)[*\s]*[:：]\s*\**\s*(.*)$/.exec(raw);
+      if (m) {
+        sec = m[1];
+        let rest = m[2].trim();
+        sec === "结论" ? out.verdict = STEER_VERDICTS.find((v) => rest.includes(v)) || "" : sec === "拉回建议" && rest && steer.push(rest);
+        continue;
+      }
+      let item = /^\s*[-•]\s*(.+)$/.exec(raw);
+      sec === "不剧透" && item ? out.plain.push(item[1].trim()) : sec === "剧透" && item ? out.spoil.push(item[1].trim()) : sec === "拉回建议" && raw.trim() && steer.push(raw.trim());
+    }
+    return out.plain = out.plain.filter((t) => !none(t)), out.spoil = out.spoil.filter((t) => !none(t)), out.steer = steer.join(`
+`).trim(), none(out.steer) && (out.steer = ""), out;
   }
 
   // src/core/trpg-rows.js
@@ -5723,11 +5878,26 @@ ${out.content.slice(at)}` };
         checks: trpgCheckResults(chatMessages()),
         settings: data.settings(),
         push: prog && prog.trpgKp && prog.trpgKp.push,
-        floors: aiFloors()
+        floors: aiFloors(),
+        timeline: trpgTimeline(prog)
       })), {
         ...out,
         reason: out.content ? "" : "当前没有可演的线索场景",
         lineOnly: !out.content && !!(out.used && out.used.recognize && out.used.recognize.length)
+      };
+    }
+    function trpgTimeline(prog) {
+      let p = project(), events2 = parseTimeline(p && p.setting && p.setting.text);
+      if (!events2.length) return null;
+      let c = compute(), now = c ? readGameClock(c.snap.tables, p.clue.bindings.time && p.clue.bindings.time.路径) : null;
+      return {
+        events: events2,
+        now,
+        clock: prog && prog.trpgKp && prog.trpgKp.clock,
+        onClock: (next) => Promise.resolve().then(() => {
+          let cur = getProgress() || {};
+          setProgress({ ...cur, trpgKp: { ...cur.trpgKp || {}, clock: next } }, "trpg-kp");
+        })
       };
     }
     function stayInfo(cc) {
@@ -5795,10 +5965,10 @@ ${out.content.slice(at)}` };
       if (!c) return null;
       let p = project(), text2 = requestToText(payload);
       if (!text2) return null;
-      let fresh = lastInjected && Date.now() - lastInjected.at < ROUND_TTL_MS, out = fresh ? lastInjected.content : "", history = chatMessages().filter((m) => m && !m.is_user && !m.is_system).map((m) => String(m.mes || "")), isRevealed = (id) => effectiveFact(id, c.snap, c.prog).confirmed, injectedFocus = fresh && out && lastInjected.focus || "", auditState = { ...c.state, focus: { ...c.state.focus, uid: injectedFocus } }, tablesText = Object.values(c.snap && c.snap.tables || {}).map((sh) => sh && Array.isArray(sh.content) ? sh.content.map((r) => Array.isArray(r) ? r.join(" ") : "").join(" ") : "").join(" "), result = auditRequest(text2, p, auditState, out, { history, isRevealed, places: { setting: injectedSetting(p.setting), tables: tablesText } }), leaks = result.leaks.filter((l) => l.level === "leak");
-      return lastAudit = { ...result, at: Date.now(), via: lastInjected ? lastInjected.via : "" }, leaks.length && (note(
+      let fresh = lastInjected && Date.now() - lastInjected.at < ROUND_TTL_MS, out = fresh ? lastInjected.content : "", history = chatMessages().filter((m) => m && !m.is_user && !m.is_system).map((m) => String(m.mes || "")), isRevealed = (id) => effectiveFact(id, c.snap, c.prog).confirmed, injectedFocus = fresh && out && lastInjected.focus || "", auditState = { ...c.state, focus: { ...c.state.focus, uid: injectedFocus } }, tablesText = Object.values(c.snap && c.snap.tables || {}).map((sh) => sh && Array.isArray(sh.content) ? sh.content.map((r) => Array.isArray(r) ? r.join(" ") : "").join(" ") : "").join(" "), result2 = auditRequest(text2, p, auditState, out, { history, isRevealed, places: { setting: injectedSetting(p.setting), tables: tablesText } }), leaks = result2.leaks.filter((l) => l.level === "leak");
+      return lastAudit = { ...result2, at: Date.now(), via: lastInjected ? lastInjected.via : "" }, leaks.length && (note(
         `最终请求核验：发现 ${leaks.length} 处不该出现的剧情（${leaks.slice(0, 3).map((l) => l.source).join("、")}${leaks.length > 3 ? "……" : ""}）`
-      ), toast("warning", `本轮请求里提前出现了还没开放的剧情（${leaks[0].source}）${leaks[0].where === "setting" ? "，在这个项目的设定里" : leaks[0].where === "table" ? "，在数据库表格里" : ""}。到诊断页看怎么处理。`)), result.duplicated && (note(`最终请求核验：本轮线索内容出现了 ${result.projectionCount} 次（重复注入）`), toast("warning", "本轮线索内容在正文请求里出现了不止一次，请检查是否同时启用了别的注入路径。")), emit("clue-audit"), result;
+      ), toast("warning", `本轮请求里提前出现了还没开放的剧情（${leaks[0].source}）${leaks[0].where === "setting" ? "，在这个项目的设定里" : leaks[0].where === "table" ? "，在数据库表格里" : ""}。到诊断页看怎么处理。`)), result2.duplicated && (note(`最终请求核验：本轮线索内容出现了 ${result2.projectionCount} 次（重复注入）`), toast("warning", "本轮线索内容在正文请求里出现了不止一次，请检查是否同时启用了别的注入路径。")), emit("clue-audit"), result2;
     }
     function register() {
       let api = acuApi();
@@ -8254,8 +8424,8 @@ ${horrorGuide}` : "",
       hasEntriesEvent() || (view.clearTimeout(fallbackTimer), fallbackTimer = view.setTimeout(async () => {
         let name = `剧情注入器·${cardName() || "未命名"}`;
         try {
-          let result = await writeFallbackBook(name, clueMode() ? [] : virtualEntries());
-          result.conflict && toast("warning", `聊天已绑定世界书「${result.conflict}」，剧情注入器的条目写在「${name}」，需要手动启用。`);
+          let result2 = await writeFallbackBook(name, clueMode() ? [] : virtualEntries());
+          result2.conflict && toast("warning", `聊天已绑定世界书「${result2.conflict}」，剧情注入器的条目写在「${name}」，需要手动启用。`);
         } catch (error) {
           toast("error", `写入专用世界书失败：${error.message}`);
         }
@@ -8688,11 +8858,11 @@ ${horrorGuide}` : "",
         return floors.length && !manual && setProgress({ ...currentProgress(), lastCheckFloor: floorCount() }), log("跳过检测：大纲为空"), manual && hasPersonas(activeProject()) && toast("info", floors.length ? "没有需要检测的人设线。" : "还没有可检测的正文。"), null;
       checking = !0, log(`开始检测人设阶段：${items.length} 条线，读最近 ${floors.length} 楼${manual ? "（手动）" : ""}`), emit("checking");
       try {
-        let messages = buildPersonaCheckMessages(items, floors), result = null;
+        let messages = buildPersonaCheckMessages(items, floors), result2 = null;
         for (let attempt = 0; ; attempt += 1)
           try {
             if (!ticketValid(scope)) return null;
-            result = parseCheckReply(await requestLlm(messages, resolveLlm(settings, "check"), { timeoutMs: 12e4 }));
+            result2 = parseCheckReply(await requestLlm(messages, resolveLlm(settings, "check"), { timeoutMs: 12e4 }));
             break;
           } catch (error) {
             if (!ticketValid(scope) || attempt >= CHECK_RETRIES) throw error;
@@ -8702,8 +8872,8 @@ ${horrorGuide}` : "",
         notice.hide("checkfail");
         let next = { ...currentProgress(), lastCheckFloor: floorCount() };
         delete next.lastFailFloor, setProgress(next);
-        let moves = result.personas || [];
-        return log(`人设检测完成：${moves.length} 条建议`), offerPersonaMoves(items, moves), manual && !moves.length && toast("info", "人设阶段没有变化。"), result;
+        let moves = result2.personas || [];
+        return log(`人设检测完成：${moves.length} 条建议`), offerPersonaMoves(items, moves), manual && !moves.length && toast("info", "人设阶段没有变化。"), result2;
       } catch (error) {
         return ticketValid(scope) && (setProgress({ ...currentProgress(), lastFailFloor: floorCount() }), log(`检测失败：${error.message}`), notice.show({
           id: "checkfail",
@@ -8736,11 +8906,11 @@ ${horrorGuide}` : "",
           newThreadMode: sw.sideOn ? settings.newThreadMode : "off",
           ignored: threadState(prog).ignored,
           readTo: prog.lastCheckFloor
-        }), pItems = personaCheckItems(floors), messages = buildCheckMessages(unit, index, floors, threadInfo, pItems), result = null;
+        }), pItems = personaCheckItems(floors), messages = buildCheckMessages(unit, index, floors, threadInfo, pItems), result2 = null;
         for (let attempt = 0; ; attempt += 1)
           try {
             if (!ticketValid(t)) return null;
-            result = parseCheckReply(await requestLlm(messages, resolveLlm(settings, "check"), { timeoutMs: 12e4 }));
+            result2 = parseCheckReply(await requestLlm(messages, resolveLlm(settings, "check"), { timeoutMs: 12e4 }));
             break;
           } catch (error) {
             if (!ticketValid(t) || attempt >= CHECK_RETRIES) throw error;
@@ -8753,16 +8923,16 @@ ${horrorGuide}` : "",
           next,
           unit.id,
           stageNodes(unit.stage.data).filter((node) => !isThreadNode(node)),
-          result.done
+          result2.done
         ), settings.carryOver)
           for (let item of carriedNodes(list, states, prog, { links: opts.links }))
-            next = uncheckByNames(next, item.unit.id, [item.node], result.done);
-        let merged = applyCheck(next, liveThreads(list, unitStates(list, next), next, opts), result, { floor: floorCount() });
+            next = uncheckByNames(next, item.unit.id, [item.node], result2.done);
+        let merged = applyCheck(next, liveThreads(list, unitStates(list, next), next, opts), result2, { floor: floorCount() });
         next = { ...merged.progress, lastCheckFloor: floorCount() }, delete next.lastFailFloor, setProgress(next);
         for (let event of merged.events) log(threadEventText(event));
         return log(
-          `检测完成：已演 ${result.done.length} 个节点${result.stageDone ? "，本阶段已演完" : ""}${result.offTrack ? "，偏离大纲" : ""}`
-        ), result.offTrack && settings.offTrackMode !== "off" && !next.offMuted.includes(unit.id) ? handleOffTrack(unit, result.offReason || result.reason) : result.stageDone ? proposeAdvance({ unit, reason: result.reason }) : manual && toast("info", result.reason || "本阶段尚未演完。"), result.newThread && sw.sideOn && offerThread(unit, result.newThread), offerPersonaMoves(pItems, result.personas || []), result;
+          `检测完成：已演 ${result2.done.length} 个节点${result2.stageDone ? "，本阶段已演完" : ""}${result2.offTrack ? "，偏离大纲" : ""}`
+        ), result2.offTrack && settings.offTrackMode !== "off" && !next.offMuted.includes(unit.id) ? handleOffTrack(unit, result2.offReason || result2.reason) : result2.stageDone ? proposeAdvance({ unit, reason: result2.reason }) : manual && toast("info", result2.reason || "本阶段尚未演完。"), result2.newThread && sw.sideOn && offerThread(unit, result2.newThread), offerPersonaMoves(pItems, result2.personas || []), result2;
       } catch (error) {
         return ticketValid(t) ? (setProgress({ ...currentProgress(), lastFailFloor: floorCount() }), log(`检测失败：${error.message}`), notice.show({
           id: "checkfail",
@@ -8793,13 +8963,13 @@ ${finds.map((d) => `- ${d.text}`).join(`
       ].filter(Boolean).join(`
 `), t = ticket(), pItems = personaCheckItems(floors), reply2 = await requestLlm(buildClueCheckMessages(material, floors, pItems), resolveLlm(data.settings(), "check"), {
         timeoutMs: 12e4
-      }), result = parseCheckReply(reply2);
-      return ticketValid(t) ? (offerPersonaMoves(pItems, result.personas || []), log(`线索检测建议：${result.done.length ? "场景可能已演完" : "场景未演完"}`), notice.show({
+      }), result2 = parseCheckReply(reply2);
+      return ticketValid(t) ? (offerPersonaMoves(pItems, result2.personas || []), log(`线索检测建议：${result2.done.length ? "场景可能已演完" : "场景未演完"}`), notice.show({
         id: "clue-check",
         title: "检测建议（不会自动改状态）",
-        body: `${result.reason || ""}${result.done.length ? " 如确认已完成，请到执行页手动标记，或等待填表记录事实。" : ""}`,
+        body: `${result2.reason || ""}${result2.done.length ? " 如确认已完成，请到执行页手动标记，或等待填表记录事实。" : ""}`,
         timeout: 2e4
-      }), result) : (log("线索检测返回时项目、模式或聊天已切换，结果丢弃"), null);
+      }), result2) : (log("线索检测返回时项目、模式或聊天已切换，结果丢弃"), null);
     }
     function clampBase() {
       let prog = currentProgress();
@@ -8886,13 +9056,13 @@ ${finds.map((d) => `- ${d.text}`).join(`
       if (!project || !prog) return null;
       let text2 = requestToText(payload);
       if (!text2) return null;
-      let list = flattenUnits(project.outline.volumes), states = isInfinite(project) ? Object.fromEntries(list.map((u) => [u.id, "done"])) : unitStates(list, prog), projection = entries().filter((e) => e.enabled && e.content).map((e) => e.content), history = chatMessages().filter((m) => m && !m.is_user && !m.is_system).map((m) => String(m.mes || "")), result = auditOutlineRequest(text2, project, states, projection, { history }), leaks = result.leaks;
-      return lastOutlineAudit = { ...result, at: Date.now() }, leaks.length && (log(
+      let list = flattenUnits(project.outline.volumes), states = isInfinite(project) ? Object.fromEntries(list.map((u) => [u.id, "done"])) : unitStates(list, prog), projection = entries().filter((e) => e.enabled && e.content).map((e) => e.content), history = chatMessages().filter((m) => m && !m.is_user && !m.is_system).map((m) => String(m.mes || "")), result2 = auditOutlineRequest(text2, project, states, projection, { history }), leaks = result2.leaks;
+      return lastOutlineAudit = { ...result2, at: Date.now() }, leaks.length && (log(
         `最终请求核验：发现 ${leaks.length} 处不该出现的剧情（${leaks.slice(0, 3).map((l) => l.source).join("、")}${leaks.length > 3 ? "……" : ""}）`
       ), toast(
         "warning",
         `本轮正文请求里出现了还不该出现的剧情内容（${leaks[0].source}，匹配到「${leaks[0].sample}」）。可能是世界书、预设或别的插件带进来的，请到诊断页查看。`
-      )), result.duplicated && (log(`最终请求核验：本轮剧情内容出现了 ${result.projectionCount} 次（重复注入）`), toast("warning", "本轮剧情内容在正文请求里出现了不止一次，请检查是否同时启用了别的注入路径。")), emit("clue-audit"), lastOutlineAudit;
+      )), result2.duplicated && (log(`最终请求核验：本轮剧情内容出现了 ${result2.projectionCount} 次（重复注入）`), toast("warning", "本轮剧情内容在正文请求里出现了不止一次，请检查是否同时启用了别的注入路径。")), emit("clue-audit"), lastOutlineAudit;
     }
     function onPromptReady(payload) {
       if (!(payload && payload.dryRun))
@@ -10456,8 +10626,8 @@ label.pi-wb-row{cursor:pointer}
     let projectId = view.projectId;
     view.setBusy(key, !0);
     try {
-      let result = await job();
-      return view.projectId === projectId ? result : null;
+      let result2 = await job();
+      return view.projectId === projectId ? result2 : null;
     } finally {
       view.setBusy(key, !1);
     }
@@ -11035,6 +11205,73 @@ ${block}`
     }).filter(Boolean);
   }
 
+  // src/ui/trpg-steer.js
+  var result = null, VERDICT_BADGE = { 跟着剧本: "is-ok", 有点偏: "is-warn", 跑偏了: "is-warn" };
+  function nodeName(ns) {
+    return ns.node.name || ns.node.uid;
+  }
+  function sceneHintHtml(c) {
+    if (!c || !KP_UNSET_SOURCES.includes(c.state.focus.source)) return "";
+    let nodes = c.state.nodeStates.filter((ns) => (ns.status === "available" || ns.status === "active") && !ns.disabled && ns.node.uid);
+    return `<div class="pi-hint is-warn">${KP_UNSET_HINT}${nodes.length ? ` <select class="pi-sel" data-kp-scene>${nodes.map((ns) => `<option value="${esc(ns.node.uid)}">${esc(nodeName(ns))}</option>`).join("")}</select> <button type="button" class="pi-btn is-sm" data-act="kp-scene">设为本轮场景</button>` : ""}</div>`;
+  }
+  function timelineHintHtml(project, now) {
+    return now == null && parseTimeline(project.setting && project.setting.text).length ? '<p class="pi-hint">没有读到游戏内时间，时间线不会自动推进。</p>' : "";
+  }
+  function steerResultHtml(project) {
+    let r = result && result.projectId === project.id ? result : null;
+    return r ? `<p class="pi-hint">${r.verdict ? `<span class="pi-badge ${VERDICT_BADGE[r.verdict]}">${esc(r.verdict)}</span>` : "没有认出结论，可以再检查一次。"} ${esc(r.plain.join("；"))}${r.spoil.length ? ` <button type="button" class="pi-btn is-sm is-ghost" data-act="kp-steer-spoil">${r.open ? "收起" : "展开（会剧透）"}</button>` : ""}</p>${r.open ? r.spoil.map((t) => `<p class="pi-hint">${esc(t)}</p>`).join("") : ""}${r.steer ? '<p class="pi-hint"><button type="button" class="pi-btn is-sm" data-act="kp-steer-apply">按建议拉回</button></p>' : ""}` : "";
+  }
+  function liveStage(c) {
+    let focus = c.state.nodeStates.find((s) => s.node.uid && s.node.uid === c.state.focus.uid);
+    return focus && c.state.stageStates.get(focus.node.unit.id) || [...c.state.stageStates.values()].find((s) => s.entered.v === "true" && !s.done);
+  }
+  function buildRequest(view, project, c) {
+    let recent = chatMessages().filter((m) => m && !m.is_system && String(m.mes || "").trim()).slice(-6).map((m) => ({ user: !!m.is_user, text: m.mes })), live2 = liveStage(c), stage = live2 && live2.unit.stage ? stringifyYaml({ [live2.unit.stage.key || live2.unit.id]: live2.unit.stage.data }) : "", block = splitBlocks(project.setting && project.setting.text).find((b) => b.title === KP_BLOCK && !b.cont), facts = chatFactSets({ snap: c.snap, prog: c.prog }).known.map((id) => {
+      let text2 = effectiveFact(id, c.snap, c.prog).text;
+      return `${id}${text2 ? `：${Array.isArray(text2) ? text2.join("、") : text2}` : ""}`;
+    });
+    return steerMessages({ recent, stage, rules: block ? block.text : "", facts });
+  }
+  var steerActions = {
+    "kp-scene"(view, target) {
+      let sel = target.parentElement && target.parentElement.querySelector("[data-kp-scene]");
+      if (!(!sel || !sel.value)) {
+        try {
+          view.runtime.clue.setFocus(sel.value);
+        } catch (error) {
+          toast("error", error && error.message || String(error));
+        }
+        view.renderBody();
+      }
+    },
+    "kp-steer-spoil"(view) {
+      result && (result.open = !result.open), view.renderBody();
+    },
+    async "kp-steer"(view) {
+      let c = view.runtime.clue.compute();
+      if (!c) return;
+      let project = view.project(), messages = buildRequest(view, project, c);
+      try {
+        let reply2 = await runTask(view, "kp-steer", () => ask(view, "outline", messages));
+        if (reply2 == null) return;
+        result = { ...parseSteerReply(reply2), projectId: view.projectId, open: !1 };
+      } catch (error) {
+        toast("error", `对照剧本失败：${error && error.message || error}`);
+      }
+      view.renderBody();
+    },
+    // 这里不直接写进度：由 kpCard 的 saveKp 统一保存，见 trpg-kp-card.js
+    "kp-steer-apply"(view) {
+      if (!result || !result.steer) return;
+      let prog = view.runtime.progress();
+      view.runtime.setProgress(
+        { ...prog, trpgKp: { ...prog.trpgKp || {}, push: { kind: "steer", text: result.steer, floor: aiFloorCount(chatMessages()) } } },
+        "trpg-kp"
+      ), toast("success", "下一轮会按建议拉回。"), view.renderBody();
+    }
+  };
+
   // src/ui/trpg-kp-card.js
   var shown = null, BADGE = { ok: ["is-ok", "顺"], warn: ["is-warn", "要留意"], bad: ["is-warn", "卡住了"] };
   function kpState(view) {
@@ -11050,19 +11287,22 @@ ${block}`
       let now = kpState(view).pulse;
       (!now || now.facts !== confirmed) && saveKp(view, { pulse: { facts: confirmed, floor: floors } });
     });
-    let stuck = kp.pulse && kp.pulse.facts === confirmed ? floors - kp.pulse.floor : 0, push = kp.push && kp.push.floor === floors ? kp.push : null, mine = shown && shown.projectId === project.id ? shown : null, leaks = d && d.lastAudit ? (d.lastAudit.leaks || []).filter((l) => l.level === "leak").length : 0, pushLabel = push ? (KP_LEVELS.find((x) => x.level === push.level) || {}).label : "";
+    let stuck = kp.pulse && kp.pulse.facts === confirmed ? floors - kp.pulse.floor : 0, push = kp.push && kp.push.floor === floors ? kp.push : null, mine = shown && shown.projectId === project.id ? shown : null, leaks = d && d.lastAudit ? (d.lastAudit.leaks || []).filter((l) => l.level === "leak").length : 0, pushLabel = push ? push.kind === "steer" ? "按建议拉回" : (KP_LEVELS.find((x) => x.level === push.level) || {}).label : "", busy = view.busy["kp-steer"], bind = project.clue.bindings.time;
     return `<div class="pi-card"><h3>KP<span class="pi-spacer"></span>
         <button type="button" class="pi-btn is-sm" data-act="kp-health">这局还顺吗</button>
+        <button type="button" class="pi-btn is-sm" data-act="kp-steer"${busy ? " disabled" : ""}>${busy ? '<span class="pi-spin"></span>检查中' : "对照剧本"}</button>
         <button type="button" class="pi-btn is-sm" data-act="kp-stuck">我卡住了</button></h3>
+        ${sceneHintHtml(c)}${timelineHintHtml(project, readGameClock(c.snap.tables, bind && bind.路径))}${steerResultHtml(project)}
         ${mine ? `<p class="pi-hint"><span class="pi-badge ${BADGE[mine.level][0]}">${BADGE[mine.level][1]}</span> ${esc(mine.lines.join("；"))}${mine.spoil.length ? ` <button type="button" class="pi-btn is-sm is-ghost" data-act="kp-spoil">${mine.open ? "收起" : "展开（会剧透）"}</button>` : ""}</p>${mine.open ? mine.spoil.map((t) => `<p class="pi-hint">${esc(t)}</p>`).join("") : ""}${leaks ? `<p class="pi-hint is-warn">最近一次请求里疑似提前写出了${leaks}处线索</p>` : ""}` : ""}
         ${push ? `<p class="pi-hint">下一轮：${esc(pushLabel)} <button type="button" class="pi-btn is-sm is-ghost" data-act="kp-cancel">取消</button></p>` : ""}
         ${stuck >= KP_STUCK_ROUNDS && !push ? `<p class="pi-hint is-warn">已经${stuck}轮没拿到新线索，要不要推一把？ <button type="button" class="pi-btn is-sm" data-act="kp-stuck">我卡住了</button></p>` : ""}</div>`;
   }
   var kpActions = {
+    ...steerActions,
     "kp-health"(view) {
       let c = view.runtime.clue.compute();
       if (!c) return;
-      shown = { ...trpgHealth({ volumes: c.outline.volumes, state: c.state, snap: c.snap, prog: c.prog, checks: trpgCheckResults(chatMessages()) }), projectId: view.projectId, open: !1 }, view.renderBody();
+      shown = { ...trpgHealth({ volumes: c.outline.volumes, state: c.state, snap: c.snap, prog: c.prog, checks: trpgCheckResults(chatMessages()), focus: c.state.focus }), projectId: view.projectId, open: !1 }, view.renderBody();
     },
     "kp-spoil"(view) {
       shown && (shown.open = !shown.open), view.renderBody();
@@ -12172,8 +12412,8 @@ knowledge:
 scene: {路径: 线索控制表/主线/当前场景, 离场值: 无}
 time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主线/当前时间]}
 `;
-  function reasonList(result) {
-    return result && result.reasons && result.reasons.length ? result.reasons.slice(0, 4).map((r) => `<li>${esc(r)}</li>`).join("") : "";
+  function reasonList(result2) {
+    return result2 && result2.reasons && result2.reasons.length ? result2.reasons.slice(0, 4).map((r) => `<li>${esc(r)}</li>`).join("") : "";
   }
   function nodeRow(s, focusUid, open) {
     let badge = CLUE_STATUS_BADGE[s.status], flags = [
@@ -15238,10 +15478,10 @@ ${r2.yaml}`,
       update(view, { talk: !refsOf(view.project()).talk }), view.renderBody();
     },
     async "gen-wb"(view) {
-      let result = await pickRefs(refsOf(view.project()), "AI写作参考的世界书条目");
-      if (result) {
-        if (result.none) return toast("info", "当前卡没有关联的世界书。");
-        update(view, { wb: result.wb, memo: result.memo }), view.renderBody();
+      let result2 = await pickRefs(refsOf(view.project()), "AI写作参考的世界书条目");
+      if (result2) {
+        if (result2.none) return toast("info", "当前卡没有关联的世界书。");
+        update(view, { wb: result2.wb, memo: result2.memo }), view.renderBody();
       }
     }
   };
@@ -16647,7 +16887,7 @@ ${f.text}`
     let s = st2(view), project = view.project(), fixes = where === "draft" ? s.draft.fixes : project.setting.fixes, source = where === "draft" ? s.draft.body : project.setting.text, blocks = splitBlocks(source), pick = `<label class="pi-field"><span>${drop ? "写在哪个分块" : "改哪个分块"}</span><select class="pi-sel" data-f="block">${options(
       blocks.map((block2) => ({ value: block2.key, label: block2.title })),
       guessBlock(blocks, fixes[index])
-    )}</select></label>`, readKey = (box) => box.querySelector("[data-f=block]").value, result = await openDialog({
+    )}</select></label>`, readKey = (box) => box.querySelector("[data-f=block]").value, result2 = await openDialog({
       title: drop ? "丢弃补定" : "修改补定",
       html: `<p class="pi-hint">${esc(fixes[index])}</p>${blocks.length ? pick : ""}
             ${drop ? "" : '<label class="pi-field"><span>怎么改</span><textarea class="pi-ta" data-f="text"></textarea></label>'}`,
@@ -16669,12 +16909,12 @@ ${f.text}`
         }
       ]
     });
-    if (!result) return;
-    if (result.listOnly) return removeFix(view, where, index);
-    if (!result.drop && !result.text) return;
-    let block = blocks.find((item) => item.key === result.key), note = result.drop ? `${fixes[index]}
+    if (!result2) return;
+    if (result2.listOnly) return removeFix(view, where, index);
+    if (!result2.drop && !result2.text) return;
+    let block = blocks.find((item) => item.key === result2.key), note = result2.drop ? `${fixes[index]}
 改为：删除这一条，正文里不再保留它的内容，其余不变。` : `${fixes[index]}
-改为：${result.text}`, reply2 = await runTask(
+改为：${result2.text}`, reply2 = await runTask(
       view,
       "setting",
       () => ask(view, "outline", rewriteBlockMessages({ guide: guideText(view), current: source, blockText: block.text, fixes: note }))
@@ -16984,7 +17224,7 @@ ${parsed.body}` : parsed.body;
       await confirmDialog({ title: "删除此条消息", body: "只删这一条，其他消息不动。", okLabel: "删除", danger: !0 }) && (updateChat(view, (chat) => ({ ...chat, messages: chat.messages.filter((item) => item.id !== target.dataset.id) })), view.renderBody());
     },
     async summary(view) {
-      let chat = view.data.chat(view.projectId), result = await openDialog({
+      let chat = view.data.chat(view.projectId), result2 = await openDialog({
         title: "讨论摘要",
         html: `<p class="pi-hint">更早的消息只发送这份摘要，原文仍保存在文件里。</p><textarea class="pi-ta is-tall" data-f="summary">${esc(chat.summary)}</textarea>`,
         actions: [
@@ -16993,11 +17233,11 @@ ${parsed.body}` : parsed.body;
           { label: "保存摘要", primary: !0, value: (box) => box.querySelector("[data-f=summary]").value }
         ]
       });
-      result != null && (result === "unfold" ? updateChat(view, (current) => ({
+      result2 != null && (result2 === "unfold" ? updateChat(view, (current) => ({
         ...current,
         summary: "",
         messages: current.messages.map((msg) => ({ ...msg, folded: !1 }))
-      })) : updateChat(view, (current) => ({ ...current, summary: result })), view.renderBody());
+      })) : updateChat(view, (current) => ({ ...current, summary: result2 })), view.renderBody());
     },
     // 说话人格对所有项目的讨论生效，存在插件设置里；留空用默认口吻。
     async persona(view) {
@@ -17021,10 +17261,10 @@ ${parsed.body}` : parsed.body;
       updateChat(view, (current) => ({ ...current, refs: { ...current.refs, floors } })), view.renderBody();
     },
     async "ref-wb"(view) {
-      let result = await pickRefs(view.data.chat(view.projectId).refs);
-      if (result) {
-        if (result.none) return toast("info", "当前卡没有关联的世界书。");
-        updateChat(view, (current) => ({ ...current, refs: { ...current.refs, memo: result.memo, wb: result.wb } })), view.renderBody();
+      let result2 = await pickRefs(view.data.chat(view.projectId).refs);
+      if (result2) {
+        if (result2.none) return toast("info", "当前卡没有关联的世界书。");
+        updateChat(view, (current) => ({ ...current, refs: { ...current.refs, memo: result2.memo, wb: result2.wb } })), view.renderBody();
       }
     },
     "to-setting"(view) {
@@ -17388,7 +17628,7 @@ ${suffix.trim()}` : body;
       body.innerHTML = step === "list" ? listHtml(books, picked) : previewHtml(plan()), box.querySelector("[data-f=count]").textContent = step === "list" ? `已选${picked.size}条` : "预览";
       for (let btn of box.querySelectorAll("[data-dlg]"))
         (btn.textContent === "返回选择" || btn.textContent === "转入") && (btn.hidden = step === "list"), btn.textContent === "预览" && (btn.hidden = step !== "list");
-    }, result = await openDialog({
+    }, result2 = await openDialog({
       title: "从世界书转入人设",
       html: '<p class="pi-hint is-warn" data-f="count"></p><div data-f="body"></div>',
       onMount: (box) => {
@@ -17421,7 +17661,7 @@ ${suffix.trim()}` : body;
         { label: "转入", primary: !0, value: () => ({ entries: chosen(), plan: plan() }) }
       ]
     });
-    return result ? commit2(view, result) : !1;
+    return result2 ? commit2(view, result2) : !1;
   }
   async function commit2(view, { entries, plan }) {
     let ok = entries.filter((entry) => !plan.blocked.has(idOf(entry)));
@@ -18294,9 +18534,9 @@ ${suffix.trim()}` : body;
       for (; ; ) {
         let presets = view.data.settings().presets;
         if (!presets.length) return view.renderBody();
-        let result = await pickPreset(presets);
-        if (!result) return;
-        let [act, id] = [result.slice(0, result.indexOf(":")), result.slice(result.indexOf(":") + 1)], preset = presets.find((item) => item.id === id);
+        let result2 = await pickPreset(presets);
+        if (!result2) return;
+        let [act, id] = [result2.slice(0, result2.indexOf(":")), result2.slice(result2.indexOf(":") + 1)], preset = presets.find((item) => item.id === id);
         if (!preset) return;
         if (act === "del") {
           await confirmDialog({
@@ -18821,8 +19061,8 @@ ${suffix.trim()}` : body;
   async function applyPatches(view, plan, { label, backup = !1 }) {
     let s = st8(view);
     await snap(view, label);
-    let result = await patchEntries(s.book, plan.map((item) => ({ key: item.key, patch: item.patch })));
-    backup && downloadBlob(`${s.book}-${label}前备份.json`, JSON.stringify(result, null, 2)), toast("success", `${label}：已修改${plan.length}条。`), await reloadBook(view);
+    let result2 = await patchEntries(s.book, plan.map((item) => ({ key: item.key, patch: item.patch })));
+    backup && downloadBlob(`${s.book}-${label}前备份.json`, JSON.stringify(result2, null, 2)), toast("success", `${label}：已修改${plan.length}条。`), await reloadBook(view);
   }
   async function regexDialog(scope) {
     let check = (f, label, on = !1) => `<label class="pi-check"><input type="checkbox" data-f="${f}"${on ? " checked" : ""}><span>${label}</span></label>`, html = `<label class="pi-field"><span>查找</span><input class="pi-inp is-mono" data-f="find" placeholder="如：旧名字 或 \\d+"></label>
@@ -18918,8 +19158,8 @@ ${suffix.trim()}` : body;
     async "book-rename"(view) {
       let from = st8(view).book, to = await promptDialog({ title: "重命名世界书", label: "新名称", value: from });
       if (to == null || to.trim() === from) return;
-      let result = await renameBook(from, to);
-      undoStacks.delete(from), result.failed.length ? toast("warning", `已另存为「${result.name}」，但${result.failed.join("、")}的绑定没能改过去，旧书「${from}」保留，请在酒馆里手动改绑定后删除。`) : toast("success", `已重命名为「${result.name}」。`), await openBook(view, result.name);
+      let result2 = await renameBook(from, to);
+      undoStacks.delete(from), result2.failed.length ? toast("warning", `已另存为「${result2.name}」，但${result2.failed.join("、")}的绑定没能改过去，旧书「${from}」保留，请在酒馆里手动改绑定后删除。`) : toast("success", `已重命名为「${result2.name}」。`), await openBook(view, result2.name);
     },
     async "book-copy"(view) {
       let s = st8(view), to = await promptDialog({ title: "另存副本", label: "副本名称", value: `${s.book}-副本` });
@@ -18935,8 +19175,8 @@ ${suffix.trim()}` : body;
       let s = st8(view), name = s.book;
       if (!await confirmDialog({ title: `删除世界书「${name}」`, body: "先下载整本备份，再删除并解除聊天、角色卡和全局的绑定，无法撤销。", list: [`${s.entries.length}条条目`], okLabel: "删除", danger: !0 })) return;
       downloadBlob(`${name}-备份.json`, JSON.stringify(await loadBook(name), null, 2));
-      let result = await removeBook(name);
-      undoStacks.delete(name), result.failed.length ? toast("warning", `已删除，但${result.failed.join("、")}的绑定没能解除，请在酒馆里检查。`) : toast("success", `已删除「${name}」。`), s.book = "", s.entries = null, s.extra = (s.extra || []).filter((item) => item !== name), view.renderBody();
+      let result2 = await removeBook(name);
+      undoStacks.delete(name), result2.failed.length ? toast("warning", `已删除，但${result2.failed.join("、")}的绑定没能解除，请在酒馆里检查。`) : toast("success", `已删除「${name}」。`), s.book = "", s.entries = null, s.extra = (s.extra || []).filter((item) => item !== name), view.renderBody();
     },
     "book-search"(view) {
       openSearch(view, "book");
@@ -19041,8 +19281,8 @@ ${suffix.trim()}` : body;
         downloadBlob(`${s.book}-迁移前备份.json`, JSON.stringify({ entries: Object.fromEntries(entries.map((entry) => [entry.key, raw.entries[entry.key]])) }, null, 2));
       }
       input2.move && await snap(view, "迁移（移动）");
-      let result = await transferEntries(s.book, input2.to, entries.map((entry) => entry.key), { move: input2.move });
-      toast("success", `已${input2.move ? "移动" : "复制"} ${result.copied}条到「${input2.to}」${result.created ? "（新建）" : ""}。`), s.picked = /* @__PURE__ */ new Set(), await reloadBook(view);
+      let result2 = await transferEntries(s.book, input2.to, entries.map((entry) => entry.key), { move: input2.move });
+      toast("success", `已${input2.move ? "移动" : "复制"} ${result2.copied}条到「${input2.to}」${result2.created ? "（新建）" : ""}。`), s.picked = /* @__PURE__ */ new Set(), await reloadBook(view);
     },
     "wb-adv"(view, target) {
       let s = st8(view), open = new Set(s.advOpen || []);
@@ -19055,9 +19295,9 @@ ${suffix.trim()}` : body;
     // 触发测试：文本框可贴文字，也可取最近 N 楼；按酒馆规则模拟当前书的触发（不含递归、概率、分组）。
     async "wb-trigger"(view) {
       let s = st8(view), entries = handwritten(s.entries || []), tk = tokenOf(s), row2 = (item, extra) => `<div class="pi-wb-hit"><span class="pi-wb-title" title="${esc(item.title)}">${esc(item.title)}</span><span class="pi-meta">${extra}${item.tokens} token</span></div>`, group = (name, list, extra) => list.length ? `<div class="pi-wb-sec-hd">${name}<small>${list.length}</small></div>${list.map((item) => row2(item, extra(item))).join("")}` : "", run = (box) => {
-        let text2 = box.querySelector('[data-f="text"]').value, globals = worldInfoMatchSettings(), result = triggerTest(entries, text2, tk, globals), body = group("常驻", result.constant, () => "") + group("关键词命中", result.keyword, (item) => `${esc(item.matched.join("、"))}：`);
+        let text2 = box.querySelector('[data-f="text"]').value, globals = worldInfoMatchSettings(), result2 = triggerTest(entries, text2, tk, globals), body = group("常驻", result2.constant, () => "") + group("关键词命中", result2.keyword, (item) => `${esc(item.matched.join("、"))}：`);
         box.querySelector('[data-f="result"]').innerHTML = `${body || '<p class="pi-hint">没有命中的条目</p>'}
-                <p class="pi-meta">合计${result.tokens.total} token（常驻${result.tokens.constant}，关键词${result.tokens.keyword}）</p>
+                <p class="pi-meta">合计${result2.tokens.total} token（常驻${result2.tokens.constant}，关键词${result2.tokens.keyword}）</p>
                 <p class="pi-meta">未计算递归、概率、分组与扫描深度</p>${globals.known ? "" : '<p class="pi-meta">未读到酒馆全局匹配设置，按不区分大小写、不全词匹配计算</p>'}`;
       };
       await openDialog({
@@ -19502,7 +19742,7 @@ ${suffix.trim()}` : body;
     }
     async function newProject2() {
       setDrawer(!1);
-      let current2 = data.index().projects.find((item) => item.id === view.projectId), result = await openDialog({
+      let current2 = data.index().projects.find((item) => item.id === view.projectId), result2 = await openDialog({
         title: "新项目",
         html: `<label class="pi-field"><span>项目名</span><input class="pi-inp" data-f="name" placeholder="如：龙宫温养"></label>
                 <p class="pi-hint">一个项目保存一个故事的设定、人设、大纲和进度。每个聊天同时使用一个项目；当前聊天还没有项目时，会直接使用新项目。主线、支线都写在同一个项目的大纲里。</p>
@@ -19525,12 +19765,12 @@ ${suffix.trim()}` : body;
           }
         ]
       });
-      if (!result) return;
-      if (result === "import-file") return importProjectFile(current2 && current2.group ? current2.group : "");
-      let name = result.name;
+      if (!result2) return;
+      if (result2 === "import-file") return importProjectFile(current2 && current2.group ? current2.group : "");
+      let name = result2.name;
       try {
-        let project = await data.createProject(name, result.group, result.mode);
-        result.trpg && result.mode !== "infinite" && setTrpg(project.id, !0), !runtime.activeId() && cardKey() && await runtime.switchProject(project.id), await selectProject(project.id, "discuss");
+        let project = await data.createProject(name, result2.group, result2.mode);
+        result2.trpg && result2.mode !== "infinite" && setTrpg(project.id, !0), !runtime.activeId() && cardKey() && await runtime.switchProject(project.id), await selectProject(project.id, "discuss");
       } catch (error) {
         toast("error", `新建失败：${error.message}`);
       }
@@ -19590,7 +19830,7 @@ ${suffix.trim()}` : body;
       let meta2 = data.index().projects.find((item) => item.id === id);
       if (!meta2) return;
       data.project(id) || await data.loadProject(id);
-      let mode2 = data.project(id) ? data.project(id).mode : "normal", result = await openDialog({
+      let mode2 = data.project(id) ? data.project(id).mode : "normal", result2 = await openDialog({
         title: "编辑项目",
         html: `<label class="pi-field"><span>名称</span><input class="pi-inp" data-f="name" value="${esc(meta2.name)}"></label>
                 ${groupField(meta2.group || "")}
@@ -19612,8 +19852,8 @@ ${suffix.trim()}` : body;
           }
         ]
       });
-      if (result) {
-        if (result === "delete") {
+      if (result2) {
+        if (result2 === "delete") {
           if (!await confirmDialog({
             title: `删除「${meta2.name}」`,
             body: "将删除以下文件，聊天里记录的该项目进度保留。",
@@ -19629,7 +19869,7 @@ ${suffix.trim()}` : body;
           }
           return;
         }
-        data.project(id) || await data.loadProject(id), data.renameProject(id, result.name, result.group), result.mode !== mode2 && data.updateProject(id, (project) => ({ ...project, mode: result.mode, infinite: normalizeInfinite(project.infinite) })), result.trpg !== null && result.trpg !== isTrpg(data.project(id)) && setTrpg(id, result.trpg && result.mode !== "infinite"), runtime.refresh(), render12();
+        data.project(id) || await data.loadProject(id), data.renameProject(id, result2.name, result2.group), result2.mode !== mode2 && data.updateProject(id, (project) => ({ ...project, mode: result2.mode, infinite: normalizeInfinite(project.infinite) })), result2.trpg !== null && result2.trpg !== isTrpg(data.project(id)) && setTrpg(id, result2.trpg && result2.mode !== "infinite"), runtime.refresh(), render12();
       }
     }
     function onClick(event) {
@@ -19795,7 +20035,7 @@ ${suffix.trim()}` : body;
   }
 
   // src/index.js
-  var VERSION = "0.3.8", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.3.9", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")

@@ -146,7 +146,7 @@ test('机械判定：CoC 规则', () => {
     assert.deepEqual(T.cocJudge(23, 60, '困难'), { tier: '困难成功', ok: true, need: 30 });
     assert.deepEqual(T.cocJudge(40, 60, '困难'), { tier: '成功', ok: false, need: 30 });
     assert.deepEqual(T.cocJudge(12, 60, '极难'), { tier: '极难成功', ok: true, need: 12 });
-    assert.equal(T.cocJudge(1, 10, '极难').ok, true, '01 大成功');
+    assert.equal(T.cocJudge(5, 10, '极难').tier, '大成功', '≤5 大成功');
     assert.deepEqual(T.cocJudge(97, 40), { tier: '大失败', ok: false, need: 40 });
     assert.deepEqual(T.cocJudge(97, 60), { tier: '失败', ok: false, need: 60 });
     assert.equal(T.cocJudge(100, 99).tier, '大失败');

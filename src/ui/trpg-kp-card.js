@@ -3,6 +3,8 @@ import { esc, menuDialog } from './dom.js';
 import { chatMessages, toast } from '../host/st.js';
 import { chatFactSets } from '../core/clue-project.js';
 import { trpgCheckResults } from '../core/trpg.js';
+import { steerActions, sceneHintHtml, timelineHintHtml, steerResultHtml } from './trpg-steer.js';
+import { readGameClock } from '../core/trpg-timeline.js';
 import { trpgHealth, kpPushTarget, aiFloorCount, KP_LEVELS, KP_STUCK_ROUNDS } from '../core/trpg-kp.js';
 
 // 体检结果只留在内存里，换项目就丢
@@ -33,10 +35,14 @@ export function kpCard(view, project, c, d) {
         push = kp.push && kp.push.floor === floors ? kp.push : null,
         mine = shown && shown.projectId === project.id ? shown : null,
         leaks = d && d.lastAudit ? (d.lastAudit.leaks || []).filter((l) => l.level === 'leak').length : 0,
-        pushLabel = push ? (KP_LEVELS.find((x) => x.level === push.level) || {}).label : '';
+        pushLabel = push ? (push.kind === 'steer' ? '按建议拉回' : (KP_LEVELS.find((x) => x.level === push.level) || {}).label) : '',
+        busy = view.busy['kp-steer'],
+        bind = project.clue.bindings.time;
     return `<div class="pi-card"><h3>KP<span class="pi-spacer"></span>
         <button type="button" class="pi-btn is-sm" data-act="kp-health">这局还顺吗</button>
+        <button type="button" class="pi-btn is-sm" data-act="kp-steer"${busy ? ' disabled' : ''}>${busy ? '<span class="pi-spin"></span>检查中' : '对照剧本'}</button>
         <button type="button" class="pi-btn is-sm" data-act="kp-stuck">我卡住了</button></h3>
+        ${sceneHintHtml(c)}${timelineHintHtml(project, readGameClock(c.snap.tables, bind && bind.路径))}${steerResultHtml(project)}
         ${
             mine
                 ? `<p class="pi-hint"><span class="pi-badge ${BADGE[mine.level][0]}">${BADGE[mine.level][1]}</span> ${esc(mine.lines.join('；'))}${
@@ -55,10 +61,11 @@ export function kpCard(view, project, c, d) {
 }
 
 export const kpActions = {
+    ...steerActions,
     'kp-health'(view) {
         let c = view.runtime.clue.compute();
         if (!c) return;
-        let r = trpgHealth({ volumes: c.outline.volumes, state: c.state, snap: c.snap, prog: c.prog, checks: trpgCheckResults(chatMessages()) });
+        let r = trpgHealth({ volumes: c.outline.volumes, state: c.state, snap: c.snap, prog: c.prog, checks: trpgCheckResults(chatMessages()), focus: c.state.focus });
         ((shown = { ...r, projectId: view.projectId, open: !1 }), view.renderBody());
     },
     'kp-spoil'(view) {

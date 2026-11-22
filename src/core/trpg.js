@@ -231,12 +231,12 @@ export function parseRoll(text, skill = '') {
     return w ? { word: w[1] } : null;
 }
 
-// CoC 7 版：01 大成功；100（技能值不到 50 时 96 以上）大失败；≤1/5 极难、≤1/2 困难、≤技能值 成功。达到要求的难度才算过。
+// CoC 7 版：≤5 大成功；100（技能值不到 50 时 96 以上）大失败；≤1/5 极难、≤1/2 困难、≤技能值 成功。达到要求的难度才算过。
 export function cocJudge(die, value, level = '普通') {
     let fumble = die >= 100 || (value < 50 && die >= 96),
-        tier = die === 1 ? '大成功' : fumble ? '大失败' : die <= Math.floor(value / 5) ? '极难成功' : die <= Math.floor(value / 2) ? '困难成功' : die <= value ? '成功' : '失败',
+        tier = die <= 5 ? '大成功' : fumble ? '大失败' : die <= Math.floor(value / 5) ? '极难成功' : die <= Math.floor(value / 2) ? '困难成功' : die <= value ? '成功' : '失败',
         need = level === '极难' ? Math.floor(value / 5) : level === '困难' ? Math.floor(value / 2) : value;
-    return { tier, ok: die === 1 || (!fumble && die <= need), need };
+    return { tier, ok: die <= 5 || (!fumble && die <= need), need };
 }
 
 // messages = 酒馆聊天数组；返回 { 编号: { ok, tier, die, value, level, skill, at } }
