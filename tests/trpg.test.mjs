@@ -260,3 +260,17 @@ test('KP 规则：小标题降级、加上 KP 资料说明、成为一个设定�
     assert.deepEqual(blocks.map((b) => b.key), ['背景', 'KP规则']);
     assert.equal(T.kpBlockText(''), '');
 });
+
+test('IGS 技能值：用户只写骰点、请求没写技能值时，用 IGS 调查员档的技能值判；没有 IGS 时照旧', () => {
+    const chat = [{ is_user: false, mes: '【检定】{{user}}：侦查（普通）#F09' }, { is_user: true, mes: '1D100=65' }];
+    try {
+        T.setIgsView({ IGS: { stats: { investigator: () => ({ sheet: true, skills: { 侦查: 70 } }) } } });
+        const on = T.trpgCheckResults(chat).F09;
+        assert.equal(on?.value, 70);
+        assert.equal(on?.ok, true);
+        T.setIgsView(null);
+        assert.equal(T.trpgCheckResults(chat).F09, undefined);
+    } finally {
+        T.setIgsView(null);
+    }
+});

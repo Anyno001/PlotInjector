@@ -1,4 +1,4 @@
-// PlotInjector v0.3.9
+// PlotInjector v0.3.10
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -2428,9 +2428,23 @@ ${lines2.join(`
   var CHECK_MODES = [
     { value: "text", label: "正文里写一行【检定】" },
     { value: "anke", label: "论坛安科（IGS 论坛点 ROLL）" }
-  ], CHECK_RESULT = "成败由插件按骰点算好，写在本轮材料里：材料里写「判定成功」的，这一轮写出那条发现；写「判定失败」的，按失败写，不要写出也不要暗示那条发现；还是「待判定」的说明用户还没掷，不要自己判断成败，也不要猜测会发现什么。用户消息里的骰点不用你来算。用户说成功了、本轮材料里却没有对应的「判定成功」条目时，只写到判定成功、开始有所发现的那一刻，具体发现了什么留到下一轮，绝不要自己编。理智检定不受这条限制：用户掷完后按模组的理智损失结算。", CHECK_RULE = `「待判定」的发现：玩家的行动到了这一步时，在正文末尾写出检定请求「【检定】谁：技能 技能值（难度）#编号」，如「【检定】{{user}}：侦查 60（困难）#F03」。技能从材料里写的技能中挑最合适的一个；技能值从调查员资料里取，查不到就不写；编号照抄材料里的 #编号。写到掷骰之前就停下，不替玩家掷骰，不写结果。暗骰同样写请求，只写技能，不说明在查什么。${CHECK_RESULT}`, CHECK_RULE_ANKE = `「待判定」的发现：玩家的行动到了这一步时，在正文最末另起一行写一个检定安科 [igs-anke:检定|问题|对象|技能|技能值|难度|编号]：问题用楼主的口吻对网友说；对象写真正去做这件事的人（楼主、角色名或 {{user}}）；技能从材料里写的技能中挑最合适的一个；技能值从调查员资料里取，查不到写 50；难度写 普通、困难或极难；编号照抄材料里的 #编号（不带 #）。理智检定也用它，技能写「理智」、技能值写当前理智值、编号写 SAN。写到掷骰之前就停下，不替玩家掷骰，不写结果。${CHECK_RESULT}`;
-  function checkRule(settings) {
-    return settings && settings.trpgCheck === "anke" ? CHECK_RULE_ANKE : CHECK_RULE;
+  ], CHECK_RESULT = "成败由插件按骰点算好，写在本轮材料里：材料里写「判定成功」的，这一轮写出那条发现；写「判定失败」的，按失败写，不要写出也不要暗示那条发现；还是「待判定」的说明用户还没掷，不要自己判断成败，也不要猜测会发现什么。用户消息里的骰点不用你来算。用户说成功了、本轮材料里却没有对应的「判定成功」条目时，只写到判定成功、开始有所发现的那一刻，具体发现了什么留到下一轮，绝不要自己编。理智检定不受这条限制：用户掷完后按模组的理智损失结算。", CHECK_RULE = `「待判定」的发现：玩家的行动到了这一步时，在正文末尾写出检定请求「【检定】谁：技能 技能值（难度）#编号」，如「【检定】{{user}}：侦查 60（困难）#F03」。技能从材料里写的技能中挑最合适的一个；技能值从调查员资料里取，查不到就不写；编号照抄材料里的 #编号。写到掷骰之前就停下，不替玩家掷骰，不写结果。暗骰同样写请求，只写技能，不说明在查什么。${CHECK_RESULT}`, CHECK_RULE_ANKE = `「待判定」的发现：玩家的行动到了这一步时，在正文最末另起一行写一个检定安科 [igs-anke:检定|问题|对象|技能|技能值|难度|编号]：问题用楼主的口吻对网友说；对象写真正去做这件事的人（楼主、角色名或 {{user}}）；技能从材料里写的技能中挑最合适的一个；技能值从调查员资料里取，查不到写 50；难度写 普通、困难或极难；编号照抄材料里的 #编号（不带 #）。理智检定也用它，技能写「理智」、技能值写当前理智值、编号写 SAN。写到掷骰之前就停下，不替玩家掷骰，不写结果。${CHECK_RESULT}`, igsView = null;
+  function setIgsView(v) {
+    igsView = v || null;
+  }
+  function igsSkillValue(skill) {
+    try {
+      let inv = igsView?.IGS?.stats?.investigator?.(), v = inv && inv.sheet && inv.skills ? inv.skills[skill] : null;
+      return typeof v == "number" && Number.isFinite(v) ? v : null;
+    } catch {
+      return null;
+    }
+  }
+  function checkRule(settings, skills) {
+    let rule = settings && settings.trpgCheck === "anke" ? CHECK_RULE_ANKE : CHECK_RULE;
+    if (!Array.isArray(skills)) return rule;
+    let list = [...new Set(skills)].map((k) => [k, igsSkillValue(k)]).filter(([, v]) => v != null);
+    return list.length ? `${rule}可用的技能值：${list.map(([k, v]) => `${k} ${v}`).join("、")}。` : rule;
   }
   function hasChecks(list) {
     return (list || []).some((d) => d && d.check);
@@ -2588,7 +2602,7 @@ ${u.yaml}`].filter(Boolean).join(`
       if (!req) return;
       let roll = parseRoll(text2, req.skill);
       if (!roll) return;
-      let value = roll.value || req.value, res = roll.die != null && value ? { ...cocJudge(roll.die, value, req.level), die: roll.die } : roll.word ? { tier: roll.word, ok: !/失败/.test(roll.word), die: null } : null;
+      let value = roll.value || req.value || igsSkillValue(req.skill), res = roll.die != null && value ? { ...cocJudge(roll.die, value, req.level), die: roll.die } : roll.word ? { tier: roll.word, ok: !/失败/.test(roll.word), die: null } : null;
       res && (out[req.code] = { ...res, value, level: req.level, skill: req.skill, at }, open = open.filter((o) => o !== req));
     });
     let last = -1;
@@ -3868,7 +3882,7 @@ ${u.yaml}`].filter(Boolean).join(`
         let ck = checkLine(d, checks);
         lines2.push(ck ? ck.line : `- ${d.text}`), used.discoveries.push(d.fact || d.text.slice(0, 20)), d.fact && (!ck || ck.reveal) && used.candidates.push({ fact: d.fact, record: d.record });
       }), // 跑团模式：有带判定的发现时，加一条检定写法（没有判定时什么都不加）
-      hasChecks(pending) && lines2.push(checkRule(settings)));
+      hasChecks(pending) && lines2.push(checkRule(settings, [...new Set(pending.flatMap((d) => d && d.check && d.check.skills || []))])));
       let holdersOf = (id) => [
         ...new Set(
           (snapshot.knowledge || []).filter((row2) => row2.fact === id && clueText(row2.actor)).map((row2) => `${clueText(row2.actor)}${row2.verified === !0 ? "" : `（${clueText(row2.credibility) || "未核实"}）`}`)
@@ -5069,7 +5083,7 @@ ${guide ? `${guide}
   function trpgHealth({ volumes, state, snap: snap2, prog, checks, focus }) {
     let { known, claimed } = chatFactSets({ snap: snap2, prog }), dead = deadDiscoveries(state, snap2, prog, checks), deadSet = new Set(dead.map((d) => d.fact)), opts = { knownFacts: known, claimedFacts: claimed }, reach = clueReachability(stripFacts(volumes || [], deadSet), opts), base = dead.length ? clueReachability(volumes || [], opts) : reach, lines2 = [], spoil = [];
     reach.verdict === "ok" ? lines2.push(dead.length ? `有${dead.length}条判定失败的线索，暂时不影响主线` : "主线走得通") : reach.verdict === "blocked" ? lines2.push(
-      dead.length && base.verdict !== "blocked" ? `有${dead.length}条判定失败的线索，主线因此卡住，可以用「我卡住了」补救` : "主线现在走不通，需要检查剧本或表格"
+      dead.length && base.verdict !== "blocked" ? `有${dead.length}条判定失败的线索，主线因此卡住，可以在下面推一把` : "主线现在走不通，需要检查剧本或表格"
     ) : lines2.push("走不走得通要看表格或时间");
     let live2 = [...state.stageStates.values()].find((s) => s.entered.v === "true" && !s.done);
     live2 && live2.requiredLeft.length && lines2.push(`当前阶段还差${live2.requiredLeft.length}个必需节点`);
@@ -8223,7 +8237,9 @@ ${horrorGuide}` : "",
   // src/app/runtime.js
   var VIRTUAL_WORLD = "剧情注入器", LOG_MAX2 = 40, PENDING_MAX_MS = 3e4, CHECK_RETRIES = 3, RETRY_GAP_MS = 2e3, WORLD_RETRIES = 2, WORLD_WAIT_MS = 9e4, placeOf = (unit) => `${volumeLabel(unit.volume.key)}·${stageLabel(unit.stage.key)}`;
   function createRuntime({ data, notice, emit, askReason = async () => "" }) {
-    let view = hostWindow(), progress = null, progressFor = "", alignedFrom = null, alignedOutline = null, alignedPersonas = null, checking = !1, fallbackTimer = 0, generating = !1, chatStartFloors = 0, pendingCheck = !1, pendingTimer = 0, opening = !1, openGen = 0, openPromise = Promise.resolve(null), pendingTrigger = null, lastRead = null, listeners = [], stats = {}, logs = [];
+    let view = hostWindow();
+    setIgsView(view);
+    let progress = null, progressFor = "", alignedFrom = null, alignedOutline = null, alignedPersonas = null, checking = !1, fallbackTimer = 0, generating = !1, chatStartFloors = 0, pendingCheck = !1, pendingTimer = 0, opening = !1, openGen = 0, openPromise = Promise.resolve(null), pendingTrigger = null, lastRead = null, listeners = [], stats = {}, logs = [];
     function log(text2) {
       logs.push({ at: Date.now(), text: text2 }), logs.length > LOG_MAX2 && logs.shift();
     }
@@ -11213,7 +11229,7 @@ ${block}`
   function sceneHintHtml(c) {
     if (!c || !KP_UNSET_SOURCES.includes(c.state.focus.source)) return "";
     let nodes = c.state.nodeStates.filter((ns) => (ns.status === "available" || ns.status === "active") && !ns.disabled && ns.node.uid);
-    return `<div class="pi-hint is-warn">${KP_UNSET_HINT}${nodes.length ? ` <select class="pi-sel" data-kp-scene>${nodes.map((ns) => `<option value="${esc(ns.node.uid)}">${esc(nodeName(ns))}</option>`).join("")}</select> <button type="button" class="pi-btn is-sm" data-act="kp-scene">设为本轮场景</button>` : ""}</div>`;
+    return `<p class="pi-hint is-warn">${KP_UNSET_HINT}</p>${nodes.length ? `<div class="pi-row"><select class="pi-sel pi-grow" data-kp-scene>${nodes.map((ns) => `<option value="${esc(ns.node.uid)}">${esc(nodeName(ns))}</option>`).join("")}</select><button type="button" class="pi-btn is-sm" data-act="kp-scene">设为本轮场景</button></div>` : ""}`;
   }
   function timelineHintHtml(project, now) {
     return now == null && parseTimeline(project.setting && project.setting.text).length ? '<p class="pi-hint">没有读到游戏内时间，时间线不会自动推进。</p>' : "";
@@ -11273,7 +11289,7 @@ ${block}`
   };
 
   // src/ui/trpg-kp-card.js
-  var shown = null, BADGE = { ok: ["is-ok", "顺"], warn: ["is-warn", "要留意"], bad: ["is-warn", "卡住了"] };
+  var shown = null, BADGE = { ok: ["is-ok", "顺利进行"], warn: ["is-warn", "小心探索"], bad: ["is-warn", "卡住了"] };
   function kpState(view) {
     return (view.runtime.progress() || {}).trpgKp || {};
   }
@@ -11289,31 +11305,31 @@ ${block}`
     });
     let stuck = kp.pulse && kp.pulse.facts === confirmed ? floors - kp.pulse.floor : 0, push = kp.push && kp.push.floor === floors ? kp.push : null, mine = shown && shown.projectId === project.id ? shown : null, leaks = d && d.lastAudit ? (d.lastAudit.leaks || []).filter((l) => l.level === "leak").length : 0, pushLabel = push ? push.kind === "steer" ? "按建议拉回" : (KP_LEVELS.find((x) => x.level === push.level) || {}).label : "", busy = view.busy["kp-steer"], bind = project.clue.bindings.time;
     return `<div class="pi-card"><h3>KP<span class="pi-spacer"></span>
-        <button type="button" class="pi-btn is-sm" data-act="kp-health">这局还顺吗</button>
-        <button type="button" class="pi-btn is-sm" data-act="kp-steer"${busy ? " disabled" : ""}>${busy ? '<span class="pi-spin"></span>检查中' : "对照剧本"}</button>
-        <button type="button" class="pi-btn is-sm" data-act="kp-stuck">我卡住了</button></h3>
+        <button type="button" class="pi-btn is-sm" data-act="kp-health" title="推演凭已经拿到的线索，主线还能不能走通，并可以推一把；只给结论，展开才剧透">卡住了吗</button>
+        <button type="button" class="pi-btn is-sm" data-act="kp-steer" title="对照最近的正文和模组原文，看正文有没有跑偏"${busy ? " disabled" : ""}>${busy ? '<span class="pi-spin"></span>检查中' : "对照剧本"}</button></h3>
         ${sceneHintHtml(c)}${timelineHintHtml(project, readGameClock(c.snap.tables, bind && bind.路径))}${steerResultHtml(project)}
-        ${mine ? `<p class="pi-hint"><span class="pi-badge ${BADGE[mine.level][0]}">${BADGE[mine.level][1]}</span> ${esc(mine.lines.join("；"))}${mine.spoil.length ? ` <button type="button" class="pi-btn is-sm is-ghost" data-act="kp-spoil">${mine.open ? "收起" : "展开（会剧透）"}</button>` : ""}</p>${mine.open ? mine.spoil.map((t) => `<p class="pi-hint">${esc(t)}</p>`).join("") : ""}${leaks ? `<p class="pi-hint is-warn">最近一次请求里疑似提前写出了${leaks}处线索</p>` : ""}` : ""}
+        ${mine ? `<p class="pi-hint"><span class="pi-badge ${BADGE[mine.level][0]}">${BADGE[mine.level][1]}</span> ${esc(mine.lines.join("；"))}${mine.spoil.length ? ` <button type="button" class="pi-btn is-sm is-ghost" data-act="kp-spoil">${mine.open ? "收起" : "展开（会剧透）"}</button>` : ""}</p>${mine.open ? mine.spoil.map((t) => `<p class="pi-hint">${esc(t)}</p>`).join("") : ""}${leaks ? `<p class="pi-hint is-warn">最近一次请求里疑似提前写出了${leaks}处线索</p>` : ""}${mine.fact && !push ? `<p class="pi-hint">要推一把的话，下一轮：</p><div class="pi-tools is-c3">${KP_LEVELS.map((x) => `<button type="button" class="pi-btn is-sm" data-act="kp-push" data-level="${x.level}">${esc(x.label)}</button>`).join("")}</div>` : mine.fact || push ? "" : '<p class="pi-hint">眼下没有能推的线索。</p>'}` : ""}
         ${push ? `<p class="pi-hint">下一轮：${esc(pushLabel)} <button type="button" class="pi-btn is-sm is-ghost" data-act="kp-cancel">取消</button></p>` : ""}
-        ${stuck >= KP_STUCK_ROUNDS && !push ? `<p class="pi-hint is-warn">已经${stuck}轮没拿到新线索，要不要推一把？ <button type="button" class="pi-btn is-sm" data-act="kp-stuck">我卡住了</button></p>` : ""}</div>`;
+        ${stuck >= KP_STUCK_ROUNDS && !push ? `<p class="pi-hint is-warn">已经${stuck}轮没拿到新线索，要不要推一把？ <button type="button" class="pi-btn is-sm" data-act="kp-health">卡住了吗</button></p>` : ""}</div>`;
   }
   var kpActions = {
     ...steerActions,
     "kp-health"(view) {
       let c = view.runtime.clue.compute();
       if (!c) return;
-      shown = { ...trpgHealth({ volumes: c.outline.volumes, state: c.state, snap: c.snap, prog: c.prog, checks: trpgCheckResults(chatMessages()), focus: c.state.focus }), projectId: view.projectId, open: !1 }, view.renderBody();
+      let r = trpgHealth({ volumes: c.outline.volumes, state: c.state, snap: c.snap, prog: c.prog, checks: trpgCheckResults(chatMessages()), focus: c.state.focus }), target = kpPushTarget(c.state, c.snap, c.prog);
+      shown = { ...r, fact: target ? target.fact : "", projectId: view.projectId, open: !1 }, view.renderBody();
     },
     "kp-spoil"(view) {
       shown && (shown.open = !shown.open), view.renderBody();
     },
-    async "kp-stuck"(view) {
+    // 推的目标按点击时重新选（体检之后可能已经拿到了那条线索）
+    "kp-push"(view, target) {
       let c = view.runtime.clue.compute();
       if (!c) return;
-      let target = kpPushTarget(c.state, c.snap, c.prog);
-      if (!target) return toast("info", "眼下没有能推的线索。");
-      let pick = await menuDialog({ title: "推一把", items: KP_LEVELS.map((x) => ({ label: x.label, value: String(x.level) })) });
-      pick && (saveKp(view, { push: { fact: target.fact, level: Number(pick), floor: aiFloorCount(chatMessages()) } }), view.renderBody());
+      let t = kpPushTarget(c.state, c.snap, c.prog);
+      if (!t) return toast("info", "眼下没有能推的线索。"), view.renderBody();
+      saveKp(view, { push: { fact: t.fact, level: Number(target.dataset.level), floor: aiFloorCount(chatMessages()) } }), view.renderBody();
     },
     "kp-cancel"(view) {
       saveKp(view, { push: null }), view.renderBody();
@@ -20035,7 +20051,7 @@ ${suffix.trim()}` : body;
   }
 
   // src/index.js
-  var VERSION = "0.3.9", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.3.10", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")

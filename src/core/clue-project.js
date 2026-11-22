@@ -506,7 +506,7 @@ export function buildClueProjection(
                         d.fact && (!ck || ck.reveal) && used.candidates.push({ fact: d.fact, record: d.record }));
                 }),
                 // 跑团模式：有带判定的发现时，加一条检定写法（没有判定时什么都不加）
-                hasChecks(pending) && lines.push(checkRule(settings))));
+                hasChecks(pending) && lines.push(checkRule(settings, [...new Set(pending.flatMap((d) => (d && d.check && d.check.skills) || []))]))));
         let holdersOf = (id) => [
                 ...new Set(
                     (snapshot.knowledge || [])

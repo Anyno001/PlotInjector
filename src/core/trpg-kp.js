@@ -75,7 +75,7 @@ export function trpgHealth({ volumes, state, snap, prog, checks, focus }) {
     else if (reach.verdict === 'blocked')
         lines.push(
             dead.length && base.verdict !== 'blocked'
-                ? `有${dead.length}条判定失败的线索，主线因此卡住，可以用「我卡住了」补救`
+                ? `有${dead.length}条判定失败的线索，主线因此卡住，可以在下面推一把`
                 : '主线现在走不通，需要检查剧本或表格',
         );
     else lines.push('走不走得通要看表格或时间');

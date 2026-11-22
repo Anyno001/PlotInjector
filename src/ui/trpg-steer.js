@@ -23,11 +23,11 @@ function nodeName(ns) {
 export function sceneHintHtml(c) {
     if (!c || !KP_UNSET_SOURCES.includes(c.state.focus.source)) return '';
     let nodes = c.state.nodeStates.filter((ns) => (ns.status === 'available' || ns.status === 'active') && !ns.disabled && ns.node.uid);
-    return `<div class="pi-hint is-warn">${KP_UNSET_HINT}${
+    return `<p class="pi-hint is-warn">${KP_UNSET_HINT}</p>${
         nodes.length
-            ? ` <select class="pi-sel" data-kp-scene>${nodes.map((ns) => `<option value="${esc(ns.node.uid)}">${esc(nodeName(ns))}</option>`).join('')}</select> <button type="button" class="pi-btn is-sm" data-act="kp-scene">设为本轮场景</button>`
+            ? `<div class="pi-row"><select class="pi-sel pi-grow" data-kp-scene>${nodes.map((ns) => `<option value="${esc(ns.node.uid)}">${esc(nodeName(ns))}</option>`).join('')}</select><button type="button" class="pi-btn is-sm" data-act="kp-scene">设为本轮场景</button></div>`
             : ''
-    }</div>`;
+    }`;
 }
 
 // 有时间线但没读到游戏内时间

@@ -1,5 +1,5 @@
-// 跑团模式执行页的「KP」卡：体检、我卡住了、察觉卡关。逻辑在 core/trpg-kp.js。
-import { esc, menuDialog } from './dom.js';
+// 跑团模式执行页的「KP」卡：卡住了吗（体检+推一把）、对照剧本、察觉卡关。逻辑在 core/trpg-kp.js。
+import { esc } from './dom.js';
 import { chatMessages, toast } from '../host/st.js';
 import { chatFactSets } from '../core/clue-project.js';
 import { trpgCheckResults } from '../core/trpg.js';
@@ -10,7 +10,7 @@ import { trpgHealth, kpPushTarget, aiFloorCount, KP_LEVELS, KP_STUCK_ROUNDS } fr
 // 体检结果只留在内存里，换项目就丢
 let shown = null;
 
-const BADGE = { ok: ['is-ok', '顺'], warn: ['is-warn', '要留意'], bad: ['is-warn', '卡住了'] };
+const BADGE = { ok: ['is-ok', '顺利进行'], warn: ['is-warn', '小心探索'], bad: ['is-warn', '卡住了'] };
 
 function kpState(view) {
     return (view.runtime.progress() || {}).trpgKp || {};
@@ -39,9 +39,8 @@ export function kpCard(view, project, c, d) {
         busy = view.busy['kp-steer'],
         bind = project.clue.bindings.time;
     return `<div class="pi-card"><h3>KP<span class="pi-spacer"></span>
-        <button type="button" class="pi-btn is-sm" data-act="kp-health">这局还顺吗</button>
-        <button type="button" class="pi-btn is-sm" data-act="kp-steer"${busy ? ' disabled' : ''}>${busy ? '<span class="pi-spin"></span>检查中' : '对照剧本'}</button>
-        <button type="button" class="pi-btn is-sm" data-act="kp-stuck">我卡住了</button></h3>
+        <button type="button" class="pi-btn is-sm" data-act="kp-health" title="推演凭已经拿到的线索，主线还能不能走通，并可以推一把；只给结论，展开才剧透">卡住了吗</button>
+        <button type="button" class="pi-btn is-sm" data-act="kp-steer" title="对照最近的正文和模组原文，看正文有没有跑偏"${busy ? ' disabled' : ''}>${busy ? '<span class="pi-spin"></span>检查中' : '对照剧本'}</button></h3>
         ${sceneHintHtml(c)}${timelineHintHtml(project, readGameClock(c.snap.tables, bind && bind.路径))}${steerResultHtml(project)}
         ${
             mine
@@ -49,13 +48,17 @@ export function kpCard(view, project, c, d) {
                       mine.spoil.length ? ` <button type="button" class="pi-btn is-sm is-ghost" data-act="kp-spoil">${mine.open ? '收起' : '展开（会剧透）'}</button>` : ''
                   }</p>${mine.open ? mine.spoil.map((t) => `<p class="pi-hint">${esc(t)}</p>`).join('') : ''}${
                       leaks ? `<p class="pi-hint is-warn">最近一次请求里疑似提前写出了${leaks}处线索</p>` : ''
+                  }${
+                      mine.fact && !push
+                          ? `<p class="pi-hint">要推一把的话，下一轮：</p><div class="pi-tools is-c3">${KP_LEVELS.map((x) => `<button type="button" class="pi-btn is-sm" data-act="kp-push" data-level="${x.level}">${esc(x.label)}</button>`).join('')}</div>`
+                          : mine.fact || push ? '' : '<p class="pi-hint">眼下没有能推的线索。</p>'
                   }`
                 : ''
         }
         ${push ? `<p class="pi-hint">下一轮：${esc(pushLabel)} <button type="button" class="pi-btn is-sm is-ghost" data-act="kp-cancel">取消</button></p>` : ''}
         ${
             stuck >= KP_STUCK_ROUNDS && !push
-                ? `<p class="pi-hint is-warn">已经${stuck}轮没拿到新线索，要不要推一把？ <button type="button" class="pi-btn is-sm" data-act="kp-stuck">我卡住了</button></p>`
+                ? `<p class="pi-hint is-warn">已经${stuck}轮没拿到新线索，要不要推一把？ <button type="button" class="pi-btn is-sm" data-act="kp-health">卡住了吗</button></p>`
                 : ''
         }</div>`;
 }
@@ -65,20 +68,20 @@ export const kpActions = {
     'kp-health'(view) {
         let c = view.runtime.clue.compute();
         if (!c) return;
-        let r = trpgHealth({ volumes: c.outline.volumes, state: c.state, snap: c.snap, prog: c.prog, checks: trpgCheckResults(chatMessages()), focus: c.state.focus });
-        ((shown = { ...r, projectId: view.projectId, open: !1 }), view.renderBody());
+        let r = trpgHealth({ volumes: c.outline.volumes, state: c.state, snap: c.snap, prog: c.prog, checks: trpgCheckResults(chatMessages()), focus: c.state.focus }),
+            target = kpPushTarget(c.state, c.snap, c.prog);
+        ((shown = { ...r, fact: target ? target.fact : '', projectId: view.projectId, open: !1 }), view.renderBody());
     },
     'kp-spoil'(view) {
         (shown && (shown.open = !shown.open), view.renderBody());
     },
-    async 'kp-stuck'(view) {
+    // 推的目标按点击时重新选（体检之后可能已经拿到了那条线索）
+    'kp-push'(view, target) {
         let c = view.runtime.clue.compute();
         if (!c) return;
-        let target = kpPushTarget(c.state, c.snap, c.prog);
-        if (!target) return toast('info', '眼下没有能推的线索。');
-        let pick = await menuDialog({ title: '推一把', items: KP_LEVELS.map((x) => ({ label: x.label, value: String(x.level) })) });
-        if (!pick) return;
-        (saveKp(view, { push: { fact: target.fact, level: Number(pick), floor: aiFloorCount(chatMessages()) } }), view.renderBody());
+        let t = kpPushTarget(c.state, c.snap, c.prog);
+        if (!t) return (toast('info', '眼下没有能推的线索。'), view.renderBody());
+        (saveKp(view, { push: { fact: t.fact, level: Number(target.dataset.level), floor: aiFloorCount(chatMessages()) } }), view.renderBody());
     },
     'kp-cancel'(view) {
         (saveKp(view, { push: null }), view.renderBody());

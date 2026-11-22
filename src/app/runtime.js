@@ -85,6 +85,7 @@ import {
     threadSwitches,
 } from '../core/threads.js';
 
+import { setIgsView } from '../core/trpg.js';
 import { cardKey, cardName, chatMessages, ctx, hostWindow, toast } from '../host/st.js';
 import { readEntryContent, worldInfoMatchSettings, worldInfoScanDepth, writeFallbackBook } from '../host/worldbook.js';
 import { bindChat, readChatState, readProgress, writeProgress } from './progress-store.js';
@@ -108,6 +109,7 @@ const placeOf = (unit) => `${volumeLabel(unit.volume.key)}·${stageLabel(unit.st
 // askReason 由入口传入（弹输入框），运行时本身不依赖界面。
 export function createRuntime({ data, notice, emit, askReason = async () => '' }) {
     const view = hostWindow();
+    setIgsView(view);
     let progress = null,
         progressFor = '',
         alignedFrom = null,

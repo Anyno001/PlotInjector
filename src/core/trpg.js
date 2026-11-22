@@ -60,8 +60,25 @@ const CHECK_RESULT =
 export const CHECK_RULE = `「待判定」的发现：玩家的行动到了这一步时，在正文末尾写出检定请求「【检定】谁：技能 技能值（难度）#编号」，如「【检定】{{user}}：侦查 60（困难）#F03」。技能从材料里写的技能中挑最合适的一个；技能值从调查员资料里取，查不到就不写；编号照抄材料里的 #编号。写到掷骰之前就停下，不替玩家掷骰，不写结果。暗骰同样写请求，只写技能，不说明在查什么。${CHECK_RESULT}`;
 export const CHECK_RULE_ANKE = `「待判定」的发现：玩家的行动到了这一步时，在正文最末另起一行写一个检定安科 [igs-anke:检定|问题|对象|技能|技能值|难度|编号]：问题用楼主的口吻对网友说；对象写真正去做这件事的人（楼主、角色名或 {{user}}）；技能从材料里写的技能中挑最合适的一个；技能值从调查员资料里取，查不到写 50；难度写 普通、困难或极难；编号照抄材料里的 #编号（不带 #）。理智检定也用它，技能写「理智」、技能值写当前理智值、编号写 SAN。写到掷骰之前就停下，不替玩家掷骰，不写结果。${CHECK_RESULT}`;
 
-export function checkRule(settings) {
-    return settings && settings.trpgCheck === 'anke' ? CHECK_RULE_ANKE : CHECK_RULE;
+let igsView = null;
+export function setIgsView(v) {
+    igsView = v || null;
+}
+function igsSkillValue(skill) {
+    try {
+        let inv = igsView?.IGS?.stats?.investigator?.(),
+            v = inv && inv.sheet && inv.skills ? inv.skills[skill] : null;
+        return typeof v === 'number' && Number.isFinite(v) ? v : null;
+    } catch {
+        return null;
+    }
+}
+
+export function checkRule(settings, skills) {
+    let rule = settings && settings.trpgCheck === 'anke' ? CHECK_RULE_ANKE : CHECK_RULE;
+    if (!Array.isArray(skills)) return rule;
+    let list = [...new Set(skills)].map((k) => [k, igsSkillValue(k)]).filter(([, v]) => v != null);
+    return list.length ? `${rule}可用的技能值：${list.map(([k, v]) => `${k} ${v}`).join('、')}。` : rule;
 }
 
 export function hasChecks(list) {
@@ -255,7 +272,7 @@ export function trpgCheckResults(messages) {
         if (!req) return;
         let roll = parseRoll(text, req.skill);
         if (!roll) return;
-        let value = roll.value || req.value,
+        let value = roll.value || req.value || igsSkillValue(req.skill),
             res = roll.die != null && value ? { ...cocJudge(roll.die, value, req.level), die: roll.die } : roll.word ? { tier: roll.word, ok: !/失败/.test(roll.word), die: null } : null;
         if (!res) return;
         ((out[req.code] = { ...res, value, level: req.level, skill: req.skill, at }), (open = open.filter((o) => o !== req)));
