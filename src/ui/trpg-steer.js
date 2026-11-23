@@ -55,6 +55,11 @@ function liveStage(c) {
 }
 
 function buildRequest(view, project, c) {
+    return steerMessages(steerContext(project, c));
+}
+
+// 最近正文、当前阶段（作者视角）、KP规则、已确认事实：对照剧本和「卡住了吗」共用
+export function steerContext(project, c) {
     let recent = chatMessages()
             .filter((m) => m && !m.is_system && String(m.mes || '').trim())
             .slice(-6)
@@ -66,7 +71,7 @@ function buildRequest(view, project, c) {
             let text = effectiveFact(id, c.snap, c.prog).text;
             return `${id}${text ? `：${Array.isArray(text) ? text.join('、') : text}` : ''}`;
         });
-    return steerMessages({ recent, stage, rules: block ? block.text : '', facts });
+    return { recent, stage, rules: block ? block.text : '', facts };
 }
 
 export const steerActions = {

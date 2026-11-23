@@ -257,9 +257,9 @@ export function renderClueRun(view, project, st7) {
         settings = `<div class="pi-card pi-run-set"><h3><button type="button" class="pi-run-fold" data-act="run-set-toggle" aria-expanded="${setOpen}">${setOpen ? '▾' : '▸'}设置与记录</button>${setOpen ? '' : `<span class="pi-meta">${esc(setSummary)}</span>`}</h3>
         ${
             setOpen
-                ? `<div class="pi-rl-sec"><div class="pi-run-sec-hd">线索表格</div><div class="pi-tools is-c2"><button type="button" class="pi-btn is-sm" data-act="clue-prebuild" title="按大纲补表格行：表已经建好、大纲后来又加了线索时用，把缺的行补进关键事实表、知情表；已有的行不动">补全表格…</button><button type="button" class="pi-btn is-sm" data-act="clue-labels-edit" title="修改线索标签：修改关键事实表里已有线索的标签和登记口径">修改线索…</button></div></div>
+                ? `<div class="pi-rl-sec"><div class="pi-run-sec-hd">线索表格</div><div class="pi-tools is-c3"><button type="button" class="pi-btn is-sm" data-act="clue-prebuild" title="按大纲补表格行：表已经建好、大纲后来又加了线索时用，把缺的行补进关键事实表、知情表；已有的行不动">补全表格…</button><button type="button" class="pi-btn is-sm" data-act="clue-labels-edit" title="修改线索标签：修改关键事实表里已有线索的标签和登记口径">修改线索…</button><button type="button" class="pi-btn is-sm" data-act="clue-gen-template" title="生成线索模板：在当前聊天的表格上加入三张线索表（带上大纲要用的行），并调整默认表的规则；先预览，确认后才写入">创建模板</button></div></div>
         <div class="pi-rl-sec"><div class="pi-run-sec-hd">推进</div><div class="pi-pace"><span class="pi-pace-label">推进速度</span><div class="pi-seg">${PACES.map((pace) => `<button type="button" class="pi-seg-btn${pace.value === runtime.progress().pace ? ' is-sel' : ''}" data-act="pace" data-pace="${pace.value}">${pace.label}</button>`).join('')}</div></div>${lineOpts(c, project)}</div>
-        <div class="pi-rl-sec"><button type="button" class="pi-run-fold" data-act="run-fold" data-key="advOpen" aria-expanded="${advOpen}">${advOpen ? '▾' : '▸'}高级</button>${advOpen ? `${modeCard(project, !0)}${bindingCard(project, st7, c.snap.api ? c.snap.tables : null, !0)}<div class="pi-tools is-c1"><button type="button" class="pi-btn is-sm is-wide" data-act="clue-gen-template" title="生成线索模板：在当前聊天的表格上加入三张线索表（带上大纲要用的行），并调整默认表的规则；先预览，确认后才写入">创建模板</button></div>` : ''}</div>
+        <div class="pi-rl-sec"><button type="button" class="pi-run-fold" data-act="run-fold" data-key="advOpen" aria-expanded="${advOpen}">${advOpen ? '▾' : '▸'}高级</button>${advOpen ? `${modeCard(project, !0)}${bindingCard(project, st7, c.snap.api ? c.snap.tables : null, !0)}` : ''}</div>
         ${clueLogCard(runtime, st7)}`
                 : ''
         }</div>`;
@@ -271,13 +271,14 @@ export function renderClueRun(view, project, st7) {
         lackRow = lack.length
             ? `<div class="pi-row is-todo"><p class="pi-hint is-warn">当前聊天还没有线索表（${esc(lack.map((p) => p.replace(/^缺少表/, '')).join('、'))}）。</p><button type="button" class="pi-btn is-sm is-primary" data-act="clue-gen-template">创建模板</button></div>`
             : '',
-        rowBtn = (text, act, label, tip = '') => `<div class="pi-row is-todo"><p class="pi-hint is-warn"${tip ? ` title="${esc(tip)}"` : ''}>${esc(text)}</p><button type="button" class="pi-btn is-sm" data-act="${act}">${label}</button></div>`,
+        // 补行 / 表结构出问题时旁边带「重新创建模板」（用户 2026-11-23：出了问题要重建模板，原来藏在设置与记录→高级里）
+        rowBtn = (text, act, label, tip = '', remake = !1) => `<div class="pi-row is-todo"><p class="pi-hint is-warn"${tip ? ` title="${esc(tip)}"` : ''}>${esc(text)}</p><button type="button" class="pi-btn is-sm" data-act="${act}">${label}</button>${remake ? '<button type="button" class="pi-btn is-sm is-ghost" data-act="clue-gen-template" title="表格出了问题时用：按大纲重新生成线索模板写入当前聊天，先预览，确认后才写入">重新创建模板</button>' : ''}</div>`,
         gapHit = !1,
         // 每行问题带上能解决它的按钮：缺行 → 补全表格；表结构不对 → 打开表格绑定；其余只说明
         problemRows = problems.filter((p) => !lack.includes(p)).map((p) => {
             let gap = /^事实表里没有这些编号的行：(.+?)（/.exec(p);
-            if (gap) return ((gapHit = !0), rowBtn(`关键事实表里还没有这些线索的行：${factNamesText(gap[1].split('、').filter(Boolean))}。`, 'clue-prebuild', '补全表格', gap[1]));
-            if (/^表「.*缺少.*列|已核实值|方式列/.test(p)) return rowBtn(p, 'run-set-open', '打开表格绑定');
+            if (gap) return ((gapHit = !0), rowBtn(`关键事实表里还没有这些线索的行：${factNamesText(gap[1].split('、').filter(Boolean))}。`, 'clue-prebuild', '补全表格', gap[1], !0));
+            if (/^表「.*缺少.*列|已核实值|方式列/.test(p)) return rowBtn(p, 'run-set-open', '打开表格绑定', '', !0);
             return `<p class="pi-hint is-warn">${esc(noDb && p === c.snap.problems[0] ? '没有检测到数据库插件（shujuku），当前无法注入。剧情线的进度不受影响，装好并开启数据库插件后接着用。' : p)}</p>`;
         }),
         // 表和标签都准备好了、大纲里仍有线索没有行：单独一行（已有「事实表里没有…」那一行时不重复）
@@ -285,7 +286,7 @@ export function renderClueRun(view, project, st7) {
     if (!noDb && !lack.length && !gapHit && c.snap.facts instanceof Map) {
         let notReady = new Set(labelsToPrepare(project.outline.volumes, project.clue.labels).filter((x) => !c.snap.facts.has(x.code)).map((x) => x.code)),
             miss = prebuildPlan(project.outline.volumes).facts.filter((f) => !c.snap.facts.has(f.code) && !notReady.has(f.code));
-        miss.length && (newRow = rowBtn(`大纲里有${miss.length}条线索在表格里还没有行。`, 'clue-prebuild', '补全表格'));
+        miss.length && (newRow = rowBtn(`大纲里有${miss.length}条线索在表格里还没有行。`, 'clue-prebuild', '补全表格', '', !0));
     }
     let todo = [...(lackRow ? [lackRow] : []), ...problemRows, ...(newRow ? [newRow] : []), ...(labelRow ? [labelRow] : [])];
     let multi = (c.state.lineStates || []).length > 0,

@@ -89,7 +89,7 @@ export function trpgHealth({ volumes, state, snap, prog, checks, focus }) {
     focus && KP_UNSET_SOURCES.includes(focus.source) && lines.push(KP_UNSET_HINT);
     for (let n of reach.stuckNodes) spoil.push(`${n.nodeName}（${n.stage}）：${n.why}`);
     for (let d of dead) spoil.push(`判定失败 #${d.fact}（${d.node}）：${d.text}`);
-    return { level: reach.verdict === 'blocked' ? 'bad' : reach.verdict === 'unknown' || dead.length ? 'warn' : 'ok', lines, spoil };
+    return { level: reach.verdict === 'blocked' ? 'bad' : reach.verdict === 'unknown' || dead.length ? 'warn' : 'ok', lines, spoil, deadFacts: deadSet };
 }
 
 // 选一条要推的发现；返回 { fact, discovery, node } 或 null
@@ -195,6 +195,80 @@ export function kpInject(out, { state, snap, prog, checks, settings, push, floor
     }
     let at = out.content.lastIndexOf(close);
     return at < 0 ? out : { ...out, content: `${out.content.slice(0, at)}${body}\n${out.content.slice(at)}` };
+}
+
+// ---------- 「卡住了吗」AI 判断 ----------
+// 本地推演只看大纲图走不走得通；玩家在正文里是不是在原地打转，要 AI 读正文判断（用户 2026-11-23）。
+export const STUCK_VERDICTS = ['顺利进行', '在打转', '卡住了'];
+export const STUCK_ADVICE = ['不用推', ...KP_LEVELS.map((x) => x.label)];
+
+// pending：眼前还没拿到的发现 [{ fact, node, text }]；health：本地推演的结论行
+export function stuckMessages({ recent, stage, rules, facts, pending, health }) {
+    return [
+        {
+            role: 'system',
+            content: [
+                '你是跑团模组的 KP 助手。读最近的正文，判断玩家（调查员）是不是卡住了：找不到下一步、在同一处反复打转、明显忘了或没注意到眼前的线索、一直在做和模组无关的事。只判断，不续写。',
+                '只是在正常探索、刚换场景、刚拿到线索在消化，都算顺利。',
+                '严格按下面格式输出，不要写别的：',
+                '结论：顺利进行 / 在打转 / 卡住了（三选一）',
+                '不剧透：',
+                '- 用玩家能看的话说现在的状况（如：在同一个房间反复搜查、没有去问在场的人），不写线索内容、名字和真相',
+                '剧透：',
+                '- 玩家漏掉了哪条线索、本来该怎么拿到',
+                '建议：不用推 / 给点暗示 / 再给一次检定 / 直接给线索（四选一）',
+                '没卡住时「剧透」写「- 无」，建议写「不用推」。',
+            ].join('\n'),
+        },
+        {
+            role: 'user',
+            content: [
+                `【最近正文】\n${recent.map((m) => `${m.user ? '玩家' : '正文'}：${String(m.text || '').slice(0, 1500)}`).join('\n\n') || '（没有）'}`,
+                `【当前阶段的模组内容（作者视角，含仅作者部分）】\n${stage || '（没有进行中的阶段）'}`,
+                rules && `【KP规则】\n${rules}`,
+                `【已确认的事实】\n${facts.length ? facts.map((f) => `- ${f}`).join('\n') : '（暂无）'}`,
+                `【眼前还没拿到的线索】\n${pending.length ? pending.map((p) => `- #${p.fact}（${p.node}）：${p.text}`).join('\n') : '（没有）'}`,
+                health && health.length ? `【插件推演】\n${health.map((t) => `- ${t}`).join('\n')}` : '',
+            ]
+                .filter(Boolean)
+                .join('\n\n'),
+        },
+    ];
+}
+
+// 回复 → { verdict, plain[], spoil[], advice }；没认出时 verdict / advice 为 ''
+export function parseStuckReply(text) {
+    let out = { verdict: '', plain: [], spoil: [], advice: '' },
+        sec = '',
+        none = (t) => /^无[。.]?$/.test(t);
+    for (let raw of String(text || '')
+        .replace(/\r/g, '')
+        .split('\n')) {
+        let m = /^[\s#*>]*(结论|不剧透|剧透|建议)[*\s]*[:：]\s*\**\s*(.*)$/.exec(raw);
+        if (m) {
+            sec = m[1];
+            let rest = m[2].trim();
+            sec === '结论' && (out.verdict = STUCK_VERDICTS.find((v) => rest.includes(v)) || '');
+            sec === '建议' && (out.advice = STUCK_ADVICE.find((v) => rest.includes(v)) || '');
+            continue;
+        }
+        let item = /^\s*[-•]\s*(.+)$/.exec(raw);
+        if (sec === '不剧透' && item) out.plain.push(item[1].trim());
+        else if (sec === '剧透' && item) out.spoil.push(item[1].trim());
+    }
+    out.plain = out.plain.filter((t) => !none(t));
+    out.spoil = out.spoil.filter((t) => !none(t));
+    return out;
+}
+
+// 眼前（已开放/进行中节点）还没拿到、也没判定失败的发现
+export function pendingDiscoveries(state, snap, prog, deadFacts = new Set()) {
+    let out = [];
+    for (let ns of state.nodeStates)
+        if (ns.status === 'available' || ns.status === 'active')
+            for (let d of discoveryList(itemOf(ns.node)))
+                d.fact && !deadFacts.has(d.fact) && !got(d.fact, snap, prog) && out.push({ fact: d.fact, node: ns.node.name || ns.node.uid, text: d.text });
+    return out;
 }
 
 // ---------- 「对照剧本」检查 ----------

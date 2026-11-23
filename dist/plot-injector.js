@@ -1,4 +1,4 @@
-// PlotInjector v0.3.12
+// PlotInjector v0.3.13
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -5093,7 +5093,7 @@ ${guide ? `${guide}
     near && lines2.push(`眼前能拿到的线索${near}条`), focus && KP_UNSET_SOURCES.includes(focus.source) && lines2.push(KP_UNSET_HINT);
     for (let n of reach.stuckNodes) spoil.push(`${n.nodeName}（${n.stage}）：${n.why}`);
     for (let d of dead) spoil.push(`判定失败 #${d.fact}（${d.node}）：${d.text}`);
-    return { level: reach.verdict === "blocked" ? "bad" : reach.verdict === "unknown" || dead.length ? "warn" : "ok", lines: lines2, spoil };
+    return { level: reach.verdict === "blocked" ? "bad" : reach.verdict === "unknown" || dead.length ? "warn" : "ok", lines: lines2, spoil, deadFacts: deadSet };
   }
   function kpPushTarget(state, snap2, prog) {
     let pending = (ns) => discoveryList(itemOf(ns.node)).filter((d) => d.fact && !got(d.fact, snap2, prog)).map((d) => ({ fact: d.fact, discovery: d, node: ns.node })), focus = state.nodeStates.find((ns) => ns.node.uid && ns.node.uid === state.focus.uid), mine = focus ? pending(focus) : [], live2 = [...state.stageStates.values()].find((s) => s.entered.v === "true" && !s.done), wanted = /* @__PURE__ */ new Set();
@@ -5169,6 +5169,75 @@ ${close}` };
     let at = out.content.lastIndexOf(close);
     return at < 0 ? out : { ...out, content: `${out.content.slice(0, at)}${body}
 ${out.content.slice(at)}` };
+  }
+  var STUCK_VERDICTS = ["顺利进行", "在打转", "卡住了"], STUCK_ADVICE = ["不用推", ...KP_LEVELS.map((x) => x.label)];
+  function stuckMessages({ recent, stage, rules, facts, pending, health }) {
+    return [
+      {
+        role: "system",
+        content: [
+          "你是跑团模组的 KP 助手。读最近的正文，判断玩家（调查员）是不是卡住了：找不到下一步、在同一处反复打转、明显忘了或没注意到眼前的线索、一直在做和模组无关的事。只判断，不续写。",
+          "只是在正常探索、刚换场景、刚拿到线索在消化，都算顺利。",
+          "严格按下面格式输出，不要写别的：",
+          "结论：顺利进行 / 在打转 / 卡住了（三选一）",
+          "不剧透：",
+          "- 用玩家能看的话说现在的状况（如：在同一个房间反复搜查、没有去问在场的人），不写线索内容、名字和真相",
+          "剧透：",
+          "- 玩家漏掉了哪条线索、本来该怎么拿到",
+          "建议：不用推 / 给点暗示 / 再给一次检定 / 直接给线索（四选一）",
+          "没卡住时「剧透」写「- 无」，建议写「不用推」。"
+        ].join(`
+`)
+      },
+      {
+        role: "user",
+        content: [
+          `【最近正文】
+${recent.map((m) => `${m.user ? "玩家" : "正文"}：${String(m.text || "").slice(0, 1500)}`).join(`
+
+`) || "（没有）"}`,
+          `【当前阶段的模组内容（作者视角，含仅作者部分）】
+${stage || "（没有进行中的阶段）"}`,
+          rules && `【KP规则】
+${rules}`,
+          `【已确认的事实】
+${facts.length ? facts.map((f) => `- ${f}`).join(`
+`) : "（暂无）"}`,
+          `【眼前还没拿到的线索】
+${pending.length ? pending.map((p) => `- #${p.fact}（${p.node}）：${p.text}`).join(`
+`) : "（没有）"}`,
+          health && health.length ? `【插件推演】
+${health.map((t) => `- ${t}`).join(`
+`)}` : ""
+        ].filter(Boolean).join(`
+
+`)
+      }
+    ];
+  }
+  function parseStuckReply(text2) {
+    let out = { verdict: "", plain: [], spoil: [], advice: "" }, sec = "", none = (t) => /^无[。.]?$/.test(t);
+    for (let raw of String(text2 || "").replace(/\r/g, "").split(`
+`)) {
+      let m = /^[\s#*>]*(结论|不剧透|剧透|建议)[*\s]*[:：]\s*\**\s*(.*)$/.exec(raw);
+      if (m) {
+        sec = m[1];
+        let rest = m[2].trim();
+        sec === "结论" && (out.verdict = STUCK_VERDICTS.find((v) => rest.includes(v)) || ""), sec === "建议" && (out.advice = STUCK_ADVICE.find((v) => rest.includes(v)) || "");
+        continue;
+      }
+      let item = /^\s*[-•]\s*(.+)$/.exec(raw);
+      sec === "不剧透" && item ? out.plain.push(item[1].trim()) : sec === "剧透" && item && out.spoil.push(item[1].trim());
+    }
+    return out.plain = out.plain.filter((t) => !none(t)), out.spoil = out.spoil.filter((t) => !none(t)), out;
+  }
+  function pendingDiscoveries(state, snap2, prog, deadFacts = /* @__PURE__ */ new Set()) {
+    let out = [];
+    for (let ns of state.nodeStates)
+      if (ns.status === "available" || ns.status === "active")
+        for (let d of discoveryList(itemOf(ns.node)))
+          d.fact && !deadFacts.has(d.fact) && !got(d.fact, snap2, prog) && out.push({ fact: d.fact, node: ns.node.name || ns.node.uid, text: d.text });
+    return out;
   }
   var STEER_VERDICTS = ["跟着剧本", "有点偏", "跑偏了"];
   function steerMessages({ recent, stage, rules, facts }) {
@@ -11295,11 +11364,14 @@ ${block}`
     return focus && c.state.stageStates.get(focus.node.unit.id) || [...c.state.stageStates.values()].find((s) => s.entered.v === "true" && !s.done);
   }
   function buildRequest(view, project, c) {
+    return steerMessages(steerContext(project, c));
+  }
+  function steerContext(project, c) {
     let recent = chatMessages().filter((m) => m && !m.is_system && String(m.mes || "").trim()).slice(-6).map((m) => ({ user: !!m.is_user, text: m.mes })), live2 = liveStage(c), stage = live2 && live2.unit.stage ? stringifyYaml({ [live2.unit.stage.key || live2.unit.id]: live2.unit.stage.data }) : "", block = splitBlocks(project.setting && project.setting.text).find((b) => b.title === KP_BLOCK && !b.cont), facts = chatFactSets({ snap: c.snap, prog: c.prog }).known.map((id) => {
       let text2 = effectiveFact(id, c.snap, c.prog).text;
       return `${id}${text2 ? `：${Array.isArray(text2) ? text2.join("、") : text2}` : ""}`;
     });
-    return steerMessages({ recent, stage, rules: block ? block.text : "", facts });
+    return { recent, stage, rules: block ? block.text : "", facts };
   }
   var steerActions = {
     "kp-scene"(view, target) {
@@ -11341,7 +11413,10 @@ ${block}`
   };
 
   // src/ui/trpg-kp-card.js
-  var shown = null, BADGE = { ok: ["is-ok", "顺利进行"], warn: ["is-warn", "小心探索"], bad: ["is-warn", "卡住了"] };
+  var shown = null, BADGE = { ok: ["is-ok", "顺利进行"], warn: ["is-warn", "小心探索"], loop: ["is-warn", "在打转"], bad: ["is-warn", "卡住了"] }, AI_LEVEL = { 顺利进行: "ok", 在打转: "loop", 卡住了: "bad" };
+  function shownLevel(mine) {
+    return mine.level === "bad" ? "bad" : mine.ai && AI_LEVEL[mine.ai.verdict] || mine.level;
+  }
   function kpState(view) {
     return (view.runtime.progress() || {}).trpgKp || {};
   }
@@ -11355,12 +11430,14 @@ ${block}`
       let now = kpState(view).pulse;
       (!now || now.facts !== confirmed) && saveKp(view, { pulse: { facts: confirmed, floor: floors } });
     });
-    let stuck = kp.pulse && kp.pulse.facts === confirmed ? floors - kp.pulse.floor : 0, push = kp.push && kp.push.floor === floors ? kp.push : null, mine = shown && shown.projectId === project.id ? shown : null, leaks = d && d.lastAudit ? (d.lastAudit.leaks || []).filter((l) => l.level === "leak").length : 0, pushLabel = push ? push.kind === "steer" ? "按建议拉回" : (KP_LEVELS.find((x) => x.level === push.level) || {}).label : "", busy = view.busy["kp-steer"], bind = project.clue.bindings.time;
+    let stuck = kp.pulse && kp.pulse.facts === confirmed ? floors - kp.pulse.floor : 0, push = kp.push && kp.push.floor === floors ? kp.push : null, mine = shown && shown.projectId === project.id ? shown : null, leaks = d && d.lastAudit ? (d.lastAudit.leaks || []).filter((l) => l.level === "leak").length : 0, pushLabel = push ? push.kind === "steer" ? "按建议拉回" : (KP_LEVELS.find((x) => x.level === push.level) || {}).label : "", busy = view.busy["kp-steer"] || view.busy["kp-health"], thinking = !!view.busy["kp-health"], ai = mine && mine.ai, spoils = mine ? [...ai && ai.spoil || [], ...mine.spoil] : [], advice = ai && ai.advice, bind = project.clue.bindings.time;
     return `<div class="pi-card"><h3>KP<span class="pi-spacer"></span>
         <button type="button" class="pi-btn is-sm is-ghost" data-act="kp-health" title="推演凭已经拿到的线索，主线还能不能走通，并可以推一把；只给结论，展开才剧透">卡住了吗</button>
         ${busy ? '<span class="pi-spin"></span>' : `<button type="button" class="pi-icon-btn" data-act="kp-menu" title="更多" aria-label="更多">${ICONS.more}</button>`}</h3>
         ${timelineHintHtml(project, readGameClock(c.snap.tables, bind && bind.路径))}${steerResultHtml(project)}
-        ${mine ? `<p class="pi-hint"><span class="pi-badge ${BADGE[mine.level][0]}">${BADGE[mine.level][1]}</span> ${esc(mine.lines.join("；"))}${mine.spoil.length ? ` <button type="button" class="pi-btn is-sm is-ghost" data-act="kp-spoil">${mine.open ? "收起" : "展开（会剧透）"}</button>` : ""}</p>${mine.open ? mine.spoil.map((t) => `<p class="pi-hint">${esc(t)}</p>`).join("") : ""}${leaks ? `<p class="pi-hint is-warn">最近一次请求里疑似提前写出了${leaks}处线索</p>` : ""}${mine.fact && !push ? `<div class="pi-tools is-c3">${KP_LEVELS.map((x) => `<button type="button" class="pi-btn is-sm" data-act="kp-push" data-level="${x.level}">${esc(x.label)}</button>`).join("")}</div>` : mine.fact || push ? "" : '<p class="pi-hint">眼下没有能推的线索。</p>'}` : ""}
+        ${mine ? `<p class="pi-hint">${thinking ? '<span class="pi-badge">判断中</span>' : `<span class="pi-badge ${BADGE[shownLevel(mine)][0]}">${BADGE[shownLevel(mine)][1]}</span>`} ${esc(
+      ai && ai.plain.length ? ai.plain.join("；") : thinking ? "AI 正在读最近的正文…" : mine.aiError ? `AI 判断失败（${mine.aiError}），下面只是插件推演。` : ai ? "AI 没有给出说明。" : ""
+    )}${spoils.length && !thinking ? ` <button type="button" class="pi-btn is-sm is-ghost" data-act="kp-spoil">${mine.open ? "收起" : "展开（会剧透）"}</button>` : ""}</p><p class="pi-hint">插件推演：${esc(mine.lines.join("；"))}</p>${mine.open && !thinking ? spoils.map((t) => `<p class="pi-hint">${esc(t)}</p>`).join("") : ""}${leaks ? `<p class="pi-hint is-warn">最近一次请求里疑似提前写出了${leaks}处线索</p>` : ""}${advice && advice !== "不用推" && !push ? `<p class="pi-hint">AI 建议：${esc(advice)}</p>` : ""}${mine.fact && !push && !thinking ? `<div class="pi-tools is-c3">${KP_LEVELS.map((x) => `<button type="button" class="pi-btn is-sm${advice === x.label ? " is-primary" : ""}" data-act="kp-push" data-level="${x.level}">${esc(x.label)}</button>`).join("")}</div>` : mine.fact || push ? "" : '<p class="pi-hint">眼下没有能推的线索。</p>'}` : ""}
         ${push ? `<p class="pi-hint">下一轮：${esc(pushLabel)} <button type="button" class="pi-btn is-sm is-ghost" data-act="kp-cancel">取消</button></p>` : ""}
         ${stuck >= KP_STUCK_ROUNDS && !push ? `<p class="pi-hint is-warn">已经${stuck}轮没拿到新线索。</p>` : ""}</div>`;
   }
@@ -11370,11 +11447,22 @@ ${block}`
       let pick = await menuDialog({ title: "KP", items: [{ label: "对照剧本", value: "kp-steer" }] });
       pick && kpActions[pick](view);
     },
-    "kp-health"(view) {
+    // 先出插件推演（立即），再让 AI 读最近正文判断是不是真卡住了
+    async "kp-health"(view) {
+      if (view.busy["kp-health"]) return;
       let c = view.runtime.clue.compute();
       if (!c) return;
-      let r = trpgHealth({ volumes: c.outline.volumes, state: c.state, snap: c.snap, prog: c.prog, checks: trpgCheckResults(chatMessages()), focus: c.state.focus }), target = kpPushTarget(c.state, c.snap, c.prog);
-      shown = { ...r, fact: target ? target.fact : "", projectId: view.projectId, open: !1 }, view.renderBody();
+      let project = view.project(), r = trpgHealth({ volumes: c.outline.volumes, state: c.state, snap: c.snap, prog: c.prog, checks: trpgCheckResults(chatMessages()), focus: c.state.focus }), target = kpPushTarget(c.state, c.snap, c.prog), mine = { ...r, fact: target ? target.fact : "", projectId: view.projectId, open: !1, ai: null, aiError: "" };
+      shown = mine;
+      let messages = stuckMessages({ ...steerContext(project, c), pending: pendingDiscoveries(c.state, c.snap, c.prog, r.deadFacts), health: r.lines });
+      try {
+        let reply2 = await runTask(view, "kp-health", () => ask(view, "outline", messages));
+        if (reply2 == null || shown !== mine) return;
+        mine.ai = parseStuckReply(reply2), mine.ai.verdict || (mine.aiError = "没有认出结论");
+      } catch (error) {
+        shown === mine && (mine.aiError = error && error.message || String(error));
+      }
+      view.renderBody();
     },
     "kp-spoil"(view) {
       shown && (shown.open = !shown.open), view.renderBody();
@@ -12564,16 +12652,16 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
       groups.push(stageBlock(unit, stage, c.state.nodeStates.filter((s) => s.node.unit === unit), focus.uid, st72, { next, expand: !anyLive }));
     }
     let last = clue.lastInjected(), b0 = project.clue.bindings, unbound = !(b0.facts.length || b0.knowledge.length), setOpen = st72.setOpen !== void 0 ? st72.setOpen : unbound || !c.snap.api, mode0 = (PLOT_MODES.find((m) => m.value === project.clue.mode) || PLOT_MODES[0]).label, opN = clueOpCount(runtime), setSummary = [mode0, unbound ? "表格未绑定" : "表格已绑定", `推进速度${(PACES.find((x) => x.value === runtime.progress().pace) || PACES[1]).label}`, ...opN ? [`记录${opN}条`] : []].join("，"), advOpen = !!st72.advOpen, settings = `<div class="pi-card pi-run-set"><h3><button type="button" class="pi-run-fold" data-act="run-set-toggle" aria-expanded="${setOpen}">${setOpen ? "▾" : "▸"}设置与记录</button>${setOpen ? "" : `<span class="pi-meta">${esc(setSummary)}</span>`}</h3>
-        ${setOpen ? `<div class="pi-rl-sec"><div class="pi-run-sec-hd">线索表格</div><div class="pi-tools is-c2"><button type="button" class="pi-btn is-sm" data-act="clue-prebuild" title="按大纲补表格行：表已经建好、大纲后来又加了线索时用，把缺的行补进关键事实表、知情表；已有的行不动">补全表格…</button><button type="button" class="pi-btn is-sm" data-act="clue-labels-edit" title="修改线索标签：修改关键事实表里已有线索的标签和登记口径">修改线索…</button></div></div>
+        ${setOpen ? `<div class="pi-rl-sec"><div class="pi-run-sec-hd">线索表格</div><div class="pi-tools is-c3"><button type="button" class="pi-btn is-sm" data-act="clue-prebuild" title="按大纲补表格行：表已经建好、大纲后来又加了线索时用，把缺的行补进关键事实表、知情表；已有的行不动">补全表格…</button><button type="button" class="pi-btn is-sm" data-act="clue-labels-edit" title="修改线索标签：修改关键事实表里已有线索的标签和登记口径">修改线索…</button><button type="button" class="pi-btn is-sm" data-act="clue-gen-template" title="生成线索模板：在当前聊天的表格上加入三张线索表（带上大纲要用的行），并调整默认表的规则；先预览，确认后才写入">创建模板</button></div></div>
         <div class="pi-rl-sec"><div class="pi-run-sec-hd">推进</div><div class="pi-pace"><span class="pi-pace-label">推进速度</span><div class="pi-seg">${PACES.map((pace) => `<button type="button" class="pi-seg-btn${pace.value === runtime.progress().pace ? " is-sel" : ""}" data-act="pace" data-pace="${pace.value}">${pace.label}</button>`).join("")}</div></div>${lineOpts(c, project)}</div>
-        <div class="pi-rl-sec"><button type="button" class="pi-run-fold" data-act="run-fold" data-key="advOpen" aria-expanded="${advOpen}">${advOpen ? "▾" : "▸"}高级</button>${advOpen ? `${modeCard(project, !0)}${bindingCard(project, st72, c.snap.api ? c.snap.tables : null, !0)}<div class="pi-tools is-c1"><button type="button" class="pi-btn is-sm is-wide" data-act="clue-gen-template" title="生成线索模板：在当前聊天的表格上加入三张线索表（带上大纲要用的行），并调整默认表的规则；先预览，确认后才写入">创建模板</button></div>` : ""}</div>
-        ${clueLogCard(runtime, st72)}` : ""}</div>`, labelRow = (c.state.lineStates || []).length ? labelsPendingHtml(project, c) : "", noDb = !c.snap.api, lack = noDb ? [] : problems2.filter((p) => /^缺少表「/.test(p)), lackRow = lack.length ? `<div class="pi-row is-todo"><p class="pi-hint is-warn">当前聊天还没有线索表（${esc(lack.map((p) => p.replace(/^缺少表/, "")).join("、"))}）。</p><button type="button" class="pi-btn is-sm is-primary" data-act="clue-gen-template">创建模板</button></div>` : "", rowBtn = (text2, act, label, tip = "") => `<div class="pi-row is-todo"><p class="pi-hint is-warn"${tip ? ` title="${esc(tip)}"` : ""}>${esc(text2)}</p><button type="button" class="pi-btn is-sm" data-act="${act}">${label}</button></div>`, gapHit = !1, problemRows = problems2.filter((p) => !lack.includes(p)).map((p) => {
+        <div class="pi-rl-sec"><button type="button" class="pi-run-fold" data-act="run-fold" data-key="advOpen" aria-expanded="${advOpen}">${advOpen ? "▾" : "▸"}高级</button>${advOpen ? `${modeCard(project, !0)}${bindingCard(project, st72, c.snap.api ? c.snap.tables : null, !0)}` : ""}</div>
+        ${clueLogCard(runtime, st72)}` : ""}</div>`, labelRow = (c.state.lineStates || []).length ? labelsPendingHtml(project, c) : "", noDb = !c.snap.api, lack = noDb ? [] : problems2.filter((p) => /^缺少表「/.test(p)), lackRow = lack.length ? `<div class="pi-row is-todo"><p class="pi-hint is-warn">当前聊天还没有线索表（${esc(lack.map((p) => p.replace(/^缺少表/, "")).join("、"))}）。</p><button type="button" class="pi-btn is-sm is-primary" data-act="clue-gen-template">创建模板</button></div>` : "", rowBtn = (text2, act, label, tip = "", remake = !1) => `<div class="pi-row is-todo"><p class="pi-hint is-warn"${tip ? ` title="${esc(tip)}"` : ""}>${esc(text2)}</p><button type="button" class="pi-btn is-sm" data-act="${act}">${label}</button>${remake ? '<button type="button" class="pi-btn is-sm is-ghost" data-act="clue-gen-template" title="表格出了问题时用：按大纲重新生成线索模板写入当前聊天，先预览，确认后才写入">重新创建模板</button>' : ""}</div>`, gapHit = !1, problemRows = problems2.filter((p) => !lack.includes(p)).map((p) => {
       let gap = /^事实表里没有这些编号的行：(.+?)（/.exec(p);
-      return gap ? (gapHit = !0, rowBtn(`关键事实表里还没有这些线索的行：${factNamesText(gap[1].split("、").filter(Boolean))}。`, "clue-prebuild", "补全表格", gap[1])) : /^表「.*缺少.*列|已核实值|方式列/.test(p) ? rowBtn(p, "run-set-open", "打开表格绑定") : `<p class="pi-hint is-warn">${esc(noDb && p === c.snap.problems[0] ? "没有检测到数据库插件（shujuku），当前无法注入。剧情线的进度不受影响，装好并开启数据库插件后接着用。" : p)}</p>`;
+      return gap ? (gapHit = !0, rowBtn(`关键事实表里还没有这些线索的行：${factNamesText(gap[1].split("、").filter(Boolean))}。`, "clue-prebuild", "补全表格", gap[1], !0)) : /^表「.*缺少.*列|已核实值|方式列/.test(p) ? rowBtn(p, "run-set-open", "打开表格绑定", "", !0) : `<p class="pi-hint is-warn">${esc(noDb && p === c.snap.problems[0] ? "没有检测到数据库插件（shujuku），当前无法注入。剧情线的进度不受影响，装好并开启数据库插件后接着用。" : p)}</p>`;
     }), newRow = "";
     if (!noDb && !lack.length && !gapHit && c.snap.facts instanceof Map) {
       let notReady = new Set(labelsToPrepare(project.outline.volumes, project.clue.labels).filter((x) => !c.snap.facts.has(x.code)).map((x) => x.code)), miss = prebuildPlan(project.outline.volumes).facts.filter((f) => !c.snap.facts.has(f.code) && !notReady.has(f.code));
-      miss.length && (newRow = rowBtn(`大纲里有${miss.length}条线索在表格里还没有行。`, "clue-prebuild", "补全表格"));
+      miss.length && (newRow = rowBtn(`大纲里有${miss.length}条线索在表格里还没有行。`, "clue-prebuild", "补全表格", "", !0));
     }
     let todo = [...lackRow ? [lackRow] : [], ...problemRows, ...newRow ? [newRow] : [], ...labelRow ? [labelRow] : []], multi = (c.state.lineStates || []).length > 0, units = c.compiled.units, allDone = units.length > 0 && units.every((u) => (c.state.stageStates.get(u.id) || {}).done), ellip = `<button type="button" class="pi-icon-btn" data-act="run-cur-menu" title="更多" aria-label="更多">${ICONS.more}</button>`, statusRow = `<div class="pi-row pi-rl-status"><b>${multi ? "剧情" : "主线"}</b>${enabled}${c.prog.paused ? '<span class="pi-badge is-warn">已暂停</span>' : allDone && !multi ? '<span class="pi-badge is-ok">已全部完成</span>' : '<span class="pi-badge is-accent">进行中</span>'}<span class="pi-meta pi-grow">${multi && !c.prog.paused ? esc(lineSummary(c)) : ""}</span>${c.prog.paused ? '<button type="button" class="pi-btn is-sm is-primary" data-act="clue-pause" data-value="">继续剧情</button>' : allDone && !multi ? '<button type="button" class="pi-btn is-sm is-primary" data-act="clue-next">开始下一段主线…</button>' : multi ? pauseMenu(c) : '<button type="button" class="pi-btn is-sm" data-act="clue-pause" data-value="1" title="去玩日常：所有线索内容都不注入，进度保留">暂停</button>'}${ellip}</div>`, focusLabel = [hereText(c), focusNode ? esc(focusNode.node.name) : ""].filter(Boolean).join(" · ") || esc(FOCUS_SOURCE[focus.source]), hint = isTrpg(project) ? sceneHintHtml(c) : "", focusRow = hint ? `<div class="pi-rl-focus is-col">${hint}</div>` : `<div class="pi-rl-focus"><b class="pi-grow">${focusLabel}</b>${focusNode ? `<button type="button" class="pi-btn is-sm" data-act="clue-leave" data-uid="${esc(focusNode.node.uid)}" title="主角已经离开这件事：不再注入它的场景和发现，只给入口">已离开</button>` : ""}${c.prog.focus ? `<button type="button" class="pi-btn is-sm" data-act="clue-unfocus" title="回到按填表判断本轮场景">${c.prog.focus.startsWith(AWAY_PREFIX) ? "其实没离开" : "换场景"}</button>` : ""}</div>`, cur = `<div class="pi-card pi-rl-cur"><h3>当前</h3>
         ${progressHtml("prebuild")}${todo.length ? `<div class="pi-rl-stack">${todo.join("")}</div>` : ""}
@@ -20157,7 +20245,7 @@ ${suffix.trim()}` : body;
   }
 
   // src/index.js
-  var VERSION = "0.3.12", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.3.13", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")

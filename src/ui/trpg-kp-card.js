@@ -4,14 +4,22 @@ import { ICONS } from './styles.js';
 import { chatMessages, toast } from '../host/st.js';
 import { chatFactSets } from '../core/clue-project.js';
 import { trpgCheckResults } from '../core/trpg.js';
-import { steerActions, timelineHintHtml, steerResultHtml } from './trpg-steer.js';
+import { steerActions, timelineHintHtml, steerResultHtml, steerContext } from './trpg-steer.js';
 import { readGameClock } from '../core/trpg-timeline.js';
-import { trpgHealth, kpPushTarget, aiFloorCount, KP_LEVELS, KP_STUCK_ROUNDS } from '../core/trpg-kp.js';
+import { trpgHealth, kpPushTarget, aiFloorCount, KP_LEVELS, KP_STUCK_ROUNDS, stuckMessages, parseStuckReply, pendingDiscoveries } from '../core/trpg-kp.js';
+import { ask, runTask } from './ai.js';
 
 // 体检结果只留在内存里，换项目就丢
 let shown = null;
 
-const BADGE = { ok: ['is-ok', '顺利进行'], warn: ['is-warn', '小心探索'], bad: ['is-warn', '卡住了'] };
+const BADGE = { ok: ['is-ok', '顺利进行'], warn: ['is-warn', '小心探索'], loop: ['is-warn', '在打转'], bad: ['is-warn', '卡住了'] };
+const AI_LEVEL = { 顺利进行: 'ok', 在打转: 'loop', 卡住了: 'bad' };
+
+// 徽章：AI 读了正文就以 AI 为准；插件推演出「走不通」时始终显示卡住了
+function shownLevel(mine) {
+    if (mine.level === 'bad') return 'bad';
+    return (mine.ai && AI_LEVEL[mine.ai.verdict]) || mine.level;
+}
 
 function kpState(view) {
     return (view.runtime.progress() || {}).trpgKp || {};
@@ -37,7 +45,11 @@ export function kpCard(view, project, c, d) {
         mine = shown && shown.projectId === project.id ? shown : null,
         leaks = d && d.lastAudit ? (d.lastAudit.leaks || []).filter((l) => l.level === 'leak').length : 0,
         pushLabel = push ? (push.kind === 'steer' ? '按建议拉回' : (KP_LEVELS.find((x) => x.level === push.level) || {}).label) : '',
-        busy = view.busy['kp-steer'],
+        busy = view.busy['kp-steer'] || view.busy['kp-health'],
+        thinking = !!view.busy['kp-health'],
+        ai = mine && mine.ai,
+        spoils = mine ? [...((ai && ai.spoil) || []), ...mine.spoil] : [],
+        advice = ai && ai.advice,
         bind = project.clue.bindings.time;
     return `<div class="pi-card"><h3>KP<span class="pi-spacer"></span>
         <button type="button" class="pi-btn is-sm is-ghost" data-act="kp-health" title="推演凭已经拿到的线索，主线还能不能走通，并可以推一把；只给结论，展开才剧透">卡住了吗</button>
@@ -45,13 +57,15 @@ export function kpCard(view, project, c, d) {
         ${timelineHintHtml(project, readGameClock(c.snap.tables, bind && bind.路径))}${steerResultHtml(project)}
         ${
             mine
-                ? `<p class="pi-hint"><span class="pi-badge ${BADGE[mine.level][0]}">${BADGE[mine.level][1]}</span> ${esc(mine.lines.join('；'))}${
-                      mine.spoil.length ? ` <button type="button" class="pi-btn is-sm is-ghost" data-act="kp-spoil">${mine.open ? '收起' : '展开（会剧透）'}</button>` : ''
-                  }</p>${mine.open ? mine.spoil.map((t) => `<p class="pi-hint">${esc(t)}</p>`).join('') : ''}${
+                ? `<p class="pi-hint">${thinking ? '<span class="pi-badge">判断中</span>' : `<span class="pi-badge ${BADGE[shownLevel(mine)][0]}">${BADGE[shownLevel(mine)][1]}</span>`} ${esc(
+                      ai && ai.plain.length ? ai.plain.join('；') : thinking ? 'AI 正在读最近的正文…' : mine.aiError ? `AI 判断失败（${mine.aiError}），下面只是插件推演。` : ai ? 'AI 没有给出说明。' : '',
+                  )}${
+                      spoils.length && !thinking ? ` <button type="button" class="pi-btn is-sm is-ghost" data-act="kp-spoil">${mine.open ? '收起' : '展开（会剧透）'}</button>` : ''
+                  }</p><p class="pi-hint">插件推演：${esc(mine.lines.join('；'))}</p>${mine.open && !thinking ? spoils.map((t) => `<p class="pi-hint">${esc(t)}</p>`).join('') : ''}${
                       leaks ? `<p class="pi-hint is-warn">最近一次请求里疑似提前写出了${leaks}处线索</p>` : ''
-                  }${
-                      mine.fact && !push
-                          ? `<div class="pi-tools is-c3">${KP_LEVELS.map((x) => `<button type="button" class="pi-btn is-sm" data-act="kp-push" data-level="${x.level}">${esc(x.label)}</button>`).join('')}</div>`
+                  }${advice && advice !== '不用推' && !push ? `<p class="pi-hint">AI 建议：${esc(advice)}</p>` : ''}${
+                      mine.fact && !push && !thinking
+                          ? `<div class="pi-tools is-c3">${KP_LEVELS.map((x) => `<button type="button" class="pi-btn is-sm${advice === x.label ? ' is-primary' : ''}" data-act="kp-push" data-level="${x.level}">${esc(x.label)}</button>`).join('')}</div>`
                           : mine.fact || push ? '' : '<p class="pi-hint">眼下没有能推的线索。</p>'
                   }`
                 : ''
@@ -70,12 +84,26 @@ export const kpActions = {
         let pick = await menuDialog({ title: 'KP', items: [{ label: '对照剧本', value: 'kp-steer' }] });
         pick && kpActions[pick](view);
     },
-    'kp-health'(view) {
+    // 先出插件推演（立即），再让 AI 读最近正文判断是不是真卡住了
+    async 'kp-health'(view) {
+        if (view.busy['kp-health']) return;
         let c = view.runtime.clue.compute();
         if (!c) return;
-        let r = trpgHealth({ volumes: c.outline.volumes, state: c.state, snap: c.snap, prog: c.prog, checks: trpgCheckResults(chatMessages()), focus: c.state.focus }),
-            target = kpPushTarget(c.state, c.snap, c.prog);
-        ((shown = { ...r, fact: target ? target.fact : '', projectId: view.projectId, open: !1 }), view.renderBody());
+        let project = view.project(),
+            r = trpgHealth({ volumes: c.outline.volumes, state: c.state, snap: c.snap, prog: c.prog, checks: trpgCheckResults(chatMessages()), focus: c.state.focus }),
+            target = kpPushTarget(c.state, c.snap, c.prog),
+            mine = { ...r, fact: target ? target.fact : '', projectId: view.projectId, open: !1, ai: null, aiError: '' };
+        shown = mine;
+        let messages = stuckMessages({ ...steerContext(project, c), pending: pendingDiscoveries(c.state, c.snap, c.prog, r.deadFacts), health: r.lines });
+        try {
+            let reply = await runTask(view, 'kp-health', () => ask(view, 'outline', messages));
+            if (reply == null || shown !== mine) return;
+            mine.ai = parseStuckReply(reply);
+            mine.ai.verdict || (mine.aiError = '没有认出结论');
+        } catch (error) {
+            shown === mine && (mine.aiError = (error && error.message) || String(error));
+        }
+        view.renderBody();
     },
     'kp-spoil'(view) {
         (shown && (shown.open = !shown.open), view.renderBody());
