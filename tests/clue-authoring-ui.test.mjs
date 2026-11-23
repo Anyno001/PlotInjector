@@ -197,7 +197,7 @@ test('V6 rewrite: the discussion record listed is actually in the request; 0 flo
   assert.ok(!user.content.includes('【最近正文】'), '0 floors → none');
   const body = doc.querySelector('.pi-body').textContent;
   assert.match(body, /讨论记录（\d+字）/);
-  assert.match(body, /最近正文：讨论区勾选的楼数为0，没有附带/);
+  assert.match(body, /最近正文：讨论区勾选的楼数为0，未附带/);
   // with floors ticked, recent text is sent and listed
   await setRefs(inst, id, { floors: 2 });
   doc.querySelector('[data-act="draft-drop"]').click(); await tick();

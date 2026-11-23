@@ -1,5 +1,5 @@
 import { emptyProgress, normalizeProgress } from '../core/progress.js';
-import { ctx } from '../host/st.js';
+import { ctx, savedChatMetadata } from '../host/st.js';
 
 // chat_metadata.plotInjector = { projectId: 本聊天使用的项目, byProject: { [项目id]: 进度 } }。
 // projectId 优先于本卡默认项目；同一聊天切换项目不丢各自进度；切聊天时 chat_metadata 整个换掉，所以每次都从上下文现取。
@@ -55,4 +55,29 @@ export function clearChatProgress() {
     delete m[KEY];
     const c = ctx();
     if (typeof c.saveMetadata === 'function') return c.saveMetadata();
+}
+
+// 立即存盘并从服务器读回核对（收起记录用，方案 三.3）：check(读回的插件数据) 为真才算存下来了。
+export async function persistChatNow(check) {
+    const c = ctx();
+    if (!c || typeof c.saveMetadata !== 'function') return false;
+    try {
+        await c.saveMetadata();
+    } catch {
+        return false;
+    }
+    const saved = await savedChatMetadata();
+    try {
+        return !!saved && !!check(saved[KEY]);
+    } catch {
+        return false;
+    }
+}
+
+// 当前聊天里还有已收起、没恢复的表格行吗（重置插件前检查，方案 十.7：不能把唯一的记录清掉）
+export function chatHasFoldedRows() {
+    const state = readChatState();
+    return Object.values(state.byProject || {}).some(
+        (prog) => prog && Array.isArray(prog.folds) && prog.folds.some((r) => r && Array.isArray(r.rows) && r.rows.some((x) => x && x.st === 'deleted')),
+    );
 }

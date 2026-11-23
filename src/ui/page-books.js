@@ -202,7 +202,7 @@ export function render(view) {
     return `<div class="pi-card pi-wb"><h3>世界书<span class="pi-spacer"></span>
             <button type="button" class="pi-btn is-sm is-ghost" data-act="book-new">${ICONS.plus}新建</button>
             <button type="button" class="pi-icon-btn" data-act="page-more" title="更多">${ICONS.more}</button></h3>
-        <p class="pi-hint is-warn">注意：这里的操作真的会修改你的世界书！</p>
+        <p class="pi-hint is-warn">这里的操作会直接修改世界书。</p>
         ${s.search === 'book' ? searchBox('book', s.bookQuery, '搜索所有世界书') : ''}
         ${list || `<p class="pi-hint">${norm(s.bookQuery) ? '没有匹配的世界书' : '没有关联或全局启用的世界书，可从「更多」搜索或打开其他世界书。'}</p>`}</div>`;
 }
@@ -450,7 +450,7 @@ export const actions = {
         if (to == null || to.trim() === from) return;
         const result = await renameBook(from, to);
         undoStacks.delete(from);
-        if (result.failed.length) toast('warning', `已另存为「${result.name}」，但${result.failed.join('、')}的绑定没能改过去，旧书「${from}」保留，请在酒馆里手动改绑定后删除。`);
+        if (result.failed.length) toast('warning', `已另存为「${result.name}」，但${result.failed.join('、')}的绑定未能迁移，原书「${from}」已保留，请在酒馆中手动改绑后删除。`);
         else toast('success', `已重命名为「${result.name}」。`);
         await openBook(view, result.name);
     },
@@ -475,7 +475,7 @@ export const actions = {
         downloadBlob(`${name}-备份.json`, JSON.stringify(await loadBook(name), null, 2));
         const result = await removeBook(name);
         undoStacks.delete(name);
-        if (result.failed.length) toast('warning', `已删除，但${result.failed.join('、')}的绑定没能解除，请在酒馆里检查。`);
+        if (result.failed.length) toast('warning', `已删除，但${result.failed.join('、')}的绑定未能解除，请在酒馆中检查。`);
         else toast('success', `已删除「${name}」。`);
         s.book = '';
         s.entries = null;

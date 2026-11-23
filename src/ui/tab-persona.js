@@ -76,12 +76,12 @@ function partnerField(attrs, line, bar) {
 
 // 读声望线的状态说明：读到几、落在哪、没读到该查什么。
 function fameHint(view, line, info, bar) {
-    if (!info.active) return '当前聊天没有使用本项目，这里不读声望。';
-    if (info.lost) return `没有读到这条${line.fame.source === 'favor' ? '角色数据' : '声望'}，请检查名称是否和IGS里的一致。读不到时沿用手动选的阶段。`;
+    if (!info.active) return '当前聊天未使用本项目，不读取声望。';
+    if (info.lost) return `未读取到这条${line.fame.source === 'favor' ? '角色数据' : '声望'}，请检查名称是否与IGS中一致。读取失败时沿用手动选择的阶段。`;
     const value = fameReading(line, view.runtime.fame());
     const base = value === null ? '' : `当前读到的数值：${value}。`;
-    if (info.miss) return `${base}这个数值不在任何阶段的区间内，现在显示「${info.stage.name}」。请给每个阶段填上下限。`;
-    const noPairs = line.fame.source !== 'favor' && bar && Array.isArray(bar.pairs) && !bar.pairs.length ? '这条声望还没有搭档记录，现在按整体读。' : '';
+    if (info.miss) return `${base}这个数值不在任何阶段的区间内，当前显示「${info.stage.name}」。请为每个阶段填写上下限。`;
+    const noPairs = line.fame.source !== 'favor' && bar && Array.isArray(bar.pairs) && !bar.pairs.length ? '这条声望暂无搭档记录，按整体读取。' : '';
     return `${base}${noPairs}`.trim();
 }
 
@@ -265,7 +265,7 @@ export const actions = {
             mode = await choiceDialog({ title: `导入${parsed.lines.length}条人设线`, body: `其中${same}条与现有人设线同组同名，怎么处理？`, choices: [
                 { label: '都保留（新的加「（导入）」）', value: 'both', primary: true }, { label: '替换同名', value: 'replace' }, { label: '跳过同名', value: 'skip' }, { label: '取消', value: null }] });
             if (!mode) return;
-        } else if (!(await confirmDialog({ title: '导入人设', body: `将加入${parsed.lines.length}条人设线。跟随大纲的阶段绑定不会带入，需要重新选。`, okLabel: '导入' }))) return;
+        } else if (!(await confirmDialog({ title: '导入人设', body: `会加入${parsed.lines.length}条人设线。跟随大纲的阶段绑定不会导入，需重新选择。`, okLabel: '导入' }))) return;
         const merged = mergePersonaLines(personas(view).lines, parsed.lines, mode);
         patchPersonas(view, all => ({ ...all, lines: merged.lines }));
         view.renderBody();
@@ -281,7 +281,7 @@ export const actions = {
     },
     async 'pl-del'(view, target) {
         const line = personas(view).lines.find(item => item.id === target.dataset.line);
-        if (!line || !(await confirmDialog({ title: `删除「${line.name}」`, body: '这条人设线连同全部阶段一并删除。', okLabel: '删除', danger: true }))) return;
+        if (!line || !(await confirmDialog({ title: `删除「${line.name}」`, body: '这条人设线及其全部阶段会一并删除。', okLabel: '删除', danger: true }))) return;
         patchPersonas(view, all => ({ ...all, lines: all.lines.filter(item => item.id !== line.id) }));
         view.renderBody();
     },

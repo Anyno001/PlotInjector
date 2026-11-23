@@ -295,7 +295,7 @@ test('R2: a failed write keeps the project unchanged and the input for retry; re
   await x.open();
   assert.equal(x.$('[data-le-label="0"]').value, '新标签7');
   assert.equal(x.$('[data-le-crit="0"]').value, '新口径7');
-  assert.match(x.$('.pi-dialog').textContent, /上次有1条没写进表格/);
+  assert.match(x.$('.pi-dialog').textContent, /上次有1条未写入表格/);
   await x.save();
   assert.deepEqual(x.rows().find((r) => r[1] === 'F7').slice(3), ['新标签7', '新口径7']);
   assert.equal(x.inst.data.project(x.pid).clue.labels.F7.criterion, '新口径7');
@@ -394,13 +394,13 @@ test('fresh chat with only seed rows: edits go into the project, the table is no
   const api = ctx.host.w.AutoCardUpdaterAPI;
   await ctx.click('[data-act="clue-labels-edit"]');
   assert.equal(ctx.$('[data-le-label="0"]').value, 'A标签7', 'seed rows are shown');
-  assert.match(ctx.$('.pi-dialog').textContent, /这个聊天还没填过表/);
+  assert.match(ctx.$('.pi-dialog').textContent, /本聊天尚未填表/);
   ctx.$('[data-le-crit="0"]').value = '新口径7';
   ctx.$$('.pi-dialog .pi-btn').find((b) => b.textContent === '保存').click(); for (let i = 0; i < 8; i++) await tick();
   assert.deepEqual(api.updated, [], 'the table is not written');
   assert.equal(ctx.inst.data.project(ctx.pid).clue.labels.F7.criterion, '新口径7', 'saved into the project');
   assert.equal(msgs.at(-1).level, 'info');
-  assert.match(msgs.at(-1).text, /已存进项目1条/);
+  assert.match(msgs.at(-1).text, /已保存1条到项目/);
   // 第一次填表：初始行变成真正的行
   ctx.host.db.setTables({ sheet_f: { name: '关键事实表', content: [['row_id', '编号', '状态', '标签', '登记口径'], ['1', 'F7', '未获得', 'A标签7', 'A口径7'], ['2', 'F8', '未获得', 'A标签8', 'A口径8']] } });
   ctx.inst.runtime.clue.invalidate();
@@ -427,7 +427,7 @@ test('after a reload the in-memory draft is gone, but a project label that diffe
   await ctx.click('[data-act="clue-labels-edit"]');
   assert.equal(ctx.$('[data-le-label="0"]').value, '项目标签7');
   assert.equal(ctx.$('[data-le-label="1"]').value, '标签8', 'rows without a project label show the table value');
-  assert.match(ctx.$('.pi-dialog').textContent, /有1条和项目里存的不一样/);
+  assert.match(ctx.$('.pi-dialog').textContent, /有1条与项目保存的不一致/);
   await ctx.inst.destroy();
 });
 

@@ -281,7 +281,7 @@ test('项目按聊天记：长按项目名设为当前聊天使用，换聊天�
     item.dispatchEvent(new host.win.MouseEvent('pointerup', { bubbles: true }));
     item.click();
     await tick(10);
-    const pick = [...doc.querySelectorAll('.pi-menu-item')].find(btn => /设为当前聊天使用/.test(btn.textContent));
+    const pick = [...doc.querySelectorAll('.pi-menu-item')].find(btn => /用于当前聊天/.test(btn.textContent));
     assert.ok(pick, '长按弹出菜单');
     pick.click();
     await tick(20);
@@ -317,7 +317,7 @@ test('项目文件读取失败时显示原因和重试；页面渲染出错时�
     const runtime = next.instance.runtime;
     runtime.setProgress({ ...runtime.progress(), muted: null });
     await tick(10);
-    assert.match(doc.querySelector('.pi-body').textContent, /这一页显示出错/);
+    assert.match(doc.querySelector('.pi-body').textContent, /本页显示出错/);
     assert.ok(runtime.diagnose().logs.some(item => /页面渲染失败/.test(item.text)));
     await next.instance.destroy();
 });
@@ -384,7 +384,7 @@ test('上次检测楼层大于现有楼数时自动回到现有楼数；诊断�
     doc.querySelector('.pi-side [data-act="page"][data-page="diag"]').click();
     await tick(10);
     const body = doc.querySelector('.pi-body');
-    assert.match(body.textContent, /当前只有3楼/);
+    assert.match(body.textContent, /超过当前楼数（3）/);
     assert.match(body.textContent, /收到回复/);
     body.querySelector('.pi-diag-row [data-act="reset-base"]').click();
     await tick(10);
@@ -741,8 +741,8 @@ test('大纲页：阶段节点按主线/支线/世界动态切换显示', async 
     doc.querySelector('[data-act="tab"][data-tab="outline"]').click();
     [...doc.querySelectorAll('.pi-titem')].find(item => item.textContent.includes('阶段一')).click();
     await tick(10);
-    const visible = () => [...doc.querySelectorAll('.pi-body .pi-card h3')].map(h => (h.textContent.match(/主线节点|支线事件|世界动态/) || [])[0]).filter(Boolean);
-    assert.deepEqual(visible(), ['主线节点']);
+    const visible = () => [...doc.querySelectorAll('.pi-body .pi-card h3')].map(h => (h.textContent.match(/剧情节点|可选事件|世界动态/) || [])[0]).filter(Boolean);
+    assert.deepEqual(visible(), ['剧情节点'], 'outline mode uses the same node words as clue mode');
     doc.querySelector('[data-act="node-kind"][data-kind="world"]').click();
     await tick(10);
     assert.deepEqual(visible(), ['世界动态']);

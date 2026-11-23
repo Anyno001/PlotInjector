@@ -251,7 +251,7 @@ test('run page: the 剧情线 card lists lines with their state and what they wa
   const doc = host.w.document;
   doc.querySelector(`[data-act="project"][data-id="${pid}"]`).click(); await new Promise((r) => setTimeout(r, 20));
   doc.querySelector('[data-act="tab"][data-tab="run"]').click(); await new Promise((r) => setTimeout(r, 20));
-  const card = () => [...doc.querySelectorAll('.pi-card')].find((c) => /^进度/.test(c.querySelector('h3')?.textContent || ''));
+  const card = () => [...doc.querySelectorAll('.pi-card')].find((c) => /^剧情线/.test(c.querySelector('h3')?.textContent || ''));
   assert.ok(card(), 'line card shown');
   assert.match(card().textContent, /非法设备[\s\S]*进行中/);
   assert.match(card().textContent, /电影院[\s\S]*未触发/);

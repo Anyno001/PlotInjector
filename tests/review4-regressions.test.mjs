@@ -354,7 +354,7 @@ test('V3 result-based: rewrite that would directly complete an in-progress node 
   { const pm = doc.querySelector('[data-act="run-prog-menu"]'); if (pm) { pm.click(); await tick(); doc.querySelector('[data-dlg-value="rewrite"]').click(); } else doc.querySelector('[data-act="rewrite"]').click(); } await tick();
   doc.querySelector('.pi-dialog textarea, .pi-dialog input').value = 'x';
   doc.querySelector('.pi-dialog .pi-btn.is-primary').click(); await tick(); await tick();
-  assert.match(doc.querySelector('.pi-body').textContent, /这次改写会让 n_ledger「查账本」直接变成已完成/);
+  assert.match(doc.querySelector('.pi-body').textContent, /这次改写会让 ?n_ledger「查账本」直接变成已完成/);
   await inst.destroy();
 });
 

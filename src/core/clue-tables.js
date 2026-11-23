@@ -16,6 +16,8 @@ export function sheetList(tables) {
             name: String(sheet.name || key),
             content: sheet.content,
             seedRows: sheet.seedRows,
+            [SEED_OFF]: sheet[SEED_OFF],
+            [SEED_HOLD]: sheet[SEED_HOLD],
             note: String((sheet.sourceData && sheet.sourceData.note) || ''),
             freq: sheet.updateConfig ? sheet.updateConfig.updateFrequency : void 0,
         }));
@@ -30,10 +32,36 @@ export function findSheet(tables, name) {
           : { error: `缺少表「${name}」` };
 }
 
+// 表里的行：有真正的行用真正的行；还没有时用模板初始行（seedRows，D21）。
+// 游玩时只有数据库此刻还会用初始行，才把它当表里的行（官方 shouldUseInitialSeedRows_ACU，见 lines.js seedRowsState）。
+// 调用方用 withSeedGate 把判断写进表格（运行时读表时做一次）；没写过的表格照旧读初始行（作者预览、模板、改标签）。
+//   live：照旧读初始行。
+//   pending：还没有用户消息、或认不准隔离——初始行不算登记（不放行发现），也先别往「只有初始行」的表里补行，
+//            否则一条真实行会使数据库不再使用其余初始行。
+//   off：过了时机，初始行不读；表里没有真正的行就照常补。
+// SEED_OFF：不读初始行（值是 pending / off）；SEED_HOLD：这张表只有初始行、现在先别补行。
+export const SEED_OFF = '__piSeedOff';
+export const SEED_HOLD = '__piSeedHold';
+export function withSeedGate(tables, state) {
+    state === !0 && (state = 'live');
+    state === !1 && (state = 'off');
+    if (!tables || typeof tables != 'object') return tables;
+    let out = { ...tables };
+    for (let [k, s] of Object.entries(tables)) {
+        if (!k.startsWith('sheet_') || !s || !Array.isArray(s.seedRows) || !s.seedRows.length) continue;
+        let own = Array.isArray(s.content) && s.content.slice(1).some(Array.isArray);
+        out[k] = { ...s, ...(state === 'live' ? {} : { [SEED_OFF]: state }), ...(state !== 'off' && !own ? { [SEED_HOLD]: !0 } : {}) };
+    }
+    return out;
+}
+// 只看真正的行（写后回读、确认写进去没有）：初始行一律不算
+export function entityTables(tables) {
+    return withSeedGate(tables, 'off');
+}
 export function sheetRows(sheet) {
     let head = Array.isArray(sheet.content[0]) ? sheet.content[0] : [],
         own = sheet.content.slice(1).filter(Array.isArray),
-        seeds = Array.isArray(sheet.seedRows) ? sheet.seedRows.filter(Array.isArray) : [],
+        seeds = !sheet[SEED_OFF] && Array.isArray(sheet.seedRows) ? sheet.seedRows.filter(Array.isArray) : [],
         rows = own.length ? own : seeds;
     return {
         head,
@@ -69,7 +97,8 @@ export function readCell(tables, path) {
     if (found.error) return { state: 'unknown', reason: found.error };
     let { col, rows } = sheetRows(found.sheet),
         c = col(column),
-        hits = c < 0 ? [] : findRow(rows, rowKey);
+        know = col('事实') >= 0 && col('角色') >= 0,
+        hits = c < 0 ? [] : findRow(rows, rowKey, { know });
     if ((!hits.length && col(rowKey) >= 0 && findRow(rows, column).length && ((c = col(rowKey)), (hits = findRow(rows, column))), c < 0))
         return { state: 'unknown', reason: `表「${table}」缺少列「${column}」` };
     if (!hits.length) return { state: 'unknown', reason: `表「${table}」没有行「${rowKey}」` };
@@ -91,7 +120,8 @@ export function readFacts(tables, bindings) {
             idCol = col(binding.编号列 || ''),
             stateCol = binding.状态列 ? col(binding.状态列) : -1,
             textCol = binding.内容列 ? col(binding.内容列) : -1,
-            srcCol = binding.来源列 ? col(binding.来源列) : -1;
+            srcCol = binding.来源列 ? col(binding.来源列) : -1,
+            labelCol = col('标签');
         if (idCol < 0) {
             problems.push(`表「${binding.表}」缺少编号列「${binding.编号列 || '（未设置）'}」`);
             continue;
@@ -126,6 +156,7 @@ export function readFacts(tables, bindings) {
                 raw: cellText(raw),
                 text: textCol >= 0 ? cellText(row[textCol]) : '',
                 source: srcCol >= 0 ? cellText(row[srcCol]) : '',
+                label: labelCol >= 0 ? cellText(row[labelCol]) : '',
                 table: binding.表,
             });
         }
@@ -134,7 +165,7 @@ export function readFacts(tables, bindings) {
 }
 
 export function readKnowledge(tables, bindings) {
-    // present：表里存在的全部「事实@角色」组合（含「未知」预建行），用于检查预建行是否齐全。
+    // present：表里存在的全部「事实@角色」组合（含「未知」预建行），用于检查预建行是否齐全。键按 knowKey 归一（主角的几种写法算一个）。
     let rows = [],
         problems = [],
         present = /* @__PURE__ */ new Set();
@@ -174,7 +205,7 @@ export function readKnowledge(tables, bindings) {
         for (let row of data) {
             let fact = cellText(row[factCol]),
                 actor = cellText(row[actorCol]);
-            fact && actor && present.add(`${fact}@${actor}`);
+            fact && actor && present.add(knowKey(fact, actor));
             if (wayCol >= 0 && unknownWays.has(cellText(row[wayCol]))) continue;
             if (wayCol >= 0 && validWays.size && !validWays.has(cellText(row[wayCol]))) {
                 badWays.add(cellText(row[wayCol]));
@@ -233,9 +264,21 @@ export function plotPresetConflicts(preset) {
     return out;
 }
 
-export function findRow(rows, rowKey) {
+// know：这是知情表（有「事实」「角色」两列）。只有知情表的「事实@主角」行键按主角别名找（D48）：
+// 精确行键 → 主角同义行键（只看行键那一格）→ 原来的任意格查找。普通表不做别名。
+export function findRow(rows, rowKey, { know = !1 } = {}) {
     let first = rows.filter((row) => cellText(row[1]) === rowKey);
-    return first.length ? first : rows.filter((row) => row.slice(1).some((cell) => cellText(cell) === rowKey));
+    if (first.length) return first;
+    let i = String(rowKey).lastIndexOf('@');
+    if (know && i > 0 && SELF_KEYS.includes(String(rowKey).slice(i + 1).trim())) {
+        let want = knowKeyOf(rowKey),
+            alias = rows.filter((row) => {
+                let k = cellText(row[1]);
+                return k.includes('@') && knowKeyOf(k) === want;
+            });
+        if (alias.length) return alias;
+    }
+    return rows.filter((row) => row.slice(1).some((cell) => cellText(cell) === rowKey));
 }
 
 export const ENTRY_OPEN = '(（[【「『';
@@ -250,6 +293,17 @@ export const ENTRY_COMMA = ',，、';
 export const ENTRY_HEAD = /^\s*[^\s:：=,，、;；|｜()（）]{1,12}\s*[:：=]/;
 
 export const SELF_KEYS = ['主角', 'user', '<user>', '{{user}}', '玩家'];
+
+// 比对「事实@角色」用的键（D47）：主角的几种写法算同一个人。只用来比较，不改表里的原拼法。
+export function knowKey(fact, actor) {
+    let a = cellText(actor);
+    return `${cellText(fact)}@${SELF_KEYS.includes(a) ? 'user' : a}`;
+}
+export function knowKeyOf(key) {
+    let s = String(key ?? ''),
+        i = s.lastIndexOf('@');
+    return i < 0 ? s : knowKey(s.slice(0, i), s.slice(i + 1));
+}
 
 export function entryOf(key, value) {
     let k = String(key).trim(),
@@ -381,7 +435,7 @@ export function tierCompare(op, cell, wanted, tiers) {
 }
 
 // 表格说明里给档位编了号（「0 陌生：…」「3 信任：…」）时，查一个档位名对应的数字；没写或写了不止一个数字就返回 null。
-// 审阅页的表格条件用它：作者填「≥ 信任」，提示按说明改成「≥ 3」（用户 2026-11-17）。
+// 审阅页的表格条件用它：作者填「≥ 信任」，提示改成「≥ 3」。
 export function tierNumberInNote(note, word) {
     let w = cellText(word);
     if (!w || Number.isFinite(Number(w))) return null;

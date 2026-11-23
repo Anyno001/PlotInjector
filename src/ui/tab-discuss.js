@@ -11,6 +11,7 @@ import { downloadBlob, toast } from '../host/st.js';
 import { choiceDialog, confirmDialog, esc, openDialog, promptDialog, menuDialog } from './dom.js';
 import { ICONS } from './styles.js';
 import { pickRefs, progressText, resolveRefs, wbSummary } from './discuss-refs.js';
+import { outlineChipLabel, outlineMulti, pickOutlineLines } from './outline-refs.js';
 import { renderMarkdown } from './markdown.js';
 import * as outlineTab from './tab-outline.js';
 import * as settingTab from './tab-setting.js';
@@ -37,21 +38,22 @@ export function render(view) {
         wb = wbSummary(view, chat.refs, () => view.renderBody()),
         canProgress = !!progressText(view),
         persona = view.data.settings().persona.trim(),
-        refsOn = [refs.setting && '设定', refs.outline && '大纲', refs.progress && canProgress && '剧情进度', refs.floors && `正文${refs.floors}楼`, wb && wb.count && `世界书${wb.count}条`].filter(Boolean),
+        olLabel = outlineChipLabel(view, view.project(), refs),
+        refsOn = [refs.setting && '设定', refs.outline && olLabel, refs.progress && canProgress && '剧情进度', refs.floors && `正文${refs.floors}楼`, wb && wb.count && `世界书${wb.count}条`].filter(Boolean),
         open = !!st(view).refsOpen,
-        chips = `<div class="pi-dc-bar"><button type="button" class="pi-dc-refs" data-act="refs-toggle" aria-expanded="${open}">参考 <i>${refsOn.length}</i><small>${esc(refsOn.join('、') || '无')}</small><span class="pi-dc-caret">${open ? '▴' : '▾'}</span></button>
-        <button type="button" class="pi-dc-act" data-act="review-pick" title="选一条剧情线，逐页查看各阶段，在对应页填写意见后统一发送">${ICONS.pencil}<span>审阅修改</span></button></div>
+        chips = `<div class="pi-dc-bar"><button type="button" class="pi-dc-refs" data-act="refs-toggle" aria-expanded="${open}">参考 <i>${refsOn.length}</i><small>${esc(refsOn.join('、') || '无')}</small><span class="pi-dc-caret${open ? ' is-open' : ''}">${ICONS.chevDown}</span></button>
+        <button type="button" class="pi-dc-act" data-act="review-pick" title="选一条${clueWord ? '剧情线' : '卷'}，逐页查看各阶段，在对应页填写意见后统一发送">${ICONS.pencil}<span>审阅修改</span></button></div>
         ${open ? `<div class="pi-dc-refs-open">
         <button type="button" class="pi-chip${persona ? ' is-on' : ''}" data-act="persona" title="${esc(persona || '指定AI讨论时的说话人格')}">人格${persona ? '' : '：未设置'}</button>
         <button type="button" class="pi-chip${refs.setting ? ' is-on' : ''}" data-act="ref" data-ref="setting">设定</button>
-        <button type="button" class="pi-chip${refs.outline ? ' is-on' : ''}" data-act="ref" data-ref="outline">大纲</button>
+        <button type="button" class="pi-chip${refs.outline ? ' is-on' : ''}" data-act="ref-outline">${esc(olLabel)}</button>
         <button type="button" class="pi-chip${refs.progress && canProgress ? ' is-on' : ''}" data-act="ref" data-ref="progress"${canProgress ? '' : ' disabled title="本项目不是当前聊天启用的项目"'}>剧情进度</button>
         <button type="button" class="pi-chip${refs.floors ? ' is-on' : ''}" data-act="ref-floors">正文${refs.floors}楼</button>
         <button type="button" class="pi-chip${wb && wb.count ? ' is-on' : ''}" data-act="ref-wb">世界书${wb ? `${wb.count}条` : '…'}</button></div>` : ''}`,
         messages = live
             .map((msg) => {
                 let isUser = msg.role === 'user',
-                    // 回复下的按钮排成一行（用户 2026-11-16 选 B）：常用的放外面，编辑、删除此条消息、重新生成收进「⋯」
+                    // 回复下的按钮排成一行：常用的放外面，编辑、删除、重新生成收进「⋯」。
                     tools = `<div class="pi-msg-tools">${
                         isUser || msg !== lastAiMsg
                             ? ''
@@ -63,9 +65,9 @@ export function render(view) {
             .join(''),
         empty = chat.messages.length
             ? ''
-            : '<div class="pi-empty">说说你想写的剧情或设定，一句话也行。<br>AI会帮你把世界观、人物和剧情走向想清楚；想好了，可以在AI的回复下面点「写新剧情线」。</div>';
+            : `<div class="pi-empty">输入想写的剧情或设定，一句话即可。<br>AI协助梳理世界观、人物和剧情走向；完成后可在AI回复下方点「${clueWord ? '写新剧情线' : '写新卷'}」。</div>`;
     return `${chips}<div class="pi-chat">
-        ${folded ? `<button type="button" class="pi-msg-fold" data-act="summary">更早的${folded}条已折成摘要，查看</button>` : ''}
+        ${folded ? `<button type="button" class="pi-msg-fold" data-act="summary">更早的${folded}条已折叠为摘要，查看</button>` : ''}
         ${empty}${messages}${busy ? '<div class="pi-msg is-ai"><span class="pi-spin"></span></div>' : ''}</div>
         <div class="pi-compose">${chat.messages.length ? `<button type="button" class="pi-compose-side" data-act="clear-talk" title="清空讨论">${ICONS.trash}</button>` : ''}<textarea class="pi-ta" data-compose placeholder="Ctrl+Enter发送">${esc(st(view).draft || '')}</textarea>
         ${busy ? `<button type="button" class="pi-send" data-act="stop" title="停止回复">${ICONS.close}</button>` : `<button type="button" class="pi-send" data-act="send" title="发送（Ctrl+Enter）">${ICONS.send}</button>`}</div>`;
@@ -131,7 +133,7 @@ function updateChat(view, fn) {
 
 function talkMarkdown(view, chat) {
     const name = view.project().name;
-    const lines = [`# ${name} · 讨论记录`, ''];
+    const lines = [`# ${name}讨论记录`, ''];
     if (chat.summary) lines.push('## 早期摘要', '', chat.summary, '');
     for (const msg of chat.messages) lines.push(`## ${msg.role === 'user' ? '我' : 'AI'}`, '', msg.content, '');
     return lines.join('\n');
@@ -144,7 +146,7 @@ export const actions = {
         if (!chat || !chat.messages.length) return;
         const choice = await choiceDialog({
             title: '清空讨论',
-            body: `删除这个项目的全部${chat.messages.length}条讨论消息和摘要。设定、大纲和附带参考不受影响。`,
+            body: `删除本项目的全部${chat.messages.length}条讨论消息和摘要；设定、大纲和附带参考不受影响。`,
             choices: [
                 { label: '取消', value: null },
                 { label: '直接清空', value: 'clear', danger: !0 },
@@ -222,7 +224,7 @@ export const actions = {
             view.renderBody());
     },
     async 'msg-del'(view, target) {
-        (await confirmDialog({ title: '删除此条消息', body: '只删这一条，其他消息不动。', okLabel: '删除', danger: !0 })) &&
+        (await confirmDialog({ title: '删除此条消息', body: '仅删除这一条消息。', okLabel: '删除', danger: !0 })) &&
             (updateChat(view, (chat) => ({ ...chat, messages: chat.messages.filter((item) => item.id !== target.dataset.id) })),
             view.renderBody());
     },
@@ -251,7 +253,7 @@ export const actions = {
     async persona(view) {
         const value = await promptDialog({
             title: '说话人格',
-            label: '讨论时AI以什么身份、什么风格回复，留空为默认',
+            label: '讨论时AI的身份与回复风格，留空为默认',
             value: view.data.settings().persona,
             multiline: !0,
             placeholder: '例：你是一位熟悉原作的资深编辑，说话直接，敢于否定不合理的设定。',
@@ -261,6 +263,14 @@ export const actions = {
     ref(view, target) {
         const key = target.dataset.ref;
         (updateChat(view, (chat) => ({ ...chat, refs: { ...chat.refs, [key]: !chat.refs[key] } })), view.renderBody());
+    },
+    // 大纲：单线项目直接开关；多线项目打开选线框。
+    async 'ref-outline'(view) {
+        let project = view.project(),
+            refs = view.data.chat(view.projectId).refs;
+        if (!outlineMulti(project)) return (updateChat(view, (chat) => ({ ...chat, refs: { ...chat.refs, outline: !chat.refs.outline } })), view.renderBody());
+        let r = await pickOutlineLines(view, project, refs);
+        r && (updateChat(view, (chat) => ({ ...chat, refs: { ...chat.refs, outline: r.outline, lines: r.lines } })), view.renderBody());
     },
     async 'ref-floors'(view) {
         const chat = view.data.chat(view.projectId),
@@ -286,7 +296,7 @@ export const actions = {
     'refs-toggle'(view) {
         ((st(view).refsOpen = !st(view).refsOpen), view.renderBody());
     },
-    // 审阅修改（导入审阅总方案第五节 J，用户 2026-11-16 第三版）：选一条剧情线 → 逐页审阅（和导入同一个页面）。
+    // 审阅修改：选一条剧情线，逐页审阅（与导入共用同一页面）。
     // 讨论只用来聊，不直接改大纲；讨论记录在审阅页发送意见时作为参考带上。
     async 'review-pick'(view) {
         let project = view.project();

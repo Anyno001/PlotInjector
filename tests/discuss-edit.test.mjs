@@ -183,7 +183,7 @@ test('J3 outline mode: the review page has no line page, shows place / event and
   assert.equal(rv.querySelectorAll('.pi-rv-dot').length, 2, 'no line page');
   await goPage(t, 1);
   assert.match(doc.querySelector('.pi-rv').textContent, /后屋，发现撕掉的一页/);
-  assert.match(doc.querySelector('.pi-rv').textContent, /支线[\s\S]*流浪猫[\s\S]*触发：去后巷时/);
+  assert.match(doc.querySelector('.pi-rv').textContent, /可选事件[\s\S]*流浪猫[\s\S]*触发：去后巷时/);
   await t.blur('[data-rv-comment]', '加一段老板娘不配合的对话');
   host.llm.reply = '【单位：o1/os2】\n```yaml\n阶段二_调查:\n  时间范围: 第二天\n  主线节点:\n    - {名称: 查账本, 地点: 后屋, 事件: 发现撕掉的一页}\n    - {名称: 老板娘不配合, 地点: 柜台, 事件: 她推说记不清}\n```';
   await t.click('[data-act="rv-preview"]');

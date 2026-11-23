@@ -55,6 +55,14 @@ export function personaLines(items) {
         .join('\n');
 }
 
+// 大纲推进按线（方案 五.4）：剧情线开启条件里等着确认的事。只给公开说明，不给答案；items 为空时不加，提示与旧版逐字一致。
+const FACT_KEY = '"facts":[{"id":"编号","floor":写出这件事的楼号}]';
+const FACT_RULE =
+    'facts 对照【待确认的事】：只有正文已经明确写出这件事发生了才填，id 原样照抄，floor 填写出它的楼号。只是提到、计划、猜测、角色以为的都不算。没有就填空数组。';
+export function factLines(items) {
+    return items.map((item) => `- ${item.id}：${item.text}`).join('\n');
+}
+
 // newThread 的占位值：AI 没有新线时常写成这些。比对前去掉首尾空白与末尾标点。
 const EMPTY_NAMES = /^(?:无|没有|暂无|空|none|null|nil|n\/a|na|undefined|-|—|无新线|没有新线|没有新的线)$/i;
 const isEmptyName = (name) =>
@@ -66,9 +74,10 @@ const isEmptyName = (name) =>
     );
 
 // index 是 buildIndexText 生成的剧情索引，里面已有当前段各节点的已演/未演。threads 见 threadRules。
-export function buildCheckMessages(unit, index, floors, threads = null, personas = null) {
+export function buildCheckMessages(unit, index, floors, threads = null, personas = null, facts = null) {
     const extra = threadRules(threads);
     const pItems = Array.isArray(personas) ? personas : [];
+    const fItems = Array.isArray(facts) ? facts : [];
     const format =
         '{"done":["节点名"],"stageDone":true或false,"offTrack":true或false,"offReason":"偏离说明，没有就留空","reason":"一句话"}';
     const system = [
@@ -76,16 +85,18 @@ export function buildCheckMessages(unit, index, floors, threads = null, personas
         '只认正文里已经写出的事件，计划、预告、角色设想不算发生。',
         '若剧情走了某个节点的「偏转」分支，在 reason 里写明是哪个节点、怎么偏的。',
         '另外判断剧情是否严重偏离大纲：正文的走向已经和【当前】【下一段】冲突，照原计划写下去会接不上（例如关键人物已死、关键事件已不可能发生、地点或立场彻底改变）。普通的细节出入、走了偏转分支都不算严重偏离。',
-        `只输出一个 JSON 对象，不加说明：${extra || pItems.length ? `${format.slice(0, -1)}${[...(extra ? extra.keys : []), ...(pItems.length ? [PERSONA_KEY] : [])].map((key) => `,${key}`).join('')}}` : format}`,
+        `只输出一个 JSON 对象，不加说明：${extra || pItems.length || fItems.length ? `${format.slice(0, -1)}${[...(extra ? extra.keys : []), ...(pItems.length ? [PERSONA_KEY] : []), ...(fItems.length ? [FACT_KEY] : [])].map((key) => `,${key}`).join('')}}` : format}`,
         `done 只填${extra && extra.hooks ? '【当前】或【支线钩子】' : '【当前】'}里出现过的节点名，原样照抄；stageDone 表示当前段所有主线节点都已发生、剧情已进入下一段。`,
         ...(extra ? extra.rules : []),
         ...(pItems.length ? [PERSONA_RULE] : []),
+        ...(fItems.length ? [FACT_RULE] : []),
     ].join('\n');
     // floor.index 是楼层下标，小于上次检测时楼数的楼上次已经读过。
     const readTo = extra ? extra.readTo : 0;
     const user = [
         `【剧情索引】\n${index}`,
         ...(pItems.length ? ['', `【人设阶段】\n${personaLines(pItems)}`] : []),
+        ...(fItems.length ? ['', `【待确认的事】\n${factLines(fItems)}`] : []),
         '',
         '【最近正文】',
         ...floors.map((floor) => `【第 ${floor.index} 楼${readTo > 0 && floor.index < readTo ? '·已读' : ''}】\n${floor.text}`),
@@ -97,15 +108,19 @@ export function buildCheckMessages(unit, index, floors, threads = null, personas
 }
 
 // 没有大纲时只检测人设阶段：不带剧情索引，回复里只有 personas。
-export function buildPersonaCheckMessages(items, floors) {
+export function buildPersonaCheckMessages(items, floors, facts = []) {
+    const fItems = Array.isArray(facts) ? facts : [];
     const system = [
-        '你是人设阶段核对员。根据最近的正文，判断下列人设线是否已经进入下一阶段。',
+        items.length ? '你是人设阶段核对员。根据最近的正文，判断下列人设线是否已经进入下一阶段。' : '你是剧情核对员。根据最近的正文，判断下列事情是否已经在正文中发生。',
+        ...(items.length && fItems.length ? ['同时判断【待确认的事】是否已经发生。'] : []),
         '只认正文里已经写出的事件，计划、预告、角色设想不算发生。',
-        `只输出一个 JSON 对象，不加说明：{${PERSONA_KEY}}`,
-        PERSONA_RULE,
+        `只输出一个 JSON 对象，不加说明：{${[...(items.length ? [PERSONA_KEY] : []), ...(fItems.length ? [FACT_KEY] : [])].join(',')}}`,
+        ...(items.length ? [PERSONA_RULE] : []),
+        ...(fItems.length ? [FACT_RULE] : []),
     ].join('\n');
     const user = [
-        `【人设阶段】\n${personaLines(items)}`,
+        ...(items.length ? [`【人设阶段】\n${personaLines(items)}`] : []),
+        ...(fItems.length ? [`${items.length ? '\n' : ''}【待确认的事】\n${factLines(fItems)}`] : []),
         '',
         '【最近正文】',
         ...floors.map((floor) => `【第 ${floor.index} 楼】\n${floor.text}`),
@@ -139,6 +154,7 @@ export function parseCheckReply(text) {
         hooks: names(value.hooks),
         newThread: parseThread(value.newThread),
         ...(Array.isArray(value.personas) ? { personas: parsePersonaMoves(value.personas) } : {}),
+        ...(Array.isArray(value.facts) ? { facts: parseFactHits(value.facts) } : {}),
     };
 }
 
@@ -163,6 +179,15 @@ function parseClocks(raw, flag) {
             };
         })
         .filter((item) => item.name);
+}
+
+// facts：[{id, floor}]，也接受直接写编号的字符串
+function parseFactHits(raw) {
+    return (Array.isArray(raw) ? raw : [])
+        .map((item) => (typeof item === 'string' ? { id: item } : item))
+        .filter((item) => item && typeof item === 'object')
+        .map((item) => ({ id: String(item.id ?? item.编号 ?? '').trim(), floor: Math.round(Number(item.floor ?? item.楼)) || 0 }))
+        .filter((item) => item.id);
 }
 
 // personas 只认数组里 line 与 to 都有内容的对象。

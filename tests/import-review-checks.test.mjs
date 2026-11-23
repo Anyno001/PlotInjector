@@ -177,9 +177,9 @@ test('parseUnitReply: a stage wrapped in a volume (with a line head) is unwrappe
   assert.equal(r.stage.data.主线节点.length, 2);
   assert.equal(r.stage.data.AI指令, '新指令');
   // 只要了阶段3，回复里是别的阶段名：不认
-  assert.throws(() => C.parseUnitReply('v/s3', '剧情_卷X:\n  线: {编号: S3}\n  阶段9_别的:\n    主线节点: [{id: n1}]\n  阶段8_也不是:\n    主线节点: [{id: n2}]\n', '阶段3_两条记录', 2), /找不到这个阶段/);
+  assert.throws(() => C.parseUnitReply('v/s3', '剧情_卷X:\n  线: {编号: S3}\n  阶段9_别的:\n    主线节点: [{id: n1}]\n  阶段8_也不是:\n    主线节点: [{id: n2}]\n', '阶段3_两条记录', 2), /回复中没有这个阶段/);
   // 原来有节点、回复里一个都没有：不认（不清空）
-  assert.throws(() => C.parseUnitReply('v/s3', '阶段3_两条记录:\n  AI指令: 只剩指令\n', '阶段3_两条记录', 3), /一个场景都没有/);
+  assert.throws(() => C.parseUnitReply('v/s3', '阶段3_两条记录:\n  AI指令: 只剩指令\n', '阶段3_两条记录', 3), /没有任何场景/);
   // 改了阶段名的单个阶段：照样认
   assert.equal(C.parseUnitReply('v/s3', '阶段3_两条记录与合流:\n  主线节点: [{id: n1, 名称: 甲}]\n', '阶段3_两条记录', 1).stage.key, '阶段3_两条记录与合流');
   // 线头：三种写法

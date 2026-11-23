@@ -58,7 +58,7 @@ test('settings page: switch to 同人, then to 自定义 (seeded from the guide 
   const pick = () => doc.querySelector('[data-guide-preset]');
   assert.ok(pick(), 'preset select');
   assert.equal(pick().value, 'generic');
-  assert.match(doc.body.textContent, /正文模型看不到它/);
+  assert.match(doc.body.textContent, /正文模型不会读取/);
   const choose = async (v) => { pick().value = v; pick().dispatchEvent(new host.w.Event('change', { bubbles: true })); await tick(); };
   await choose('fanfic');
   assert.equal(inst.data.settings().guidePreset, 'fanfic');

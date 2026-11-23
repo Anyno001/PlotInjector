@@ -469,7 +469,7 @@ test('runtime: quota full → walking into another side line does not start it; 
 test('runtime: enter is refused when the condition is not met; resume of a started side line checks the quota', async () => {
   const { host, inst } = await boot(1, [MAIN(), side('S07', { 开启条件: { 表: '关系表/巴基/阶段 >= 2' } }), side('S10'), side('S12')]);
   await host.addMessage('开场白', false);
-  assert.throws(() => inst.runtime.clue.lineAct('S07', 'enter'), /开启条件还没满足/);
+  assert.throws(() => inst.runtime.clue.lineAct('S07', 'enter'), /开启条件尚未满足/);
   inst.runtime.clue.lineAct('S10', 'enter');
   inst.runtime.clue.lineAct('S10', 'pause');
   inst.runtime.clue.lineAct('S12', 'enter');
@@ -742,27 +742,65 @@ test('line confirm (real DOM): 标记完成 / 放弃 confirmed after switching p
 });
 
 // 第三批（用户 2026-11-16）：执行页按「需要处理 → 剧情 → 剧情线 → 本轮场景 → 节点 → 运行设置」排；运行设置表格已绑定时收起，展开后有推进方式、表格绑定、支线名额、推进速度；节点只展开进行中的阶段
-test('run page layout: order, collapsed 设置与记录 (opens on click), only the live stage is expanded, pause menu keeps the three kinds', async () => {
+test('run page layout: order, collapsed 运行设置 (opens on click), pause menu keeps the three kinds', async () => {
   const { host, inst } = await boot(2, [MAIN(), side('S01'), side('S02')]);
   inst.open(); await new Promise((r) => setTimeout(r, 20));
   const doc = host.w.document, tick = () => new Promise((r) => setTimeout(r, 30));
   doc.querySelector('[data-act="tab"][data-tab="run"]').click(); await tick();
   const heads = [...doc.querySelectorAll('.pi-body .pi-card > h3')].map((h) => h.textContent.replace(/\s+/g, '')).filter(Boolean);
   const at = (re) => heads.findIndex((h) => re.test(h));
-  assert.ok(at(/^当前/) >= 0 && at(/^进度/) > at(/^当前/) && at(/设置与记录/) > at(/^进度/), heads.join(' | '));
-  assert.ok(doc.querySelector('.pi-tl .pi-tl-item.is-active .pi-tl-nodes'), 'live stage expanded as a ring timeline');
+  assert.ok(at(/^剧情进行中/) >= 0 && at(/^剧情线/) > at(/^剧情进行中/) && at(/^本轮场景/) > at(/^剧情线/) && at(/^节点/) > at(/^本轮场景/) && at(/运行设置/) > at(/^节点/), heads.join(' | '));
+  assert.ok(doc.querySelector('[data-act="clue-refresh"]') && doc.querySelector('[data-act="preview"]') && doc.querySelector('[data-act="rewrite"]'), '重新读表 / 预览 / 改写后续 are direct buttons');
   const fold = doc.querySelector('[data-act="run-set-toggle"]');
   assert.equal(fold.getAttribute('aria-expanded'), 'false', 'tables bound → settings collapsed');
   assert.match(fold.closest('h3').textContent, /线索推进，表格已绑定，推进速度/);
   assert.equal(doc.querySelector('[data-act="clue-mode"]'), null);
   fold.click(); await tick();
-  for (const sel of ['[data-act="clue-prebuild"]', '[data-clue-sidelimit]', '[data-act="pace"]']) assert.ok(doc.querySelector(sel), `${sel} in 设置与记录`);
-  assert.equal(doc.querySelector('[data-act="clue-mode"]'), null, 'advanced folded');
-  doc.querySelector('[data-act="run-fold"][data-key="advOpen"]').click(); await tick();
-  for (const sel of ['[data-act="clue-mode"]', '[data-act="clue-bind-toggle"]', '[data-act="clue-gen-template"]']) assert.ok(doc.querySelector(sel), `${sel} in 高级`);
+  for (const sel of ['[data-act="clue-prebuild"]', '[data-act="clue-labels-edit"]', '[data-act="clue-gen-template"]', '[data-act="clue-mode"]', '[data-act="clue-bind-toggle"]', '[data-clue-sidelimit]', '[data-act="pace"]'])
+    assert.ok(doc.querySelector(sel), `${sel} in 运行设置`);
   const menu = doc.querySelector('.pi-pause-menu');
-  assert.ok(menu.querySelector('[data-act="clue-pause"][data-value="1"]') && menu.querySelector('[data-act="clue-pause-mains"]') && menu.querySelector('[data-act="clue-pause-side"]'), '暂停全部剧情 / 只暂停主线 / 只暂停支线 all in the menu');
+  assert.ok(menu.querySelector('[data-act="clue-pause"][data-value="1"]') && menu.querySelector('[data-act="clue-pause-mains"]') && menu.querySelector('[data-act="clue-pause-side"]'), '暂停全部剧情 / 只暂停主线 / 只暂停支线');
   const names = [...doc.querySelectorAll('.pi-line-name')].map((b) => b.textContent);
   assert.ok(names.every((n) => !/·/.test(n) && !/^(\S+) \1/.test(n)), names.join(' | '));
+  await inst.destroy();
+});
+
+// 合并完整性审阅 R1–R3（2026-11-23）：主线和进行中的支线，阶段和节点都列出、节点菜单点得到；必需节点写名字；没开始的线写出在等什么
+test('run page: every running line shows its stages and nodes (node menus reachable); required nodes are named; waiting lines say why', async () => {
+  const { host, inst } = await boot(2, [MAIN(), side('S01'), side('S02', { 开启条件: { 事实: 'F_never' } })]);
+  inst.runtime.clue.lineAct('S01', 'enter');
+  inst.open(); await new Promise((r) => setTimeout(r, 20));
+  const doc = host.w.document, tick = () => new Promise((r) => setTimeout(r, 30));
+  doc.querySelector('[data-act="tab"][data-tab="run"]').click(); await tick();
+  const nodesCard = [...doc.querySelectorAll('.pi-card')].find((c) => /^节点/.test(c.querySelector('h3')?.textContent || ''));
+  const live = [...nodesCard.querySelectorAll('.pi-clue-stage.is-active')].map((s) => s.querySelector('.pi-tl-name').textContent.replace(/\s+/g, ''));
+  assert.ok(live.some((t) => /M1/.test(t)) && live.some((t) => /S01/.test(t)), `both lines' live stages listed: ${live.join(' | ')}`);
+  assert.ok(nodesCard.querySelector('[data-act="clue-node-menu"][data-uid="S01a"]'), 'the side line node has its ⋯ menu');
+  assert.match(nodesCard.textContent, /未完成的必需节点：S01a/);
+  doc.querySelector('[data-act="clue-node-menu"][data-uid="S01a"]').click(); await tick();
+  assert.ok(doc.querySelector('[data-dlg-value="done:fill"]'), 'node menu opens with 手动标记完成');
+  const lineCard = doc.querySelector('.pi-line-card');
+  lineCard.querySelector('[data-act="clue-line-tab"][data-tab="idle"]').click(); await tick();
+  const s02 = doc.querySelector('.pi-line-card [data-line-row="S02"]');
+  assert.ok(s02 && s02.querySelector('.pi-line-tags'), 'S02 row has its type / state');
+  assert.match(s02.textContent, /等待：F_never/, 'S02 says what it waits for (not only 已离开)');
+  await inst.destroy();
+});
+
+// 合并完整性审阅（2026-11-23）：本场的线索还没有标签、建不了行时，本轮场景卡写出「尚在准备」（显示线索名，不显示编号）
+test('run page: 本场有线索尚在准备 shows on the scene card when the focused node\'s clue has no row yet', async () => {
+  const { host, inst, pid } = await boot(2, [MAIN(), side('S01')]);
+  inst.runtime.clue.lineAct('S01', 'enter');
+  inst.runtime.clue.setFocus('S01a');
+  inst.runtime.clue.invalidate();
+  const c = inst.runtime.clue.compute();
+  assert.ok(c.notReady && c.notReady.has('F_S01a'), `F_S01a not ready: ${[...(c.notReady || [])].join(',')}`);
+  inst.open(); await new Promise((r) => setTimeout(r, 20));
+  const doc = host.w.document, tick = () => new Promise((r) => setTimeout(r, 30));
+  doc.querySelector(`[data-act="project"][data-id="${pid}"]`) && doc.querySelector(`[data-act="project"][data-id="${pid}"]`).click(); await tick();
+  doc.querySelector('[data-act="tab"][data-tab="run"]').click(); await tick();
+  const scene = [...doc.querySelectorAll('.pi-card')].find((x) => /^本轮场景/.test(x.querySelector('h3')?.textContent || ''));
+  assert.match(scene.textContent, /本场有线索尚在准备，本轮暂不提供给正文/);
+  assert.match(scene.textContent, /本轮场景：S01a（/, 'focus line keeps its source');
   await inst.destroy();
 });

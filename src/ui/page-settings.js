@@ -8,7 +8,7 @@ import { LLM_ROLES } from '../core/store.js';
 import { fetchModels } from '../host/llm.js';
 import { toast } from '../host/st.js';
 import { confirmDialog, esc, openDialog, options, promptDialog } from './dom.js';
-import { ICONS } from './styles.js';
+import { ICONS, foldIcon } from './styles.js';
 
 const st = (view) => view.tabState('settings');
 
@@ -68,7 +68,6 @@ function llmCard(view, s) {
         </div>`;
 }
 
-// 载入预设：列出全部预设，点名称载入，垃圾桶删除。
 function pickPreset(presets) {
     const html = presets
         .map(
@@ -81,7 +80,7 @@ function pickPreset(presets) {
     return openDialog({ title: '载入接口预设', html: `<div class="pi-presets">${html}</div>`, actions: [{ label: '取消', value: null }] });
 }
 
-// 编辑框里直接给出当前生效的全文（未自定义时就是内置版本），改了才存成自定义；改回与内置一致视为未自定义。
+// 编辑框显示当前生效全文；改动后才存为自定义，改回与内置一致视为未自定义。
 function guideCard(view, s) {
     let open = st(view).guideOpen,
         g = resolveGuide(s),
@@ -89,16 +88,16 @@ function guideCard(view, s) {
         custom = s.guidePreset === 'custom';
     return `<div class="pi-card"><h3>写作基准<span class="pi-spacer"></span>
             <button type="button" class="pi-btn is-sm is-ghost" data-act="guide-toggle">${open ? '收起' : '查看'}</button></h3>
-        <p class="pi-hint">在讨论页聊设定和剧情、在设定页整理设定时，AI按这份基准来写。正文模型看不到它。</p>
-        <label class="pi-field"><span>使用哪一份</span><select class="pi-sel" data-guide-preset>${options(
+        <p class="pi-hint">讨论页和设定页的AI按这份基准写作，正文模型不会读取。</p>
+        <label class="pi-field"><span>使用的基准</span><select class="pi-sel" data-guide-preset>${options(
             GUIDE_PRESETS.map((x) => ({ value: x.value, label: x.value === 'generic' ? '通用（默认）' : x.label })),
             preset.value,
         )}</select></label>
-        ${custom && !String(s.guide || '').trim() ? '<p class="pi-hint is-warn">自定义的内容还是空的，现在实际用的是通用版。</p>' : ''}
-        ${open ? (custom ? `<textarea class="pi-ta is-mono is-tall" data-guide>${esc(s.guide || '')}</textarea>` : `<p class="pi-hint">内置版本不能直接改。想改的话，选「自定义」，会以这一份为底稿。</p><pre class="pi-pre">${esc(g.text)}</pre>`) : ''}</div>`;
+        ${custom && !String(s.guide || '').trim() ? '<p class="pi-hint is-warn">自定义内容为空，当前使用通用版。</p>' : ''}
+        ${open ? (custom ? `<textarea class="pi-ta is-mono is-tall" data-guide>${esc(s.guide || '')}</textarea>` : `<p class="pi-hint">内置版本不可直接修改。选择「自定义」可以此版本为底稿编辑。</p><pre class="pi-pre">${esc(g.text)}</pre>`) : ''}</div>`;
 }
 
-// 推进速度说明并在「阶段推进」里：平时只占一行，展开后用下拉框选要编辑的档。用哪一档在执行页按聊天选。
+// 推进速度说明默认收起；使用哪一档在执行页按聊天选。
 function paceRow(view, s) {
     const open = st(view).paceOpen;
     const changed = PACES.filter((item) => s.paceText[item.value]).map((item) => item.label);
@@ -106,13 +105,13 @@ function paceRow(view, s) {
     const pace = PACES.some((item) => item.value === st(view).pace) ? st(view).pace : current || 'normal';
     const pick = PACES.map((item) => ({
         value: item.value,
-        label: `${item.label}${item.value === current ? '（当前聊天使用）' : ''}${s.paceText[item.value] ? '（已改）' : ''}`,
+        label: `${item.label}${item.value === current ? '（当前聊天使用）' : ''}${s.paceText[item.value] ? '（已修改）' : ''}`,
     }));
     return `<div class="pi-set-row"><span>推进速度说明</span>${changed.length ? `<span class="pi-badge">已修改${changed.join('、')}</span>` : ''}<span class="pi-spacer"></span>
             <button type="button" class="pi-btn is-sm is-ghost" data-act="pace-toggle">${open ? '收起' : '编辑'}</button></div>
         ${
             open
-                ? `<div class="pi-set-sub"><label class="pi-field"><span>编辑哪一档的说明</span><select class="pi-sel" data-pace-pick>${options(pick, pace)}</select></label>
+                ? `<div class="pi-set-sub"><label class="pi-field"><span>编辑的档位</span><select class="pi-sel" data-pace-pick>${options(pick, pace)}</select></label>
         <textarea class="pi-ta" rows="3" data-pace-text="${pace}">${esc(paceText(s, pace))}</textarea>
         <div class="pi-tools is-c1 is-end"><button type="button" class="pi-btn is-sm" data-act="pace-reset" data-pace="${pace}"${s.paceText[pace] ? '' : ' disabled'}>恢复默认</button></div></div>`
                 : ''
@@ -138,20 +137,20 @@ export function render(view) {
     ];
     const threadModes = [
         { value: 'ask', label: '弹出确认' },
-        { value: 'auto', label: '自动收录为支线' },
+        { value: 'auto', label: '自动收录为可选事件' },
         { value: 'off', label: '不识别' },
     ];
     let advOpen = !!st(view).advOpen;
     return `${llmCard(view, s)}
-        <div class="pi-card"><h3>阶段推进</h3>
+        <div class="pi-card"><h3>大纲推进</h3><p class="pi-hint">以下设置只用于大纲推进；线索推进不做定期检测。</p>
         <div class="pi-pair"><label class="pi-field"><span>检测间隔（楼）</span><input class="pi-inp" type="number" min="1" data-set="checkEvery" value="${s.checkEvery}"></label>
             <label class="pi-field"><span>每次读取楼数</span><input class="pi-inp" type="number" min="1" data-set="checkFloors" value="${s.checkFloors}"></label></div>
         <label class="pi-field"><span>判定阶段已演完后</span><select class="pi-sel" data-set="handleMode">${options(modes, s.handleMode)}</select></label>
         <label class="pi-field"><span>偏离大纲时</span><select class="pi-sel" data-set="offTrackMode">${options(offModes, s.offTrackMode)}</select></label>
         <label class="pi-field"><span>人设阶段变化时</span><select class="pi-sel" data-set="personaMode">${options(personaModes, s.personaMode)}</select></label>
-        <label class="pi-check"><input type="checkbox" data-set="carryOver"${s.carryOver ? ' checked' : ''}><span>没演的支线与世界动态延续到后面的阶段</span></label>
-        <div class="pi-pair"><label class="pi-field"><span>同时注入的激活支线</span><input class="pi-inp" type="number" min="1" max="6" data-set="hookCap" value="${s.hookCap}"></label>
-            <label class="pi-field"><span>正文出现大纲外的新线时</span><select class="pi-sel" data-set="newThreadMode">${options(threadModes, s.newThreadMode)}</select></label></div>
+        <label class="pi-check"><input type="checkbox" data-set="carryOver"${s.carryOver ? ' checked' : ''}><span>未演的可选事件与世界动态延续到后续阶段</span></label>
+        <div class="pi-pair"><label class="pi-field"><span>同时注入的激活可选事件</span><input class="pi-inp" type="number" min="1" max="6" data-set="hookCap" value="${s.hookCap}"></label>
+            <label class="pi-field"><span>正文出现大纲外的事件时</span><select class="pi-sel" data-set="newThreadMode">${options(threadModes, s.newThreadMode)}</select></label></div>
         ${paceRow(view, s)}</div>
         <div class="pi-card"><h3>注入内容</h3>
         <label class="pi-field"><span>详细条目的标签名</span><input class="pi-inp" data-set="tagName" value="${esc(s.tagName)}"></label>
@@ -163,7 +162,7 @@ export function render(view) {
         <div class="pi-tools is-c1 is-end"><button type="button" class="pi-btn is-sm" data-act="body-guide-reset"${s.bodyGuideText ? '' : ' disabled'}>恢复默认</button></div></div>`
                 : ''
         }</div>
-        <div class="pi-card pi-run-set"><h3><button type="button" class="pi-run-fold" data-act="adv-toggle" aria-expanded="${advOpen}">${advOpen ? '▾' : '▸'}高级</button>${advOpen ? '' : '<span class="pi-meta">写作基准、实验功能</span>'}</h3></div>
+        <div class="pi-card pi-run-set"><h3><button type="button" class="pi-run-fold" data-act="adv-toggle" aria-expanded="${advOpen}">${foldIcon(advOpen)}<span>高级</span></button>${advOpen ? '' : '<span class="pi-meta">写作基准、实验功能</span>'}</h3></div>
         ${advOpen ? `${guideCard(view, s)}
         <div class="pi-card"><h3>实验功能</h3>
         <label class="pi-check"><input type="checkbox" data-set="trpgLab"${s.trpgLab ? ' checked' : ''}><span>跑团模式（新建项目时可选）</span></label>
@@ -211,7 +210,7 @@ export function onChange(view, target) {
         let s = view.data.settings(),
             next = target.value,
             patch = { guidePreset: next };
-        // 切到自定义、框里还空着：以刚才在用的那份为底稿。
+        // 切到自定义且为空：以当前使用的基准为底稿。
         next === 'custom' && !String(s.guide || '').trim() && (patch.guide = resolveGuide(s).text);
         (view.data.updateSettings(patch), next === 'custom' && (st(view).guideOpen = !0), view.renderBody());
         return;
@@ -244,7 +243,7 @@ export const actions = {
                 let models = await fetchModels(view.data.settings().llm[role]);
                 ((s.models = { ...s.models, [role]: models }),
                     (s.manual = { ...s.manual, [role]: !1 }),
-                    toast('success', `获取到${models.length}个模型，可在下拉框中选择。`));
+                    toast('success', `已获取${models.length}个模型，可在下拉框选择。`));
             } finally {
                 ((s.loading = ''), view.renderBody());
             }

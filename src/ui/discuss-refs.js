@@ -9,6 +9,7 @@ import { checkedSet, entryRefId, fieldChecked, isMemoField, ruleFromSelection } 
 import { estimateTokens } from '../core/tokens.js';
 import { bookEntries, boundBookNames, loadBook } from '../host/worldbook.js';
 import { esc, openDialog } from './dom.js';
+import { outlineMulti, outlineRef } from './outline-refs.js';
 import { ICONS } from './styles.js';
 
 // 讨论页「附带参考」：设定、大纲、剧情进度、最近正文、世界书条目。
@@ -57,13 +58,15 @@ export async function resolveRefs(view, chat, project, { skip = [] } = {}) {
         (r.setting && project.setting.text.trim() && refs.push({ title: '当前设定', text: project.setting.text }),
         r.outline && project.outline.volumes.length)
     ) {
-        const text = outlineToText(project.outline.volumes);
+        // 多线项目按选中的线附；单线项目附整份，太长则只附阶段名。
+        const ol = outlineRef(view, project, r),
+            text = ol ? ol.text : '';
         refs.push({
             title: '当前大纲',
             text:
-                text.length < 12e3
+                outlineMulti(project) || text.length < 12e3
                     ? text
-                    : flattenUnits(project.outline.volumes).map((unit) => `${volumeLabel(unit.volume.key)}·${stageLabel(unit.stage.key)}`)
+                    : flattenUnits(project.outline.volumes).map((unit) => `${volumeLabel(unit.volume.key)} ${stageLabel(unit.stage.key)}`)
                           .join(`
 `),
         });

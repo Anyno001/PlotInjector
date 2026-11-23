@@ -9,10 +9,10 @@ import {
     emptyClueProgress,
     TRI,
 } from './clue-rules.js';
-import { findSheet, sheetRows, cellText, findRow, cellEntries, pickEntry, tierOrderInNote, tierIndex } from './clue-tables.js';
+import { findSheet, sheetRows, cellText, findRow, cellEntries, pickEntry, tierOrderInNote, tierIndex, knowKey, knowKeyOf, readFacts, readKnowledge } from './clue-tables.js';
 
 import { stripAuthorBlocks, nodeUid, normalizeClue } from './clue-model.js';
-import { isPlainObject, stageLabel, flattenUnits, stageNodes, NODE_FIELDS } from './outline.js';
+import { isPlainObject, stageLabel, flattenUnits, stageNodes, NODE_FIELDS, volumeShowName, outlineToText } from './outline.js';
 
 import { bodyGuideText } from './inject.js';
 import { normalizeCheck, hasChecks, checkRule, checkLine, freshCheckLines } from './trpg.js';
@@ -45,7 +45,7 @@ export function discoveryList(item) {
 
 export function nodeFactRefs(node) {
     let refs = /* @__PURE__ */ new Set();
-    // 所在阶段的进入条件也算：门槛事实往往写在阶段上（如「账页 + 证词 → 进入对质」），进了场景正文需要它们。
+    // 阶段进入条件中的事实也算：门槛事实常写在阶段上。
     let unitEnter = node.unit && node.unit.clue ? node.unit.clue.enter : null;
     for (let cond of [unitEnter, node.open, node.done]) for (let f of conditionRefs(cond).facts) refs.add(f);
     let extra = isPlainObject(node.item) && node.item.相关事实;
@@ -56,6 +56,8 @@ export function nodeFactRefs(node) {
 export const CLUE_STATUS_TEXT = { locked: '未开放', available: '可进行', active: '进行中', done: '已完成' };
 
 export function clueProgressText(state, snapshot, clueProg, { problems = [] } = {}) {
+    // 读条件用的视图（含已收起的行）；模板初值是「未获得 / 未知」，不会被列成已确认或知情
+    snapshot = (snapshot && snapshot.cond) || snapshot;
     let lines = ['【线索进度（作者视角，含未开放节点的名称；只用于讨论和写大纲，不会给正文）】'],
         stages = [];
     for (let [, s] of state.stageStates) {
@@ -92,10 +94,127 @@ export function clueProgressText(state, snapshot, clueProg, { problems = [] } = 
         over.status === 'confirmed' &&
             !(snapshot.facts && snapshot.facts.has(id)) &&
             confirmed.push(`- ${id}：（人工确认）${clueText(over.text)}`);
+    for (let [id, over] of Object.entries((clueProg && clueProg.factOverrides) || {}))
+        over.status === 'claimed' && !(snapshot.facts && snapshot.facts.has(id)) && claims.push(`- ${id}：（人工记为存疑）${clueText(over.text)}`);
     lines.push(confirmed.length ? '已确认的事实：' : '已确认的事实：暂无', ...confirmed);
     claims.length && lines.push('已经出现、尚未核实的说法：', ...claims);
     problems.length && lines.push('表格问题：', ...problems.slice(0, 5).map((p) => `- ${p}`));
     return lines.join('\n');
+}
+
+// 一卷（一条线）用到的事实编号和节点 id：线 / 阶段 / 节点条件、节点的相关事实、条件里直接读线索表某一行的路径。
+// 改写请求与采用前的跨线检查共用这份「别的线用到本线什么」。
+export function volumeUses(compiled, v) {
+    let refs = { facts: new Set(), nodes: new Set(), lines: new Set(), knows: new Set() },
+        use = (c) => (conditionRefs(c, refs), condPathFacts(c, refs));
+    for (let n of compiled.nodes.filter((n) => n.unit.volume === v)) {
+        [n.open, n.early, n.done].forEach(use);
+        let extra = isPlainObject(n.item) && n.item.相关事实;
+        for (let f of Array.isArray(extra) ? extra : extra ? [extra] : []) String(f).trim() && refs.facts.add(String(f).trim());
+    }
+    for (let u of compiled.units.filter((u) => u.volume === v)) u.clue && (use(u.clue.enter), use(u.clue.end));
+    let l = (compiled.lines || []).find((x) => x.volume === v);
+    l && use(l.open);
+    return refs;
+}
+
+// 按线改写时，别的线的紧凑参考（大型项目方案 四.1、四.4）：一行线名和简介，加上已用的节点 id、事实编号，
+// 以及它和目标线之间的引用。不发别的线的正文，免得几十条线全塞进请求。
+export function otherLinesText(volumes, targetVolumeId) {
+    let compiled = compileClue(volumes || []),
+        target = (volumes || []).find((v) => v.id === targetVolumeId),
+        mine = compiled.nodes.filter((n) => n.unit.volume === target),
+        myFacts = new Set(mine.flatMap((n) => discoveryList(isPlainObject(n.item) ? n.item : {}).map((d) => d.fact)).filter(Boolean)),
+        myNodes = new Set(mine.map((n) => n.uid).filter(Boolean)),
+        out = [];
+    for (let v of volumes || []) {
+        if (v === target) continue;
+        let nodes = compiled.nodes.filter((n) => n.unit.volume === v),
+            gives = [...new Set(nodes.flatMap((n) => discoveryList(isPlainObject(n.item) ? n.item : {}).map((d) => d.fact)).filter(Boolean))],
+            refs = volumeUses(compiled, v);
+        let uses = [...refs.facts].filter((f) => myFacts.has(f)).concat([...refs.nodes].filter((x) => myNodes.has(x))),
+            line = isPlainObject(v.line) ? v.line : {},
+            head = `- ${volumeShowName(v)}${clueText(line.简介) ? `：${clueText(line.简介)}` : ''}`;
+        out.push(
+            [
+                head,
+                nodes.some((n) => n.uid) && `  节点 id：${nodes.map((n) => n.uid).filter(Boolean).join('、')}`,
+                gives.length && `  产出事实：${gives.join('、')}`,
+                uses.length && `  用到这条线的：${uses.join('、')}（改写时不能删掉或改编号）`,
+            ]
+                .filter(Boolean)
+                .join('\n'),
+        );
+    }
+    return out.length ? `【其他剧情线（只作参考，不能改动）】\n${out.join('\n')}` : '';
+}
+
+// 写卷、讨论的大纲参考（大型项目方案 四.4）：勾选的线（卷 id）附完整 YAML，其余每条线几行：
+// 简介、节点 id、产出的事实编号、它用到勾选的线的哪些编号。full 为空时只有简介部分。
+// 返回 { text, full: [卷名], brief: 条数 }。
+export function outlineRefText(volumes, fullIds) {
+    let list = volumes || [],
+        want = new Set(fullIds || []),
+        full = list.filter((v) => want.has(v.id)),
+        compiled = compileClue(list),
+        mineFacts = new Set(),
+        mineNodes = new Set();
+    for (let n of compiled.nodes.filter((n) => want.has(n.unit.volume && n.unit.volume.id))) {
+        n.uid && mineNodes.add(n.uid);
+        for (let d of discoveryList(isPlainObject(n.item) ? n.item : {})) d.fact && mineFacts.add(d.fact);
+    }
+    let brief = [];
+    for (let v of list) {
+        if (want.has(v.id)) continue;
+        let nodes = compiled.nodes.filter((n) => n.unit.volume === v),
+            gives = [...new Set(nodes.flatMap((n) => discoveryList(isPlainObject(n.item) ? n.item : {}).map((d) => d.fact)).filter(Boolean))],
+            refs = volumeUses(compiled, v),
+            uses = [...refs.facts].filter((f) => mineFacts.has(f)).concat([...refs.nodes].filter((x) => mineNodes.has(x))),
+            line = isPlainObject(v.line) ? v.line : {},
+            stages = v.stages.map((s) => stageLabel(s.key)).join('、');
+        brief.push(
+            [
+                `- ${volumeShowName(v)}${clueText(line.简介) ? `：${clueText(line.简介)}` : ''}`,
+                stages && `  阶段：${stages}`,
+                nodes.some((n) => n.uid) && `  节点 id：${nodes.map((n) => n.uid).filter(Boolean).join('、')}`,
+                gives.length && `  产出事实：${gives.join('、')}`,
+                uses.length && `  用到上面完整附带的线：${uses.join('、')}`,
+            ]
+                .filter(Boolean)
+                .join('\n'),
+        );
+    }
+    return {
+        text: [full.length ? outlineToText(full) : '', brief.length ? `【其他剧情线（只附简介）】\n${brief.join('\n')}` : ''].filter(Boolean).join('\n\n'),
+        full: full.map((v) => volumeShowName(v)),
+        brief: brief.length,
+    };
+}
+
+// 按线改写采用前（大型项目方案 四.1）：别的线用到、改写后不见了的事实编号和节点 id。
+// 「来源」只算节点产出（发现）；引用方自己的条件不能证明来源还在。原来就没有节点产出的（纯开线事件，由正文登记）
+// 不算丢。引用方看线 / 阶段 / 节点条件、节点的相关事实、条件里直接读线索表某一行的路径。
+export function crossLineLoss(oldVolumes, nextVolumes, targetVolumeId) {
+    let gather = (vols) => {
+            let c = compileClue(vols || []),
+                facts = new Set(),
+                nodes = new Set(c.nodes.map((n) => n.uid).filter(Boolean));
+            for (let n of c.nodes) for (let d of discoveryList(isPlainObject(n.item) ? n.item : {})) d.fact && facts.add(d.fact);
+            return { c, facts, nodes };
+        },
+        before = gather(oldVolumes),
+        after = gather(nextVolumes),
+        out = [];
+    for (let v of nextVolumes || []) {
+        if (v.id === targetVolumeId) continue;
+        let refs = volumeUses(after.c, v);
+        let lost = [
+            ...[...refs.facts].filter((f) => before.facts.has(f) && !after.facts.has(f)),
+            ...[...refs.nodes].filter((x) => before.nodes.has(x) && !after.nodes.has(x)),
+        ];
+        lost.length && out.push(`「${volumeShowName(v)}」还在用${lost.join('、')}，改写后已经没有了`);
+    }
+    return out;
 }
 
 export function clueIndexText(volumes) {
@@ -119,7 +238,7 @@ export function clueIndexText(volumes) {
 
 export function chatFactSets(c) {
     if (!c) return { known: [], claimed: [] };
-    // 编号取表中和人工操作的并集（内测前审阅）：执行页「人工确认」的事实可能还没有表格行。
+    // 编号取表中和手动操作的并集：执行页「手动确认」的事实可能还没有表格行。
     let known = [],
         claimed = [],
         ids = /* @__PURE__ */ new Set([
@@ -192,12 +311,20 @@ export function prebuildPlan(volumes, { actors = ['user'] } = {}) {
         facts.has(id) ||
             facts.set(id, { code: id, label: '', criterion: '', draftCriterion: '', risky: !1, overlap: '', node: '', orphan: !0 });
     for (let a of actors) for (let id of facts.keys()) knows.add(`${id}@${a}`);
+    // 同一事实、主角的几种写法（主角 / user / 玩家…）只要一行（D48）：留先出现的写法（条件里作者写的在前），
+    // 模板、补行、读条件共用这一份，保证行数一致
+    let seenKey = /* @__PURE__ */ new Set();
     return {
         facts: [...facts.values()],
-        knows: [...knows].map((k) => {
-            let i = k.lastIndexOf('@');
-            return { key: k, fact: k.slice(0, i), actor: k.slice(i + 1) };
-        }),
+        knows: [...knows]
+            .filter((k) => {
+                let key = knowKeyOf(k);
+                return seenKey.has(key) ? !1 : (seenKey.add(key), !0);
+            })
+            .map((k) => {
+                let i = k.lastIndexOf('@');
+                return { key: k, fact: k.slice(0, i), actor: k.slice(i + 1) };
+            }),
         scenes,
     };
 }
@@ -213,17 +340,350 @@ export function answerOverlap(record, answer) {
     return '';
 }
 
+// ---------- 大型项目第 2 批：哪些行该在表里（一份范围规则，模板、自动补行、缺行提示、补表格行共用） ----------
+// 方案 二.1：
+//   观察：开线事件（没有节点产出、只给开线用的事实）——对所有没开始的线都保留，提前发生的事才记得住；
+//   进行中：已开始（含完成、放弃、暂停）的线自己产出的事实；
+//   被依赖：已开始的线的条件读到的外部事实（事实、知情、核实、表格路径、计数各种写法，以及节点的「相关事实」）；
+//   无线：不属于任何线的节点产出的事实（老的单线大纲）；
+//   未来：只由还没开始的线产出——不建行，也不报缺行。
+// started：已经开始过的线的编号集合；null = 整本都要（老大纲、没有线的项目，行为和以前一样）。
+// frontier（线索建行与登记方案 二.2）：按节点建行用的节点集合（nodeFrontier）。给了它，节点产出的线索只看产出它的节点：
+//   在已开始的线上、且在 frontier 里才建；条件里读到它不再是建行的理由（读条件本来就用完整模板参照）。
+//   开线事件、老写法开场事实、孤立事实、不属于任何线的线索照旧。不给（跑团、中途开线索补登）就按线，和以前一样。
+// 返回 { facts: Set, future: Set }。
+export function rowScope(compiled, started, frontier = null) {
+    let lines = compiled.lines || [],
+        facts = /* @__PURE__ */ new Set(),
+        all = /* @__PURE__ */ new Set(),
+        producedBy = /* @__PURE__ */ new Map();
+    for (let n of compiled.nodes)
+        for (let d of discoveryList(isPlainObject(n.item) ? n.item : {}))
+            d.fact && (all.add(d.fact), producedBy.set(d.fact, (producedBy.get(d.fact) || /* @__PURE__ */ new Set()).add(n.unit.line ? n.unit.line.id : '')));
+    let trig = lineTriggerFacts(compiled);
+    for (let f of trig.keys()) (all.add(f), facts.add(f));
+    // 老写法「开场事实」：线自己的节点产出它时也开局就建，否则线没开始就登记不上，这条线永远开不了（设计决定 :959）
+    for (let l of lines) l.legacyFact && (all.add(l.legacyFact), facts.add(l.legacyFact));
+    // 没有节点产出、但条件里用到的事实（孤立事实）：一直要（和以前一样，缺了会报问题）
+    let refsOf = (units, nodes, extraConds = []) => {
+        let r = { facts: /* @__PURE__ */ new Set(), nodes: /* @__PURE__ */ new Set(), knows: /* @__PURE__ */ new Set(), lines: /* @__PURE__ */ new Set() };
+        for (let u of units) u.clue && (conditionRefs(u.clue.enter, r), conditionRefs(u.clue.end, r), condPathFacts(u.clue.enter, r), condPathFacts(u.clue.end, r));
+        for (let n of nodes) {
+            for (let c of [n.open, n.early, n.done]) (conditionRefs(c, r), condPathFacts(c, r));
+            let extra = isPlainObject(n.item) && n.item.相关事实;
+            for (let f of Array.isArray(extra) ? extra : extra ? [extra] : []) String(f).trim() && r.facts.add(String(f).trim());
+        }
+        for (let c of extraConds) (conditionRefs(c, r), condPathFacts(c, r));
+        return r.facts;
+    };
+    for (let f of refsOf(compiled.units, compiled.nodes, lines.map((l) => l.open))) producedBy.has(f) || (all.add(f), facts.add(f));
+    if (!started || !lines.length) {
+        for (let f of all) facts.add(f);
+        return { facts, future: /* @__PURE__ */ new Set() };
+    }
+    if (frontier) {
+        for (let n of compiled.nodes) {
+            let id = n.unit.line ? n.unit.line.id : '';
+            (id === '' || (started.has(id) && frontier.has(n))) &&
+                discoveryList(isPlainObject(n.item) ? n.item : {}).forEach((d) => d.fact && facts.add(d.fact));
+        }
+        return { facts, future: new Set([...all].filter((f) => !facts.has(f))) };
+    }
+    for (let [f, ids] of producedBy) [...ids].some((id) => id === '' || started.has(id)) && facts.add(f);
+    let live = lines.filter((l) => started.has(l.id));
+    for (let f of refsOf(
+        live.flatMap((l) => l.units),
+        compiled.nodes.filter((n) => n.unit.line && started.has(n.unit.line.id)),
+        live.map((l) => l.open),
+    ))
+        all.has(f) && facts.add(f);
+    return { facts, future: new Set([...all].filter((f) => !facts.has(f))) };
+}
+
+// 按节点建行的节点集合（线索建行与登记方案 二.2）：已开放、进行中、已完成的节点，再往前看一层——
+// 假设这些节点的线索都拿到了，推一遍会新开放的节点。往前看的一层只是表里的空行，正文仍按真实开放状态给材料；
+// 一批里正常连走两步（A 拿到马上开 B）时 B 也有行登记。往前看新增的线索最多 cap 条（和跑团一样 30）。
+export const FRONTIER_CAP = 30;
+export function nodeFrontier(compiled, state, snap, prog, config, { cap = FRONTIER_CAP } = {}) {
+    if (!state || !state.nodeStates) return null;
+    let gives = (n) =>
+            discoveryList(isPlainObject(n.item) ? n.item : {})
+                .map((d) => d.fact)
+                .filter(Boolean),
+        out = /* @__PURE__ */ new Set(),
+        have = /* @__PURE__ */ new Set();
+    for (let ns of state.nodeStates) ns.status !== 'locked' && (out.add(ns.node), gives(ns.node).forEach((f) => have.add(f)));
+    let knowAtoms = /* @__PURE__ */ new Set(),
+        refs = (c) => conditionRefs(c).knows.forEach((k) => knowAtoms.add(k));
+    for (let u of compiled.units) u.clue && (refs(u.clue.enter), refs(u.clue.end));
+    for (let n of compiled.nodes) [n.open, n.early, n.done].forEach(refs);
+    let facts = new Map((snap && snap.facts) || []);
+    for (let id of have) facts.set(id, { ...(facts.get(id) || {}), id, status: 'confirmed', raw: '已核实', text: (facts.get(id) || {}).text || '' });
+    let knowledge = [
+            ...((snap && snap.knowledge) || []),
+            ...[...knowAtoms].flatMap((k) => {
+                let i = k.lastIndexOf('@'),
+                    fact = k.slice(0, i);
+                return have.has(fact) ? [{ fact, actor: k.slice(i + 1), way: '亲见', verified: !0 }] : [];
+            }),
+        ],
+        assumedKnows = knowledge.slice(((snap && snap.knowledge) || []).length),
+        tables = patchClueView(snap && snap.tables, config && config.bindings, {
+            facts: new Map([...have].map((id) => [id, 'yes'])),
+            knows: new Map(assumedKnows.map((k) => [knowKey(k.fact, k.actor), 'yes'])),
+        }),
+        sim = computeClueState(compiled, { ...(snap || {}), facts, knowledge, tables }, prog, config),
+        added = 0;
+    for (let ns of sim.nodeStates) {
+        if (ns.status === 'locked' || out.has(ns.node)) continue;
+        let fresh = gives(ns.node).filter((f) => !have.has(f));
+        if (added + fresh.length > cap) continue;
+        ((added += fresh.length), out.add(ns.node));
+    }
+    return out;
+}
+
+// 越序登记检查（线索建行与登记方案 二.3）：只看还没认可的新登记。
+// 已认可的登记是起点；时间、关系等普通格子用现在的值；新登记里，产出它的节点前提成立的先纳入，再看它让哪些后继节点成立，
+// 直到不再变化。暂停的线、正常结束的线不挡（按照常进行算），没开始、错过、放弃的线挡。没有节点产出的线索（开线事件等）直接纳入。
+// accepted：已认可的编号集合。返回 { admit: 这次纳入的, held: 前提不成立的 }。
+export function admitRegistrations(compiled, snap, prog, config, accepted) {
+    let overs = prog.factOverrides || {},
+        pending = /* @__PURE__ */ new Set(),
+        admit = /* @__PURE__ */ new Set();
+    for (let [id, f] of (snap && snap.facts) || [])
+        f && (f.status === 'confirmed' || f.claimed) && !accepted.has(id) && !(overs[id] && ['confirmed', 'kept'].includes(overs[id].status)) && pending.add(id);
+    if (!pending.size) return { admit, held: pending };
+    let producers = /* @__PURE__ */ new Map();
+    for (let n of compiled.nodes)
+        for (let d of discoveryList(isPlainObject(n.item) ? n.item : {})) d.fact && producers.set(d.fact, [...(producers.get(d.fact) || []), n]);
+    for (let id of [...pending]) producers.has(id) || (pending.delete(id), admit.add(id));
+    let lines = {};
+    for (let [k, v] of Object.entries(prog.lines || {})) {
+        let { state, ...rest } = v || {};
+        lines[k] = state === 'pause' ? rest : v;
+    }
+    let loose = { ...prog, paused: !1, mainPaused: !1, sidePaused: !1, lines };
+    for (let round = 0; round < 64 && pending.size; round++) {
+        let st = computeClueState(compiled, withHeld(snap, pending, config && config.bindings), loose, config, { endedOpen: !0 }),
+            // 看节点开没开放，不看显示状态：完成条件另有写法时，「已完成」不等于开放条件成立（GPT 发布前审阅 R7）
+            ok = new Set(st.nodeStates.filter((x) => x.open && x.open.v === TRI.t).map((x) => x.node)),
+            got = [...pending].filter((id) => producers.get(id).some((n) => ok.has(n)));
+        if (!got.length) break;
+        got.forEach((id) => (pending.delete(id), admit.add(id)));
+    }
+    return { admit, held: pending };
+}
+// 内存里改线索表的读视图（不写库）：事实行改状态；知情行改获知方式和可信度。
+// set：{ facts: Map(编号 → 'yes' | 'no'), knows: Map(knowKey → 'yes' | 'no') }。只改已有的行（读视图里按完整模板补过行）。
+function patchClueView(tables, bindings, set) {
+    if (!tables) return tables;
+    let fb = ((bindings && bindings.facts) || [])[0],
+        kb = ((bindings && bindings.knowledge) || [])[0],
+        first = (v, d) => cellText(Array.isArray(v) ? v[0] : v) || d,
+        edit = (name, fn) => {
+            let found = name ? findSheet(tables, name) : { error: !0 };
+            if (found.error || !Array.isArray(found.sheet.content) || !found.sheet.content[0]) return;
+            let head = found.sheet.content[0],
+                col = (c) => (c ? head.indexOf(c) : -1),
+                key = found.sheet.key,
+                changed = !1,
+                rows = found.sheet.content.map((row, i) => {
+                    if (!i) return row;
+                    let next = fn(row, col);
+                    return next ? ((changed = !0), next) : row;
+                });
+            changed && (tables = { ...tables, [key]: { ...tables[key], content: rows } });
+        };
+    fb &&
+        fb.状态列 &&
+        set.facts.size &&
+        edit(fb.表, (row, col) => {
+            let v = set.facts.get(cellText(row[col(fb.编号列)])),
+                c = col(fb.状态列);
+            return v && c > 0 ? Object.assign([...row], { [c]: v === 'yes' ? first(fb.已核实值, '已核实') : '未获得' }) : null;
+        });
+    kb &&
+        kb.方式列 &&
+        set.knows.size &&
+        edit(kb.表, (row, col) => {
+            let fact = cellText(row[col(kb.事实列)]),
+                v = set.knows.get(knowKey(fact, cellText(row[col(kb.角色列)]))) || set.knows.get(`${fact}@*`),
+                w = col(kb.方式列),
+                cr = col(kb.可信度列);
+            if (!v || w < 1) return null;
+            let out = Object.assign([...row], { [w]: v === 'yes' ? '亲见' : first(kb.未知值, '未知') });
+            return (cr > 0 && (out[cr] = v === 'yes' ? first(kb.已核实值, '已核实') : '未核实'), out);
+        });
+    return tables;
+}
+// 不算数的登记：事实按未获得，这条事实的知情记录也不算；直接读线索表格子的条件看到的也是改过的值。
+export function withHeld(snap, held, bindings = null) {
+    if (!held || !held.size) return snap;
+    let facts = new Map((snap && snap.facts) || []);
+    for (let id of held) facts.has(id) && facts.set(id, { ...facts.get(id), status: 'unconfirmed', claimed: !1, raw: '未获得' });
+    return {
+        ...snap,
+        facts,
+        tables: patchClueView(snap && snap.tables, bindings, { facts: new Map([...held].map((id) => [id, 'no'])), knows: new Map([...held].map((id) => [`${id}@*`, 'no'])) }),
+        knowledge: ((snap && snap.knowledge) || []).filter((r) => !held.has(r.fact)),
+    };
+}
+
+// 条件里直接读线索表某一行的路径也算用到这条事实：关键事实表 `表/F8/列`，知情表 `表/F8@角色/列`。
+function condPathFacts(cond, out) {
+    if (!cond) return out;
+    if (cond.kind === 'group') return (cond.items.forEach((c) => condPathFacts(c, out)), out);
+    if (cond.kind === 'cell') {
+        let m = /^[^/]+\/([^/@]+)(?:@[^/]+)?\//.exec(cond.path || '');
+        m && /^F/i.test(m[1].trim()) && out.facts.add(m[1].trim());
+    }
+    return out;
+}
+
+// 已开始过的线（进行中、完成、放弃、暂停都算）。线索进度算出来以前用不了，就返回 null（整本都要）。
+export function startedLines(state) {
+    let ls = state && state.lineStates;
+    return ls ? new Set(ls.filter((s) => s.started || ['完成', '放弃', '暂停'].includes(s.state)).map((s) => s.line.id)) : null;
+}
+
+// 插件能不能为这个绑定预建占位行（方案 十.1）：只有能表达「未获得 / 未知」的绑定才行。
+// 事实表要配了状态列和已核实值（没配状态列的老绑定，表里有这一行就算已核实，建一行就等于确认了没发生的事）；
+// 知情表要配了方式列（没配方式列，每一行都算知情）。
+export function canSeedFacts(fb) {
+    return !!(fb && fb.表 && fb.编号列 && fb.状态列 && cellText(fb.已核实值) !== '');
+}
+export function canSeedKnows(kb) {
+    return !!(kb && kb.表 && kb.事实列 && kb.角色列 && kb.方式列);
+}
+// 项目级绑定：事实行、知情行各自能否预建。目标取第一个绑定；同一张表另有老绑定
+// （事实没配状态列 / 知情没配方式列）时，补进去的占位行会被那个老绑定读成已核实 / 已知，这种行也不建。
+export function seedable(bindings) {
+    let fbs = (bindings && bindings.facts) || [],
+        kbs = (bindings && bindings.knowledge) || [],
+        fb = fbs[0],
+        kb = kbs[0];
+    return {
+        facts: canSeedFacts(fb) && fbs.slice(1).every((b) => !b || b.表 !== fb.表 || canSeedFacts(b)),
+        knows: canSeedKnows(kb) && kbs.slice(1).every((b) => !b || b.表 !== kb.表 || canSeedKnows(b)),
+    };
+}
+
+// 读条件用的表（方案 二.3〔五〕）：以「全部建好时应有的行」为固定参照——prebuildPlan 对整本大纲给出的事实行和
+// (事实, 角色) 知情行，和不按线筛选时生成模板会建的一样。实表里有就用实表的；没有的补模板初值（事实「未获得」，
+// 知情「未知 / 未核实」）。这个集合只由大纲决定，不看算出来的线状态，所以算一次就定，不会来回跳。
+// 只给能表达初值的绑定补（canSeedFacts / canSeedKnows）；读不到表、列不对，原样返回，照旧按原规则报问题。
+// 补的行不写回数据库，也不发给填表模型；写操作一律用原始表。返回的 tables 里，补过的表 seedRows 清空（不再拿初始行充数）。
+export function effectiveTables(tables, bindings, plan, labels = {}) {
+    if (!tables || !plan) return tables;
+    let out = tables,
+        can = seedable(bindings),
+        fb = ((bindings && bindings.facts) || [])[0],
+        kb = ((bindings && bindings.knowledge) || [])[0],
+        patch = (name, build) => {
+            let found = findSheet(out, name);
+            if (found.error) return;
+            let key = found.sheet.key,
+                head = Array.isArray(found.sheet.content && found.sheet.content[0]) ? found.sheet.content[0] : null;
+            if (!head) return;
+            // 表里的行和别处读法一样：还没填过表时用模板带的初始行（D21），不能当成空表补「未获得」盖掉作者预填的值
+            let col = (c) => head.findIndex((x, i) => i > 0 && String(x ?? '').trim() === c),
+                own = sheetRows(found.sheet).rows,
+                add = build(col, own, head);
+            add && add.length && (out = { ...out, [key]: { ...out[key], content: [head, ...own, ...add], seedRows: [] } });
+        },
+        blank = (head) => {
+            let row = head.map(() => '');
+            return ((row[0] = null), row);
+        };
+    can.facts &&
+        patch(fb.表, (col, own, head) => {
+            let idCol = col(fb.编号列),
+                stCol = col(fb.状态列);
+            if (idCol < 0 || stCol < 0) return null;
+            let have = new Set(own.map((r) => cellText(r[idCol])));
+            return plan.facts
+                .filter((f) => !have.has(f.code))
+                .map((f) => {
+                    let row = blank(head);
+                    return (
+                        (row[idCol] = f.code),
+                        (row[stCol] = '未获得'),
+                        col('标签') >= 0 && (row[col('标签')] = (labels[f.code] && labels[f.code].label) || ''),
+                        col('登记口径') >= 0 && (row[col('登记口径')] = (labels[f.code] && labels[f.code].criterion) || ''),
+                        row
+                    );
+                });
+        });
+    can.knows &&
+        patch(kb.表, (col, own, head) => {
+            let fCol = col(kb.事实列),
+                aCol = col(kb.角色列),
+                wCol = col(kb.方式列),
+                cCol = kb.可信度列 ? col(kb.可信度列) : -1,
+                keyCol = col('键');
+            if (fCol < 0 || aCol < 0 || wCol < 0) return null;
+            // 主角的几种写法算同一个人（D47）；每补一条就记进集合，同一人不补两行
+            let have = new Set(own.map((r) => knowKey(r[fCol], r[aCol])));
+            return plan.knows
+                .filter((k) => {
+                    let key = knowKey(k.fact, k.actor);
+                    return have.has(key) ? !1 : (have.add(key), !0);
+                })
+                .map((k) => {
+                    let row = blank(head);
+                    return (
+                        keyCol >= 0 && (row[keyCol] = k.key),
+                        (row[fCol] = k.fact),
+                        (row[aCol] = k.actor),
+                        (row[wCol] = Array.isArray(kb.未知值) ? kb.未知值[0] : kb.未知值 || '未知'),
+                        cCol >= 0 && (row[cCol] = '未核实'),
+                        row
+                    );
+                });
+        });
+    return out;
+}
+
+// 条件用的事实和知情（方案 二.3、十.1）：补了初值的那张表，只让「能表达初值」的绑定从视图读；
+// 别的绑定（没配状态列 / 方式列的老绑定，哪怕和它是同一张表）照旧读实表，免得把补的「未获得 / 未知」行读成已核实 / 已知。
+// 合并规则同 readFacts，按绑定顺序：前面已核实的锁定，否则后面覆盖；别表的「存疑」不被补的「未获得」覆盖。
+export function condReads(tables, view, bindings) {
+    let fbs = (bindings && bindings.facts) || [],
+        kbs = (bindings && bindings.knowledge) || [],
+        can = seedable(bindings),
+        facts = /* @__PURE__ */ new Map(),
+        knowledge = [];
+    fbs.forEach((b, i) => {
+        for (let [id, x] of readFacts(i === 0 && can.facts ? view : tables, [b]).facts) {
+            let prev = facts.get(id);
+            (prev && prev.status === 'confirmed') || facts.set(id, x);
+        }
+    });
+    kbs.forEach((b, i) => knowledge.push(...readKnowledge(i === 0 && can.knows ? view : tables, [b]).rows));
+    return { facts, knowledge };
+}
+
+// 差额按目标表自身计算（别表有记录不代表目标表有该行）；读不到目标表时退回汇总读数。
 export function prebuildDiff(plan, snapshot, bindings) {
     let fb = (bindings.facts || [])[0],
         kb = (bindings.knowledge || [])[0],
-        haveFacts = snapshot.facts || /* @__PURE__ */ new Map(),
-        haveKnows = snapshot.knowPresent || /* @__PURE__ */ new Set(),
+        ownF = fb && snapshot.tables ? readFacts(snapshot.tables, [fb]) : null,
+        ownK = kb && snapshot.tables ? readKnowledge(snapshot.tables, [kb]) : null,
+        missing = (r) => r.problems.some((x) => /缺少|重名/.test(x)),
+        haveFacts = ownF && !missing(ownF) ? ownF.facts : snapshot.facts || /* @__PURE__ */ new Map(),
+        haveKnows = ownK && !missing(ownK) ? ownK.present : snapshot.knowPresent || /* @__PURE__ */ new Set(),
+        seenKnows = /* @__PURE__ */ new Set(),
         planFacts = new Set(plan.facts.map((f) => f.code));
     return {
         factTable: fb ? fb.表 : '',
         knowTable: kb ? kb.表 : '',
         newFacts: plan.facts.filter((f) => !haveFacts.has(f.code)),
-        newKnows: plan.knows.filter((k) => !haveKnows.has(k.key)),
+        // 「事实@角色」按 knowKeyOf 比（主角 / user / 玩家 算一个人，D47）；计划里同一人写了两种写法只补一行
+        newKnows: plan.knows.filter((k) => {
+            let key = knowKeyOf(k.key);
+            return haveKnows.has(key) || seenKnows.has(key) ? !1 : (seenKnows.add(key), !0);
+        }),
         // 表里有、大纲里已经没有的编号（改写后失效）：只报告，不删除
         stale: [...haveFacts.keys()].filter((id) => !planFacts.has(id)),
         kept: plan.facts.filter((f) => haveFacts.has(f.code)).map((f) => f.code),
@@ -363,13 +823,13 @@ export function historyGuard(oldVolumes, nextVolumes, snapshot, clueProg, config
               )
             : a.entered.v === 'true' &&
               b.entered.v !== 'true' &&
-              notes.push(`阶段「${name}」原来已经进入，改写后会变成「未进入」，这个阶段里的入口会消失`);
+              notes.push(`阶段「${name}」原来已进入，改写后会变成「未进入」，这个阶段里的入口会消失`);
     }
     // 失去的入口：原来可进行 / 进行中、改写后不再开放的节点（不论原因：阶段倒退、开放条件被改）。
     let lostEntries = [...before]
         .filter(([uid, s]) => (s.status === 'available' || s.status === 'active') && after.has(uid) && after.get(uid).status === 'locked')
         .map(([uid, s]) => `${uid}「${s.node.name}」`);
-    lostEntries.length && notes.push(`改写后这些原来可以去做的事会重新锁上：${lostEntries.join('、')}`);
+    lostEntries.length && notes.push(`改写后这些原本可进行的节点会重新锁定：${lostEntries.join('、')}`);
     for (let unit of flattenUnits(oldVolumes))
         for (let n of stageNodes(unit.stage.data))
             nodeUid(n.item) && home.set(nodeUid(n.item), { volKey: unit.volume.key, stageKey: unit.stage.key, field: n.field });
@@ -397,12 +857,12 @@ export function historyGuard(oldVolumes, nextVolumes, snapshot, clueProg, config
                 let movedTo = (fact) =>
                     [...after].find(([, x]) => discoveryList(isPlainObject(x.node.item) ? x.node.item : {}).some((d) => d.fact === fact));
                 notes.push(
-                    `${label}${t ? '里' : '（改写后被删除）中'}已经获得或已经说出的发现 ${lost
+                    `${label}${t ? '里' : '（改写后被删除）中'}已获得或已说出的发现${lost
                         .map((f) => {
                             let m = movedTo(f);
-                            return m ? `${f}（挪到了 ${m[0]}）` : f;
+                            return m ? `${f}（移到了${m[0]}）` : f;
                         })
-                        .join('、')} 在原位置不见了；表格里的记录还在，但正文可能把它当成没发生过`,
+                        .join('、')}在原位置不见了；表格里的记录还在，但正文可能把它当成没发生过`,
                 );
             }
         }
@@ -413,7 +873,7 @@ export function historyGuard(oldVolumes, nextVolumes, snapshot, clueProg, config
             was = s ? s.status : '（新节点）';
         t.status === 'done' &&
             was !== 'done' &&
-            notes.push(`这次改写会让 ${uid}「${t.node.name}」直接变成已完成（原来：${s ? NODE_STATUS_LABELS[was] : was}），调查会被跳过`);
+            notes.push(`这次改写会让${uid}「${t.node.name}」直接变成已完成（原来：${s ? NODE_STATUS_LABELS[was] : was}），这个节点的调查会被跳过`);
     }
     return { diffs, notes, keepDone, reinsert, home };
 }
@@ -452,7 +912,7 @@ export function buildClueProjection(
     snapshot,
     clueProg,
     settings,
-    { pace = 'normal', stay = '', plan = null, notReady = null, checks = null } = {},
+    { pace = 'normal', stay = '', plan = null, notReady = null, checks = null, arrive = !1 } = {},
 ) {
     let tag = String(settings.tagName || '剧情参考').trim() || '剧情参考',
         focus = state.nodeStates.find((s) => s.node.uid && s.node.uid === state.focus.uid),
@@ -482,7 +942,8 @@ export function buildClueProjection(
             stay && lines.push(stay),
             instr && lines.push(`本段要求：${instr}`),
             place && lines.push(`地点：${place}`),
-            scene && lines.push(`场景（初次到达时的样子；人物态度和环境后来的变化以前文为准，不要重置）：${scene}`));
+            scene && lines.push(`场景（初次到达时的样子；人物态度和环境后来的变化以前文为准，不要重置）：${scene}`),
+            arrive && lines.push(ARRIVE_RULE));
         let isClaimed = (d) => {
                 if (!d.fact) return !1;
                 let f = snapshot.facts && snapshot.facts.get(d.fact),
@@ -522,9 +983,13 @@ export function buildClueProjection(
                         : '｜知情范围未记录'
                     : '';
             },
+            nameOf = (id) => {
+                let f = snapshot.facts && snapshot.facts.get(id);
+                return f && f.label ? `「${f.label}」` : id;
+            },
             recordedOr = (id, text) =>
                 text ||
-                `（${id} 已经${snapshot.facts && snapshot.facts.get(id) && snapshot.facts.get(id).claimed ? '有人说出' : '确认'}，但表格没有记录具体内容；沿用正文里已经写出的部分，不要补充）`;
+                `（${nameOf(id)} 已经${snapshot.facts && snapshot.facts.get(id) && snapshot.facts.get(id).claimed ? '有人说出' : '确认'}，但表格没有记录具体内容；沿用正文里已经写出的部分，不要补充）`;
         (got.length &&
             lines.push(
                 '本场景已经获得的发现（不要重复揭示）：',
@@ -550,7 +1015,7 @@ export function buildClueProjection(
                 fact = snapshot.facts && snapshot.facts.get(id);
             if (eff.confirmed) {
                 let text = clueText(eff.text);
-                (known.push(`- ${text || `（${id} 已经确认，但表格没有记录具体内容）`}${whoText(id)}`), used.facts.push(id));
+                (known.push(`- ${text || `（${nameOf(id)} 已经确认，但表格没有记录具体内容）`}${whoText(id)}`), used.facts.push(id));
                 continue;
             }
             let override = clueProg && clueProg.factOverrides && clueProg.factOverrides[id];
@@ -593,7 +1058,7 @@ export function buildClueProjection(
             items = offer ? offer.items.filter((x) => x.entry) : [];
         items.length &&
             (lines.push(
-                `可用的后续方向：${items.map((x) => x.entry).join('；')}。${offer.hint ? `（由头：${offer.hint}）` : ''}`,
+                `可用的后续方向：${items.map((x) => String(x.entry).trim().replace(/[。；;，,\s]+$/, '')).join('；')}。${offer.hint ? `（由头：${offer.hint}）` : ''}`,
                 '只有本轮行动自然涉及它时才接入；否则继续眼前的事，不必提及。尚未进入时不要补写调查结果。',
                 ...(offer.kind === 'side' ? ['如果前文已经发生过类似的事，就接着前文写，不要重演。'] : []),
             ),
@@ -813,7 +1278,7 @@ export function clueAlternativeRoutes(volumes, { knownFacts = [], claimedFacts =
         let own = compiled.nodes.filter((n) => n.unit === u),
             alts = own.filter((n) => n.kind === 'main' && !n.required);
         if (alts.length < 2) continue;
-        // 分叉起点：开放条件既不依赖其他可选节点产出的事实，也不引用其他可选节点（内测前审阅：{任一:[{节点:A},{节点:B}]} 写法）。
+        // 分叉起点：开放条件既不依赖其他可选节点产出的事实，也不引用其他可选节点（含 {任一:[{节点:A},{节点:B}]} 写法）。
         let altFacts = new Set(alts.flatMap(gives)),
             altIds = new Set(alts.map((n) => n.uid).filter(Boolean)),
             starts = alts.filter((n) => {
@@ -846,7 +1311,7 @@ export function clueAlternativeRoutes(volumes, { knownFacts = [], claimedFacts =
                         (ns.node.required || used.includes(ns.node) || used.push(ns.node), gives(ns.node).forEach((f) => have.add(f)));
                 if (have.size === before) break;
             }
-            // 「下一阶段」只在同一条剧情线里找（GPT 总方案审阅 R5）：一条线的最后一个阶段之后是另一条独立的线，
+            // 「下一阶段」只在同一条剧情线内找：线的最后一个阶段之后是另一条独立的线，
             // 那条线等手动开启、等条件都是正常设计，不算这条线走不通。没有线信息的旧大纲仍按整串卷连着算。
             let s = state.stageStates.get(u.id),
                 next = units[ui + 1] && units[ui + 1].line === u.line ? units[ui + 1] : null,
@@ -862,7 +1327,7 @@ export function clueAlternativeRoutes(volumes, { knownFacts = [], claimedFacts =
                     : endV !== TRI.t
                       ? `本阶段结束${verdict === 'unknown' ? '要看运行时的情况' : '不了'}：${(s.entered.v !== TRI.t ? s.entered.reasons : s.end.reasons).join('；') || s.requiredLeft.map((n) => n.uid).join('、')}`
                       : `下一阶段${verdict === 'unknown' ? '能否进入要看运行时的情况' : '进不去'}：${ns.entered.reasons.join('；')}`;
-            // 结构化字段（总方案 A / R5）：给审阅页拼人话、跳转、按根因去重用。原来的 stage / node / why 文字不变。
+            // 结构化字段：给审阅页拼人话、跳转、按根因去重用。原来的 stage / node / why 文字不变。
             let need = verdict === 'ok' ? null : endV !== TRI.t ? (s.entered.v !== TRI.t ? u.clue && u.clue.enter : u.clue && u.clue.end) : next && next.clue && next.clue.enter;
             out.push({
                 stage: stageLabel(u.stage.key),
@@ -1018,6 +1483,9 @@ export function focusScore(state, snapshot, clueProg) {
     }
     return n;
 }
+
+// 剧情推进判断玩家这一轮才走进这个场景时加的一句（场景和发现当轮一起给）
+export const ARRIVE_RULE = '用户这一轮刚到这里：只写到达时自然看到的、对方主动说出的；需要用户进一步搜查、说服、检验才能得到的，留到用户真的做了再写。';
 
 export const CLUE_OFF_MATERIAL_RULE =
     '用户转去调查另一件事，而本轮材料没有提供那件事的具体发现时，写到到达、接触和开始调查为止：可以写环境、人物和对方的反应；东西上写着什么、翻开或打开后看到什么、对方说出的关键信息，都不要自己编，待后续材料提供后再写。本轮已经提供的发现、前文已经明确的内容以及普通日常行动，可以按实际行动继续，不必机械等到下一轮。';

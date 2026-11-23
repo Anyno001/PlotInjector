@@ -1,9 +1,9 @@
-// 审阅草稿与统一保存（导入审阅与改大纲总方案第十节：GPT 审阅 R1 / R2 / R3 / R4）。
+// 审阅草稿与统一保存（导入审阅与改大纲总方案第十节）。
 // 只有纯函数，不碰界面和存储。导入审阅、重新审阅刚导入的线、「审阅修改」已有大纲三条路共用：
 //   1. 审阅过程只改草稿（session.draft），点「采用 / 保存」才由 prepareCommit 合成要写进项目的大纲；
-//   2. 身份由程序固定：卷 id、阶段 id、线编号、没要求改的线头字段，不靠模型照抄（R2）；
-//   3. 关联修改按实际引用成组（R4），一组里有一个单位失败整组不应用；
-//   4. 保存前对已有线跑 historyGuard 并真正执行 restoreHistory，摘要按最终内容生成（R1）。
+//   2. 身份由程序固定：卷 id、阶段 id、线编号、没要求改的线头字段，不靠模型照抄；
+//   3. 关联修改按实际引用成组，一组里有一个单位失败整组不应用；
+//   4. 保存前对已有线跑 historyGuard 并真正执行 restoreHistory，摘要按最终内容生成。
 import { isPlainObject, makeId, stageLabel, stageNodes, pushOutlineHistory } from './outline.js';
 import { nodeUid, NODE_COND_KEYS, STAGE_COND_KEYS } from './clue-model.js';
 import { conditionRefs, parseCondition } from './clue-rules.js';
@@ -69,7 +69,7 @@ export function undoDraft(session) {
     let last = session.history[session.history.length - 1];
     return last ? { ...session, draft: last.draft, history: session.history.slice(0, -1) } : session;
 }
-// ---- 把模型给回来的内容放回草稿：身份由程序定（R2）----
+// ---- 把模型给回来的内容放回草稿：身份由程序定----
 // 单阶段：回写到插件记下的那个阶段 id；阶段名可以改，id 不变。
 export function putStage(volumes, volumeId, stageId, incoming) {
     return volumes.map((v) =>
@@ -82,14 +82,14 @@ export function putLine(volumes, volumeId, incomingLine, allow = null) {
         if (v.id !== volumeId) return v;
         let old = isPlainObject(v.line) ? v.line : {},
             next = { ...old };
-        // 编号、类型（已有时）永远用原来的：类型只在新建时选（用户 2026-11-16），改了会牵动主线互斥、接上一条、开启时段、支线名额
+        // 编号、类型（已有时）永远用原来的：类型只在新建时选，改了会牵动主线互斥、接上一条、开启时段、支线名额
         let fixed = (k) => k === '编号' || (k === '类型' && String(old.类型 || '').trim() !== '');
         for (let [k, val] of Object.entries(isPlainObject(incomingLine) ? incomingLine : {})) !fixed(k) && (!allow || allow.includes(k)) && (next[k] = val);
         if (allow) for (let k of allow) !fixed(k) && !(isPlainObject(incomingLine) && k in incomingLine) && delete next[k];
         return { ...v, line: next };
     });
 }
-// 整条线：模型给回一卷，按「原阶段 → 新阶段」对应保留阶段 id。不按下标回填（GPT R2：前面插一个阶段，后面全错位）。
+// 整条线：模型给回一卷，按「原阶段 → 新阶段」对应保留阶段 id。不按下标回填（前面插一个阶段，后面全错位）。
 // 对应依据，依次：
 //   1. 阶段名相同；
 //   2. 共有节点 id 最多（同一件事沿用原节点 id 是提示词里的硬规则）；
@@ -129,9 +129,9 @@ export function putVolume(volumes, volumeId, incoming, { allowLine = [] } = {}) 
     return { volumes: putLine(volumes.map((v) => (v.id === volumeId ? next : v)), volumeId, incoming.line, allowLine), match };
 }
 
-// 保留条件：切到别的开始方式时，暂存切换前那条复杂的开启条件，选回「保留现有条件」时恢复（GPT 第三轮 C1）
+// 保留条件：切到别的开始方式时，暂存切换前那条复杂的开启条件，选回「保留现有条件」时恢复
 const REVIEW_ONLY_LINE_KEYS = ['开始时机已选', '开始方式表格', '表格条件草稿', '保留条件'];
-// ---- 改动摘要：写实质变化，不笼统说「内容有改动」（R2 末条）----
+// ---- 改动摘要：写实质变化，不笼统说「内容有改动」----
 const nodeList = (stage) => stageNodes(stage && stage.data).filter((n) => n.kind !== 'world');
 const condText = (c) => (c == null || c === '' ? '（无）' : typeof c == 'string' ? c : JSON.stringify(c).replace(/"/g, ''));
 const LINE_WORDS = { 类型: '类型', 简介: '简介', 开启条件: '开始条件', 开启方式: '开始方式', 开启时段: '开启时段', 入口提示: '入口', 接上一条: '排在前一条主线后面' };
@@ -160,7 +160,7 @@ export function stageChanges(before, after) {
         (gone.length || added.length) && out.push(`「${n.name}」的发现：${[...added.map((f) => `+${f}`), ...gone.map((f) => `−${f}`)].join(' ')}`);
         for (let k of ['入口', '场景', '地点']) !same(oi[k], ni[k]) && out.push(`「${n.name}」的${k}改了`);
         !same(discoveryList(oi), discoveryList(ni)) && !gone.length && !added.length && out.push(`「${n.name}」的发现内容改了`);
-        // 上面没单独写到的字段（事件、偏转、触发……）：列出字段名，不让改动被漏掉（GPT 代码审阅 R1）
+        // 上面没单独写到的字段（事件、偏转、触发……）：列出字段名，不让改动被漏掉
         let named = new Set(['id', '名称', '必需', '发现', '入口', '场景', '地点', ...NODE_COND_KEYS]),
             rest = [...new Set([...Object.keys(oi), ...Object.keys(ni)])].filter((k) => !named.has(k) && !same(oi[k], ni[k]));
         rest.length && out.push(`「${n.name}」的${rest.join('、')}改了`);
@@ -210,7 +210,7 @@ export function draftChanges(base, draft) {
     return out;
 }
 
-// 用户在这次审阅里实际改过的线（打开时的样子 → 草稿）：保存、计数、对齐都只看这些（GPT 第二轮 N1）。
+// 用户在这次审阅里实际改过的线（打开时的样子 → 草稿）：保存、计数、对齐都只看这些。
 // 大纲里别处改了、这里没动过的线不算，不能拿旧草稿去盖。
 export function editedVolumes(review) {
     let base = (review && review.base) || [];
@@ -225,7 +225,7 @@ export function targetStamp(project, ids) {
     return stableText(ids.map((id) => vols.find((v) => v.id === id) || null));
 }
 
-// 有没有要保存的改动：比完整内容，不看摘要（摘要只是给人看的，GPT 代码审阅 R1）。
+// 有没有要保存的改动：比完整内容，不看摘要（摘要只是给人看的）。
 export function draftDiffers(base, draft) {
     [base, draft] = [stripReviewMarks(base), stripReviewMarks(draft)];
     let strip = (v) => (v ? { key: v.key, line: v.line, stages: v.stages } : null);
@@ -233,7 +233,7 @@ export function draftDiffers(base, draft) {
 }
 
 // 线头提供的外部事实来源（正文里发生、填表记下，不靠节点产出）：开启条件里的事实 + 旧写法「开场事实」。
-// 和 checkClueDraft 的判断一致（GPT 第三轮 C2）：那边把线的开启条件事实和 legacyFact 都算作已有来源。
+// 和 checkClueDraft 的判断一致：那边把线的开启条件事实和 legacyFact 都算作已有来源。
 export function lineFactSources(line) {
     if (!isPlainObject(line)) return [];
     let out = [];
@@ -243,7 +243,7 @@ export function lineFactSources(line) {
     return out;
 }
 
-// ---- 关联分组（R4）：按实际引用把要一起改的单位编成组 ----
+// ---- 关联分组：按实际引用把要一起改的单位编成组 ----
 // 引用来源：阶段进入 / 结束条件、节点开放 / 提前 / 完成条件、线头开启条件里的事实与节点；事实由哪个阶段产出。
 // 同一条线的相邻阶段（前一阶段的结束 ↔ 后一阶段的进入）在条件互相引用时也算关联。
 function unitRefs(volumes) {
@@ -290,7 +290,7 @@ export function relatedGroups(volumes, want) {
     for (let k of wanted) groups.set(find(k), [...(groups.get(find(k)) || []), k]);
     return [...groups.values()];
 }
-// 一组修改需要的只读上下文：组外、但和组内单位有引用关系的单位里的真实条件表达式和事实来源（R4：名称和概述不能替代条件本身）。
+// 一组修改需要的只读上下文：组外、但和组内单位有引用关系的单位里的真实条件表达式和事实来源（名称和概述不能替代条件本身）。
 export function groupContext(volumes, group) {
     let { produce, nodeHome, uses } = unitRefs(volumes),
         inGroup = new Set(group),
@@ -307,7 +307,7 @@ export function groupContext(volumes, group) {
     return { facts: [...facts], units: [...related].filter((k) => !inGroup.has(k)) };
 }
 
-// 一组修改会不会把组外的引用改断（GPT 代码审阅 R5）：组外的单位（含项目里别的线）引用的事实 / 节点，
+// 一组修改会不会把组外的引用改断：组外的单位（含项目里别的线）引用的事实 / 节点，
 // 改之前有产出 / 存在，改之后没了。返回 [{ key, refs }]。只看程序能验证的结构，不猜剧情意图；原来就断的不算。
 // background：项目里别的线（不在 before / after 里的卷）。
 export function refBreaks(before, after, group, background = []) {
@@ -323,7 +323,7 @@ export function refBreaks(before, after, group, background = []) {
     return out;
 }
 
-// 这次修改让组内的引用找不到了（GPT 第二轮 N8、第三轮 C3）：新写的节点 id 不存在、新写的事实没有来源；
+// 这次修改让组内的引用找不到了：新写的节点 id 不存在、新写的事实没有来源；
 // 或原来能找到的引用改完找不到了。事实来源：节点产出，或线头的外部来源（lineFactSources）。原来就断的不算。返回 [{ key, refs }]。
 export function newMissingRefs(before, after, group, background = []) {
     let A = unitRefs([...background, ...before]),
@@ -334,7 +334,7 @@ export function newMissingRefs(before, after, group, background = []) {
         let now = B.uses.get(k),
             was = A.uses.get(k) || { facts: new Set(), nodes: new Set() };
         if (!now) continue;
-        // 新写的引用找不到；或者原来就在用、原来有来源、这次改完没来源了（同组里把产出删了，GPT 第三轮 C3）。
+        // 新写的引用找不到；或者原来就在用、原来有来源、这次改完没来源了（同组里把产出删了）。
         // 原来就找不到的旧问题不算，留给检查。来源挪到同组别处、仍找得到的照常放行。
         let bad = [
             ...[...now.nodes].filter((n) => !B.nodeHome.has(n) && (!was.nodes.has(n) || A.nodeHome.has(n))),
@@ -345,7 +345,7 @@ export function newMissingRefs(before, after, group, background = []) {
     return out;
 }
 
-// 一组的结果是否能整组应用（R4）：每个单位都要拿到、解析成功、期间没被用户改过；模型多给的单位不算数。
+// 一组的结果是否能整组应用：每个单位都要拿到、解析成功、期间没被用户改过；模型多给的单位不算数。
 // results：{ 键: 新值 }；snapshot：发请求时这几个单位的值（JSON 字符串）；current：现在的草稿。
 export function groupVerdict(group, results, snapshot, current) {
     let missing = group.filter((k) => !(k in results)),
@@ -354,14 +354,14 @@ export function groupVerdict(group, results, snapshot, current) {
     return { ok: !missing.length && !touched.length, missing, touched, extra };
 }
 
-// ---- 统一保存入口（R1）----
+// ---- 统一保存入口----
 // 合成要写进项目的大纲：项目现在的大纲里，按卷 id 换掉这次审阅的线（新线追加），别的不动。
 // 对已有线跑 historyGuard，并真正执行 restoreHistory；对最终内容重新生成摘要和检查。
 // clue：{ snap, prog, config } —— 当前聊天的进度（项目没在这个聊天启用时为 null，不做历史保护）。
 // check：(volumes) => 问题列表（调用方传入，比如 importReachIssues + checkClueDraft）。
 // 返回 { volumes, history, guard, restored, changes, issues, removedStages }；调用方确认后用 commitOutline 写入。
 // 审阅页自己用的线头标记（开始时机已选、表格条件表单的状态），不写进大纲。
-// 选了「按表格条件」但表单没填完的线（表、行、列、值缺一个）：不能保存成没有条件（GPT 第二轮 N2）。
+// 选了「按表格条件」但表单没填完的线（表、行、列、值缺一个）：不能保存成没有条件。
 export function incompleteTableLines(volumes) {
     return (volumes || []).filter((v) => isPlainObject(v.line) && v.line.开始方式表格 && (isPlainObject(v.line.表格条件草稿) || v.line.开启条件 == null || v.line.开启条件 === ''));
 }
@@ -381,7 +381,7 @@ export function prepareCommit(project, draft, { clue = null, check = null, label
         guard = null,
         restored = [];
     if (clue && clue.snap) {
-        guard = historyGuard(current, merged, clue.snap, clue.prog, clue.config);
+        guard = historyGuard(current, merged, clue.snap.cond || clue.snap, clue.prog, clue.config);
         if (guard.keepDone.size || guard.reinsert.size)
             ((merged = restoreHistory(merged, guard)), (restored = [...guard.keepDone.keys(), ...guard.reinsert.keys()]));
     }
@@ -398,15 +398,15 @@ export function prepareCommit(project, draft, { clue = null, check = null, label
         stamp: JSON.stringify(current),
     };
 }
-// 写入：确认期间大纲又变了（stamp 对不上）就不写，让调用方重新准备（R1 第 5 条）。
+// 写入：确认期间大纲又变了（stamp 对不上）就不写，让调用方重新准备。
 export function commitOutline(project, prepared) {
-    if (JSON.stringify(project.outline.volumes) !== prepared.stamp) return { ok: !1, why: '确认期间大纲又被改过了，请重新检查后再保存' };
+    if (JSON.stringify(project.outline.volumes) !== prepared.stamp) return { ok: !1, why: '确认期间大纲已被修改，请重新检查后再保存' };
     return { ok: !0, outline: { ...project.outline, volumes: prepared.volumes, history: prepared.history } };
 }
 
-// ---- 「好几条支线」导入改用统一审阅页（第二批 b，用户 2026-11-16）----
+// ---- 「好几条支线」导入改用统一审阅页----
 // 旧任务的逐条审阅数据（job.lineReview.items）迁进审阅会话：当前改稿（作 base 和 draft）、意见（comment）、不导入、重新整理前的内容；
-// 不从原始整理结果重建（GPT 界面审阅：迁移时保留已经审过的内容）。上次意见（lastComment）、改动列表不迁；旧 lineReview 原样留在任务里，不再写。
+// 不从原始整理结果重建，以保留已审内容。上次意见（lastComment）、改动列表不迁；旧 lineReview 原样留在任务里，不再写。
 // 会话里额外记：dropped（本次不导入的线的卷 id）、prev（重新整理前的内容，按卷 id）、lineIds（卷 id → 文档里的线编号）。
 // 一条线的意见（旧的按线意见）放到这条线的线页（unitKey(vol.id)）上。
 export function linesSessionOf(job) {

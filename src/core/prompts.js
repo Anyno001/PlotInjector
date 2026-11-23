@@ -197,9 +197,10 @@ function changesBlock(units, title) {
     return lines.length ? `【${title}】\n${lines.join('\n')}` : '';
 }
 
-function restText(units, from) {
+// rest：只改写这几段（按线改写时只有目标线的；不给就是从 from 到全书末尾）
+function restText(units, from, rest = null) {
     const byVolume = new Map();
-    for (const unit of units.slice(from)) {
+    for (const unit of rest || units.slice(from)) {
         if (!byVolume.has(unit.volume)) byVolume.set(unit.volume, []);
         byVolume.get(unit.volume).push(unit.stage);
     }
@@ -263,7 +264,7 @@ ${clueIndex}`
                 ? `【最近正文】
 ${recent}`
                 : '',
-            // 线索模式：请求放在一大段表格目录后面时，模型偶尔会忽略请求、接着写已有的主线（2026-11-14 DeepSeek 30 次里 2 次）。写明这一卷就是这个要求。
+            // 线索模式：请求放在一大段表格目录后面时，模型偶尔会忽略请求、接着写已有的主线。写明这一卷就是这个要求。
             clue && request
                 ? `只写一条新的剧情线（YAML 里的第 ${volumeNo} 卷），它的内容就是下面这个要求（不要续写、重写、改动已有的剧情线，编号不要和已有的线重复）：
 ${request}`
@@ -277,12 +278,21 @@ ${request}`
     ];
 }
 
-export function rewriteRestMessages({ setting, volumes, fromUnitIndex, units, recent, reason }) {
-    const system = `剧情在执行中偏离了大纲。按已经发生的正文改写剩余阶段，保持卷名与阶段名格式。\n${OUTLINE_RULES}\n\n【格式样例】\n${formatSample(volumes)}`;
+// 按线改写（大型项目方案 四.1）：只改这一条线，别的线只给紧凑参考。
+export const ONE_LINE_RULE =
+    '这次只改写【需要改写的剩余阶段】里的这一条剧情线：只输出这一条线（顶层键照抄），不要输出别的线。【其他剧情线】只作参考，不能改动；别的线用到的节点 id 和事实编号要保留。';
+
+export function rewriteRestMessages({ setting, volumes, fromUnitIndex, units, recent, reason, rest = null, others = '' }) {
+    // 按线改写：格式样例取目标线、已演完的状态变化也只取目标线，别的线的正文不进请求（方案 四.1）
+    const own = rest && rest.length ? rest[0].volume : null,
+        sample = own ? [own] : volumes,
+        done = units.slice(0, fromUnitIndex).filter((u) => !own || u.volume === own);
+    const system = `剧情在执行中偏离了大纲。按已经发生的正文改写剩余阶段，保持卷名与阶段名格式。${rest ? `\n${ONE_LINE_RULE}` : ''}\n${OUTLINE_RULES}\n\n【格式样例】\n${formatSample(sample)}`;
     const user = [
         setting ? `【设定】\n${setting}` : '',
-        changesBlock(units.slice(0, fromUnitIndex), '已演完阶段的状态变化'),
-        `【需要改写的剩余阶段】\n${restText(units, fromUnitIndex)}`,
+        changesBlock(done, '已演完阶段的状态变化'),
+        `【需要改写的剩余阶段】\n${restText(units, fromUnitIndex, rest)}`,
+        others,
         reason ? `【偏转说明】\n${reason}` : '',
         `【最近正文】\n${recent}`,
     ]
@@ -295,17 +305,21 @@ export function rewriteRestMessages({ setting, volumes, fromUnitIndex, units, re
 }
 
 // 大纲调整后按大纲校对设定：只改与大纲冲突、或把会变的关系与认知写死的句子。
-export function syncSettingMessages({ guide, setting, units, fromUnitIndex = 0, reason = '' }) {
+export function syncSettingMessages({ guide, setting, units, fromUnitIndex = 0, reason = '', rest = null }) {
     const system = [
         guide,
         '剧情大纲已经调整。对照【剧情大纲】校对【已有世界观正文】：找出与大纲冲突的句子，以及把人物关系、认知、信息差、人物走向写成永远不变的句子，只改这些句子，改写成开局状态或留白；同一件事在几个分块里重复出现时，只留在最合适的一处；其余文字逐字保留，分块标题不变。',
         '原有 <仅作者> 区块必须保持仅作者属性，标签完整保留。不能把其中的真相、未来发展、作者备注写到公开分块里。',
         '只回「世界观正文」「速查」两段。世界观正文输出改好后的完整全文；没有需要改的句子时原样输出。',
     ].join('\n\n');
+    const own = rest && rest.length ? rest[0].volume : null;
     const user = [
         `【已有世界观正文】\n${setting}`,
-        changesBlock(units.slice(0, fromUnitIndex), '已演完阶段的状态变化'),
-        `【剧情大纲】\n${restText(units, fromUnitIndex)}`,
+        changesBlock(
+            units.slice(0, fromUnitIndex).filter((u) => !own || u.volume === own),
+            '已演完阶段的状态变化',
+        ),
+        `【剧情大纲】\n${restText(units, fromUnitIndex, rest)}`,
         reason ? `【调整原因】\n${reason}` : '',
     ]
         .filter(Boolean)
@@ -548,12 +562,24 @@ ${ref.text}`,
 `);
 }
 
-export function clueRewriteMessages({ setting, volumes, fromUnitIndex, units, recent, reason, progress = '', refs = [], talk = '' }) {
-    let rest = units.slice(fromUnitIndex),
+export function clueRewriteMessages({
+    setting,
+    volumes,
+    fromUnitIndex,
+    units,
+    recent,
+    reason,
+    progress = '',
+    refs = [],
+    talk = '',
+    rest: only = null,
+    others = '',
+}) {
+    let rest = only || units.slice(fromUnitIndex),
         byVolume = /* @__PURE__ */ new Map();
     for (let unit of rest) (byVolume.has(unit.volume) || byVolume.set(unit.volume, []), byVolume.get(unit.volume).push(unit.stage));
     let restText = outlineToText([...byVolume.entries()].map(([volume, stages]) => ({ ...volume, stages }))),
-        system = `剧情在执行中偏离了大纲。按已经发生的正文和线索进度，改写线索推进模式的剩余阶段，保持剧情线名（顶层键）与阶段名格式。
+        system = `剧情在执行中偏离了大纲。按已经发生的正文和线索进度，改写线索推进模式的剩余阶段，保持剧情线名（顶层键）与阶段名格式。${only ? `\n${ONE_LINE_RULE}` : ''}
 ${CLUE_OUTLINE_RULES}
 改写时另外遵守：
 · 已完成节点、已确认事实是已经发生的历史，不能改写、不能删除，后面的条件可以继续引用它们。
@@ -575,6 +601,7 @@ ${talk}`
             progress,
             `【需要改写的剩余阶段】
 ${restText}`,
+            others,
             reason
                 ? `【偏转说明】
 ${reason}`
@@ -644,7 +671,7 @@ export function fixFullWidthKeys(yaml) {
 export { OUTLINE_RULES };
 
 // 入口提示：线可以开始、主角还没去做时，插件把它作为「可以去做的事」的由头交给正文（lines.js 的 offer.hint）。
-// 用户 2026-11-16：要 AI 顺手写好，不让作者自己想。DeepSeek 对比见 开发/import-lab/entry-check.mjs。
+// 要 AI 顺手写好，不让作者自己想。对比见 开发/import-lab/entry-check.mjs。
 export const BRIEF_RULE = [
     '· 简介（每条线都必须写）：一句话说这条线讲的是什么事，给作者在执行页、审阅页一眼认出这条线用。',
     '  - 写成「谁 + 遇到什么事 + 主角要做什么」，具体到人和事，十五到三十字。',

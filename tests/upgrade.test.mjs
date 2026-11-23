@@ -192,7 +192,7 @@ test('run page: pause / resume buttons; all-done card offers 开始下一段主�
   doc.querySelector('[data-act="clue-pause"][data-value="1"]').click(); await tick();
   assert.equal(inst.runtime.clue.diagnose().paused, true);
   assert.match(doc.body.textContent, /已暂停/);
-  assert.equal(inst.runtime.clue.projection().reason, '主线已暂停（日常游玩）');
+  assert.equal(inst.runtime.clue.projection().reason, '剧情已暂停');
   doc.querySelector('[data-act="clue-pause"][data-value=""]').click(); await tick();
   assert.equal(inst.runtime.clue.diagnose().paused, false);
   for (const f of ['F_box', 'F_ledger', 'F_seen', 'F_print', 'F_talk']) set('关键事实表', f, '状态', '已核实');

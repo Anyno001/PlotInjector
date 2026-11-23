@@ -207,7 +207,7 @@ export function mergeImportIndex(list) {
         facts = /* @__PURE__ */ new Map();
     for (let [k, idx] of (list || []).entries()) {
         if (!isPlainObject(idx)) continue;
-        // 模型有时把「梗概」「作者资料」写成列表：逐条拼成一段，每条一行（实测：直接 String(数组) 会变成逗号连着的一串）。
+        // 模型有时把「梗概」「作者资料」写成列表：逐条拼成一段，每条一行（String(数组) 会变成逗号串）。
         let joinText = (v) =>
             Array.isArray(v)
                 ? v
@@ -216,7 +216,7 @@ export function mergeImportIndex(list) {
                       .join('\n')
                 : clueText(v);
         idx.梗概 && out.梗概.push(`第${k + 1}段：${joinText(idx.梗概)}`);
-        // 人物合并（GPT §20.3）：只按「名称」合并，或者原文明示是同一人（本段把对方的名称列为别名，或用「同一人」字段指明）。
+        // 人物合并：只按「名称」合并，或者原文明示是同一人（本段把对方的名称列为别名，或用「同一人」字段指明）。
         // 只是共用一个泛称（「维修工」「老板」）不合并；两个人都用同一个别名时，标出来请作者确认。
         for (let p of Array.isArray(idx.人物) ? idx.人物 : []) {
             if (!isPlainObject(p) || !p.名称) continue;
@@ -281,7 +281,7 @@ export function importDraftMessages({ part, index, prevTail = '', mode = 'clue',
                 '  待确认: 拿不准的地方（没有就省略）',
                 '  补写: true（只有这个节点不是材料里的、是你为了可玩性加的才写）',
                 clue
-                    ? '信息放在哪里（GPT §20.3）：'
+                    ? '信息放在哪里：'
                     : '信息放在哪里：节点的名称、地点、事件、偏转都会交给正文，只写玩家此时能经历到的事；幕后真相、真名、还没到揭示时机的答案只写在 <仅作者>…</仅作者> 里。世界动态的「来源」写故事里是谁传出的消息，不写原文出处。',
                 onlyClue(
                     '  · 入口、地点、场景：只写玩家此时就能看到、知道的东西。入口在节点开放时就会给正文，场景在玩家到场时给正文，都不能含调查结果。',
@@ -346,7 +346,7 @@ export function importDraftMessages({ part, index, prevTail = '', mode = 'clue',
     ];
 }
 
-// 导入「一条主线 / 一条支线」（导入审阅总方案 F / H）：整份文档成一条剧情线，卷的第一个键写「线」。
+// 导入「一条主线 / 一条支线」：整份文档成一条剧情线，卷的第一个键写「线」。
 // 编号由插件分配（采用时排在已有的线后面），模型不用写；开始时机照原文抄，原文没写就不写开启条件，由作者在审阅页选。
 export function importLineHeadRule(kind, part = null) {
     let main = kind === 'main';
@@ -370,11 +370,11 @@ export function importJobKind(job) {
     return k === 'main' || k === 'side' || k === 'lines' || k === 'outline' || k === 'edit' ? k : job && job.mode === 'lines' ? 'lines' : job && job.mode === 'outline' ? 'outline' : 'legacy';
 }
 
-// 「按意见修改」的请求（导入审阅总方案 4.3 / GPT 审阅 R4）：一组单位一次请求。
+// 「按意见修改」的请求：一组单位一次请求。
 // units：[{ key, kind: 'line' | 'stage', label, yaml, comment, source }]（source：这个单位对应的原文片段，只附这一段）。
 // context：组外有关的单位的真实条件表达式和事实来源（只读）。secrets：保密名字（必须改的位置用）。
 // 输出格式：每个单位一个代码块，代码块前一行写「【单位：<key>】」，插件按 key 回写，不靠模型照抄名字定位。
-// overall：整体意见（用户 2026-11-16：只对当前这条线）——这时 units 里有这条线的所有部分（u.overall 不为 false），
+// overall：整体意见，只对当前这条线；此时 units 里有这条线的所有部分（u.overall 不为 false），
 //   别的线上写了意见的部分也可能在里面（u.overall = false，只按它自己的意见改）；只输出真要改的。
 // talk：讨论记录（作为参考）；mode：'outline' 时用按阶段推进的规则（不加线索字段）。
 export function reviewReviseMessages({ units, context = '', secrets = [], tableCatalog = '', mainLines = '', overall = '', talk = '', mode = 'clue' }) {
@@ -428,10 +428,10 @@ export function reviewReviseMessages({ units, context = '', secrets = [], tableC
     ];
 }
 // 拆回复：「【单位：key】」后面紧跟的第一个代码块。返回 { key: 代码块文字 }；没有标记的代码块不认。
-// 模型常漏写标记（DeepSeek 实测：两次都只给了代码块）。补救只在不会认错时用：
+// 模型常漏写标记（只给代码块）。补救只在不会认错时用：
 //   units = [{ key, name }]（name：阶段名或「线」）。只有一个单位时，唯一的代码块就是它；
 //   有几个时，按代码块顶层键 = 请求里的阶段名对应（只认这次请求里的名字，对不上的不用）。
-//   名字有重复（两条线都有「阶段1_经过」、几个线头都叫「线」）时不猜：同名的块和单位都不补，意见保留（GPT 第二轮 N4）。
+//   名字有重复（两条线都有「阶段1_经过」、几个线头都叫「线」）时不猜：同名的块和单位都不补，意见保留。
 export function splitUnitReplies(text, units = []) {
     let out = {},
         t = String(text || ''),
@@ -439,7 +439,7 @@ export function splitUnitReplies(text, units = []) {
         m;
     while ((m = re.exec(t))) m[1] in out || (out[m[1]] = m[2]);
     if (!units.length) return out;
-    // 有标记的块已经认了；剩下没标记的块（DeepSeek 实测：几个块里漏写其中一个的标记）按阶段名补上
+    // 有标记的块已经认了；剩下没标记的块按阶段名补上
     let blocks = [...t.matchAll(/```(?:yaml)?\s*\n([\s\S]*?)```/g)].map((x) => x[1]).filter((b) => !Object.values(out).includes(b));
     if (units.length === 1 && !Object.keys(out).length && blocks.length === 1) return { [units[0].key]: blocks[0] };
     let topOf = (b) => ((/^([^\s:#][^:\n]*):/m.exec(b) || [])[1] || '').trim(),
@@ -470,13 +470,13 @@ export function keepReasons(text) {
 }
 
 // 读出一个单位的修改结果（模型给的格式不总一样）：
-//   阶段：{阶段名: 字段} 最好；包了一层卷名（{卷名: {线, 阶段名: 字段}}，DeepSeek 实测）时，按请求的阶段名取出那一个阶段；
+//   阶段：{阶段名: 字段} 最好；包了一层卷名（{卷名: {线, 阶段名: 字段}}）时，按请求的阶段名取出那一个阶段；
 //         都对不上时不认（不把整卷当成一个阶段，免得清空节点）。
 //   线头：{线: {...}}、{卷名: {线: {...}}} 或直接字段。
 // want：请求时的阶段名（或「线」）；oldNodes：原来的节点数——原来有节点、改完一个都没有的，视为模型给错了格式，不认。
 export function parseUnitReply(key, text, want, oldNodes = 0) {
     let v = parseYaml(text);
-    if (!isPlainObject(v)) throw new Error('格式不对：应该是「名字: 内容」');
+    if (!isPlainObject(v)) throw new Error('格式错误：应为「名字: 内容」');
     if (String(key).endsWith('/line')) {
         let l = isPlainObject(v[VOLUME_LINE_KEY]) ? v[VOLUME_LINE_KEY] : Object.values(v).map((x) => isPlainObject(x) && x[VOLUME_LINE_KEY]).find(isPlainObject) || v;
         return { line: l };
@@ -491,13 +491,13 @@ export function parseUnitReply(key, text, want, oldNodes = 0) {
         let entries = Object.entries(v).filter(([k, x]) => k !== VOLUME_LINE_KEY && looks(x));
         entries.length === 1 && (pick = entries[0]);
     }
-    if (!pick) throw new Error('回复里找不到这个阶段');
+    if (!pick) throw new Error('回复中没有这个阶段');
     let nodes = NODE_FIELDS.reduce((n, { field }) => n + (Array.isArray(pick[1][field]) ? pick[1][field].length : 0), 0);
-    if (oldNodes && !nodes) throw new Error('回复里这个阶段一个场景都没有（可能格式给错了），没有采用');
+    if (oldNodes && !nodes) throw new Error('回复中这个阶段没有任何场景（格式可能有误），未采用');
     return { stage: { key: pick[0], data: nodeMapsToLists(pick[1]) } };
 }
 
-// 按意见修改时附的原文（GPT 审阅 R4：改条件要看原文依据）。导入记录的是这个节点来自原文的哪一段（起 / 止，一段可能有几千字），
+// 按意见修改时附的原文（改条件需要原文依据）。导入记录的是这个节点来自原文的哪一段（起 / 止，一段可能有几千字），
 // 整段太长；优先取讲推进、门槛、替代路线的小节（「推进条件」「调查如何继续」「走不通时」「合流」「进入条件」），
 // 再补开头，合计不超过 max 字。没有这类小节时取开头。
 const SOURCE_KEYS = /推进条件|调查如何继续|如何继续|走不通|合流|进入条件|结束条件|先后不限|任一|任意一/;
@@ -514,7 +514,7 @@ export function sourceExcerpt(src, from, to, max = 2400) {
     return [start, ...out].filter(Boolean).join('\n…\n');
 }
 
-// 问题 → 追加进意见的一句话（「把所有问题填进意见」/「填进意见」）。不覆盖作者原话，同一句不重复加（GPT 审阅 R4 末条）。
+// 问题 → 追加进意见的一句话（「把所有问题填进意见」/「填进意见」）。不覆盖作者原话，同一句不重复加。
 // 需要确认的（warn）只填问题的开头，由作者接着写回答，不替作者回答。
 // 同一页里原因相同的问题合成一条（目前：几个节点都「一直开不了」）。合并后的条目带 parts（原来的几条），加入意见时一句话说全。
 export function mergeSameIssues(list) {
@@ -608,7 +608,7 @@ export function importSecretNames(index) {
     ];
 }
 
-// 疑似短名（总方案 C / GPT 审阅 R7）：保密全名按「·」「•」、空格拆开的每一段（≥2 字）。只是候选：
+// 疑似短名：保密全名按「·」「•」、空格拆开的每一段（≥2 字）。只是候选：
 // 命中时报「需确认」，不当成确定的泄密；作者确认后才当保密别名用。
 // 不收：本来就是全名或别名的；是某个不保密人物的名称 / 别名（或其中一段）的；常见泛称。
 export const SECRET_SHORT_STOP = ['先生', '小姐', '女士', '老板', '医生', '博士', '队长', '警官', '老师', '师傅'];
@@ -716,7 +716,7 @@ export function checkImportDraft(volumes, { index = null, secrets = null, mode =
             s &&
                 s.length >= 2 &&
                 // 确认过的短名：先去掉包含它的全名再找，只有单独出现才算。同一处写了全名，全名那条已经报过；
-                // 别的地方单独写了短名（比如更早的阶段），照样报（GPT 第六轮 R4）
+                // 别的地方单独写了短名（比如更早的阶段），照样报
                 bare(s, x.text).includes(s) &&
                 hits.set(`${x.layer}|${s}`, [...(hits.get(`${x.layer}|${s}`) || []), x]);
     }
@@ -779,7 +779,7 @@ export function checkImportDraft(volumes, { index = null, secrets = null, mode =
                         isPlainObject(n) && IMPORT_AUTHOR_KEYS.forEach((k) => k in n && left.add(k));
     for (let k of left) out.push({ level: 'error', text: `正式大纲里还留着只给作者看的字段「${k}」` });
     if (!clue) return out;
-    // 并行线被写成先后两个阶段（实测常见：「阶段5a」「阶段5b」）：阶段按顺序进行，两条线都成了必须的。
+    // 并行线被写成先后两个阶段（如「阶段5a」「阶段5b」）：阶段按顺序进行，两条线都成了必须的。
     let units = flattenUnits(volumes || []);
     for (let k = 1; k < units.length; k++) {
         let a = /^阶段\s*(\d+)\s*([a-zA-Z])/.exec(units[k - 1].stage.key),
@@ -796,7 +796,7 @@ export function checkImportDraft(volumes, { index = null, secrets = null, mode =
     return out;
 }
 
-// ---- 问题的人话（总方案 A）：事实编号换成内容、节点编号换成名称；原来的 text 保留，界面放进「详细」里。----
+// ---- 问题的人话：事实编号换成内容、节点编号换成名称；原来的 text 保留，界面放进「详细」里。----
 const shortText = (t, n = 20) => {
     let x = String(t || '').trim().replace(/[。；，、.!！]+$/, '');
     return x.length > n ? `${x.slice(0, n)}…` : x;
@@ -830,7 +830,7 @@ function routePlain(r, facts) {
         return {
             plain: `「${r.stage}」：「${r.nodeNames[0]}」一直开不了（它的开放条件要的线索，前面拿不到），这条路走不通。`,
             fix: '看看它的开放条件：要的线索是不是写错了，或者前面阶段漏了产出这条线索的地方。',
-            // 同一阶段里几个节点都因为这个原因开不了：界面合成一张卡（GPT 界面审阅第 9 条）
+            // 同一阶段里几个节点都因为这个原因开不了：界面合成一张卡
             same: { key: 'open-never', stage: r.stage, node: r.nodeNames[0] },
         };
     if (r.at === 'next')
@@ -849,7 +849,7 @@ function routePlain(r, facts) {
     };
 }
 
-// 大纲页「检查」用的线索结构检查（导入审阅总方案第 2 条剩余项）：和导入审阅同一套人话问题。
+// 大纲页「检查」用的线索结构检查：和导入审阅同一套人话问题。
 //   编译错误、条件里拿不到的事实 / 不存在的节点和线、走不通的地方、替代途径；
 //   保密名字：项目存过名单（导入时的作者索引）才查，没有名单不报「没做保密检查」（项目里的线多半不是导入的）。
 // 每条带 stageId / volumeId，界面用来跳到那个阶段。
@@ -956,10 +956,9 @@ export function importDoneText(volumes) {
         .join('\n');
 }
 
-// rewrite：跨段时后面的段把前面已经写过的线头、阶段、节点又写了一遍（实测 2026-11-17：S07、S15 列出 35～45 条
-// 「两段写得不一样」，还造出重复节点 id）。true 时前一段为准、空的才补、不列冲突；新阶段、新节点、新发现照常加。
+// rewrite：跨段时后段把前段已有的线头、阶段、节点又写了一遍（会列出大量冲突并造出重复节点 id）。true 时前一段为准、空的才补、不列冲突；新阶段、新节点、新发现照常加。
 // 「多条支线」按线合并时用 true，被略过的条数记在结果的 skipped 上，由调用方合成一句提示；
-// 「一条主线 / 一条支线」导入仍用默认 false（逐条列出冲突），实测这类导入几乎没有重写。
+// 「一条主线 / 一条支线」导入仍用默认 false（逐条列出冲突）。
 export function mergeImportParts(vols, { rewrite = !1 } = {}) {
     let stages = [],
         conflicts = [],
@@ -986,7 +985,7 @@ export function mergeImportParts(vols, { rewrite = !1 } = {}) {
             return (finds.length && (a.发现 = finds), mergeFields(a, b, ['id', '发现'], where), a);
         };
     // 已经出现过的节点 id（任何阶段）。跨段重写时，同一个节点出现在后一段的另一个阶段：
-    // 新增的发现、原来空着的字段合进原来的节点（GPT 第五轮 C2：整个丢掉会连新发现一起丢），再去掉这个重复的位置；原来的位置不变。
+    // 新增的发现、原来空着的字段合进原来的节点（整个丢掉会连新发现一起丢），再去掉这个重复的位置；原来的位置不变。
     let idsOf = (st) => NODE_FIELDS.flatMap(({ field }) => asList(st.data && st.data[field]).map((n) => (isPlainObject(n) ? n.id : '')).filter(Boolean)),
         findNode = (id) => {
             for (let x of stages)
@@ -1185,8 +1184,8 @@ ${mainLines}`,
     ];
 }
 
-// 「好几条支线」导入：同一批里两条线出现同一段内容（DeepSeek 实测：S07 名下是 S02 的整个阶段，四个节点 id 都重复）。
-// 只报事实，不猜谁抄了谁：写出两边的线和阶段，由作者决定重新整理哪一条（GPT 代码审阅第 2 点）。
+// 「好几条支线」导入：同一批里两条线出现同一段内容。
+// 只报事实，不猜谁抄了谁：写出两边的线和阶段，由作者决定重新整理哪一条。
 // 同一段 = 两个阶段共有节点 id，或阶段名和节点名完全一样。返回 [{ a: {id, stage}, b: {id, stage}, nodes: [id…], text }]。
 export function importLineDuplicates(vols) {
     let idOf = (v) => (isPlainObject(v.line) ? String(v.line.编号 || '').trim() : ''),
@@ -1258,7 +1257,7 @@ export function importLineIssues(drafts, existing, { index = null, known = [], c
                     .slice(0, 4)
                     .map((x) => `${x.stage}${x.node ? `·${x.node}` : ''}（${x.why}）`)
                     .join('；');
-        ((hard = hard.filter((x) => !/线 [A-Za-z]+\d+ (未触发|可开启)/.test(x.why))),
+        ((hard = hard.filter((x) => !/线 ?[A-Za-z]+\d+ ?(未触发|可开启)/.test(x.why))),
             hard.length &&
                 add(id, {
                     level: 'error',
@@ -1290,7 +1289,7 @@ export function mergeImportByLine(vols) {
         let list = groups.get(key),
             merged = mergeImportParts(list, { rewrite: !0 }),
             line = {};
-        // 线头：前一段为准，空的才补（后面的段重写的简介、入口提示不逐条列冲突，实测 2026-11-17）
+        // 线头：前一段为准，空的才补（后面的段重写的简介、入口提示不逐条列冲突）
         let skippedHead = 0;
         for (let v of list)
             if (isPlainObject(v.line))

@@ -54,7 +54,7 @@ export function effectiveClueProgress(clueOps, chat) {
             continue;
         }
         if (op.kind === 'pause') {
-            // target: side = 暂停全部支线；mains = 暂停全部主线（新）；其他（含旧记录的 main）= 暂停整个剧情（GPT 审阅 R6：旧记录的含义不变）
+            // target：side 暂停全部支线；mains 暂停全部主线；其他（含旧记录的 main）暂停整个剧情
             op.target === 'side' ? (out.sidePaused = !!op.value) : op.target === 'mains' ? (out.mainPaused = !!op.value) : (out.paused = !!op.value);
             continue;
         }

@@ -2,7 +2,7 @@ import { normalizeProject } from './store.js';
 import { makeId, isPlainObject } from './outline.js';
 import { emptyPersonas } from './personas.js';
 
-// 整个项目导出成一个文件、在别的酒馆导入（用户 2026-11-17：本地和云酒馆之间搬项目；卡作者把写好的剧情和角色卡一起发给玩家）。
+// 整个项目导出成一个文件、在别的酒馆导入。
 // 打包：大纲、线索标签和口径、保密名单、推进方式和注入参数等设置；人设、设定可选（很多作者写在世界书里）。
 // 不打包：导入任务和原文、讨论记录、聊天进度、修改历史、本机的世界书引用。
 // 线、阶段、节点的 id 只在项目内部用，导入时原样保留（人设阶段绑定、保密名单、线索标签都按它们对上），只换项目 id。
@@ -27,7 +27,7 @@ export function buildProjectFile(project, { personas = !0, setting = !0, version
     return { kind: PROJECT_FILE_KIND, version: 1, app: version, exportedAt: new Date().toISOString(), project: body };
 }
 
-// 人设里「从世界书转入」的记录只对本机有意义：每条线的 source / sources、顶层的 imported（GPT 第六轮 R3）。
+// 人设里「从世界书转入」的记录只对本机有意义：每条线的 source / sources、顶层的 imported。
 // 导出、导入都去掉；人设正文、阶段 id、跟随大纲的 unitId 保留。
 function stripPersonaSources(personas) {
     let src = isPlainObject(personas) ? personas : emptyPersonas();
@@ -79,7 +79,7 @@ export function projectSummary(project, extra = {}) {
     };
 }
 
-// 导入时的名字：和已有项目重名就加「（导入）」，还重名再加序号。不覆盖原项目（用户 2026-11-17）。
+// 导入时的名字：和已有项目重名就加「（导入）」，还重名再加序号。不覆盖原项目。
 export function importedName(name, taken) {
     let base = String(name || '').trim() || '导入的项目',
         names = new Set((taken || []).map(String));

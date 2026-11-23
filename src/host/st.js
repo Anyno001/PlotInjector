@@ -89,3 +89,30 @@ export function downloadBlob(name, data, type = 'application/json') {
     anchor.remove();
     view.setTimeout(() => view.URL.revokeObjectURL(url), 2000);
 }
+
+// 从服务器读回当前聊天文件的 chat_metadata（saveMetadata 出错、超时都不报，只有读回才能确认存下来了）。
+// 单聊 /api/chats/get，群聊 /api/chats/group/get；读不到返回 null。
+export async function savedChatMetadata() {
+    try {
+        const c = ctx(),
+            id = chatId();
+        if (!c || !id) return null;
+        let body;
+        if (c.groupId) body = { id };
+        else {
+            const card = c.characterId != null && Array.isArray(c.characters) ? c.characters[c.characterId] : null;
+            if (!card || !card.avatar) return null;
+            body = { ch_name: card.name, file_name: String(id).replace(/\.jsonl$/, ''), avatar_url: card.avatar };
+        }
+        const res = await hostWindow().fetch(c.groupId ? '/api/chats/group/get' : '/api/chats/get', {
+            method: 'POST',
+            headers: requestHeaders(),
+            body: JSON.stringify(body),
+        });
+        if (!res.ok) return null;
+        const data = await res.json();
+        return Array.isArray(data) && data[0] && data[0].chat_metadata && typeof data[0].chat_metadata === 'object' ? data[0].chat_metadata : null;
+    } catch {
+        return null;
+    }
+}

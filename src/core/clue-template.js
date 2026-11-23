@@ -1,5 +1,10 @@
 import { LINE_CATALOG_COL } from './lines.js';
 import { isPlainObject } from './outline.js';
+// 「已核实」按各行口径写的取得者判断，不一律要求主角（用户扮演的角色）取得（蜘蛛侠卡实测 2026-11-23：查案的是 char）。
+// 旧聊天的说明里还是旧句子，重新「创建模板」时换成这一句。
+const FACT_VERIFIED_OLD = '已核实：正文里主角实际取得了这项结果，而且有可靠依据（亲眼看到实物、读到原件、得到明确验证）。';
+const FACT_VERIFIED_RULE =
+    '    · 已核实：正文里实际出现了这一行口径所说的结果（口径写了由谁取得，以那个人为准），而且有可靠依据（亲眼看到实物、读到原件、得到明确验证）。';
 export const CLUE_TPL_MARK_BEGIN = '【线索主线附加规则·剧情注入器】';
 
 export const CLUE_TPL_MARK_END = '【附加规则结束】';
@@ -88,7 +93,7 @@ export function clueFactSheet() {
                 '- 标签：中性的简短名称，不要修改，也不要据此推断答案。',
                 '- 登记口径：正文里出现什么才算取得这一项（不含答案）。不要修改。',
                 '- 状态：只能是 未获得 / 已核实 / 存疑。',
-                '    · 已核实：正文里主角实际取得了这项结果，而且有可靠依据（亲眼看到实物、读到原件、得到明确验证）。',
+                FACT_VERIFIED_RULE,
                 '    · 存疑：正文里确实出现了这项内容，但来源只是某人的说法、传闻或推测，还没有可靠依据。「内容」要写明是谁说的。拿不准正文有没有写出这项内容时不要记为存疑，保持原值。',
                 '    · 未获得：其余情况。到达地点、尝试调查、对方答应提供、中途离开，都仍是未获得。',
                 '- 内容：一句话写出正文里实际出现的内容，只写正文写出来的部分，不补充正文没有的细节。例：只承认拿了钱、没说原因，就只写拿了钱。',
@@ -169,7 +174,7 @@ export function clueSheets({ factRows = [], knowRows = [], controlRow = null, sc
     return [ctrl, facts, know];
 }
 
-// 全局表（记时间、地点的那张单行表）：卡作者常改名、加列（用户 2026-11-17 反馈：叫「全局状态表」，没被认出来，更新频率还是 3）。
+// 全局表（记时间、地点的单行表）：卡作者常改名、加列。
 // 按名字认：官方认的「全局数据表」「全局表」，常见的「全局状态表」；都没有就找名字带「全局」、有时间列的表。
 // 列按名字找，列多列少都不影响；插件只改它的更新频率，读时间、地点两格，不增删列、不改它的填表规则。
 export const GLOBAL_TABLE_NAMES = ['全局数据表', '全局表', '全局状态表'];
@@ -303,10 +308,10 @@ export function ddlAddColumns(ddl, cols) {
     if (close < 0) return { ok: !1, ddl: src };
     let body = src.slice(0, close).replace(/\s+$/, ''),
         tail = src.slice(close);
-    // 表级约束（UNIQUE、PRIMARY KEY (...)、CHECK、FOREIGN KEY、CONSTRAINT）必须在所有列之后：有它们时不改 DDL，只报告（GPT 第四轮 R10）。
-    // 约束可能在行首，也可能和列写在同一行的逗号后面（第五轮审阅 7：单行建表语句）。先去掉 -- 注释，免得把注释里的词当成约束。
+    // 表级约束（UNIQUE、PRIMARY KEY (...)、CHECK、FOREIGN KEY、CONSTRAINT）必须在所有列之后：有它们时不改 DDL，只报告。
+    // 约束可能在行首，也可能和列写在同一行的逗号后面（单行建表语句）。先去掉 -- 注释，免得把注释里的词当成约束。
     let defs = body.slice(body.indexOf('(') + 1).replace(/--[^\n]*/g, '');
-    // 单词边界放在关键字上（内测前审阅）：PRIMARY KEY ("name") 的括号后面是引号，原写法的 \b 不成立。
+    // 单词边界放在关键字上：PRIMARY KEY ("name") 的括号后面是引号，原写法的 \b 不成立。
     if (/(?:^|,)\s*(?:(?:CONSTRAINT|UNIQUE|CHECK|FOREIGN\s+KEY)\b|PRIMARY\s+KEY\s*\()/im.test(defs))
         return { ok: !1, ddl: src, why: '表定义里有表级约束' };
     // 最后一列可能带行尾注释：逗号要加在注释之前。
@@ -390,6 +395,12 @@ export function synthesizeClueTemplate(base, { clue = {} } = {}) {
             problems.push(`已有的「${sheet.name}」缺少列：${missing.join('、')}。没有改动这张表，请检查是否是别的用途的同名表`);
             continue;
         }
+        if (sheet.name === '关键事实表') {
+            let note = String((have.sheet.sourceData && have.sheet.sourceData.note) || '');
+            note.includes(FACT_VERIFIED_OLD) &&
+                ((have.sheet.sourceData = { ...have.sheet.sourceData, note: note.replace(`    · ${FACT_VERIFIED_OLD}`, FACT_VERIFIED_RULE).replace(FACT_VERIFIED_OLD, FACT_VERIFIED_RULE.trim()) }),
+                changes.push('「关键事实表」说明：「已核实」改为按各行口径里的取得者判断，不一律要求主角取得'));
+        }
         if (sheet.name === '线索控制表') {
             let note = String((have.sheet.sourceData && have.sheet.sourceData.note) || ''),
                 i = note.lastIndexOf(CLUE_SCENE_CATALOG_HEAD),
@@ -444,7 +455,7 @@ export function synthesizeClueTemplate(base, { clue = {} } = {}) {
             changes,
             problems,
             created,
-            // 线索三表有重名（R10）：不新建、不自动绑定，调用方应停止。
+            // 线索三表有重名：不新建、不自动绑定，调用方应停止。
             blocked,
             binding: {
                 facts: [

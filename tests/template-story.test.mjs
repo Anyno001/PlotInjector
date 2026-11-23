@@ -363,7 +363,7 @@ test('prebuild through the run page: only missing rows are inserted via the offi
   (() => { const t = doc.querySelector('[data-act="run-set-toggle"][aria-expanded="false"]'); t && t.click(); })(); await tick(); (() => { const t = doc.querySelector('[data-act="run-fold"][data-key="advOpen"][aria-expanded="false"]'); t && t.click(); })(); await tick();
   doc.querySelector('[data-act="clue-prebuild"]').click(); await tick();
   const dlg = doc.querySelector('.pi-dialog');
-  assert.match(dlg.textContent, /每一轮都会发给填表模型/);
+  assert.match(dlg.textContent, /每一?轮都会发给填表模型/);
   assert.match(dlg.textContent, /已有、不改动：F_box/);
   // the record (may contain the answer) is no longer printed; the 自动填写 button writes a neutral version instead
   assert.ok(dlg.querySelector('[data-fr-auto]'), 'auto-fill button');
@@ -413,7 +413,7 @@ test('unoffered fact line: keep silences it; void revokes, writes the tables bac
   await click('[data-act="tab"][data-tab="run"]');
   let line = doc.querySelector('.pi-unoffered');
   assert.ok(line, 'one line in 本轮场景');
-  assert.match(line.textContent, /正文可能自己编了：修车铺老板说那晚看见一辆车/);
+  assert.match(line.textContent, /正文可能自行编造：修车铺老板说那晚看见一辆车/);
   assert.doesNotMatch(doc.body.textContent, /两表核对：这些事实被记为已核实/, 'old wording gone');
   // void
   await click('[data-act="clue-fact-void"][data-id="F_talk"]');

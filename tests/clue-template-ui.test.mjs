@@ -52,7 +52,7 @@ test('new chat on the default tables: preview lists the changes; import uses sco
   assert.match(text, /新增「关键事实表」/);
   assert.match(text, /「全局数据表」改为每楼更新/);
   assert.match(text, /「重要角色表」新增列：剧情身份、当前动向/);
-  assert.match(text, /不会删除任何东西/);
+  assert.match(text, /原有表和数据全部保留/);
   fillLabels(dlg); await confirm(dlg);
   assert.equal(ctx.api.templateCalls.length, 1);
   assert.deepEqual(ctx.api.templateCalls[0].options, { scope: 'chat', dataMode: 'seed' });
@@ -85,7 +85,7 @@ test('second run (clue tables already exist): no fact rows in the template; poin
   const ctx = await setup(dailyTables());
   let dlg = await openGen(ctx); fillLabels(dlg); await confirm(dlg);
   dlg = await openGen(ctx);
-  assert.match(dlg.textContent, /已经有关键事实表，不在模板里追加行/);
+  assert.match(dlg.textContent, /已有关键事实表，模板不追加行/);
   assert.equal(dlg.querySelectorAll('[data-gt-label]').length, 0);
   await confirm(dlg);
   // the chat template keeps its original data rows as they were imported (real ST: getTableTemplate returns them);
@@ -112,7 +112,7 @@ test('import failure: binding untouched; template read failure / mismatch: nothi
   const orig = ctx.api.getTableTemplate;
   ctx.api.getTableTemplate = () => ({ ...orig(), sheet_other: { uid: 'sheet_other', name: '别的模板的表', content: [['row_id', 'x']], sourceData: {}, updateConfig: {}, exportConfig: {} } });
   let d = await openGen(ctx);
-  assert.match(d.textContent, /没有生成线索模板[\s\S]*模板里有、当前聊天没有：别的模板的表/);
+  assert.match(d.textContent, /未创建模板[\s\S]*模板里有、当前聊天没有：别的模板的表/);
   assert.ok(![...d.querySelectorAll('.pi-btn')].some((b) => b.textContent === '写入当前聊天'), 'no import button');
   [...d.querySelectorAll('.pi-btn')].find((b) => b.textContent === '关闭').click(); await tick();
   assert.equal(ctx.api.templateCalls.length, 0);
@@ -130,7 +130,7 @@ test('template changed while the preview was open → not imported', async () =>
 
 // 实测 2026-11-15：导入后到第一次填表前，预建行还是数据库的种子行，插件改不了「场景目录」，第一轮正文拿不到入口；
 // 生成模板时确认过的标签也没存进项目，执行页误报「标签还没准备好」。
-test('multi-line outline: the scene catalog is written into the control seed row; confirmed labels are kept; no pending-label warning', async () => {
+test('multi-line outline: only opening rows are built; the scene catalog is written into the control seed row; confirmed labels are kept; the rest are offered for preparation', async () => {
   const multiText = fs.readFileSync(path.join(here, './fixtures/雾港旧案_多线实测大纲.yaml'), 'utf8');
   const host = createHost({ tables: dailyTables() });
   const inst = host.load(); await inst.ready;
@@ -143,7 +143,14 @@ test('multi-line outline: the scene catalog is written into the control seed row
   const doc = host.w.document, api = host.w.AutoCardUpdaterAPI;
   doc.querySelector(`[data-act="project"][data-id="${p.id}"]`).click(); await tick();
   doc.querySelector('[data-act="tab"][data-tab="run"]').click(); await tick();
-  const dlg = await openGen({ doc }); fillLabels(dlg); await confirm(dlg);
+  const dlg = await openGen({ doc });
+  // 大型项目第 2 批：开局只建要用的行（进行中的 M1、可开启的 S01 没开始，只有开线事件；没开始的线开始后自动补）
+  assert.match(dlg.textContent, /开局要用\d+条线索/);
+  assert.match(dlg.textContent, /另有\d+条要等剧情推进到那一步，到时自动补入表格/);
+  fillLabels(dlg); await confirm(dlg);
+  const facts = byName(api.templateCalls[0].tpl, '关键事实表').content.slice(1).map((r) => r[1]);
+  assert.ok(facts.includes('F_ticket') && facts.includes('F_watchman'), `M1 rows built: ${facts}`);
+  assert.ok(!facts.includes('F_cellar') && !facts.includes('F_s02_sailor'), 'M2 / S02 (not started) rows not built');
   const ctrl = byName(api.templateCalls[0].tpl, '线索控制表');
   assert.equal(ctrl.content.length, 2);
   const cat = ctrl.content[1][ctrl.content[0].indexOf('场景目录')];
@@ -152,10 +159,11 @@ test('multi-line outline: the scene catalog is written into the control seed row
   assert.doesNotMatch(cat, /s02_address|m2_pawnshop|m1_watchman/, 'nothing that is not open yet');
   const labels = inst.data.project(p.id).clue.labels;
   assert.equal(labels.F_ticket.label, '标签0');
-  assert.equal(Object.keys(labels).length, 6);
+  assert.equal(Object.keys(labels).length, facts.length, 'labels typed in the dialog are kept');
+  // 其余线的标签由「准备标签」写进项目（不在模板弹窗里一次写完）
   inst.runtime.clue.invalidate(); inst.renderBody ? inst.renderBody() : null; await tick();
   doc.querySelector('[data-act="tab"][data-tab="run"]').click(); await tick();
-  assert.doesNotMatch(doc.body.textContent, /标签还没准备好/);
+  assert.match(doc.body.textContent, /条线索的标签未准备/, 'the rest is offered for preparation');
   await inst.destroy();
 });
 

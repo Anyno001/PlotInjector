@@ -1,9 +1,10 @@
 import { isClueMode } from '../core/clue-model.js';
-import { renderClueRun, modeCard, clueActions, clueOnChange } from './clue-run.js';
+import { renderClueRun, modeCard, clueActions, clueOnChange, clueOnInput, lineDisplayName } from './clue-run.js';
 import { kpActions } from './trpg-kp-card.js';
+import { esc as escHtml, confirmDialog } from './dom.js';
 
 import { DEFAULT_PARAMS, PACES, POSITIONS, ROLES, buildIndexText, carriedNodes, positionLabel } from '../core/inject.js';
-import { flattenUnits, stageLabel, stageNodes, volumeShowName } from '../core/outline.js';
+import { flattenUnits, nodeWord, stageLabel, stageNodes, volumeShowName } from '../core/outline.js';
 import { STATE_LABELS, checkBase, goTo, offNodes, patchSlot, setNodeChecked, unitStates } from '../core/progress.js';
 import { currentStage, groupLines, hasPersonas, mutePersona, personaEnv, personaNote, releasePersona, setPersonaStage } from '../core/personas.js';
 import { clockPhase, isThreadNode, liveThreads, maskUnits, patchLive, threadSwitches } from '../core/threads.js';
@@ -50,7 +51,7 @@ export function entryRow(entry, expanded) {
         </div>${body}</div>`;
 }
 
-// 阶段节点行：类型标签、名称、行尾状态字。未演继续注入，已演不再注入；整行灰色表示已演。
+// 阶段节点行：未演继续注入，已演不再注入（整行灰色）。
 const nodeRow = (
     unitId,
     node,
@@ -58,9 +59,9 @@ const nodeRow = (
     from = '',
     mark = '',
 ) => `<div class="pi-node-row${off ? ' is-off' : ''}"${from ? ` title="来自${esc(from)}"` : ''}>
-        <span class="pi-node-name"><span class="pi-badge pi-kind is-${esc(node.kind)}">${esc(node.label)}</span> <span class="pi-node-txt">${esc(node.name)}</span></span>${mark || `<button type="button" class="pi-meta pi-meta-btn" data-act="node-toggle" data-node="${esc(node.id)}" data-unit="${esc(unitId)}">${off ? '已演' : '未演'}</button>`}</div>`;
+        <span class="pi-node-name"><span class="pi-badge pi-kind is-${esc(node.kind)}">${esc(nodeWord(node))}</span> <span class="pi-node-txt">${esc(node.name)}</span></span>${mark || `<button type="button" class="pi-meta pi-meta-btn" data-act="node-toggle" data-node="${esc(node.id)}" data-unit="${esc(unitId)}">${off ? '已演' : '未演'}</button>`}</div>`;
 
-// 状态一律灰色小字；已激活在字前加粉点。状态文字本身是按钮，点开手动菜单。
+// 状态文字本身是按钮，点开手动菜单。
 function hookRow(hook) {
     const chain = hook.steps.length && (hook.status === 'active' || hook.status === 'queue');
     const mark =
@@ -97,7 +98,7 @@ function expiredRows(hooks, open) {
     return `<p class="pi-hint"><button type="button" class="pi-meta pi-meta-btn" data-act="expired-toggle">已过期${hooks.length}条</button></p>${rows}`;
 }
 
-// 世界进度钟：每钟一行，圆点按格数，深色为已填；点整行开手动菜单。
+// 世界进度钟：每钟一行，点整行开手动菜单。
 function worldRow(live) {
     if (!live.clocks.length) return '';
     const row = (clock) => {
@@ -115,11 +116,10 @@ const switchCell = (key, label, on) =>
     `<div class="pi-pace-cell"><span>${esc(label)}</span><button type="button" class="pi-switch${on ? ' is-on' : ''}" role="switch" aria-checked="${on}" data-act="thread-switch" data-key="${key}" title="${on ? '已开启' : '已关闭'}"></button></div>`;
 
 function switchRow(sw) {
-    return `<div class="pi-pace"><span class="pi-pace-label">启用</span><div class="pi-pair">${switchCell('sideOn', '支线', sw.sideOn)}${switchCell('worldOn', '世界动态', sw.worldOn)}</div></div>`;
+    return `<div class="pi-pace"><span class="pi-pace-label">启用</span><div class="pi-pair">${switchCell('sideOn', '可选事件', sw.sideOn)}${switchCell('worldOn', '世界动态', sw.worldOn)}</div></div>`;
 }
 
-// carried：已过阶段里没演的支线与世界动态，标为已演即不再延续，灰色留在原处可恢复。
-// units 已按开关遮罩，关掉的一类不会出现在这里，只留一行「已关闭」。
+// carried：已过阶段中未演的支线与世界动态，标为已演即不再延续。关掉的一类已被遮罩，只留「已关闭」一行。
 function nodeList(unit, progress, carried, live, sw, expiredOpen) {
     const off = new Set(offNodes(progress, unit));
     const nodes = stageNodes(unit.stage.data).filter((node) => !isThreadNode(node));
@@ -127,15 +127,14 @@ function nodeList(unit, progress, carried, live, sw, expiredOpen) {
     const own = live.hooks.filter((hook) => !hook.carried && alive(hook));
     const later = live.hooks.filter((hook) => hook.carried && alive(hook));
     const expired = live.hooks.filter((hook) => !alive(hook));
-    const closed = [...(sw.sideOn ? [] : ['支线']), ...(sw.worldOn ? [] : ['世界动态'])];
+    const closed = [...(sw.sideOn ? [] : ['可选事件']), ...(sw.worldOn ? [] : ['世界动态'])];
     if (!nodes.length && !carried.length && !live.hooks.length && !live.clocks.length && !closed.length) return '';
     return `<div class="pi-tl-nodes">${nodes.map((node) => nodeRow(unit.id, node, off.has(node.id))).join('')}${own.map(hookRow).join('')}
         ${carried.length || later.length ? `<p class="pi-hint">延续自前面阶段</p>${carried.map((item) => nodeRow(item.unit.id, item.node, item.off, stageLabel(item.unit.stage.key))).join('')}${later.map(hookRow).join('')}` : ''}
         ${expiredRows(expired, expiredOpen)}${worldRow(live)}${closed.map((label) => `<p class="pi-hint">${label}已关闭</p>`).join('')}</div>`;
 }
 
-// 阶段时间线：每卷一条，粗环为阶段，已过的实心、走过的连线为实线，之后为虚线。
-// 进行中只有圆点用强调色；手动改状态、设为当前、恢复提醒收进行尾的「⋯」。
+// 阶段时间线：每卷一条；手动改状态、设为当前、恢复提醒收进行尾「⋯」。
 function timeline(units, states, progress, carried, live, sw, expiredOpen) {
     const groups = [];
     for (const unit of units) {
@@ -164,24 +163,23 @@ function timeline(units, states, progress, carried, live, sw, expiredOpen) {
         .join('');
 }
 
-// 当前聊天没在用这个项目时的启用卡；已在用返回空串。
+// 当前聊天未使用本项目时的启用卡；已在用返回空串。
 export function activateCard(view, project) {
     const { data, runtime } = view;
-    if (!cardKey()) return '<div class="pi-empty">先打开一张角色卡的聊天，再启用项目。</div>';
+    if (!cardKey()) return '<div class="pi-empty">请先打开角色卡聊天，再启用项目。</div>';
     const activeId = runtime.activeId();
     if (activeId === project.id) return '';
     const other = data.index().projects.find((item) => item.id === activeId);
     return `<div class="pi-card"><h3>启用</h3>
-            <p class="pi-hint">${other ? `当前聊天使用的是「${esc(other.name)}」` : `「${esc(cardName())}」还没有启用项目`}。</p>
+            <p class="pi-hint">${other ? `当前聊天使用「${esc(other.name)}」` : `「${esc(cardName())}」未启用项目`}。</p>
             <div class="pi-tools is-c2">
-                <button type="button" class="pi-btn is-primary" data-act="activate">设为当前聊天使用</button>
+                <button type="button" class="pi-btn is-primary" data-act="activate">用于当前聊天</button>
                 <button type="button" class="pi-btn" data-act="activate-card">设为本卡默认</button></div></div>`;
 }
 
-// 线标题旁状态标签的颜色：读到声望绿，读不到或不在区间黄，手动锁定粉，其余灰。
 const PERSONA_TAG_TONE = { 读声望中: 'is-ok', 读不到声望: 'is-warn', 数值不在任何区间: 'is-warn', 手动: 'is-accent' };
 
-// 人设阶段卡：每个角色一组，每条线一行阶段胶囊，实心粉底标当前，「⋯」里改提醒与自动判断。
+// 人设阶段卡：每个角色一组，每条线一行阶段胶囊。
 function personaCard(view, project, progress, st) {
     if (!hasPersonas(project)) return '';
     const all = project.personas;
@@ -194,7 +192,6 @@ function personaCard(view, project, progress, st) {
             .filter(Boolean)
             .map((text) => `<span class="pi-pl-tag ${PERSONA_TAG_TONE[text] || ''}">${esc(text)}</span>`)
             .join('');
-        // 当前阶段实心粉底，已过的阶段正常字色，未到的阶段虚线框加淡字。
         const caps = item.stages
             .map((stage, index) => {
                 const tone = index === info.index ? ' is-on' : index < info.index ? ' is-past' : ' is-next';
@@ -211,7 +208,7 @@ function personaCard(view, project, progress, st) {
             return `<div class="pi-group is-persona${shut ? ' is-collapsed' : ''}"><button type="button" class="pi-group-hd" data-act="persona-fold" data-group="${esc(key)}">${shut ? ICONS.caret : ICONS.caretDown}${esc(group.name || '未分组')}<small>${group.lines.length}</small></button>${shut ? '' : group.lines.map(line).join('')}</div>`;
         })
         .join('');
-    return `<div class="pi-card"><h3>人设阶段</h3>${groups || '<p class="pi-hint">没有启用的人设线。</p>'}</div>`;
+    return `<div class="pi-card"><h3>人设阶段</h3>${groups || '<p class="pi-hint">无启用的人设线。</p>'}</div>`;
 }
 
 export function render(view) {
@@ -225,7 +222,10 @@ export function render(view) {
         entries = runtime.entries(),
         sw = threadSwitches(project),
         units = maskUnits(flattenUnits(project.outline.volumes), sw),
-        states = unitStates(units, progress),
+        ov = runtime.olInfo ? runtime.olInfo() : null,
+        states = ov ? ov.states : unitStates(units, progress),
+        tlUnits = ov ? units.filter((u) => ov.own.has(u.id)) : units,
+        seqBack = !ov && progress.lineFlow === 'seq' && project.outline.volumes.some((v) => v.line && typeof v.line === 'object'),
         total = entries.filter((entry) => entry.enabled).reduce((sum, entry) => sum + estimateTokens(entry.content), 0),
         settings = data.settings(),
         checking = runtime.isChecking(),
@@ -239,25 +239,68 @@ export function render(view) {
                       .filter((entry) => entry.kind !== 'persona')
                       .map((entry) => entryRow(entry, st.open === entry.slotId))
                       .join('')
-                : '<p class="pi-hint">设定和大纲都为空，没有可注入的内容。</p>'
+                : '<p class="pi-hint">设定和大纲为空，无可注入内容。</p>'
         }
         </div>
         ${personaCard(view, project, progress, st)}
+        ${ov ? olLineCard(ov, st) : ''}
         <div class="pi-card"><h3>阶段<span class="pi-meta">${gap > 0 ? `${gap}楼后检测` : '下一楼检测'}</span><span class="pi-spacer"></span>
             ${units.length ? `<button type="button" class="pi-btn is-sm is-ghost" data-act="index-toggle">${st.indexOpen ? '收起索引' : '剧情索引'}</button>` : ''}</h3>
         ${
             units.length
-                ? `${st.indexOpen ? `<pre class="pi-pre pi-index">${esc(buildIndexText(units, states, progress, { carryOver: settings.carryOver, hookCap: settings.hookCap }))}</pre>` : ''}
+                ? `${seqBack ? '<div class="pi-row"><p class="pi-hint">本聊天按顺序推进，整本当一条线。</p><span class="pi-spacer"></span><button type="button" class="pi-btn is-sm is-ghost" data-act="ol-flow" data-flow="line">改回按线</button></div>' : ''}${st.indexOpen ? `<pre class="pi-pre pi-index">${esc(buildIndexText(units, states, progress, { carryOver: settings.carryOver, hookCap: settings.hookCap, olView: ov }))}</pre>` : ''}
         <div class="pi-pace"><span class="pi-pace-label">推进速度</span><div class="pi-seg">${PACES.map((pace) => `<button type="button" class="pi-seg-btn${pace.value === progress.pace ? ' is-sel' : ''}" data-act="pace" data-pace="${pace.value}">${pace.label}</button>`).join('')}</div></div>
         ${switchRow(sw)}
         <div class="pi-tools is-c3">
             <button type="button" class="pi-btn is-primary is-sm" data-act="next">打开下一段</button>
             <button type="button" class="pi-btn is-sm" data-act="check"${checking ? ' disabled' : ''}>${checking ? '<span class="pi-spin"></span>检测中' : '立即检测'}</button>
             <button type="button" class="pi-btn is-sm" data-act="rewrite">改写后续</button></div>
-        ${timeline(units, states, progress, settings.carryOver ? carriedNodes(units, states, progress, { withOff: !0 }) : [], liveOf(units, states, progress, settings), sw, st.expiredOpen)}`
-                : '<p class="pi-hint">大纲为空。到「大纲」页导入剧情YAML、导入长文，或让AI写。</p>'
+        ${ov ? `<p class="pi-hint">${ov.cur ? '只显示正在演的线。其他线在上面「剧情线」里查看。' : '没有正在演的剧情线。在上面「剧情线」里开始一条。'}</p>` : ''}
+        ${timeline(tlUnits, states, progress, settings.carryOver ? carriedNodes(tlUnits, states, progress, { withOff: !0 }) : [], liveOf(units, states, progress, settings), sw, st.expiredOpen)}`
+                : '<p class="pi-hint">大纲为空。可在「大纲」页导入剧情YAML、导入长文或由AI生成。</p>'
         }
         </div>`;
+}
+
+// ---------- 大纲推进按线（方案 五）：剧情线卡、只显示当前线的时间线、按顺序兜底 ----------
+const OL_TABS = [
+    ['now', '进行中'],
+    ['idle', '未进行'],
+    ['end', '已结束'],
+];
+const OL_LABEL = { 可开启: '可开始', 未触发: '未开始' };
+const OL_BADGE = { 进行中: 'is-ok', 可开启: 'is-warn', 暂停: 'is-warn', 完成: 'is-ok' };
+const olGroup = (s) => (s.state === '进行中' ? 'now' : ['完成', '放弃', '已过'].includes(s.state) ? 'end' : 'idle');
+function olStageNote(s) {
+    let k = s.line.units.findIndex((u) => u.id === s.at);
+    return k >= 0 && ['进行中', '暂停', '放弃'].includes(s.state) ? stageLabel(s.line.units[k].stage.key) : '';
+}
+function olLineCard(ov, st) {
+    let tab = OL_TABS.some(([k]) => k === st.olTab) ? st.olTab : 'now',
+        of = (g) => ov.ls.filter((s) => olGroup(s) === g),
+        btn = (id, v, label, cls = ' is-ghost') => `<button type="button" class="pi-btn is-sm${cls}" data-act="ol-line" data-id="${esc(id)}" data-value="${v}">${label}</button>`,
+        row = (s) => {
+            let id = s.line.id,
+                main0 = s.state === '可开启' ? btn(id, 'start', '开始', ' is-primary') : s.state === '暂停' ? btn(id, 'resume', '继续', ' is-primary') : '',
+                g1 = [
+                    ...(s.state === '进行中' ? [btn(id, 'pause', '暂停'), btn(id, 'done', '标记完成'), btn(id, 'abandon', '放弃', ' is-ghost is-danger')] : []),
+                    ...(s.state === '暂停' ? [btn(id, 'abandon', '放弃', ' is-ghost is-danger')] : []),
+                    ...(s.state === '未触发' ? [btn(id, 'start', '直接开始')] : []),
+                ].join(''),
+                undo = s.ever || ['完成', '放弃', '暂停'].includes(s.state) ? btn(id, '', '还原') : '',
+                groups = [g1, undo].filter(Boolean),
+                more = groups.length ? `<details class="pi-line-more"><summary class="pi-icon-btn" title="更多">${ICONS.more}</summary><div class="pi-line-menu">${groups.map((g) => `<div class="pi-line-menu-g">${g}</div>`).join('')}</div></details>` : '',
+                note = olStageNote(s),
+                why = ['可开启', '未触发'].includes(s.state) && !s.auto && s.why ? s.why : '';
+            return `<div class="pi-line-row" data-line-row="${esc(id)}"><div class="pi-line-head"><b class="pi-line-name">${esc(lineDisplayName(s.line))}</b><div class="pi-line-acts">${main0}${more}</div></div>
+          <div class="pi-line-tags"><span class="pi-badge ${s.missed ? '' : OL_BADGE[s.state] || ''}">${esc(s.missed ? '已错过' : OL_LABEL[s.state] || s.state)}</span>${note ? `<span class="pi-meta">${esc(note)}</span>` : ''}</div>
+          ${s.line.brief ? `<p class="pi-hint">${esc(s.line.brief)}</p>` : ''}${why ? `<p class="pi-hint">${esc(why)}</p>` : ''}</div>`;
+        },
+        empty = { now: '没有正在演的剧情线。', idle: '暂无未进行的剧情线。', end: '暂无已结束的剧情线。' };
+    return `<div class="pi-card pi-line-card"><h3>剧情线<span class="pi-meta">共${ov.ls.length}条</span></h3>
+        <div class="pi-seg pi-line-seg">${OL_TABS.map(([k, label]) => `<button type="button" class="pi-seg-btn${k === tab ? ' is-sel' : ''}" data-act="ol-line-tab" data-tab="${k}">${label} ${of(k).length}</button>`).join('')}</div>
+        ${OL_TABS.map(([k]) => `<div class="pi-line-grp" data-line-grp="${k}"${k === tab ? '' : ' hidden'}>${of(k).map(row).join('') || `<p class="pi-hint">${empty[k]}</p>`}</div>`).join('')}
+        <div class="pi-row pi-line-foot"><p class="pi-hint">同一时间只演一条线。开始另一条时，当前这条暂停，阶段和已演节点都保留。</p><span class="pi-spacer"></span><button type="button" class="pi-btn is-sm is-ghost" data-act="ol-flow" data-flow="seq">按顺序推进…</button></div></div>`;
 }
 
 function liveOf(units, states, progress, settings) {
@@ -277,17 +320,42 @@ function setSlot(view, slotId, patch) {
 }
 
 export const actions = {
+    'ol-line-tab'(view, target) {
+        ((view.tabState('run').olTab = target.dataset.tab), view.renderBody());
+    },
+    async 'ol-line'(view, target) {
+        let ov = view.runtime.olInfo(),
+            id = target.dataset.id,
+            v = target.dataset.value,
+            s = ov && ov.ls.find((x) => x.line.id === id);
+        if (!s) return;
+        let name = lineDisplayName(s.line);
+        if ((v === 'start' || v === 'resume') && ov.cur && ov.cur.line.id !== id) {
+            let k = ov.cur.line.units.findIndex((u) => u.id === ov.cur.at);
+            if (!(await confirmDialog({ title: `开始${name}`, body: `同一时间只演一条线。${lineDisplayName(ov.cur.line)}会暂停${k >= 0 ? `在第${k + 1}段` : ''}，阶段和已演节点都保留，之后点「继续」回来。`, okLabel: '开始' })))
+                return;
+        }
+        if ((v === 'done' || v === 'abandon') && !(await confirmDialog({ title: `${v === 'done' ? '标记完成' : '放弃'} ${name}`, body: v === 'done' ? '这条线算完成，没演到的阶段不算发生。' : '这条线算放弃，之后不再提示。', okLabel: v === 'done' ? '标记完成' : '放弃', danger: v === 'abandon' })))
+            return;
+        (view.runtime.olAct(id, v), view.renderBody());
+    },
+    async 'ol-flow'(view, target) {
+        let ov = view.runtime.olInfo(),
+            seq = target.dataset.flow === 'seq',
+            k = ov && ov.cur ? ov.cur.line.units.findIndex((u) => u.id === ov.cur.at) : -1,
+            at = ov && ov.cur ? `${ov.cur.line.id} ${k >= 0 ? `第${k + 1}段` : '当前阶段'}` : '当前阶段';
+        if (
+            !(await confirmDialog({
+                title: seq ? '改为按顺序推进' : '改回按线推进',
+                body: seq ? `改为按顺序推进：从${at}往后依次推进，各剧情线的状态保留，切回按线时继续使用。` : '改回按线推进：各剧情线按原来的状态继续，同一时间只演一条。',
+                okLabel: seq ? '按顺序' : '按线',
+            }))
+        )
+            return;
+        (view.runtime.olSetFlow(seq ? 'seq' : ''), view.renderBody());
+    },
     ...clueActions,
     ...kpActions,
-    // 执行页「当前」「进度」卡右上角的「⋯」
-    async 'run-cur-menu'(view) {
-        const pick = await menuDialog({ title: '当前', items: [{ label: '预览注入内容', value: 'preview' }, { label: '重新读表', value: 'clue-refresh' }] });
-        pick === 'preview' ? actions.preview(view) : pick && clueActions[pick](view);
-    },
-    async 'run-prog-menu'(view) {
-        const pick = await menuDialog({ title: '进度', items: [{ label: '改写后续', value: 'rewrite' }] });
-        pick === 'rewrite' && startRewrite(view);
-    },
     activate: (view) => view.runtime.switchProject(view.projectId, 'chat'),
     'activate-card': (view) => view.runtime.switchProject(view.projectId, 'card'),
     // 推进速度随聊天保存，改完立即换掉详细条目开头的说明。
@@ -337,7 +405,6 @@ export const actions = {
     },
     next: (view) => view.runtime.openNext(),
     check: (view) => view.runtime.checkNow({ manual: !0 }),
-    // 行尾「⋯」：设为当前、手动改状态、恢复提醒。
     async 'unit-menu'(view, target) {
         const { runtime } = view,
             id = target.dataset.unit,
@@ -361,7 +428,6 @@ export const actions = {
             setSlot(view, id, { state: pick.slice(6) || void 0 });
         }
     },
-    // 进度钟「⋯」：手动推进、倒退、标记已发生、重置。
     async 'clock-menu'(view, target) {
         const clock = viewLive(view).clocks.find((item) => item.key === target.dataset.key);
         if (!clock) return;
@@ -384,7 +450,6 @@ export const actions = {
                       : { filled: Math.max(0, Math.min(clock.total, clock.filled + (pick === 'up' ? 1 : -1))) };
         view.runtime.setProgress(patchLive(progress, clock, patch));
     },
-    // 支线钩子「⋯」：手动激活或退回待触发、支线链换步、恢复过期、标为过期。
     async 'hook-menu'(view, target) {
         const hook = viewLive(view).hooks.find((item) => item.key === target.dataset.key);
         if (!hook) return;
@@ -446,10 +511,14 @@ export const actions = {
                                 .join('')
                           : '';
                   }).join('')
-                : '<p class="pi-hint">没有启用的条目。</p>';
+                : '<p class="pi-hint">无启用的条目。</p>';
         return openDialog({ title: '最终注入预览', html: `${html}`, actions: [{ label: '关闭', value: !0, primary: !0 }] });
     },
 };
+
+export function onInput(view, target) {
+    clueOnInput(view, target);
+}
 
 export function onChange(view, target) {
     if (clueOnChange(view, target)) return;

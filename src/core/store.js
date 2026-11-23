@@ -55,7 +55,7 @@ export function resolveLlm(settings, role) {
 
 export const DEFAULT_SETTINGS = {
     tagName: '剧情参考',
-    // 正文通用提示（角色知情、剧情推进，GPT §20.1）：随本轮剧情材料注入一次；没有材料时不出现。
+    // 正文通用提示（角色知情、剧情推进）：随本轮剧情材料注入一次；没有材料时不出现。
     bodyGuide: !0,
     bodyGuideText: '',
     offTrackMode: 'ask',
@@ -201,7 +201,7 @@ export function normalizeProject(value, id) {
         // 跑团模式（core/trpg.js）：只有开过的项目才有这个键
         ...(normalizeTrpg(src.trpg) ? { trpg: normalizeTrpg(src.trpg) } : {}),
         ...(src.infinite && typeof src.infinite == 'object' ? { infinite: normalizeInfinite(src.infinite) } : {}),
-        // 批量导入支线采用后的对应（GPT 代码审阅 R4）：{ "任务id:原编号": 卷id }。之后再采用同一任务的线，引用照这个改到实际的新编号。
+        // 批量导入支线采用后的对应：{ "任务id:原编号": 卷id }。之后再采用同一任务的线，引用照这个改到实际的新编号。
         ...(src.importLineMap && typeof src.importLineMap == 'object' && !Array.isArray(src.importLineMap)
             ? { importLineMap: Object.fromEntries(Object.entries(src.importLineMap).filter(([, v]) => typeof v == 'string')) }
             : {}),
@@ -209,7 +209,7 @@ export function normalizeProject(value, id) {
 }
 
 // 设定、大纲页让 AI 写作时带的参考：讨论记录开关 + 世界书条目（规则与讨论页相同，见 core/refs.js）。
-// 保密名单（导入审阅总方案 R7）：按来源剧情线（卷 id）分开存，再导入 / 重新审阅一条线不覆盖别的线。
+// 保密名单：按来源剧情线（卷 id）分开存，再导入 / 重新审阅一条线不覆盖别的线。
 // { 卷id: { names: [全名或别名…], confirmed: [确认过的短名…], denied: [确认不是的短名…] } }。没有这个字段 = 「未提供保密名单」。
 export function normalizeSecretNames(value) {
     let list = (x) => (Array.isArray(x) ? [...new Set(x.map((n) => String(n || '').trim()).filter((n) => n.length >= 2))] : []);
@@ -265,6 +265,8 @@ function normalizeRefs(value) {
     return {
         setting: src.setting !== false,
         outline: Boolean(src.outline),
+        // 多线项目里完整附带的线（卷 id）；null = 还没选过，按正在玩的线（大型项目方案 四.4）
+        lines: Array.isArray(src.lines) ? src.lines.filter((x) => typeof x === 'string') : null,
         progress: src.progress !== false,
         floors: Number.isFinite(floors) ? Math.max(0, Math.min(50, Math.round(floors))) : 10,
         memo: Number.isFinite(memo) ? Math.max(0, Math.min(100, Math.round(memo))) : DEFAULT_MEMO,

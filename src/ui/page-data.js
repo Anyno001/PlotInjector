@@ -3,13 +3,14 @@ import { importSrcFile, importJobFile } from '../app/import-store.js';
 import { INDEX_FILE, chatFile, formatBytes, projectFile } from '../core/store.js';
 import { buildZip } from '../core/zip.js';
 import { buildPersonaFile } from '../core/persona-file.js';
-import { clearChatProgress } from '../app/progress-store.js';
+import { chatHasFoldedRows, clearChatProgress } from '../app/progress-store.js';
 import { deleteFile, readRawFile, verifyFiles } from '../host/files.js';
 import { downloadBlob, hostWindow, toast } from '../host/st.js';
 import { compareVersions, fetchLatestVersion } from '../host/update.js';
 import { confirmDialog, esc, openDialog, options } from './dom.js';
 import { buildProjectFile, projectSummary, PROJECT_FILE_EXT } from '../core/project-file.js';
 import { outlineToText } from '../core/outline.js';
+import { labelsToPrepare } from '../core/fact-labels.js';
 import { writeUi } from './app.js';
 
 const st = (view) => view.tabState('data');
@@ -106,7 +107,7 @@ export function render(view) {
         <div class="pi-equal is-one pi-acts"><button type="button" class="pi-btn is-sm is-danger" data-act="wipe">备份并删除</button></div></div>`;
 }
 
-// 导出（用户 2026-11-17）：选一个项目，导出大纲或完整项目。导入完整项目在「新项目」里。
+// 导出：选一个项目，导出大纲或完整项目；导入完整项目在「新项目」里。
 function exportCard(view) {
     const projects = view.data.index().projects;
     if (!projects.length) return '';
@@ -118,14 +119,14 @@ function exportCard(view) {
             projects.map((p) => ({ value: p.id, label: `${p.group ? `${p.group}／` : ''}${p.name}` })),
             pick,
         )}</select></label>
-        <p class="pi-hint">完整项目可以在别的酒馆用「新项目」导入，带上线索标签、保密名单和推进设置；不含讨论记录和聊天进度。</p>
+        <p class="pi-hint">完整项目可在其他酒馆通过「新项目」导入，包含线索标签、保密名单和推进设置；不含讨论记录和聊天进度。</p>
         <div class="pi-tools is-c3 pi-acts"><button type="button" class="pi-btn is-sm" data-act="export-outline" title="只导出大纲">导出大纲</button><button type="button" class="pi-btn is-sm is-primary" data-act="export-project" title="导出完整项目：带上线索标签、保密名单和推进设置">导出项目</button><button type="button" class="pi-btn is-sm is-danger" data-act="delete-current" title="删除当前选中的项目">删除项目</button></div></div>`;
 }
 
 async function exportTarget(view) {
     const id = st(view).exportId;
     const project = view.data.project(id) || (await view.data.loadProject(id).catch(() => null));
-    if (!project) throw new Error('读不到这个项目的文件');
+    if (!project) throw new Error('无法读取这个项目的文件');
     return project;
 }
 
@@ -136,7 +137,7 @@ export function onChange(view, target) {
     let ref = target.value.trim();
     if (/^\d+\.\d+\.\d+$/.test(ref)) ref = `v${ref}`;
     if (ref && ref !== 'main' && !/^v\d+\.\d+\.\d+$/.test(ref)) {
-        toast('warning', '版本号格式应为v0.1.0这样的三段数字，或填main；未保存。');
+        toast('warning', '版本号格式应为v0.1.0（三段数字）或main；未保存。');
         target.value = view.data.settings().loaderRef;
         return;
     }
@@ -199,7 +200,7 @@ export const actions = {
     },
     async 'export-outline'(view) {
         const project = await exportTarget(view);
-        if (!project.outline.volumes.length) throw new Error('这个项目的大纲还是空的');
+        if (!project.outline.volumes.length) throw new Error('这个项目的大纲为空');
         downloadBlob(`${project.name}-大纲.yaml`, outlineToText(project.outline.volumes), 'text/yaml');
     },
     async 'export-project'(view) {
@@ -210,14 +211,24 @@ export const actions = {
                 sum.lines ? `${sum.lines}条剧情线` : '',
                 sum.labels ? `${sum.labels}条线索标签` : '',
                 project.secretNames ? '保密名单' : '',
-                `推进方式（${sum.clue ? '线索推进' : '按阶段推进'}）和注入设置`,
+                `推进方式（${sum.clue ? '线索推进' : '大纲推进'}）和注入设置`,
             ].filter(Boolean),
+            // 发包前提醒还没准备好的线索标签（方案 四.2）：没标签或没审过的，玩家开到那条线时还要再调用模型
+            todoLabels = sum.clue ? labelsToPrepare(project.outline.volumes, project.clue.labels) : [],
+            noLabel = todoLabels.filter((x) => !x.review).length,
+            unreviewed = todoLabels.length - noLabel,
+            // 四种来源分开说明：旧标签沿用、用户写的不算模型检查过。
+            srcCount = (k) => Object.values((project.clue && project.clue.labels) || {}).filter((v) => (k ? v.src === k : !v.src)).length,
+            byUser = sum.clue ? srcCount('user') : 0,
+            legacy = sum.clue ? srcCount('') : 0,
             pick = await openDialog({
                 title: `导出「${project.name}」`,
                 html: `<p class="pi-hint">包含：${esc(parts.join('、'))}。</p>
+                ${todoLabels.length ? `<p class="pi-hint is-warn">还有${[noLabel && `${noLabel}条线索没有标签`, unreviewed && `${unreviewed}条标签没检查是否透露答案`].filter(Boolean).join('，')}。可以先到执行页点「立即准备」补齐，再导出。</p>` : ''}
+                ${byUser || legacy ? `<p class="pi-hint">${[byUser && `${byUser}条是手动写的标签`, legacy && `${legacy}条为沿用的旧标签`].filter(Boolean).join('，')}，没有经过模型检查是否透露答案。</p>` : ''}
                 ${sum.personas ? `<label class="pi-check"><input type="checkbox" data-f="personas" checked><span>人设（${sum.personas}条）</span></label>` : ''}
                 ${sum.setting ? '<label class="pi-check"><input type="checkbox" data-f="setting" checked><span>设定</span></label>' : ''}
-                ${sum.personas || sum.setting ? '<p class="pi-hint">人设、设定已经写进世界书的，可以不勾。</p>' : ''}
+                ${sum.personas || sum.setting ? '<p class="pi-hint">人设、设定已写入世界书的，可不勾选。</p>' : ''}
                 <p class="pi-hint">不含讨论记录、聊天进度和导入草稿。</p>`,
                 actions: [
                     { label: '取消', value: null },
@@ -295,6 +306,8 @@ export const actions = {
         }
     },
     async wipe(view) {
+        if (chatHasFoldedRows())
+            return toast('warning', '当前聊天有已收起的表格行，重置会清掉它们唯一的记录。请先到执行页「剧情线」的「已结束」里打开「收起记录」，点「全部恢复」。');
         await view.data.flush().catch(() => {});
         let index = view.data.index(),
             names = [.../* @__PURE__ */ new Set([...index.files, ...referenced(index)])],

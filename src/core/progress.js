@@ -101,6 +101,58 @@ export function uncheckByNames(progress, unitId, nodes, names) {
     return next;
 }
 
+// 按线改写用的跳段（大型项目方案 十.3）：只清 only 里这些阶段的手动状态，别的线不动；
+// 返回 { next, changes }，changes 记下实际改过的字段（current，以及各 slots[阶段].state 的前后值，原来没有记 undefined），撤销只还原这些。
+export function goToIn(progress, unitId, only) {
+    const slots = { ...progress.slots },
+        changes = { current: [progress.current, unitId], slots: {} };
+    for (const id of only || []) {
+        if (slots[id] && slots[id].state !== void 0) {
+            const { state, ...rest } = slots[id];
+            changes.slots[id] = [state, void 0];
+            slots[id] = rest;
+        }
+    }
+    return { next: { ...progress, current: unitId, slots }, changes };
+}
+
+// 撤销 goToIn 的改动：只有字段仍是当时写出的值才还原；之后又被改过的字段保留现在的。
+export function undoGoToIn(progress, changes) {
+    if (!changes) return progress;
+    let next = progress;
+    if (progress.current === changes.current[1]) next = { ...next, current: changes.current[0] };
+    for (const [id, [was, wrote]] of Object.entries(changes.slots || {})) {
+        const cur = next.slots && next.slots[id];
+        if ((cur ? cur.state : void 0) !== wrote) continue;
+        next = { ...next, slots: { ...next.slots, [id]: { ...(cur || {}), ...(was === void 0 ? {} : { state: was }) } } };
+    }
+    return next;
+}
+
+// 撤销改写时，改写后才有的阶段 id 对回原来的阶段：同一卷（卷 id）里阶段名相同、两边都只有一个，才算同一段。
+// 当前段和各段的进度（手设状态、勾选）搬到原 id；对不上的（新增的段、同名多个）不猜，留在原处。原 id 上已有的字段不覆盖。
+export function remapStages(progress, fromUnits, toUnits) {
+    let keyOf = (u) => `${u.volume.id}\u0000${u.stage.key}`,
+        count = (list) => list.reduce((m, u) => m.set(keyOf(u), (m.get(keyOf(u)) || 0) + 1), new Map()),
+        nf = count(fromUnits || []),
+        nt = count(toUnits || []),
+        toIds = new Set((toUnits || []).map((u) => u.id)),
+        byKey = new Map((toUnits || []).map((u) => [keyOf(u), u.id])),
+        map = new Map();
+    for (let u of fromUnits || []) {
+        let k = keyOf(u);
+        !toIds.has(u.id) && nf.get(k) === 1 && nt.get(k) === 1 && map.set(u.id, byKey.get(k));
+    }
+    if (!map.size) return progress;
+    let slots = { ...progress.slots };
+    for (let [from, to] of map) {
+        if (!slots[from]) continue;
+        slots[to] = { ...slots[from], ...(slots[to] || {}) };
+        delete slots[from];
+    }
+    return { ...progress, current: map.get(progress.current) || progress.current, slots };
+}
+
 export function goTo(progress, units, unitId) {
     const slots = { ...progress.slots };
     for (const unit of units) {

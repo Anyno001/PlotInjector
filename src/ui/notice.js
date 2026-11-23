@@ -1,7 +1,7 @@
 import { hostDocument, hostWindow } from '../host/st.js';
 import { el, esc } from './dom.js';
 
-// 右下角小卡片（手机在顶部）：同 id 只留一张，新的替换旧的。
+// 同 id 只留一张，新的替换旧的。
 export function createNotices() {
     const doc = hostDocument(),
         view = hostWindow();
@@ -39,7 +39,7 @@ export function createNotices() {
     function hideBar() {
         (bar?.remove(), (bar = null));
     }
-    function topBar({ tag = '', text, action = '', run = null }) {
+    function topBar({ tag = '', text, action = '', run = null, confirm = true }) {
         hideBar();
         let top = doc.querySelector('#top-bar, #top-settings-holder'),
             offset = top ? Math.max(0, Math.round(top.getBoundingClientRect().bottom)) : 0;
@@ -54,7 +54,7 @@ export function createNotices() {
         (bar.querySelector('.pi-topbar-ok').addEventListener('click', () => bar === self && hideBar()),
             btn &&
                 btn.addEventListener('click', () => {
-                    if (!armed) {
+                    if (confirm && !armed) {
                         ((btn.textContent = '再点'),
                             btn.classList.add('is-armed'),
                             (armed = view.setTimeout(() => {

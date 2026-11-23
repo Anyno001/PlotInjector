@@ -93,7 +93,7 @@ export function lineEntryPlan(
     };
 }
 
-// 主线位置：同时只有一条主线「进行中」。暂停的主线不占位置（导入审阅总方案 H / GPT 审阅 R6）。
+// 主线位置：同时只有一条主线「进行中」。暂停的主线不占位置。
 export function mainSlotTaken(lineStates, id) {
     let other = (lineStates || []).find((s) => s.line.kind === 'main' && s.line.id !== id && s.state === '进行中');
     return other ? `主线${other.line.id}还在进行` : '';
@@ -194,16 +194,81 @@ export function frameEvents(msg, isoKey = null) {
 
 export function fillEvidence(msg, sheetKey, isoKey = null) {
     if (!msg || msg.is_user) return { ok: !1, reason: '不是AI回复' };
-    if (!sheetKey) return { ok: !1, reason: '不知道线索控制表在数据库里的编号' };
+    if (!sheetKey) return { ok: !1, reason: '未找到线索控制表在数据库中的编号' };
     let events = frameEvents(msg, isoKey);
     return events === null
-        ? { ok: !1, reason: '读不到数据库现在用的隔离标识，这一楼又有好几份记录，认不准是哪一份' }
+        ? { ok: !1, reason: '无法读取数据库当前的隔离标识，且这一楼有多份记录，无法确定是哪一份' }
         : events.length
           ? events.filter((e) => (FILL_SOURCES.includes(e.source) || e.source === 'checkpoint') && e.filled.includes(sheetKey) && !e.error)
                 .length
               ? { ok: !0, reason: '' }
-              : { ok: !1, reason: '这一楼的填表没有处理线索控制表' }
-          : { ok: !1, reason: '这一楼还没有填表记录' };
+              : { ok: !1, reason: '这一楼的填表未处理线索控制表' }
+          : { ok: !1, reason: '这一楼尚无填表记录' };
+}
+
+// 这张表数据库记到了第几个 AI 楼层（0 = 从没填过），照官方 resolveTableHistoryStatesFromChat_ACU：
+// 从最新的 AI 楼往前找第一条把这张表列进 filledSheetKeys / groupKeys 的记录，或 checkpoint 里的 lastFilledAiFloor。
+// 数据库按这个数决定下次从哪一楼开始补填；插件自己插行（manual_crud）不算。
+// 返回 null：认不准隔离，无法判断。
+export function trackedFillFloor(chat, sheetKey, isoKey = null) {
+    let list = Array.isArray(chat) ? chat : [],
+        floors = [],
+        n = 0;
+    for (let i = 0; i < list.length; i++) (list[i] && !list[i].is_user && n++, floors.push(n));
+    let has = (e) => isPlainObject(e) && [e.filledSheetKeys, e.groupKeys].some((k) => Array.isArray(k) && k.includes(sheetKey)),
+        sched = (cp) => {
+            let v = isPlainObject(cp) && isPlainObject(cp.scheduleSummary) ? cp.scheduleSummary : null,
+                x = v && (isPlainObject(v[sheetKey]) ? v[sheetKey].lastFilledAiFloor : v.lastFilledAiFloor);
+            return Number.isFinite(x) && x > 0 ? x : 0;
+        };
+    for (let i = list.length - 1; i >= 0; i--) {
+        let msg = list[i];
+        if (!msg || msg.is_user) continue;
+        let { sure, tag } = isolatedTag(msg, isoKey);
+        if (!sure) return null;
+        let frame = tag && isPlainObject(tag.storageFrame) ? tag.storageFrame : null;
+        if (!frame) continue;
+        let per = isPlainObject(frame.perSheetCheckpoints) ? frame.perSheetCheckpoints[sheetKey] : null,
+            best = Math.max(sched(frame.checkpoint), isPlainObject(per) ? sched({ scheduleSummary: { [sheetKey]: per.scheduleSummary } }) : 0);
+        (has(frame.checkpoint && frame.checkpoint.event) || has(per && per.event)) && (best = Math.max(best, floors[i]));
+        for (let e of Array.isArray(frame.logEntries) ? frame.logEntries : [])
+            has(e) && (best = Math.max(best, Number(e.aiFloor) > 0 ? Number(e.aiFloor) : floors[i]));
+        if (best > 0) return best;
+    }
+    return 0;
+}
+
+// 聊天里 AI 楼层达到这个数，生成线索模板后才需要从当前楼层开始记（更少时数据库补填一批就到当前楼）
+export const START_MIN_AI = 4;
+// 开始那一楼被重新生成后，等数据库空闲多久再重新开始（毫秒）：delay 后检查一次，quiet 内没有填表才算空闲
+export const START_TIMING = { delay: 1e4, quiet: 9e3 };
+// 点了确认却没记上时最多试几次（取消则不再试）
+export const START_TRIES = 3;
+
+export const aiFloorCount = (chat) => (Array.isArray(chat) ? chat : []).filter((m) => m && !m.is_user).length;
+
+// 数据库此刻会不会用模板初始行，照官方 shouldUseInitialSeedRows_ACU（chat-scope-guide.ts:74–100）：
+// 恰好一条用户消息，并且没有哪一楼带当前隔离的表格数据——隔离记录里 independentData 有 sheet_ 键，
+// 或者三种老字段有 sheet_ 键、而且这一楼的隔离身份对得上（关着隔离时楼上不能有身份；开着时要等于当前码）。
+// 只有 V2 storageFrame 不算（官方也不看它）。返回（见 clue-tables.js withSeedGate）：
+//   'live'：会用；'off'：两条以上用户消息、或已经有楼带表格数据；
+//   'pending'：还没有用户消息（只有开场白，续写也不会先加用户消息），或者认不准隔离。
+const LEGACY_FIELDS = ['TavernDB_ACU_IndependentData', 'TavernDB_ACU_Data', 'TavernDB_ACU_SummaryData'];
+export function seedRowsState(chat, isoKey = null) {
+    let list = Array.isArray(chat) ? chat : [],
+        users = list.filter((m) => m && m.is_user).length,
+        unsure = !1;
+    if (users > 1) return 'off';
+    for (let msg of list) {
+        if (!msg || msg.is_user) continue;
+        let { sure, tag } = isolatedTag(msg, isoKey);
+        if (!sure) unsure = !0;
+        else if (tag && isPlainObject(tag.independentData) && Object.keys(tag.independentData).some((k) => k.startsWith('sheet_'))) return 'off';
+        if (!LEGACY_FIELDS.some((f) => isPlainObject(msg[f]) && Object.keys(msg[f]).some((k) => k.startsWith('sheet_')))) continue;
+        if (isoKey == null) unsure = !0;
+        else if (isoKey === '' ? !msg.TavernDB_ACU_Identity : msg.TavernDB_ACU_Identity === isoKey) return 'off';
+    }
+    return unsure || users === 0 ? 'pending' : 'live';
 }
 
 export function appendTargetFloor(chat, isoKey = null) {
@@ -235,7 +300,7 @@ export function sceneCatalogCell(state, plan, clueProg) {
         push = (uid, entry, place) => {
             !uid ||
                 seen.has(uid) ||
-                (seen.add(uid), rows.push(`${uid}：${[entry || '（没写入口）', place && `地点：${place}`].filter(Boolean).join('；')}`));
+                (seen.add(uid), rows.push(`${uid}：${[(entry && String(entry).trim().replace(/[。；;，,\s]+$/, '')) || '（没写入口）', place && `地点：${place}`].filter(Boolean).join('；')}`));
         };
     for (let s of state.nodeStates) {
         if (!s.node.uid || s.disabled || !(s.status === 'available' || s.status === 'active')) continue;

@@ -7,9 +7,10 @@ export const NODE_FIELDS = [
     { field: '支线事件', kind: 'side', prefix: 's', label: '支线' },
     { field: '世界动态', kind: 'world', prefix: 'w', label: '世界动态' },
 ];
-// 节点分类的叫法：线索推进里「主线节点」叫「剧情节点」、「支线事件」叫「可选事件」（和主线 / 支线这两种剧情线区分开）。键名不变。
+// 节点分类在界面上的叫法：「主线节点」叫「剧情节点」、「支线事件」叫「可选事件」（和剧情线区分开，两种推进方式一样）。
+// 键名和发给模型的文字不变（label 仍是 主线 / 支线）。
 export const CLUE_NODE_WORDS = { main: '剧情节点', side: '可选事件', world: '世界动态' };
-export const nodeWord = (meta, clue = false) => (clue ? CLUE_NODE_WORDS[meta.kind] || meta.label : meta.label);
+export const nodeWord = (meta) => CLUE_NODE_WORDS[meta.kind] || meta.label;
 const STAGE_HINT_KEYS = ['时间范围', 'AI指令', '主线节点', '支线事件', '世界动态', '状态变化'];
 
 // 状态变化：本阶段结束时人物关系、认知、信息差比之前变了什么。阶段演完后累积起来接在设定后面注入，覆盖设定里的开局状态。
@@ -113,13 +114,13 @@ export function volumeLabel(key) {
     const { short, title } = splitVolumeKey(key);
     return title ? `${short}·${title}` : short;
 }
-// 界面上显示的卷名（用户 2026-11-16：界面不用「·」）。注入正文、提示词里仍用 volumeLabel，保持和旧版逐字一致。
+// 界面显示的卷名（不用「·」）。注入正文、提示词里仍用 volumeLabel，保持和旧版逐字一致。
 export function volumeName(key) {
     const { short, title } = splitVolumeKey(key);
     return title ? `${short} ${title}` : short;
 }
 
-// 线的显示名（线索推进，实测 2026-11-17：几次导入都叫「卷1」，执行页分不清）：有编号时用编号代替「卷N」，
+// 线的显示名：有编号时用编号代替「卷N」，
 // 「剧情_卷1_旧码头的账本」+ M1 → 「M1 旧码头的账本」；卷名里已经是编号的不重复。没有编号（按阶段推进）照旧。
 export function volumeShowName(volume) {
     const key = volume && volume.key,
@@ -127,6 +128,12 @@ export function volumeShowName(volume) {
     if (!id) return volumeName(key);
     const { short, title } = splitVolumeKey(key);
     return short === id || /^卷/.test(short) ? `${id}${title ? ` ${title}` : ''}` : `${id} ${volumeName(key)}`;
+}
+// 剧情线对象（{ id, name }，name 是注入用的「S01·标题」）在界面和提示里的显示名：不用「·」，有编号时去掉「卷N」、前面带编号
+export function lineShowName(l) {
+    let name = String((l && l.name) || '').replace(/·/g, ' ');
+    l && l.id && (name = name.replace(/^卷[^\s]*\s+/, ''));
+    return l && l.id && !name.startsWith(l.id) ? `${l.id} ${name}` : name;
 }
 // 阶段二_腺图与封咒 → { short: 阶段二, title: 腺图与封咒 }
 export function splitStageKey(key) {
@@ -205,12 +212,73 @@ export function replaceRest(volumes, fromStageId, incoming) {
     return next.filter((volume) => volume.stages.length);
 }
 
+// 改写一条线时，从 AI 回复的几卷里取「这条线」那一卷：同卷名 → 同线编号 → 只有一卷、而且没写别的线编号时就是它。
+// 明写了别的线编号的卷，卷名相同也不算（编号比卷名可靠）。
+// 认不出（几卷都对不上，或者唯一一卷明写了别的线编号）返回 hit:null：不采用（方案 四.1、十.2）。
+// 其余卷不采用（回复里多出来的别的线不采用），名字放进 dropped 供提示。
+export function pickLineIncoming(volume, incoming) {
+    const list = Array.isArray(incoming) ? incoming : [],
+        lineId = (v) => (v && isPlainObject(v.line) ? String(v.line.编号 || '').trim() : ''),
+        own = lineId(volume),
+        lone = list.length === 1 ? list[0] : null,
+        // 编号不冲突：没写编号，或者写的就是这条线（目标线自己没编号时，写了任何编号都算冲突）
+        fits = (v) => !lineId(v) || lineId(v) === own,
+        // 有唯一一卷明写了目标线的编号，先取它；否则同卷名、单卷规则照旧
+        byId = own ? list.filter((v) => lineId(v) === own) : [],
+        hit =
+            (byId.length === 1 ? byId[0] : null) ||
+            list.find((v) => v.key === volume.key && fits(v)) ||
+            (own ? list.find((v) => lineId(v) === own) : null) ||
+            (lone && fits(lone) ? lone : null);
+    return { hit, stages: hit ? hit.stages || [] : [], dropped: list.filter((v) => v !== hit).map((v) => volumeName(v.key)) };
+}
+
+// 一条线（一卷）里从 fromStageId 起（含）换成 incoming 里属于这条线的阶段；别的卷一个字不动（大型项目方案 四.1）。
+// 以「现在」的大纲为底：请求期间别的线有改动也保留。返回 null：原来的阶段已经不在，或者回复里认不出这条线。
+export function replaceLineRest(volumes, fromStageId, incoming) {
+    const at = (volumes || []).findIndex((v) => v.stages.some((s) => s.id === fromStageId));
+    if (at < 0) return null;
+    const vol = volumes[at],
+        got = pickLineIncoming(vol, incoming);
+    if (!got.hit) return null;
+    const cut = vol.stages.findIndex((s) => s.id === fromStageId),
+        stages = [...vol.stages.slice(0, cut), ...got.stages],
+        next = volumes.slice();
+    return (stages.length ? (next[at] = { ...vol, stages }) : next.splice(at, 1), next);
+}
+
+// 这条线从 fromStageId 起要被替换的那几段的签名（方案 四.1〔五〕）：卷在全书里的位置和身份、要替换的阶段的 id、顺序和内容。
+// 生成以后作者改了这几段的正文、或者卷被移动、改名，签名都会变，草稿就不采用；只改别的线不影响。
+export function lineRestSig(volumes, volumeId, fromStageId) {
+    const at = (volumes || []).findIndex((v) => v.id === volumeId);
+    if (at < 0) return '';
+    const vol = volumes[at],
+        cut = vol.stages.findIndex((s) => s.id === fromStageId);
+    return cut < 0 ? '' : JSON.stringify([at, vol.id, vol.key, vol.line || null, vol.stages.slice(cut).map((s) => [s.id, s.key, s.data])]);
+}
+
+// 改写按线时的范围：卷写了「线:」，并且全书不止一卷（单卷老项目和顺序本照旧「改写全书后续」）。
+export function rewriteByLine(volumes) {
+    return (volumes || []).length > 1 && (volumes || []).some((v) => isPlainObject(v.line));
+}
+
 // outline v0.1.23：历史版本、移动、单阶段替换、大纲检查。
 
 // 覆盖性操作前把当前大纲（YAML 文本）入栈；大纲为空时不入栈。
 export function pushOutlineHistory(history, volumes, label = '', now = Date.now()) {
     if (!volumes || !volumes.length) return Array.isArray(history) ? history : [];
-    return pushHistory(history, outlineToText(volumes), 10, now, label);
+    return trimOutlineHistory(pushHistory(history, outlineToText(volumes), 10, now, label));
+}
+
+// 历史软上限（大型项目方案 四.3）：最多 10 份；总字数超过 HISTORY_SOFT_CHARS 时从最旧的删，至少留最近 3 份。
+// 单份大纲本身很大时，3 份也可能超过上限，这时不再删（软上限，不保证一定小于它）。
+export const HISTORY_SOFT_CHARS = 2e6;
+export const HISTORY_KEEP_MIN = 3;
+export function trimOutlineHistory(history, limit = HISTORY_SOFT_CHARS) {
+    const list = Array.isArray(history) ? history.slice() : [];
+    let total = list.reduce((n, item) => n + String((item && item.text) || '').length, 0);
+    while (list.length > HISTORY_KEEP_MIN && total > limit) total -= String(list.pop().text || '').length;
+    return list;
 }
 
 // 按名称分组排队：同名的按出现顺序依次取，取过的不再给别人。

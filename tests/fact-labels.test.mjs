@@ -82,7 +82,7 @@ test('dialog: 自动填写 fills only empty boxes, flags rows that need a look, 
   (() => { const t = doc.querySelector('[data-act="run-set-toggle"][aria-expanded="false"]'); t && t.click(); })(); await tick(); (() => { const t = doc.querySelector('[data-act="run-fold"][data-key="advOpen"][aria-expanded="false"]'); t && t.click(); })(); await tick();
   doc.querySelector('[data-act="clue-gen-template"]').click(); await tick();
   const dlg = doc.querySelector('.pi-dialog');
-  assert.match(dlg.textContent, /这份大纲里有4条要追踪的线索/);
+  assert.match(dlg.textContent, /开局要用4条线索/);
   // the dialog says what this step is for, and each row says which clue it is (stage, node, the answer — shown to the author only)
   assert.match(dlg.textContent, /这一步在做什么/);
   assert.match(dlg.textContent, /拿到了，后面的剧情才会开放/);
@@ -111,13 +111,14 @@ test('dialog: 自动填写 fills only empty boxes, flags rows that need a look, 
     ]);
   };
   dlg.querySelector('[data-fr-auto]').click();
-  for (let i = 0; i < 30 && !/已填好/.test(dlg.querySelector('[data-fr-status]').textContent); i++) await tick();
-  assert.match(dlg.querySelector('[data-fr-status]').textContent, /已填好3条，1条没生成（F_key）/);
-  assert.match(dlg.querySelector('[data-fr-status]').textContent, /1条原来的写法会透露答案，已经自动改好/);
+  for (let i = 0; i < 30 && !/已填写/.test(dlg.querySelector('[data-fr-status]').textContent); i++) await tick();
+  assert.match(dlg.querySelector('[data-fr-status]').textContent, /已填写3条；1条未生成（F_key）/);
+  assert.match(dlg.querySelector('[data-fr-status]').textContent, /1条原写法会透露答案，已自动改写/);
   assert.equal(reviewed.length, 1, 'one review call');
   assert.match(reviewed[0], /F_doc/);
   assert.match(reviewed[0], /F_mark/, 'every auto-filled row is reviewed, not only the ones the script flagged');
-  assert.match(reviewed[0], /编号: F_han/, 'F_han had its criterion auto-filled, so it is reviewed (with the label the author typed)');
+  // 大型项目方案 四.2 / GPT 复核 7：作者写了一个框的行算作者写的，不自动送检查（要检查点「检查」）
+  assert.doesNotMatch(reviewed[0], /编号: F_han/, 'F_han has the author\'s label → not auto-reviewed');
   assert.equal(dlg.querySelector(`[data-gt-label="${idx('F_han')}"]`).value, '我自己写的', 'author text kept');
   assert.match(dlg.querySelector(`[data-gt-crit="${idx('F_han')}"]`).value, /推托没开口不算/, 'empty criterion filled');
   const warnOf = (code) => dlg.querySelector(`[data-fr-warn="${idx(code)}"] .pi-warn-line`)?.textContent || '';
@@ -202,7 +203,7 @@ test('review: a literal overlap the review clears stays grey; a failed review fa
   const idx = (code) => [...dlg.querySelectorAll('[data-fr-row]')].findIndex((r) => r.querySelector('.pi-fr-hd .pi-meta').textContent === code);
   host.llm.respond = (body) => (/有没有剧透/.test(body) ? yamlReply(['- {编号: F_doc, 透露: 否}']) : write);
   dlg.querySelector('[data-fr-auto]').click();
-  for (let i = 0; i < 30 && !/已填好/.test(dlg.querySelector('[data-fr-status]').textContent); i++) await tick();
+  for (let i = 0; i < 30 && !/已填写/.test(dlg.querySelector('[data-fr-status]').textContent); i++) await tick();
   const row = dlg.querySelector(`[data-fr-row="${idx('F_doc')}"]`);
   assert.equal(row.querySelector('.pi-warn-line'), null, 'review said no leak: no yellow');
   assert.ok(!row.classList.contains('is-warn'));
@@ -217,8 +218,8 @@ test('review: a literal overlap the review clears stays grey; a failed review fa
   dlg = await open();
   host.llm.respond = (body) => { if (/有没有剧透/.test(body)) throw new Error('超时'); return write; };
   dlg.querySelector('[data-fr-auto]').click();
-  for (let i = 0; i < 30 && !/已填好/.test(dlg.querySelector('[data-fr-status]').textContent); i++) await tick();
-  assert.match(dlg.querySelector('[data-fr-status]').textContent, /检查没完成（超时）/);
+  for (let i = 0; i < 30 && !/已填写/.test(dlg.querySelector('[data-fr-status]').textContent); i++) await tick();
+  assert.match(dlg.querySelector('[data-fr-status]').textContent, /检查未完成（超时）/);
   assert.match(dlg.querySelector(`[data-fr-row="${idx('F_doc')}"] .pi-warn-line`).textContent, /口径里有答案的片段/);
   await inst.destroy();
 });
@@ -274,8 +275,35 @@ test('R5: editing a row while the review is pending keeps the edit; the old verd
   crit('F_han').value = '我自己改的口径；没说不算';
   crit('F_han').dispatchEvent(new host.w.Event('input', { bubbles: true }));
   release();
-  for (let i = 0; i < 30 && !/已填好/.test(dlg.querySelector('[data-fr-status]').textContent); i++) await tick();
+  for (let i = 0; i < 30 && !/已填写/.test(dlg.querySelector('[data-fr-status]').textContent); i++) await tick();
   assert.match(dlg.querySelector(`[data-fr-row="${idx('F_doc')}"] .pi-warn-line`)?.textContent || '', /口径里有答案的片段/, 'the old 透露:否 does not clear the new text');
   assert.equal(crit('F_han').value, '我自己改的口径；没说不算', 'the old rewrite does not overwrite the edit');
   await inst.destroy();
+});
+
+test('context: 前提 = the nodes behind the open condition, or the previous stage end of the same line; prompt asks for who / when / which step', () => {
+  const vols = [{ id: 'v1', key: '剧情_卷1_旧码头', stages: [
+    { id: 's1', key: '阶段1_证词', data: { 结束条件: { 事实: 'F_han' }, 主线节点: [
+      { id: 'n_han', 名称: '夜班看守老韩', 入口: '可以找看守问问那晚的事', 发现: [{ 事实: 'F_han', 内容: '老韩说看见周先生' }] },
+      { id: 'n_mark', 名称: '后门', 入口: '后门外好像有痕迹', 开放条件: { 事实: 'F_han' }, 发现: [{ 事实: 'F_mark', 内容: '一个鞋印' }] },
+    ] } },
+    { id: 's2', key: '阶段2_收尾', data: { 主线节点: [
+      { id: 'n_end', 名称: '回到码头', 入口: '事情处理完后回码头看看', 发现: [{ 事实: 'F_end', 内容: '老韩被安置' }] },
+    ] } },
+  ] }];
+  const ctx = new Map(C.factLabelContext(vols).map((x) => [x.code, x]));
+  assert.deepEqual(ctx.get('F_han').before, [], 'first step: nothing before');
+  assert.deepEqual(ctx.get('F_mark').before, ['可以找看守问问那晚的事'], 'from the open condition');
+  assert.deepEqual(ctx.get('F_end').before, ['可以找看守问问那晚的事'], 'no open condition: previous stage end');
+  const [sys, user] = C.factLabelMessages([...ctx.values()]);
+  assert.match(user.content, /- 编号: F_end[\s\S]*前提（这一步之前已经发生）: 可以找看守问问那晚的事/);
+  assert.ok(!/老韩被安置/.test(user.content.split('发现内容')[0]), 'precondition line carries no answer');
+  assert.match(sys.content, /1\. 谁取得：写材料里取得它的人/);
+  assert.match(sys.content, /2\. 什么时候：点出这一步接在哪一步之后/);
+  assert.match(sys.content, /3\. 做到哪一步/);
+});
+
+test("check: words quoted from 前提 (earlier public events) are not flagged as answer pieces", () => {
+  const ctx = { answer: "警方封存了当铺现场的残件，经同意可取样", entry: "警方接管现场", before: ["当铺里的失控器材（当铺方向传来撞击和警笛，卷帘门被破坏）"] };
+  assert.deepEqual(C.factLabelCheck({ label: "封存的残件", criterion: "当铺里的失控器材处理完后，彼得获准接触残件时登记；只看到封存不算" }, ctx).suspects, []);
 });

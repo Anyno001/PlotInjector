@@ -272,7 +272,7 @@ async function runImportJobInner(view, jobId, signal) {
 }
 
 // 多条支线：一段分几批（每批几条线）并发整理，结果按批次位置存进 drafts[段].list[批]。
-// 并发时后面的批次可能先写完，前面的位置暂时是空的（存盘后是 null）（GPT 第五轮 C1）。
+// 并发时后面的批次可能先写完，前面的位置暂时为空（存盘后是 null）。
 // want：这一段预期几批；ok：成功了几批；bad：第一个失败的批次；left：还没成功的批数。
 export function lineBatchState(job, p) {
     let ident = job.lineIdent && Array.isArray(job.lineIdent.lines) ? job.lineIdent.lines : null,
@@ -351,11 +351,11 @@ const IMPORT_KINDS = [
     { value: 'side', label: '一条支线', note: '一段独立的支线剧情' },
     { value: 'lines', label: '多条支线', note: '多段支线剧情，逐条整理' },
 ];
-const KIND_WORD = { main: '一条主线', side: '一条支线', lines: '多条支线', outline: '按阶段推进', legacy: '线索推进', edit: '审阅修改' };
+const KIND_WORD = { main: '一条主线', side: '一条支线', lines: '多条支线', outline: '大纲推进', legacy: '线索推进', edit: '审阅修改' };
 const IMPORT_NEEDS_SIDE = '这是一条支线。写清它什么时候能开始、由什么引出（比如「主线进行到当铺之后，罗莎打电话来」）；开头的人物表只给我自己看。';
 const IMPORT_NEEDS_LINES = '文档里每条支线用「## 1标题」「## 2标题」分开；每条写清什么时候能开始。开头的总说明只给我自己看。';
-// 审阅修改只含大纲里已有的线。导入审阅完、还没保存到大纲的线不在这里（实测：从导入页切出去后找不到支线）：
-// 列出这些导入，给一个回去的入口。只算从来没保存进大纲的：单条导入保存过（adoptedId）、之后点「继续修改」的不算（GPT 第五轮 U1）；
+// 审阅修改只含大纲里已有的线；导入审阅完但未保存的线不在其中，需要给一个回去的入口：
+// 只算从未保存进大纲的；单条导入保存过（adoptedId）后点「继续修改」的不算。
 // 多条支线看还剩几条既没保存、也没设成不导入。打开审阅修改前已经把这个项目的导入记录都载入了。
 function unsavedImports(view, project) {
     return importJobIds(project)
@@ -429,17 +429,17 @@ export function renderImport(view) {
         <label class="pi-field"><span>推进方式</span><select class="pi-sel" data-imp-modesel>${options(
             [
                 { value: 'clue', label: '线索推进' },
-                { value: 'outline', label: '按阶段推进' },
+                { value: 'outline', label: '大纲推进' },
             ],
             clue0 ? 'clue' : 'outline',
-        )}</select><span class="pi-hint">${clue0 ? '按查到的线索推进剧情。' : '按时间顺序一段段推进，整份文档整理成一卷。'}${clue0 === isClueMode(project) ? '' : '和项目现在的推进方式不同。保存后到执行页切换推进方式，剧情才会按这种方式推进。'}</span></label>
+        )}</select><span class="pi-hint">${clue0 ? '按查到的线索推进剧情。' : '按时间顺序一段段推进，整份文档整理成一卷。'}${clue0 === isClueMode(project) ? '' : '与项目当前的推进方式不同；保存后需到执行页切换推进方式才会生效。'}</span></label>
         ${
             clue0
                 ? `<div class="pi-field"><span>文档内容</span><div class="pi-imp-kind">${IMPORT_KINDS.map((k) => `<button type="button" class="pi-imp-kind-btn${kind0 === k.value ? ' is-sel' : ''}" data-act="import-kind" data-kind="${k.value}"><b>${k.label}</b><span>${k.note}</span></button>`).join('')}</div></div>`
                 : ''
         }
         ${clue0 && kind0 !== 'lines' && isTrpg(project) ? `<label class="pi-check"><input type="checkbox" data-imp-trpg${(s.trpg ?? !0) ? ' checked' : ''}><span>跑团模组（CoC 7版）：带上检定，另外整理KP规则</span></label>` : ''}
-        ${clue0 && !currentTables() ? '<p class="pi-hint is-warn">当前聊天读不到数据库表格。依赖表格的开始条件会先按手动开始整理；也可以到有表格的聊天里导入。</p>' : ''}
+        ${clue0 && !currentTables() ? '<p class="pi-hint is-warn">当前聊天无法读取数据库表格。依赖表格的开启条件会先按手动开始整理；也可在有表格的聊天中导入。</p>' : ''}
         <label class="pi-field"><span>要求（可空）</span><textarea class="pi-ta" rows="3" data-imp-needs placeholder="${esc(kind0 === 'side' ? IMPORT_NEEDS_SIDE : kind0 === 'lines' ? IMPORT_NEEDS_LINES : IMPORT_NEEDS_EXAMPLE)}">${esc(s.needs || '')}</textarea></label>
         <input type="hidden" data-imp-mode value="${clue0 ? (kind0 === 'lines' ? 'lines' : 'clue') : 'outline'}"><input type="hidden" data-imp-kind value="${kind0}">
         <div class="pi-tools is-end is-c1"><button type="button" class="pi-btn is-primary" data-act="import-start">开始整理</button></div></div>
@@ -454,14 +454,14 @@ export function renderImport(view) {
                     .load(s.jobId)
                     .catch(() => null)
                     .then((j) => {
-                        (j && j.projectId === view.projectId) || ((s.jobId = ''), toast('warning', '读不到这个导入任务。'));
+                        (j && j.projectId === view.projectId) || ((s.jobId = ''), toast('warning', '无法读取这个导入任务。'));
                     })
                     .finally(() => ((s.loadingJob = !1), view.renderBody()))),
             '<div class="pi-empty"><span class="pi-spin"></span> 正在读取导入任务…</div>'
         );
     if (importJobKind(job) === 'edit') {
-        if (!job.review) return '<div class="pi-empty">这次修改的内容读不出来。</div>';
-        // 顶上那行路径写当前位置（大纲里）；从讨论页来的，右边另给「返回讨论」（GPT 界面审阅第 3 条）
+        if (!job.review) return '<div class="pi-empty">无法读取这次修改的内容。</div>';
+        // 顶部路径显示当前位置；从讨论页进入时右侧另有「返回讨论」。
         let back = `<div class="pi-imp-crumb"><button type="button" class="pi-imp-crumb-a" data-act="import-close">大纲</button><span>›</span><b>审阅修改</b><button type="button" class="pi-imp-crumb-a pi-imp-crumb-end" data-act="edit-back-discuss">返回讨论</button></div>`;
         return renderReview(view, job, job.review, null, back + pendingImportNote(view, project));
     }
@@ -479,10 +479,10 @@ export function renderImport(view) {
     if (job.step !== 'review')
         return `${crumbs(1)}<div class="pi-card"><h3>导入长文<span class="pi-spacer"></span><button type="button" class="pi-btn is-sm is-ghost" data-act="import-close">回到大纲</button></h3>${progress}
         <div class="pi-tools is-end">${busy ? '<button type="button" class="pi-btn is-sm is-danger" data-act="import-stop">停止</button>' : ''}<button type="button" class="pi-btn is-primary is-sm" data-act="import-run"${busy ? ' disabled' : ''}>${busy ? '<span class="pi-spin"></span>整理中' : failed.length ? '重试失败的段' : drafted || indexed ? '继续' : '开始'}</button></div></div>`;
-    // 好几条支线（第二批 b）：和导入一条线同一个审阅页，多一行选线。旧任务的逐条审阅数据迁进会话（linesSessionOf）。
+    // 多条支线：与单条导入共用审阅页，多一行选线；旧任务的逐条审阅数据迁入会话（linesSessionOf）。
     if (job.mode === 'lines') {
         if (!job.review || !job.review.lines) {
-            // 旧任务：逐条数据（job.lineReview）迁进审阅会话；新任务从整理结果建会话。之后只写会话，不再写 lineReview（GPT 第三轮清理 B3）
+            // 旧任务：逐条数据（job.lineReview）迁进审阅会话；新任务从整理结果建会话。之后只写会话，不再写 lineReview。
             let lr = job.lineReview || lineReviewFromJob(job);
             return (
                 view.data.imports.update(job.id, (j) => (j.review && j.review.lines ? j : { ...j, review: linesSessionOf({ ...j, lineReview: j.lineReview || lr }) })).then(() => view.renderBody()),
@@ -530,7 +530,7 @@ export function renderImport(view) {
             <details><summary class="pi-hint">YAML</summary><pre class="pi-pre is-full">${esc(stringifyYaml({ [st.key]: st.data }))}</pre></details></div>`;
             })
             .join('')}
-        <div class="pi-tools is-end"><button type="button" class="pi-btn is-primary is-sm" data-act="import-adopt">把勾选的阶段追加为新卷</button></div>
+        <div class="pi-tools is-end"><button type="button" class="pi-btn is-primary is-sm" data-act="import-adopt">追加所选阶段</button></div>
         ${cand.index ? `<details><summary class="pi-hint">作者索引（只给作者看）</summary><pre class="pi-pre is-full">${esc(stringifyYaml(Object.fromEntries(Object.entries(cand.index).filter(([k]) => k !== 'secretFlag'))))}</pre></details>` : ''}</div>`;
 }
 
@@ -597,7 +597,7 @@ export const importActions = {
             }
         } else text = await files[0].text();
         box && (box.value = text);
-        // 选了文件：记下文件名和字数，显示在原文框下面（第四批）
+        // 选了文件：记下文件名和字数，显示在原文框下方。
         keepStartInputs(view, target);
         ((sti(view).file = { name: files[0].name, chars: text.replace(/\s/g, '').length }), view.renderBody());
     },
@@ -609,7 +609,7 @@ export const importActions = {
             kindBox = card.querySelector('[data-imp-kind]'),
             kind = mode === 'outline' ? 'outline' : mode === 'lines' ? 'lines' : kindBox && ['main', 'side'].includes(kindBox.value) ? kindBox.value : 'main',
             projectId = view.projectId;
-        if (!text.trim()) return toast('warning', '先粘贴原文，或选择一个文件。');
+        if (!text.trim()) return toast('warning', '请先粘贴原文或选择文件。');
         let trpgBox = card.querySelector('[data-imp-trpg]'),
             trpg = !!(trpgBox && trpgBox.checked && mode === 'clue');
         let job = await view.data.imports.create({ projectId, text, mode, needs, kind, trpg });
@@ -620,7 +620,7 @@ export const importActions = {
             runKpRules(view, projectId, text));
         ((sti(view).text = ''), (sti(view).needs = ''), (sti(view).file = null));
         if ((view.data.updateProject(projectId, (p) => ({ ...p, imports: [...importJobIds(p), job.id] })), view.projectId !== projectId))
-            return toast('info', '导入任务已建好，记在原来的项目里。');
+            return toast('info', '导入任务已创建，归属原项目。');
         ((sti(view).jobId = job.id), view.renderBody(), importActions['import-run'](view));
     },
     async 'import-open'(view, target) {
@@ -657,7 +657,7 @@ export const importActions = {
             (await runTask(view, `import:${view.projectId}`, () => runImportJob(view, jobId)).catch((error) =>
                 error && error.name === 'AbortError'
                     ? toast('info', '已停止整理。已完成的段已保存，点「继续」接着做。')
-                    : toast('error', `整理中断：${error.message}。已完成的部分已保存，点「继续」接着做。`),
+                    : toast('error', `整理中断：${error.message}。已完成的部分已保存，点「继续」可接着整理。`),
             ),
             view.renderBody());
     },
@@ -701,10 +701,10 @@ export const importActions = {
             }))
         )
             return;
-        if (!same()) return toast('warning', '确认期间切换了项目，没有追加。');
+        if (!same()) return toast('warning', '确认期间已切换项目，未追加。');
         let keys = take.map((st2) => adoptKey(job.id, 0, st2.key)),
             project = view.project();
-        if (keys.some((k) => projectAdopted(project).has(k))) return (toast('info', '这些阶段刚刚已经追加过了。'), view.renderBody());
+        if (keys.some((k) => projectAdopted(project).has(k))) return (toast('info', '这些阶段已追加过。'), view.renderBody());
         let incoming = [{ ...vol, id: makeId('v'), stages: take.map((st2) => ({ ...st2, id: makeId('s') })) }],
             fresh;
         try {
@@ -721,7 +721,7 @@ export const importActions = {
         }
         (view.data.updateProject(projectId, (p) => ({
             ...p,
-            // 先记大纲历史（GPT 代码审阅：按阶段推进的追加也要能撤回）
+            // 先记大纲历史，使按阶段推进的追加也能撤回。
             outline: { ...p.outline, volumes: [...p.outline.volumes, ...fresh], history: pushOutlineHistory(p.outline.history, p.outline.volumes, '导入追加阶段') },
             importAdopted: [...projectAdopted(p), ...keys],
         })),
@@ -736,12 +736,12 @@ export const importActions = {
     },
 };
 
-// 采用逐页审阅的草稿（导入审阅总方案 4.2 / GPT 审阅 R1）：
+// 采用逐页审阅的草稿（方案 4.2）：
 //   还有没发的意见 → 先问（先发送意见 / 保存到大纲，暂不发送意见 / 取消）；有确定的错误 → 列出来（取消 / 仍然保存）；只剩要确认的 → 不挡。
 //   重新审阅已采用的线：按卷 id 换掉那一卷（prepareCommit 跑历史保护并真正放回已完成的节点）。
 //   新导入：分配编号、节点 id 撞号换新，再经 prepareCommit 追加。都先记大纲历史；确认期间大纲变了就不写。
 // 「好几条支线」导入里已经保存到大纲的线：会话记的（adoptedLines）+ 项目里的记录（importLineMap、按线已采用标记）。
-// 旧任务迁进统一审阅页时会话里还没有记录，要从项目里恢复（GPT 第二轮 N5）。返回 { 卷 id: 大纲里的编号 }。
+// 旧任务迁进统一审阅页时会话里还没有记录，要从项目里恢复。返回 { 卷 id: 大纲里的编号 }。
 export function adoptedLinesOf(project, job, review) {
     let out = { ...((review && review.adoptedLines) || {}) },
         ids = (review && review.lineIds) || {},
@@ -754,17 +754,17 @@ export function adoptedLinesOf(project, job, review) {
     }
     return out;
 }
-// 表格条件没填完的线：不能当成没有条件保存（GPT 第二轮 N2）。跳到那条线的线页，提示补全。返回 true = 拦下了。
+// 表格条件没填完的线：不能当成没有条件保存。跳到那条线的线页，提示补全。返回 true = 拦下了。
 async function blockHalfTable(view, jobId, review, vols) {
     let half = incompleteTableLines(vols);
     if (!half.length) return !1;
     let i = reviewUnits(view.project(), review).findIndex((u) => u.volumeId === half[0].id && u.kind === 'line');
     i >= 0 && (await view.data.imports.update(jobId, (j) => ({ ...j, review: { ...j.review, at: i } })));
     view.renderBody();
-    toast('warning', `${half.map(lineTitle).join('、')}的表格条件还没填完（表、行、列、值都要有），没有保存。也可以改选别的开始方式。`);
+    toast('warning', `${half.map(lineTitle).join('、')}的表格条件未填完（需要表、行、列、值），未保存。也可改选其他开始方式。`);
     return !0;
 }
-// 保存「好几条支线」导入（第二批 b）：规则和旧逐条审阅页的采用一样——
+// 保存「好几条支线」导入：规则和旧逐条审阅页的采用一样——
 //   不导入的、已经保存过的线跳过；编号和项目里的线撞了就换号（本批内部、之前从这次导入保存过的线的引用一起改）；
 //   卷 / 阶段拿新 id，节点 id 撞号换新；记 importLineMap（导入编号 → 卷 id）和按线的已采用标记；保密名单按线记。
 //   先记大纲历史；准备和写入之间大纲变了就不写。保存后留在审阅页，保存过的线标「已保存」，可以接着处理其余的线。
@@ -776,17 +776,17 @@ async function adoptLinesReview(view, jobId) {
     let pending = sendableNotes(view.project(), review).length;
     if (pending) {
         let pick = await choiceDialog({
-            title: '还有意见没发送',
-            body: `有${pending}页意见还没用于修改草稿。保存后意见仍会保留。`,
+            title: '有意见未发送',
+            body: `有${pending}页意见尚未用于修改草稿。保存后意见仍会保留。`,
             choices: [
                 { label: '取消', value: null },
-                { label: '保存到大纲，暂不发送意见', value: 'save' },
-                { label: '先发送意见', value: 'send', primary: !0 },
+                { label: '仍然保存', value: 'save' },
+                { label: '先发送', value: 'send', primary: !0 },
             ],
         });
         if (pick === 'send') return rvActions['rv-send'](view);
         if (pick !== 'save') return;
-        if (view.projectId !== projectId || !importJobOf(view, jobId)) return toast('warning', '确认期间切换了项目，没有保存。');
+        if (view.projectId !== projectId || !importJobOf(view, jobId)) return toast('warning', '确认期间已切换项目，未保存。');
     }
     let project = view.project(),
         ids = review.lineIds || {},
@@ -811,14 +811,14 @@ async function adoptLinesReview(view, jobId) {
         errs.length &&
         !(await confirmDialog({
             title: `保存${take.length}条支线到大纲`,
-            body: errs.length ? `还有${errs.length}处问题，有问题的线可能一直开始不了。保存后也可以在大纲页「审阅修改…」里再改：` : `要保存：${take.map(idOf).join('、')}。`,
+            body: errs.length ? `还有${errs.length}处问题，相关的线可能无法开始。保存后可在大纲页「审阅修改」中继续修改：` : `要保存：${take.map(idOf).join('、')}。`,
             list: errs.slice(0, 10),
             okLabel: errs.length ? '仍然保存' : '保存',
             danger: !!errs.length,
         }))
     )
         return;
-    if (view.projectId !== projectId || !importJobOf(view, jobId)) return toast('warning', '确认期间切换了项目，没有保存。');
+    if (view.projectId !== projectId || !importJobOf(view, jobId)) return toast('warning', '确认期间已切换项目，未保存。');
     project = view.project();
     let fresh, lineMap, map, renamed;
     try {
@@ -858,11 +858,11 @@ async function adoptLinesReview(view, jobId) {
         );
         return { ...p, outline: w.outline, importAdopted: [...projectAdopted(p), ...keys], importLineMap: { ...(p.importLineMap || {}), ...lineMap }, ...(sec ? { secretNames: sec } : {}) };
     });
-    if (!written) return toast('warning', '确认期间大纲又被改过了，没有写入。请再点一次「保存到大纲」。');
+    if (!written) return toast('warning', '确认期间大纲已被修改，未写入。请重新点「保存到大纲」。');
     Object.keys(map).length &&
         toast('warning', `有${Object.keys(map).length}条支线的编号和已有的线重复，已换成：${Object.entries(map).map(([a, b]) => `${a}→${b}`).join('、')}（本批内部的引用一起改了）。`);
     renamed.length && toast('warning', `有${renamed.length}个节点ID与现有节点重复，已换成新ID。`);
-    // 会话里记下保存过的线（卷 id → 大纲里的编号）。这些线的意见留着只读（保存前说过「意见会留在页上」，GPT 第二轮 N6），不再发送
+    // 会话里记下保存过的线（卷id → 大纲里的编号）。这些线的意见留着只读（保存前说明过「意见会留在页上」），不再发送
     let saved = Object.fromEntries(take.map((v, i) => [v.id, String((fresh[i].line || {}).编号 || idOf(v))]));
     await view.data.imports
         .update(jobId, (j) => ({
@@ -876,7 +876,7 @@ async function adoptLinesReview(view, jobId) {
         .catch(() => {});
     (view.runtime.refresh && view.runtime.refresh(), toast('success', `已保存${take.length}条支线到大纲。`), view.renderBody(), afterAdopt(view));
 }
-// 审阅里回答过的疑似短名（是同一人 / 不是）写进这几条线的保密名单（用户 2026-11-17），以后审阅修改、检查、发给 AI 都按它。
+// 审阅里回答过的疑似短名（是同一人 / 不是）写进这几条线的保密名单；之后审阅修改、检查、发给 AI 都按它。
 function withShortAnswers(sec, ids, review) {
     let sure = (review && review.shortsSure) || [],
         not = (review && review.shortsNot) || [];
@@ -903,7 +903,7 @@ async function adoptReview(view, jobId) {
     if (await blockHalfTable(view, jobId, review, isEdit || review.reopened ? editedVolumes(review) : review.draft)) return;
     if (!isEdit && isPlainObject(line0) && !line0.编号 && !line0.开启条件 && !line0.开始时机已选 && !line0.开启方式 && !line0.接上一条) {
         (await view.data.imports.update(jobId, (j) => ({ ...j, review: { ...j.review, at: 0 } })), view.renderBody());
-        return toast('warning', '先在第1页选这条线什么时候开始。');
+        return toast('warning', '请先在第1页选择这条线的开启条件。');
     }
     let pending = Object.values(review.comments || {}).filter((c) => String(c || '').trim()).length,
         localOk = (job.localIndex || []).filter((x) => isPlainObject(x) && !x.error),
@@ -913,22 +913,22 @@ async function adoptReview(view, jobId) {
         asks = all.filter((x) => x.level !== 'error'),
         lines = [
             errs.length ? `还有${errs.length}个问题没解决：${errs.slice(0, 3).map((x) => x.plain || x.text).join('；')}` : '',
-            asks.length ? `另有${asks.length}个问题你没回答，按原样保留。` : '',
+            asks.length ? `另有${asks.length}个问题未回答，会按原样保留。` : '',
         ].filter(Boolean);
-    // 还有意见没发给 AI（用户 2026-11-16：流程要闭合，提示要能直接去发送）
+    // 还有意见没发给 AI：提示里要能直接去发送。
     if (pending) {
         let pick = await choiceDialog({
-            title: '还有意见没发送',
-            body: `有${pending}页意见还没用于修改草稿。保存后意见仍会保留。`,
+            title: '有意见未发送',
+            body: `有${pending}页意见尚未用于修改草稿。保存后意见仍会保留。`,
             choices: [
                 { label: '取消', value: null },
-                { label: '保存到大纲，暂不发送意见', value: 'save' },
-                { label: '先发送意见', value: 'send', primary: !0 },
+                { label: '仍然保存', value: 'save' },
+                { label: '先发送', value: 'send', primary: !0 },
             ],
         });
         if (pick === 'send') return rvActions['rv-send'](view);
         if (pick !== 'save') return;
-        if (view.projectId !== projectId || !importJobOf(view, jobId)) return toast('warning', '确认期间切换了项目，没有保存。');
+        if (view.projectId !== projectId || !importJobOf(view, jobId)) return toast('warning', '确认期间已切换项目，未保存。');
     }
     let project = view.project(),
         reopen = isEdit ? review.draft.some((v) => project.outline.volumes.some((x) => x.id === v.id)) : !!(review.reopened && review.adoptedId && project.outline.volumes.some((v) => v.id === review.adoptedId)),
@@ -936,16 +936,16 @@ async function adoptReview(view, jobId) {
         renamed = [],
         savedIds = [];
     if (isEdit && !reopen) return toast('warning', '大纲里找不到这些线了（可能删掉了），没有保存。');
-    // 改已有的线（审阅修改、导入后重新审阅）：只写有修改的线（第二批：一次审阅可以有好几条线）。
-    // 打开审阅以后，某条线在大纲里又被别处改过 → 先列出别处的改动，用户确认才拿草稿覆盖。基准是打开时的样子（review.base），各条线分别核对（GPT 代码审阅 R2）。
+    // 改已有的线（审阅修改、导入后重新审阅）：只写有修改的线（一次审阅可以有好几条线）。
+    // 打开审阅以后，某条线在大纲里又被别处改过 → 先列出别处的改动，用户确认才拿草稿覆盖。基准是打开时的样子（review.base），各条线分别核对。
     if (reopen) {
-        // 只保存这次审阅里实际改过的线（打开时的样子 → 草稿）；没动过、但大纲里别处改了的线不碰（GPT 第二轮 N1）
+        // 只保存这次审阅里实际改过的线（打开时的样子 → 草稿）；没动过、但大纲里别处改了的线不碰
         let live = (id) => project.outline.volumes.find((v) => v.id === id),
             mine = editedVolumes(review),
             gone = mine.filter((v) => !live(v.id)).map(lineTitle);
         draft = mine.filter((v) => live(v.id) && draftDiffers([live(v.id)], [v]));
-        gone.length && toast('warning', `${gone.join('、')}在大纲里已经删掉了，这些线的修改没有保存。`);
-        if (!draft.length) return toast('info', '和大纲里现在的一样，没有要保存的。');
+        gone.length && toast('warning', `${gone.join('、')}已从大纲删除，这些线的修改未保存。`);
+        if (!draft.length) return toast('info', '与大纲一致，无需保存。');
         let elsewhere = draft.flatMap((v) => {
             let opened = (review.base || []).find((x) => x.id === v.id),
                 now = live(v.id);
@@ -955,19 +955,19 @@ async function adoptReview(view, jobId) {
             if (
                 !(await confirmDialog({
                     title: '大纲里已有新改动',
-                    body: '打开审阅以后，大纲里这些内容又被改过。保存草稿会覆盖下面这些改动（大纲历史里可以找回）。草稿和意见都还在，可以先取消，核对后再保存。',
+                    body: '打开审阅后，大纲中以下内容又被修改。保存草稿会覆盖这些改动（可在大纲历史中找回）。草稿和意见都保留，可先取消并核对。',
                     list: elsewhere.slice(0, 12),
                     okLabel: '仍然保存草稿',
                     danger: !0,
                 }))
             )
                 return;
-            if (view.projectId !== projectId || !importJobOf(view, jobId)) return toast('warning', '确认期间切换了项目，没有保存。');
+            if (view.projectId !== projectId || !importJobOf(view, jobId)) return toast('warning', '确认期间已切换项目，未保存。');
             project = view.project();
         }
         savedIds = draft.map((v) => v.id);
     } else {
-        if (projectAdopted(project).has(adoptKey(jobId, 'review', 0)) || review.adoptedId) return (toast('info', '这条线已经保存到大纲了。'), view.renderBody());
+        if (projectAdopted(project).has(adoptKey(jobId, 'review', 0)) || review.adoptedId) return (toast('info', '这条线已保存到大纲。'), view.renderBody());
         try {
             let plan = adoptPlan(view, job, review);
             ((draft = plan.vols), (renamed = plan.renamed));
@@ -975,7 +975,7 @@ async function adoptReview(view, jobId) {
             return toast('error', `没有采用：${error.message}`);
         }
     }
-    // 先按这个聊天的进度准备最终要写的内容（放回已完成的节点），确认框里写的是最终结果和对进度的影响（GPT 代码审阅 R8）
+    // 先按这个聊天的进度准备最终要写的内容（放回已完成的节点），确认框里写的是最终结果和对进度的影响
     let label = isEdit ? '审阅修改' : reopen ? '重新审阅保存' : '导入采用',
         prepare = () => {
             let p = view.project(),
@@ -985,7 +985,7 @@ async function adoptReview(view, jobId) {
         effects = (pr) => [...(pr.guard ? [...pr.guard.diffs, ...pr.guard.notes] : []), ...(pr.restored.length ? [`已经完成的节点会保留：${pr.restored.join('、')}（完成条件不变）`] : [])],
         prep = prepare(),
         shown = effects(prep),
-        // 确认框弹出时目标线在大纲里的样子：确认期间被改过或删掉就不写（GPT 第二轮 N1：重算进度可以，不能顺手接受新的大纲内容）
+        // 确认框弹出时目标线在大纲里的样子：确认期间被改过或删掉就不写（重算进度可以，但不能顺手接受大纲里的新内容）
         stamp0 = reopen ? targetStamp(view.project(), savedIds) : '';
     if (reopen && (errs.length || (prep.guard && prep.guard.diffs.length))) {
         let titleOf = (key) => lineTitle(draft.find((v) => v.id === key.split('/')[0]) || { key: '' }),
@@ -1001,11 +1001,11 @@ async function adoptReview(view, jobId) {
         )
             return;
     } else if (!reopen && errs.length && !(await confirmDialog({ title: `保存「${volumeLabelOf(review)}」到大纲`, body: lines.join('\n'), okLabel: '仍然保存', danger: !!errs.length }))) return;
-    if (view.projectId !== projectId || !importJobOf(view, jobId)) return toast('warning', '确认期间切换了项目，没有保存。');
-    if (reopen && targetStamp(view.project(), savedIds) !== stamp0) return toast('warning', '确认期间大纲里这些线又被改过（或删掉了），没有保存。草稿和意见都还在，请再点一次核对。');
-    // 确认期间聊天进度变了（比如又推进了一楼）：按新进度重算；影响和刚才显示的不一样就不写，请用户再核对
+    if (view.projectId !== projectId || !importJobOf(view, jobId)) return toast('warning', '确认期间已切换项目，未保存。');
+    if (reopen && targetStamp(view.project(), savedIds) !== stamp0) return toast('warning', '确认期间大纲中这些线已被修改或删除，未保存。草稿和意见都保留，请重新确认。');
+    // 确认期间聊天进度变了（比如又推进了一楼）：按新进度重算；影响和之前显示的不同就不写，请用户重新确认
     let again = prepare();
-    if (JSON.stringify(effects(again)) !== JSON.stringify(shown)) return toast('warning', '确认期间剧情进度变了，对进度的影响和刚才显示的不同，没有保存。请再点一次核对。');
+    if (JSON.stringify(effects(again)) !== JSON.stringify(shown)) return toast('warning', '确认期间剧情进度已变化，影响与之前显示的不同，未保存。请重新确认。');
     prep = again;
     let secretNames = isEdit ? null : importSecretNames(index),
         written = null;
@@ -1021,7 +1021,7 @@ async function adoptReview(view, jobId) {
             );
         return { ...p, outline: w.outline, importAdopted: [...projectAdopted(p), ...keys], ...(sec ? { secretNames: sec } : {}) };
     });
-    if (!written) return toast('warning', '确认期间大纲又被改过了，没有写入。请再点一次「保存到大纲」。');
+    if (!written) return toast('warning', '确认期间大纲已被修改，未写入。请重新点「保存到大纲」。');
     prep.restored.length && toast('info', `已保留已经完成的节点：${prep.restored.join('、')}（完成条件不变）。`);
     renamed.length && toast('warning', `有${renamed.length}个节点ID与现有节点重复，已换成新ID。`);
     if (isEdit) {
@@ -1055,7 +1055,7 @@ async function adoptReview(view, jobId) {
 }
 
 // 审阅修改（讨论页、大纲页顶部「审阅修改…」、大纲页选中的线）：每个项目一个「审阅修改」任务，里面是项目里所有的线
-// （存在导入记录里，关掉再打开还在），打开和导入同一个逐页审阅页，跳到选中的那条线。第二批（用户 2026-11-16）。
+// （存在导入记录里，关掉再打开还在），打开与导入共用的逐页审阅页，跳到选中的线。
 // 再次打开时和大纲对齐：大纲里新加的线补进来；没改过的线换成大纲现在的样子；大纲里删掉、草稿也没改过的线去掉。
 // parts：{ 单位键: 解析结果 }，可空。返回任务 id。
 export function syncEditSession(project, review) {
@@ -1065,7 +1065,7 @@ export function syncEditSession(project, review) {
             let b = base.find((x) => x.id === v.id);
             return !b || draftDiffers([b], [v]);
         },
-        // 只写过意见、还没改正文的线：大纲里删掉了也留着，意见才看得到（GPT 第二轮 N6）
+        // 只写过意见、还没改正文的线：大纲里删掉了也留着，意见才看得到
         noted = (v) => Object.entries(review.comments || {}).some(([k, t]) => k.split('/')[0] === v.id && String(t || '').trim()),
         draft = [],
         nextBase = [],
@@ -1076,7 +1076,7 @@ export function syncEditSession(project, review) {
     }
     // 大纲里删掉了，但草稿里改过或写了意见：留着（保存时不会写回，提示已删除）
     for (let d of review.draft) !live.some((v) => v.id === d.id) && (edited(d) || noted(d)) && (draft.push(d), nextBase.push(base.find((x) => x.id === d.id) || d));
-    // 撤销记录里没动过的线也换成大纲现在的样子：撤销只退回当时实际改的线，不把别处的新改动退掉（GPT 第二轮 N1）
+    // 撤销记录里没动过的线也换成大纲现在的样子：撤销只退回当时实际改的线，不把别处的新改动退掉
     let history = (review.history || []).map((h) => ({ ...h, draft: draft.map((v) => (synced.has(v.id) ? v : (h.draft || []).find((x) => x.id === v.id) || v)) }));
     return { ...review, draft, base: nextBase, history };
 }
@@ -1125,7 +1125,7 @@ function volumeLabelOf(review) {
     return v ? String(v.key || '').replace(/^剧情_/, '').replace(/^卷[^_]*_/, '') : '';
 }
 
-// 同时请求的上限（用户 2026-11-17：最多 3 个，免得撞上模型服务的频率限制）。
+// 同时请求上限为 3，避免触发模型服务的频率限制。
 const IMPORT_CONCURRENCY = 3;
 // 按上限并发跑一组任务。某个任务出错时其余照常跑完（各自的结果已存进任务），最后抛出第一个错误，
 // 界面上「继续」只会重跑没成功的批次。
@@ -1155,7 +1155,7 @@ export async function runLineDrafts(view, jobId, parts, partText, local, index, 
     await store.update(jobId, (j) => ({ ...j, lineIdent: ident }));
     for (let p of parts) {
         let groups = importLineBatches(ident.lines, p.i);
-        // 同一段里的几批线互不依赖（各写各的线），最多 IMPORT_CONCURRENCY 批同时请求（实测：15 条支线逐批等太慢）。
+        // 同一段里的几批线互不依赖（各写各的线），最多 IMPORT_CONCURRENCY 批同时请求。
         // 段和段之间仍按顺序：后一段要接着前一段已经写出的同一条线（done）。
         await runPool(
             (groups.length ? groups : []).map((only, g) => () => draftBatch(p, g, only)),
@@ -1224,7 +1224,7 @@ ${r2.yaml}`,
     (await store.update(jobId, (j) => ({ ...j, step: 'review', review: j.review && j.review.lines ? j.review : linesSessionOf({ ...j, lineReview: lr }) })), view.renderBody());
 }
 
-// 「好几条支线」导入：只重新整理一条线（GPT 代码审阅第 2 点：重复内容由作者选一条重新整理，别的线不重跑）。
+// 「好几条支线」导入：只重新整理一条线：重复内容由作者选一条重新整理，别的线不重跑。
 // 用这条线出现过的各段原文、线身份表重新让 AI 只写这一条；结果替换审阅里这条线的草稿（卷 id、编号、类型保留，意见留着）。
 // 原来的草稿记进这一条的 prev，可以对照。返回 { ok, why }。
 export async function redraftLine(view, jobId, lineId) {
@@ -1242,7 +1242,7 @@ export async function redraftLine(view, jobId, lineId) {
         others = r0.draft.filter((v) => v.id !== vid0),
         tables = currentTables(),
         got = [],
-        // 发请求时这条线的草稿（GPT 第二轮 N7）：回复回来时草稿被改过 → 不替换
+        // 发请求时这条线的草稿：回复回来时草稿被改过 → 不替换
         snapVol = JSON.stringify(r0.draft.find((v) => v.id === vid0) || null);
     for (let p of parts) {
         let r = parseOutlineReply(
@@ -1275,16 +1275,16 @@ export async function redraftLine(view, jobId, lineId) {
             volId = vid0,
             cur = r && r.draft.find((v) => v.id === volId);
         if (!cur) return j;
-        // 等回复期间这条线的草稿被改过：不替换（GPT 第二轮 N7）
+        // 等回复期间这条线的草稿被改过：不替换
         if (JSON.stringify(cur) !== snapVol) return ((touched = !0), j);
         // 阶段按名称 / 共有节点对应保留 id（matchStages）；编号、类型由程序保留（类型只在新建时选）
         let type0 = String(((cur && cur.line) || {}).类型 || '').trim(),
             vol = { ...merged, id: volId, line: { ...merged.line, 编号: lineId, ...(type0 ? { 类型: type0 } : {}) }, stages: matchStages(cur.stages, merged.stages).stages };
         // 审阅会话：换掉这条线的草稿（记一笔撤回点），记下重新整理前的内容。
-        // 意见都留着：重新整理不带意见发给 AI，没有「处理过」的意见可清（GPT 第二轮 N7）；用户看过新稿后自己删或发送
+        // 意见都留着：重新整理不带意见发给AI，没有「处理过」的意见可清；用户看过新稿后自己删或发送
         let next = editDraft(r, `重新整理${lineId}`, (d) => d.map((v) => (v.id === volId ? vol : v)));
         return { ...j, review: { ...next, prev: { ...(r.prev || {}), [volId]: cur } } };
     });
-    if (touched) return { ok: !1, why: '等待期间这条线被改过，没有替换（你的修改和意见都还在），需要的话再点一次' };
+    if (touched) return { ok: !1, why: '等待期间这条线被修改，未替换（修改和意见都保留），需要时请重试' };
     return { ok: !0 };
 }

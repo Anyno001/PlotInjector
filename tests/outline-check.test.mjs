@@ -62,6 +62,47 @@ test('UI: outline 检查 shows plain-language clue issues (no 时间范围 nag i
   await inst.destroy();
 });
 
+// ---------- 叫法（总方案第三节 I）：线索推进显示「剧情线 / 剧情节点 / 可选事件」，YAML 键名不变 ----------
+test('naming: clue outline page says 剧情线 / 剧情节点 / 可选事件; outline-mode page keeps 卷 / 主线 / 支线; the prompt maps words to YAML keys', async () => {
+  const host = createHost({ tables: {} });
+  const inst = host.load(); await inst.ready;
+  const mk = async (name, clue) => {
+    const p = await inst.data.createProject(name);
+    inst.data.updateProject(p.id, (x) => ({ ...x, outline: { ...x.outline, volumes: vols() }, ...(clue ? { clue: { mode: 'clue', bindings: { facts: [], knowledge: [] } } } : {}) }));
+    return p.id;
+  };
+  const a = await mk('线索', true), b = await mk('阶段', false);
+  await inst.runtime.switchProject(a);
+  inst.data.updateSettings({ tourState: { revision: 99, done: ['core', 'outline', 'run', 'discuss', 'setting'] } });
+  inst.open(); await tick();
+  const doc = host.w.document, click = async (sel) => { const el = doc.querySelector(sel); assert.ok(el, `missing ${sel}`); el.click(); await tick(); };
+  const look = async (pid) => {
+    await click(`[data-act="project"][data-id="${pid}"]`);
+    await click('[data-act="tab"][data-tab="outline"]');
+    doc.querySelector('[data-act="sel"][data-id="s2"], [data-id="s2"]').click(); await tick();
+    return doc.querySelector('.pi-body').textContent;
+  };
+  const clueText = await look(a);
+  assert.match(clueText, /＋新剧情线/);
+  assert.match(clueText, /AI写新剧情线/);
+  assert.match(clueText, /剧情节点 3/);
+  assert.match(clueText, /可选事件 0/);
+  const oldText = await look(b);
+  assert.match(oldText, /＋新卷/);
+  // 节点叫法两种推进方式统一：大纲模式也叫剧情节点 / 可选事件，不再说主线 / 支线
+  assert.match(oldText, /剧情节点 3/);
+  assert.doesNotMatch(oldText, /主线 3/);
+  // YAML 键名不变
+  assert.ok(inst.data.project(a).outline.volumes[0].stages[1].data.主线节点);
+  await inst.destroy();
+  const m = C.outlineMessages({ setting: 'S', volumes: [], volumeNo: 1, mode: 'clue', request: 'x' });
+  assert.match(m[0].content, /「剧情节点」= 阶段里的 主线节点:/);
+  assert.match(m[0].content, /输出时只用 YAML 键名/);
+  assert.match(m[1].content, /只写一条新的剧情线/);
+  const o = C.outlineMessages({ setting: 'S', volumes: [], volumeNo: 1, mode: 'outline' });
+  assert.doesNotMatch(o[0].content + o[1].content, /剧情线|剧情节点/, 'outline mode prompt untouched');
+});
+
 // ---------- P12：AI 写的大纲「替换选中的剧情线」保留线头（编号、类型、开启条件），阶段 id 按名称对应 ----------
 test('P12: replacing a plot line with an AI draft keeps 编号 / 类型 / 开启条件 and stage ids by name; outline history is recorded', async () => {
   const host = createHost({ tables: {} });

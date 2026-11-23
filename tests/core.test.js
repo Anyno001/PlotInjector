@@ -147,7 +147,7 @@ test('已演完阶段的状态变化接在设定后面；设为不注入的分�
     assert.equal(setting.content, '铁则:\n- 甲', '当前段还没演完，变化不注入');
     const progress = advance(emptyProgress(project.id), units).progress;
     setting = buildEntries(project, progress, normalizeSettings({})).find(entry => entry.kind === 'setting');
-    assert.match(setting.content, /以这里为准）：\n- 她察觉到 A 不只是兄弟（卷一·测试·阶段一 开端）$/);
+    assert.match(setting.content, /以这里为准；这些是当前状态，正文照此写即可，不必特意提起或复述）：\n- 她察觉到 A 不只是兄弟（卷一·测试·阶段一 开端）$/);
     assert.equal(changedBlockKeys('铁则:\n- 甲\n\n钩子库:\n- 乙', '铁则:\n- 丙\n\n新块:\n- 丁').join(), '铁则');
 });
 

@@ -1,4 +1,4 @@
-import { countRows, pickEntry, tierCompare, findSheet, tierOrderInNote, cellText, sameValue, readCell } from './clue-tables.js';
+import { countRows, pickEntry, tierCompare, findSheet, tierOrderInNote, cellText, sameValue, readCell, knowKey, knowKeyOf } from './clue-tables.js';
 
 import { splitStageKey, volumeLabel, isPlainObject, flattenUnits, stageLabel, stageNodes } from './outline.js';
 
@@ -18,7 +18,7 @@ export function atomString(key, value) {
 }
 
 // 列名、行名里常有 <user> 这类标签：拆比较符号前先换成占位，免得其中的 < > 被当成比较符号
-// （实测 2026-11-17：「重要角色表/彼得·帕克/对<user>阶段 >= 信任」被拆成列「对」、值「user>阶段 >= 信任」）。
+// （例：「表/行/对<user>阶段 >= 信任」会被拆成列「对」、值「user>阶段 >= 信任」）。
 const TAG_RE = /<[A-Za-z_][\w-]*>/g;
 export function splitCompare(text, re) {
     let tags = [],
@@ -110,8 +110,8 @@ export function compareValues(a, b) {
     return 0;
 }
 
-// 「编号 + 档位名」的格子（如「3 信任」「2 熟悉」，用户的卡 2026-11-17）：条件写整数时按编号比，「== 3」成立。
-// 只认「整数、空格、汉字开头的名字」这一种写法；本身就是数字的（1e3、3,000）和日期（2026年11月17日）不算（GPT 第六轮 R5）。
+// 「编号 + 档位名」的格子（如「3 信任」「2 熟悉」）：条件写整数时按编号比，「== 3」成立。
+// 只认「整数、空格、汉字开头的名字」这一种写法；本身就是数字的（1e3、3,000）和日期（如 2026年11月17日）不算。
 const TIER_CELL = /^\s*(\d+)\s+[\u4e00-\u9fff][^\d]*$/;
 function sameOrLead(cell, wanted) {
     if (sameValue(cell, wanted)) return !0;
@@ -126,6 +126,8 @@ export function applyOp(op, cell, wanted) {
     return diff === null ? null : op === '>=' ? diff >= 0 : op === '<=' ? diff <= 0 : op === '>' ? diff > 0 : diff < 0;
 }
 
+// 人工记录：confirmed 已核实；revoked 作废；claimed 只是说法（满足「事实」不满足「核实」，见 evalAtom）；
+// kept 玩家保留了「正文可能自行编造」那一行，只表示接受这笔登记，照表格判断。后两种在这里都按表格算。
 export function effectiveFact(id, snapshot, clueProg) {
     let over = clueProg && clueProg.factOverrides && clueProg.factOverrides[id],
         fact = snapshot && snapshot.facts && snapshot.facts.get(id);
@@ -145,14 +147,16 @@ export function evalAtom(atom, env) {
             if (atom.verified || eff.v !== TRI.f) return { v: eff.v, why: eff.why };
             let fact = env.facts && env.facts.get(atom.fact),
                 over = env.factOverrides && env.factOverrides[atom.fact];
-            return fact && fact.claimed && !(over && over.status === 'revoked')
+            return ((fact && fact.claimed) || (over && over.status === 'claimed')) && !(over && over.status === 'revoked')
                 ? { v: TRI.t, why: `${atom.fact}已在正文出现（${fact.raw || '说法'}）` }
                 : { v: eff.v, why: eff.why };
         }
         case 'know': {
             let over = env.factOverrides && env.factOverrides[atom.fact];
             if (over && over.status === 'revoked') return { v: TRI.f, why: `${atom.fact}已人工撤销` };
-            let rows = env.knowledge.filter((row) => row.fact === atom.fact && row.actor === atom.actor);
+            // 主角的几种写法算同一人（D48）；别的角色名须完全一致
+            let want = knowKey(atom.fact, atom.actor),
+                rows = env.knowledge.filter((row) => row.fact === atom.fact && knowKey(row.fact, row.actor) === want);
             return rows.length
                 ? atom.verified
                     ? rows.some((row) => row.verified === !0)
@@ -289,41 +293,50 @@ export function conditionRefs(
     );
 }
 
-export function prebuiltGaps(compiled, snapshot, { checkKnowledge = !0 } = {}) {
+// skip：还没开始的线的事实（大型项目第 2 批），暂不建行，不算缺。checkFacts / checkKnowledge：false 时不报这种表的缺行。
+// 知情按 knowKeyOf 比（主角的几种写法算一个人，D47）。
+export function prebuiltGaps(compiled, snapshot, { checkFacts = !0, checkKnowledge = !0, skip = null } = {}) {
     let refs = { facts: /* @__PURE__ */ new Set(), nodes: /* @__PURE__ */ new Set(), knows: /* @__PURE__ */ new Set() };
     for (let unit of compiled.units) unit.clue && (conditionRefs(unit.clue.enter, refs), conditionRefs(unit.clue.end, refs));
     for (let node of compiled.nodes) for (let cond of [node.open, node.early, node.done]) conditionRefs(cond, refs);
     for (let l of compiled.lines || []) (conditionRefs(l.open, refs), l.legacyFact && refs.facts.add(l.legacyFact));
+    if (skip && skip.size) {
+        for (let id of skip) refs.facts.delete(id);
+        for (let k of [...refs.knows]) skip.has(k.slice(0, k.lastIndexOf('@'))) && refs.knows.delete(k);
+    }
     let out = [],
-        missingFacts = [...refs.facts].filter((id) => !(snapshot.facts && snapshot.facts.has(id))),
+        missingFacts = checkFacts ? [...refs.facts].filter((id) => !(snapshot.facts && snapshot.facts.has(id))) : [],
         present = snapshot.knowPresent;
     if (
         (missingFacts.length && out.push(`事实表里没有这些编号的行：${missingFacts.join('、')}（条件会一直是「未知」）`),
         checkKnowledge && present)
     ) {
-        let missingKnows = [...refs.knows].filter((k) => !present.has(k));
+        let missingKnows = [...refs.knows].filter((k) => !present.has(knowKeyOf(k)));
         missingKnows.length && out.push(`知情表里还没有这些「事实@角色」的行：${missingKnows.join('、')}`);
     }
     return out;
 }
 
-export function tableConsistencyHints(snapshot) {
+// overrides：玩家手动补记、确认、保留过的线索（kept / confirmed / claimed）不报「知情表里没人知道」，那是插件自己只写了事实表
+export function tableConsistencyHints(snapshot, overrides = null) {
     let hints = [],
         holders = /* @__PURE__ */ new Map();
     for (let row of snapshot.knowledge || []) holders.set(row.fact, [...(holders.get(row.fact) || []), row.actor]);
     for (let [id, fact] of snapshot.facts || []) {
-        let who = holders.get(id) || [];
+        let who = holders.get(id) || [],
+            over = overrides && overrides[id];
         (fact.status === 'confirmed' || fact.claimed) &&
             !who.length &&
+            !(over && ['kept', 'confirmed', 'claimed'].includes(over.status)) &&
             snapshot.knowPresent &&
             [...snapshot.knowPresent].some((k) => k.startsWith(`${id}@`)) &&
             hints.push(
-                `${id}在事实表里已记为「${fact.raw || '已确认'}」，但知情表里还没有任何人知道它；如果正文里有人亲见或听到，检查知情表是否漏填`,
+                `${id}在关键事实表里记为「${fact.raw || '已确认'}」，但知情表里没有任何角色知道它；如果正文里有角色亲见或听到，检查知情表是否漏填`,
             );
         fact.status === 'unconfirmed' &&
             !fact.claimed &&
             who.length &&
-            hints.push(`知情表记录了${who.join('、')}知道${id}，但事实表仍是「${fact.raw}」；检查事实表是否漏填`);
+            hints.push(`知情表记录了${who.join('、')}知道${id}，但关键事实表仍是「${fact.raw}」；检查关键事实表是否漏填`);
     }
     return hints;
 }
@@ -408,7 +421,8 @@ export function compileClue(volumes) {
     return { units, nodes, errors, lines };
 }
 
-export function computeClueState(compiled, snapshot, clueProg, config = DEFAULT_CLUE) {
+// opts.endedOpen：判断新登记合不合法时用（线索建行与登记方案 二.3）——正常结束的线，节点照常按条件判断开放。
+export function computeClueState(compiled, snapshot, clueProg, config = DEFAULT_CLUE, opts = {}) {
     let { units, nodes } = compiled,
         lines = compiled.lines || [],
         byUid = new Map(nodes.filter((n) => n.uid).map((n) => [n.uid, n])),
@@ -429,7 +443,7 @@ export function computeClueState(compiled, snapshot, clueProg, config = DEFAULT_
                 let node = byUid.get(uid);
                 return node ? nodeDone(node).v === TRI.t : void 0;
             },
-            // 给条件求值用的线状态：开启条件是未知（含循环）而落到「未触发」的，不当成确定的「未触发」交出去，返回 null（GPT 代码审阅 R4）。
+            // 条件求值用的线状态：开启条件未知（含循环）时返回 null，不当作确定的「未触发」。
             lineState: (id) => {
                 let l = byLine.get(id);
                 if (!l) return;
@@ -514,8 +528,8 @@ export function computeClueState(compiled, snapshot, clueProg, config = DEFAULT_
             if (o === l || o.kind !== 'main' || (o.mode !== 'auto' && !lineEvidence(o)) || (!lineEvidence(o) && k > at)) continue;
             let s = lineStateOf(o);
             if (!s) return `主线${o.id}的状态还算不出来`;
-            // 自动开始：暂停的主线也挡着（GPT七题审阅 §3：暂停M1不会自己开M2）。
-            // 手动「进入」看的是mainSlotTaken，暂停的不占位置（GPT审阅R6），想先玩别的主线就手动进入。
+            // 自动开始：暂停的主线也占位（暂停M1不会自动开M2）。
+            // 手动进入看 mainSlotTaken，暂停的不占位；要先玩别的主线需手动进入。
             if (s.state === '进行中' || s.state === '暂停')
                 return `主线${o.id} ${s.state === '暂停' ? '暂停中（想先玩这条，点「进入」）' : '还在进行'}`;
         }
@@ -649,7 +663,8 @@ export function computeClueState(compiled, snapshot, clueProg, config = DEFAULT_
                 done = nodeDone(node),
                 open,
                 ls = node.unit.line && lineOf.get(node.unit.line);
-            if (ls && ls.state !== '进行中') open = { v: TRI.f, reasons: [`所在的线 ${ls.line.id} ${ls.missed ? '已错过' : ls.state}`] };
+            if (ls && ls.state !== '进行中' && !(opts.endedOpen && ls.state === '完成' && !ls.manual.state))
+                open = { v: TRI.f, reasons: [`所在的线 ${ls.line.id} ${ls.missed ? '已错过' : ls.state}`] };
             else if (ls && ls.line.kind === 'side' && clueProg.sidePaused) open = { v: TRI.f, reasons: ['支线已全部暂停'] };
             else if (ls && ls.line.kind === 'main' && clueProg.mainPaused) open = { v: TRI.f, reasons: ['主线已全部暂停'] };
             else if (over.open === 'force') open = { v: TRI.t, reasons: ['人工开放'], manual: !0 };
@@ -717,7 +732,7 @@ export function pickFocus(nodeStates, clueProg, config, snapshot, stageStates) {
 
 export const LINE_STATES = ['未触发', '可开启', '进行中', '暂停', '完成', '放弃'];
 
-// 结束 = 完成或放弃（导入审阅总方案 H / GPT 审阅 R6）：「前一条结束后再开」不会因为前一条被放弃而永远等着。原来的「完成」仍只表示完成。
+// 结束 = 完成或放弃：前一条被放弃时，「前一条结束后再开」仍可触发；「完成」只表示完成。
 export const LINE_STATE_ALIAS = { 开过: ['进行中', '暂停', '完成', '放弃'], 开着: ['进行中', '暂停'], 结束: ['完成', '放弃'] };
 
 export function normalizeOps(text) {
@@ -954,7 +969,7 @@ export function compileLines(units, errors) {
                 synthetic: !isPlainObject(volume.line),
                 window: null,
                 origCond: clueText(raw.原开启条件),
-                // 接上一条（导入审阅总方案 H / GPT 审阅 R6）：排在前一条主线后面，前一条「结束」（完成或放弃）后才自动开始。
+                // 接上一条：排在前一条主线之后，其「结束」（完成或放弃）后自动开始。
                 // 只管自动开始；手动进入可以跳过它，剧情条件照样要满足。
                 after: kind === 'main' && (raw.接上一条 === !0 || raw.接上一条 === 'true' || raw.接上一条 === '是'),
             };

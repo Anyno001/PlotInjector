@@ -327,7 +327,7 @@ test('batch1: discussion reply tools are one row (整理成设定 / 写新剧情
     assert.deepEqual(menu, ['编辑', '重新生成', '删除此条消息']);
     t.doc.querySelector('.pi-dialog [data-dlg-value="msg-del"]').click(); await tick();
     const dlg = [...t.doc.querySelectorAll('.pi-dialog')].pop();
-    assert.match(dlg.textContent, /删除此条消息[\s\S]*只删这一条/);
+    assert.match(dlg.textContent, /删除此条消息[\s\S]*仅删除这一条/);
     await t.dlgBtn('删除');
     assert.deepEqual((await t.inst.data.loadChat(t.pid)).messages.map((m) => m.id), ['u1'], 'only that message removed');
   } finally { await t.inst.destroy(); }

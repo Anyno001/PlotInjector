@@ -34,7 +34,7 @@ function hubCard(infinite) {
 function worldRow(world, open, currentId) {
     const badges = world.id === currentId ? '<span class="pi-badge is-ok">当前</span>' : '';
     const body = open ? `<div class="pi-entry-bd">
-        <p class="pi-hint">${esc(world.dice.horror)}｜周期${esc(world.dice.cycle)}｜${esc(world.dice.client)}｜情欲${esc(world.dice.lust)}</p>
+        <p class="pi-hint">${esc(world.dice.horror)}，周期${esc(world.dice.cycle)}，${esc(world.dice.client)}，情欲${esc(world.dice.lust)}</p>
         <pre class="pi-pre">${esc(world.body)}</pre>
         <div class="pi-tools is-c2">
             <button type="button" class="pi-btn is-sm" data-act="world-reopen" data-id="${esc(world.id)}"${currentId ? ' disabled' : ''}>重新打开</button>

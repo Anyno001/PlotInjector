@@ -262,7 +262,7 @@ test('UI: save S01 alone (it clashes and is renumbered), then S03 that waits on 
   assert.deepEqual(ids(), ['S01', 'S02', 'S04'], 'S01 clashes → S04 (S03 is the batch\'s own id)');
   // 留在审阅页：S01 标已保存、不能再改
   await gotoLine(doc, 'S01');
-  assert.match(doc.querySelector('.pi-rv').textContent, /已经保存到大纲（S04）/);
+  assert.match(doc.querySelector('.pi-rv').textContent, /已保存到大纲（S04）/);
   assert.ok(!doc.querySelector('[data-act="rv-line-menu"]'), 'no drop / redraft on a saved line');
   // S03 撤回不导入，再保存
   await gotoLine(doc, 'S03');

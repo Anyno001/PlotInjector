@@ -268,6 +268,8 @@ export function alignProgress(progress, outline) {
     const uniq = list => [...new Set(list)];
     const next = { ...progress };
     next.current = fix(progress.current);
+    // 大纲推进按线：各线记下的位置一起归位
+    if (isObj(progress.lines)) next.lines = Object.fromEntries(Object.entries(progress.lines).map(([k, v]) => [k, isObj(v) && typeof v.at === 'string' ? { ...v, at: fix(v.at) } : v]));
     if (Array.isArray(progress.muted)) next.muted = uniq(progress.muted.map(fix));
     if (Array.isArray(progress.offMuted)) next.offMuted = uniq(progress.offMuted.map(fix));
     // 已演标记：先按阶段收集（含别名阶段的旧记录），归位后写回现存阶段；别名阶段上的 off 清掉。

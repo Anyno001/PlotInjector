@@ -7,6 +7,8 @@ import {
     clueProgressText,
     historyGuard,
     discoveryList,
+    otherLinesText,
+    crossLineLoss,
 } from '../core/clue-project.js';
 import {
     tableCatalogText,
@@ -26,7 +28,7 @@ import { prepareLabels } from './clue-run.js';
 import { CLUE_STAGE_KEYS, reidConflicts, isClueMode, normalizeClue } from '../core/clue-model.js';
 import { putVolume, prepareCommit, commitOutline, draftDiffers, targetStamp } from '../core/review-draft.js';
 import { renderImport, importActions, importJobOf } from './long-import.js';
-// 讨论页「打开审阅」用（经这里转一下，免得讨论页直接引 long-import 造成模块加载顺序问题）
+// 供讨论页「打开审阅」调用；经此转发以避免讨论页直接引用 long-import（模块加载顺序）。
 export { openEditReview, showEditReview } from './long-import.js';
 import { openEditReview, showEditReview } from './long-import.js';
 import { reviewOnInput } from './import-review.js';
@@ -57,7 +59,13 @@ import {
     outlineToText,
     parseOutlineText,
     pushOutlineHistory,
+    HISTORY_SOFT_CHARS,
+    HISTORY_KEEP_MIN,
     replaceRest,
+    replaceLineRest,
+    rewriteByLine,
+    lineRestSig,
+    pickLineIncoming,
     replaceStages,
     restoreOutline,
     stageLabel,
@@ -69,11 +77,12 @@ import {
 } from '../core/outline.js';
 
 import { outlineLinks, withAliases, withRenames } from '../core/align.js';
-import { currentIndex, goTo, unitStates } from '../core/progress.js';
+import { currentIndex, goTo, goToIn, unitStates } from '../core/progress.js';
 
 import { ask, runTask } from './ai.js';
 import { choiceDialog, confirmDialog, esc, menuDialog, openDialog, options, pickFiles, promptDialog } from './dom.js';
 import { genActions, genRefTexts, genRefsBar } from './gen-refs.js';
+import { outlineRef } from './outline-refs.js';
 import { normalizeGenRefs } from '../core/store.js';
 import { ICONS } from './styles.js';
 
@@ -93,15 +102,15 @@ const NEW_NODE = {
 
 const st = (view) => view.tabState('outline');
 
-// outline v0.1.23：单阶段 AI 草稿的标题、历史版本、检查与总览。
+// 单阶段 AI 草稿的标题、历史版本、检查与总览。
 const STAGE_DRAFT = { 'stage-refine': '细化节点', 'stage-split': '拆成两段', 'stage-merge': '与下一段合并' };
 const fmtTime = (time) => new Date(time).toLocaleString();
 
 // YAML 解析错误：中文只写「第 N 行格式有误」，英文原文收进「错误详情」。
-const ERR_PREFIX = /^(?:YAML格式错误(?:（第 \d+ 行）)?|第 \d+ 行)[：:]\s*/;
+const ERR_PREFIX = /^(?:YAML格式错误(?:（第 ?\d+ ?行）)?|第 ?\d+ ?行)[：:]\s*/;
 function errParts(error, line) {
     const text = String((error && error.message) || error || '');
-    const no = line || (error && error.line) || Number((/第 (\d+) 行/.exec(text) || [])[1]) || 0;
+    const no = line || (error && error.line) || Number((/第 ?(\d+) ?行/.exec(text) || [])[1]) || 0;
     const detail = text.replace(ERR_PREFIX, '').trim();
     const yaml = Boolean(no) || (/^YAML格式错误/.test(text) && !/[一-鿿]/.test(detail));
     return { no, detail, yaml };
@@ -116,8 +125,10 @@ function errHtml(error, line, tag = 'p') {
 function historyHtml(project, at) {
     const list = project.outline.history;
     if (!list.length) return '<div class="pi-card"><h3>历史版本</h3><p class="pi-hint">还没有历史版本。</p></div>';
-    const chosen = list[at];
+    const chosen = list[at],
+        total = list.reduce((n, item) => n + item.text.length, 0);
     return `<div class="pi-card"><h3>历史版本</h3>
+        <p class="pi-hint">共${list.length}版，${total}字。最多存10版；总量超过${HISTORY_SOFT_CHARS / 1e4}万字时从最旧的删，至少留最近${HISTORY_KEEP_MIN}版。</p>
         ${list
             .map(
                 (
@@ -132,7 +143,7 @@ function historyHtml(project, at) {
         ${chosen ? `<pre class="pi-pre">${esc(chosen.text)}</pre>` : ''}</div>`;
 }
 
-// 叫法（导入审阅总方案第三节 I）：线索推进里「卷」叫「剧情线」，阶段推进照旧叫「卷」。YAML 键名不变。
+// 线索推进里「卷」叫「剧情线」，大纲推进仍叫「卷」；YAML 键名不变。
 // p：项目或 view（取 view.project()）。
 export function vq(p, outline, clue) {
     let project = p && typeof p.project === 'function' ? p.project() : p;
@@ -176,14 +187,14 @@ function checkHtml(view, project) {
         idOf = (x) => x.stageId || (x.stageIds && x.stageIds[0]) || x.volumeId || '',
         row = (x) => {
             let id = idOf(x),
-                body = `<span class="pi-pname">${esc(x.plain || x.text)}</span>${x.fix ? `<span class="pi-hint pi-check-fix">怎么改：${esc(x.fix)}</span>` : ''}`;
+                body = `<span class="pi-pname">${esc(x.plain || x.text)}</span>${x.fix ? `<span class="pi-hint pi-check-fix">建议：${esc(x.fix)}</span>` : ''}`;
             return id
                 ? `<button type="button" class="pi-titem is-issue pi-check-item" data-act="issue-go" data-id="${esc(id)}">${body}</button>`
                 : `<div class="pi-titem is-issue pi-check-item">${body}</div>`;
         };
-    if (!total) return `<div class="pi-card"><h3>大纲检查</h3><p class="pi-hint">没有发现问题。${clue ? '（按线索推进检查了：走不走得通、拿不拿得到线索、替代途径。）' : ''}</p></div>`;
+    if (!total) return `<div class="pi-card"><h3>大纲检查</h3><p class="pi-hint">没有发现问题。${clue ? '（已检查：能否推进、线索能否获得、替代途径。）' : ''}</p></div>`;
     return `<div class="pi-card"><h3>大纲检查<span class="pi-meta">${total}项</span></h3>
-        ${clue ? '<p class="pi-hint">点一条跳到那个阶段。想让AI改：点「审阅修改…」，在那条线的页上写意见。</p>' : ''}
+        ${clue ? '<p class="pi-hint">点击一条跳转到对应阶段。需要AI修改时，点「审阅修改」并在这条线的页上写意见。</p>' : ''}
         ${errs.length ? `<div class="pi-rv-sec">要处理的问题（${errs.length}）</div>${errs.map(row).join('')}` : ''}
         ${base.length ? `${clue ? `<div class="pi-rv-sec">格式（${base.length}）</div>` : ''}${base.map(row).join('')}` : ''}
         ${asks.length ? `<details><summary class="pi-hint">另有${asks.length}项需确认</summary>${asks.map(row).join('')}</details>` : ''}</div>`;
@@ -234,7 +245,7 @@ function treeHtml(project, sel) {
     );
 }
 
-// threads v0.1.23：支线的钩子玩法、世界动态的进度钟，默认折叠在「玩法」里；空值不写进 YAML。
+// 支线钩子、世界动态进度钟，默认折叠；空值不写进 YAML。
 const PLAY_KEYS = { side: ['条件', '时限', '错过', '步骤'], world: ['进度钟', '前兆', '后果'] };
 const PLAY_HINTS = {
     条件: '满足后才激活，如主角到过酒馆',
@@ -283,13 +294,13 @@ function playValue(key, raw) {
     return text;
 }
 
-// 节点的基本字段（第四批，用户 2026-11-16）：名称、地点并排；线索推进时「必需」是名称旁边的小标签，点一下切换必需 / 可选。
-// 其余字段照旧；线索推进时事件、偏转、触发收进下面的「更多」（clueNodeFields 里），不常用。
+// 名称、地点并排；线索推进时「必需」是名称旁的标签，点击切换必需 / 可选。
+// 线索推进时，事件、偏转、触发收进「更多」（见 clueNodeFields）。
 function nodeBasics(meta, index, value, keys, clueOn) {
     let input = (key, ph = '') => `<input class="pi-inp" data-node-field="${esc(meta.field)}" data-i="${index}" data-k="${esc(key)}" value="${esc(value[key] ?? '')}"${ph ? ` placeholder="${esc(ph)}"` : ''}>`,
         area = (key) => `<textarea class="pi-ta pi-ta-auto" rows="2" data-node-field="${esc(meta.field)}" data-i="${index}" data-k="${esc(key)}">${esc(value[key] ?? '')}</textarea>`,
         req = isRequired({ item: value, kind: meta.kind }),
-        pill = clueOn && meta.kind !== 'world' ? `<button type="button" class="pi-req${req ? ' is-on' : ''}" data-act="node-req" data-field="${esc(meta.field)}" data-i="${index}" title="点一下切换">${req ? '必需' : '可选'}</button>` : '',
+        pill = clueOn && meta.kind !== 'world' ? `<button type="button" class="pi-req${req ? ' is-on' : ''}" data-act="node-req" data-field="${esc(meta.field)}" data-i="${index}" title="点击切换">${req ? '必需' : '非必需'}</button>` : '',
         later = clueOn ? new Set(['事件', '偏转', '触发']) : new Set(),
         pairKeys = keys.includes('名称') && keys.includes('地点') ? ['名称', '地点'] : [],
         rest = keys.filter((k) => !pairKeys.includes(k) && !later.has(k));
@@ -306,23 +317,23 @@ function nodeEditor(stage, meta, clueOn = false) {
                     keys = [.../* @__PURE__ */ new Set([...NODE_KEYS[meta.kind], ...Object.keys(value)])].filter(
                         (key) => !play.includes(key) && key !== 'id' && !CLUE_TEXT_KEYS.includes(key) && !CLUE_YAML_KEYS.includes(key),
                     );
-                return `<div class="pi-node"><div class="pi-node-hd"><span class="pi-badge">${esc(nodeWord(meta, clueOn))} ${index + 1}</span><span class="pi-grow"></span>
+                return `<div class="pi-node"><div class="pi-node-hd"><span class="pi-badge">${esc(nodeWord(meta))} ${index + 1}</span><span class="pi-grow"></span>
             <button type="button" class="pi-icon-btn" data-act="node-menu" data-field="${esc(meta.field)}" data-i="${index}" data-last="${index < list.length - 1 ? '' : '1'}" title="更多">${ICONS.more}</button></div>
             ${nodeBasics(meta, index, value, keys, clueOn)}
             ${playEditor(meta, value, index)}${clueOn ? clueNodeFields(meta, index, value) : ''}</div>`;
             })
             .join('');
-    return `<div class="pi-card"><h3>${esc(clueOn ? nodeWord(meta, !0) : meta.field)}<span class="pi-spacer"></span><button type="button" class="pi-btn is-sm" data-act="node-add" data-field="${esc(meta.field)}" data-kind="${meta.kind}">添加</button></h3>
-        ${items}</div>`;
+    return `<div class="pi-card"><h3>${esc(nodeWord(meta))}<span class="pi-spacer"></span><button type="button" class="pi-btn is-sm" data-act="node-add" data-field="${esc(meta.field)}" data-kind="${meta.kind}">添加</button></h3>
+        ${items || '<p class="pi-hint">无</p>'}</div>`;
 }
 
 // 节点按 主线 / 支线 / 世界动态 分开看，一次只展开一类，避免一长串。
 function nodeTabs(stage, kind, clueOn = false) {
     const count = (meta) => (Array.isArray(stage.data[meta.field]) ? stage.data[meta.field].length : 0);
-    return `<div class="pi-seg pi-node-seg">${NODE_FIELDS.map((meta) => `<button type="button" class="pi-seg-btn${meta.kind === kind ? ' is-sel' : ''}" data-act="node-kind" data-kind="${meta.kind}">${esc(nodeWord(meta, clueOn))} ${count(meta)}</button>`).join('')}</div>`;
+    return `<div class="pi-seg pi-node-seg">${NODE_FIELDS.map((meta) => `<button type="button" class="pi-seg-btn${meta.kind === kind ? ' is-sel' : ''}" data-act="node-kind" data-kind="${meta.kind}">${esc(nodeWord(meta))} ${count(meta)}</button>`).join('')}</div>`;
 }
 
-// 阶段的进入 / 结束条件（第四批）：都没写时收起，标题后一句摘要；写了内容的展开
+// 阶段的进入 / 结束条件：都没写时收起，标题后附一句摘要。
 function condBrief(v) {
     if (v == null || v === '') return '';
     let errs = [],
@@ -331,12 +342,12 @@ function condBrief(v) {
 }
 function condWordsShort(c) {
     let r = conditionRefs(c);
-    return [...r.facts].map((f) => `拿到${f}`).concat([...r.nodes].map((n) => `${n}完成`), [...r.lines].map((l) => `${l}完成`)).slice(0, 3).join('、') || '已写';
+    return [...r.facts].map((f) => `拿到${f}`).concat([...r.nodes].map((n) => `${n}完成`), [...r.lines].map((l) => `${l}完成`)).slice(0, 3).join('、') || '已填写';
 }
 function stageCondFold(stage) {
     let keys = ['进入条件', '结束条件'],
         has = keys.filter((k) => stage.data[k] != null && stage.data[k] !== ''),
-        brief = has.length ? has.map((k) => `${k.slice(0, 2)}：${condBrief(stage.data[k])}`).join('；') : '都没写',
+        brief = has.length ? has.map((k) => `${k.slice(0, 2)}：${condBrief(stage.data[k])}`).join('；') : '都未填写',
         yamlOf = (k) => (stage.data[k] == null ? '' : typeof stage.data[k] === 'string' ? stage.data[k] : stringifyYaml(stage.data[k]).trim());
     return `<details class="pi-fold"${has.length ? ' open' : ''}><summary><b>进入 / 结束条件</b><span>${esc(brief)}</span></summary>
         ${keys.map((key) => `<label class="pi-field"><span>${key}</span><textarea class="pi-ta is-mono pi-ta-auto" rows="2" data-stage-yaml="${key}">${esc(yamlOf(key))}</textarea></label>`).join('')}<p class="pi-status" data-stage-yaml-status></p></details>`;
@@ -351,7 +362,7 @@ function stageEditor(volume, stage, raw, kind, clueOn = false) {
             ...CLUE_STAGE_KEYS,
         ]),
         extra = Object.keys(stage.data).filter((key) => !known.has(key)),
-        // 第四批（用户 2026-11-16）：大纲编辑边输入边保存，去掉「保存」按钮，标题下一句说明
+        // 编辑边输入边保存，没有「保存」按钮，标题下用一句话说明。
         head = `<div class="pi-card"><h3>阶段<span class="pi-spacer"></span><button type="button" class="pi-icon-btn" data-act="stage-menu" title="更多">${ICONS.more}</button></h3>
         ${raw ? '<p class="pi-hint pi-ol-auto">改完点「应用」。</p>' : ''}<p class="pi-hint">所属：${esc(volumeShowName(volume))}</p>`;
     return raw
@@ -482,14 +493,14 @@ export function render(view) {
             : volume
               ? volumeEditor(volume, project)
               : `<div class="pi-card"><p class="pi-hint">从左边选${vq(project, '一卷', '一条剧情线')}或一个阶段编辑。</p></div>`;
-    // 顶部（第三批，用户 2026-11-16 选 A）：「AI 写新剧情线」占一行；下面审阅修改、导入长文、检查三个等宽；总览、历史收进「⋯」；参考移进 AI 写的弹框
+    // 顶部：「AI 写新剧情线」占一行；审阅修改、导入长文、检查三个等宽；总览、历史在「⋯」里。
     const writing = s.multi && s.multi.projectId === view.projectId,
         hasVols = project.outline.volumes.length > 0,
         dirtyN = hasVols ? editDraftCount(view, project) : 0,
         errN = hasVols ? checkErrorCount(view, project) : 0;
     return `<div class="pi-card"><h3>大纲<span class="pi-spacer"></span><button type="button" class="pi-icon-btn" data-act="outline-menu" title="更多">${ICONS.more}</button></h3>
         ${writing ? `<button type="button" class="pi-btn is-primary pi-ol-write" data-act="multi-stop"><span class="pi-spin"></span>写作中${s.multi.k}/${s.multi.n}，点击停止</button>` : `<button type="button" class="pi-btn is-primary pi-ol-write" data-act="ai-volume"${busy ? ' disabled' : ''}>${busy ? '<span class="pi-spin"></span>写作中' : vq(project, `AI写第${project.outline.volumes.length + 1}卷`, 'AI写新剧情线')}</button>`}
-        <div class="pi-ol-tools"><button type="button" class="pi-btn is-sm" data-act="review-open"${hasVols ? '' : ' disabled'} title="逐页查看各条线，在对应页写意见后一次发给AI，确认后保存到大纲">审阅修改${dirtyN ? `<span class="pi-badge is-warn">${dirtyN}</span>` : ''}</button>
+        <div class="pi-ol-tools"><button type="button" class="pi-btn is-sm" data-act="review-open"${hasVols ? '' : ' disabled'} title="逐页查看${vq(view, '各卷', '各条线')}，在对应页写意见后一次发给AI，确认后保存到大纲">审阅修改${dirtyN ? `<span class="pi-badge is-warn">${dirtyN}</span>` : ''}</button>
             <button type="button" class="pi-btn is-sm" data-act="import-open-panel">导入长文</button>
             <button type="button" class="pi-btn is-sm${s.check ? ' is-primary' : ''}" data-act="check-toggle">检查${errN ? `<span class="pi-badge is-warn">${errN}</span>` : ''}</button></div>
         </div>
@@ -615,7 +626,8 @@ function setDraft(view, mode, reply, extra = {}, { all = !1 } = {}) {
         if (mode === 'rewrite' && draft.fromUnitId) {
             const from = units.findIndex((u) => u.id === draft.fromUnitId);
             from >= 0 &&
-                ((replaced = units.slice(from)), (applied = replaceRest(project.outline.volumes, draft.fromUnitId, draft.volumes)));
+                ((replaced = units.slice(from).filter((u) => !draft.volumeId || u.volume.id === draft.volumeId)),
+                (applied = draftApplied(project.outline.volumes, draft) || applied));
         } else if (STAGE_DRAFT[mode]) {
             const ids = new Set([draft.stageId, draft.nextId].filter(Boolean));
             ((replaced = units.filter((u) => ids.has(u.id))),
@@ -648,7 +660,7 @@ function setDraft(view, mode, reply, extra = {}, { all = !1 } = {}) {
             (draft.tableConds = tables ? tableCondReport(draft.volumes, tables) : []),
             current && replaced.length)
         ) {
-            const guard = historyGuard(project.outline.volumes, applied, current.snap, current.prog, project.clue, {
+            const guard = historyGuard(project.outline.volumes, applied, current.snap.cond || current.snap, current.prog, project.clue, {
                 scope: new Set(keepIds),
             });
             draft.issues.unshift(...guard.diffs, ...guard.notes);
@@ -673,12 +685,21 @@ export async function startRewrite(view) {
               )
             : -1;
     if (isClueMode(project) && clueCur && clueFrom < 0)
-        return (toast('info', '所有阶段都已结束，没有剩余阶段可以改写。要继续剧情，请用大纲页的「AI写新剧情线」另起一条。'), void 0);
+        return (toast('info', '所有阶段都已结束，没有可改写的阶段。需继续剧情请用大纲页的「AI写新剧情线」新建一条。'), void 0);
     let task = taskContext(view),
         from = isClueMode(project) ? Math.max(0, clueFrom) : Math.max(0, currentIndex(units, view.runtime.progress())),
-        reason = await promptDialog({ title: '让AI改写后续阶段', label: '偏转说明（可空）：剧情哪里和大纲不一样了', multiline: !0 });
+        byLine = rewriteByLine(project.outline.volumes),
+        picked = byLine ? await rewriteTargetDialog(view, units, from, clueCur) : null,
+        reason = byLine
+            ? picked && picked.reason
+            : await promptDialog({ title: '让AI改写后续阶段', label: '偏转说明（可空）：剧情哪里和大纲不一样了', multiline: !0 });
     if (reason == null) return;
     if (!taskStillValid(view, task)) return staleTaskNotice(view, task);
+    // 按线改写：只发目标线剩下的阶段，其他线只给紧凑参考（方案 四.1）。
+    picked && (from = picked.from);
+    let only = picked ? units.slice(from).filter((u) => u.volume.id === picked.volumeId) : null,
+        others = picked ? otherLinesText(project.outline.volumes, picked.volumeId) : '',
+        sig = picked ? lineRestSig(project.outline.volumes, picked.volumeId, units[from].id) : '';
     view.go('outline');
     let material = isClueMode(project) ? await generationMaterial(view, { task: 'rewrite' }) : null,
         recent = material
@@ -702,6 +723,8 @@ export async function startRewrite(view) {
                       progress: material.progress,
                       refs: material.refs,
                       talk: material.talk,
+                      rest: only,
+                      others,
                   })
                 : rewriteRestMessages({
                       setting: project.setting.text,
@@ -710,10 +733,88 @@ export async function startRewrite(view) {
                       units,
                       recent,
                       reason,
+                      rest: only,
+                      others,
                   }),
         ),
     );
-    reply2 && setDraft(view, 'rewrite', reply2, { fromUnitId: units[from].id, scope: material ? material.scope : '', task });
+    reply2 &&
+        setDraft(view, 'rewrite', reply2, {
+            fromUnitId: units[from].id,
+            scope: material ? material.scope : '',
+            task,
+            reason,
+            ...(picked ? { volumeId: picked.volumeId, lineSig: sig, playing: picked.playing } : {}),
+        });
+}
+
+// 多线项目的「改写后续」：选改哪条线（默认进行中的那条），偏转说明写在同一个弹窗里。
+// 返回 { volumeId, from, reason, playing }；取消返回 null。
+async function rewriteTargetDialog(view, units, from, clueCur) {
+    let project = view.project(),
+        vols = project.outline.volumes,
+        cur = units[from] ? units[from].volume.id : vols[0].id,
+        // 每条线从哪一段开始改：进行中的那条从当前段；别的线从第一个没结束的阶段（线索模式按表格算，大纲模式按进度）
+        startOf = (vid) => {
+            if (vid === cur) return from;
+            let own = units.filter((u) => u.volume.id === vid),
+                states = clueCur ? null : unitStates(units, view.runtime.progress()),
+                open = own.find((u) =>
+                    clueCur ? !(clueCur.state.stageStates.get(u.id) || {}).done : states ? states[u.id] !== 'done' : !0,
+                );
+            return open ? units.indexOf(open) : -1;
+        },
+        rows = vols.map((v) => ({ v, at: startOf(v.id) })).filter((x) => x.at >= 0);
+    if (!rows.length) return (toast('info', '所有剧情线都已结束，没有可改写的阶段。'), null);
+    let first = rows.some((x) => x.v.id === cur) ? cur : rows[0].v.id,
+        hint = (id) => {
+            let row = rows.find((x) => x.v.id === id) || rows[0];
+            return `从「${stageLabel(units[row.at].stage.key)}」起改写，其他剧情线不变。`;
+        };
+    let picked = await openDialog({
+        title: '让AI改写后续阶段',
+        html: `<label class="pi-field"><span>改哪条剧情线</span><select class="pi-sel" data-rw-line>${options(
+            rows.map(({ v }) => ({ value: v.id, label: `${volumeShowName(v)}${v.id === cur ? '（进行中）' : ''}` })),
+            first,
+        )}</select></label>
+            <p class="pi-hint" data-rw-hint>${esc(hint(first))}</p>
+            <label class="pi-field"><span>偏转说明（可空）：剧情哪里和大纲不一样了</span><textarea class="pi-ta" rows="4" data-dlg-input></textarea></label>`,
+        onMount: (root) => {
+            let sel = root.querySelector('[data-rw-line]');
+            sel.addEventListener('change', () => (root.querySelector('[data-rw-hint]').textContent = hint(sel.value)));
+        },
+        actions: [
+            { label: '取消', value: null },
+            {
+                label: '确定',
+                primary: !0,
+                value: (root) => ({ id: root.querySelector('[data-rw-line]').value, reason: root.querySelector('[data-dlg-input]').value }),
+            },
+        ],
+    });
+    if (!picked) return null;
+    let row = rows.find((x) => x.v.id === picked.id) || rows[0];
+    return { volumeId: row.v.id, from: row.at, reason: picked.reason, playing: row.v.id === cur };
+}
+
+// 草稿替换后的大纲：按线改写只换目标线（以现在的大纲为底），否则照旧换全书后续。null：原来的阶段不在了。
+export function draftApplied(volumes, draft, incoming = draft.volumes) {
+    return draft.volumeId ? replaceLineRest(volumes, draft.fromUnitId, incoming) : replaceRest(volumes, draft.fromUnitId, incoming);
+}
+
+// 采用前核对：请求期间该线被改过则不采用；其他线引用、改写后消失的编号要先列出。
+export function lineDraftProblems(view, draft) {
+    if (!draft || !draft.volumeId) return { stale: '', lost: [] };
+    let vols = view.project().outline.volumes,
+        stale =
+            lineRestSig(vols, draft.volumeId, draft.fromUnitId) === draft.lineSig
+                ? ''
+                : '生成后这条剧情线已被修改（内容、名称、位置或阶段），草稿与之不符，未采用。请丢弃后重新生成。',
+        next = stale ? null : draftApplied(vols, draft);
+    !stale &&
+        !next &&
+        (stale = '回复中无法识别要改写的剧情线（卷名和线编号都不匹配），未采用。可在YAML中把顶层键改为这条线的卷名后点「重新解析」，或丢弃后重新生成。');
+    return { stale, lost: next ? crossLineLoss(vols, next, draft.volumeId) : [] };
 }
 
 function applyRest(view, draft, guard = rewriteGuardNow(view, draft)) {
@@ -721,20 +822,33 @@ function applyRest(view, draft, guard = rewriteGuardNow(view, draft)) {
         unit = flattenUnits(project.outline.volumes).find((item) => item.id === draft.fromUnitId);
     if (!unit) throw new Error(`原来的阶段已不存在，改用「${vq(view, '存为新卷', '存为新剧情线')}」。`);
     let incoming = draft.volumes;
+    // 按线：先认准目标卷，只在这一卷里恢复已完成的节点（不然会放进回复里别的线那一卷，采用时被丢掉）。
+    // 卷名照目标线现在的写（采用时本来只取阶段），恢复器按原卷名就能找到节点原来的位置。
+    if (draft.volumeId) {
+        let hit = pickLineIncoming(unit.volume, draft.volumes).hit;
+        if (!hit) throw new Error('回复中无法识别要改写的剧情线，未采用。');
+        incoming = [{ ...hit, key: unit.volume.key }];
+    }
     guard &&
         (guard.keepDone.size || guard.reinsert.size) &&
         ((incoming = restoreHistory(incoming, guard)),
         toast(
             'info',
-            `已保留已经完成的节点：${[...guard.keepDone.keys(), ...guard.reinsert.keys()].join('、')}（完成条件不变，节点里的其他改动照常应用）`,
+            `已保留已完成的节点：${[...guard.keepDone.keys(), ...guard.reinsert.keys()].join('、')}（完成条件不变，节点的其他改动正常应用）`,
         ));
-    let volumes = replaceRest(project.outline.volumes, unit.stage.id, incoming);
+    let volumes = draftApplied(project.outline.volumes, draft, incoming);
+    if (!volumes) throw new Error(`原来的阶段已不存在，改用「${vq(view, '存为新卷', '存为新剧情线')}」。`);
     if ((update(view, () => volumes, '改写后续阶段'), isClueMode(project))) return (view.runtime.clue.invalidate(), void 0);
-    let first = draft.volumes[0] && draft.volumes[0].stages[0];
+    // 改的不是进行中的线：进度不跳。
+    if (draft.volumeId && !draft.playing) return -1;
+    let first = draft.volumeId ? pickLineIncoming(unit.volume, draft.volumes).stages[0] : draft.volumes[0] && draft.volumes[0].stages[0];
     const from = first ? flattenUnits(volumes).findIndex((item) => item.id === first.id) : 0;
-    first &&
-        view.runtime.activeId() === view.projectId &&
-        view.runtime.setProgress(goTo(view.runtime.progress(), flattenUnits(volumes), first.id));
+    if (first && view.runtime.activeId() === view.projectId) {
+        // 按线：只清这条线里被替换的几段的手动状态，其余不动（方案 十.3）。
+        const all = flattenUnits(volumes),
+            own = draft.volumeId ? all.slice(Math.max(from, 0)).filter((u) => u.volume.id === draft.volumeId).map((u) => u.id) : null;
+        view.runtime.setProgress(own ? goToIn(view.runtime.progress(), first.id, own).next : goTo(view.runtime.progress(), all, first.id));
+    }
     return from;
 }
 
@@ -744,23 +858,23 @@ const MAX_VOLUMES = 5;
 async function writeDialog(view) {
     const picked = await openDialog({
         title: vq(view, 'AI写新卷', 'AI写新剧情线'),
-        html: `<label class="pi-field"><span>${vq(view, '卷数', '写几条')}</span><select class="pi-sel" data-wv-n>${options(
+        html: `<label class="pi-field"><span>${vq(view, '卷数', '连续写几条')}</span><select class="pi-sel" data-wv-n>${options(
             Array.from({ length: MAX_VOLUMES }, (_, i) => ({ value: i + 1, label: `${i + 1} ${vq(view, '卷', '条')}` })),
             1,
         )}</select></label>
             <label class="pi-field"><span>整体要求（可空）</span><textarea class="pi-ta" rows="4" data-wv-request>${esc(st(view).request || '')}</textarea></label>
-            <div class="pi-field"><span>参考</span>${genRefsBar(view, 'outline', () => {}, { label: !1 })}</div>`,
+            <div class="pi-field"><span>参考</span>${genRefsBar(view, 'outline', () => {}, { label: !1, outline: !0 })}</div>`,
         onMount: (root) => {
             // 参考按钮在弹框里点：改了以后只重画这一块（不关弹框）
             root.addEventListener('click', async (e) => {
-                let b = e.target.closest('[data-act="gen-talk"],[data-act="gen-wb"]');
+                let b = e.target.closest('[data-act="gen-talk"],[data-act="gen-wb"],[data-act="gen-outline"]');
                 if (!b) return;
                 e.stopPropagation();
                 await genActions[b.dataset.act](view);
                 // 世界书条数是异步算的：算好后再画一次这一块
                 let redraw = () => {
                     let bar = root.isConnected && root.querySelector('.pi-refs');
-                    bar && (bar.outerHTML = genRefsBar(view, 'outline', redraw, { label: !1 }));
+                    bar && (bar.outerHTML = genRefsBar(view, 'outline', redraw, { label: !1, outline: !0 }));
                 };
                 redraw();
             }, true);
@@ -834,7 +948,7 @@ async function writeVolumes(view, n, request, onConfirmed = null) {
     if (!taskStillValid(view, task)) return staleTaskNotice(view, task);
     const { talk, refs: wb } = material;
     if (!project.setting.text.trim() && !talk.trim() && !wb.length)
-        throw new Error('没有可参考的内容：在讨论页聊一聊，或点「世界书」选择条目。');
+        throw new Error('没有可参考的内容。请先在讨论页讨论，或点「世界书」选择条目。');
     const base = project.outline.volumes.length + 1;
     if (n <= 1) {
         const reply = await runTask(view, 'outline', () =>
@@ -910,7 +1024,7 @@ async function writeVolumes(view, n, request, onConfirmed = null) {
 export const actions = {
     ...genActions,
     ...importActions,
-    // 审阅修改（第二批，用户 2026-11-16）：大纲页顶部「审阅修改…」打开所有线（从选中的线或第一条开始）；选中一条线时的按钮直接打开这一条
+    // 大纲页顶部「审阅修改」打开所有线（从选中的线或第一条开始）；选中一条线时的按钮只打开这一条。
     async 'review-open'(view, target) {
         const project = view.project();
         if (!project.outline.volumes.length) return toast('info', '大纲里还没有内容。');
@@ -918,7 +1032,7 @@ export const actions = {
             jobId = await openEditReview(view, pick, {}, { note: isClueMode(project) ? '剧情线' : '卷' });
         (showEditReview(view, jobId), view.renderBody());
     },
-    // 节点「必需 / 可选」小标签（第四批）：点一下切换。主线节点默认必需，可选写 必需: false；支线事件默认可选
+    // 必需 / 可选标签：点击切换。主线节点默认必需，可选写 必需: false；支线事件默认可选
     'node-req'(view, target) {
         const { stage } = findSel(view.project(), st(view).sel);
         if (!stage) return;
@@ -995,7 +1109,7 @@ export const actions = {
         !volume ||
             !(await confirmDialog({
                 title: `删除「${volumeName(volume.key)}」`,
-                body: `连同${volume.stages.length}个阶段一起删除，不能撤销。想留一份的话先点「导出」。`,
+                body: `连同${volume.stages.length}个阶段一起删除，不能撤销。如需保留，请先导出。`,
                 okLabel: '删除',
                 danger: !0,
             })) ||
@@ -1055,7 +1169,7 @@ export const actions = {
     async 'stage-move'(view) {
         const { volume, stage } = findSel(view.project(), st(view).sel),
             others = view.project().outline.volumes.filter((item) => item.id !== volume.id);
-        if (!stage || !others.length) return toast('info', vq(view, '没有其他卷可移动。', '没有别的剧情线可以移过去。'));
+        if (!stage || !others.length) return toast('info', vq(view, '没有其他卷可移动。', '没有可移入的其他剧情线。'));
         const to = await menuDialog({ title: '移到…', items: others.map((item) => ({ label: volumeName(item.key), value: item.id })) });
         to && (update(view, (volumes) => moveStageToVolume(volumes, stage.id, to)), view.runtime.refresh(), view.renderBody());
     },
@@ -1064,7 +1178,7 @@ export const actions = {
         !stage ||
             !(await confirmDialog({
                 title: `删除「${stageLabel(stage.key)}」`,
-                body: `连同里面的${stageNodes(stage.data).length}个场景一起删除，删除前会保存到大纲历史。`,
+                body: `连同里面的${stageNodes(stage.data).length}个节点一起删除，删除前会保存到大纲历史。`,
                 okLabel: '删除',
                 danger: !0,
             })) ||
@@ -1152,7 +1266,7 @@ export const actions = {
         if (
             !(await confirmDialog({
                 title: `删除「${(node && (node.名称 || node.类型)) || '节点'}」`,
-                body: '删除场景后会重新对齐进度。',
+                body: '删除节点后会重新对齐进度。',
                 okLabel: '删除',
                 danger: !0,
             }))
@@ -1345,7 +1459,7 @@ ${yaml}
         const volumes = draft.items.flatMap((item) => item.volumes);
         (addVolumes(view, volumes, 'AI追加多卷'), (st(view).draft = null), view.renderBody());
     },
-    // 修格式 / 重新解析沿用草稿原来的身份（15.2-1）：先核对、修正请求返回后再核对，不会把草稿改绑到当前聊天。
+    // 修格式 / 重新解析沿用草稿原身份：请求前后都核对，不会把草稿改绑到当前聊天。
     async 'draft-fix'(view, target) {
         const draft = st(view).draft;
         if (!taskStillValid(view, draft.task)) return staleTaskNotice(view, draft.task);
@@ -1362,6 +1476,8 @@ ${yaml}
                 nextId: draft.nextId,
                 task: draft.task,
                 scope: draft.scope,
+                // 重新解析、修格式后仍须保持按线改写，不能退回「改写全书后续」。
+                ...(draft.volumeId ? { volumeId: draft.volumeId, lineSig: draft.lineSig, playing: draft.playing } : {}),
             });
     },
     'draft-reparse'(view, target) {
@@ -1381,6 +1497,8 @@ ${yaml}
                 nextId: draft.nextId,
                 task: draft.task,
                 scope: draft.scope,
+                // 重新解析、修格式后仍须保持按线改写，不能退回「改写全书后续」。
+                ...(draft.volumeId ? { volumeId: draft.volumeId, lineSig: draft.lineSig, playing: draft.playing } : {}),
             },
         );
     },
@@ -1396,8 +1514,8 @@ ${yaml}
         const incoming = st(view).draft.volumes,
             projectId = view.projectId;
         // 剧情线（带「线」的卷）：只换阶段，编号、类型、开启条件这些线头由程序保留；阶段按名称 / 共有节点对应保留 id
-        // （导入审阅总方案 P12 / GPT 审阅 R2）。AI 一次写了好几卷时，只拿第一卷换进来，其余的仍按原来追加在后面。
-        // 写入走统一保存：先按这个聊天的进度准备好最终内容，确认框写出改动和对进度的影响（GPT 代码审阅 R8），先记大纲历史（R1）。
+        // AI 一次写了多卷时，只用第一卷替换，其余仍追加在后面。
+        // 写入走统一保存：先按当前聊天进度准备最终内容，确认框列出改动和对进度的影响，并先记大纲历史。
         if (isPlainObject(volume.line) && incoming.length) {
             const head = incoming[0],
                 { volumes: put } = putVolume([volume], volume.id, { ...head, key: volume.key, line: undefined }, { allowLine: [] }),
@@ -1409,7 +1527,7 @@ ${yaml}
                 effects = (pr) => [...(pr.guard ? [...pr.guard.diffs, ...pr.guard.notes] : []), ...(pr.restored.length ? [`已经完成的节点会保留：${pr.restored.join('、')}（完成条件不变）`] : [])];
             let prep = prepare();
             const shown = effects(prep),
-                // 确认期间这条线在大纲里被改过或删掉 → 不替换（GPT 第二轮 N1）
+                // 确认期间该线被改过或删除则不替换。
                 stamp0 = targetStamp(view.project(), [volume.id]);
             if (
                 !(await confirmDialog({
@@ -1421,10 +1539,10 @@ ${yaml}
                 }))
             )
                 return;
-            if (view.projectId !== projectId) return toast('warning', '确认期间切换了项目，没有替换。');
-            if (targetStamp(view.project(), [volume.id]) !== stamp0) return toast('warning', '确认期间这条剧情线又被改过（或删掉了），没有替换。请再点一次核对。');
+            if (view.projectId !== projectId) return toast('warning', '确认期间已切换项目，未替换。');
+            if (targetStamp(view.project(), [volume.id]) !== stamp0) return toast('warning', '确认期间这条剧情线已被修改或删除，未替换。请重新确认。');
             const again = prepare();
-            if (JSON.stringify(effects(again)) !== JSON.stringify(shown)) return toast('warning', '确认期间剧情进度变了，对进度的影响和刚才显示的不同，没有替换。请再点一次核对。');
+            if (JSON.stringify(effects(again)) !== JSON.stringify(shown)) return toast('warning', '确认期间剧情进度已变化，影响与之前显示的不同，未替换。请重新确认。');
             prep = again;
             let written = !1;
             view.data.updateProject(projectId, (p) => {
@@ -1435,8 +1553,8 @@ ${yaml}
                     rest = incoming.slice(1);
                 return { ...p, outline: { ...w.outline, volumes: [...w.outline.volumes.slice(0, at + 1), ...rest, ...w.outline.volumes.slice(at + 1)] } };
             });
-            if (!written) return toast('warning', '大纲刚刚又被改过了，没有替换。请再点一次。');
-            prep.restored.length && toast('info', `已保留已经完成的节点：${prep.restored.join('、')}（完成条件不变）。`);
+            if (!written) return toast('warning', '确认期间大纲已被修改，未替换。请重新确认。');
+            prep.restored.length && toast('info', `已保留已完成的节点：${prep.restored.join('、')}（完成条件不变）。`);
             return ((st(view).draft = null), (st(view).sel = volume.id), view.runtime.refresh(), view.renderBody(), afterAdopt(view));
         }
         if (
@@ -1470,23 +1588,36 @@ ${yaml}
         if (draft && draft.task && !taskStillValid(view, draft.task))
             return toast(
                 'warning',
-                '这份改写草稿是在另一个聊天里生成的。历史保护要按那个聊天的进度计算，请回到原聊天应用，或丢弃后在这里重新生成。',
+                '这份改写草稿生成于另一个聊天。历史保护按原聊天的进度计算，请回到原聊天应用，或丢弃后在这里重新生成。',
             );
+        let line = lineDraftProblems(view, draft);
+        if (line.stale) return toast('warning', line.stale);
+        if (line.lost.length)
+            return openDialog({
+                title: '没有替换',
+                html: `<p class="pi-hint">改写后，其他剧情线仍在使用的以下内容会丢失：</p><ul>${line.lost.map((x) => `<li>${esc(x)}</li>`).join('')}</ul><p class="pi-hint">可在下方YAML中补回这些编号后点「重新解析」，或丢弃后重新生成。</p>`,
+                actions: [{ label: '关闭', value: !0, primary: !0 }],
+            });
         let guard = rewriteGuardNow(view, draft),
-            items = guard ? [...guard.diffs, ...guard.notes] : [];
+            items = guard ? [...guard.diffs, ...guard.notes] : [],
+            what = draft.volumeId
+                ? `「${volumeShowName(view.project().outline.volumes.find((v) => v.id === draft.volumeId))}」从这一段起的阶段会换成改写后的内容，其他剧情线不变。`
+                : '当前阶段和之后的阶段会换成改写后的内容，之前已经演完的阶段不动。';
         if (
             !(await confirmDialog({
                 title: '替换剩余阶段',
                 body: items.length
-                    ? '当前阶段和之后的阶段会换成改写后的内容，之前已经演完的阶段不动。按这个聊天现在的进度检查，这次替换会造成下面这些影响，确认可以接受再替换：'
-                    : '当前阶段和之后的阶段会换成改写后的内容，之前已经演完的阶段不动。按这个聊天现在的进度检查，没有发现会让已经发生的事情倒退。',
+                    ? `${what}按当前聊天的进度检查，这次替换会造成以下影响：`
+                    : `${what}按当前聊天的进度检查，未发现会使已发生内容回退的影响。`,
                 list: items,
                 okLabel: '替换',
                 danger: !0,
             }))
         )
             return;
-        if (draft && draft.task && !taskStillValid(view, draft.task)) return toast('warning', '确认期间切换了聊天，没有应用。');
+        if (draft && draft.task && !taskStillValid(view, draft.task)) return toast('warning', '确认期间已切换聊天，未应用。');
+        line = lineDraftProblems(view, draft);
+        if (line.stale || line.lost.length) return toast('warning', line.stale || `确认期间大纲已变化，未替换：${line.lost[0]}`);
         let after = rewriteGuardNow(view, draft),
             seen = new Set(items),
             added = after ? [...after.diffs, ...after.notes].filter((x) => !seen.has(x)) : [];
@@ -1494,22 +1625,35 @@ ${yaml}
             added.length &&
             !(await confirmDialog({
                 title: '进度在确认期间变了',
-                body: '刚才的确认框打开期间，表格又更新了。按现在的进度，这次改写还会造成：',
+                body: '确认期间表格已更新。按最新进度，这次改写还会造成：',
                 list: added,
                 okLabel: '仍然替换',
                 danger: !0,
             }))
         )
             return;
-        if (draft && draft.task && !taskStillValid(view, draft.task)) return toast('warning', '确认期间切换了聊天，没有应用。');
-        const from = applyRest(view, draft, rewriteGuardNow(view, draft));
-        (isClueMode(view.project()) ||
-            (await runTask(view, 'outline', () => view.runtime.syncSetting(view.projectId, { from, reason: draft.reason }))),
-            putDraft(view, view.projectId, null),
-            afterAdopt(view),
-            view.renderBody());
+        if (draft && draft.task && !taskStillValid(view, draft.task)) return toast('warning', '确认期间已切换聊天，未应用。');
+        // 最后一次核对：所有确认框都关了、正式写入之前，用现在的大纲和进度再算一遍（第二个确认框开着时也可能有人改了）
+        line = lineDraftProblems(view, draft);
+        if (line.stale || line.lost.length) return toast('warning', line.stale || `确认期间大纲已变化，未替换：${line.lost[0]}`);
+        let last = rewriteGuardNow(view, draft),
+            seen2 = new Set([...items, ...added]);
+        if (last && [...last.diffs, ...last.notes].some((x) => !seen2.has(x)))
+            return toast('warning', '确认期间进度已变化，未替换。请重新点「替换」确认。');
+        const targetVol = draft.volumeId ? view.project().outline.volumes.find((v) => v.id === draft.volumeId) : null,
+            from = applyRest(view, draft, last),
+            // 按线改写：只按该线剩下的阶段校对设定；起点是实际采用的目标线第一段，不是回复的第一卷。
+            firstNew = targetVol && pickLineIncoming(targetVol, draft.volumes).stages[0],
+            syncFrom = draft.volumeId
+                ? flattenUnits(view.project().outline.volumes).findIndex((u) => u.volume.id === draft.volumeId && firstNew && u.stage.id === firstNew.id)
+                : from;
+        isClueMode(view.project()) ||
+            syncFrom < 0 ||
+            (await runTask(view, 'outline', () =>
+                view.runtime.syncSetting(view.projectId, { from: syncFrom, reason: draft.reason, volumeId: draft.volumeId || '' }),
+            ));
+        (putDraft(view, view.projectId, null), afterAdopt(view), view.renderBody());
     },
-    // outline v0.1.23：历史版本、检查、总览、单阶段草稿。
     history(view) {
         ((st(view).history = !st(view).history), (st(view).historyAt = void 0), view.renderBody());
     },
@@ -1563,7 +1707,7 @@ ${yaml}
         if (isClueMode(project) && view.runtime.activeId() === view.projectId) {
             const current = view.runtime.clue.compute(),
                 preview = replaceStages(project.outline.volumes, volume.id, ids, incoming),
-                guard = historyGuard(project.outline.volumes, preview.volumes, current.snap, current.prog, project.clue, {
+                guard = historyGuard(project.outline.volumes, preview.volumes, current.snap.cond || current.snap, current.prog, project.clue, {
                     scope: new Set(compileClue([{ ...volume, stages: old }]).nodes.map((n) => n.uid)),
                 });
             incoming = restoreHistory([{ ...volume, stages: incoming }], guard).flatMap((v) => v.stages);
@@ -1619,7 +1763,7 @@ function renameInTree(target, id, label) {
 
 export function onInput(view, target) {
     if (target.matches('[data-rv-when],[data-rv-win],select[data-rv-tbl]')) return void reviewOnInput(view, target, importJobOf);
-    // 导入页「推进方式」下拉框（第四批：代替「整理成：… 改」）
+    // 导入页「推进方式」下拉框。
     if (target.matches('[data-imp-modesel]')) return void importActions['import-mode'](view, target, target.value);
     let { stage, volume } = findSel(view.project(), st(view).sel);
     if (target.dataset.aiRequest !== void 0) {
@@ -1739,7 +1883,7 @@ export const CLUE_TEXT_KEYS = ['入口', '场景', '作者备注'];
 
 export const CLUE_YAML_KEYS = ['必需', '开放条件', '提前条件', '完成条件', '发现', '相关事实'];
 
-// 线索推进的节点字段（第四批）：入口、场景直接显示；完成条件和发现收在「线索条件」里（写了就展开，收起时一句摘要）；
+// 线索推进的节点字段：入口、场景直接显示；完成条件和发现收在「线索条件」里（有内容则展开）；
 // 不常用的（事件、偏转、触发、作者备注、开放 / 提前条件、相关事实）收在「更多」里，写了内容的不藏。
 export function clueNodeFields(meta2, index, value) {
     let yamlOf = (v) => (v === void 0 || v === null || v === '' ? '' : typeof v == 'string' ? v : stringifyYaml(v).trim()),
@@ -1747,12 +1891,12 @@ export function clueNodeFields(meta2, index, value) {
         text = (key, hint = '') => `<label class="pi-field"><span>${esc(key)}</span><textarea class="pi-ta pi-ta-auto" rows="2" data-node-field="${esc(meta2.field)}" data-i="${index}" data-k="${esc(key)}"${hint ? ` placeholder="${esc(hint)}"` : ''}>${esc(value[key] ?? '')}</textarea></label>`,
         yaml = (key) => `<label class="pi-field"><span>${esc(key)}</span><textarea class="pi-ta is-mono pi-ta-auto" rows="2" data-node-yaml="${esc(meta2.field)}" data-i="${index}" data-k="${esc(key)}" placeholder="${esc(CLUE_PLACEHOLDER[key] || '')}">${esc(yamlOf(value[key]))}</textarea></label>`,
         gets = discoveryList(value).map((d) => d.fact).filter(Boolean),
-        condSum = [has('完成条件') ? `完成：${condBrief(value.完成条件)}` : '', gets.length ? `获得${gets.join('、')}` : ''].filter(Boolean).join('；') || '都没写',
+        condSum = [has('完成条件') ? `完成：${condBrief(value.完成条件)}` : '', gets.length ? `获得${gets.join('、')}` : ''].filter(Boolean).join('；') || '都未填写',
         moreKeys = ['事件', '偏转', '触发', '作者备注', '开放条件', '提前条件', '相关事实'].filter((k) => k in value || ['作者备注', '开放条件', '提前条件', '相关事实'].includes(k)),
         moreHas = moreKeys.filter(has),
-        moreSum = moreHas.length ? `已写：${moreHas.join('、')}` : '都没写',
+        moreSum = moreHas.length ? `已填写：${moreHas.join('、')}` : '都未填写',
         moreField = (k) => (CLUE_YAML_KEYS.includes(k) ? yaml(k) : k === '作者备注' ? text(k, '只给作者看，不注入') : `<label class="pi-field"><span>${esc(k)}</span><textarea class="pi-ta pi-ta-auto" rows="2" data-node-field="${esc(meta2.field)}" data-i="${index}" data-k="${esc(k)}">${esc(value[k] ?? '')}</textarea></label>`);
-    return `${text('入口', '开放后告诉正文可以去做')}${text('场景', '成为焦点时注入')}
+    return `${text('入口', '开放后提示正文可前往')}${text('场景', '成为焦点时注入')}
         <details class="pi-fold"${has('完成条件') || gets.length ? ' open' : ''}><summary><b>线索条件</b><span>${esc(condSum)}</span></summary>${yaml('完成条件')}${yaml('发现')}</details>
         <details class="pi-fold"${moreHas.length ? ' open' : ''}><summary><b>更多</b><span>${esc(moreSum)}</span></summary>${moreKeys.map(moreField).join('')}<p class="pi-hint">ID ${esc(value.id || '保存后自动补')}</p></details>
         <p class="pi-status" data-node-yaml-status="${index}"></p>`;
@@ -1807,10 +1951,9 @@ export async function generationMaterial(view, { talkLimit = 12e3, task = 'volum
         extra = [];
     // 勾选「当前大纲」：写新卷时按预算附正文（作者视角，含作者备注；只发给写大纲的模型，不进正文注入）。
     // 改写本身已经带了「需要改写的剩余阶段」，不再重复附整份大纲。
-    r.outline &&
-        project.outline.volumes.length &&
-        task === 'volume' &&
-        extra.push({ title: '当前大纲', text: outlineToText(project.outline.volumes) });
+    // 多线项目：选中的线附完整内容，其余附简介（方案 四.4）。
+    let ol = task === 'volume' ? outlineRef(view, project, r) : null;
+    ol && ol.text && extra.push({ title: '当前大纲', text: ol.text });
     let progress = '';
     if (r.progress) {
         let c = clue && view.runtime.activeId() === view.projectId ? view.runtime.clue.compute() : null;
@@ -1832,14 +1975,14 @@ ${f.text}`,
     let fitted = fitRefs(combined),
         parts = [];
     talk
-        ? parts.push(`讨论记录（${full.length}字${full.length > talk.length ? `，只附了最近${talk.length}字` : ''}）`)
+        ? parts.push(`讨论记录（${full.length}字${full.length > talk.length ? `，仅附最近${talk.length}字` : ''}）`)
         : parts.push('讨论记录：没有');
     for (let rep of fitted.report)
         parts.push(
             rep.kept === rep.chars
-                ? `${rep.title}（${rep.chars}字）`
+                ? `${rep.title}（${rep.chars}字${rep.title === '当前大纲' && ol && ol.note ? `，${ol.note}` : ''}）`
                 : rep.kept
-                  ? `${rep.title}（${rep.chars}字，只附了前${rep.kept}字）`
+                  ? `${rep.title}（${rep.chars}字，仅附前${rep.kept}字）`
                   : `${rep.title}（${rep.chars}字，超出预算未附带）`,
         );
     r.progress &&
@@ -1849,7 +1992,7 @@ ${f.text}`,
                     ? '线索进度（当前聊天）'
                     : '剧情进度'
                 : clue
-                  ? '线索进度：本项目不是当前聊天启用的项目，没有附带'
+                  ? '线索进度：未附带（本项目未在当前聊天启用）'
                   : '剧情进度：没有',
         );
     task === 'rewrite' &&
@@ -1857,13 +2000,13 @@ ${f.text}`,
             recent
                 ? `最近${floorsN}楼正文`
                 : floorsN
-                  ? `最近正文：勾选了${floorsN}楼，但本聊天还没有可附的正文`
-                  : '最近正文：讨论区勾选的楼数为0，没有附带',
+                  ? `最近正文：勾选了${floorsN}楼，当前聊天暂无可附带的正文`
+                  : '最近正文：讨论区勾选的楼数为0，未附带',
         );
-    task === 'rewrite' && r.outline && parts.push('当前大纲：改写只附「需要改写的剩余阶段」，前面已经演过的阶段没有附带');
+    task === 'rewrite' && r.outline && parts.push('当前大纲：改写只附「需要改写的剩余阶段」，已结束的阶段未附带');
     task === 'volume' &&
         floorsN &&
-        parts.push(recent ? `最近${floorsN}楼正文` : `最近正文：勾选了${floorsN}楼，但本聊天还没有可附的正文`);
+        parts.push(recent ? `最近${floorsN}楼正文` : `最近正文：勾选了${floorsN}楼，当前聊天暂无可附带的正文`);
     task === 'volume' && clue && parts.push('已有节点与事实编号索引（固定附带）');
     return { project, talk, refs: fitted.refs, progress, recent, clue, scope: `本次附带的材料：${parts.join('、')}` };
 }
@@ -1876,15 +2019,21 @@ export function rewriteGuardNow(view, draft) {
         units = flattenUnits(project.outline.volumes),
         from = units.findIndex((u) => u.id === draft.fromUnitId),
         restIds = new Set(
-            compileClue(units.slice(from).map((u) => ({ ...u.volume, stages: [u.stage] })))
+            compileClue(
+                units
+                    .slice(from)
+                    .filter((u) => !draft.volumeId || u.volume.id === draft.volumeId)
+                    .map((u) => ({ ...u.volume, stages: [u.stage] })),
+            )
                 .nodes.map((n) => n.uid)
                 .filter(Boolean),
         );
-    return c
+    let next = draftApplied(project.outline.volumes, draft);
+    return c && next
         ? historyGuard(
               project.outline.volumes,
-              replaceRest(project.outline.volumes, unit.stage.id, draft.volumes),
-              c.snap,
+              next,
+              c.snap.cond || c.snap,
               c.prog,
               project.clue,
               { scope: restIds },

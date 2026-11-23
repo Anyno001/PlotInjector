@@ -167,9 +167,11 @@ test('R1 void: write errors and native storage are reported, never claimed as do
   {
     const { host, inst } = await setup();
     const api = host.w.AutoCardUpdaterAPI, real = api.executeSqlMutation;
-    api.executeSqlMutation = async (sql, params) => (sql.includes('关键事实表') ? { changes: 1, errors: [] } : real(sql, params));
+    const seen = [];
+    api.executeSqlMutation = async (arg, params) => { seen.push(arg); const sql = typeof arg === 'object' ? arg.sql : arg; return sql.includes('关键事实表') ? { changes: 1, errors: [] } : real(arg, params); };
     const r = await inst.runtime.clue.voidFact('F_seen');
-    assert.equal(r.table, 'partial'); assert.match(r.why, /事实表这条还不是/);
+    assert.equal(r.table, 'partial'); assert.match(r.why, /事实表中这条线索不是/);
+    assert.ok(seen.every((x) => x && x.skipNotify === true), 'plugin writes skip the official update callback (D50 R9)');
     await inst.destroy();
   }
 });
@@ -231,13 +233,13 @@ test('R3: void then restore right away — result follows the cleared table, UI 
   await click('[data-act="clue-fact-void"][data-id="F_seen"]');
   // 作废会改表格：先确认一次（桌面、手机都问）
   await click('.pi-dialog .pi-btn.is-primary');
-  assert.ok(toasts.some(([k, m]) => k === 'success' && /表格也改回了未获得/.test(m)), JSON.stringify(toasts));
+  assert.ok(toasts.some(([k, m]) => k === 'success' && /表格已改回未获得/.test(m)), JSON.stringify(toasts));
   const btn = doc.querySelector('[data-act="clue-fact-restore"][data-id="F_seen"]');
   assert.equal(btn.textContent, '解除作废');
-  assert.match(btn.title, /不会还原被清掉的记录/);
+  assert.match(btn.title, /不恢复已清除的记录/);
   await click('[data-act="clue-fact-restore"][data-id="F_seen"]');
   assert.equal(eff(inst, 'F_seen').confirmed, false, 'table was cleared → still not obtained');
-  assert.ok(toasts.some(([, m]) => /按没拿到算.*不会改回去/.test(m)), JSON.stringify(toasts));
+  assert.ok(toasts.some(([, m]) => /按未获得处理.*不会恢复/.test(m)), JSON.stringify(toasts));
   await inst.destroy();
 });
 
@@ -252,7 +254,7 @@ test('R1 UI: mobile confirm is bound to the scope when it opened — switching p
   const dlg = doc.querySelector('.pi-dialog');
   assert.ok(dlg, 'confirm opens on touch');
   assert.doesNotMatch(dlg.textContent, /点错了可以点/, 'no unconditional "you can undo" promise');
-  assert.match(dlg.textContent, /不会删除/);
+  assert.match(dlg.textContent, /不删除/);
   // while the dialog is open the user switches to another clue project with the same fact codes (the dangerous case:
   // re-reading the old button against the new project would revoke F_seen there)
   const other = await inst.data.createProject('同款项目');
@@ -312,7 +314,7 @@ test('R3 void: unreadable tables or SQL errors are never reported as ok', async 
   {
     const { host, inst } = await setup();
     const api = host.w.AutoCardUpdaterAPI, real = api.executeSqlMutation;
-    api.executeSqlMutation = async (sql, params) => { const res = await real(sql, params); return sql.includes('知情表') ? { ...res, errors: ['磁盘写入失败'] } : res; };
+    api.executeSqlMutation = async (arg, params) => { const res = await real(arg, params); const sql = typeof arg === 'object' ? arg.sql : arg; return sql.includes('知情表') ? { ...res, errors: ['磁盘写入失败'] } : res; };
     const r = await inst.runtime.clue.voidFact('F_seen');
     assert.notEqual(r.table, 'ok');
     assert.match(r.why, /磁盘写入失败/);

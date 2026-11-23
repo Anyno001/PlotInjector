@@ -39,7 +39,7 @@ function checkBadge(check) {
 
 function fixesHtml(fixes, where) {
     if (!fixes.length) return '';
-    return `<p class="pi-hint">补定（替你补齐的项）：</p>${fixes
+    return `<p class="pi-hint">补定（自动补齐的项）：</p>${fixes
         .map(
             (fix, i) => `<div class="pi-fix"><span class="pi-fix-text">${esc(fix)}</span>
         <span class="pi-fix-acts"><button type="button" class="pi-btn is-sm" data-act="fix-ok" data-where="${where}" data-i="${i}">确认</button>
@@ -151,7 +151,7 @@ function removeFix(view, where, index) {
     view.renderBody();
 }
 
-// 改：按用户说明让 AI 重写所在分块。丢弃：让 AI 从所在分块里删掉这条补定的内容，或只从列表移除。
+// 改：按说明让 AI 重写所在分块；丢弃：让 AI 删掉该补定内容，或只从列表移除。
 async function editFix(view, where, index, drop = !1) {
     const s = st(view),
         project = view.project(),
@@ -166,7 +166,7 @@ async function editFix(view, where, index, drop = !1) {
         result = await openDialog({
             title: drop ? '丢弃补定' : '修改补定',
             html: `<p class="pi-hint">${esc(fixes[index])}</p>${blocks.length ? pick : ''}
-            ${drop ? '' : '<label class="pi-field"><span>怎么改</span><textarea class="pi-ta" data-f="text"></textarea></label>'}`,
+            ${drop ? '' : '<label class="pi-field"><span>修改内容</span><textarea class="pi-ta" data-f="text"></textarea></label>'}`,
             actions: drop
                 ? [
                       { label: '取消', value: null },
@@ -232,7 +232,7 @@ export const actions = {
             project = view.project(),
             { talk, wb } = await genRefTexts(view);
         if (view.projectId !== projectId) return;
-        if (!talk.trim() && !wb.length) throw new Error('没有可参考的内容：在讨论页聊一聊，或点「世界书」选择条目。');
+        if (!talk.trim() && !wb.length) throw new Error('没有可参考的内容。请先在讨论页讨论，或点「世界书」选择条目。');
         const append = !!(st(view).append && project.setting.text.trim()),
             reply = await runTask(view, 'setting', () =>
                 ask(view, 'outline', settingMessages({ guide: guideText(view), talk, current: project.setting.text, append, refs: wb })),
@@ -263,7 +263,7 @@ ${parsed.body}`
         const parsed = parseSettingReply(reply),
             keys = parsed.body ? changedBlockKeys(project.setting.text, parsed.body) : [];
         if (!keys.length) {
-            toast('info', '设定与大纲没有冲突，不需要修改。');
+            toast('info', '设定与大纲无冲突，无需修改。');
             return;
         }
         ((st(view).draft = { body: mergeBlocks(project.setting.text, parsed.body, keys), check: parsed.check, fixes: [], keys, sync: !0 }),
@@ -406,7 +406,7 @@ export function onStatus(view, root) {
     const status = root.querySelector('[data-save-status]');
     if (!status) return;
     const failed = view.data.failedFiles().length;
-    status.textContent = failed ? '保存失败，内容仍在内存里' : '已保存';
+    status.textContent = failed ? '保存失败，内容仍保留在当前页面' : '已保存';
     status.classList.toggle('is-err', Boolean(failed));
 }
 

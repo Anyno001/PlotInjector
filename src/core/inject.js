@@ -70,13 +70,6 @@ function stagePlace(unit) {
     return `${volumeLabel(unit.volume.key)}·${stageLabel(unit.stage.key)}`;
 }
 
-function nodeNames(unit, off) {
-    const hidden = new Set(off);
-    return stageNodes(unit.stage.data)
-        .filter((node) => node.kind === 'main' && !hidden.has(node.id))
-        .map((node) => node.name);
-}
-
 function rangeOf(unit) {
     const value = unit.stage.data && unit.stage.data.时间范围;
     return value ? String(value).trim() : '';
@@ -92,8 +85,11 @@ function nodeLine(node, mark) {
 }
 
 // links：大纲对照表（core/align.js），已演标记、钟、钩子按名称与改名链对回当前节点。
-export function buildIndexText(units, states, progress, { carryOver = true, hookCap, links = NO_LINKS } = {}) {
-    const lines = [];
+// olView（大纲推进按线）：{ states, own: 当前线的阶段 id 集合, others: 其他线各一行 }。只列当前线，延续也只取当前线。
+export function buildIndexText(units, states, progress, { carryOver = true, hookCap, links = NO_LINKS, olView = null } = {}) {
+    const lines = [],
+        all = units;
+    olView && ((states = olView.states), (units = units.filter((u) => olView.own.has(u.id))));
     const done = units.filter((unit) => states[unit.id] === 'done');
     const active = units.filter((unit) => states[unit.id] === 'active');
     const next = units.filter((unit) => states[unit.id] === 'next');
@@ -130,6 +126,7 @@ export function buildIndexText(units, states, progress, { carryOver = true, hook
         for (const unit of later.slice(0, LATER_LIMIT)) lines.push(`- ${stagePlace(unit)}`);
         if (later.length > LATER_LIMIT) lines.push(`- ……另有 ${later.length - LATER_LIMIT} 段`);
     }
+    olView && olView.others && lines.push(olView.others);
     return lines.join('\n');
 }
 
@@ -215,24 +212,33 @@ ${
 }
 
 // 已演完阶段的状态变化，接在设定后面注入；live 给出时再接上已发生的世界动态后果与错过支线的后果。
+// 写明是当前的背景状态，免得正文模型当成新情节反复交代。
+export const CHANGES_HEAD = '已演完的剧情带来的变化（设定里对应的开局状态以这里为准；这些是当前状态，正文照此写即可，不必特意提起或复述）：';
 export function changesText(units, states, live = null) {
     const lines = units
         .filter((unit) => states[unit.id] === 'done')
         .flatMap((unit) => changeLines(unit.stage.data).map((text) => `- ${text}（${stagePlace(unit)}）`))
         .concat(threadChangeLines(live));
-    return lines.length ? `已演完的剧情带来的变化（设定里对应的开局状态以这里为准）：\n${lines.join('\n')}` : '';
+    return lines.length ? `${CHANGES_HEAD}\n${lines.join('\n')}` : '';
 }
 
 // 执行页与注入共用：返回本轮要注入的条目（含停用的，UI 需要显示），注入时只取 enabled。
 // options：人设的 recentText/globals/fame/stageStates，以及剧情承接 stayOf；也兼容开发版直接传入 stayOf 回调。
 export function buildEntries(project, progress, settings, personaOpts = {}) {
     const options = typeof personaOpts === 'function' ? { stayOf: personaOpts } : (personaOpts || {});
-    const base = buildOutlineEntries(project, progress, settings, options.stayOf),
+    const base = buildOutlineEntries(project, progress, settings, options.stayOf, options.olView),
         persona = project ? buildPersonaEntries(project, progress, options) : [];
     return persona.length ? [...base, ...persona] : base;
 }
 
-function buildOutlineEntries(project, progress, settings, stayOf = () => '') {
+// 按线时延续每轮最多 5 条，按楼数轮流（方案 五.5）；按顺序不限，和以前一样
+export const OL_CARRY_CAP = 5;
+function olCap(list, olView) {
+    if (!olView || list.length <= OL_CARRY_CAP) return list;
+    let start = ((olView.turn || 0) * OL_CARRY_CAP) % list.length;
+    return [...list, ...list].slice(start, start + OL_CARRY_CAP);
+}
+function buildOutlineEntries(project, progress, settings, stayOf = () => '', olView = null) {
     const defaults = { ...DEFAULT_PARAMS, ...(project && project.defaults) };
     const entries = [];
     if (!project) return entries;
@@ -240,10 +246,12 @@ function buildOutlineEntries(project, progress, settings, stayOf = () => '') {
         allUnits = infinite ? [] : flattenUnits(project.outline && project.outline.volumes),
         units = maskUnits(allUnits, threadSwitches(project)),
         links = infinite ? NO_LINKS : outlineLinks(project.outline, allUnits),
-        states = unitStates(units, progress, links),
+        states = olView ? olView.states : unitStates(units, progress, links),
         threadOpts = { carryOver: settings.carryOver !== !1, hookCap: settings.hookCap, links },
-        live = infinite ? null : liveThreads(units, states, progress, threadOpts),
-        done = infinite || units === allUnits ? live : liveThreads(allUnits, states, progress, threadOpts),
+        // 按线：活动的钩子、进度钟只取当前线；已发生的后果（changesText）仍看全书
+        own = olView ? units.filter((u) => olView.own.has(u.id)) : units,
+        live = infinite ? null : liveThreads(own, states, progress, threadOpts),
+        done = infinite ? live : units === allUnits && !olView ? live : liveThreads(allUnits, states, progress, threadOpts),
         settingText = [injectedSetting(project.setting), changesText(units, states, done)].filter(Boolean).join(`
 
 `);
@@ -271,11 +279,11 @@ function buildOutlineEntries(project, progress, settings, stayOf = () => '') {
         );
     }
     if (units.length) {
-        const next = units.find((unit) => states[unit.id] === 'next') || null,
-            carried = settings.carryOver === !1 ? [] : carriedNodes(units, states, progress, { links });
+        const next = own.find((unit) => states[unit.id] === 'next') || null,
+            carried = settings.carryOver === !1 ? [] : olCap(carriedNodes(olView ? units.filter((u) => olView.own.has(u.id)) : units, states, progress, { links }), olView);
         let threads = threadsText(live);
         let guided = false;
-        for (const unit of units) {
+        for (const unit of own) {
             if (states[unit.id] !== 'active') continue;
             const off = offNodes(progress, unit, links),
                 params = pickParams(defaults.detail, progress.slots[unit.id]),

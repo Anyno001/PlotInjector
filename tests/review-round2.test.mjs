@@ -75,7 +75,7 @@ test('N1: the target line changing (or being deleted) while the save confirmatio
       await t.dlgBtn('保存');
       if (kind === 'change') assert.equal(live(t).find((v) => v.id === 'v1').line.简介, '确认期间别处改的', 'newer value not overwritten');
       else assert.ok(!live(t).some((v) => v.id === 'v1'), 'deleted line not brought back');
-      assert.ok(toasts.some((x) => /确认期间大纲里这些线又被改过/.test(x)), toasts.join('|'));
+      assert.ok(toasts.some((x) => /确认期间大纲中这些线已被修改或删除/.test(x)), toasts.join('|'));
       assert.equal(job(t).review.draft.find((v) => v.id === 'v1').line.简介, 'A 草稿', 'draft kept');
     } finally { await t.inst.destroy(); }
   }
@@ -114,7 +114,7 @@ test('N1: AI 替换剧情线 is not written when the line changed while its conf
     await t.dlgBtn('替换');
     assert.equal(live(t)[0].line.简介, '确认期间改的');
     assert.equal(live(t)[0].stages.length, 3, 'stages not replaced');
-    assert.ok(toasts.some((x) => /确认期间这条剧情线又被改过/.test(x)), toasts.join('|'));
+    assert.ok(toasts.some((x) => /确认期间这条剧情线已被修改或删除/.test(x)), toasts.join('|'));
   } finally { await t.inst.destroy(); }
 });
 
@@ -132,7 +132,7 @@ test('N2: an incomplete table form never saves as "no condition"; > / < / 不包
     await LI.blur(doc, doc.querySelector('input[data-rv-tbl="value"]'), '');
     const r = LI.lineJob(inst, pid).review;
     assert.equal(JSON.stringify(r.draft[0].line.开启条件), JSON.stringify({ 表: '重要角色表/巴基/阶段 > 3' }), 'last complete condition kept');
-    assert.match(doc.querySelector('.pi-rv-tbl').textContent, /还没填完/);
+    assert.match(doc.querySelector('.pi-rv-tbl').textContent, /未填完/);
     const n = inst.data.project(pid).outline.volumes.length;
     await click('[data-act="import-adopt"]'); await tick();
     assert.equal(inst.data.project(pid).outline.volumes.length, n, 'not saved');
@@ -159,7 +159,7 @@ test('N3: the overall comment on M1 sends M1 only, is labelled with the line, an
     await t.click('[data-act="rv-preview"]');
     const dlg = await waitDialog(t);
     assert.match(dlg.textContent, /对M1 案子的整体意见/);
-    assert.match(dlg.textContent, /只改M1 案子[\s\S]*3个阶段/);
+    assert.match(dlg.textContent, /只修改M1 案子[\s\S]*3个阶段/);
     dlg.querySelector('[data-rv-overall]').value = '语气轻一点';
     t.host.llm.reply = ['【单位：vS/line】', '```yaml', '线:', '  简介: 被改了', '```'].join('\n');
     const calls = t.host.llmCalls.length;
@@ -220,7 +220,7 @@ test('N5: a saved bulk line is read-only and its comment is never sent; drop lin
     await click('.pi-rv-foot [data-act="import-adopt"]');
     assert.ok(!doc.querySelector('.pi-dialog'), 'no error-level issue: bulk save has no confirm');
     await LI.gotoLine(doc, 'S01');
-    assert.match(doc.querySelector('.pi-rv').textContent, /已经保存到大纲（S01），这里只读/);
+    assert.match(doc.querySelector('.pi-rv').textContent, /已保存到大纲（S01），这里只读/);
     assert.ok(doc.querySelector('[data-act="rv-edit-saved"]'), '到大纲审阅修改');
     assert.ok(doc.querySelector('[data-rv-line="简介"]').disabled, 'inputs disabled');
     assert.ok(!doc.querySelector('[data-rv-comment]'), 'no comment box');
@@ -292,7 +292,7 @@ test('N6: a line deleted from the outline that only had a comment stays visible 
     assert.ok(r.draft.some((v) => v.id === 'vS'), 'line kept in the session');
     await t.click('.pi-rv-line [title="下一条"]');
     const text = t.doc.querySelector('.pi-rv').textContent;
-    assert.match(text, /在大纲里已经删掉了/);
+    assert.match(text, /已从大纲删除/);
     assert.match(text, /S01 的意见/);
     assert.equal(t.doc.querySelector('[data-act="rv-send"]').textContent.trim(), '发送意见', 'not counted for sending');
   } finally { await t.inst.destroy(); }
@@ -365,8 +365,43 @@ test('N8: a reply that adds a condition on a node that does not exist is held ba
     await t.click('[data-act="rv-send"]'); await done(t);
     assert.equal(JSON.stringify(job(t).review.draft), before, 'not applied');
     assert.equal(job(t).review.comments['v1/s2'], '加个前置', 'comment kept');
-    assert.ok(toasts.some((x) => /找不到的node_does_not_exist/.test(x)), toasts.join('|'));
+    assert.ok(toasts.some((x) => /不存在的node_does_not_exist/.test(x)), toasts.join('|'));
   } finally { await t.inst.destroy(); }
+});
+
+// ---------- 文案 ----------
+test('wording: existing line without a start condition shows 无额外条件, not a warning; 保留现有条件; field hints under the labels', async () => {
+  const vols = DE.clueVols(); vols[1].line = { 编号: 'S01', 类型: '支线', 开启条件: { 任一: [{ 线: 'M1 == 完成' }, { 事实: 'F1' }] } };
+  const t = await DE.boot(vols, 'clue', false);
+  try {
+    await DE.openReview(t, 'v1');
+    const text = t.doc.querySelector('.pi-rv').textContent;
+    assert.match(text, /无额外条件/);
+    assert.doesNotMatch(text, /文档未写开始条件/);
+    assert.match(text, /供作者识别这条线/);
+    assert.match(text, /剧情入口/);
+    assert.match(text, /不代表事件已发生/);
+    await t.click('.pi-rv-line [title="下一条"]');
+    assert.match(t.doc.querySelector('.pi-rv-opts').textContent, /保留现有条件/);
+  } finally { await t.inst.destroy(); }
+});
+
+// ---------- 入口规则（GPT 第二轮）：主角已在现场时不另编邀约 ----------
+test('entry rule: protagonist already on scene → write the change in front of him, not a new invitation; rule reaches the import / revise prompts', () => {
+  assert.match(C.ENTRY_HINT_RULE, /原文中主角已经在现场，就写眼前使他继续参与的变化，不另编邀约/);
+  assert.doesNotMatch(C.ENTRY_HINT_RULE, /写的是主角还没到场时/);
+  const m = C.reviewReviseMessages({ units: [{ key: 'v/line', label: '线', yaml: '线: {}', comment: '' }], overall: '补全' });
+  assert.match(m[0].content, /主角已经在现场/);
+  assert.match(m[1].content, /整体意见适用/);
+});
+
+// ---------- 新手引导（GPT 第二轮界面审阅）：运行设置收起时也能看到入口；多条线时暂停指向「暂停 ▾」 ----------
+test('tour: the run page has a 运行设置 step on the always-visible toggle before the template step; 暂停 targets the menu summary', async () => {
+  const src = fs.readFileSync(new URL('../src/ui/tour.js', import.meta.url), 'utf8');
+  const run = src.slice(src.indexOf('    run: ['), src.indexOf('\n    ],', src.indexOf('    run: [')));
+  const iSet = run.indexOf("target: '[data-act=run-set-toggle]'"), iTpl = run.indexOf("target: '[data-act=clue-gen-template]'");
+  assert.ok(iSet > 0 && iSet < iTpl, '运行设置 step comes first');
+  assert.match(run, /target: '\.pi-pause-menu > summary, \[data-act=clue-pause\]'/);
 });
 
 // ---------- GPT 第三轮 C1–C3、U1–U2 ----------

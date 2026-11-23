@@ -129,7 +129,7 @@ export function auditOutlineRequest(requestText, project, states, projection, { 
     let hay = normText(requestText),
         leaks = [],
         strip = (text, piece) => (piece && piece.length >= AUDIT_MIN ? text.split(piece).join('') : text);
-    // 从长到短扣（返修复审）：短条目（设定）可能正好是长条目（阶段）里的一句，先扣短的会把长条目截断，后面就扣不掉了。
+    // 从长到短扣：先扣短条目会截断包含它的长条目。
     let pieces = (Array.isArray(projection) ? projection : [projection])
             .map(normText)
             .filter((p) => p.length >= AUDIT_MIN)
@@ -161,7 +161,7 @@ export function auditOutlineRequest(requestText, project, states, projection, { 
             let item = isPlainObject(node.item) ? node.item : { 名称: node.item },
                 keys = ['事件', '偏转', '触发', '内容'];
             for (let k of keys) item[k] && add(`${node.name || '节点'}·${k}`, item[k]);
-            // 只写了一行字符串的节点（保存后只剩名称和 id）：名称本身就是剧情句子，按名称查。一般短标题不查（内测前审阅）。
+            // 只写了一行字符串的节点（保存后只剩名称和 id）：名称本身就是剧情句子，按名称查。一般短标题不查。
             keys.some((k) => item[k]) || normText(stripAuthorBlocks(node.name)).length < 12 || add('节点', node.name);
         }
     }

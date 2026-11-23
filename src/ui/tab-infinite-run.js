@@ -30,12 +30,12 @@ export function render(view) {
         <div class="pi-row"><span class="pi-badge is-accent">${esc(labels[inf.phase])}</span>${world ? `<span class="pi-badge">${esc(world.title)}</span>` : ''}
             <span class="pi-badge">世界库${inf.worlds.length}份</span></div>
         <div class="pi-tools is-c2">
-            <button type="button" class="pi-btn is-primary is-sm" data-act="inf-enter"${inf.phase !== 'train' || opening ? ' disabled' : ''}>${opening ? '<span class="pi-spin"></span>造世界' : '进入新世界'}</button>
+            <button type="button" class="pi-btn is-primary is-sm" data-act="inf-enter"${inf.phase !== 'train' || opening ? ' disabled' : ''}>${opening ? '<span class="pi-spin"></span>生成中' : '进入新世界'}</button>
             <button type="button" class="pi-btn is-sm" data-act="inf-return"${inf.phase !== 'world' ? ' disabled' : ''}>回到${esc(hubName)}</button></div>
-        ${blanked.length ? `<p class="pi-hint">${esc(blanked.map(key => WORD_TITLES[key]).join('、'))}的词被清空，现按默认词读取。</p>` : ''}</div>
+        ${blanked.length ? `<p class="pi-hint">${esc(blanked.map(key => WORD_TITLES[key]).join('、'))}已清空，按默认词读取。</p>` : ''}</div>
         <div class="pi-card"><h3>注入条目${book}<span class="pi-meta">≈${total} token</span><span class="pi-spacer"></span>
             <button type="button" class="pi-btn is-sm is-ghost" data-act="preview">预览</button></h3>
-        ${entries.length ? entries.map(entry => entryRow(entry, st.open === entry.slotId)).join('') : '<p class="pi-hint">设定和世界库都为空，没有可注入的内容。</p>'}</div>
+        ${entries.length ? entries.map(entry => entryRow(entry, st.open === entry.slotId)).join('') : '<p class="pi-hint">设定和世界库为空，无可注入内容。</p>'}</div>
         ${inf.log.length ? `<div class="pi-card"><h3>近期记录</h3><pre class="pi-pre">${esc(inf.log.slice().reverse().join('\n'))}</pre></div>` : ''}`;
 }
 
@@ -44,7 +44,7 @@ export const actions = {
     'inf-enter': view => view.runtime.openWorld(),
     async 'inf-return'(view) {
         const hubName = resolveHub(view.runtime.infState()?.infinite.config).hubName;
-        const ok = await confirmDialog({ title: `回到${hubName}`, body: '撤掉当前世界档案的注入，档案留在世界库里。', okLabel: `回到${hubName}` });
+        const ok = await confirmDialog({ title: `回到${hubName}`, body: '停止注入当前世界档案，档案保留在世界库。', okLabel: `回到${hubName}` });
         if (!ok) return;
         view.runtime.returnToTrain();
         view.renderBody();

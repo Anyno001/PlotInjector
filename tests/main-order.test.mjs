@@ -112,7 +112,7 @@ test('H (8): switching main lines in the run page asks first; cancelling changes
   [...dlg.querySelectorAll('.pi-btn')].find((b) => b.textContent === '取消').click(); await tick();
   assert.deepEqual(running(inst), ['M1'], 'cancel: nothing changed');
   doc.querySelector('[data-act="clue-line"][data-id="M3"][data-value="enter"]').click(); await tick();
-  [...doc.querySelector('.pi-dialog').querySelectorAll('.pi-btn')].find((b) => b.textContent === '换过去').click(); await tick();
+  [...doc.querySelector('.pi-dialog').querySelectorAll('.pi-btn')].find((b) => b.textContent === '切换').click(); await tick();
   assert.deepEqual(running(inst), ['M3']);
   assert.equal(lineOf(inst, 'M1').state, '暂停');
   // 暂停全部主线的按钮在剧情线卡片上（有两条以上主线时）

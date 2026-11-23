@@ -182,3 +182,16 @@ test('findGlobalTable: official names first, then a 全局 table with a time col
   const noTime = C.synthesizeClueTemplate({ mate: {}, sheet_g: { uid: 'sheet_g', name: '全局状态表', content: [['row_id', '全局状态', '当前位置']] } }, { clue: CLUE });
   assert.match(noTime.problems.join('\n'), /「全局状态表」里没找到时间列/);
 });
+
+test('已核实 rule: judged by the obtainer the criterion names, not always 主角; old chats get the new sentence when the template is created again', () => {
+  const once = C.synthesizeClueTemplate(DEFAULT, { clue: CLUE }).template;
+  const note = byName(once, '关键事实表').sourceData.note;
+  assert.match(note, /口径写了由谁取得，以那个人为准/);
+  assert.ok(!/正文里主角实际取得了这项结果/.test(note));
+  const old = JSON.parse(JSON.stringify(once));
+  const sheet = byName(old, '关键事实表');
+  sheet.sourceData.note = note.replace(/    · 已核实：[^\n]*/, '    · 已核实：正文里主角实际取得了这项结果，而且有可靠依据（亲眼看到实物、读到原件、得到明确验证）。');
+  const r = C.synthesizeClueTemplate(old, { clue: CLUE });
+  assert.equal(byName(r.template, '关键事实表').sourceData.note, note, 'old sentence replaced, the rest untouched');
+  assert.ok(r.changes.some((x) => /「关键事实表」说明：「已核实」改为按各行口径里的取得者判断/.test(x)));
+});

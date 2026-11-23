@@ -82,7 +82,7 @@ test('start page: document type and plotting mode are separate; the job remember
   await pickMode('outline');
   assert.ok(!ctx.$('[data-act="import-kind"]'), 'stage-based import has no line types');
   assert.equal(ctx.$('[data-imp-modesel]').value, 'outline');
-  assert.match(ctx.$('.pi-card').textContent, /和项目现在的推进方式不同。保存后到执行页切换推进方式/);
+  assert.match(ctx.$('.pi-card').textContent, /与项目当前的推进方式不同；保存后需到执行页切换推进方式/);
   assert.equal(ctx.$('[data-imp-text]').value, '保留我写的字', 'switching the mode keeps the pasted text');
   await pickMode('clue');
   await ctx.click('[data-act="import-kind"][data-kind="side"]');
@@ -246,7 +246,7 @@ test('adopt: a main line is numbered after existing lines and waits for the prev
   await ctx.inst.destroy();
 });
 
-test('save with unsent comments: 取消 writes nothing; 先发送意见 sends straight away; 保存到大纲，暂不发送意见 saves and keeps the comments', async () => {
+test('save with unsent comments: 取消 writes nothing; 先发送 sends straight away; 仍然保存 saves and keeps the comments', async () => {
   const ctx = await boot();
   await importMain(ctx);
   const radio = ctx.$('[data-rv-when="any"]');
@@ -258,25 +258,25 @@ test('save with unsent comments: 取消 writes nothing; 先发送意见 sends st
   assert.ok(ctx.$('[data-act="rv-send"]').classList.contains('is-primary'), 'send is the main button while comments are pending');
   ctx.$('.pi-rv-foot [data-act="import-adopt"]').click(); await tick();
   let text = await answer(ctx.doc, '取消');
-  assert.match(text, /有2页意见还没用于修改草稿[\s\S]*保存到大纲，暂不发送意见[\s\S]*先发送意见/);
+  assert.match(text, /有2页意见尚未用于修改草稿[\s\S]*仍然保存[\s\S]*先发送/);
   assert.equal(ctx.inst.data.project(ctx.pid).outline.volumes.length, 0);
-  // 先发送意见 → 直接发送，不再弹发送框；发送期间不写大纲
+  // 先发送 → 直接发送，不再弹发送框；发送期间不写大纲
   const calls = ctx.host.llmCalls.length;
   ctx.$('.pi-rv-foot [data-act="import-adopt"]').click(); await tick();
-  await answer(ctx.doc, '先发送意见');
+  await answer(ctx.doc, '先发送');
   for (let i = 0; i < 40 && ctx.host.llmCalls.length === calls; i++) await tick();
   assert.ok(ctx.host.llmCalls.length > calls, 'the request went out directly');
   for (let i = 0; i < 40 && ctx.inst.__view.busy[`review:${ctx.pid}`]; i++) await tick();
   assert.equal(ctx.doc.querySelector('.pi-dialog'), null, 'no dialog in between');
   assert.equal(ctx.inst.data.project(ctx.pid).outline.volumes.length, 0);
-  // 保存到大纲，暂不发送意见 → 再过一次问题确认 → 写进大纲；意见留着（GPT 第二轮 N6）
+  // 仍然保存 → 再过一次问题确认 → 写进大纲；意见留着（GPT 第二轮 N6）
   ctx.$('.pi-rv-foot [data-act="import-adopt"]').click(); await tick();
-  await answer(ctx.doc, '保存到大纲，暂不发送意见');
+  await answer(ctx.doc, '仍然保存');
   ctx.doc.querySelector('.pi-dialog') && (await answer(ctx.doc, '仍然保存'));
   assert.equal(ctx.inst.data.project(ctx.pid).outline.volumes.length, 1);
   const kept = jobOf(ctx).review.comments;
   assert.equal(Object.values(kept).filter((t) => String(t || '').trim()).length, 2, 'unsent notes survive the save');
-  assert.match(ctx.$('.pi-rv').textContent, /还有2页意见没发送/);
+  assert.match(ctx.$('.pi-rv').textContent, /有2页意见未发送/);
   // 继续修改：意见回到对应的页上
   await ctx.click('[data-act="rv-reopen"]');
   assert.match(ctx.$('[data-act="rv-send"]').textContent, /发送意见（2页）/);

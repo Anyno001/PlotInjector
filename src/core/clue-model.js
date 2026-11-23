@@ -297,6 +297,10 @@ export function normalizeClue(value) {
         // 多线：同时进行的支线最多几条（1 或 2，默认 1）；顶端小条提示开没开（默认开）。
         sideLimit: src.sideLimit === 2 ? 2 : 1,
         lineToast: src.lineToast !== !1,
+        // 收起已结束的线时保留在表里的线索编号（方案 三.2「这条线索不收」）
+        // 收起已结束的线（项目开关，默认开；实际是否自动收起还要看存储模式是否放行、本聊天是否开启）
+        foldAuto: src.foldAuto !== !1,
+        noFold: [...new Set((Array.isArray(src.noFold) ? src.noFold : []).map((x) => String(x ?? '').trim()).filter(Boolean))],
         bindings: {
             switch: normalizeBinding(b.switch, CELL_BINDING_KEYS),
             facts: list(b.facts, FACT_BINDING_KEYS),
@@ -308,7 +312,7 @@ export function normalizeClue(value) {
             .filter((item) => isPlainObject(item) && String(item.id || '').trim())
             .map((item) => ({ id: String(item.id).trim(), 说明: String(item.说明 || '') })),
         // 事实的标签和登记口径（采用大纲时生成、复审后存下，多线自动补行用）：{ 编号: { label, criterion, sig } }。
-        // sig 是生成时依据的内容签名：大纲里这条事实的内容变了，签名对不上，就要重新生成（GPT 七题审阅 §5.1）。
+        // sig：生成时依据的内容签名；大纲里这条事实的内容变了就要重新生成。
         labels: normalizeLabels(src.labels),
     };
 }
@@ -323,12 +327,24 @@ export function isClueMode(project) {
     return !!(project && project.clue && project.clue.mode === 'clue');
 }
 
+export const LABEL_SRC = ['gen', 'ai', 'user'];
+
 export function normalizeLabels(value) {
     if (!isPlainObject(value)) return {};
-    // Object.fromEntries：键名是 __proto__ 也只是普通的自有键（项目文件来自别处，GPT 第六轮）
+    // fromEntries：键名 __proto__ 也只作普通键（项目文件来自外部）
     return Object.fromEntries(
         Object.entries(value)
             .filter(([, v]) => isPlainObject(v) && String(v.label || '').trim())
-            .map(([code, v]) => [code, { label: String(v.label).trim(), criterion: String(v.criterion || '').trim(), sig: String(v.sig || '') }]),
+            .map(([code, v]) => [
+                code,
+                {
+                    label: String(v.label).trim(),
+                    criterion: String(v.criterion || '').trim(),
+                    sig: String(v.sig || ''),
+                    // 标签来源（大型项目方案 四.2、十.4）：gen＝模型生成、还没检查是否透露答案；ai＝模型检查过；user＝用户写或改的。
+                    // 没有这个字段的是旧标签：原样沿用，不自动重审，不为老项目调用模型。旧数据里的 rv:false 读成 gen。
+                    ...(LABEL_SRC.includes(v.src) ? { src: v.src } : v.rv === !1 ? { src: 'gen' } : {}),
+                },
+            ]),
     );
 }

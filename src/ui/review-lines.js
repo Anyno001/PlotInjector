@@ -1,5 +1,5 @@
 // 「多条支线」导入和统一审阅页共用的小工具：线级检查、条件的文字说法、名称表、旧任务的逐条数据、已采用的线。
-// 原来在旧的逐条审阅页 line-review.js 里；那个页面已经没有入口，删除时把仍在用的这几个挪到这里（GPT 第三轮清理 B1）。
+// 从已删除的 line-review.js 迁来仍在使用的函数。
 import { importJobOf } from './long-import.js';
 import { isPlainObject, volumeLabel, stageLabel, stageNodes, volumeName } from '../core/outline.js';
 import { currentTables } from './tab-outline.js';
@@ -38,7 +38,7 @@ export function reviewCheck(view, items, opts = {}) {
         draftIssues = checkClueDraft(
             kept.map((x) => x.vol),
             base,
-        ).filter((t) => /^线 [A-Za-z]+\d+ 要等的/.test(t)),
+        ).filter((t) => /^线 ?[A-Za-z]+\d+ ?要等的/.test(t)),
         job0 = rs.src === 'import' ? importJobOf(view, rs.jobId) : null,
         more = {};
     if (job0) {
@@ -82,7 +82,7 @@ export function reviewCheck(view, items, opts = {}) {
                     line.mode === 'manual' &&
                     line.origCond &&
                     issues.push({ level: 'info', text: `人工开启。原来的要求：${line.origCond}` }));
-            // 同一段内容出现在两条线里：写出双方，给两边各一个「重新整理」（GPT 代码审阅第 2 点）
+            // 同一段内容出现在两条线里：写出双方，各给一个「重新整理」
             rs.src === 'import' &&
                 dups
                     .filter((d) => d.a.id === x.id || d.b.id === x.id)
@@ -91,7 +91,7 @@ export function reviewCheck(view, items, opts = {}) {
             empty.length &&
                 issues.push({
                     level: 'error',
-                    text: `这些阶段没有读到任何场景（节点）：${empty.join('、')}。可能是AI把场景写在了不认识的字段下，写意见让AI重写这一条`,
+                    text: `以下阶段没有读到场景（节点）：${empty.join('、')}。可能是场景写在了无法识别的字段下，请写意见让AI重写这一条`,
                 });
             let job = rs.src === 'import' ? importJobOf(view, rs.jobId) : null,
                 inv =
@@ -121,12 +121,12 @@ export function condWords(c, names = {}) {
         return c.items
             .map((x) => condWords(x, names))
             .filter(Boolean)
-            .join(c.mode === 'any' ? '，或者' : '，并且');
+            .join(c.mode === 'any' ? '，或' : '，并且');
     if (c.kind === 'cell') {
         let [t, row, col] = String(c.path)
             .split('/')
             .map((x) => x.trim());
-        return `（${t}）${row}的${col}${c.pick ? `里「${c.pick}」那一项` : ''} ${OP_WORD[c.op] || c.op} ${c.value}${c.tiers ? `（${c.tiers.join(' < ')}）` : ''}`;
+        return `（${t}）${row}的${col}${c.pick ? `的「${c.pick}」项` : ''} ${OP_WORD[c.op] || c.op} ${c.value}${c.tiers ? `（${c.tiers.join(' < ')}）` : ''}`;
     }
     return c.kind === 'line'
         ? `${line(c.line)} ${c.state === '开过' ? (c.op === '==' ? '开始过' : '还没开始过') : c.state === '开着' ? (c.op === '==' ? '正在进行' : '不在进行中') : `${c.op === '==' ? '是' : '不是'}「${c.state}」`}`

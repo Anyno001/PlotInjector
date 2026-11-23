@@ -131,7 +131,7 @@ test('15.3: deleting a whole unfinished node that has a confirmed discovery is f
   next[0].stages[0].data.主线节点 = [next[0].stages[0].data.主线节点[1]];
   const snap = { facts: new Map([['F1', { id: 'F1', status: 'confirmed', text: 'x', raw: '已核实' }]]), knowledge: [], tables: {} };
   const g = C.historyGuard(vols, next, snap, C.emptyClueProgress(), C.normalizeClue({ mode: 'clue' }));
-  assert.match(g.notes.join('\n'), /n1「甲」（改写后被删除）中已经获得或已经说出的发现 F1/);
+  assert.match(g.notes.join('\n'), /n1「甲」（改写后被删除）中已获得或已说出的发现 ?F1/);
 });
 
 test('15.3: the final confirm lists outcomes computed NOW (fact confirmed while the draft waited)', async () => {
@@ -142,7 +142,7 @@ test('15.3: the final confirm lists outcomes computed NOW (fact confirmed while 
   await makeRewriteDraft(ctx, draftYaml);
   set('关键事实表', 'F_talk', '状态', '已核实'); commit();
   doc.querySelector('[data-act="draft-rest"]').click(); await tick();
-  assert.match(doc.querySelector('.pi-dialog').textContent, /这次改写会让 n_ledger「查账本」直接变成已完成/);
+  assert.match(doc.querySelector('.pi-dialog').textContent, /这次改写会让 ?n_ledger「查账本」直接变成已完成/);
   await inst.destroy();
 });
 

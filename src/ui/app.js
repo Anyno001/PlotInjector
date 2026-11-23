@@ -175,7 +175,7 @@ export function createApp({ data, runtime, version }) {
         if (view.page) return current().render(view);
         const project = view.project();
         if (!view.projectId)
-            return `<div class="pi-empty">${data.index().projects.length ? '从项目列表选择一个项目。' : '一个项目保存一个故事的设定、人设、大纲和进度，绑定到角色卡和聊天使用。一般顺序：讨论、写大纲、执行。设定页和人设页可选。'}<br><br>
+            return `<div class="pi-empty">${data.index().projects.length ? '从项目列表选择一个项目。' : '一个项目保存一个故事的设定、人设、大纲和进度。一般顺序：讨论、写大纲、执行；设定页和人设页可选。'}<br><br>
                 <button type="button" class="pi-btn is-primary" data-act="new-project">${ICONS.plus}新项目</button></div>`;
         if (!project) {
             const failed = view.loadError[view.projectId];
@@ -192,7 +192,7 @@ export function createApp({ data, runtime, version }) {
             return (
                 console.error('[剧情注入器] 页面渲染失败', error),
                 runtime.note(`页面渲染失败（${view.page || view.tab}）：${error.message}`),
-                `<div class="pi-empty">这一页显示出错：${esc(error.message)}<br><br><button type="button" class="pi-btn is-primary" data-act="retry-render">重试</button></div>`
+                `<div class="pi-empty">本页显示出错：${esc(error.message)}<br><br><button type="button" class="pi-btn is-primary" data-act="retry-render">重试</button></div>`
             );
         }
     }
@@ -226,7 +226,7 @@ export function createApp({ data, runtime, version }) {
         ((body.className = `pi-body${!view.page && view.tab === 'discuss' && view.project() ? ' is-chat' : ''}`),
             (body.innerHTML = safeBodyHtml()),
             (body.scrollTop = keepScroll));
-        // 文本框随内容变高（第四批）：初始 2 行，内容多了再变高
+        // 文本框初始 2 行，随内容增高。
         body.querySelectorAll('.pi-ta-auto').forEach(growBox);
         // 审阅页的页签横向滚动：重画后把当前页签滚到看得见的位置（只动页签栏，不动整页）
         const tabs = body.querySelector('.pi-rv-dots'),
@@ -248,7 +248,7 @@ export function createApp({ data, runtime, version }) {
     let tour = createTour({ getRoot: () => root, data });
     view.tour = tour;
     function startTour(scope, opts) {
-        tour.start(scope, opts) || (opts && opts.auto) || toast('info', '这一页现在没有可以讲解的内容。');
+        tour.start(scope, opts) || (opts && opts.auto) || toast('info', '本页暂无教程。');
     }
     function maybeAutoTour() {
         let tries = 0,
@@ -348,7 +348,7 @@ export function createApp({ data, runtime, version }) {
             result = await openDialog({
                 title: '新项目',
                 html: `<label class="pi-field"><span>项目名</span><input class="pi-inp" data-f="name" placeholder="如：龙宫温养"></label>
-                <p class="pi-hint">一个项目保存一个故事的设定、人设、大纲和进度。每个聊天同时使用一个项目；当前聊天还没有项目时，会直接使用新项目。主线、支线都写在同一个项目的大纲里。</p>
+                <p class="pi-hint">一个项目保存一个故事的设定、人设、大纲和进度。每个聊天同时使用一个项目；没有项目的聊天会直接使用新项目。主线、支线写在同一个项目的大纲里。</p>
                 ${groupField(current2 && current2.group ? current2.group : '')}
                 <label class="pi-check"><input type="checkbox" data-f="infinite"><span>无限流模式（主空间出发、世界库、污染）</span></label>
                 ${trpgField(!1)}
@@ -379,7 +379,7 @@ export function createApp({ data, runtime, version }) {
             toast('error', `新建失败：${error.message}`);
         }
     }
-    // 从项目文件导入（用户 2026-11-17）：总是建成新项目，重名加「（导入）」，不覆盖原项目。
+    // 从项目文件导入：总是建成新项目，重名加「（导入）」，不覆盖原项目。
     async function importProjectFile(group = '') {
         const [file] = await pickFiles({ accept: '.json,application/json' });
         if (!file) return;
@@ -391,9 +391,9 @@ export function createApp({ data, runtime, version }) {
         }
         const { project, summary } = parsed,
             name = importedName(project.name, data.index().projects.map((p) => p.name)),
-            // 确认框只留要紧的：名字、里面有什么、要不要先建表（用户 2026-11-17：字太多，要简洁）
+            // 确认框只留名字、内容摘要、是否需要先建表。
             what = [
-                summary.clue ? '线索推进' : '按阶段推进',
+                summary.clue ? '线索推进' : '大纲推进',
                 summary.lines ? `${summary.lines}条剧情线` : '',
                 summary.labels ? `${summary.labels}条标签` : '',
                 summary.personas ? `${summary.personas}条人设` : '',
@@ -402,7 +402,7 @@ export function createApp({ data, runtime, version }) {
             // 当前聊天读得到表格时，核对项目绑定的表在不在
             missing = summary.clue ? missingBoundTables(project, outline.currentTables()) : [],
             ok = await openDialog({
-                // 排法 A（用户 2026-11-17 选定）：灰色小标题、大号项目名、一排小标签、细线下一句提示
+                // 版式：灰色小标题、大号项目名、一排小标签、细线下一句提示
                 html: `<div><p class="pi-pf-imp-ttl">导入项目</p><p class="pi-pf-imp-name">${esc(name)}</p>
                 <div class="pi-pf-imp-pills">${what.map((w) => `<span class="pi-badge">${esc(w)}</span>`).join('')}</div>
                 ${summary.clue ? `<p class="pi-pf-imp-note${missing && missing.length ? ' is-warn' : ''}">${missing && missing.length ? `当前聊天缺少${esc(missing.join('、'))}。` : ''}游玩前在执行页点「创建模板」。</p>` : ''}</div>`,
@@ -425,7 +425,7 @@ export function createApp({ data, runtime, version }) {
         if (!meta) return;
         const items = [];
         (cardKey() &&
-            (runtime.activeId() !== id && items.push({ label: '设为当前聊天使用', value: 'chat', icon: ICONS.chat }),
+            (runtime.activeId() !== id && items.push({ label: '用于当前聊天', value: 'chat', icon: ICONS.chat }),
             data.activeIdFor(cardKey()) !== id && items.push({ label: '设为本卡默认（新聊天也用）', value: 'card', icon: ICONS.card })),
             items.push({ label: '编辑名称、分组', value: 'edit', icon: ICONS.pencil }));
         const pick = await menuDialog({ title: meta.name, items });

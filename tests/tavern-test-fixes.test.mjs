@@ -152,7 +152,7 @@ test('import page: when no database tables are readable, a note says table-based
     assert.doesNotMatch(doc.body.textContent, /当前聊天读不到数据库表格/, 'tables readable → no note');
     host.w.AutoCardUpdaterAPI && (host.w.AutoCardUpdaterAPI.exportTableAsJson = () => { throw new Error('no db'); });
     inst.__view.renderBody(); await tick();
-    assert.match(doc.body.textContent, /当前聊天读不到数据库表格。依赖表格的开始条件会先按手动开始整理/);
+    assert.match(doc.body.textContent, /当前聊天无法读取数据库表格。依赖表格的开启条件会先按手动开始整理/);
   } finally { await inst.destroy(); }
 });
 
