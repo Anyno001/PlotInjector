@@ -1,4 +1,4 @@
-// PlotInjector v0.3.14
+// PlotInjector v0.3.15
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -9350,7 +9350,7 @@ ${finds.map((d) => `- ${d.text}`).join(`
 .pi-root input[type=checkbox]:checked::before{transform:scale(1)}
 .pi-root input[type=checkbox]:disabled{opacity:.45;cursor:not-allowed}
 .pi-root input[type=checkbox]:focus-visible{box-shadow:0 0 0 2px var(--pi-accent-soft),inset 0 0 0 1.5px var(--pi-accent)}
-.pi-overlay{position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;z-index:10050;display:flex;align-items:center;justify-content:center;background:rgba(20,20,30,.28)}
+.pi-overlay{position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;z-index:2147483643;display:flex;align-items:center;justify-content:center;background:rgba(20,20,30,.28)}
 .pi-panel{position:relative;width:880px;max-width:96vw;height:88vh;max-height:88vh;background:var(--pi-surf);border-radius:var(--pi-r);box-shadow:var(--pi-shadow);display:grid;grid-template-columns:220px 1fr;overflow:hidden}
 .pi-scrim{display:none}
 .pi-side{background:var(--pi-bg);display:flex;flex-direction:column;min-height:0}
@@ -9710,15 +9710,15 @@ label.pi-wb-row{cursor:pointer}
 .pi-status.is-err{color:var(--pi-danger)}
 .pi-spin{display:inline-block;width:12px;height:12px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:pi-spin .8s linear infinite}
 @keyframes pi-spin{to{transform:rotate(360deg)}}
-.pi-dialog{position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;z-index:10060;display:flex;align-items:center;justify-content:center;background:rgba(20,20,30,.28)}
+.pi-dialog{position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;z-index:2147483645;display:flex;align-items:center;justify-content:center;background:rgba(20,20,30,.28)}
 .pi-dialog-box{width:440px;max-width:92vw;max-height:80vh;overflow-y:auto;background:var(--pi-bg);border-radius:var(--pi-r);box-shadow:var(--pi-shadow);padding:16px;scrollbar-width:none}
 .pi-dialog-box h4{margin:0 0 8px;font-size:15px;color:var(--pi-dark)}
 .pi-dialog-box .pi-dlg-acts{display:flex;gap:8px;justify-content:flex-end;margin-top:12px;flex-wrap:wrap}
 .pi-dialog-box .pi-dlg-acts>.pi-btn{min-width:88px}
 .pi-dialog-box ul{margin:6px 0;padding-left:18px;font-size:12px;color:var(--pi-txt2);max-height:200px;overflow-y:auto}
-.pi-notices{position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;z-index:10040;display:flex;flex-direction:column;justify-content:flex-end;align-items:flex-end;gap:8px;padding:16px;box-sizing:border-box;pointer-events:none}
+.pi-notices{position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;z-index:2147483641;display:flex;flex-direction:column;justify-content:flex-end;align-items:flex-end;gap:8px;padding:16px;box-sizing:border-box;pointer-events:none}
 .pi-unoffered-tip{display:block;font-size:11px;color:var(--pi-txt2);margin-top:2px}
-.pi-topbar{position:fixed;left:50%;transform:translateX(-50%);z-index:10050;width:min(400px,calc(100vw - 16px - env(safe-area-inset-left,0px) - env(safe-area-inset-right,0px)));box-sizing:border-box;display:flex;align-items:center;gap:10px;padding:8px 8px 8px 14px;background:var(--pi-bg);color:var(--pi-txt);border-radius:var(--pi-r);box-shadow:var(--pi-shadow);font-size:13px;margin-top:6px}
+.pi-topbar{position:fixed;left:50%;transform:translateX(-50%);z-index:2147483643;width:min(400px,calc(100vw - 16px - env(safe-area-inset-left,0px) - env(safe-area-inset-right,0px)));box-sizing:border-box;display:flex;align-items:center;gap:10px;padding:8px 8px 8px 14px;background:var(--pi-bg);color:var(--pi-txt);border-radius:var(--pi-r);box-shadow:var(--pi-shadow);font-size:13px;margin-top:6px}
 .pi-topbar-dot{flex:none;width:8px;height:8px;border-radius:50%;background:var(--pi-accent)}
 .pi-topbar-body{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.35}
 .pi-topbar-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:var(--pi-dark)}
@@ -9893,8 +9893,8 @@ label.pi-wb-row{cursor:pointer}
 .pi-clue-name{flex:1;min-width:0;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pi-clue-why{margin:2px 0 4px;padding-left:20px;font-size:12px;color:var(--pi-txt2)}
 .pi-hint.is-off{opacity:.5;text-decoration:line-through}
-/* 新手教程（41a_ui_tour.js）：遮罩挖一个洞亮出目标，旁边一个气泡。层级在面板（10050）之上、弹窗（10060）之下。 */
-.pi-tour{position:fixed;inset:0;z-index:10055;isolation:isolate}
+/* 新手教程（41a_ui_tour.js）：遮罩挖一个洞亮出目标，旁边一个气泡。层级在面板之上、弹窗之下。 */
+.pi-tour{position:fixed;inset:0;z-index:2147483644;isolation:isolate}
 .pi-tour-mask{position:absolute;inset:0;width:100%;height:100%;pointer-events:auto}
 .pi-tour-mask path{fill:rgba(10,10,18,.72)}
 .pi-tour-hole{position:fixed;border:2px solid var(--pi-accent);border-radius:10px;box-shadow:0 0 0 4px var(--pi-accent-soft);pointer-events:none;transition:left .18s,top .18s,width .18s,height .18s}
@@ -20287,7 +20287,7 @@ ${suffix.trim()}` : body;
   }
 
   // src/index.js
-  var VERSION = "0.3.14", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.3.15", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")
