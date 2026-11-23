@@ -1,4 +1,4 @@
-// PlotInjector v0.3.11
+// PlotInjector v0.3.12
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -12576,7 +12576,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
       miss.length && (newRow = rowBtn(`大纲里有${miss.length}条线索在表格里还没有行。`, "clue-prebuild", "补全表格"));
     }
     let todo = [...lackRow ? [lackRow] : [], ...problemRows, ...newRow ? [newRow] : [], ...labelRow ? [labelRow] : []], multi = (c.state.lineStates || []).length > 0, units = c.compiled.units, allDone = units.length > 0 && units.every((u) => (c.state.stageStates.get(u.id) || {}).done), ellip = `<button type="button" class="pi-icon-btn" data-act="run-cur-menu" title="更多" aria-label="更多">${ICONS.more}</button>`, statusRow = `<div class="pi-row pi-rl-status"><b>${multi ? "剧情" : "主线"}</b>${enabled}${c.prog.paused ? '<span class="pi-badge is-warn">已暂停</span>' : allDone && !multi ? '<span class="pi-badge is-ok">已全部完成</span>' : '<span class="pi-badge is-accent">进行中</span>'}<span class="pi-meta pi-grow">${multi && !c.prog.paused ? esc(lineSummary(c)) : ""}</span>${c.prog.paused ? '<button type="button" class="pi-btn is-sm is-primary" data-act="clue-pause" data-value="">继续剧情</button>' : allDone && !multi ? '<button type="button" class="pi-btn is-sm is-primary" data-act="clue-next">开始下一段主线…</button>' : multi ? pauseMenu(c) : '<button type="button" class="pi-btn is-sm" data-act="clue-pause" data-value="1" title="去玩日常：所有线索内容都不注入，进度保留">暂停</button>'}${ellip}</div>`, focusLabel = [hereText(c), focusNode ? esc(focusNode.node.name) : ""].filter(Boolean).join(" · ") || esc(FOCUS_SOURCE[focus.source]), hint = isTrpg(project) ? sceneHintHtml(c) : "", focusRow = hint ? `<div class="pi-rl-focus is-col">${hint}</div>` : `<div class="pi-rl-focus"><b class="pi-grow">${focusLabel}</b>${focusNode ? `<button type="button" class="pi-btn is-sm" data-act="clue-leave" data-uid="${esc(focusNode.node.uid)}" title="主角已经离开这件事：不再注入它的场景和发现，只给入口">已离开</button>` : ""}${c.prog.focus ? `<button type="button" class="pi-btn is-sm" data-act="clue-unfocus" title="回到按填表判断本轮场景">${c.prog.focus.startsWith(AWAY_PREFIX) ? "其实没离开" : "换场景"}</button>` : ""}</div>`, cur = `<div class="pi-card pi-rl-cur"><h3>当前</h3>
-        ${todo.length ? `<div class="pi-rl-stack">${todo.join("")}</div>` : ""}
+        ${progressHtml("prebuild")}${todo.length ? `<div class="pi-rl-stack">${todo.join("")}</div>` : ""}
         ${statusRow}${focusRow}
         ${stayNotice(view, c)}
         ${unofferedHtml(c, project)}
@@ -13082,14 +13082,15 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
         return toast("warning", `确认期间表格变了（预览时已有的${vanished.join("、")}现在不见了），没有写入。请重新点一次。`);
       if (!prebuildTargetSame(targetPrint, prebuildTargetPrint(now.snap.tables, project.clue.bindings)))
         return toast("warning", "确认期间表格变了（可能刚填过表），没有写入。请重新打开「补全表格」，按现在的表格再确认一次。");
-      let want = fresh.newFacts.map((f) => f.code).filter((code) => labels.has(code)), knowsToWrite = fresh.newKnows.filter((k) => previewKnows.has(k.key)), fb = project.clue.bindings.facts[0], kb = project.clue.bindings.knowledge[0], done = [], failed = [], factOk = new Set(now.snap.facts ? now.snap.facts.keys() : []), stopped = "";
+      let want = fresh.newFacts.map((f) => f.code).filter((code) => labels.has(code)), knowsToWrite = fresh.newKnows.filter((k) => previewKnows.has(k.key)), fb = project.clue.bindings.facts[0], kb = project.clue.bindings.knowledge[0], done = [], failed = [], factOk = new Set(now.snap.facts ? now.snap.facts.keys() : []), stopped = "", total = want.length + (kb ? knowsToWrite.length : 0), prog = startProgress("prebuild").step("正在写入线索行", 100, 1e9), tick = (name) => prog.real(total ? (done.length + failed.length) / total * 100 : 100, `${done.length + failed.length}/${total}${name ? `　刚写完${name}` : ""}${failed.length ? `，失败${failed.length}` : ""}`);
+      tick(""), view.renderBody();
       for (let code of want) {
         if (!prebuildScopeValid(view, scope)) {
           stopped = "写入过程中切换了聊天";
           break;
         }
         let f = labels.get(code), data = { [fb.编号列]: code, 标签: f.label, 登记口径: f.criterion };
-        fb.状态列 && (data[fb.状态列] = "未获得"), await api.insertRow({ tableName: fb.表, data, skipNotify: !0 }).catch(() => -1) >= 0 ? (done.push(code), factOk.add(code)) : failed.push(code);
+        fb.状态列 && (data[fb.状态列] = "未获得"), await api.insertRow({ tableName: fb.表, data, skipNotify: !0 }).catch(() => -1) >= 0 ? (done.push(code), factOk.add(code)) : failed.push(code), tick(code);
       }
       if (kb && !stopped)
         for (let k of knowsToWrite) {
@@ -13099,9 +13100,9 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
             break;
           }
           let data = { 键: k.key, [kb.事实列]: k.fact, [kb.角色列]: k.actor };
-          kb.方式列 && (data[kb.方式列] = Array.isArray(kb.未知值) ? kb.未知值[0] : kb.未知值 || "未知"), kb.可信度列 && (data[kb.可信度列] = "未核实"), await api.insertRow({ tableName: kb.表, data, skipNotify: !0 }).catch(() => -1) >= 0 ? done.push(k.key) : failed.push(k.key);
+          kb.方式列 && (data[kb.方式列] = Array.isArray(kb.未知值) ? kb.未知值[0] : kb.未知值 || "未知"), kb.可信度列 && (data[kb.可信度列] = "未核实"), await api.insertRow({ tableName: kb.表, data, skipNotify: !0 }).catch(() => -1) >= 0 ? done.push(k.key) : failed.push(k.key), tick(k.key);
         }
-      view.runtime.clue.invalidate(), view.renderBody();
+      prog.done(`写入完成：${done.length}/${total}${failed.length ? `，失败${failed.length}` : ""}${stopped ? `（${stopped}，已停下）` : ""}`), setTimeout(() => prog.clear(), 8e3), view.runtime.clue.invalidate(), view.renderBody();
       let msg = `已写入${done.length}行${done.length ? `（${done.slice(0, 8).join("、")}${done.length > 8 ? "……" : ""}）` : ""}`;
       stopped ? toast("warning", `${msg}。${stopped}，后面的行没有写；回到原聊天再点一次，会只补剩下的。`) : failed.length ? toast(
         "error",
@@ -14680,11 +14681,21 @@ ${yamlOf(k)}`).join(`
     let text2 = importLiveText(jobId);
     hostDocument().querySelectorAll("[data-imp-live]").forEach((el2) => el2.dataset.impLive === jobId && (el2.textContent = text2));
   }
+  var importStops = /* @__PURE__ */ new Map();
+  function stopImport(jobId) {
+    let ctl = importStops.get(jobId);
+    return ctl && ctl.abort(), !!ctl;
+  }
   async function askLive(view, jobId, label, messages) {
-    let m = liveImport.get(jobId) || (liveImport.set(jobId, /* @__PURE__ */ new Map()), liveImport.get(jobId)), key = ++liveSeq, last = 0;
+    let m = liveImport.get(jobId) || (liveImport.set(jobId, /* @__PURE__ */ new Map()), liveImport.get(jobId)), key = ++liveSeq, last = 0, ctl = importStops.get(jobId);
+    if (ctl && ctl.signal.aborted) {
+      let error = new Error("已停止");
+      throw error.name = "AbortError", error;
+    }
     m.set(key, { label, chars: 0 }), paintLive(jobId);
     try {
       return await ask(view, "outline", messages, {
+        signal: ctl ? ctl.signal : void 0,
         onText: (t) => {
           m.set(key, { label, chars: t.length });
           let now = Date.now();
@@ -14710,10 +14721,22 @@ ${yamlOf(k)}`).join(`
     return new Set(project && Array.isArray(project.importAdopted) ? project.importAdopted : []);
   }
   async function runImportJob(view, jobId) {
+    let ctl = new AbortController();
+    importStops.set(jobId, ctl);
+    try {
+      return await runImportJobInner(view, jobId, ctl.signal);
+    } finally {
+      if (importStops.get(jobId) === ctl && importStops.delete(jobId), ctl.signal.aborted) {
+        let error = new Error("已停止");
+        throw error.name = "AbortError", error;
+      }
+    }
+  }
+  async function runImportJobInner(view, jobId, signal) {
     let store = view.data.imports, job = await store.load(jobId), text2 = await store.source(jobId), task = { projectId: view.projectId };
     if (!job) throw new Error("找不到这个导入任务");
     if (job.projectId !== task.projectId) throw new Error("这个导入任务不属于当前项目");
-    let still = () => view.projectId === task.projectId && store.get(jobId), parts = job.parts && job.parts.length ? job.parts : splitLongText(text2, { target: IMPORT_PART_CHARS }).map(({ text: _t, ...p }) => p);
+    let still = () => !signal.aborted && view.projectId === task.projectId && store.get(jobId), parts = job.parts && job.parts.length ? job.parts : splitLongText(text2, { target: IMPORT_PART_CHARS }).map(({ text: _t, ...p }) => p);
     job.parts && job.parts.length || await store.update(jobId, (j) => ({ ...j, parts, step: "index" }));
     let partText = (p) => text2.slice(Math.max(0, p.start - p.lead), p.end), ok = (x) => isPlainObject(x) && !x.error, local = [...store.get(jobId).localIndex || []], lines2 = job.mode === "lines", okList = () => local.map((x) => ok(x) ? x : {}), read = (t) => {
       let v = parseYaml(extractYaml(t));
@@ -14740,7 +14763,7 @@ ${yamlOf(k)}`).join(`
             parsed = good || { error: `第${p.i + 1}段的索引读不出来：${error2.message}` };
           }
       }
-      ok(parsed) && sent.set(p.i, { msgs, reply: reply2 }), local[p.i] = parsed, await store.update(jobId, (j) => ({ ...j, localIndex: local, step: "index" })), view.renderBody();
+      still() && (ok(parsed) && sent.set(p.i, { msgs, reply: reply2 }), local[p.i] = parsed, await store.update(jobId, (j) => ({ ...j, localIndex: local, step: "index" })), view.renderBody());
     }, todo = parts.filter((p) => !ok(local[p.i]));
     if (todo.length && !local.some(ok) && await readPart(todo.shift()), !still() || (await runPool(todo.map((p) => () => readPart(p)), IMPORT_CONCURRENCY, still), !still())) return;
     if (!mergeImportIndex(okList()).事实.length) {
@@ -14887,7 +14910,7 @@ ${yamlOf(k)}`).join(`
     let parts = job.parts || [], indexed = (job.localIndex || []).filter((x) => isPlainObject(x) && !x.error).length, lines2 = job.mode === "lines", whole = (p) => job.drafts && job.drafts[p.i] && !job.drafts[p.i].error && (!lines2 || !lineBatchState(job, p).left), drafted = parts.filter(whole).length, total = parts.length, failed = importFailedParts(job).filter((f) => !/还没整理/.test(f.why) && !(busy && /批未完成/.test(f.why))), doing = busy && lines2 && parts.find((p) => !whole(p) && job.drafts && job.drafts[p.i]), bs = doing ? lineBatchState(job, doing) : null, progress = `<p class="pi-hint">共${total || "?"}段，已读${indexed}段，已整理${drafted}段${job.step === "review" ? "，已完成" : ""}</p>${bs ? `<p class="pi-hint">正在整理第${doing.i + 1}段，已完成${bs.ok} / ${bs.want}批。</p>` : ""}${busy ? `<p class="pi-hint" data-imp-live="${esc(job.id)}">${esc(importLiveText(job.id))}</p>` : ""}${failed.map((f) => `<p class="pi-hint is-warn">${esc(f.why)}</p>`).join("")}`;
     if (job.step !== "review")
       return `${crumbs(1)}<div class="pi-card"><h3>导入长文<span class="pi-spacer"></span><button type="button" class="pi-btn is-sm is-ghost" data-act="import-close">回到大纲</button></h3>${progress}
-        <div class="pi-tools is-end"><button type="button" class="pi-btn is-primary is-sm" data-act="import-run"${busy ? " disabled" : ""}>${busy ? '<span class="pi-spin"></span>整理中' : failed.length ? "重试失败的段" : drafted || indexed ? "继续" : "开始"}</button></div></div>`;
+        <div class="pi-tools is-end">${busy ? '<button type="button" class="pi-btn is-sm is-danger" data-act="import-stop">停止</button>' : ""}<button type="button" class="pi-btn is-primary is-sm" data-act="import-run"${busy ? " disabled" : ""}>${busy ? '<span class="pi-spin"></span>整理中' : failed.length ? "重试失败的段" : drafted || indexed ? "继续" : "开始"}</button></div></div>`;
     if (job.mode === "lines") {
       if (!job.review || !job.review.lines) {
         let lr = job.lineReview || lineReviewFromJob(job);
@@ -15005,8 +15028,12 @@ ${yamlOf(k)}`).join(`
     async "import-run"(view) {
       let jobId = sti(view).jobId;
       !jobId || !importJobOf(view, jobId) || (await runTask(view, `import:${view.projectId}`, () => runImportJob(view, jobId)).catch(
-        (error) => toast("error", `整理中断：${error.message}。已完成的部分已保存，点「继续」接着做。`)
+        (error) => error && error.name === "AbortError" ? toast("info", "已停止整理。已完成的段已保存，点「继续」接着做。") : toast("error", `整理中断：${error.message}。已完成的部分已保存，点「继续」接着做。`)
       ), view.renderBody());
+    },
+    "import-stop"(view) {
+      let jobId = sti(view).jobId;
+      jobId && stopImport(jobId) ? view.renderBody() : toast("info", "没有正在进行的整理。");
     },
     // 采用：勾选的阶段合成一卷追加到大纲（R3）。
     //   1. 先按项目现有大纲 + 勾选阶段重算检查（R4），有问题先确认；
@@ -20130,7 +20157,7 @@ ${suffix.trim()}` : body;
   }
 
   // src/index.js
-  var VERSION = "0.3.11", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.3.12", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")

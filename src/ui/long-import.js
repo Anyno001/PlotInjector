@@ -70,13 +70,26 @@ function paintLive(jobId) {
         .querySelectorAll('[data-imp-live]')
         .forEach((el) => el.dataset.impLive === jobId && (el.textContent = text));
 }
+// 正在整理的导入任务 → 中止器（用户 2026-11-23：导入没有强制停止键）。停止时进行中的请求立即作废，已存下的段不动，点「继续」接着做。
+const importStops = new Map();
+export function stopImport(jobId) {
+    let ctl = importStops.get(jobId);
+    ctl && ctl.abort();
+    return !!ctl;
+}
 async function askLive(view, jobId, label, messages) {
     let m = liveImport.get(jobId) || (liveImport.set(jobId, new Map()), liveImport.get(jobId)),
         key = ++liveSeq,
-        last = 0;
+        last = 0,
+        ctl = importStops.get(jobId);
+    if (ctl && ctl.signal.aborted) {
+        let error = new Error('已停止');
+        throw ((error.name = 'AbortError'), error);
+    }
     (m.set(key, { label, chars: 0 }), paintLive(jobId));
     try {
         return await ask(view, 'outline', messages, {
+            signal: ctl ? ctl.signal : void 0,
             onText: (t) => {
                 m.set(key, { label, chars: t.length });
                 let now = Date.now();
@@ -108,13 +121,27 @@ export function projectAdopted(project) {
 }
 
 export async function runImportJob(view, jobId) {
+    let ctl = new AbortController();
+    importStops.set(jobId, ctl);
+    try {
+        return await runImportJobInner(view, jobId, ctl.signal);
+    } finally {
+        importStops.get(jobId) === ctl && importStops.delete(jobId);
+        if (ctl.signal.aborted) {
+            let error = new Error('已停止');
+            throw ((error.name = 'AbortError'), error);
+        }
+    }
+}
+
+async function runImportJobInner(view, jobId, signal) {
     let store = view.data.imports,
         job = await store.load(jobId),
         text = await store.source(jobId),
         task = { projectId: view.projectId };
     if (!job) throw new Error('找不到这个导入任务');
     if (job.projectId !== task.projectId) throw new Error('这个导入任务不属于当前项目');
-    let still = () => view.projectId === task.projectId && store.get(jobId),
+    let still = () => !signal.aborted && view.projectId === task.projectId && store.get(jobId),
         parts =
             job.parts && job.parts.length ? job.parts : splitLongText(text, { target: IMPORT_PART_CHARS }).map(({ text: _t, ...p }) => p);
     (job.parts && job.parts.length) || (await store.update(jobId, (j) => ({ ...j, parts, step: 'index' })));
@@ -160,6 +187,7 @@ export async function runImportJob(view, jobId) {
                         parsed = good || { error: `第${p.i + 1}段的索引读不出来：${error2.message}` };
                     }
             }
+            if (!still()) return; // 修格式那一步被停止时别把「读不出来」存进去
             ok(parsed) && sent.set(p.i, { msgs, reply: reply2 });
             ((local[p.i] = parsed), await store.update(jobId, (j) => ({ ...j, localIndex: local, step: 'index' })), view.renderBody());
         };
@@ -450,7 +478,7 @@ export function renderImport(view) {
         progress = `<p class="pi-hint">共${total || '?'}段，已读${indexed}段，已整理${drafted}段${job.step === 'review' ? '，已完成' : ''}</p>${bs ? `<p class="pi-hint">正在整理第${doing.i + 1}段，已完成${bs.ok} / ${bs.want}批。</p>` : ''}${busy ? `<p class="pi-hint" data-imp-live="${esc(job.id)}">${esc(importLiveText(job.id))}</p>` : ''}${failed.map((f) => `<p class="pi-hint is-warn">${esc(f.why)}</p>`).join('')}`;
     if (job.step !== 'review')
         return `${crumbs(1)}<div class="pi-card"><h3>导入长文<span class="pi-spacer"></span><button type="button" class="pi-btn is-sm is-ghost" data-act="import-close">回到大纲</button></h3>${progress}
-        <div class="pi-tools is-end"><button type="button" class="pi-btn is-primary is-sm" data-act="import-run"${busy ? ' disabled' : ''}>${busy ? '<span class="pi-spin"></span>整理中' : failed.length ? '重试失败的段' : drafted || indexed ? '继续' : '开始'}</button></div></div>`;
+        <div class="pi-tools is-end">${busy ? '<button type="button" class="pi-btn is-sm is-danger" data-act="import-stop">停止</button>' : ''}<button type="button" class="pi-btn is-primary is-sm" data-act="import-run"${busy ? ' disabled' : ''}>${busy ? '<span class="pi-spin"></span>整理中' : failed.length ? '重试失败的段' : drafted || indexed ? '继续' : '开始'}</button></div></div>`;
     // 好几条支线（第二批 b）：和导入一条线同一个审阅页，多一行选线。旧任务的逐条审阅数据迁进会话（linesSessionOf）。
     if (job.mode === 'lines') {
         if (!job.review || !job.review.lines) {
@@ -627,9 +655,15 @@ export const importActions = {
         !jobId ||
             !importJobOf(view, jobId) ||
             (await runTask(view, `import:${view.projectId}`, () => runImportJob(view, jobId)).catch((error) =>
-                toast('error', `整理中断：${error.message}。已完成的部分已保存，点「继续」接着做。`),
+                error && error.name === 'AbortError'
+                    ? toast('info', '已停止整理。已完成的段已保存，点「继续」接着做。')
+                    : toast('error', `整理中断：${error.message}。已完成的部分已保存，点「继续」接着做。`),
             ),
             view.renderBody());
+    },
+    'import-stop'(view) {
+        let jobId = sti(view).jobId;
+        jobId && stopImport(jobId) ? view.renderBody() : toast('info', '没有正在进行的整理。');
     },
     // 采用：勾选的阶段合成一卷追加到大纲（R3）。
     //   1. 先按项目现有大纲 + 勾选阶段重算检查（R4），有问题先确认；

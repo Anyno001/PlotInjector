@@ -309,7 +309,7 @@ export function renderClueRun(view, project, st7) {
             ? `<div class="pi-rl-focus is-col">${hint}</div>`
             : `<div class="pi-rl-focus"><b class="pi-grow">${focusLabel}</b>${focusNode ? `<button type="button" class="pi-btn is-sm" data-act="clue-leave" data-uid="${esc(focusNode.node.uid)}" title="主角已经离开这件事：不再注入它的场景和发现，只给入口">已离开</button>` : ''}${c.prog.focus ? `<button type="button" class="pi-btn is-sm" data-act="clue-unfocus" title="回到按填表判断本轮场景">${c.prog.focus.startsWith(AWAY_PREFIX) ? '其实没离开' : '换场景'}</button>` : ''}</div>`,
         cur = `<div class="pi-card pi-rl-cur"><h3>当前</h3>
-        ${todo.length ? `<div class="pi-rl-stack">${todo.join('')}</div>` : ''}
+        ${progressHtml('prebuild')}${todo.length ? `<div class="pi-rl-stack">${todo.join('')}</div>` : ''}
         ${statusRow}${focusRow}
         ${stayNotice(view, c)}
         ${unofferedHtml(c, project)}
@@ -1044,7 +1044,12 @@ export const clueActions = {
             done = [],
             failed = [],
             factOk = new Set(now.snap.facts ? now.snap.facts.keys() : []),
-            stopped = '';
+            stopped = '',
+            // 写入时在执行页显示进度（用户 2026-11-23：弹窗关掉后看不到正在写到第几行）
+            total = want.length + (kb ? knowsToWrite.length : 0),
+            prog = startProgress('prebuild').step('正在写入线索行', 100, 1e9),
+            tick = (name) => prog.real(total ? ((done.length + failed.length) / total) * 100 : 100, `${done.length + failed.length}/${total}${name ? `　刚写完${name}` : ''}${failed.length ? `，失败${failed.length}` : ''}`);
+        (tick(''), view.renderBody());
         for (let code of want) {
             if (!prebuildScopeValid(view, scope)) {
                 stopped = '写入过程中切换了聊天';
@@ -1056,6 +1061,7 @@ export const clueActions = {
                 (await api.insertRow({ tableName: fb.表, data, skipNotify: !0 }).catch(() => -1)) >= 0
                     ? (done.push(code), factOk.add(code))
                     : failed.push(code));
+            tick(code);
         }
         if (kb && !stopped)
             for (let k of knowsToWrite) {
@@ -1070,7 +1076,10 @@ export const clueActions = {
                     (await api.insertRow({ tableName: kb.表, data, skipNotify: !0 }).catch(() => -1)) >= 0
                         ? done.push(k.key)
                         : failed.push(k.key));
+                tick(k.key);
             }
+        prog.done(`写入完成：${done.length}/${total}${failed.length ? `，失败${failed.length}` : ''}${stopped ? `（${stopped}，已停下）` : ''}`);
+        setTimeout(() => prog.clear(), 8000);
         (view.runtime.clue.invalidate(), view.renderBody());
         let msg = `已写入${done.length}行${done.length ? `（${done.slice(0, 8).join('、')}${done.length > 8 ? '……' : ''}）` : ''}`;
         stopped
