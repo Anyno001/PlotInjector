@@ -1,10 +1,10 @@
 import { createTour, tourState, tourScopeOf, TOUR_REVISION } from './tour.js';
 
 import { normalizeInfinite } from '../core/infinite.js';
-import { isTrpg } from '../core/trpg.js';
+import { isTrpg } from '../trpg/trpg.js';
 import { groupProjects } from '../core/store.js';
 import { cardKey, cardName, hostDocument, hostWindow, toast } from '../host/st.js';
-import { confirmDialog, el, ensureStyle, esc, isNight, menuDialog, openDialog, options, pickFiles, setNight } from './dom.js';
+import { confirmDialog, el, ensureStyle, esc, isNight, layerParent, menuDialog, openDialog, options, pickFiles, setNight } from './dom.js';
 import { parseProjectFile, importedName, missingBoundTables } from '../core/project-file.js';
 import { ICONS } from './styles.js';
 import * as discuss from './tab-discuss.js';
@@ -28,6 +28,8 @@ const TABS = [
 ];
 // 无限流项目：大纲页签换成世界库，执行页签换成状态页。
 const INFINITE_TABS = { outline: { label: '世界库', mod: worlds }, run: { mod: infiniteRun } };
+// 跑团项目：设定叫公共设定，大纲叫模组，人设页签不显示。
+const TRPG_TABS = { setting: { label: '公共设定' }, outline: { label: '模组' }, persona: { hidden: !0 } };
 const PAGES = {
     books: { label: '世界书管理', icon: 'book', mod: books },
     data: { label: '数据管理', icon: 'box', mod: dataPage },
@@ -98,10 +100,15 @@ export function createApp({ data, runtime, version }) {
     }
     view.tabState = tabState;
     const isInfinite = () => !!(view.project() && view.project().mode === 'infinite'),
-        tabOf = (tab) => ({ ...tab, ...(isInfinite() ? INFINITE_TABS[tab.key] : null) });
+        tabOf = (tab) => ({ ...tab, ...(isInfinite() ? INFINITE_TABS[tab.key] : isTrpg(view.project()) ? TRPG_TABS[tab.key] : null) }),
+        // 当前页签；跑团项目里被藏起来的页签（人设）退回执行页
+        tabKey = () => {
+            const tab = TABS.find((item) => item.key === view.tab);
+            return tab && tabOf(tab).hidden ? 'run' : view.tab;
+        };
     function current() {
         if (view.page) return PAGES[view.page].mod;
-        return tabOf(TABS.find((tab) => tab.key === view.tab) || TABS.find((tab) => tab.key === 'run')).mod;
+        return tabOf(TABS.find((tab) => tab.key === tabKey()) || TABS.find((tab) => tab.key === 'run')).mod;
     }
     function sideHtml() {
         const index = data.index(),
@@ -153,9 +160,10 @@ export function createApp({ data, runtime, version }) {
                 view.page || !project
                     ? ''
                     : `<div class="pi-tabs">${TABS.map(tabOf)
+                          .filter((tab) => !tab.hidden)
                           .map(
                               (tab) =>
-                                  `<button type="button" class="pi-tab${tab.key === view.tab ? ' is-sel' : ''}" data-act="tab" data-tab="${tab.key}">${tab.label}</button>`,
+                                  `<button type="button" class="pi-tab${tab.key === tabKey() ? ' is-sel' : ''}" data-act="tab" data-tab="${tab.key}">${tab.label}</button>`,
                           )
                           .join('')}</div>`,
             rename =
@@ -397,7 +405,7 @@ export function createApp({ data, runtime, version }) {
                 summary.lines ? `${summary.lines}条剧情线` : '',
                 summary.labels ? `${summary.labels}条标签` : '',
                 summary.personas ? `${summary.personas}条人设` : '',
-                summary.setting ? '设定' : '',
+                summary.setting ? (isTrpg(project) ? '公共设定' : '设定') : '',
             ].filter(Boolean),
             // 当前聊天读得到表格时，核对项目绑定的表在不在
             missing = summary.clue ? missingBoundTables(project, outline.currentTables()) : [],
@@ -607,7 +615,7 @@ export function createApp({ data, runtime, version }) {
                     (event.target === root && root.dataset.down && close(), delete root.dataset.down);
                 }),
                 doc.addEventListener('keydown', onKey, !0),
-                doc.body.appendChild(root),
+                layerParent(doc).appendChild(root),
                 (view.restored = !1),
                 data.isReady() ? restore() : render(),
                 maybeAutoTour()));

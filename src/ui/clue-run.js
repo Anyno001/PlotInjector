@@ -19,10 +19,6 @@ import { PLOT_MODES, isClueMode, normalizeClue } from '../core/clue-model.js';
 
 import { stringifyYaml, parseYaml } from '../core/yaml.js';
 import { acuApi } from '../app/clue-runtime.js';
-import { isTrpg } from '../core/trpg.js';
-import { kpCard } from './trpg-kp-card.js';
-import { sceneHintHtml } from './trpg-steer.js';
-import { trpgWantFacts, trpgRowFilter } from '../core/trpg-rows.js';
 import { NODE_STATUS_LABELS, AWAY_PREFIX } from '../core/clue-rules.js';
 import { ICONS } from './styles.js';
 import { stageLabel, isPlainObject } from '../core/outline.js';
@@ -54,13 +50,6 @@ export const FOCUS_SOURCE = {
 };
 
 // inner：放在「运行设置」里时不单独成卡
-// 跑团项目：模板的初始行只放眼前要用的线索（core/trpg-rows.js），其余标签照样存进项目，推进时自动补行。普通项目原样全给。
-function trpgSeedRows(project, c, factRows, knowRows) {
-    if (!isTrpg(project) || !c) return { factRows, knowRows };
-    let keep = trpgRowFilter(c.compiled, trpgWantFacts(c.compiled, c.state, c.snap, c.prog, project.clue));
-    return { factRows: factRows.filter((f) => keep(f.code)), knowRows: knowRows.filter((k) => keep(k.fact)) };
-}
-
 export function modeCard(project, inner = !1) {
     let mode = project.clue ? project.clue.mode : 'outline',
         body = `<div class="pi-seg">${PLOT_MODES.map((item) => `<button type="button" class="pi-seg-btn${item.value === mode ? ' is-sel' : ''}" data-act="clue-mode" data-mode="${item.value}">${esc(item.label)}</button>`).join('')}</div>`;
@@ -305,10 +294,7 @@ export function renderClueRun(view, project, st7) {
                     : '<button type="button" class="pi-btn is-sm" data-act="clue-pause" data-value="1" title="去玩日常：所有线索内容都不注入，进度保留">暂停</button>'
         }${ellip}</div>`,
         focusLabel = [hereText(c), focusNode ? esc(focusNode.node.name) : ''].filter(Boolean).join(' · ') || esc(FOCUS_SOURCE[focus.source]),
-        hint = isTrpg(project) ? sceneHintHtml(c) : '',
-        focusRow = hint
-            ? `<div class="pi-rl-focus is-col">${hint}</div>`
-            : `<div class="pi-rl-focus"><b class="pi-grow">${focusLabel}</b>${focusNode ? `<button type="button" class="pi-btn is-sm" data-act="clue-leave" data-uid="${esc(focusNode.node.uid)}" title="主角已经离开这件事：不再注入它的场景和发现，只给入口">已离开</button>` : ''}${c.prog.focus ? `<button type="button" class="pi-btn is-sm" data-act="clue-unfocus" title="回到按填表判断本轮场景">${c.prog.focus.startsWith(AWAY_PREFIX) ? '其实没离开' : '换场景'}</button>` : ''}</div>`,
+        focusRow = `<div class="pi-rl-focus"><b class="pi-grow">${focusLabel}</b>${focusNode ? `<button type="button" class="pi-btn is-sm" data-act="clue-leave" data-uid="${esc(focusNode.node.uid)}" title="主角已经离开这件事：不再注入它的场景和发现，只给入口">已离开</button>` : ''}${c.prog.focus ? `<button type="button" class="pi-btn is-sm" data-act="clue-unfocus" title="回到按填表判断本轮场景">${c.prog.focus.startsWith(AWAY_PREFIX) ? '其实没离开' : '换场景'}</button>` : ''}</div>`,
         cur = `<div class="pi-card pi-rl-cur"><h3>当前</h3>
         ${progressHtml('prebuild')}${todo.length ? `<div class="pi-rl-stack">${todo.join('')}</div>` : ''}
         ${statusRow}${focusRow}
@@ -320,7 +306,7 @@ export function renderClueRun(view, project, st7) {
         prog = `<div class="pi-card"><h3>进度<span class="pi-spacer"></span><button type="button" class="pi-icon-btn" data-act="run-prog-menu" title="更多" aria-label="更多">${ICONS.more}</button></h3>
         ${lineCard(c, project)}
         ${groups.length ? `<div class="pi-tl">${groups.join('')}</div>` : '<p class="pi-hint">大纲为空。</p>'}</div>`;
-    return `${cur}${isTrpg(project) ? kpCard(view, project, c, d) : ''}${prog}${settings}`;
+    return `${cur}${prog}${settings}`;
 }
 
 // 操作记录条数（设置与记录里的一行）
@@ -1172,7 +1158,7 @@ export const clueActions = {
             gen = synthesizeClueTemplate(base, {
                 clue: hasFacts
                     ? { scenes: plan.scenes }
-                    : { controlRow: ['主线', '', catalogNow], ...trpgSeedRows(project, liveNow, picked, plan.knows), scenes: plan.scenes },
+                    : { controlRow: ['主线', '', catalogNow], factRows: picked, knowRows: plan.knows, scenes: plan.scenes },
             }),
             res = null;
         try {

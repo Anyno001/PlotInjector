@@ -3,7 +3,7 @@ import { DEFAULT_PARAMS, OLD_DEFAULT_PARAMS } from './inject.js';
 import { normalizeInfinite } from './infinite.js';
 import { normalizeAlias, normalizeRenames } from './align.js';
 import { makeId } from './outline.js';
-import { normalizeTrpg } from './trpg.js';
+import { normalizeTrpg } from '../trpg/trpg.js';
 import { emptyPersonas, normalizePersonas } from './personas.js';
 import { DEFAULT_MEMO, DEFAULT_WB_RULE, migrateOc, normalizeWbRule } from './refs.js';
 

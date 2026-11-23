@@ -21,16 +21,31 @@ import {
 
 import { acuApi } from '../app/clue-runtime.js';
 import { cloneTables } from '../core/clue-tables.js';
-import { prepareLabels } from './clue-run.js';
+import * as origRun from './clue-run.js';
+import * as trpgRun from '../trpg/trpg-clue-run.js';
 
 import { CLUE_STAGE_KEYS, reidConflicts, isClueMode, normalizeClue } from '../core/clue-model.js';
 import { putVolume, prepareCommit, commitOutline, draftDiffers, targetStamp } from '../core/review-draft.js';
-import { renderImport, importActions, importJobOf } from './long-import.js';
+import * as origImport from './long-import.js';
+import * as origReview from './import-review.js';
+import * as origLong from '../core/long-import.js';
+import * as trpgImport from '../trpg/trpg-long-import-ui.js';
+import * as trpgReview from '../trpg/trpg-import-review.js';
+import * as trpgLong from '../trpg/trpg-long-import.js';
+import { isTrpg } from '../trpg/trpg.js';
+import { routeActions, viewIsTrpg, outlineWord } from '../trpg/trpg-route.js';
+import { importJobKind } from '../core/long-import.js';
+
+// 导入、审阅、执行页这几块：跑团项目走 src/trpg 里的拷贝，其余项目走原文件。
+const importActions = routeActions(origImport.importActions, trpgImport.importActions);
+const renderImport = (view) => (viewIsTrpg(view) ? trpgImport : origImport).renderImport(view);
+const importJobOf = (view, jobId) => (viewIsTrpg(view) ? trpgImport : origImport).importJobOf(view, jobId);
+const reviewOnInput = (view, ...args) => (viewIsTrpg(view) ? trpgReview : origReview).reviewOnInput(view, ...args);
+const prepareLabels = (view, ...args) => (viewIsTrpg(view) ? trpgRun : origRun).prepareLabels(view, ...args);
+const projectClueIssues = (project, ...args) => (isTrpg(project) ? trpgLong : origLong).projectClueIssues(...args);
 // 讨论页「打开审阅」用（经这里转一下，免得讨论页直接引 long-import 造成模块加载顺序问题）
-export { openEditReview, showEditReview } from './long-import.js';
-import { openEditReview, showEditReview } from './long-import.js';
-import { reviewOnInput } from './import-review.js';
-import { projectClueIssues, importJobKind } from '../core/long-import.js';
+export const openEditReview = (view, ...args) => (viewIsTrpg(view) ? trpgImport : origImport).openEditReview(view, ...args);
+export const showEditReview = (view, ...args) => (viewIsTrpg(view) ? trpgImport : origImport).showEditReview(view, ...args);
 import { projectSecretNames } from '../core/store.js';
 
 import { settingPiecesFromEntries, afterImport, classifyEntries, pickWorldbookEntries } from './wb-import.js';
@@ -39,7 +54,13 @@ import { ctx, downloadBlob, toast } from '../host/st.js';
 
 import { resolveRefs, progressText, fitRefs } from './discuss-refs.js';
 
-import { compileClue, parseCondition, conditionRefs, isRequired } from '../core/clue-rules.js';
+import * as origRules from '../core/clue-rules.js';
+import * as trpgRules from '../trpg/trpg-clue-rules.js';
+import { isRequired } from '../core/clue-rules.js';
+// 条件的解析和校验：跑团项目用 src/trpg 里的拷贝（认得「情况:」），其余项目照旧。每次按传入的项目即时取，不留模块级状态。
+const rulesOf = (project) => (isTrpg(project) ? trpgRules : origRules);
+const compileClue = (project, ...args) => rulesOf(project).compileClue(...args);
+const parseCondition = (project, ...args) => rulesOf(project).parseCondition(...args);
 
 import {
     isPlainObject,
@@ -160,7 +181,7 @@ function checkErrorCount(view, project) {
     let n = 0;
     try {
         let clue = isClueMode(project);
-        n = clue ? projectClueIssues(project.outline.volumes, { secrets: projectSecretNames(project) }).filter((x) => x.level === 'error').length : 0;
+        n = clue ? projectClueIssues(project, project.outline.volumes, { secrets: projectSecretNames(project) }).filter((x) => x.level === 'error').length : 0;
     } catch {}
     return (checkCache.set(key, n), n);
 }
@@ -169,7 +190,7 @@ function checkHtml(view, project) {
         current = clue && view.runtime.activeId() === view.projectId ? view.runtime.clue.compute() : null,
         { known, claimed } = chatFactSets(current),
         base = outlineIssues(project.outline.volumes).filter((x) => !clue || x.kind !== 'no-time'),
-        more = clue ? projectClueIssues(project.outline.volumes, { secrets: projectSecretNames(project), knownFacts: known, claimedFacts: claimed }) : [],
+        more = clue ? projectClueIssues(project, project.outline.volumes, { secrets: projectSecretNames(project), knownFacts: known, claimedFacts: claimed }) : [],
         errs = more.filter((x) => x.level === 'error'),
         asks = more.filter((x) => x.level !== 'error'),
         total = base.length + more.length,
@@ -181,8 +202,8 @@ function checkHtml(view, project) {
                 ? `<button type="button" class="pi-titem is-issue pi-check-item" data-act="issue-go" data-id="${esc(id)}">${body}</button>`
                 : `<div class="pi-titem is-issue pi-check-item">${body}</div>`;
         };
-    if (!total) return `<div class="pi-card"><h3>大纲检查</h3><p class="pi-hint">没有发现问题。${clue ? '（按线索推进检查了：走不走得通、拿不拿得到线索、替代途径。）' : ''}</p></div>`;
-    return `<div class="pi-card"><h3>大纲检查<span class="pi-meta">${total}项</span></h3>
+    if (!total) return `<div class="pi-card"><h3>${outlineWord(project)}检查</h3><p class="pi-hint">没有发现问题。${clue ? '（按线索推进检查了：走不走得通、拿不拿得到线索、替代途径。）' : ''}</p></div>`;
+    return `<div class="pi-card"><h3>${outlineWord(project)}检查<span class="pi-meta">${total}项</span></h3>
         ${clue ? '<p class="pi-hint">点一条跳到那个阶段。想让AI改：点「审阅修改…」，在那条线的页上写意见。</p>' : ''}
         ${errs.length ? `<div class="pi-rv-sec">要处理的问题（${errs.length}）</div>${errs.map(row).join('')}` : ''}
         ${base.length ? `${clue ? `<div class="pi-rv-sec">格式（${base.length}）</div>` : ''}${base.map(row).join('')}` : ''}
@@ -297,7 +318,7 @@ function nodeBasics(meta, index, value, keys, clueOn) {
         ${rest.map((key) => `<label class="pi-field"><span>${esc(key)}</span>${LONG_KEYS.has(key) ? area(key) : input(key)}</label>`).join('')}`;
 }
 
-function nodeEditor(stage, meta, clueOn = false) {
+function nodeEditor(stage, meta, clueOn = false, project = null) {
     const list = Array.isArray(stage.data[meta.field]) ? stage.data[meta.field] : [],
         items = list
             .map((item, index) => {
@@ -309,7 +330,7 @@ function nodeEditor(stage, meta, clueOn = false) {
                 return `<div class="pi-node"><div class="pi-node-hd"><span class="pi-badge">${esc(nodeWord(meta, clueOn))} ${index + 1}</span><span class="pi-grow"></span>
             <button type="button" class="pi-icon-btn" data-act="node-menu" data-field="${esc(meta.field)}" data-i="${index}" data-last="${index < list.length - 1 ? '' : '1'}" title="更多">${ICONS.more}</button></div>
             ${nodeBasics(meta, index, value, keys, clueOn)}
-            ${playEditor(meta, value, index)}${clueOn ? clueNodeFields(meta, index, value) : ''}</div>`;
+            ${playEditor(meta, value, index)}${clueOn ? clueNodeFields(meta, index, value, project) : ''}</div>`;
             })
             .join('');
     return `<div class="pi-card"><h3>${esc(clueOn ? nodeWord(meta, !0) : meta.field)}<span class="pi-spacer"></span><button type="button" class="pi-btn is-sm" data-act="node-add" data-field="${esc(meta.field)}" data-kind="${meta.kind}">添加</button></h3>
@@ -323,26 +344,28 @@ function nodeTabs(stage, kind, clueOn = false) {
 }
 
 // 阶段的进入 / 结束条件（第四批）：都没写时收起，标题后一句摘要；写了内容的展开
-function condBrief(v) {
+function condBrief(v, project = null) {
     if (v == null || v === '') return '';
     let errs = [],
-        c = parseCondition(v, errs);
-    return errs.length ? String(typeof v === 'string' ? v : JSON.stringify(v)).slice(0, 40) : condWordsShort(c);
+        c = parseCondition(project, v, errs);
+    return errs.length ? String(typeof v === 'string' ? v : JSON.stringify(v)).slice(0, 40) : condWordsShort(c, project);
 }
-function condWordsShort(c) {
-    let r = conditionRefs(c);
-    return [...r.facts].map((f) => `拿到${f}`).concat([...r.nodes].map((n) => `${n}完成`), [...r.lines].map((l) => `${l}完成`)).slice(0, 3).join('、') || '已写';
+function condWordsShort(c, project = null) {
+    let rl = rulesOf(project),
+        r = rl.conditionRefs(c);
+    let says = rl.sayAtoms ? rl.sayAtoms(c).map((t) => (t.length > 14 ? `${t.slice(0, 14)}…` : t)) : [];
+    return [...r.facts].map((f) => `拿到${f}`).concat([...r.nodes].map((n) => `${n}完成`), [...r.lines].map((l) => `${l}完成`), says).slice(0, 3).join('、') || '已写';
 }
-function stageCondFold(stage) {
+function stageCondFold(stage, project = null) {
     let keys = ['进入条件', '结束条件'],
         has = keys.filter((k) => stage.data[k] != null && stage.data[k] !== ''),
-        brief = has.length ? has.map((k) => `${k.slice(0, 2)}：${condBrief(stage.data[k])}`).join('；') : '都没写',
+        brief = has.length ? has.map((k) => `${k.slice(0, 2)}：${condBrief(stage.data[k], project)}`).join('；') : '都没写',
         yamlOf = (k) => (stage.data[k] == null ? '' : typeof stage.data[k] === 'string' ? stage.data[k] : stringifyYaml(stage.data[k]).trim());
     return `<details class="pi-fold"${has.length ? ' open' : ''}><summary><b>进入 / 结束条件</b><span>${esc(brief)}</span></summary>
         ${keys.map((key) => `<label class="pi-field"><span>${key}</span><textarea class="pi-ta is-mono pi-ta-auto" rows="2" data-stage-yaml="${key}">${esc(yamlOf(key))}</textarea></label>`).join('')}<p class="pi-status" data-stage-yaml-status></p></details>`;
 }
 
-function stageEditor(volume, stage, raw, kind, clueOn = false) {
+function stageEditor(volume, stage, raw, kind, clueOn = false, project = null) {
     const known = /* @__PURE__ */ new Set([
             '时间范围',
             'AI指令',
@@ -365,12 +388,13 @@ function stageEditor(volume, stage, raw, kind, clueOn = false) {
             changeLines(stage.data).join(`
 `),
         )}</textarea></label>
-        ${clueOn ? stageCondFold(stage) : ''}
+        ${clueOn ? stageCondFold(stage, project) : ''}
 ${extra.length ? `<p class="pi-hint">另有字段：${esc(extra.join('、'))}（在YAML原文里编辑）</p>` : ''}</div>
         ${nodeTabs(stage, kind, clueOn)}${nodeEditor(
             stage,
             NODE_FIELDS.find((meta) => meta.kind === kind),
             clueOn,
+            project,
         )}`;
 }
 
@@ -478,7 +502,7 @@ export function render(view) {
         busy = view.busy.outline,
         kind = NODE_FIELDS.some((meta) => meta.kind === s.nodeKind) ? s.nodeKind : NODE_FIELDS[0].kind,
         editor = stage
-            ? stageEditor(volume, stage, s.raw, kind, isClueMode(project))
+            ? stageEditor(volume, stage, s.raw, kind, isClueMode(project), project)
             : volume
               ? volumeEditor(volume, project)
               : `<div class="pi-card"><p class="pi-hint">从左边选${vq(project, '一卷', '一条剧情线')}或一个阶段编辑。</p></div>`;
@@ -487,7 +511,7 @@ export function render(view) {
         hasVols = project.outline.volumes.length > 0,
         dirtyN = hasVols ? editDraftCount(view, project) : 0,
         errN = hasVols ? checkErrorCount(view, project) : 0;
-    return `<div class="pi-card"><h3>大纲<span class="pi-spacer"></span><button type="button" class="pi-icon-btn" data-act="outline-menu" title="更多">${ICONS.more}</button></h3>
+    return `<div class="pi-card"><h3>${outlineWord(project)}<span class="pi-spacer"></span><button type="button" class="pi-icon-btn" data-act="outline-menu" title="更多">${ICONS.more}</button></h3>
         ${writing ? `<button type="button" class="pi-btn is-primary pi-ol-write" data-act="multi-stop"><span class="pi-spin"></span>写作中${s.multi.k}/${s.multi.n}，点击停止</button>` : `<button type="button" class="pi-btn is-primary pi-ol-write" data-act="ai-volume"${busy ? ' disabled' : ''}>${busy ? '<span class="pi-spin"></span>写作中' : vq(project, `AI写第${project.outline.volumes.length + 1}卷`, 'AI写新剧情线')}</button>`}
         <div class="pi-ol-tools"><button type="button" class="pi-btn is-sm" data-act="review-open"${hasVols ? '' : ' disabled'} title="逐页查看各条线，在对应页写意见后一次发给AI，确认后保存到大纲">审阅修改${dirtyN ? `<span class="pi-badge is-warn">${dirtyN}</span>` : ''}</button>
             <button type="button" class="pi-btn is-sm" data-act="import-open-panel">导入长文</button>
@@ -629,7 +653,7 @@ function setDraft(view, mode, reply, extra = {}, { all = !1 } = {}) {
         }
         const replacedIds = new Set(replaced.map((u) => u.id)),
             base = project.outline.volumes.map((v) => ({ ...v, stages: v.stages.filter((s) => !replacedIds.has(s.id)) })),
-            keepIds = compileClue(replaced.map((u) => ({ ...u.volume, stages: [u.stage] })))
+            keepIds = compileClue(project, replaced.map((u) => ({ ...u.volume, stages: [u.stage] })))
                 .nodes.map((n) => n.uid)
                 .filter(Boolean),
             current = view.runtime.activeId() === view.projectId ? view.runtime.clue.compute() : null,
@@ -1170,7 +1194,7 @@ export const actions = {
     },
     async 'outline-menu'(view) {
         const pick = await menuDialog({
-            title: '大纲',
+            title: outlineWord(view.project()),
             items: [
                 { label: st(view).overview ? '收起总览' : '总览', value: 'overview-toggle' },
                 { label: `${st(view).history ? '收起历史' : '历史'}（${view.project().outline.history.length}）`, value: 'history' },
@@ -1564,7 +1588,7 @@ ${yaml}
             const current = view.runtime.clue.compute(),
                 preview = replaceStages(project.outline.volumes, volume.id, ids, incoming),
                 guard = historyGuard(project.outline.volumes, preview.volumes, current.snap, current.prog, project.clue, {
-                    scope: new Set(compileClue([{ ...volume, stages: old }]).nodes.map((n) => n.uid)),
+                    scope: new Set(compileClue(project, [{ ...volume, stages: old }]).nodes.map((n) => n.uid)),
                 });
             incoming = restoreHistory([{ ...volume, stages: incoming }], guard).flatMap((v) => v.stages);
         }
@@ -1741,13 +1765,13 @@ export const CLUE_YAML_KEYS = ['必需', '开放条件', '提前条件', '完成
 
 // 线索推进的节点字段（第四批）：入口、场景直接显示；完成条件和发现收在「线索条件」里（写了就展开，收起时一句摘要）；
 // 不常用的（事件、偏转、触发、作者备注、开放 / 提前条件、相关事实）收在「更多」里，写了内容的不藏。
-export function clueNodeFields(meta2, index, value) {
+export function clueNodeFields(meta2, index, value, project = null) {
     let yamlOf = (v) => (v === void 0 || v === null || v === '' ? '' : typeof v == 'string' ? v : stringifyYaml(v).trim()),
         has = (k) => value[k] !== void 0 && value[k] !== null && value[k] !== '',
         text = (key, hint = '') => `<label class="pi-field"><span>${esc(key)}</span><textarea class="pi-ta pi-ta-auto" rows="2" data-node-field="${esc(meta2.field)}" data-i="${index}" data-k="${esc(key)}"${hint ? ` placeholder="${esc(hint)}"` : ''}>${esc(value[key] ?? '')}</textarea></label>`,
         yaml = (key) => `<label class="pi-field"><span>${esc(key)}</span><textarea class="pi-ta is-mono pi-ta-auto" rows="2" data-node-yaml="${esc(meta2.field)}" data-i="${index}" data-k="${esc(key)}" placeholder="${esc(CLUE_PLACEHOLDER[key] || '')}">${esc(yamlOf(value[key]))}</textarea></label>`,
         gets = discoveryList(value).map((d) => d.fact).filter(Boolean),
-        condSum = [has('完成条件') ? `完成：${condBrief(value.完成条件)}` : '', gets.length ? `获得${gets.join('、')}` : ''].filter(Boolean).join('；') || '都没写',
+        condSum = [has('完成条件') ? `完成：${condBrief(value.完成条件, project)}` : '', gets.length ? `获得${gets.join('、')}` : ''].filter(Boolean).join('；') || '都没写',
         moreKeys = ['事件', '偏转', '触发', '作者备注', '开放条件', '提前条件', '相关事实'].filter((k) => k in value || ['作者备注', '开放条件', '提前条件', '相关事实'].includes(k)),
         moreHas = moreKeys.filter(has),
         moreSum = moreHas.length ? `已写：${moreHas.join('、')}` : '都没写',
@@ -1876,7 +1900,7 @@ export function rewriteGuardNow(view, draft) {
         units = flattenUnits(project.outline.volumes),
         from = units.findIndex((u) => u.id === draft.fromUnitId),
         restIds = new Set(
-            compileClue(units.slice(from).map((u) => ({ ...u.volume, stages: [u.stage] })))
+            compileClue(project, units.slice(from).map((u) => ({ ...u.volume, stages: [u.stage] })))
                 .nodes.map((n) => n.uid)
                 .filter(Boolean),
         );
@@ -1906,7 +1930,7 @@ export function applyYamlField(view, target) {
     try {
         value = text === '' ? void 0 : parseYaml(text);
         let errs = [];
-        ['开放条件', '提前条件', '完成条件', '进入条件', '结束条件'].includes(key) && parseCondition(value, errs);
+        ['开放条件', '提前条件', '完成条件', '进入条件', '结束条件'].includes(key) && parseCondition(view.project(), value, errs);
         if (errs.length) throw new Error(errs.join('；'));
         status && ((status.textContent = ''), status.classList.remove('is-err'));
     } catch (error) {
@@ -1945,5 +1969,5 @@ export function currentTables() {
 
 export function afterAdopt(view) {
     let p = view.project();
-    p && isClueMode(p) && compileClue(p.outline.volumes).lines.length && prepareLabels(view);
+    p && isClueMode(p) && compileClue(p, p.outline.volumes).lines.length && prepareLabels(view);
 }

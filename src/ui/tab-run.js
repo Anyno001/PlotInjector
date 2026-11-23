@@ -1,6 +1,15 @@
 import { isClueMode } from '../core/clue-model.js';
-import { renderClueRun, modeCard, clueActions, clueOnChange } from './clue-run.js';
-import { kpActions } from './trpg-kp-card.js';
+import * as origRun from './clue-run.js';
+import * as trpgRun from '../trpg/trpg-clue-run.js';
+import { kpActions } from '../trpg/trpg-kp-card.js';
+import { isTrpg } from '../trpg/trpg.js';
+import { routeActions, viewIsTrpg } from '../trpg/trpg-route.js';
+
+// 执行页：跑团项目走 src/trpg 里的拷贝，其余项目走原文件。
+const clueActions = routeActions(origRun.clueActions, trpgRun.clueActions);
+const renderClueRun = (view, project, st) => (isTrpg(project) ? trpgRun : origRun).renderClueRun(view, project, st);
+const modeCard = (project) => (isTrpg(project) ? trpgRun : origRun).modeCard(project);
+const clueOnChange = (view, target) => (viewIsTrpg(view) ? trpgRun : origRun).clueOnChange(view, target);
 
 import { DEFAULT_PARAMS, PACES, POSITIONS, ROLES, buildIndexText, carriedNodes, positionLabel } from '../core/inject.js';
 import { flattenUnits, stageLabel, stageNodes, volumeShowName } from '../core/outline.js';

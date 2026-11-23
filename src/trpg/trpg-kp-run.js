@@ -1,0 +1,243 @@
+// 跑团模式的 KP 自动检测（运行时）：每轮回复结束后发一次检测请求，把核对过的结果写进进度。
+// 排队、重试、通知卡的写法照大纲模式的检测（app/runtime.js）。判断结果存在注入器自己的进度里，表格只是镜像（通过的线索写回事实表、知情表，写不进去只记日志）。
+import { chatMessages } from '../host/st.js';
+import { requestLlm } from '../host/llm.js';
+import { resolveLlm } from '../core/store.js';
+import { menuDialog } from '../ui/dom.js';
+import { isPlainObject } from '../core/outline.js';
+import { effectiveFact } from './trpg-clue-rules.js';
+import { findSheet, sheetRows, cellText, SELF_KEYS } from './trpg-clue-tables.js';
+import { acuApi } from './trpg-clue-runtime.js';
+import { trpgCheckResults } from './trpg.js';
+import { aiFloorCount, KP_LEVELS, kpPushTarget } from './trpg-kp.js';
+import { steerContext } from './trpg-steer.js';
+import {
+    KP_NOTE,
+    kpAutoOn,
+    recentTwo,
+    kpCandidates,
+    kpPendingSays,
+    kpScenes,
+    kpCheckMessages,
+    parseKpReply,
+    verifyKp,
+    kpFactLabel,
+    kpLogEntry,
+    pushLog,
+} from './trpg-kp-check.js';
+
+const CHECK_RETRIES = 3;
+const RETRY_GAP_MS = 2e3;
+
+// deps：data、notice、clue（运行时里的线索运行时）、getProject / getProgress / setProgress、ticket / ticketValid、log、setTimeout
+export function createKpRunner(deps) {
+    const { data, notice, log } = deps;
+    let running = false,
+        again = false,
+        lastKey = '';
+
+    function kpOf() {
+        return (deps.getProgress() || {}).trpgKp || {};
+    }
+    function saveKp(patch) {
+        let prog = deps.getProgress();
+        prog && deps.setProgress({ ...prog, trpgKp: { ...(prog.trpgKp || {}), ...patch } }, 'trpg-kp');
+    }
+
+    // floor：刚收到的那一楼；manual：手动重试时不看「已经检测过这一楼」
+    async function run({ floor = -1, manual = false } = {}) {
+        let project = deps.getProject();
+        if (!project || !kpAutoOn(data.settings())) return null;
+        if (running) return ((again = true), log('跑团检测：上一次还没结束，结束后再检测'), null);
+        let chat = chatMessages(),
+            at = floor >= 0 && chat[floor] && !chat[floor].is_user ? floor : chat.length - 1,
+            msg = chat[at];
+        if (!msg || msg.is_user || msg.is_system) return null;
+        let key = `${deps.ticket().chat}:${at}:${Number(msg.swipe_id) || 0}:${msg.send_date ?? ''}`;
+        if (!manual && key === lastKey) return null;
+        let c = deps.clue.compute();
+        if (!c || !c.snap.api || c.prog.paused || !c.snap.enabled) return null;
+        running = true;
+        let iso0 = deps.clue.opScope().iso;
+        let t = deps.ticket();
+        try {
+            lastKey = key;
+            let checks = trpgCheckResults(chat),
+                recent = recentTwo(chat),
+                candidates = kpCandidates({ prog: deps.getProgress(), chat, floor: at, state: c.state, snap: c.snap, effective: (id, snap) => effectiveFact(id, snap, c.prog), checks }),
+                says = kpPendingSays({ compiled: c.compiled, state: c.state, conds: c.prog.trpgConds }),
+                scenes = kpScenes(c.state),
+                labels = isPlainObject(project.clue.labels) ? project.clue.labels : {},
+                labelOf = (id) => kpFactLabel(labels, id, (candidates.find((x) => x.fact === id) || {}).text),
+                ctx = steerContext(project, c),
+                messages = kpCheckMessages({ recent, candidates, says, scenes, stage: ctx.stage, rules: ctx.rules, labelOf });
+            log(`跑团检测：第 ${at} 楼，${candidates.length} 条线索、${says.length} 个条件`);
+            let parsed = null;
+            for (let attempt = 0; ; attempt += 1)
+                try {
+                    if (!deps.ticketValid(t)) return null;
+                    parsed = parseKpReply(await requestLlm(messages, resolveLlm(data.settings(), 'check'), { timeoutMs: 12e4 }));
+                    break;
+                } catch (error) {
+                    if (!deps.ticketValid(t) || attempt >= CHECK_RETRIES) throw error;
+                    (log(`跑团检测请求失败：${error.message}，${RETRY_GAP_MS / 1e3} 秒后第 ${attempt + 1} 次重试`),
+                        await new Promise((resolve) => deps.setTimeout(resolve, RETRY_GAP_MS)));
+                }
+            if (!deps.ticketValid(t)) return (log('跑团检测返回时聊天或项目已切换，结果丢弃'), null);
+            // 返回时这一楼已经被删、被重新生成：结果不要了
+            let now = chatMessages()[at];
+            if (!now || now.send_date !== msg.send_date || (Number(now.swipe_id) || 0) !== (Number(msg.swipe_id) || 0))
+                return (log('跑团检测返回时这一楼已经变了，结果丢弃'), null);
+            notice.hide('checkfail');
+            let result = verifyKp(parsed, { candidates, says, scenes, recent }),
+                prog0 = c.prog.factOverrides || {};
+            // 通过的线索：已有人工记录（或 KP 之前判过）的不覆盖
+            let recorded = [];
+            for (let f of result.facts) {
+                if (!f.ok || prog0[f.id]) continue;
+                try {
+                    let text = (candidates.find((x) => x.fact === f.id) || {}).text || '';
+                    deps.clue.act({ kind: 'fact', target: f.id, value: 'confirmed', text, note: KP_NOTE });
+                    recorded.push({ id: f.id, text, label: labelOf(f.id) });
+                } catch (error) {
+                    log(`跑团检测：记录线索失败：${error.message}`);
+                }
+            }
+            // 场景：命中的节点在可进行的前提下设为焦点
+            if (result.scene && result.scene !== c.state.focus.uid) {
+                try {
+                    deps.clue.setFocus(result.scene);
+                } catch (error) {
+                    log(`跑团检测：设场景失败：${error.message}`);
+                }
+            }
+            let stage = c.state.current ? c.state.current.id : '',
+                kp = kpOf(),
+                muted = !!stage && kp.offMuted === stage,
+                conds = { ...(kp.conds || {}) };
+            for (let x of result.conds) x.ok && (conds[x.text] = { floor: at, quote: x.quote });
+            // 判断以上面的进度记录为准；表格只是镜像，写不进去只记日志
+            let tables = await mirrorTables(recorded, project, t, iso0);
+            if (!deps.ticketValid(t)) return (log('跑团检测写表后聊天或项目已切换，不再保存日志'), null);
+            saveKp({ conds, log: pushLog(kp.log, { ...kpLogEntry({ floor: at, result, labelOf, off: result.offTrack }), ...(tables.length ? { tables } : {}) }) });
+            deps.clue.invalidate('kp-check');
+            result.offTrack && !muted && offerOffTrack({ result, stage });
+            log(`跑团检测完成：拿到 ${result.facts.filter((x) => x.ok).length} 条线索，${result.conds.filter((x) => x.ok).length} 个条件成立${result.offTrack ? '，偏离模组' : ''}`);
+            return result;
+        } catch (error) {
+            if (deps.ticketValid(t)) {
+                lastKey = '';
+                log(`跑团检测失败：${error.message}`);
+                notice.show({
+                    id: 'checkfail',
+                    title: '跑团检测失败',
+                    body: `已自动重试${CHECK_RETRIES}次：${error.message}`,
+                    actions: [
+                        { label: '重试', primary: !0, run: () => run({ floor: at, manual: !0 }) },
+                        { label: '关闭', run: () => {} },
+                    ],
+                });
+            }
+            return null;
+        } finally {
+            running = false;
+            again && ((again = false), deps.setTimeout(() => run({ floor: -1 }), 0));
+        }
+    }
+
+    // 判定通过的线索写回数据库表格（写法照 trpg-clue-run.js 的改线索标签）：
+    // 每条写之前按编号重新找行号、核对作用域，优先官方 updateRow，旧版逐格 updateCell，写完回读核对；
+    // 表里没有对应行不新建；写不进去不影响判断，只返回说明记进日志。
+    async function mirrorTables(items, project, t, iso0) {
+        if (!items.length) return [];
+        let api = acuApi(),
+            fb = ((project.clue.bindings || {}).facts || [])[0],
+            kb = ((project.clue.bindings || {}).knowledge || [])[0],
+            first = (v, d = '') => String(Array.isArray(v) ? (v[0] ?? d) : (v ?? d)),
+            live = () => deps.ticketValid(t) && deps.clue.opScope().iso === iso0,
+            tableNow = (name) => {
+                deps.clue.invalidate();
+                let now = deps.clue.compute(),
+                    sh = findSheet((now && now.snap.tables) || {}, name);
+                if (sh.error) return null;
+                return { sheet: sh.sheet, col: sheetRows(sh.sheet).col };
+            },
+            // 写一行：find(t) 返回行号（content 下标，0 是表头）；多于一行匹配也不写
+            writeRow = async (name, find, data) => {
+                if (!live()) return '写表前切换了聊天、项目或数据隔离';
+                let t0 = tableNow(name),
+                    at = t0 ? find(t0) : -1;
+                if (at === -2) return '表里有多行同一个编号，没写';
+                if (at < 1) return '表里还没有这一行，没写';
+                if (Object.keys(data).some((k) => t0.col(k) < 0)) return `表里缺少列：${Object.keys(data).filter((k) => t0.col(k) < 0).join('、')}`;
+                if (typeof api.updateRow == 'function') await Promise.resolve(api.updateRow(name, at, data)).catch(() => !1);
+                else
+                    for (let [k, v] of Object.entries(data)) {
+                        if (!live()) break;
+                        let t2 = tableNow(name),
+                            at2 = t2 ? find(t2) : -1;
+                        if (at2 < 1) break;
+                        await Promise.resolve(api.updateCell({ tableName: name, rowIndex: at2, colIdentifier: k, value: v, skipNotify: !0 })).catch(() => !1);
+                    }
+                if (!live()) return '写表途中切换了聊天、项目或数据隔离，没法确认结果';
+                let t3 = tableNow(name),
+                    at3 = t3 ? find(t3) : -1;
+                return at3 >= 1 && Object.entries(data).every(([k, v]) => cellText(t3.sheet.content[at3][t3.col(k)]) === cellText(v)) ? 'ok' : '写了但回读对不上';
+            },
+            findBy = (cols, test) => (t0) => {
+                let idx = cols.map((n) => t0.col(n));
+                if (idx.some((i) => i < 0)) return -1;
+                let hits = [];
+                t0.sheet.content.forEach((r, k) => k > 0 && Array.isArray(r) && test(idx.map((i) => cellText(r[i]))) && hits.push(k));
+                return hits.length > 1 ? -2 : hits.length ? hits[0] : -1;
+            },
+            out = [];
+        try {
+            if (!api || !fb || !fb.状态列 || (typeof api.updateRow != 'function' && typeof api.updateCell != 'function'))
+                return items.map((x) => ({ label: x.label, fact: '没有可写的数据库接口，或没绑定事实表状态列' }));
+            for (let x of items) {
+                let data = { [fb.状态列]: first(fb.已核实值, '已核实') };
+                fb.内容列 && x.text && (data[fb.内容列] = x.text);
+                let entry = { label: x.label, fact: await writeRow(fb.表, findBy([fb.编号列], ([c]) => c === x.id), data) };
+                if (kb && kb.方式列 && kb.事实列 && kb.角色列 && entry.fact === 'ok') {
+                    let kd = { [kb.方式列]: first(kb.有效值, '亲见') };
+                    kb.可信度列 && (kd[kb.可信度列] = first(kb.已核实值, '已核实'));
+                    entry.know = await writeRow(kb.表, findBy([kb.事实列, kb.角色列], ([f, a]) => f === x.id && SELF_KEYS.includes(a.toLowerCase())), kd);
+                }
+                out.push(entry);
+            }
+        } catch (error) {
+            out.push({ label: '', fact: `写表出错：${error.message}` });
+        }
+        return out;
+    }
+
+    // 偏离提醒：写法照大纲模式的偏离提醒
+    function offerOffTrack({ result, stage }) {
+        let actions = [];
+        result.pullBack &&
+            actions.push({
+                label: '按建议拉回',
+                primary: !0,
+                run: () => {
+                    saveKp({ push: { kind: 'steer', text: result.pullBack, floor: aiFloorCount(chatMessages()) } });
+                    notice.hide('kp-offtrack');
+                },
+            });
+        actions.push({
+            label: '给点线索',
+            run: async () => {
+                let c = deps.clue.compute(),
+                    target = c && kpPushTarget(c.state, c.snap, c.prog);
+                if (!target) return notice.show({ id: 'kp-offtrack', title: '眼下没有能推的线索', body: '', timeout: 4e3 });
+                let pick = await menuDialog({ title: '给点线索', items: KP_LEVELS.map((x) => ({ label: x.label, value: String(x.level) })) });
+                pick && (saveKp({ push: { fact: target.fact, level: Number(pick), floor: aiFloorCount(chatMessages()) } }), notice.hide('kp-offtrack'));
+            },
+        });
+        actions.push({ label: '这次不管', run: () => notice.hide('kp-offtrack') });
+        stage && actions.push({ label: '本阶段不再提醒', run: () => (saveKp({ offMuted: stage }), notice.hide('kp-offtrack')) });
+        notice.show({ id: 'kp-offtrack', title: '剧情偏离模组', body: result.offReason || '正文走向和当前阶段的内容对不上。', actions });
+    }
+
+    return { run, reset: () => ((again = false), (lastKey = '')) };
+}

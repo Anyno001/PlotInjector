@@ -1,5 +1,5 @@
 import { resolveGuide, GUIDE_PRESETS } from '../core/guide.js';
-import { CHECK_MODES } from '../core/trpg.js';
+import { CHECK_MODES } from '../trpg/trpg.js';
 
 import { bodyGuideText, BODY_GUIDE, PACES, PACE_TEXT, paceText } from '../core/inject.js';
 
@@ -167,7 +167,8 @@ export function render(view) {
         ${advOpen ? `${guideCard(view, s)}
         <div class="pi-card"><h3>实验功能</h3>
         <label class="pi-check"><input type="checkbox" data-set="trpgLab"${s.trpgLab ? ' checked' : ''}><span>跑团模式（新建项目时可选）</span></label>
-        ${s.trpgLab ? `<label class="pi-field"><span>检定写法</span><select class="pi-sel" data-set="trpgCheck">${options(CHECK_MODES, s.trpgCheck === 'anke' ? 'anke' : 'text')}</select></label>` : ''}</div>` : ''}
+        ${s.trpgLab ? `<label class="pi-check"><input type="checkbox" data-set="trpgAutoCheck"${s.trpgAutoCheck !== false ? ' checked' : ''}><span>跑团每轮自动检测</span></label>
+        <label class="pi-field"><span>检定写法</span><select class="pi-sel" data-set="trpgCheck">${options(CHECK_MODES, s.trpgCheck === 'anke' ? 'anke' : 'text')}</select></label>` : ''}</div>` : ''}
         <div class="pi-tools is-c1"><button type="button" class="pi-btn is-sm is-ghost" data-act="tour-reset" title="先播放总览，之后第一次打开插件时也会再播一次">重新播放教程</button></div>`;
 }
 

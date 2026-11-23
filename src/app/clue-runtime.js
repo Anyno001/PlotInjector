@@ -52,10 +52,6 @@ import {
 } from '../core/clue-tables.js';
 
 import { hostWindow, chatMessages, ctx, toast } from '../host/st.js';
-import { isTrpg, trpgCheckResults } from '../core/trpg.js';
-import { kpInject } from '../core/trpg-kp.js';
-import { parseTimeline, readGameClock } from '../core/trpg-timeline.js';
-import { trpgWantFacts } from '../core/trpg-rows.js';
 import { isClueMode, withNodeIds } from '../core/clue-model.js';
 
 import { isPlainObject } from '../core/outline.js';
@@ -500,10 +496,7 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
                 let s = started.get(lid);
                 return !!s && (s.manual.startAt === void 0 || s.manual.startAt < 0 || target >= s.manual.startAt);
             },
-            // 跑团项目只补眼前要用的线索（core/trpg-rows.js）；普通项目 trpgSet 为 null，和原来一样
-            trpgSet = isTrpg(p) ? trpgWantFacts(c.compiled, c.state, c.snap, c.prog, p.clue) : null,
-            wantFact = (code) =>
-                triggers.has(code) || !factLines.has(code) || ([...factLines.get(code)].some(lineReady) && (!trpgSet || trpgSet.has(code))),
+            wantFact = (code) => triggers.has(code) || !factLines.has(code) || [...factLines.get(code)].some(lineReady),
             diff = prebuildDiff(
                 { ...plan, facts: plan.facts.filter((f) => wantFact(f.code)), knows: plan.knows.filter((k) => wantFact(k.fact)) },
                 c.snap,
@@ -768,43 +761,11 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
                 stay: stayText(stayState(prog && prog.stays, chatMessages(), info), 'clue'),
                 plan: c.plan,
                 notReady: c.notReady,
-                // 跑团模式：从聊天记录算出各检定的结果（core/trpg.js）；不是跑团项目不算
-                checks: isTrpg(project()) ? trpgCheckResults(chatMessages()) : null,
             });
-        // 跑团模式的 KP 推一把（core/trpg-kp.js）；普通线索项目不进这里
-        isTrpg(project()) &&
-            (out = kpInject(out, {
-                state: c.state,
-                snap: c.snap,
-                prog: c.prog,
-                checks: trpgCheckResults(chatMessages()),
-                settings: data.settings(),
-                push: prog && prog.trpgKp && prog.trpgKp.push,
-                floors: aiFloors(),
-                timeline: trpgTimeline(prog),
-            }));
         return {
             ...out,
             reason: out.content ? '' : '当前没有可演的线索场景',
             lineOnly: !out.content && !!(out.used && out.used.recognize && out.used.recognize.length),
-        };
-    }
-    // 跑团时间线：事件来自设定的「KP规则」，时间读绑定的表格；时钟记进 progress.trpgKp.clock（微任务里写，不在投影中同步写）
-    function trpgTimeline(prog) {
-        let p = project(),
-            events = parseTimeline(p && p.setting && p.setting.text);
-        if (!events.length) return null;
-        let c = compute(),
-            now = c ? readGameClock(c.snap.tables, p.clue.bindings.time && p.clue.bindings.time.路径) : null;
-        return {
-            events,
-            now,
-            clock: prog && prog.trpgKp && prog.trpgKp.clock,
-            onClock: (next) =>
-                Promise.resolve().then(() => {
-                    let cur = getProgress() || {};
-                    setProgress({ ...cur, trpgKp: { ...(cur.trpgKp || {}), clock: next } }, 'trpg-kp');
-                }),
         };
     }
     function stayInfo(cc) {
