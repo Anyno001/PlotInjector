@@ -1421,6 +1421,7 @@ ${finds.map((d) => `- ${d.text}`).join(`
         injectMode: () => (hasEntriesEvent() ? 'virtual' : 'book'),
         clue,
         isClueMode: clueMode,
+        kp: kpRunner,
         bumpEpoch,
         ticket,
         ticketValid,

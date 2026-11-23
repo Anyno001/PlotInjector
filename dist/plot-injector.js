@@ -1,4 +1,4 @@
-// PlotInjector v0.3.16
+// PlotInjector v0.3.17
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -6837,6 +6837,84 @@ ${guide ? `${guide}
   }
   var CLUE_OFF_MATERIAL_RULE2 = "用户转去调查另一件事，而本轮材料没有提供那件事的具体发现时，写到到达、接触和开始调查为止：可以写环境、人物和对方的反应；东西上写着什么、翻开或打开后看到什么、对方说出的关键信息，都不要自己编，待后续材料提供后再写。本轮已经提供的发现、前文已经明确的内容以及普通日常行动，可以按实际行动继续，不必机械等到下一轮。";
 
+  // src/trpg/trpg-timeline.js
+  var PERIOD = "凌晨|清晨|早上|早晨|上午|中午|下午|傍晚|晚上|夜里|夜晚|深夜", CLOCK_SRC = `(${PERIOD})?\\s*(\\d{1,2})(?:[:：](\\d{2})|点(半|(\\d{1,2})分?)?|时)`;
+  function toMinutes(period, h, m) {
+    return h = Number(h), m = Number(m) || 0, h > 24 || m > 59 ? null : (/下午|傍晚|晚上|夜里|夜晚/.test(period || "") && h < 12 || period === "深夜" && h >= 6 && h < 12 ? h += 12 : period === "凌晨" && h === 12 && (h = 0), h % 24 * 60 + m);
+  }
+  function minutesOf(match) {
+    let [, period, h, hm, half, dm] = match;
+    return toMinutes(period, h, hm ?? (half === "半" ? 30 : dm || 0));
+  }
+  function clockText(minutes) {
+    let t = (minutes % 1440 + 1440) % 1440;
+    return `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
+  }
+  function readClock(value) {
+    let text2 = (Array.isArray(value) ? value.join(" ") : value == null ? "" : String(value)).trim(), last = null;
+    for (let m of text2.matchAll(new RegExp(CLOCK_SRC, "g"))) {
+      let v = minutesOf(m);
+      v != null && (last = v);
+    }
+    return last;
+  }
+  function readGameClock(tables, paths) {
+    for (let path of [].concat(paths || []).filter(Boolean)) {
+      let cell = readCell2(tables || {}, path);
+      if (cell.state === "ok") {
+        let v = readClock(cell.value);
+        if (v != null) return v;
+      }
+    }
+    return null;
+  }
+  function parseTimeline(settingText) {
+    let block = splitBlocks(settingText).find((b) => b.title === KP_BLOCK && !b.cont), out = [];
+    if (!block) return out;
+    let inSection = !1, day = 0, last = -1;
+    for (let line of block.text.split(`
+`)) {
+      let head = /^\s*【([^】]+)】\s*$/.exec(line);
+      if (head) {
+        inSection = head[1].trim() === "时间线";
+        continue;
+      }
+      if (!inSection) continue;
+      let m = new RegExp(`^\\s*-\\s*${CLOCK_SRC}`).exec(line);
+      if (!m) continue;
+      let base = minutesOf(m);
+      if (base == null) continue;
+      let minutes = base + day * 1440;
+      for (; minutes < last; ) day += 1, minutes += 1440;
+      last = minutes, out.push({ minutes, clock: clockText(minutes), text: line.slice(m[0].length).replace(/^[\s:：,，、\-—]+/, "").trim() });
+    }
+    return out.filter((e) => e.text);
+  }
+  function dueEvents(events, prev, now) {
+    if (!events.length || prev == null || now == null) return [];
+    let end = now;
+    if (end < prev) {
+      if (prev - end < 720) return [];
+      end += 1440;
+    }
+    let hit = (t) => t > prev && t <= end;
+    return events.filter((e) => hit(e.minutes) || e.minutes >= 1440 && hit(e.minutes - 1440) || hit(e.minutes + 1440));
+  }
+  function timelineLines(due, now) {
+    return due.length ? [
+      `模组时间线：现在 ${clockText(now)}。以下事件已经到点，这一轮或下一轮要让它发生（写法可以随玩家行动调整，不能取消）：`,
+      ...due.map((e) => `- ${e.clock} ${e.text}`)
+    ] : [];
+  }
+  function timelineStep({ events, now, clock, floors }) {
+    if (!events.length || now == null) return { lines: [], next: null };
+    let c = clock && Number.isFinite(clock.minutes) ? clock : null, from = c ? c.floor < floors ? c.minutes : c.floor === floors ? c.from ?? null : null : null;
+    return {
+      lines: timelineLines(dueEvents(events, from, now), now),
+      next: !c || c.floor !== floors ? { floor: floors, minutes: now, from } : null
+    };
+  }
+
   // src/trpg/trpg-clue-rules.js
   var COND_MAX_DEPTH2 = 2, ATOM_KEYS2 = ["事实", "知情", "核实", "节点", "表", "时间", "线", "情况"], TRI2 = { t: "true", f: "false", u: "unknown" };
   function atomString2(key, value) {
@@ -6986,6 +7064,12 @@ ${guide ? `${guide}
         }
         if (atom.tiers && !["==", "!="].includes(atom.op) && !tierOrderKnown2(atom, env.tables))
           return { v: TRI2.u, why: `${label}：档位顺序「${atom.tiers.join(" < ")}」还没确认，确认前不比大小` };
+        if (atom.kind === "time" && /^\d{1,2}[:：]\d{2}$/.test(String(atom.value).trim()) && !["包含", "不包含"].includes(atom.op)) {
+          let now = readClock(value), want = readClock(atom.value);
+          if (now == null) return { v: TRI2.u, why: `时间「${cellText2(value)}」里读不出钟点` };
+          let d = now - want, hit = { ">=": d >= 0, ">": d > 0, "<=": d <= 0, "<": d < 0, "==": d === 0, "!=": d !== 0 }[atom.op];
+          return { v: hit ? TRI2.t : TRI2.f, why: `时间 ${clockText(now)}${hit ? "已到" : "未到"} ${clockText(want)}` };
+        }
         let ok = atom.op === "包含" || atom.op === "不包含" ? cellText2(value).includes(atom.value) === (atom.op === "包含") : atom.tiers ? tierCompare2(atom.op, value, atom.value, atom.tiers) : applyOp2(atom.op, value, atom.value);
         return ok === null ? {
           v: TRI2.u,
@@ -7638,84 +7722,6 @@ ${guide ? `${guide}
       } else ask2.push(st9.resumed ? "" : "结合前文接着写。", "如果场景和人物前面已经交代过，就不必再铺陈；已经写过的事件，不要再写一遍。");
     return lines2.length ? [`【这一${kind === "clue" ? "场" : "段"}到现在】`, ...lines2, ask2.filter(Boolean).join("")].join(`
 `) : "";
-  }
-
-  // src/trpg/trpg-timeline.js
-  var PERIOD = "凌晨|清晨|早上|早晨|上午|中午|下午|傍晚|晚上|夜里|夜晚|深夜", CLOCK_SRC = `(${PERIOD})?\\s*(\\d{1,2})(?:[:：](\\d{2})|点(半|(\\d{1,2})分?)?|时)`;
-  function toMinutes(period, h, m) {
-    return h = Number(h), m = Number(m) || 0, h > 24 || m > 59 ? null : (/下午|傍晚|晚上|夜里|夜晚/.test(period || "") && h < 12 || period === "深夜" && h >= 6 && h < 12 ? h += 12 : period === "凌晨" && h === 12 && (h = 0), h % 24 * 60 + m);
-  }
-  function minutesOf(match) {
-    let [, period, h, hm, half, dm] = match;
-    return toMinutes(period, h, hm ?? (half === "半" ? 30 : dm || 0));
-  }
-  function clockText(minutes) {
-    let t = (minutes % 1440 + 1440) % 1440;
-    return `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
-  }
-  function readClock(value) {
-    let text2 = (Array.isArray(value) ? value.join(" ") : value == null ? "" : String(value)).trim(), last = null;
-    for (let m of text2.matchAll(new RegExp(CLOCK_SRC, "g"))) {
-      let v = minutesOf(m);
-      v != null && (last = v);
-    }
-    return last;
-  }
-  function readGameClock(tables, paths) {
-    for (let path of [].concat(paths || []).filter(Boolean)) {
-      let cell = readCell2(tables || {}, path);
-      if (cell.state === "ok") {
-        let v = readClock(cell.value);
-        if (v != null) return v;
-      }
-    }
-    return null;
-  }
-  function parseTimeline(settingText) {
-    let block = splitBlocks(settingText).find((b) => b.title === KP_BLOCK && !b.cont), out = [];
-    if (!block) return out;
-    let inSection = !1, day = 0, last = -1;
-    for (let line of block.text.split(`
-`)) {
-      let head = /^\s*【([^】]+)】\s*$/.exec(line);
-      if (head) {
-        inSection = head[1].trim() === "时间线";
-        continue;
-      }
-      if (!inSection) continue;
-      let m = new RegExp(`^\\s*-\\s*${CLOCK_SRC}`).exec(line);
-      if (!m) continue;
-      let base = minutesOf(m);
-      if (base == null) continue;
-      let minutes = base + day * 1440;
-      for (; minutes < last; ) day += 1, minutes += 1440;
-      last = minutes, out.push({ minutes, clock: clockText(minutes), text: line.slice(m[0].length).replace(/^[\s:：,，、\-—]+/, "").trim() });
-    }
-    return out.filter((e) => e.text);
-  }
-  function dueEvents(events, prev, now) {
-    if (!events.length || prev == null || now == null) return [];
-    let end = now;
-    if (end < prev) {
-      if (prev - end < 720) return [];
-      end += 1440;
-    }
-    let hit = (t) => t > prev && t <= end;
-    return events.filter((e) => hit(e.minutes) || e.minutes >= 1440 && hit(e.minutes - 1440) || hit(e.minutes + 1440));
-  }
-  function timelineLines(due, now) {
-    return due.length ? [
-      `模组时间线：现在 ${clockText(now)}。以下事件已经到点，这一轮或下一轮要让它发生（写法可以随玩家行动调整，不能取消）：`,
-      ...due.map((e) => `- ${e.clock} ${e.text}`)
-    ] : [];
-  }
-  function timelineStep({ events, now, clock, floors }) {
-    if (!events.length || now == null) return { lines: [], next: null };
-    let c = clock && Number.isFinite(clock.minutes) ? clock : null, from = c ? c.floor < floors ? c.minutes : c.floor === floors ? c.from ?? null : null : null;
-    return {
-      lines: timelineLines(dueEvents(events, from, now), now),
-      next: !c || c.floor !== floors ? { floor: floors, minutes: now, from } : null
-    };
   }
 
   // src/trpg/trpg-kp.js
@@ -11882,8 +11888,11 @@ ${rules}`
       result2.pullBack && actions12.push({
         label: "按建议拉回",
         primary: !0,
-        run: () => {
-          saveKp2({ push: { kind: "steer", text: result2.pullBack, floor: aiFloorCount(chatMessages()) } }), notice.hide("kp-offtrack");
+        // 先给玩家看 KP 打算怎么拉回、可以改；取消就把提示卡放回去
+        run: async () => {
+          let text2 = await promptDialog({ title: "按建议拉回", label: "下一轮正文会这样把剧情引回来，可以修改", value: result2.pullBack, multiline: !0 });
+          if (text2 == null || !String(text2).trim()) return offerOffTrack({ result: result2, stage });
+          saveKp2({ push: { kind: "steer", text: String(text2).trim(), floor: aiFloorCount(chatMessages()) } }), notice.hide("kp-offtrack");
         }
       }), actions12.push({
         label: "给点线索",
@@ -11895,7 +11904,12 @@ ${rules}`
         }
       }), actions12.push({ label: "这次不管", run: () => notice.hide("kp-offtrack") }), stage && actions12.push({ label: "本阶段不再提醒", run: () => (saveKp2({ offMuted: stage }), notice.hide("kp-offtrack")) }), notice.show({ id: "kp-offtrack", title: "剧情偏离模组", body: result2.offReason || "正文走向和当前阶段的内容对不上。", actions: actions12 });
     }
-    return { run, reset: () => (again = !1, lastKey = "") };
+    function clearKp() {
+      let c = deps.clue.compute(), ids = Object.entries(c && c.prog.factOverrides || {}).filter(([, v]) => v && v.by === "kp").map(([id]) => id);
+      for (let id of ids) deps.clue.act({ kind: "fact", target: id, value: "", note: "清空KP记录" });
+      return saveKp2({ conds: {}, log: [], offMuted: "" }), lastKey = "", deps.clue.invalidate("kp-clear"), ids.length;
+    }
+    return { run, clearKp, reset: () => (again = !1, lastKey = "") };
   }
 
   // src/core/infinite-state.js
@@ -13343,6 +13357,7 @@ ${finds.map((d) => `- ${d.text}`).join(`
       injectMode: () => hasEntriesEvent() ? "virtual" : "book",
       clue,
       isClueMode: clueMode,
+      kp: kpRunner,
       bumpEpoch,
       ticket,
       ticketValid,
@@ -16691,8 +16706,28 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
   var kpActions = {
     ...steerActions,
     async "kp-menu"(view) {
-      let pick = await menuDialog({ title: "KP", items: [{ label: "对照剧本", value: "kp-steer" }] });
+      let pick = await menuDialog({
+        title: "KP",
+        items: [
+          { label: "对照剧本", value: "kp-steer" },
+          { label: "重新检测最新一楼", value: "kp-recheck" },
+          { label: "清空KP记录", value: "kp-clear", danger: !0 }
+        ]
+      });
       pick && kpActions[pick](view);
+    },
+    async "kp-recheck"(view) {
+      await view.runtime.kp.run({ manual: !0 }) ? view.renderBody() : toast("info", "没有检测：最新一楼不是AI回复，或「跑团每轮自动检测」已关、数据库未就绪。");
+    },
+    async "kp-clear"(view) {
+      if (!await confirmDialog({
+        title: "清空KP记录",
+        body: "KP自动判定的线索会撤销，判过的一句话条件和检测记录会清掉，阶段按剩下的记录重新计算。你手动确认的线索不动；已写进数据库表格的内容不会改，删楼或重roll时表格会跟着退回。",
+        okLabel: "清空",
+        danger: !0
+      })) return;
+      let n = view.runtime.kp.clearKp();
+      toast("success", `已清空，撤销了${n}条KP判定的线索。`), view.renderBody();
     },
     // 先出插件推演（立即），再让 AI 读最近正文判断是不是真卡住了
     async "kp-health"(view) {
@@ -27519,7 +27554,7 @@ ${suffix.trim()}` : body;
   }
 
   // src/index.js
-  var VERSION = "0.3.16", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.3.17", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")

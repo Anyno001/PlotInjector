@@ -6,6 +6,8 @@ import { clueText, discoveryList } from './trpg-clue-project.js';
 
 import { nodeUid, DEFAULT_CLUE } from './trpg-clue-model.js';
 
+import { readClock, clockText } from './trpg-timeline.js';
+
 export const COND_MAX_DEPTH = 2;
 
 export const ATOM_KEYS = ['事实', '知情', '核实', '节点', '表', '时间', '线', '情况'];
@@ -232,6 +234,15 @@ export function evalAtom(atom, env) {
             }
             if (atom.tiers && !['==', '!='].includes(atom.op) && !tierOrderKnown(atom, env.tables))
                 return { v: TRI.u, why: `${label}：档位顺序「${atom.tiers.join(' < ')}」还没确认，确认前不比大小` };
+            // 「时间 >= 19:30」只比钟点：表格时间常带年月日（2026年10月31日 17:30），整串逐个数字比会把 2026 当成小时
+            if (atom.kind === 'time' && /^\d{1,2}[:：]\d{2}$/.test(String(atom.value).trim()) && !['包含', '不包含'].includes(atom.op)) {
+                let now = readClock(value),
+                    want = readClock(atom.value);
+                if (now == null) return { v: TRI.u, why: `时间「${cellText(value)}」里读不出钟点` };
+                let d = now - want,
+                    hit = { '>=': d >= 0, '>': d > 0, '<=': d <= 0, '<': d < 0, '==': d === 0, '!=': d !== 0 }[atom.op];
+                return { v: hit ? TRI.t : TRI.f, why: `时间 ${clockText(now)}${hit ? '已到' : '未到'} ${clockText(want)}` };
+            }
             let ok =
                 atom.op === '包含' || atom.op === '不包含'
                     ? cellText(value).includes(atom.value) === (atom.op === '包含')

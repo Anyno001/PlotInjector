@@ -3,7 +3,7 @@
 import { chatMessages } from '../host/st.js';
 import { requestLlm } from '../host/llm.js';
 import { resolveLlm } from '../core/store.js';
-import { menuDialog } from '../ui/dom.js';
+import { menuDialog, promptDialog } from '../ui/dom.js';
 import { isPlainObject } from '../core/outline.js';
 import { effectiveFact } from './trpg-clue-rules.js';
 import { findSheet, sheetRows, cellText, SELF_KEYS } from './trpg-clue-tables.js';
@@ -219,8 +219,11 @@ export function createKpRunner(deps) {
             actions.push({
                 label: '按建议拉回',
                 primary: !0,
-                run: () => {
-                    saveKp({ push: { kind: 'steer', text: result.pullBack, floor: aiFloorCount(chatMessages()) } });
+                // 先给玩家看 KP 打算怎么拉回、可以改；取消就把提示卡放回去
+                run: async () => {
+                    let text = await promptDialog({ title: '按建议拉回', label: '下一轮正文会这样把剧情引回来，可以修改', value: result.pullBack, multiline: !0 });
+                    if (text == null || !String(text).trim()) return offerOffTrack({ result, stage });
+                    saveKp({ push: { kind: 'steer', text: String(text).trim(), floor: aiFloorCount(chatMessages()) } });
                     notice.hide('kp-offtrack');
                 },
             });
@@ -239,5 +242,17 @@ export function createKpRunner(deps) {
         notice.show({ id: 'kp-offtrack', title: '剧情偏离模组', body: result.offReason || '正文走向和当前阶段的内容对不上。', actions });
     }
 
-    return { run, reset: () => ((again = false), (lastKey = '')) };
+    // 清空本聊天的 KP 记录：撤销 KP 判的线索（人工确认的不动）、清掉一句话条件、检测日志和「本阶段不再提醒」。表格里已写回的不动（删楼或重 roll 会跟着退回）。
+    function clearKp() {
+        let c = deps.clue.compute(),
+            ids = Object.entries((c && c.prog.factOverrides) || {})
+                .filter(([, v]) => v && v.by === 'kp')
+                .map(([id]) => id);
+        for (let id of ids) deps.clue.act({ kind: 'fact', target: id, value: '', note: '清空KP记录' });
+        saveKp({ conds: {}, log: [], offMuted: '' });
+        lastKey = '';
+        deps.clue.invalidate('kp-clear');
+        return ids.length;
+    }
+    return { run, clearKp, reset: () => ((again = false), (lastKey = '')) };
 }

@@ -1,5 +1,5 @@
 // 跑团模式执行页的「KP」卡：卡住了吗（体检+推一把）、对照剧本、察觉卡关。逻辑在 core/trpg-kp.js。
-import { esc, menuDialog } from '../ui/dom.js';
+import { confirmDialog, esc, menuDialog } from '../ui/dom.js';
 import { ICONS } from '../ui/styles.js';
 import { chatMessages, toast } from '../host/st.js';
 import { chatFactSets } from './trpg-clue-project.js';
@@ -103,8 +103,31 @@ export function kpCard(view, project, c, d) {
 export const kpActions = {
     ...steerActions,
     async 'kp-menu'(view) {
-        let pick = await menuDialog({ title: 'KP', items: [{ label: '对照剧本', value: 'kp-steer' }] });
+        let pick = await menuDialog({
+            title: 'KP',
+            items: [
+                { label: '对照剧本', value: 'kp-steer' },
+                { label: '重新检测最新一楼', value: 'kp-recheck' },
+                { label: '清空KP记录', value: 'kp-clear', danger: !0 },
+            ],
+        });
         pick && kpActions[pick](view);
+    },
+    async 'kp-recheck'(view) {
+        let r = await view.runtime.kp.run({ manual: !0 });
+        r ? view.renderBody() : toast('info', '没有检测：最新一楼不是AI回复，或「跑团每轮自动检测」已关、数据库未就绪。');
+    },
+    async 'kp-clear'(view) {
+        let ok = await confirmDialog({
+            title: '清空KP记录',
+            body: 'KP自动判定的线索会撤销，判过的一句话条件和检测记录会清掉，阶段按剩下的记录重新计算。你手动确认的线索不动；已写进数据库表格的内容不会改，删楼或重roll时表格会跟着退回。',
+            okLabel: '清空',
+            danger: !0,
+        });
+        if (!ok) return;
+        let n = view.runtime.kp.clearKp();
+        toast('success', `已清空，撤销了${n}条KP判定的线索。`);
+        view.renderBody();
     },
     // 先出插件推演（立即），再让 AI 读最近正文判断是不是真卡住了
     async 'kp-health'(view) {
