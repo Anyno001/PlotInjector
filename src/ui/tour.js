@@ -1,6 +1,6 @@
 import { hostDocument, hostWindow } from '../host/st.js';
 
-import { el } from './dom.js';
+import { el, layerParent } from './dom.js';
 import { ICONS } from './styles.js';
 export const TOUR_REVISION = 2;
 
@@ -480,7 +480,7 @@ export function createTour({ getRoot, data }) {
             let b = event.target.closest('[data-tour]');
             b && (b.dataset.tour === 'next' ? step(1) : b.dataset.tour === 'prev' ? step(-1) : stop(!0));
         }),
-            doc.body.appendChild(layer),
+            layerParent(doc).appendChild(layer),
             doc.addEventListener('keydown', onKey, !0),
             win.addEventListener('resize', relayout),
             win.addEventListener('scroll', relayout, !0));

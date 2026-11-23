@@ -1,14 +1,14 @@
 // 跑团 KP 卡里的「场景没定」提醒和「对照剧本」检查。逻辑在 core/trpg-kp.js、core/trpg-timeline.js。
-import { esc } from './dom.js';
+import { esc } from '../ui/dom.js';
 import { chatMessages, toast } from '../host/st.js';
-import { effectiveFact } from '../core/clue-rules.js';
-import { chatFactSets } from '../core/clue-project.js';
+import { effectiveFact } from './trpg-clue-rules.js';
+import { chatFactSets } from './trpg-clue-project.js';
 import { splitBlocks } from '../core/setting.js';
 import { stringifyYaml } from '../core/yaml.js';
-import { KP_BLOCK } from '../core/trpg.js';
-import { KP_UNSET_SOURCES, KP_UNSET_HINT, steerMessages, parseSteerReply, aiFloorCount } from '../core/trpg-kp.js';
-import { parseTimeline } from '../core/trpg-timeline.js';
-import { ask, runTask } from './ai.js';
+import { KP_BLOCK } from './trpg.js';
+import { KP_UNSET_SOURCES, KP_UNSET_HINT, steerMessages, parseSteerReply, aiFloorCount } from './trpg-kp.js';
+import { parseTimeline } from './trpg-timeline.js';
+import { ask, runTask } from '../ui/ai.js';
 
 // 检查结果只留在内存里，换项目就丢
 let result = null;

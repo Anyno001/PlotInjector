@@ -2,6 +2,7 @@
 import { guideInfo, ask } from './ai.js';
 
 import { isClueMode } from '../core/clue-model.js';
+import { outlineWord, settingWord, viewIsTrpg } from '../trpg/trpg-route.js';
 
 import { makeId, isPlainObject, volumeName } from '../core/outline.js';
 
@@ -38,15 +39,17 @@ export function render(view) {
         wb = wbSummary(view, chat.refs, () => view.renderBody()),
         canProgress = !!progressText(view),
         persona = view.data.settings().persona.trim(),
-        olLabel = outlineChipLabel(view, view.project(), refs),
-        refsOn = [refs.setting && '设定', refs.outline && olLabel, refs.progress && canProgress && '剧情进度', refs.floors && `正文${refs.floors}楼`, wb && wb.count && `世界书${wb.count}条`].filter(Boolean),
+        // 跑团项目照远端：「模组」芯片只开关；线索 / 大纲项目用多线选择（outline-refs）
+        trpgView = viewIsTrpg(view),
+        olLabel = trpgView ? outlineWord(view.project()) : outlineChipLabel(view, view.project(), refs),
+        refsOn = [refs.setting && settingWord(view.project()), refs.outline && olLabel, refs.progress && canProgress && '剧情进度', refs.floors && `正文${refs.floors}楼`, wb && wb.count && `世界书${wb.count}条`].filter(Boolean),
         open = !!st(view).refsOpen,
         chips = `<div class="pi-dc-bar"><button type="button" class="pi-dc-refs" data-act="refs-toggle" aria-expanded="${open}">参考 <i>${refsOn.length}</i><small>${esc(refsOn.join('、') || '无')}</small><span class="pi-dc-caret${open ? ' is-open' : ''}">${ICONS.chevDown}</span></button>
         <button type="button" class="pi-dc-act" data-act="review-pick" title="选一条${clueWord ? '剧情线' : '卷'}，逐页查看各阶段，在对应页填写意见后统一发送">${ICONS.pencil}<span>审阅修改</span></button></div>
         ${open ? `<div class="pi-dc-refs-open">
         <button type="button" class="pi-chip${persona ? ' is-on' : ''}" data-act="persona" title="${esc(persona || '指定AI讨论时的说话人格')}">人格${persona ? '' : '：未设置'}</button>
-        <button type="button" class="pi-chip${refs.setting ? ' is-on' : ''}" data-act="ref" data-ref="setting">设定</button>
-        <button type="button" class="pi-chip${refs.outline ? ' is-on' : ''}" data-act="ref-outline">${esc(olLabel)}</button>
+        <button type="button" class="pi-chip${refs.setting ? ' is-on' : ''}" data-act="ref" data-ref="setting">${settingWord(view.project())}</button>
+        ${trpgView ? `<button type="button" class="pi-chip${refs.outline ? ' is-on' : ''}" data-act="ref" data-ref="outline">${esc(olLabel)}</button>` : `<button type="button" class="pi-chip${refs.outline ? ' is-on' : ''}" data-act="ref-outline">${esc(olLabel)}</button>`}
         <button type="button" class="pi-chip${refs.progress && canProgress ? ' is-on' : ''}" data-act="ref" data-ref="progress"${canProgress ? '' : ' disabled title="本项目不是当前聊天启用的项目"'}>剧情进度</button>
         <button type="button" class="pi-chip${refs.floors ? ' is-on' : ''}" data-act="ref-floors">正文${refs.floors}楼</button>
         <button type="button" class="pi-chip${wb && wb.count ? ' is-on' : ''}" data-act="ref-wb">世界书${wb ? `${wb.count}条` : '…'}</button></div>` : ''}`,

@@ -191,7 +191,7 @@ test('run page: pause / resume buttons; all-done card offers 开始下一段主�
   doc.querySelector('[data-act="tab"][data-tab="run"]').click(); await tick();
   doc.querySelector('[data-act="clue-pause"][data-value="1"]').click(); await tick();
   assert.equal(inst.runtime.clue.diagnose().paused, true);
-  assert.match(doc.body.textContent, /已暂停/);
+  assert.match(doc.documentElement.textContent, /已暂停/);
   assert.equal(inst.runtime.clue.projection().reason, '剧情已暂停');
   doc.querySelector('[data-act="clue-pause"][data-value=""]').click(); await tick();
   assert.equal(inst.runtime.clue.diagnose().paused, false);
@@ -212,10 +212,10 @@ test('run page: plot preset with a story-driving task → warning; paused → no
   inst.open(); await new Promise((r) => setTimeout(r, 20));
   const doc = host.w.document, tick = () => new Promise((r) => setTimeout(r, 20));
   doc.querySelector('[data-act="tab"][data-tab="run"]').click(); await tick();
-  assert.match(doc.body.textContent, /启用了召回以外的任务：「推进」/);
+  assert.match(doc.documentElement.textContent, /启用了召回以外的任务：「推进」/);
   inst.runtime.clue.setPaused(true); doc.querySelector('[data-act="tab"][data-tab="run"]').click(); await tick();
-  assert.ok(!/启用了召回以外的任务/.test(doc.body.textContent), 'no warning while paused');
+  assert.ok(!/启用了召回以外的任务/.test(doc.documentElement.textContent), 'no warning while paused');
   inst.runtime.clue.setPaused(false); preset = P.timeRecall; doc.querySelector('[data-act="tab"][data-tab="run"]').click(); await tick();
-  assert.ok(!/启用了召回以外的任务/.test(doc.body.textContent), 'recall-only preset → no warning');
+  assert.ok(!/启用了召回以外的任务/.test(doc.documentElement.textContent), 'recall-only preset → no warning');
   await inst.destroy();
 });

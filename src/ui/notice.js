@@ -1,5 +1,5 @@
 import { hostDocument, hostWindow } from '../host/st.js';
-import { el, esc } from './dom.js';
+import { el, esc, layerParent } from './dom.js';
 
 // 同 id 只留一张，新的替换旧的。
 export function createNotices() {
@@ -8,7 +8,7 @@ export function createNotices() {
     let box = null;
     const timers = /* @__PURE__ */ new Map();
     function container() {
-        return ((!box || !box.isConnected) && ((box = el('<div class="pi-root pi-notices"></div>')), doc.body.appendChild(box)), box);
+        return ((!box || !box.isConnected) && ((box = el('<div class="pi-root pi-notices"></div>')), layerParent(doc).appendChild(box)), box);
     }
     function hide(id) {
         (view.clearTimeout(timers.get(id)), timers.delete(id), box?.querySelector(`[data-notice="${id}"]`)?.remove());
@@ -46,7 +46,7 @@ export function createNotices() {
         ((bar = el(
             `<div class="pi-root pi-topbar" role="status" style="top:calc(${offset}px + env(safe-area-inset-top, 0px))"><span class="pi-topbar-dot"></span><div class="pi-topbar-body"><span class="pi-topbar-text" title="${esc(text)}">${esc(text)}</span>${tag ? `<span class="pi-topbar-tag">${esc(tag)}</span>` : ''}</div><div class="pi-topbar-acts">${action ? `<button type="button" class="pi-btn is-sm pi-topbar-act">${esc(action)}</button>` : ''}<button type="button" class="pi-btn is-sm is-primary pi-topbar-ok">确认</button></div></div>`,
         )),
-            doc.body.appendChild(bar));
+            layerParent(doc).appendChild(bar));
         let armed = 0,
             btn = bar.querySelector('.pi-topbar-act'),
             y0 = null,

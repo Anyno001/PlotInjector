@@ -15,7 +15,6 @@ import { stripAuthorBlocks, nodeUid, normalizeClue } from './clue-model.js';
 import { isPlainObject, stageLabel, flattenUnits, stageNodes, NODE_FIELDS, volumeShowName, outlineToText } from './outline.js';
 
 import { bodyGuideText } from './inject.js';
-import { normalizeCheck, hasChecks, checkRule, checkLine, freshCheckLines } from './trpg.js';
 
 export function clueText(value) {
     return Array.isArray(value)
@@ -31,13 +30,7 @@ export function discoveryList(item) {
     return list
         .map((d) =>
             isPlainObject(d)
-                ? {
-                      fact: String(d.事实 || d.id || '').trim(),
-                      text: clueText(d.内容),
-                      record: clueText(d.记录),
-                      // 跑团模式的「判定」（core/trpg.js）；没写判定的发现不带这个键
-                      ...(normalizeCheck(d.判定) ? { check: normalizeCheck(d.判定) } : {}),
-                  }
+                ? { fact: String(d.事实 || d.id || '').trim(), text: clueText(d.内容), record: clueText(d.记录) }
                 : { fact: '', text: clueText(d), record: '' },
         )
         .filter((d) => d.text);
@@ -912,7 +905,7 @@ export function buildClueProjection(
     snapshot,
     clueProg,
     settings,
-    { pace = 'normal', stay = '', plan = null, notReady = null, checks = null, arrive = !1 } = {},
+    { pace = 'normal', stay = '', plan = null, notReady = null, arrive = !1 } = {},
 ) {
     let tag = String(settings.tagName || '剧情参考').trim() || '剧情参考',
         focus = state.nodeStates.find((s) => s.node.uid && s.node.uid === state.focus.uid),
@@ -960,14 +953,10 @@ export function buildClueProjection(
             pending.length &&
                 (lines.push(got.length ? '本场景还可能获得的发现（尚未发生）：' : '本场景可能获得的发现（尚未发生）：'),
                 pending.forEach((d) => {
-                    // 跑团模式：带判定的发现按骰点结果写（掷骰成功前不给内容，core/trpg.js checkLine）；没有判定的原样
-                    let ck = checkLine(d, checks);
-                    (lines.push(ck ? ck.line : `- ${d.text}`),
+                    (lines.push(`- ${d.text}`),
                         used.discoveries.push(d.fact || d.text.slice(0, 20)),
-                        d.fact && (!ck || ck.reveal) && used.candidates.push({ fact: d.fact, record: d.record }));
-                }),
-                // 跑团模式：有带判定的发现时，加一条检定写法（没有判定时什么都不加）
-                hasChecks(pending) && lines.push(checkRule(settings, [...new Set(pending.flatMap((d) => (d && d.check && d.check.skills) || []))]))));
+                        d.fact && used.candidates.push({ fact: d.fact, record: d.record }));
+                })));
         let holdersOf = (id) => [
                 ...new Set(
                     (snapshot.knowledge || [])
@@ -1084,16 +1073,6 @@ export function buildClueProjection(
             (used.leads = leads.map((l) => l.uid)),
             leads.forEach((l) => used.scenes.push({ uid: l.uid, entry: l.text, place: l.place, focus: !1 })));
     }
-    // 跑团模式：这一轮刚掷的检定，焦点场景里没列出的单独列出（没有判定结果时什么都不加）
-    checks &&
-        lines.push(
-            ...freshCheckLines(state.nodeStates, checks, {
-                printed: used.discoveries,
-                isGot: (id) => effectiveFact(id, snapshot, clueProg).confirmed,
-                discoveriesOf: discoveryList,
-                used,
-            }),
-        );
     if (!lines.length) return { content: '', used };
     let note = pace === 'slow' ? '节奏放慢，细写当下。' : pace === 'fast' ? '节奏加快，次要细节一笔带过。' : '',
         guide = bodyGuideText(settings);

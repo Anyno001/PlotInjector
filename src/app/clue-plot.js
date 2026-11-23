@@ -3,7 +3,7 @@ import { chatMessages, hostWindow } from '../host/st.js';
 
 // 推进预设的复制品和每轮的场景判断（见 core/plot-scene.js）。
 // 复制品按聊天绑定（官方 switchPlotPreset 只改当前聊天），原预设改了就重新生成；手改复制品会被覆盖。
-// 只给线索模式：d.off() 为真（跑团项目）时不复制、不切换、不读场景（用户 2026-11-23）。
+// 只给线索模式（跑团项目由外层 runtime.js 挡住）；d.off() 为真时不复制、不切换、不读场景。
 export const PLOT_WAIT = { ms: 2e3, step: 100 };
 const SYNC_GAP_MS = 2e4;
 const API_FNS = ['getCurrentPlotPreset', 'getPlotPresetDetails', 'importPlotPresetFromData', 'switchPlotPreset'];

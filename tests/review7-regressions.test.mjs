@@ -88,7 +88,7 @@ test('R2: a draft opened in project A is not shown or adoptable in project B; ad
   await ctx.inst.data.loadProject(B);
   await ctx.goto(B);
   assert.ok(!ctx.doc.querySelector('[data-act="import-adopt"]'), 'B does not show A\'s draft');
-  assert.ok(!ctx.doc.body.textContent.includes('节点n1'));
+  assert.ok(!ctx.doc.documentElement.textContent.includes('节点n1'));
   // even a forged click on B with A's job id does nothing
   const st = ctx.inst.__view.tabState('import');
   st[B] = { jobId: ctx.inst.data.project(A).imports[0] };
@@ -97,6 +97,7 @@ test('R2: a draft opened in project A is not shown or adoptable in project B; ad
   btn.click(); await tick();
   assert.equal(ctx.inst.data.project(B).outline.volumes.length, 0);
   assert.equal(ctx.inst.data.project(A).outline.volumes.length, 0);
+  fake.remove(); // 面板挂在 <html> 上（v0.3.16），假按钮在 body 里会排在真按钮前面
   // back in A the draft is still there and adopts into A
   await ctx.goto(A);
   assert.ok(ctx.doc.querySelector('[data-act="import-adopt"]'));
@@ -160,7 +161,7 @@ test('R4: a stage that needs a fact nobody produces is shown on the review page 
   const ctx = await boot();
   const [A] = ctx.ids;
   await runImport(ctx, DRAFT([['阶段1_a', [['n1', 'FA']]], ['阶段2_b', [['n2', 'FB']], ['进入条件: {事实: F_none}']]]));
-  assert.match(ctx.doc.body.textContent, /问题1/, 'the problem is counted on the review page');
+  assert.match(ctx.doc.documentElement.textContent, /问题1/, 'the problem is counted on the review page');
   ctx.doc.querySelector('[data-act="import-adopt"]').click(); await tick();
   const text = await answer(ctx.doc, '取消');
   assert.match(text, /还有1个问题没解决/);
@@ -187,7 +188,7 @@ test('R7: a part whose draft cannot be parsed is shown as failed (not "no proble
   let bad = true;
   await runImport(ctx, (body) => (bad && !/格式错误|没有读到/.test(body) ? 'not yaml: [' : bad ? 'still: [' : DRAFT([['阶段1_a', [['n1', 'F1']]]])));
   assert.ok(!ctx.doc.querySelector('[data-act="import-adopt"]'), 'not in review');
-  assert.match(ctx.doc.body.textContent, /第1段转写失败/);
+  assert.match(ctx.doc.documentElement.textContent, /第1段转写失败/);
   assert.match(ctx.doc.querySelector('[data-act="import-run"]').textContent, /重试失败的段/);
   const job = ctx.inst.data.imports.get(ctx.inst.data.project(A).imports[0]);
   assert.ok(job.drafts[0].error);
@@ -223,7 +224,7 @@ test('R11: import files are in the index (backup/verify/orphan see them); a miss
   d.querySelector('[data-act="import-open-panel"]').click();
   for (let i = 0; i < 10; i++) await tick();
   assert.ok(loads <= 1, `read ${loads} times`);
-  assert.match(d.body.textContent, /读不到这条导入记录的文件/);
+  assert.match(d.documentElement.textContent, /读不到这条导入记录的文件/);
   await inst2.destroy();
 });
 

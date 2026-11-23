@@ -233,7 +233,7 @@ test('adopt: a main line is numbered after existing lines and waits for the prev
   assert.equal(p.outline.history[0].label, '导入采用');
   assert.match(p.outline.history[0].text, /剧情_M1_旧案/);
   assert.deepEqual([...Object.values(p.secretNames)[0].names], ['埃利奥特·维恩']);
-  assert.match(ctx.doc.body.textContent, /已保存到大纲：M2/);
+  assert.match(ctx.doc.documentElement.textContent, /已保存到大纲：M2/);
   const fake = ctx.doc.createElement('div'); fake.className = 'pi-card'; ctx.doc.querySelector('.pi-body').append(fake); // 点击要落在插件里才会被处理
   const btn = ctx.doc.createElement('button'); btn.dataset.act = 'import-adopt'; fake.append(btn); btn.click(); await tick();
   assert.equal(ctx.inst.data.project(ctx.pid).outline.volumes.length, 2, 'no second copy');

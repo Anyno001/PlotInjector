@@ -5,6 +5,10 @@ import { cloneTables, readFacts, readKnowledge } from '../core/clue-tables.js';
 import { injectedSetting, changedBlockKeys, mergeBlocks, parseSettingReply, pushHistory, splitBlocks } from '../core/setting.js';
 import { ensureOutlineIds, isClueMode, stripAuthorBlocks, outlineVolumesView } from '../core/clue-model.js';
 import { createClueRuntime, acuApi } from './clue-runtime.js';
+import { createClueRuntime as createTrpgClueRuntime } from '../trpg/trpg-clue-runtime.js';
+import { routeRuntime } from '../trpg/trpg-route.js';
+import { trpgChangesText } from '../trpg/trpg-changes.js';
+import { createKpRunner } from '../trpg/trpg-kp-run.js';
 
 import { DEFAULT_PARAMS, pickParams, buildEntries, buildIndexText, carriedNodes, toWorldInfoEntry } from '../core/inject.js';
 import { buildPersonaCheckMessages, buildClueCheckMessages, buildCheckMessages, cleanFloorText, parseCheckReply } from '../core/check.js';
@@ -95,7 +99,7 @@ import {
     threadSwitches,
 } from '../core/threads.js';
 
-import { setIgsView } from '../core/trpg.js';
+import { isTrpg, setIgsView } from '../trpg/trpg.js';
 import { cardKey, cardName, chatId, chatMessages, ctx, hostWindow, toast } from '../host/st.js';
 import { readEntryContent, worldInfoMatchSettings, worldInfoScanDepth, writeFallbackBook } from '../host/worldbook.js';
 import { bindChat, readChatState, readProgress, writeProgress } from './progress-store.js';
@@ -142,7 +146,7 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
     function log(text) {
         (logs.push({ at: Date.now(), text }), logs.length > LOG_MAX && logs.shift());
     }
-    let clue = createClueRuntime({
+    const clueDeps = {
         data,
         getProject: () => activeProject(),
         getProgress: () => currentProgress(),
@@ -151,6 +155,35 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
         log,
         ticket: () => ticket(),
         ticketValid: (t) => ticketValid(t),
+    };
+    // 跑团项目走 src/trpg 里的拷贝，其余项目走原文件；两套同时存在，但每次只有当前项目对应的那套干活。
+    let clueOrig = createClueRuntime(clueDeps),
+        clue = routeRuntime(clueOrig, createTrpgClueRuntime(clueDeps), () => isTrpg(activeProject()));
+    // 线索模式自己的开关对象（自动收起放行、收起安静时长、开始时机）不是函数，分流层会把它们包成函数，这里原样挂回；跑团那份没有这些
+    for (const [key, value] of Object.entries(clueOrig)) typeof value != 'function' && (clue[key] = value);
+    // 只属于线索模式的功能（推进判断场景、推进预设）：跑团项目走 src/trpg，不调用（两边互不影响）
+    const clueOnly = () => clueMode() && !isTrpg(activeProject());
+    // 跑团项目每轮回复后的 KP 检测（排队写法同 queueCheck）
+    let kpPending = !1,
+        kpFloor = -1,
+        kpTimer = 0;
+    const kpRunner = createKpRunner({
+        data,
+        notice,
+        log,
+        clue: {
+            compute: () => clue.compute(),
+            act: (op) => clue.act(op),
+            setFocus: (uid) => clue.setFocus(uid),
+            invalidate: (reason) => clue.invalidate(reason),
+            opScope: () => clue.opScope(),
+        },
+        getProject: () => (isTrpg(activeProject()) ? activeProject() : null),
+        getProgress: () => currentProgress(),
+        setProgress: (next, reason) => setProgress(next, reason),
+        ticket: () => ticket(),
+        ticketValid: (t) => ticketValid(t),
+        setTimeout: (fn, ms) => view.setTimeout(fn, ms),
     });
     function clueMode() {
         return !isInfinite(activeProject()) && isClueMode(activeProject());
@@ -469,7 +502,9 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
     function buildClueEntries(project, prog) {
         let defaults = { ...DEFAULT_PARAMS, ...project.defaults },
             out = [],
-            settingText = injectedSetting(project.setting);
+            settingText = isTrpg(project)
+                ? [injectedSetting(project.setting), trpgChangesText(clue.compute())].filter(Boolean).join('\n\n')
+                : injectedSetting(project.setting);
         settingText &&
             out.push({
                 slotId: SETTING_SLOT,
@@ -536,7 +571,7 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
     async function onEntriesLoaded(payload) {
         if (!(!payload || !Array.isArray(payload.chatLore))) {
             (opening && (await waitOpening()), refreshPersonas());
-            clueMode() && (await clue.awaitPlotScene().catch((e) => log(`读剧情推进结果出错：${e.message}`)));
+            clueOnly() && (await clue.awaitPlotScene().catch((e) => log(`读剧情推进结果出错：${e.message}`)));
             try {
                 payload.chatLore.push(...virtualEntries({ recordClue: !0 }));
             } catch (error) {
@@ -1141,7 +1176,8 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
     function personaCheckItems(floors) {
         const project = activeProject(),
             prog = currentProgress();
-        return !hasPersonas(project) || !prog || data.settings().personaMode === 'off'
+        // 跑团项目没有人设页签，不做人设检测
+        return isTrpg(project) || !hasPersonas(project) || !prog || data.settings().personaMode === 'off'
             ? []
             : checkItems(
                   project,
@@ -1156,6 +1192,7 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
               );
     }
     function offerPersonaMoves(items, replyMoves) {
+        if (isTrpg(activeProject())) return;
         const scope = ticket(),
             project = activeProject(),
             moves = resolveMoves(items, replyMoves);
@@ -1421,6 +1458,21 @@ ${finds.map((d) => `- ${d.text}`).join(`
     }
     function runPending() {
         (view.clearTimeout(pendingTimer), pendingCheck && ((pendingCheck = !1), checkNow()));
+        (view.clearTimeout(kpTimer), kpPending && ((kpPending = !1), kpRunner.run({ floor: kpFloor })));
+    }
+    function queueKp(messageId) {
+        kpFloor = Number(messageId);
+        if (!generating) {
+            view.setTimeout(() => kpRunner.run({ floor: kpFloor }), 0);
+            return;
+        }
+        kpPending ||
+            ((kpPending = !0),
+            log('跑团检测：主回复仍在生成，生成结束后检测'),
+            view.clearTimeout(kpTimer),
+            (kpTimer = view.setTimeout(() => {
+                kpPending && (log('跑团检测：等待生成结束超时，直接检测'), (kpPending = !1), kpRunner.run({ floor: kpFloor }));
+            }, PENDING_MAX_MS)));
     }
     function queueCheck() {
         if (!generating) {
@@ -1438,7 +1490,7 @@ ${finds.map((d) => `- ${d.text}`).join(`
     async function onGenerationStarted(type, options2, dryRun) {
         dryRun || ((generating = !0), clueMode() && (clue.register(), clue.invalidate(), clue.ensureRound(String(type || 'generate'))));
         // 推进在这之后才跑（数据库在 GENERATION_AFTER_COMMANDS 里调用）：先确认它用的是带场景判断的最新复制品
-        !dryRun && clueMode() && (await clue.syncPlotPreset({ force: !0 }).catch((e) => log(`推进预设出错：${e.message}`)));
+        !dryRun && clueOnly() && (await clue.syncPlotPreset({ force: !0 }).catch((e) => log(`推进预设出错：${e.message}`)));
     }
     function onGenerationEnded() {
         ((generating = !1), clue.endRound(), runPending());
@@ -1457,6 +1509,7 @@ ${finds.map((d) => `- ${d.text}`).join(`
             (clue.bindCandidatesToMessage(Number(messageId)),
                 clue.invalidate(),
                 log(`收到第 ${messageId} 楼：线索模式不做自动检测，等待填表结果`),
+                isTrpg(project) && queueKp(messageId),
                 emit('floor'));
             return;
         }
@@ -1492,6 +1545,9 @@ ${finds.map((d) => `- ${d.text}`).join(`
             (lastRead = null),
             (pendingCheck = !1),
             view.clearTimeout(pendingTimer),
+            (kpPending = !1),
+            view.clearTimeout(kpTimer),
+            kpRunner.reset(),
             (chatStartFloors = floorCount()),
             notice.hide('advance'),
             notice.hide('offtrack'),
@@ -1575,7 +1631,7 @@ ${finds.map((d) => `- ${d.text}`).join(`
         if (!(payload && payload.dryRun))
             try {
                 if (isBackgroundRequest(requestToText(payload))) return log('插件自己的后台请求（讨论、整理、导入、检测），不做正文核验');
-                clueMode() ? (clue.stripPlotSceneFrom(payload), clue.auditFinalRequest(payload)) : auditOutline(payload);
+                clueMode() ? (clueOnly() && clue.stripPlotSceneFrom(payload), clue.auditFinalRequest(payload)) : auditOutline(payload);
             } catch (error) {
                 log(`最终请求核验出错：${error.message}`);
             }
@@ -1688,6 +1744,7 @@ ${finds.map((d) => `- ${d.text}`).join(`
         olAct,
         olSetFlow,
         isClueMode: clueMode,
+        kp: kpRunner,
         bumpEpoch,
         ticket,
         ticketValid,

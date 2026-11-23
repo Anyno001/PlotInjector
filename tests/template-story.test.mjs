@@ -414,7 +414,7 @@ test('unoffered fact line: keep silences it; void revokes, writes the tables bac
   let line = doc.querySelector('.pi-unoffered');
   assert.ok(line, 'one line in 本轮场景');
   assert.match(line.textContent, /正文可能自行编造：修车铺老板说那晚看见一辆车/);
-  assert.doesNotMatch(doc.body.textContent, /两表核对：这些事实被记为已核实/, 'old wording gone');
+  assert.doesNotMatch(doc.documentElement.textContent, /两表核对：这些事实被记为已核实/, 'old wording gone');
   // void
   await click('[data-act="clue-fact-void"][data-id="F_talk"]');
   // 作废会改表格：先确认一次（桌面、手机都问）

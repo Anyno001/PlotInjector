@@ -127,13 +127,12 @@ test('R1: the run page does not report later steps as missing rows; it does once
   await inst.destroy();
 });
 
+// 跑团项目走 src/trpg 自己的运行时（v0.3.16 起），线索模式的提前登记撤回不进跑团
 test('R2: a 跑团 project keeps its old behaviour — an out-of-order registration is not withdrawn', async () => {
   const { host, inst } = await setup({ factRows: ['F_a', 'F_b', 'F_c'], trpg: true });
   setCells(host, [['关键事实表', byCode('F_c'), '状态', '已核实']]);
   await sync(host, inst, '结局先登记了。');
-  assert.equal(statusOf(host, 'F_c'), '已核实');
-  same(inst.runtime.clue.withdrawnList(), []);
-  assert.equal(inst.runtime.clue.compute().snap.held.size, 0, 'nothing held either: the plugin still counts it');
+  assert.equal(statusOf(host, 'F_c'), '已核实', 'the table is not written back');
   await inst.destroy();
 });
 

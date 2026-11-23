@@ -86,10 +86,6 @@ import {
 } from '../core/clue-tables.js';
 
 import { hostWindow, chatMessages, ctx, toast } from '../host/st.js';
-import { isTrpg, trpgCheckResults } from '../core/trpg.js';
-import { kpInject } from '../core/trpg-kp.js';
-import { parseTimeline, readGameClock } from '../core/trpg-timeline.js';
-import { trpgWantFacts, trpgRowFilter } from '../core/trpg-rows.js';
 import { isClueMode, withNodeIds } from '../core/clue-model.js';
 
 import { isPlainObject, lineShowName } from '../core/outline.js';
@@ -198,12 +194,12 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
         }
         // 越序登记（线索建行与登记方案 二.3）：只查还没认可的新登记，前提不成立的这一轮不算（held），同步时写回未获得
         let acc = acceptedSet(),
-            reg = snap.api && acc && !isTrpg(p) ? admitRegistrations(compiled, cond, prog, p.clue, acc) : null,
+            reg = snap.api && acc ? admitRegistrations(compiled, cond, prog, p.clue, acc) : null,
             held = reg ? reg.held : /* @__PURE__ */ new Set();
         held.size && (cond = withHeld(cond, held, p.clue.bindings));
-        // 普通线索项目按节点建行；跑团项目照旧按线（再由 trpg-rows 只留眼前要用的）
+        // 按节点建行（跑团项目走 src/trpg 自己的运行时，不经过这里）
         let state = computeClueState(compiled, cond, prog, p.clue),
-            frontier = snap.api && compiled.lines.length && !isTrpg(p) ? nodeFrontier(compiled, state, cond, prog, p.clue) : null,
+            frontier = snap.api && compiled.lines.length ? nodeFrontier(compiled, state, cond, prog, p.clue) : null,
             scope = snap.api && compiled.lines.length ? rowScope(compiled, startedLines(state), frontier) : null;
         // 已收起、待核对、记录已存未删的线索不算漏行，也不自动补（方案 十.1）
         let busy = foldBusyCodes(foldSt);
@@ -696,10 +692,10 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
         let live = new Set(foldPlan(c.compiled, c.state.lineStates, { keep: p.clue.noFold, paused: new Set(pausedReady(c).keys()) }).flatMap((x) => x.facts));
         return new Set(st.filter((x) => (x.st === 'folded' || x.st === 'lost') && (x.st === 'lost' || !live.has(x.row.code))).map((x) => x.row.code));
     }
-    // 收起检查（方案 三）：哪些行能收、在等哪次填表。只计算，不写表。收起只给线索模式，跑团不用（用户 2026-11-23）。
+    // 收起检查（方案 三）：哪些行能收、在等哪次填表。只计算，不写表。收起只给线索模式（跑团项目走 src/trpg，不经过这里）。
     function foldCheck() {
         let p = project();
-        if (!p || isTrpg(p)) return null;
+        if (!p) return null;
         let c = compute(),
             api = acuApi();
         if (!c || !c.snap.api || !c.compiled.lines.length) return null;
@@ -751,7 +747,7 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
             problems: rows.problems,
         };
     }
-    let plot = createPlotOps({ api: acuApi, note, off: () => isTrpg(project()) });
+    let plot = createPlotOps({ api: acuApi, note });
     let fold = createFoldOps({
         project,
         api: acuApi,
@@ -958,9 +954,7 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
             },
             // 补哪些行：与模板、缺行提示同一范围规则——开线事件、孤立事实、已开始线自身产出的及其条件用到的外部事实
             want = rowScope(c.compiled, new Set([...started.keys()].filter(lineReady)), c.snap.frontier || null).facts,
-            // 跑团项目再只留眼前要用的（core/trpg-rows.js）；普通项目 trpgKeep 为 null
-            trpgKeep = isTrpg(p) ? trpgRowFilter(c.compiled, trpgWantFacts(c.compiled, c.state, c.snap, c.prog, p.clue)) : null,
-            wantFact = (code) => want.has(code) && (!trpgKeep || trpgKeep(code)) && !(c.snap.foldBusy && c.snap.foldBusy.has(code)),
+            wantFact = (code) => want.has(code) && !(c.snap.foldBusy && c.snap.foldBusy.has(code)),
             diff = prebuildDiff(
                 { ...plan, facts: plan.facts.filter((f) => wantFact(f.code)), knows: plan.knows.filter((k) => wantFact(k.fact)) },
                 c.snap,
@@ -1088,7 +1082,7 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
     const isReg = (f) => !!f && (f.status === 'confirmed' || f.claimed);
     // 填表后：建底账 / 记认可 / 退出已回到未获得的 / 撤回前提不成立的（SQLite 写回未获得，先备份原登记）。改了进度返回 true。
     async function checkRegistrations(p, c, t0) {
-        if (fold.fillBusy() || isTrpg(p)) return !1;
+        if (fold.fillBusy()) return !1;
         let prog = getProgress() || {},
             chat = chatMessages(),
             view = c.snap.cond || c.snap,
@@ -1536,44 +1530,12 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
                 stay: stayText(stayState(prog && prog.stays, chatMessages(), info), 'clue'),
                 plan: c.plan,
                 notReady: c.notReady,
-                // 跑团模式：从聊天记录算出各检定的结果（core/trpg.js）；不是跑团项目不算
-                checks: isTrpg(project()) ? trpgCheckResults(chatMessages()) : null,
                 arrive,
             });
-        // 跑团模式的 KP 推一把（core/trpg-kp.js）；普通线索项目不进这里
-        isTrpg(project()) &&
-            (out = kpInject(out, {
-                state: c.state,
-                snap: c.snap,
-                prog: c.prog,
-                checks: trpgCheckResults(chatMessages()),
-                settings: data.settings(),
-                push: prog && prog.trpgKp && prog.trpgKp.push,
-                floors: aiFloors(),
-                timeline: trpgTimeline(prog),
-            }));
         return {
             ...out,
             reason: out.content ? '' : '当前无可进行的线索场景',
             lineOnly: !out.content && !!(out.used && out.used.recognize && out.used.recognize.length),
-        };
-    }
-    // 跑团时间线：事件来自设定的「KP规则」，时间读绑定的表格；时钟记进 progress.trpgKp.clock（微任务里写，不在投影中同步写）
-    function trpgTimeline(prog) {
-        let p = project(),
-            events = parseTimeline(p && p.setting && p.setting.text);
-        if (!events.length) return null;
-        let c = compute(),
-            now = c ? readGameClock(c.snap.tables, p.clue.bindings.time && p.clue.bindings.time.路径) : null;
-        return {
-            events,
-            now,
-            clock: prog && prog.trpgKp && prog.trpgKp.clock,
-            onClock: (next) =>
-                Promise.resolve().then(() => {
-                    let cur = getProgress() || {};
-                    setProgress({ ...cur, trpgKp: { ...(cur.trpgKp || {}), clock: next } }, 'trpg-kp');
-                }),
         };
     }
     // 剧情推进判断本轮走进了某个场景：这一轮就按它是当前场景出材料（表格里的当前场景要等填表后才变）。

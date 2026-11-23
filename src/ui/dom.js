@@ -69,10 +69,15 @@ export function openDialog({ title, html = '', actions = [{ label: '确定', val
             if (value !== undefined) finish(value);
         });
         doc.addEventListener('keydown', onKey, true);
-        doc.body.appendChild(root);
+        layerParent(doc).appendChild(root);
         if (onMount) onMount(root);
         root.querySelector('input,textarea,select')?.focus();
     });
+}
+
+// 浮层挂到 <html> 而不是 <body>：酒馆手机样式把 body 设成 position:fixed，body 里的层级再高也压不过挂在 <html> 上的 IGS 阅读器。
+export function layerParent(doc) {
+    return doc.documentElement || doc.body;
 }
 
 export function confirmDialog({ title, body = '', list = [], okLabel = '确定', danger = false }) {

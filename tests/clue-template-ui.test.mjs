@@ -163,7 +163,7 @@ test('multi-line outline: only opening rows are built; the scene catalog is writ
   // 其余线的标签由「准备标签」写进项目（不在模板弹窗里一次写完）
   inst.runtime.clue.invalidate(); inst.renderBody ? inst.renderBody() : null; await tick();
   doc.querySelector('[data-act="tab"][data-tab="run"]').click(); await tick();
-  assert.match(doc.body.textContent, /条线索的标签未准备/, 'the rest is offered for preparation');
+  assert.match(doc.documentElement.textContent, /条线索的标签未准备/, 'the rest is offered for preparation');
   await inst.destroy();
 });
 

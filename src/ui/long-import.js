@@ -49,10 +49,6 @@ import { esc, options, pickFiles, confirmDialog, choiceDialog } from './dom.js';
 
 import { toast, hostDocument } from '../host/st.js';
 import { adoptKey } from '../app/import-store.js';
-// 跑团模式（core/trpg.js）：PDF 转文字、跑团模组导入
-import { isPdfFile, pdfFileToText } from '../host/pdf-load.js';
-import { isTrpg } from '../core/trpg.js';
-import { runKpRules } from './trpg-kp.js';
 
 export const IMPORT_PART_CHARS = 8e3;
 
@@ -254,7 +250,6 @@ async function runImportJobInner(view, jobId, signal) {
                     needs: cur.needs,
                     done,
                     kind: importJobKind(cur),
-                    trpg: !!cur.trpg,
                 }),
             ),
             r = parseOutlineReply(reply2);
@@ -423,7 +418,7 @@ export function renderImport(view) {
         let clue0 = s.mode ? s.mode === 'clue' : isClueMode(project),
             kind0 = clue0 ? s.kind || 'main' : 'outline';
         return `${crumbs(0)}<div class="pi-card"><h3>导入长文<span class="pi-spacer"></span><button type="button" class="pi-btn is-sm is-ghost" data-act="import-close">回到大纲</button></h3>
-        <label class="pi-field"><span>原文</span><textarea class="pi-ta pi-imp-text" data-imp-text placeholder="粘贴剧情方案，或选择txt / md${isTrpg(project) ? ' / pdf' : ''}文件">${esc(s.text || '')}</textarea></label>
+        <label class="pi-field"><span>原文</span><textarea class="pi-ta pi-imp-text" data-imp-text placeholder="粘贴剧情方案，或选择txt / md文件">${esc(s.text || '')}</textarea></label>
         <div class="pi-row pi-imp-file"><button type="button" class="pi-btn is-sm" data-act="import-pick-file">选择文件…</button></div>
         ${s.file ? `<div class="pi-imp-chip"><span class="pi-imp-chip-name">${esc(s.file.name)}</span><span class="pi-imp-chip-sub">${s.file.chars >= 1e4 ? `${(s.file.chars / 1e4).toFixed(1)}万字` : `${s.file.chars}字`}</span></div>` : ''}
         <label class="pi-field"><span>推进方式</span><select class="pi-sel" data-imp-modesel>${options(
@@ -438,7 +433,6 @@ export function renderImport(view) {
                 ? `<div class="pi-field"><span>文档内容</span><div class="pi-imp-kind">${IMPORT_KINDS.map((k) => `<button type="button" class="pi-imp-kind-btn${kind0 === k.value ? ' is-sel' : ''}" data-act="import-kind" data-kind="${k.value}"><b>${k.label}</b><span>${k.note}</span></button>`).join('')}</div></div>`
                 : ''
         }
-        ${clue0 && kind0 !== 'lines' && isTrpg(project) ? `<label class="pi-check"><input type="checkbox" data-imp-trpg${(s.trpg ?? !0) ? ' checked' : ''}><span>跑团模组（CoC 7版）：带上检定，另外整理KP规则</span></label>` : ''}
         ${clue0 && !currentTables() ? '<p class="pi-hint is-warn">当前聊天无法读取数据库表格。依赖表格的开启条件会先按手动开始整理；也可在有表格的聊天中导入。</p>' : ''}
         <label class="pi-field"><span>要求（可空）</span><textarea class="pi-ta" rows="3" data-imp-needs placeholder="${esc(kind0 === 'side' ? IMPORT_NEEDS_SIDE : kind0 === 'lines' ? IMPORT_NEEDS_LINES : IMPORT_NEEDS_EXAMPLE)}">${esc(s.needs || '')}</textarea></label>
         <input type="hidden" data-imp-mode value="${clue0 ? (kind0 === 'lines' ? 'lines' : 'clue') : 'outline'}"><input type="hidden" data-imp-kind value="${kind0}">
@@ -550,8 +544,6 @@ function keepStartInputs(view, target) {
     let card = target.closest('.pi-card'),
         s = sti(view);
     card && ((s.text = card.querySelector('[data-imp-text]').value), (s.needs = card.querySelector('[data-imp-needs]').value));
-    let trpgBox = card && card.querySelector('[data-imp-trpg]');
-    trpgBox && (s.trpg = trpgBox.checked);
 }
 export const importActions = {
     ...rvActions,
@@ -577,25 +569,10 @@ export const importActions = {
         ((sti(view).jobId = ''), view.renderBody());
     },
     async 'import-pick-file'(view, target) {
-        let files = await pickFiles({ accept: isTrpg(view.project()) ? '.txt,.md,.markdown,.pdf,text/plain,application/pdf' : '.txt,.md,.markdown,text/plain', multiple: !1 });
+        let files = await pickFiles({ accept: '.txt,.md,.markdown,text/plain', multiple: !1 });
         if (!files || !files.length) return;
         let box = target.closest('.pi-card').querySelector('[data-imp-text]'),
-            text;
-        if (isPdfFile(files[0])) {
-            let btn = target;
-            try {
-                btn.disabled = !0;
-                btn.textContent = '正在读取PDF…';
-                let r = await pdfFileToText(files[0], { onProgress: (n, total) => (btn.textContent = `正在读取第${n}/${total}页…`) });
-                if (!r.text.trim()) return toast('warning', `没有读到文字。${r.warnings.join('')}扫描版PDF需要先做文字识别。`);
-                text = r.text;
-                r.warnings.length && toast('info', r.warnings.join(''));
-            } catch (error) {
-                return toast('error', `PDF读取失败：${(error && error.message) || error}`);
-            } finally {
-                ((btn.disabled = !1), (btn.textContent = '选择文件…'));
-            }
-        } else text = await files[0].text();
+            text = await files[0].text();
         box && (box.value = text);
         // 选了文件：记下文件名和字数，显示在原文框下方。
         keepStartInputs(view, target);
@@ -610,14 +587,7 @@ export const importActions = {
             kind = mode === 'outline' ? 'outline' : mode === 'lines' ? 'lines' : kindBox && ['main', 'side'].includes(kindBox.value) ? kindBox.value : 'main',
             projectId = view.projectId;
         if (!text.trim()) return toast('warning', '请先粘贴原文或选择文件。');
-        let trpgBox = card.querySelector('[data-imp-trpg]'),
-            trpg = !!(trpgBox && trpgBox.checked && mode === 'clue');
-        let job = await view.data.imports.create({ projectId, text, mode, needs, kind, trpg });
-        sti(view).trpg = void 0;
-        // 跑团模组：项目记为跑团模式，后台另外整理 KP 规则（和大纲整理并行）
-        trpg &&
-            (view.data.updateProject(projectId, (p) => ({ ...p, trpg: { ...(p.trpg || {}), on: !0, rule: 'coc7' } })),
-            runKpRules(view, projectId, text));
+        let job = await view.data.imports.create({ projectId, text, mode, needs, kind });
         ((sti(view).text = ''), (sti(view).needs = ''), (sti(view).file = null));
         if ((view.data.updateProject(projectId, (p) => ({ ...p, imports: [...importJobIds(p), job.id] })), view.projectId !== projectId))
             return toast('info', '导入任务已创建，归属原项目。');

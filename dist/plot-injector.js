@@ -1,4 +1,4 @@
-// PlotInjector v0.3.14
+// PlotInjector v0.4.0
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -488,8 +488,8 @@ ${body}
       `
 `
     ).split(`
-`), blocks = [], current = { key: "", lines: [] }, counts = {}, depth = 0, closed = !1, lastPublic = "开头", open = (title2, line, flag = {}) => {
-      (current.key || current.lines.some((item) => item.trim())) && blocks.push(current), counts[title2] = (counts[title2] || 0) + 1, current = { key: counts[title2] > 1 ? `${title2}#${counts[title2]}` : title2, title: title2, lines: [line], ...flag };
+`), blocks = [], current = { key: "", lines: [] }, counts = {}, depth = 0, closed = !1, lastPublic = "开头", open = (title2, line, flag2 = {}) => {
+      (current.key || current.lines.some((item) => item.trim())) && blocks.push(current), counts[title2] = (counts[title2] || 0) + 1, current = { key: counts[title2] > 1 ? `${title2}#${counts[title2]}` : title2, title: title2, lines: [line], ...flag2 };
     };
     for (let line of lines2) {
       let match = depth === 0 && !/^\s*<仅作者>/.test(line) && HEADING.exec(line);
@@ -726,14 +726,14 @@ ${body}
     if (at < 0) return null;
     let vol = volumes[at], got2 = pickLineIncoming(vol, incoming);
     if (!got2.hit) return null;
-    let cut2 = vol.stages.findIndex((s) => s.id === fromStageId), stages = [...vol.stages.slice(0, cut2), ...got2.stages], next = volumes.slice();
+    let cut3 = vol.stages.findIndex((s) => s.id === fromStageId), stages = [...vol.stages.slice(0, cut3), ...got2.stages], next = volumes.slice();
     return stages.length ? next[at] = { ...vol, stages } : next.splice(at, 1), next;
   }
   function lineRestSig(volumes, volumeId, fromStageId) {
     let at = (volumes || []).findIndex((v) => v.id === volumeId);
     if (at < 0) return "";
-    let vol = volumes[at], cut2 = vol.stages.findIndex((s) => s.id === fromStageId);
-    return cut2 < 0 ? "" : JSON.stringify([at, vol.id, vol.key, vol.line || null, vol.stages.slice(cut2).map((s) => [s.id, s.key, s.data])]);
+    let vol = volumes[at], cut3 = vol.stages.findIndex((s) => s.id === fromStageId);
+    return cut3 < 0 ? "" : JSON.stringify([at, vol.id, vol.key, vol.line || null, vol.stages.slice(cut3).map((s) => [s.id, s.key, s.data])]);
   }
   function rewriteByLine(volumes) {
     return (volumes || []).length > 1 && (volumes || []).some((v) => isPlainObject(v.line));
@@ -2512,7 +2512,7 @@ ${lines2.join(`
     return settings && settings.bodyGuide === !1 ? "" : settings && String(settings.bodyGuideText || "").trim() || BODY_GUIDE;
   }
 
-  // src/core/trpg.js
+  // src/trpg/trpg.js
   var TRPG_RULES = [{ value: "coc7", label: "CoC 7 版" }], KP_BLOCK = "KP规则";
   function normalizeTrpg(value) {
     return isPlainObject(value) ? { on: value.on !== !1, rule: TRPG_RULES.some((r) => r.value === value.rule) ? value.rule : "coc7" } : null;
@@ -2571,7 +2571,13 @@ ${lines2.join(`
     "· 成功程度不同得到的信息不同（大成功多知道一点）的，把多出来的部分拆成另一条发现、另一个事实编号；节点的完成条件只用基本的那一条。",
     "· 理智检定（如 sc0/1d3、0/1d3 的理智鉴定、损失 1D3/2D6 SAN）写在场景末尾的括号里，例如「（目睹尸体：理智检定 0/1d3）」，不要写成发现。",
     "· 战斗、对抗、伤害、计量（如「临界值 +1」「可用厕所 -1」）、按钟点发生的事件、随机表、NPC 和敌人的数值、法术，不要写成节点或发现；插件会把这些另外整理成 KP 规则。和某个节点相关的，在场景或「AI指令」里一句话点到即可（如「这里可能和教徒起冲突」）。",
-    "· 模组里的「支线」「随机事件」是可以碰到也可以错过的，写进 支线事件:，「必需: false」。"
+    "· 模组里的「支线」「随机事件」是可以碰到也可以错过的，写进 支线事件:，「必需: false」。",
+    '· 模组里写了时间推进的（某个钟点发生某件事），用阶段的进入条件写「时间 >= HH:MM」，同时并一条「情况: …」作为没绑定时间表时的后备，写成「任一」。例如：进入条件: {任一: [时间 >= 21:00, "情况: 宴会进入尾声，客人开始散去"]}。「情况」是一句话写的现场情况，由 KP 读正文判断；结束条件、开放条件、完成条件也可以这样写。',
+    "· 场景要不要开启取决于现场情况、又没有对应线索的，开放条件直接写「情况: …」，不要硬编一个只为开门的事实编号。",
+    "· 每个阶段写「状态变化」：本阶段结束时人物处境、NPC 态度、局势比之前变了什么。",
+    "· 阶段的「AI指令」只写氛围和主持机制。幕后名称、后面的时间点、破局方法、结局一律写进作者备注，或者在 AI指令里用 <仅作者>…</仅作者> 包起来。不要写「不要揭示 X」这种否定句，这句话本身就把 X 告诉了正文。",
+    "· 带判定的发现，「失败」里如果失败后仍能拿到，必须写「仍然得到」这几个字。被检定失败触发的坏结果（如被反锁）不能挂判定，改在发现的「记录」里写「检定失败才算」。",
+    "· 必需节点不要只靠「拿到任意一件可选物品」来完成。可选的事情标「必需: false」，阶段结束条件再给出其他路线。"
   ].join(`
 `), KP_SECTIONS = ["机制与计量", "时间线", "理智检定", "随机事件与随机表", "NPC与敌人数据", "法术与道具效果", "结局条件", "预设调查员"];
   function kpRulesMessages({ part, total }) {
@@ -3406,6 +3412,52 @@ ${u.yaml}`].filter(Boolean).join(`
 `) : "";
   }
 
+  // src/core/clue-rules.js
+  var clue_rules_exports = {};
+  __export(clue_rules_exports, {
+    ATOM_KEYS: () => ATOM_KEYS,
+    AWAY_PREFIX: () => AWAY_PREFIX,
+    CELL_EXTRA_KEYS: () => CELL_EXTRA_KEYS,
+    COND_MAX_DEPTH: () => COND_MAX_DEPTH,
+    LINE_MODES: () => LINE_MODES,
+    LINE_STATES: () => LINE_STATES,
+    LINE_STATE_ALIAS: () => LINE_STATE_ALIAS,
+    NODE_STATUS_LABELS: () => NODE_STATUS_LABELS,
+    TRI: () => TRI,
+    applyOp: () => applyOp,
+    atomString: () => atomString,
+    clockOf: () => clockOf,
+    compareValues: () => compareValues,
+    compileClue: () => compileClue,
+    compileLines: () => compileLines,
+    computeClueState: () => computeClueState,
+    conditionRefs: () => conditionRefs,
+    confirmTierOrder: () => confirmTierOrder,
+    digitsOf: () => digitsOf,
+    effectiveFact: () => effectiveFact,
+    emptyClueProgress: () => emptyClueProgress,
+    evalAtom: () => evalAtom,
+    evalCondition: () => evalCondition,
+    isRequired: () => isRequired,
+    joinFlowSplit: () => joinFlowSplit,
+    lineToManual: () => lineToManual,
+    lineTriggerFacts: () => lineTriggerFacts,
+    normalizeOps: () => normalizeOps,
+    parseAtom: () => parseAtom,
+    parseCellExtra: () => parseCellExtra,
+    parseCondition: () => parseCondition,
+    parseCountAtom: () => parseCountAtom,
+    pickFocus: () => pickFocus,
+    prebuiltGaps: () => prebuiltGaps,
+    resolveLineWindow: () => resolveLineWindow,
+    sampleAgrees: () => sampleAgrees,
+    sceneIsNone: () => sceneIsNone,
+    splitCompare: () => splitCompare,
+    tableConsistencyHints: () => tableConsistencyHints,
+    tierOrderKnown: () => tierOrderKnown,
+    withLineIds: () => withLineIds
+  });
+
   // src/core/clue-tables.js
   function cloneTables(raw) {
     if (!raw || typeof raw != "object") return {};
@@ -3703,7 +3755,7 @@ ${u.yaml}`].filter(Boolean).join(`
     });
     return nums.every(Number.isFinite) && nums.every((n, i) => !i || n > nums[i - 1]);
   }
-  function countRows(tables, table, column, op, value, applyOp2) {
+  function countRows(tables, table, column, op, value, applyOp3) {
     let found = findSheet(tables, table);
     if (found.error) return { state: "unknown", reason: found.error };
     let { col, rows: rows2 } = sheetRows(found.sheet), c = col(column);
@@ -3711,7 +3763,7 @@ ${u.yaml}`].filter(Boolean).join(`
     let n = 0, unsure = 0;
     for (let row2 of rows2) {
       if (cellText(row2[c]) === "") continue;
-      let ok = applyOp2(op, row2[c], value);
+      let ok = applyOp3(op, row2[c], value);
       ok === null ? unsure++ : ok && n++;
     }
     return { state: "ok", count: n, unsure };
@@ -3723,13 +3775,7 @@ ${u.yaml}`].filter(Boolean).join(`
   }
   function discoveryList(item) {
     return (Array.isArray(item.发现) ? item.发现 : item.发现 ? [item.发现] : []).map(
-      (d) => isPlainObject(d) ? {
-        fact: String(d.事实 || d.id || "").trim(),
-        text: clueText(d.内容),
-        record: clueText(d.记录),
-        // 跑团模式的「判定」（core/trpg.js）；没写判定的发现不带这个键
-        ...normalizeCheck(d.判定) ? { check: normalizeCheck(d.判定) } : {}
-      } : { fact: "", text: clueText(d), record: "" }
+      (d) => isPlainObject(d) ? { fact: String(d.事实 || d.id || "").trim(), text: clueText(d.内容), record: clueText(d.记录) } : { fact: "", text: clueText(d), record: "" }
     ).filter((d) => d.text);
   }
   function nodeFactRefs(node) {
@@ -4286,7 +4332,7 @@ ${brief.join(`
     }
     return out;
   }
-  function buildClueProjection(state, snapshot, clueProg, settings, { pace = "normal", stay = "", plan = null, notReady = null, checks = null, arrive = !1 } = {}) {
+  function buildClueProjection(state, snapshot, clueProg, settings, { pace = "normal", stay = "", plan = null, notReady = null, arrive = !1 } = {}) {
     let tag = String(settings.tagName || "剧情参考").trim() || "剧情参考", focus = state.nodeStates.find((s) => s.node.uid && s.node.uid === state.focus.uid), lines2 = [], used = {
       focus: focus ? focus.node.uid : "",
       facts: [],
@@ -4308,10 +4354,8 @@ ${brief.join(`
         return !!(f && f.claimed) && !(over && over.status === "revoked");
       }, got2 = finds.filter((d) => d.fact && effectiveFact(d.fact, snapshot, clueProg).confirmed), voiced = finds.filter((d) => !got2.includes(d) && isClaimed(d)), held = finds.filter((d) => !got2.includes(d) && !voiced.includes(d) && d.fact && notReady && notReady.has(d.fact)), pending = finds.filter((d) => !got2.includes(d) && !voiced.includes(d) && !held.includes(d)), gotFacts = new Set([...got2, ...voiced].map((d) => d.fact));
       held.length && (used.held = held.map((d) => d.fact)), held.length && !pending.length && lines2.push("这一场的具体发现还在准备，这一轮先写到人物和环境，不要写出调查结果。"), pending.length && (lines2.push(got2.length ? "本场景还可能获得的发现（尚未发生）：" : "本场景可能获得的发现（尚未发生）："), pending.forEach((d) => {
-        let ck = checkLine(d, checks);
-        lines2.push(ck ? ck.line : `- ${d.text}`), used.discoveries.push(d.fact || d.text.slice(0, 20)), d.fact && (!ck || ck.reveal) && used.candidates.push({ fact: d.fact, record: d.record });
-      }), // 跑团模式：有带判定的发现时，加一条检定写法（没有判定时什么都不加）
-      hasChecks(pending) && lines2.push(checkRule(settings, [...new Set(pending.flatMap((d) => d && d.check && d.check.skills || []))])));
+        lines2.push(`- ${d.text}`), used.discoveries.push(d.fact || d.text.slice(0, 20)), d.fact && used.candidates.push({ fact: d.fact, record: d.record });
+      }));
       let holdersOf = (id) => [
         ...new Set(
           (snapshot.knowledge || []).filter((row2) => row2.fact === id && clueText(row2.actor)).map((row2) => `${clueText(row2.actor)}${row2.verified === !0 ? "" : `（${clueText(row2.credibility) || "未核实"}）`}`)
@@ -4380,14 +4424,7 @@ ${brief.join(`
         "如果用户这一轮去做了上面的某件事，写到他到达、开始就可以；具体查到什么、对方说出什么，留到之后再写，不要自己编造结果。"
       ), used.leads = leads.map((l) => l.uid), leads.forEach((l) => used.scenes.push({ uid: l.uid, entry: l.text, place: l.place, focus: !1 })));
     }
-    if (checks && lines2.push(
-      ...freshCheckLines(state.nodeStates, checks, {
-        printed: used.discoveries,
-        isGot: (id) => effectiveFact(id, snapshot, clueProg).confirmed,
-        discoveriesOf: discoveryList,
-        used
-      })
-    ), !lines2.length) return { content: "", used };
+    if (!lines2.length) return { content: "", used };
     let note = pace === "slow" ? "节奏放慢，细写当下。" : pace === "fast" ? "节奏加快，次要细节一笔带过。" : "", guide = bodyGuideText(settings);
     return {
       content: `<${tag}>
@@ -4622,7 +4659,20 @@ ${guide ? `${guide}
   var ARRIVE_RULE = "用户这一轮刚到这里：只写到达时自然看到的、对方主动说出的；需要用户进一步搜查、说服、检验才能得到的，留到用户真的做了再写。", CLUE_OFF_MATERIAL_RULE = "用户转去调查另一件事，而本轮材料没有提供那件事的具体发现时，写到到达、接触和开始调查为止：可以写环境、人物和对方的反应；东西上写着什么、翻开或打开后看到什么、对方说出的关键信息，都不要自己编，待后续材料提供后再写。本轮已经提供的发现、前文已经明确的内容以及普通日常行动，可以按实际行动继续，不必机械等到下一轮。";
 
   // src/core/clue-rules.js
-  var COND_MAX_DEPTH = 2, ATOM_KEYS = ["事实", "知情", "核实", "节点", "表", "时间", "线"], TRI = { t: "true", f: "false", u: "unknown" };
+  var COND_MAX_DEPTH = 2, CLOCK_PERIOD = "凌晨|清晨|早上|早晨|上午|中午|下午|傍晚|晚上|夜里|夜晚|深夜", CLOCK_RE = new RegExp(`(${CLOCK_PERIOD})?\\s*(\\d{1,2})(?:[:：](\\d{2})|点(半|(\\d{1,2})分?)?|时)`, "g");
+  function clockOf(value) {
+    let text2 = (Array.isArray(value) ? value.join(" ") : value == null ? "" : String(value)).trim(), last = null;
+    for (let [, period, h, hm, half, dm] of text2.matchAll(CLOCK_RE)) {
+      let hh = Number(h), mm = Number(hm ?? (half === "半" ? 30 : dm || 0)) || 0;
+      hh > 24 || mm > 59 || (/下午|傍晚|晚上|夜里|夜晚/.test(period || "") && hh < 12 || period === "深夜" && hh >= 6 && hh < 12 ? hh += 12 : period === "凌晨" && hh === 12 && (hh = 0), last = hh % 24 * 60 + mm);
+    }
+    return last;
+  }
+  function clockText(minutes) {
+    let t = (minutes % 1440 + 1440) % 1440;
+    return `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
+  }
+  var ATOM_KEYS = ["事实", "知情", "核实", "节点", "表", "时间", "线"], TRI = { t: "true", f: "false", u: "unknown" };
   function atomString(key, value) {
     let v = String(value ?? "").trim();
     return key === "时间" ? `时间 ${v}` : `${key}: ${v}`;
@@ -4764,6 +4814,12 @@ ${guide ? `${guide}
         }
         if (atom.tiers && !["==", "!="].includes(atom.op) && !tierOrderKnown(atom, env.tables))
           return { v: TRI.u, why: `${label}：档位顺序「${atom.tiers.join(" < ")}」还没确认，确认前不比大小` };
+        if (atom.kind === "time" && /^\d{1,2}[:：]\d{2}$/.test(String(atom.value).trim()) && !["包含", "不包含"].includes(atom.op)) {
+          let now = clockOf(value), want = clockOf(atom.value);
+          if (now == null) return { v: TRI.u, why: `时间「${cellText(value)}」里读不出钟点` };
+          let d = now - want, hit = { ">=": d >= 0, ">": d > 0, "<=": d <= 0, "<": d < 0, "==": d === 0, "!=": d !== 0 }[atom.op];
+          return { v: hit ? TRI.t : TRI.f, why: `时间 ${clockText(now)}${hit ? "已到" : "未到"} ${clockText(want)}` };
+        }
         let ok = atom.op === "包含" || atom.op === "不包含" ? cellText(value).includes(atom.value) === (atom.op === "包含") : atom.tiers ? tierCompare(atom.op, value, atom.value, atom.tiers) : applyOp(atom.op, value, atom.value);
         return ok === null ? {
           v: TRI.u,
@@ -4831,8 +4887,8 @@ ${guide ? `${guide}
     return { focus: "", overrides: {}, factOverrides: {}, log: [] };
   }
   function isRequired(node) {
-    let flag = isPlainObject(node.item) ? node.item.必需 : void 0;
-    return flag == null || flag === "" ? node.kind === "main" : flag === !0 || flag === "是" || flag === "true";
+    let flag2 = isPlainObject(node.item) ? node.item.必需 : void 0;
+    return flag2 == null || flag2 === "" ? node.kind === "main" : flag2 === !0 || flag2 === "是" || flag2 === "true";
   }
   function compileClue(volumes) {
     let errors = [], units = flattenUnits(volumes), nodes = [], ids = /* @__PURE__ */ new Set();
@@ -6068,375 +6124,6 @@ ${guide ? `${guide}
     return { syncPreset, awaitScene, roundScene, clear: () => (scene = null, lastSync = 0) };
   }
 
-  // src/core/trpg-timeline.js
-  var PERIOD = "凌晨|清晨|早上|早晨|上午|中午|下午|傍晚|晚上|夜里|夜晚|深夜", CLOCK_SRC = `(${PERIOD})?\\s*(\\d{1,2})(?:[:：](\\d{2})|点(半|(\\d{1,2})分?)?|时)`;
-  function toMinutes(period, h, m) {
-    return h = Number(h), m = Number(m) || 0, h > 24 || m > 59 ? null : (/下午|傍晚|晚上|夜里|夜晚/.test(period || "") && h < 12 || period === "深夜" && h >= 6 && h < 12 ? h += 12 : period === "凌晨" && h === 12 && (h = 0), h % 24 * 60 + m);
-  }
-  function minutesOf(match) {
-    let [, period, h, hm, half, dm] = match;
-    return toMinutes(period, h, hm ?? (half === "半" ? 30 : dm || 0));
-  }
-  function clockText(minutes) {
-    let t = (minutes % 1440 + 1440) % 1440;
-    return `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
-  }
-  function readClock(value) {
-    let text2 = (Array.isArray(value) ? value.join(" ") : value == null ? "" : String(value)).trim(), last = null;
-    for (let m of text2.matchAll(new RegExp(CLOCK_SRC, "g"))) {
-      let v = minutesOf(m);
-      v != null && (last = v);
-    }
-    return last;
-  }
-  function readGameClock(tables, paths) {
-    for (let path of [].concat(paths || []).filter(Boolean)) {
-      let cell = readCell(tables || {}, path);
-      if (cell.state === "ok") {
-        let v = readClock(cell.value);
-        if (v != null) return v;
-      }
-    }
-    return null;
-  }
-  function parseTimeline(settingText) {
-    let block = splitBlocks(settingText).find((b) => b.title === KP_BLOCK && !b.cont), out = [];
-    if (!block) return out;
-    let inSection = !1, day = 0, last = -1;
-    for (let line of block.text.split(`
-`)) {
-      let head = /^\s*【([^】]+)】\s*$/.exec(line);
-      if (head) {
-        inSection = head[1].trim() === "时间线";
-        continue;
-      }
-      if (!inSection) continue;
-      let m = new RegExp(`^\\s*-\\s*${CLOCK_SRC}`).exec(line);
-      if (!m) continue;
-      let base = minutesOf(m);
-      if (base == null) continue;
-      let minutes = base + day * 1440;
-      for (; minutes < last; ) day += 1, minutes += 1440;
-      last = minutes, out.push({ minutes, clock: clockText(minutes), text: line.slice(m[0].length).replace(/^[\s:：,，、\-—]+/, "").trim() });
-    }
-    return out.filter((e) => e.text);
-  }
-  function dueEvents(events, prev, now) {
-    if (!events.length || prev == null || now == null) return [];
-    let end = now;
-    if (end < prev) {
-      if (prev - end < 720) return [];
-      end += 1440;
-    }
-    let hit = (t) => t > prev && t <= end;
-    return events.filter((e) => hit(e.minutes) || e.minutes >= 1440 && hit(e.minutes - 1440) || hit(e.minutes + 1440));
-  }
-  function timelineLines(due, now) {
-    return due.length ? [
-      `模组时间线：现在 ${clockText(now)}。以下事件已经到点，这一轮或下一轮要让它发生（写法可以随玩家行动调整，不能取消）：`,
-      ...due.map((e) => `- ${e.clock} ${e.text}`)
-    ] : [];
-  }
-  function timelineStep({ events, now, clock, floors }) {
-    if (!events.length || now == null) return { lines: [], next: null };
-    let c = clock && Number.isFinite(clock.minutes) ? clock : null, from = c ? c.floor < floors ? c.minutes : c.floor === floors ? c.from ?? null : null : null;
-    return {
-      lines: timelineLines(dueEvents(events, from, now), now),
-      next: !c || c.floor !== floors ? { floor: floors, minutes: now, from } : null
-    };
-  }
-
-  // src/core/trpg-kp.js
-  var KP_LEVELS = [
-    { level: 1, label: "给点暗示" },
-    { level: 2, label: "再给一次检定" },
-    { level: 3, label: "直接给线索" }
-  ], KP_STUCK_ROUNDS = 4, KP_HOST_RULE = [
-    "KP 主持口径：你是本模组的 KP，上面「由用户选择，不要强行引导」在跑团里按下面执行：",
-    "- 玩家偏离模组时，通过在场 NPC、环境变化或时间线事件，把注意力自然引回当前场景或上面列出的入口；不替玩家行动，不强制。",
-    "- 不要新增模组里没有的重要人物、地点、线索或事件。",
-    "- 玩家坚持做别的事，就写合理的后果，不为他编新剧情。"
-  ].join(`
-`), KP_UNSET_SOURCES = ["none", "away", "stale", "manualDone"], KP_UNSET_HINT = "本轮场景还没确定，正文只拿到入口，容易自由发挥。";
-  function aiFloorCount2(messages) {
-    return (messages || []).filter((m) => m && !m.is_user).length;
-  }
-  function itemOf(node) {
-    return isPlainObject(node && node.item) ? node.item : {};
-  }
-  function textOf(v) {
-    return Array.isArray(v) ? v.join("、") : v == null ? "" : String(v).trim();
-  }
-  var got = (fact, snap2, prog) => effectiveFact(fact, snap2, prog).confirmed;
-  function deadDiscoveries(state, snap2, prog, checks) {
-    let out = [];
-    if (!checks) return out;
-    for (let ns of state.nodeStates)
-      for (let d of discoveryList(itemOf(ns.node))) {
-        let r = d.check && d.fact ? checks[d.fact] : null, kp = d.fact ? checks[`${d.fact}-KP`] : null;
-        !r || r.ok || d.check.fail && GOT_ANYWAY.test(d.check.fail) || kp && kp.ok || got(d.fact, snap2, prog) || out.push({ fact: d.fact, text: d.text, node: ns.node.name || ns.node.uid });
-      }
-    return out;
-  }
-  function stripFacts(value, dead) {
-    if (Array.isArray(value)) return value.map((v) => stripFacts(v, dead));
-    if (!isPlainObject(value)) return value;
-    let out = {};
-    for (let [k, v] of Object.entries(value))
-      out[k] = k === "发现" && Array.isArray(v) ? v.filter((d) => !(isPlainObject(d) && dead.has(String(d.事实 || d.id || "").trim()))).map((d) => stripFacts(d, dead)) : stripFacts(v, dead);
-    return out;
-  }
-  function trpgHealth({ volumes, state, snap: snap2, prog, checks, focus }) {
-    let { known, claimed } = chatFactSets({ snap: snap2, prog }), dead = deadDiscoveries(state, snap2, prog, checks), deadSet = new Set(dead.map((d) => d.fact)), opts = { knownFacts: known, claimedFacts: claimed }, reach = clueReachability(stripFacts(volumes || [], deadSet), opts), base = dead.length ? clueReachability(volumes || [], opts) : reach, lines2 = [], spoil = [];
-    reach.verdict === "ok" ? lines2.push(dead.length ? `有${dead.length}条判定失败的线索，暂时不影响主线` : "主线走得通") : reach.verdict === "blocked" ? lines2.push(
-      dead.length && base.verdict !== "blocked" ? `有${dead.length}条判定失败的线索，主线因此卡住，可以在下面推一把` : "主线现在走不通，需要检查剧本或表格"
-    ) : lines2.push("走不走得通要看表格或时间");
-    let live2 = [...state.stageStates.values()].find((s) => s.entered.v === "true" && !s.done);
-    live2 && live2.requiredLeft.length && lines2.push(`当前阶段还差${live2.requiredLeft.length}个必需节点`);
-    let near = 0;
-    for (let ns of state.nodeStates)
-      (ns.status === "available" || ns.status === "active") && (near += discoveryList(itemOf(ns.node)).filter((d) => d.fact && !deadSet.has(d.fact) && !got(d.fact, snap2, prog)).length);
-    near && lines2.push(`眼前能拿到的线索${near}条`), focus && KP_UNSET_SOURCES.includes(focus.source) && lines2.push(KP_UNSET_HINT);
-    for (let n of reach.stuckNodes) spoil.push(`${n.nodeName}（${n.stage}）：${n.why}`);
-    for (let d of dead) spoil.push(`判定失败 #${d.fact}（${d.node}）：${d.text}`);
-    return { level: reach.verdict === "blocked" ? "bad" : reach.verdict === "unknown" || dead.length ? "warn" : "ok", lines: lines2, spoil, deadFacts: deadSet };
-  }
-  function kpPushTarget(state, snap2, prog) {
-    let pending = (ns) => discoveryList(itemOf(ns.node)).filter((d) => d.fact && !got(d.fact, snap2, prog)).map((d) => ({ fact: d.fact, discovery: d, node: ns.node })), focus = state.nodeStates.find((ns) => ns.node.uid && ns.node.uid === state.focus.uid), mine = focus ? pending(focus) : [], live2 = [...state.stageStates.values()].find((s) => s.entered.v === "true" && !s.done), wanted = /* @__PURE__ */ new Set();
-    for (let n of live2 ? live2.requiredLeft : []) for (let cond of [n.open, n.done]) conditionRefs(cond).facts.forEach((f) => wanted.add(f));
-    let open = (ns) => ns.status === "available" || ns.status === "active", others = state.nodeStates.filter((ns) => ns !== focus && open(ns));
-    return mine.find((x) => wanted.has(x.fact)) || mine[0] || others.filter((ns) => ns.node.required).flatMap(pending)[0] || others.flatMap(pending)[0] || null;
-  }
-  function kpPushLines(push, discovery, node, checks, settings) {
-    let { fact, level } = push, item = itemOf(node), where = [textOf(item.地点), textOf(item.入口)].filter(Boolean);
-    if (level === 1)
-      return {
-        reveal: !1,
-        lines: [
-          `- KP 暗示 #${fact}：这一轮让环境或在场人物给出一点指向这件事的自然暗示（声音、痕迹、有人主动提起）${where.length ? `，可以借用：${where.join("；")}` : ""}。绝不写出发现的内容，不替用户行动。`
-        ]
-      };
-    if (level === 3)
-      return {
-        reveal: !0,
-        lines: [`- KP 给出线索 #${fact}：这一轮通过合理的事件（有人找上门、东西被送来、意外撞见）让用户得到它，写出：${discovery.text}`]
-      };
-    let r = checks && checks[`${fact}-KP`];
-    if (r) {
-      let how = `${r.skill}${r.die != null ? ` 1D100=${r.die}` : ""}${r.value ? `／${r.value}` : ""}，${r.tier}`;
-      return r.ok ? { reveal: !0, lines: [`- 补救检定成功 #${fact}-KP（${how}）：这一轮写出这条发现：${discovery.text}`] } : { reveal: !1, lines: [`- 补救检定失败 #${fact}-KP（${how}）：不要写出这条发现，也不要暗示它是什么。`] };
-    }
-    let skills = [.../* @__PURE__ */ new Set(["灵感", "幸运", ...discovery.check && discovery.check.skills || []])];
-    return {
-      reveal: !1,
-      lines: [
-        `- KP 补救检定 #${fact}-KP：这一轮在正文末尾写检定请求，技能从${skills.join("、")}里挑最合适的一个，编号写 #${fact}-KP。掷骰成功之前不要写出发现内容。`,
-        checkRule(settings)
-      ]
-    };
-  }
-  function kpFind(state, fact) {
-    for (let ns of state.nodeStates) {
-      let d = discoveryList(itemOf(ns.node)).find((x) => x.fact === fact);
-      if (d) return { discovery: d, node: ns.node };
-    }
-    return null;
-  }
-  function entryList(state) {
-    return state.nodeStates.filter((ns) => ns.status === "available" && !ns.disabled && ns.node.uid && textOf(itemOf(ns.node).入口)).map((ns) => textOf(itemOf(ns.node).入口));
-  }
-  function kpInject(out, { state, snap: snap2, prog, checks, settings, push, floors, timeline: timeline2 }) {
-    let lines2 = [], seen = /* @__PURE__ */ new Set(), add = (p) => {
-      let hit = kpFind(state, p.fact);
-      if (!hit || got(p.fact, snap2, prog)) return;
-      let r = kpPushLines(p, hit.discovery, hit.node, checks, settings);
-      lines2.push(...r.lines), r.reveal && out.used.candidates.push({ fact: p.fact, record: hit.discovery.record }), seen.add(p.fact);
-    };
-    push && push.floor === floors && (push.kind === "steer" ? textOf(push.text) && lines2.push(`KP 拉回（只管这一轮）：${textOf(push.text)}`) : add(push));
-    for (let [code, r] of Object.entries(checks || {}))
-      r.fresh && /-KP$/.test(code) && !seen.has(code.slice(0, -3)) && add({ fact: code.slice(0, -3), level: 2 });
-    if (timeline2) {
-      let step = timelineStep({ events: timeline2.events || [], now: timeline2.now, clock: timeline2.clock, floors });
-      lines2.push(...step.lines), step.next && timeline2.onClock && timeline2.onClock(step.next);
-    }
-    let entries = entryList(state), host = !!(out.content || entries.length);
-    if (!lines2.length && !host) return out;
-    let tag = String(settings.tagName || "剧情参考").trim() || "剧情参考", close = `</${tag}>`, body = [...lines2.length ? ["KP 的安排（只管这一轮）：", ...lines2] : [], ...host ? [KP_HOST_RULE] : []].join(`
-`);
-    if (!out.content) {
-      let list = entries.length ? `目前可以去做的事：
-${entries.map((t) => `- ${t}`).join(`
-`)}
-` : "";
-      return { ...out, content: `<${tag}>
-${list}${body}
-${close}` };
-    }
-    let at = out.content.lastIndexOf(close);
-    return at < 0 ? out : { ...out, content: `${out.content.slice(0, at)}${body}
-${out.content.slice(at)}` };
-  }
-  var STUCK_VERDICTS = ["顺利进行", "在打转", "卡住了"], STUCK_ADVICE = ["不用推", ...KP_LEVELS.map((x) => x.label)];
-  function stuckMessages({ recent, stage, rules, facts, pending, health }) {
-    return [
-      {
-        role: "system",
-        content: [
-          "你是跑团模组的 KP 助手。读最近的正文，判断玩家（调查员）是不是卡住了：找不到下一步、在同一处反复打转、明显忘了或没注意到眼前的线索、一直在做和模组无关的事。只判断，不续写。",
-          "只是在正常探索、刚换场景、刚拿到线索在消化，都算顺利。",
-          "严格按下面格式输出，不要写别的：",
-          "结论：顺利进行 / 在打转 / 卡住了（三选一）",
-          "不剧透：",
-          "- 用玩家能看的话说现在的状况（如：在同一个房间反复搜查、没有去问在场的人），不写线索内容、名字和真相",
-          "剧透：",
-          "- 玩家漏掉了哪条线索、本来该怎么拿到",
-          "建议：不用推 / 给点暗示 / 再给一次检定 / 直接给线索（四选一）",
-          "没卡住时「剧透」写「- 无」，建议写「不用推」。"
-        ].join(`
-`)
-      },
-      {
-        role: "user",
-        content: [
-          `【最近正文】
-${recent.map((m) => `${m.user ? "玩家" : "正文"}：${String(m.text || "").slice(0, 1500)}`).join(`
-
-`) || "（没有）"}`,
-          `【当前阶段的模组内容（作者视角，含仅作者部分）】
-${stage || "（没有进行中的阶段）"}`,
-          rules && `【KP规则】
-${rules}`,
-          `【已确认的事实】
-${facts.length ? facts.map((f) => `- ${f}`).join(`
-`) : "（暂无）"}`,
-          `【眼前还没拿到的线索】
-${pending.length ? pending.map((p) => `- #${p.fact}（${p.node}）：${p.text}`).join(`
-`) : "（没有）"}`,
-          health && health.length ? `【插件推演】
-${health.map((t) => `- ${t}`).join(`
-`)}` : ""
-        ].filter(Boolean).join(`
-
-`)
-      }
-    ];
-  }
-  function parseStuckReply(text2) {
-    let out = { verdict: "", plain: [], spoil: [], advice: "" }, sec = "", none = (t) => /^无[。.]?$/.test(t);
-    for (let raw of String(text2 || "").replace(/\r/g, "").split(`
-`)) {
-      let m = /^[\s#*>]*(结论|不剧透|剧透|建议)[*\s]*[:：]\s*\**\s*(.*)$/.exec(raw);
-      if (m) {
-        sec = m[1];
-        let rest = m[2].trim();
-        sec === "结论" && (out.verdict = STUCK_VERDICTS.find((v) => rest.includes(v)) || ""), sec === "建议" && (out.advice = STUCK_ADVICE.find((v) => rest.includes(v)) || "");
-        continue;
-      }
-      let item = /^\s*[-•]\s*(.+)$/.exec(raw);
-      sec === "不剧透" && item ? out.plain.push(item[1].trim()) : sec === "剧透" && item && out.spoil.push(item[1].trim());
-    }
-    return out.plain = out.plain.filter((t) => !none(t)), out.spoil = out.spoil.filter((t) => !none(t)), out;
-  }
-  function pendingDiscoveries(state, snap2, prog, deadFacts = /* @__PURE__ */ new Set()) {
-    let out = [];
-    for (let ns of state.nodeStates)
-      if (ns.status === "available" || ns.status === "active")
-        for (let d of discoveryList(itemOf(ns.node)))
-          d.fact && !deadFacts.has(d.fact) && !got(d.fact, snap2, prog) && out.push({ fact: d.fact, node: ns.node.name || ns.node.uid, text: d.text });
-    return out;
-  }
-  var STEER_VERDICTS = ["跟着剧本", "有点偏", "跑偏了"];
-  function steerMessages({ recent, stage, rules, facts }) {
-    return [
-      {
-        role: "system",
-        content: [
-          "你是跑团模组的审稿人。对照模组内容，检查最近的正文有没有偏离剧本。只判断，不续写。",
-          "重点看：编了模组里没有的人物、地点、线索或事件；跳过了当前该进行的场景；提前揭示了还没到时机的内容；该发生的事件（时间线）没有发生。",
-          "严格按下面格式输出，不要写别的：",
-          "结论：跟着剧本 / 有点偏 / 跑偏了（三选一）",
-          "不剧透：",
-          "- 只说偏在哪一类（如：编了模组外的人物、跳过了场景、提前揭示、该发生的事件没发生），不写名字和真相",
-          "剧透：",
-          "- 具体哪里编了、模组里本来该是什么",
-          "拉回建议：",
-          "一段给正文的 KP 指示：不含玩家不该知道的真相；可以写引回到哪个场景或入口、让哪个 NPC 出现。",
-          "没偏的话「不剧透」「剧透」各写「- 无」，拉回建议写「无」。"
-        ].join(`
-`)
-      },
-      {
-        role: "user",
-        content: [
-          `【最近正文】
-${recent.map((m) => `${m.user ? "玩家" : "正文"}：${String(m.text || "").slice(0, 1500)}`).join(`
-
-`) || "（没有）"}`,
-          `【当前阶段的模组内容（作者视角，含仅作者部分）】
-${stage || "（没有进行中的阶段）"}`,
-          rules && `【KP规则】
-${rules}`,
-          `【已确认的事实】
-${facts.length ? facts.map((f) => `- ${f}`).join(`
-`) : "（暂无）"}`
-        ].filter(Boolean).join(`
-
-`)
-      }
-    ];
-  }
-  function parseSteerReply(text2) {
-    let out = { verdict: "", plain: [], spoil: [], steer: "" }, sec = "", steer = [], none = (t) => /^无[。.]?$/.test(t);
-    for (let raw of String(text2 || "").replace(/\r/g, "").split(`
-`)) {
-      let m = /^[\s#*>]*(结论|不剧透|剧透|拉回建议)[*\s]*[:：]\s*\**\s*(.*)$/.exec(raw);
-      if (m) {
-        sec = m[1];
-        let rest = m[2].trim();
-        sec === "结论" ? out.verdict = STEER_VERDICTS.find((v) => rest.includes(v)) || "" : sec === "拉回建议" && rest && steer.push(rest);
-        continue;
-      }
-      let item = /^\s*[-•]\s*(.+)$/.exec(raw);
-      sec === "不剧透" && item ? out.plain.push(item[1].trim()) : sec === "剧透" && item ? out.spoil.push(item[1].trim()) : sec === "拉回建议" && raw.trim() && steer.push(raw.trim());
-    }
-    return out.plain = out.plain.filter((t) => !none(t)), out.spoil = out.spoil.filter((t) => !none(t)), out.steer = steer.join(`
-`).trim(), none(out.steer) && (out.steer = ""), out;
-  }
-
-  // src/core/trpg-rows.js
-  var TRPG_ROW_DEPTH = 1, TRPG_ROW_CAP = 30, gives = (n) => discoveryList(isPlainObject(n.item) ? n.item : {}).map((d) => d.fact).filter(Boolean);
-  function trpgWantFacts(compiled, state, snap2, prog, config, { depth = TRPG_ROW_DEPTH, cap = TRPG_ROW_CAP } = {}) {
-    let want = /* @__PURE__ */ new Set(), have = /* @__PURE__ */ new Set(), add = (ns) => ns.status !== "locked" && gives(ns.node).forEach((f) => want.add(f));
-    for (let ns of state && state.nodeStates || []) add(ns);
-    for (let [id, f] of snap2 && snap2.facts || []) f && f.status === "confirmed" && have.add(id);
-    let knowAtoms = /* @__PURE__ */ new Set();
-    for (let u of compiled.units) u.clue && [u.clue.enter, u.clue.end].forEach((c) => conditionRefs(c).knows.forEach((k) => knowAtoms.add(k)));
-    for (let n of compiled.nodes) [n.open, n.early, n.done].forEach((c) => conditionRefs(c).knows.forEach((k) => knowAtoms.add(k)));
-    let base = want.size;
-    for (let layer = 0; layer < depth && want.size - base < cap; layer++) {
-      want.forEach((f) => have.add(f));
-      let facts = new Map(snap2 && snap2.facts ? snap2.facts : []);
-      for (let id of have) facts.set(id, { ...facts.get(id) || {}, id, status: "confirmed", raw: "已核实", text: (facts.get(id) || {}).text || "" });
-      let knowledge = [
-        ...snap2 && snap2.knowledge || [],
-        ...[...knowAtoms].flatMap((k) => {
-          let i = k.lastIndexOf("@"), fact = k.slice(0, i);
-          return have.has(fact) ? [{ fact, actor: k.slice(i + 1), way: "亲见", verified: !0 }] : [];
-        })
-      ], sim = computeClueState(compiled, { ...snap2 || {}, facts, knowledge }, prog, config), before = want.size;
-      for (let ns of sim.nodeStates) {
-        if (want.size - base >= cap) break;
-        add(ns);
-      }
-      if (want.size === before) break;
-    }
-    return want;
-  }
-  function trpgRowFilter(compiled, want) {
-    let produced = new Set(compiled.nodes.flatMap(gives));
-    return (code) => !produced.has(code) || want.has(code);
-  }
-
   // src/core/clue-audit.js
   var AUDIT_MIN = 8, AUDIT_SAMPLE = 16, AUDIT_MAX_PER_SOURCE = 6;
   function normText(text2) {
@@ -6624,9 +6311,9 @@ ${facts.length ? facts.map((f) => `- ${f}`).join(`
           cond = { ...snap2, tables: view, facts: r.facts, knowledge: r.knowledge };
         }
       }
-      let acc = acceptedSet(), reg = snap2.api && acc && !isTrpg(p) ? admitRegistrations(compiled, cond, prog, p.clue, acc) : null, held = reg ? reg.held : /* @__PURE__ */ new Set();
+      let acc = acceptedSet(), reg = snap2.api && acc ? admitRegistrations(compiled, cond, prog, p.clue, acc) : null, held = reg ? reg.held : /* @__PURE__ */ new Set();
       held.size && (cond = withHeld(cond, held, p.clue.bindings));
-      let state = computeClueState(compiled, cond, prog, p.clue), frontier = snap2.api && compiled.lines.length && !isTrpg(p) ? nodeFrontier(compiled, state, cond, prog, p.clue) : null, scope = snap2.api && compiled.lines.length ? rowScope(compiled, startedLines(state), frontier) : null, busy = foldBusyCodes(foldSt);
+      let state = computeClueState(compiled, cond, prog, p.clue), frontier = snap2.api && compiled.lines.length ? nodeFrontier(compiled, state, cond, prog, p.clue) : null, scope = snap2.api && compiled.lines.length ? rowScope(compiled, startedLines(state), frontier) : null, busy = foldBusyCodes(foldSt);
       scope && busy.size && (scope = { facts: new Set([...scope.facts].filter((f) => !busy.has(f))), future: /* @__PURE__ */ new Set([...scope.future, ...busy]) }), snap2.scope = scope, snap2.frontier = frontier, snap2.held = held, snap2.admit = reg ? reg.admit : /* @__PURE__ */ new Set(), snap2.cond = cond, snap2.fold = foldSt, snap2.foldBusy = busy;
       let can = seedable(p.clue.bindings), seedF = can.facts, seedK = can.knows, seedPending = pendingSeedCodes(snap2.tables, (p.clue.bindings.facts || [])[0]), factsBroken = snap2.problems.some((s) => /^表「.*」缺少(编号|状态)列/.test(s));
       snap2.seedPending = seedPending, snap2.factsBroken = factsBroken, snap2.api && (p.clue.bindings.facts || []).length && snap2.problems.push(
@@ -6944,7 +6631,7 @@ ${facts.length ? facts.map((f) => `- ${f}`).join(`
     }
     function foldCheck() {
       let p = project();
-      if (!p || isTrpg(p)) return null;
+      if (!p) return null;
       let c = compute(), api = acuApi();
       if (!c || !c.snap.api || !c.compiled.lines.length) return null;
       let chat = chatMessages(), iso = isoKey(), prog = getProgress() || {}, ends = isPlainObject(prog.lineEnds) ? prog.lineEnds : {}, can = seedable(p.clue.bindings), paused = pausedReady(c), plan = foldPlan(c.compiled, c.state.lineStates, { keep: p.clue.noFold, paused: new Set(paused.keys()) }), rows2 = foldRows(c.snap.tables, p.clue.bindings, plan.flatMap((x) => x.facts)), kb = (p.clue.bindings.knowledge || [])[0], keys = { facts: rows2.factKey, knows: kb ? rows2.knowKey : "" }, sum = (map, codes) => codes.reduce((n, f) => n + (map[f] || 0), 0);
@@ -6973,7 +6660,7 @@ ${facts.length ? facts.map((f) => `- ${f}`).join(`
         problems: rows2.problems
       };
     }
-    let plot = createPlotOps({ api: acuApi, note, off: () => isTrpg(project()) }), fold = createFoldOps({
+    let plot = createPlotOps({ api: acuApi, note }), fold = createFoldOps({
       project,
       api: acuApi,
       getProgress,
@@ -7127,7 +6814,7 @@ ${facts.length ? facts.map((f) => `- ${f}`).join(`
       let labels = isPlainObject(p.clue.labels) ? p.clue.labels : {}, plan = prebuildPlan(p.outline.volumes), everStarted = startedLines(c.state) || /* @__PURE__ */ new Set(), started = new Map(c.state.lineStates.filter((s) => everStarted.has(s.line.id)).map((s) => [s.line.id, s])), target = appendTargetFloor(chatMessages(), isoKey()), lineReady = (lid) => {
         let s = started.get(lid);
         return !!s && (s.manual.startAt === void 0 || s.manual.startAt < 0 || target >= s.manual.startAt);
-      }, want = rowScope(c.compiled, new Set([...started.keys()].filter(lineReady)), c.snap.frontier || null).facts, trpgKeep = isTrpg(p) ? trpgRowFilter(c.compiled, trpgWantFacts(c.compiled, c.state, c.snap, c.prog, p.clue)) : null, wantFact = (code) => want.has(code) && (!trpgKeep || trpgKeep(code)) && !(c.snap.foldBusy && c.snap.foldBusy.has(code)), diff = prebuildDiff(
+      }, want = rowScope(c.compiled, new Set([...started.keys()].filter(lineReady)), c.snap.frontier || null).facts, wantFact = (code) => want.has(code) && !(c.snap.foldBusy && c.snap.foldBusy.has(code)), diff = prebuildDiff(
         { ...plan, facts: plan.facts.filter((f) => wantFact(f.code)), knows: plan.knows.filter((k) => wantFact(k.fact)) },
         c.snap,
         p.clue.bindings
@@ -7205,7 +6892,7 @@ ${facts.length ? facts.map((f) => `- ${f}`).join(`
     }
     let isReg = (f) => !!f && (f.status === "confirmed" || f.claimed);
     async function checkRegistrations(p, c, t0) {
-      if (fold.fillBusy() || isTrpg(p)) return !1;
+      if (fold.fillBusy()) return !1;
       let prog = getProgress() || {}, chat = chatMessages(), view = c.snap.cond || c.snap, regs = new Set([...view.facts || []].filter(([, f]) => isReg(f)).map(([id]) => id)), busy = c.snap.foldBusy || /* @__PURE__ */ new Set();
       if (!Array.isArray(prog.clueAccept))
         return setProgress({ ...prog, clueAccept: [...regs].concat([...c.snap.held]).map((f) => ({ f, at: null })) }, "clue-accept"), invalidate("clue-accept"), !0;
@@ -7515,37 +7202,12 @@ ${facts.length ? facts.map((f) => `- ${f}`).join(`
         stay: stayText(stayState(prog && prog.stays, chatMessages(), info), "clue"),
         plan: c.plan,
         notReady: c.notReady,
-        // 跑团模式：从聊天记录算出各检定的结果（core/trpg.js）；不是跑团项目不算
-        checks: isTrpg(project()) ? trpgCheckResults(chatMessages()) : null,
         arrive
       });
-      return isTrpg(project()) && (out = kpInject(out, {
-        state: c.state,
-        snap: c.snap,
-        prog: c.prog,
-        checks: trpgCheckResults(chatMessages()),
-        settings: data.settings(),
-        push: prog && prog.trpgKp && prog.trpgKp.push,
-        floors: aiFloors(),
-        timeline: trpgTimeline(prog)
-      })), {
+      return {
         ...out,
         reason: out.content ? "" : "当前无可进行的线索场景",
         lineOnly: !out.content && !!(out.used && out.used.recognize && out.used.recognize.length)
-      };
-    }
-    function trpgTimeline(prog) {
-      let p = project(), events2 = parseTimeline(p && p.setting && p.setting.text);
-      if (!events2.length) return null;
-      let c = compute(), now = c ? readGameClock(c.snap.tables, p.clue.bindings.time && p.clue.bindings.time.路径) : null;
-      return {
-        events: events2,
-        now,
-        clock: prog && prog.trpgKp && prog.trpgKp.clock,
-        onClock: (next) => Promise.resolve().then(() => {
-          let cur = getProgress() || {};
-          setProgress({ ...cur, trpgKp: { ...cur.trpgKp || {}, clock: next } }, "trpg-kp");
-        })
       };
     }
     function arriveState(c) {
@@ -7795,171 +7457,3073 @@ ${facts.length ? facts.map((f) => `- ${f}`).join(`
     };
   }
 
-  // src/core/check.js
-  function cleanFloorText(text2, limit = 3e3) {
-    let out = String(text2 || "");
-    return out = out.replace(/<(think|thinking|reasoning|status|statusbar|状态栏|details)\b[^>]*>[\s\S]*?<\/\1>/gi, ""), out = out.replace(/```[\s\S]*?```/g, ""), out = out.replace(/<\s*剧情推进\s*\/?\s*>/g, ""), out = out.replace(/<[^>\n]{1,80}>/g, ""), out = out.replace(/\n{3,}/g, `
+  // src/trpg/trpg-clue-rules.js
+  var trpg_clue_rules_exports = {};
+  __export(trpg_clue_rules_exports, {
+    ATOM_KEYS: () => ATOM_KEYS2,
+    AWAY_PREFIX: () => AWAY_PREFIX2,
+    CELL_EXTRA_KEYS: () => CELL_EXTRA_KEYS2,
+    COND_MAX_DEPTH: () => COND_MAX_DEPTH2,
+    LINE_MODES: () => LINE_MODES2,
+    LINE_STATES: () => LINE_STATES2,
+    LINE_STATE_ALIAS: () => LINE_STATE_ALIAS2,
+    NODE_STATUS_LABELS: () => NODE_STATUS_LABELS2,
+    TRI: () => TRI2,
+    applyOp: () => applyOp2,
+    atomString: () => atomString2,
+    compareValues: () => compareValues2,
+    compileClue: () => compileClue2,
+    compileLines: () => compileLines2,
+    computeClueState: () => computeClueState2,
+    conditionRefs: () => conditionRefs2,
+    confirmTierOrder: () => confirmTierOrder2,
+    digitsOf: () => digitsOf2,
+    effectiveFact: () => effectiveFact2,
+    emptyClueProgress: () => emptyClueProgress2,
+    evalAtom: () => evalAtom2,
+    evalCondition: () => evalCondition2,
+    isRequired: () => isRequired2,
+    joinFlowSplit: () => joinFlowSplit2,
+    lineToManual: () => lineToManual2,
+    lineTriggerFacts: () => lineTriggerFacts2,
+    normalizeOps: () => normalizeOps2,
+    parseAtom: () => parseAtom2,
+    parseCellExtra: () => parseCellExtra2,
+    parseCondition: () => parseCondition2,
+    parseCountAtom: () => parseCountAtom2,
+    pickFocus: () => pickFocus2,
+    prebuiltGaps: () => prebuiltGaps2,
+    resolveLineWindow: () => resolveLineWindow2,
+    sampleAgrees: () => sampleAgrees2,
+    sayAtoms: () => sayAtoms,
+    sayKey: () => sayKey,
+    sceneIsNone: () => sceneIsNone2,
+    splitCompare: () => splitCompare2,
+    tableConsistencyHints: () => tableConsistencyHints2,
+    tierOrderKnown: () => tierOrderKnown2,
+    withLineIds: () => withLineIds2
+  });
 
-`).trim(), out.length > limit ? out.slice(-limit) : out;
-  }
-  function threadRules(threads) {
-    if (!threads) return null;
-    let clocks = Array.isArray(threads.clocks) ? threads.clocks : [], keys = [], rules = [];
-    if (clocks.length && (keys.push('"clocks":[{"name":"进度钟名称","tick":推进格数,"happened":true或false}]'), rules.push(
-      `clocks 对照剧情索引里的【世界进度钟】（${clocks.map((clock) => `${clock.name} ${clock.filled}/${clock.total}`).join("、")}）：正文里有推动这件事的进展就填正数，每次最多 2 格；玩家出手阻止、使局势缓和就填负数；没有变化就省略。只有正文已经写出这件事发生时，happened 才填 true。`
-    )), threads.hooks && (keys.push('"hooks":["支线名"]'), rules.push(
-      "hooks 填【支线钩子】里标为「待触发」、出现条件已在正文中满足的支线名。支线已经在正文里演出时，把支线名填进 done；支线链只在当前这一步演出时填。"
-    )), threads.newThread) {
-      keys.push('"newThread":{"name":"线名","summary":"一句话概括"}'), rules.push(
-        "玩家在正文里主动开了一条大纲和剧情索引里都没有的线（例如接下新的委托、追查新的线索、发展新的关系）时填 newThread，没有就填 null。"
-      );
-      let ignored = Array.isArray(threads.ignored) ? threads.ignored.slice(-10) : [];
-      ignored.length && rules.push(`以下线已被忽略，不要再填进 newThread：${ignored.join("、")}。`);
-    }
-    return clocks.length && threads.readTo > 0 && rules.push("标有「已读」的楼层上次检测已经读过，clocks 只按之后的新楼层推进；没有新楼层时省略 clocks 的推进。"), keys.length ? { keys, rules, hooks: !!threads.hooks, readTo: clocks.length && Number(threads.readTo) || 0 } : null;
-  }
-  var PERSONA_KEY = '"personas":[{"line":"线名","to":"下一阶段名","floor":依据所在楼号,"reason":"一句话依据"}]', PERSONA_RULE = "personas 对照【人设阶段】：只填正文里已经写出、满足该线「进入条件」的线；to 只能填该线的下一阶段名，不能跳段、不能退回；floor 填依据所在的楼号，reason 写一句依据。没有满足的就填空数组。";
-  function personaLines(items) {
-    return items.map(
-      (item) => `- ${item.group ? `${item.group}·` : ""}${item.name}：当前「${item.from}」；下一阶段「${item.to}」，进入条件：${item.cond || "（未写，按阶段名判断）"}`
-    ).join(`
-`);
-  }
-  var FACT_KEY = '"facts":[{"id":"编号","floor":写出这件事的楼号}]', FACT_RULE = "facts 对照【待确认的事】：只有正文已经明确写出这件事发生了才填，id 原样照抄，floor 填写出它的楼号。只是提到、计划、猜测、角色以为的都不算。没有就填空数组。";
-  function factLines(items) {
-    return items.map((item) => `- ${item.id}：${item.text}`).join(`
-`);
-  }
-  var EMPTY_NAMES = /^(?:无|没有|暂无|空|none|null|nil|n\/a|na|undefined|-|—|无新线|没有新线|没有新的线)$/i, isEmptyName = (name) => EMPTY_NAMES.test(
-    String(name).trim().replace(/[。．.！!？?；;，,、\s]+$/, "").trim()
-  );
-  function buildCheckMessages(unit, index, floors, threads = null, personas2 = null, facts = null) {
-    let extra = threadRules(threads), pItems = Array.isArray(personas2) ? personas2 : [], fItems = Array.isArray(facts) ? facts : [], format = '{"done":["节点名"],"stageDone":true或false,"offTrack":true或false,"offReason":"偏离说明，没有就留空","reason":"一句话"}', system = [
-      "你是剧情进度核对员。根据最近的正文，对照剧情索引判断进度。",
-      "只认正文里已经写出的事件，计划、预告、角色设想不算发生。",
-      "若剧情走了某个节点的「偏转」分支，在 reason 里写明是哪个节点、怎么偏的。",
-      "另外判断剧情是否严重偏离大纲：正文的走向已经和【当前】【下一段】冲突，照原计划写下去会接不上（例如关键人物已死、关键事件已不可能发生、地点或立场彻底改变）。普通的细节出入、走了偏转分支都不算严重偏离。",
-      `只输出一个 JSON 对象，不加说明：${extra || pItems.length || fItems.length ? `${format.slice(0, -1)}${[...extra ? extra.keys : [], ...pItems.length ? [PERSONA_KEY] : [], ...fItems.length ? [FACT_KEY] : []].map((key) => `,${key}`).join("")}}` : format}`,
-      `done 只填${extra && extra.hooks ? "【当前】或【支线钩子】" : "【当前】"}里出现过的节点名，原样照抄；stageDone 表示当前段所有主线节点都已发生、剧情已进入下一段。`,
-      ...extra ? extra.rules : [],
-      ...pItems.length ? [PERSONA_RULE] : [],
-      ...fItems.length ? [FACT_RULE] : []
-    ].join(`
-`), readTo = extra ? extra.readTo : 0, user = [
-      `【剧情索引】
-${index}`,
-      ...pItems.length ? ["", `【人设阶段】
-${personaLines(pItems)}`] : [],
-      ...fItems.length ? ["", `【待确认的事】
-${factLines(fItems)}`] : [],
-      "",
-      "【最近正文】",
-      ...floors.map((floor) => `【第 ${floor.index} 楼${readTo > 0 && floor.index < readTo ? "·已读" : ""}】
-${floor.text}`)
-    ].join(`
-`);
-    return [
-      { role: "system", content: system },
-      { role: "user", content: user }
-    ];
-  }
-  function buildPersonaCheckMessages(items, floors, facts = []) {
-    let fItems = Array.isArray(facts) ? facts : [], system = [
-      items.length ? "你是人设阶段核对员。根据最近的正文，判断下列人设线是否已经进入下一阶段。" : "你是剧情核对员。根据最近的正文，判断下列事情是否已经在正文中发生。",
-      ...items.length && fItems.length ? ["同时判断【待确认的事】是否已经发生。"] : [],
-      "只认正文里已经写出的事件，计划、预告、角色设想不算发生。",
-      `只输出一个 JSON 对象，不加说明：{${[...items.length ? [PERSONA_KEY] : [], ...fItems.length ? [FACT_KEY] : []].join(",")}}`,
-      ...items.length ? [PERSONA_RULE] : [],
-      ...fItems.length ? [FACT_RULE] : []
-    ].join(`
-`), user = [
-      ...items.length ? [`【人设阶段】
-${personaLines(items)}`] : [],
-      ...fItems.length ? [`${items.length ? `
-` : ""}【待确认的事】
-${factLines(fItems)}`] : [],
-      "",
-      "【最近正文】",
-      ...floors.map((floor) => `【第 ${floor.index} 楼】
-${floor.text}`)
-    ].join(`
-`);
-    return [
-      { role: "system", content: system },
-      { role: "user", content: user }
-    ];
-  }
-  function parseCheckReply(text2) {
-    let raw = String(text2 || ""), start = raw.indexOf("{"), end = raw.lastIndexOf("}");
-    if (start < 0 || end <= start) throw new Error("检测结果不是 JSON");
-    let value;
+  // src/trpg/trpg-clue-tables.js
+  function cloneTables2(raw) {
+    if (!raw || typeof raw != "object") return {};
     try {
-      value = JSON.parse(raw.slice(start, end + 1));
+      return JSON.parse(JSON.stringify(raw));
     } catch {
-      throw new Error("检测结果 JSON 无法解析");
+      return {};
     }
-    let done = Array.isArray(value.done) ? value.done.map((item) => String(item).trim()).filter(Boolean) : [], flag = (item) => item === !0 || item === "true";
+  }
+  function sheetList2(tables) {
+    return Object.entries(tables || {}).filter(([key, sheet]) => key.startsWith("sheet_") && sheet && Array.isArray(sheet.content)).map(([key, sheet]) => ({
+      key,
+      name: String(sheet.name || key),
+      content: sheet.content,
+      seedRows: sheet.seedRows,
+      note: String(sheet.sourceData && sheet.sourceData.note || ""),
+      freq: sheet.updateConfig ? sheet.updateConfig.updateFrequency : void 0
+    }));
+  }
+  function findSheet2(tables, name) {
+    let hits = sheetList2(tables).filter((sheet) => sheet.name === name || sheet.key === name);
+    return hits.length === 1 ? { sheet: hits[0] } : hits.length ? { error: `表「${name}」重名${hits.length}张` } : { error: `缺少表「${name}」` };
+  }
+  function sheetRows2(sheet) {
+    let head = Array.isArray(sheet.content[0]) ? sheet.content[0] : [], own = sheet.content.slice(1).filter(Array.isArray), seeds = Array.isArray(sheet.seedRows) ? sheet.seedRows.filter(Array.isArray) : [], rows2 = own.length ? own : seeds;
     return {
-      done,
-      stageDone: flag(value.stageDone),
-      offTrack: flag(value.offTrack),
-      offReason: String(value.offReason || "").trim(),
-      reason: String(value.reason || "").trim(),
-      clocks: parseClocks(value.clocks, flag),
-      hooks: names(value.hooks),
-      newThread: parseThread(value.newThread),
-      ...Array.isArray(value.personas) ? { personas: parsePersonaMoves(value.personas) } : {},
-      ...Array.isArray(value.facts) ? { facts: parseFactHits(value.facts) } : {}
+      head,
+      col: (name) => head.findIndex((cell, index) => index > 0 && String(cell ?? "").trim() === name),
+      rows: rows2
     };
   }
-  var CLOCK_TICK_MAX = 2, names = (list) => Array.isArray(list) ? list.map((item) => String(item ?? "").trim()).filter(Boolean) : [];
-  function parseClocks(raw, flag) {
-    return (Array.isArray(raw) ? raw : raw && typeof raw == "object" ? Object.entries(raw).map(([name, item]) => item && typeof item == "object" ? { name, ...item } : { name, tick: item }) : []).filter((item) => item && typeof item == "object").map((item) => {
-      let tick = Math.round(Number(item.tick ?? item.advance ?? item.推进));
-      return {
-        name: String(item.name ?? item.名称 ?? "").trim(),
-        tick: Number.isFinite(tick) ? Math.min(CLOCK_TICK_MAX, tick) : 0,
-        happened: flag(item.happened ?? item.发生)
-      };
-    }).filter((item) => item.name);
+  function cellText2(value) {
+    return value == null ? "" : String(value).trim();
   }
-  function parseFactHits(raw) {
-    return (Array.isArray(raw) ? raw : []).map((item) => typeof item == "string" ? { id: item } : item).filter((item) => item && typeof item == "object").map((item) => ({ id: String(item.id ?? item.编号 ?? "").trim(), floor: Math.round(Number(item.floor ?? item.楼)) || 0 })).filter((item) => item.id);
+  function valueSet2(value) {
+    return new Set((Array.isArray(value) ? value : value == null ? [] : [value]).map(cellText2).filter(Boolean));
   }
-  function parsePersonaMoves(raw) {
-    return (Array.isArray(raw) ? raw : []).filter((item) => item && typeof item == "object").map((item) => ({
-      line: String(item.line ?? item.线 ?? "").trim(),
-      to: String(item.to ?? item.到 ?? "").trim(),
-      floor: Math.round(Number(item.floor ?? item.楼)) || 0,
-      reason: String(item.reason ?? item.依据 ?? "").trim()
-    })).filter((item) => item.line && item.to);
+  function sameValue2(cell, wanted) {
+    let a = cellText2(cell), b = cellText2(wanted);
+    if (a === b) return !0;
+    let na = Number(a), nb = Number(b);
+    return a !== "" && b !== "" && Number.isFinite(na) && Number.isFinite(nb) && na === nb;
   }
-  function parseThread(raw) {
-    if (!raw) return null;
-    let item = typeof raw == "string" ? { name: raw } : raw;
-    if (typeof item != "object") return null;
-    let name = String(item.name ?? item.名称 ?? "").trim().slice(0, 40);
-    return name && !isEmptyName(name) ? {
-      name,
-      summary: String(item.summary ?? item.概括 ?? "").trim().slice(0, 200)
+  function readCell2(tables, path) {
+    let parts = String(path || "").split("/").map((part) => part.trim());
+    if (parts.length !== 3 || parts.some((part) => !part)) return { state: "unknown", reason: `路径「${path}」应为 表/行标识/列` };
+    let [table, rowKey2, column] = parts, found = findSheet2(tables, table);
+    if (found.error) return { state: "unknown", reason: found.error };
+    let { col, rows: rows2 } = sheetRows2(found.sheet), c = col(column), hits = c < 0 ? [] : findRow2(rows2, rowKey2);
+    if (!hits.length && col(rowKey2) >= 0 && findRow2(rows2, column).length && (c = col(rowKey2), hits = findRow2(rows2, column)), c < 0)
+      return { state: "unknown", reason: `表「${table}」缺少列「${column}」` };
+    if (!hits.length) return { state: "unknown", reason: `表「${table}」没有行「${rowKey2}」` };
+    if (hits.length > 1) return { state: "unknown", reason: `表「${table}」行「${rowKey2}」重复` };
+    let value = hits[0][c];
+    return cellText2(value) === "" ? { state: "unknown", reason: `「${path}」尚未填写` } : { state: "ok", value };
+  }
+  function readFacts2(tables, bindings) {
+    let facts = /* @__PURE__ */ new Map(), problems2 = [];
+    for (let binding of bindings || []) {
+      let found = findSheet2(tables, binding.表);
+      if (found.error) {
+        problems2.push(found.error);
+        continue;
+      }
+      let { col, rows: rows2 } = sheetRows2(found.sheet), idCol = col(binding.编号列 || ""), stateCol = binding.状态列 ? col(binding.状态列) : -1, textCol = binding.内容列 ? col(binding.内容列) : -1, srcCol = binding.来源列 ? col(binding.来源列) : -1;
+      if (idCol < 0) {
+        problems2.push(`表「${binding.表}」缺少编号列「${binding.编号列 || "（未设置）"}」`);
+        continue;
+      }
+      if (binding.状态列 && stateCol < 0) {
+        problems2.push(`表「${binding.表}」缺少状态列「${binding.状态列}」`);
+        continue;
+      }
+      let noVerifiedValue = stateCol >= 0 && (binding.已核实值 === void 0 || cellText2(binding.已核实值) === "");
+      noVerifiedValue && problems2.push(`表「${binding.表}」配置了状态列但没有设置「已核实值」，事实一律按待确认处理`);
+      let claimValues = valueSet2(binding.说法值);
+      for (let row2 of rows2) {
+        let id = cellText2(row2[idCol]);
+        if (!id) continue;
+        let raw = stateCol >= 0 ? row2[stateCol] : "", status = stateCol < 0 ? "confirmed" : cellText2(raw) === "" || noVerifiedValue ? "pending" : sameValue2(raw, binding.已核实值) ? "confirmed" : "unconfirmed", prev = facts.get(id);
+        prev && prev.status === "confirmed" || facts.set(id, {
+          id,
+          status,
+          claimed: status === "unconfirmed" && claimValues.has(cellText2(raw)),
+          raw: cellText2(raw),
+          text: textCol >= 0 ? cellText2(row2[textCol]) : "",
+          source: srcCol >= 0 ? cellText2(row2[srcCol]) : "",
+          table: binding.表
+        });
+      }
+    }
+    return { facts, problems: problems2 };
+  }
+  function readKnowledge2(tables, bindings) {
+    let rows2 = [], problems2 = [], present = /* @__PURE__ */ new Set();
+    for (let binding of bindings || []) {
+      let found = findSheet2(tables, binding.表);
+      if (found.error) {
+        problems2.push(found.error);
+        continue;
+      }
+      let { col, rows: data } = sheetRows2(found.sheet), factCol = col(binding.事实列 || ""), actorCol = col(binding.角色列 || ""), wayCol = binding.方式列 ? col(binding.方式列) : -1, credCol = binding.可信度列 ? col(binding.可信度列) : -1, srcCol = binding.来源列 ? col(binding.来源列) : -1;
+      if (factCol < 0 || actorCol < 0) {
+        problems2.push(
+          `表「${binding.表}」缺少${factCol < 0 ? `事实列「${binding.事实列 || "（未设置）"}」` : `角色列「${binding.角色列 || "（未设置）"}」`}`
+        );
+        continue;
+      }
+      if (binding.方式列 && wayCol < 0) {
+        problems2.push(`表「${binding.表}」缺少方式列「${binding.方式列}」，这张知情表暂不读取（否则预建的「未知」行会被当成知情记录）`);
+        continue;
+      }
+      let credMissing = binding.可信度列 && credCol < 0, noVerifiedValue = credCol >= 0 && (binding.已核实值 === void 0 || cellText2(binding.已核实值) === "");
+      credMissing && problems2.push(`表「${binding.表}」缺少可信度列「${binding.可信度列}」，「核实」条件一律为未知`), noVerifiedValue && problems2.push(`表「${binding.表}」配置了可信度列但没有设置「已核实值」，「核实」条件一律为未知`);
+      let unknownWays = new Set((Array.isArray(binding.未知值) ? binding.未知值 : [binding.未知值 ?? "未知"]).map(cellText2).concat([""])), validWays = valueSet2(binding.有效值), badWays = /* @__PURE__ */ new Set();
+      for (let row2 of data) {
+        let fact = cellText2(row2[factCol]), actor = cellText2(row2[actorCol]);
+        if (fact && actor && present.add(`${fact}@${actor}`), !(wayCol >= 0 && unknownWays.has(cellText2(row2[wayCol])))) {
+          if (wayCol >= 0 && validWays.size && !validWays.has(cellText2(row2[wayCol]))) {
+            badWays.add(cellText2(row2[wayCol]));
+            continue;
+          }
+          !fact || !actor || rows2.push({
+            fact,
+            actor,
+            way: wayCol >= 0 ? cellText2(row2[wayCol]) : "",
+            credibility: credCol >= 0 ? cellText2(row2[credCol]) : "",
+            verified: credCol < 0 || noVerifiedValue || cellText2(row2[credCol]) === "" ? null : sameValue2(row2[credCol], binding.已核实值),
+            source: srcCol >= 0 ? cellText2(row2[srcCol]) : "",
+            table: binding.表
+          });
+        }
+      }
+      badWays.size && problems2.push(
+        `表「${binding.表}」的方式列出现了不认识的值：${[...badWays].map((w) => `「${w}」`).join("、")}，这些行不算知情记录`
+      );
+    }
+    return { rows: rows2, problems: problems2, present };
+  }
+  var RECALL_TAGS2 = ["recall", "match", "记忆", "召回"];
+  function plotPresetConflicts2(preset) {
+    if (!isPlainObject(preset)) return [];
+    let tasks = Array.isArray(preset.plotTasks) && preset.plotTasks.length ? preset.plotTasks : [
+      {
+        name: preset.name || "默认任务",
+        enabled: !0,
+        extractTags: preset.extractTags,
+        extractInjectTags: preset.extractInjectTags
+      }
+    ], out = [];
+    for (let t of tasks) {
+      if (!t || t.enabled === !1) continue;
+      let other = `${t.extractTags || ""},${t.extractInjectTags || ""}`.split(/[,，\s]+/).map((x) => x.trim().toLowerCase()).filter(Boolean).filter((x) => !RECALL_TAGS2.includes(x));
+      other.length && out.push({ task: String(t.name || t.id || "未命名任务"), tags: other });
+    }
+    return out;
+  }
+  function findRow2(rows2, rowKey2) {
+    let first = rows2.filter((row2) => cellText2(row2[1]) === rowKey2);
+    return first.length ? first : rows2.filter((row2) => row2.slice(1).some((cell) => cellText2(cell) === rowKey2));
+  }
+  var ENTRY_OPEN2 = "(（[【「『", ENTRY_CLOSE2 = ")）]】」』", ENTRY_SEP2 = `;；|｜
+`, ENTRY_COMMA2 = ",，、", ENTRY_HEAD2 = /^\s*[^\s:：=,，、;；|｜()（）]{1,12}\s*[:：=]/, SELF_KEYS2 = ["主角", "user", "<user>", "{{user}}", "玩家"];
+  function entryOf2(key, value) {
+    let k = String(key).trim(), m = /^(?:与|和|对|跟)\s*(.+?)\s*的(?:关系|好感度?|态度|印象|看法)$/.exec(k);
+    return k = m ? m[1] : k.replace(/\s*的(?:关系|好感度?|态度|印象|看法)$/, ""), k && k.length <= 24 ? {
+      key: k.trim(),
+      value: String(value).trim().replace(/^[−－]/, "-")
     } : null;
   }
-  function buildClueCheckMessages(material, floors, personas2 = []) {
-    let system = [
-      "你是剧情核对员。根据最近的正文，判断下面这个场景里列出的发现是否已经在正文中实际发生。",
-      "只认正文里已经写出的事件：到了地点不等于找到证据，答应提供不等于已经拿到，计划和猜测都不算。",
-      `只输出一个 JSON 对象，不加说明：{"done":["已发生的发现原文"],"stageDone":true或false,"offTrack":false,"offReason":"","reason":"一句话说明依据"${personas2.length ? `,${PERSONA_KEY}` : ""}}`,
-      "done 只能照抄下面【可能的发现】里的条目；stageDone 表示这个场景已经结束。",
-      ...personas2.length ? [PERSONA_RULE] : []
-    ].join(`
-`), user = ["【场景】", material, ...personas2.length ? [`【人设阶段】
-${personaLines(personas2)}`] : [], "", "【最近正文】", ...floors.map((floor) => `【第 ${floor.index} 楼】
-${floor.text}`)].join(`
-`);
+  function parseEntry2(e) {
+    let depth = 0, at = -1, m;
+    for (let i = 0; i < e.length; i++) {
+      let ch = e[i];
+      if (ENTRY_OPEN2.includes(ch)) depth++;
+      else if (ENTRY_CLOSE2.includes(ch)) depth = Math.max(0, depth - 1);
+      else if (depth === 0 && ":：=".includes(ch)) {
+        at = i;
+        break;
+      }
+    }
+    return at > 0 ? entryOf2(e.slice(0, at), e.slice(at + 1).replace(/^[\s:：=]+/, "")) : (m = /^([^（(]{1,24}?)\s*[（(]([\s\S]*)[)）]$/.exec(e)) ? entryOf2(m[1], m[2]) : (m = /^(\D{1,12}?)\s*([+\-−－]\s*\d+(?:\.\d+)?)$/.exec(e)) ? entryOf2(m[1], m[2].replace(/\s+/g, "")) : (m = /^(\S{1,12})\s+(\S[\s\S]*)$/.exec(e)) || (m = /^(\D{1,12}?)(\d+(?:\.\d+)?)$/.exec(e)) ? entryOf2(m[1], m[2]) : null;
+  }
+  function cellEntries2(text2) {
+    let s = cellText2(text2), parts = [], cur = "", depth = 0, flush = () => {
+      cur.trim() && parts.push(cur.trim()), cur = "";
+    };
+    for (let i = 0; i < s.length; i++) {
+      let ch = s[i];
+      if (ENTRY_OPEN2.includes(ch) ? depth++ : ENTRY_CLOSE2.includes(ch) && (depth = Math.max(0, depth - 1)), depth === 0 && ENTRY_SEP2.includes(ch)) {
+        flush();
+        continue;
+      }
+      if (depth === 0 && ENTRY_COMMA2.includes(ch) && ENTRY_HEAD2.test(cur) && ENTRY_HEAD2.test(s.slice(i + 1))) {
+        flush();
+        continue;
+      }
+      cur += ch;
+    }
+    if (flush(), parts.length === 1 && /[,，、]/.test(parts[0])) {
+      let bits = parts[0].split(/[,，、]/).map((x) => x.trim()).filter(Boolean);
+      bits.length > 1 && bits.every((b) => /^\D{1,12}?\s*[+\-−－]?\s*\d+(?:\.\d+)?$/.test(b)) && (parts = bits);
+    }
+    let out = [];
+    for (let p of parts) {
+      let e = parseEntry2(p);
+      e ? out.push(e) : out.length && (out[out.length - 1] = { ...out[out.length - 1], value: `${out[out.length - 1].value},${p}` });
+    }
+    return out;
+  }
+  function pickEntry2(text2, key) {
+    let k = String(key ?? "").trim(), list = cellEntries2(text2), keys = SELF_KEYS2.includes(k) ? SELF_KEYS2 : [k];
+    if (!k) return { state: "unknown", reason: "没写要取哪一项" };
+    if (!list.length) return { state: "unknown", reason: "这一格不是按「名字:内容」分条写的" };
+    let hits = list.filter((e) => keys.includes(e.key)), vals = [...new Set(hits.map((e) => e.value))];
+    return hits.length ? vals.length > 1 ? { state: "unknown", reason: `这一格里「${k}」出现了${hits.length}次、写法不同，分不清取哪个` } : vals[0] === "" ? { state: "unknown", reason: `「${k}」这一项是空的` } : { state: "ok", value: vals[0] } : { state: "unknown", reason: `这一格里还没有「${k}」这一项` };
+  }
+  var TIER_EDGE2 = /[\s:：,，。.;；|｜(（\-—~～/／]/;
+  function tierIndex2(value, tiers) {
+    let list = (tiers || []).map((t) => cellText2(t)), v0 = cellText2(value), find = (v) => {
+      let hits = list.map((t, i) => ({ t, i })).filter(({ t }) => t && (v === t || v.startsWith(t) && TIER_EDGE2.test(v[t.length])));
+      if (!hits.length) return -1;
+      let top = Math.max(...hits.map((h) => h.t.length)), best = hits.filter((h) => h.t.length === top);
+      return best.length === 1 ? best[0].i : -1;
+    }, at = find(v0);
+    return at >= 0 ? at : find(v0.replace(/^\d+\s*[.、:：)）]?\s*/, ""));
+  }
+  function tierCompare2(op, cell, wanted, tiers) {
+    let a = tierIndex2(cell, tiers), b = (tiers || []).map((t) => cellText2(t)).indexOf(cellText2(wanted));
+    return a < 0 || b < 0 ? null : op === "==" ? a === b : op === "!=" ? a !== b : op === ">=" ? a >= b : op === "<=" ? a <= b : op === ">" ? a > b : a < b;
+  }
+  function tierNumberInNote2(note, word) {
+    let w = cellText2(word);
+    if (!w || Number.isFinite(Number(w))) return null;
+    let re = new RegExp(`^\\s*[-·•*]?\\s*(\\d+)\\s*[.、:：)）]?\\s*${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![^\\s:：（(，,。])`), nums = [...new Set(String(note || "").split(/\r?\n/).map((l) => re.exec(l)).filter(Boolean).map((m) => Number(m[1])))];
+    return nums.length === 1 ? nums[0] : null;
+  }
+  var TIER_UP_WORDS2 = /从低到高|由低到高|从弱到强|由弱到强|从浅到深|由浅入深|升序|[<＜→]|->/, TIER_DOWN_WORDS2 = /从高到低|由高到低|从强到弱|由强到弱|从深到浅|降序|[>＞]/;
+  function tierOrderInNote2(note, tiers) {
+    let list = (tiers || []).map((t) => cellText2(t)).filter(Boolean), lines2 = String(note || "").split(/\r?\n/);
+    if (list.length < 2) return !1;
+    let inLine = (line, seq) => {
+      let at = 0;
+      for (let t of seq) {
+        let i = line.indexOf(t, at);
+        if (i < 0) return !1;
+        at = i + t.length;
+      }
+      return !0;
+    }, stated = (k, words) => {
+      if (words.test(lines2[k])) return !0;
+      for (let j = k + 1; j < lines2.length && /^[\s·•\-*]/.test(lines2[j]) && !/^\s*-\s*列\d/.test(lines2[j]); j++)
+        if (words.test(lines2[j])) return !0;
+      return !1;
+    }, down = [...list].reverse();
+    if (lines2.some((l, k) => inLine(l, list) && stated(k, TIER_UP_WORDS2) && !TIER_DOWN_WORDS2.test(l)) || lines2.some((l, k) => inLine(l, down) && stated(k, TIER_DOWN_WORDS2) && !TIER_UP_WORDS2.test(l)))
+      return !0;
+    let nums = list.map((t) => {
+      let re = new RegExp(`^\\s*[-·•*]?\\s*(\\d+)\\s*[.、:：)）]?\\s*${t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![^\\s:：（(，,。])`), hit = lines2.map((l) => re.exec(l)).find(Boolean);
+      return hit ? Number(hit[1]) : NaN;
+    });
+    return nums.every(Number.isFinite) && nums.every((n, i) => !i || n > nums[i - 1]);
+  }
+  function countRows2(tables, table, column, op, value, applyOp3) {
+    let found = findSheet2(tables, table);
+    if (found.error) return { state: "unknown", reason: found.error };
+    let { col, rows: rows2 } = sheetRows2(found.sheet), c = col(column);
+    if (c < 0) return { state: "unknown", reason: `表「${table}」缺少列「${column}」` };
+    let n = 0, unsure = 0;
+    for (let row2 of rows2) {
+      if (cellText2(row2[c]) === "") continue;
+      let ok = applyOp3(op, row2[c], value);
+      ok === null ? unsure++ : ok && n++;
+    }
+    return { state: "ok", count: n, unsure };
+  }
+
+  // src/trpg/trpg-clue-model.js
+  var PLOT_MODES2 = [
+    { value: "outline", label: "模组推进" },
+    { value: "clue", label: "线索推进" }
+  ], CLUE_NODE_KEYS2 = ["id", "必需", "开放条件", "提前条件", "完成条件", "入口", "场景", "发现", "场景值", "作者备注", "相关事实"], CLUE_STAGE_KEYS2 = ["进入条件", "结束条件", "作者备注"], AUTHOR_TAG2 = /<(\/?)仅作者>/g;
+  function stripAuthorBlocks2(text2) {
+    let src = String(text2 || ""), out = "", depth = 0, last = 0, m;
+    for (AUTHOR_TAG2.lastIndex = 0; m = AUTHOR_TAG2.exec(src); )
+      depth === 0 && (out += src.slice(last, m.index)), m[1] ? depth = Math.max(0, depth - 1) : depth++, last = AUTHOR_TAG2.lastIndex;
+    return depth === 0 && (out += src.slice(last)), out.replace(/\n{3,}/g, `
+
+`).trim();
+  }
+  function authorSegments2(text2) {
+    let src = String(text2 || ""), segs = [], depth = 0, start = 0, m;
+    for (AUTHOR_TAG2.lastIndex = 0; m = AUTHOR_TAG2.exec(src); )
+      if (m[1]) {
+        if (depth === 0) continue;
+        depth--, depth === 0 && segs.push(src.slice(start, m.index));
+      } else depth++ === 0 && (start = AUTHOR_TAG2.lastIndex);
+    return depth > 0 && segs.push(src.slice(start)), segs.map((x) => x.replace(AUTHOR_TAG2, "").trim()).filter(Boolean);
+  }
+  function stripAuthorDeep2(value) {
+    if (typeof value == "string") return hasAuthorBlocks2(value) || /<\/仅作者>/.test(value) ? stripAuthorBlocks2(value) : value;
+    if (Array.isArray(value)) return value.map(stripAuthorDeep2);
+    if (isPlainObject(value)) {
+      let out = {}, own = (o, k) => Object.prototype.hasOwnProperty.call(o, k), exact = new Set(Object.keys(value).filter((k) => !/<\/?仅作者>/.test(k)));
+      for (let [k, v] of Object.entries(value)) {
+        let key = stripAuthorDeep2(k);
+        !key || !(k === key) && exact.has(key) || own(out, key) || Object.defineProperty(out, key, { value: stripAuthorDeep2(v), enumerable: !0, writable: !0, configurable: !0 });
+      }
+      return out;
+    }
+    return value;
+  }
+  function hasAuthorBlocks2(text2) {
+    return /<仅作者>/.test(String(text2 || ""));
+  }
+  function nodeUid2(item) {
+    return isPlainObject(item) && typeof item.id == "string" && item.id.trim() ? item.id.trim() : "";
+  }
+  function outlineStageData2(data, offIds = null) {
+    if (!isPlainObject(data)) return data;
+    let out = {}, off = offIds ? new Set(offIds) : null;
+    for (let [key, value] of Object.entries(data)) {
+      if (CLUE_STAGE_KEYS2.includes(key)) continue;
+      let meta2 = NODE_FIELDS.find((item) => item.field === key);
+      if (!meta2 || !Array.isArray(value)) {
+        out[key] = value;
+        continue;
+      }
+      let list = value.filter((item, index) => !off || !off.has(nodeProgressId(item, meta2.prefix, index))).map((item) => {
+        if (!isPlainObject(item)) return item;
+        let copy = {};
+        for (let [k, v] of Object.entries(item)) CLUE_NODE_KEYS2.includes(k) || (copy[k] = v);
+        let keys = Object.keys(copy);
+        return keys.length === 1 && keys[0] === "名称" && typeof copy.名称 == "string" && nodeUid2(item) ? copy.名称 : copy;
+      });
+      off && !list.length || (out[key] = list);
+    }
+    return out;
+  }
+  function withNodeIds2(volumes, idOf2 = () => makeId("n")) {
+    let changed = !1, next = (volumes || []).map((volume) => {
+      let volChanged = !1, stages = volume.stages.map((stage) => {
+        let data = stage.data, stageChanged = !1;
+        if (!isPlainObject(data)) return stage;
+        let patch = {};
+        for (let { field: field2 } of NODE_FIELDS) {
+          if (!Array.isArray(data[field2])) continue;
+          let listChanged = !1, list = data[field2].map(
+            (item) => isPlainObject(item) && !nodeUid2(item) ? (listChanged = !0, { ...item, id: idOf2() }) : item
+          );
+          listChanged && (patch[field2] = list, stageChanged = !0);
+        }
+        return stageChanged ? (volChanged = !0, { ...stage, data: { ...data, ...patch } }) : stage;
+      });
+      return volChanged ? (changed = !0, { ...volume, stages }) : volume;
+    });
+    return changed ? next : volumes;
+  }
+  function clueNodes2(volumes) {
+    let out = [];
+    for (let unit of flattenUnits(volumes))
+      for (let node of stageNodes(unit.stage.data)) out.push({ ...node, uid: nodeUid2(node.item), unit });
+    return out;
+  }
+  var NODE_COND_KEYS2 = ["开放条件", "提前条件", "完成条件"], STAGE_COND_KEYS2 = ["进入条件", "结束条件"];
+  function remapNodeRefs2(value, map) {
+    if (typeof value == "string") {
+      let m = /^(\s*节点\s*[:：]\s*)(\S+)(\s*)$/.exec(value);
+      return m && map.has(m[2]) ? `${m[1]}${map.get(m[2])}${m[3]}` : value;
+    }
+    if (Array.isArray(value)) return value.map((item) => remapNodeRefs2(item, map));
+    if (isPlainObject(value)) {
+      let out = {};
+      for (let [k, v] of Object.entries(value))
+        out[k] = k === "节点" && typeof v == "string" && map.has(v.trim()) ? map.get(v.trim()) : remapNodeRefs2(v, map);
+      return out;
+    }
+    return value;
+  }
+  function reidConflicts2(incoming, existingVolumes) {
+    let taken = new Set(
+      clueNodes2(existingVolumes).map((node) => node.uid).filter(Boolean)
+    ), own = clueNodes2(incoming).map((node) => node.uid).filter(Boolean), dup = own.find((uid, i) => own.indexOf(uid) !== i);
+    if (dup) throw new Error(`导入内容里节点ID「${dup}」重复，无法确定条件引用指向哪个节点，请先修正`);
+    let map = /* @__PURE__ */ new Map();
+    for (let uid of own) taken.has(uid) && map.set(uid, makeId("n"));
+    if (!map.size) return [incoming, []];
+    let fixNode = (item) => {
+      if (!isPlainObject(item)) return item;
+      let out = { ...item }, uid = nodeUid2(item);
+      uid && map.has(uid) && (out.id = map.get(uid));
+      for (let key of NODE_COND_KEYS2) key in out && (out[key] = remapNodeRefs2(out[key], map));
+      return out;
+    };
     return [
-      { role: "system", content: system },
-      { role: "user", content: user }
+      incoming.map((volume) => ({
+        ...volume,
+        stages: volume.stages.map((stage) => {
+          if (!isPlainObject(stage.data)) return stage;
+          let data = { ...stage.data };
+          for (let key of STAGE_COND_KEYS2) key in data && (data[key] = remapNodeRefs2(data[key], map));
+          for (let { field: field2 } of NODE_FIELDS) Array.isArray(data[field2]) && (data[field2] = data[field2].map(fixNode));
+          return { ...stage, data };
+        })
+      })),
+      [...map.keys()]
     ];
+  }
+  var DEFAULT_CLUE2 = {
+    mode: "outline",
+    inject: "worldbook",
+    autoFocusSingle: !0,
+    bindings: { switch: null, facts: [], knowledge: [], scene: null, time: null },
+    facts: []
+  };
+  function normalizeBinding2(value, keys) {
+    if (!isPlainObject(value)) return null;
+    let out = {};
+    for (let key of keys) value[key] !== void 0 && value[key] !== null && value[key] !== "" && (out[key] = value[key]);
+    return Object.keys(out).length ? out : null;
+  }
+  var FACT_BINDING_KEYS2 = ["表", "编号列", "状态列", "已核实值", "说法值", "内容列", "来源列"], KNOW_BINDING_KEYS2 = ["表", "事实列", "角色列", "方式列", "可信度列", "已核实值", "来源列", "未知值", "有效值"], CELL_BINDING_KEYS2 = ["路径", "开启值", "离场值"];
+  function normalizeClue2(value) {
+    let src = isPlainObject(value) ? value : {}, b = isPlainObject(src.bindings) ? src.bindings : {}, list = (v, keys) => (Array.isArray(v) ? v : v ? [v] : []).map((item) => normalizeBinding2(item, keys)).filter((item) => item && item.表);
+    return {
+      mode: PLOT_MODES2.some((item) => item.value === src.mode) ? src.mode : DEFAULT_CLUE2.mode,
+      // inject 只有临时世界书一种（旧项目里的 "link" 也归成它）；旧的 waitFill 不再输出，下次保存时自然消失。
+      inject: DEFAULT_CLUE2.inject,
+      autoFocusSingle: src.autoFocusSingle !== !1,
+      // 多线：同时进行的支线最多几条（1 或 2，默认 1）；顶端小条提示开没开（默认开）。
+      sideLimit: src.sideLimit === 2 ? 2 : 1,
+      lineToast: src.lineToast !== !1,
+      bindings: {
+        switch: normalizeBinding2(b.switch, CELL_BINDING_KEYS2),
+        facts: list(b.facts, FACT_BINDING_KEYS2),
+        knowledge: list(b.knowledge, KNOW_BINDING_KEYS2),
+        scene: normalizeBinding2(b.scene, CELL_BINDING_KEYS2),
+        time: normalizeTimeBinding2(b.time)
+      },
+      facts: (Array.isArray(src.facts) ? src.facts : []).filter((item) => isPlainObject(item) && String(item.id || "").trim()).map((item) => ({ id: String(item.id).trim(), 说明: String(item.说明 || "") })),
+      // 事实的标签和登记口径（采用大纲时生成、复审后存下，多线自动补行用）：{ 编号: { label, criterion, sig } }。
+      // sig 是生成时依据的内容签名：大纲里这条事实的内容变了，签名对不上，就要重新生成（GPT 七题审阅 §5.1）。
+      labels: normalizeLabels2(src.labels)
+    };
+  }
+  function normalizeTimeBinding2(value) {
+    if (!isPlainObject(value)) return null;
+    let paths = (Array.isArray(value.路径) ? value.路径 : [value.路径]).map((x) => String(x ?? "").trim()).filter(Boolean);
+    return paths.length ? { 路径: paths.length === 1 ? paths[0] : paths } : null;
+  }
+  function isClueMode2(project) {
+    return !!(project && project.clue && project.clue.mode === "clue");
+  }
+  function normalizeLabels2(value) {
+    return isPlainObject(value) ? Object.fromEntries(
+      Object.entries(value).filter(([, v]) => isPlainObject(v) && String(v.label || "").trim()).map(([code, v]) => [code, { label: String(v.label).trim(), criterion: String(v.criterion || "").trim(), sig: String(v.sig || "") }])
+    ) : {};
+  }
+
+  // src/trpg/trpg-clue-project.js
+  function clueText2(value) {
+    return Array.isArray(value) ? value.map((v) => clueText2(v)).filter(Boolean).join("、") : stripAuthorBlocks2(value == null ? "" : String(value)).trim();
+  }
+  function discoveryList2(item) {
+    return (Array.isArray(item.发现) ? item.发现 : item.发现 ? [item.发现] : []).map(
+      (d) => isPlainObject(d) ? {
+        fact: String(d.事实 || d.id || "").trim(),
+        text: clueText2(d.内容),
+        record: clueText2(d.记录),
+        // 跑团模式的「判定」（core/trpg.js）；没写判定的发现不带这个键
+        ...normalizeCheck(d.判定) ? { check: normalizeCheck(d.判定) } : {}
+      } : { fact: "", text: clueText2(d), record: "" }
+    ).filter((d) => d.text);
+  }
+  function nodeFactRefs2(node) {
+    let refs = /* @__PURE__ */ new Set(), unitEnter = node.unit && node.unit.clue ? node.unit.clue.enter : null;
+    for (let cond of [unitEnter, node.open, node.done]) for (let f of conditionRefs2(cond).facts) refs.add(f);
+    let extra = isPlainObject(node.item) && node.item.相关事实;
+    for (let f of Array.isArray(extra) ? extra : extra ? [extra] : []) refs.add(String(f).trim());
+    return [...refs].filter(Boolean);
+  }
+  function chatFactSets2(c) {
+    if (!c) return { known: [], claimed: [] };
+    let known = [], claimed = [], ids = /* @__PURE__ */ new Set([
+      ...(c.snap.facts || /* @__PURE__ */ new Map()).keys(),
+      ...Object.keys(c.prog && c.prog.factOverrides || {})
+    ]);
+    for (let id of ids) {
+      let f = c.snap.facts && c.snap.facts.get(id), eff = effectiveFact2(id, c.snap, c.prog), over = c.prog && c.prog.factOverrides && c.prog.factOverrides[id];
+      eff.confirmed ? known.push(id) : f && f.claimed && !(over && over.status === "revoked") && claimed.push(id);
+    }
+    return { known, claimed };
+  }
+  function prebuildPlan2(volumes, { actors = ["user"] } = {}) {
+    let compiled = compileClue2(volumes || []), facts = /* @__PURE__ */ new Map(), knows = /* @__PURE__ */ new Set(), scenes = [];
+    for (let node of compiled.nodes) {
+      let item = isPlainObject(node.item) ? node.item : {};
+      node.uid && clueText2(item.入口) && scenes.push({ uid: node.uid, entry: clueText2(item.入口), place: clueText2(item.地点) });
+      for (let d of discoveryList2(item)) {
+        if (!d.fact || facts.has(d.fact)) continue;
+        let criterion = d.record, overlap = criterion && answerOverlap2(criterion, d.text);
+        facts.set(d.fact, {
+          code: d.fact,
+          label: "",
+          criterion: overlap ? "" : criterion,
+          draftCriterion: criterion,
+          risky: !!overlap,
+          overlap: overlap || "",
+          node: node.uid || node.name
+        });
+      }
+    }
+    let refs = { facts: /* @__PURE__ */ new Set(), nodes: /* @__PURE__ */ new Set(), knows: /* @__PURE__ */ new Set() };
+    for (let unit of compiled.units) unit.clue && (conditionRefs2(unit.clue.enter, refs), conditionRefs2(unit.clue.end, refs));
+    for (let n of compiled.nodes) for (let c of [n.open, n.early, n.done]) conditionRefs2(c, refs);
+    for (let l of compiled.lines || []) conditionRefs2(l.open, refs);
+    for (let k of refs.knows) knows.add(k);
+    let cellKnows = (cond) => {
+      if (cond) {
+        if (cond.kind === "group") return cond.items.forEach(cellKnows);
+        if (cond.kind === "cell") {
+          let m = /^[^/]+\/([^/@]+)@([^/]+)\//.exec(cond.path);
+          m && knows.add(`${m[1].trim()}@${m[2].trim()}`);
+        }
+      }
+    };
+    for (let unit of compiled.units) unit.clue && (cellKnows(unit.clue.enter), cellKnows(unit.clue.end));
+    for (let n of compiled.nodes) [n.open, n.early, n.done].forEach(cellKnows);
+    for (let l of compiled.lines || []) cellKnows(l.open);
+    for (let [f, ids] of lineTriggerFacts2(compiled))
+      facts.has(f) || facts.set(f, {
+        code: f,
+        label: "",
+        criterion: "",
+        draftCriterion: "",
+        risky: !1,
+        overlap: "",
+        node: `线 ${ids.join("、")}`,
+        opening: ids[0],
+        trigger: !0
+      });
+    for (let id of refs.facts)
+      facts.has(id) || facts.set(id, { code: id, label: "", criterion: "", draftCriterion: "", risky: !1, overlap: "", node: "", orphan: !0 });
+    for (let a of actors) for (let id of facts.keys()) knows.add(`${id}@${a}`);
+    return {
+      facts: [...facts.values()],
+      knows: [...knows].map((k) => {
+        let i = k.lastIndexOf("@");
+        return { key: k, fact: k.slice(0, i), actor: k.slice(i + 1) };
+      }),
+      scenes
+    };
+  }
+  function answerOverlap2(record, answer) {
+    let a = String(answer || "").replace(/[\s，。、；：！？“”「」（）,.;:!?()"']/g, ""), r = String(record || "");
+    for (let len = Math.min(8, a.length); len >= 4; len--)
+      for (let i = 0; i + len <= a.length; i++) {
+        let piece = a.slice(i, i + len);
+        if (r.includes(piece)) return piece;
+      }
+    return "";
+  }
+  function prebuildDiff2(plan, snapshot, bindings) {
+    let fb = (bindings.facts || [])[0], kb = (bindings.knowledge || [])[0], haveFacts = snapshot.facts || /* @__PURE__ */ new Map(), haveKnows = snapshot.knowPresent || /* @__PURE__ */ new Set(), planFacts = new Set(plan.facts.map((f) => f.code));
+    return {
+      factTable: fb ? fb.表 : "",
+      knowTable: kb ? kb.表 : "",
+      newFacts: plan.facts.filter((f) => !haveFacts.has(f.code)),
+      newKnows: plan.knows.filter((k) => !haveKnows.has(k.key)),
+      // 表里有、大纲里已经没有的编号（改写后失效）：只报告，不删除
+      stale: [...haveFacts.keys()].filter((id) => !planFacts.has(id)),
+      kept: plan.facts.filter((f) => haveFacts.has(f.code)).map((f) => f.code)
+    };
+  }
+  function checkClueDraft2(draftVolumes, existingVolumes, { keepIds = [], isObtained = () => !1, obtainedFacts = [], claimedFacts = [], applied = null, tables = null } = {}) {
+    let out = [], draft = compileClue2(draftVolumes || []), existing = compileClue2(existingVolumes || []), keep = new Set(keepIds), existingIds = new Set(existing.nodes.map((n) => n.uid).filter((id) => id && !keep.has(id)));
+    out.push(...draft.errors.filter((e) => !/引用了不存在的节点|引用了不存在的线/.test(e)));
+    let dup = draft.nodes.filter((n) => n.uid && existingIds.has(n.uid)).map((n) => n.uid);
+    dup.length && out.push(`这些 id 和已有节点重复，保存时会自动换成新 id：${dup.join("、")}`);
+    let oldGives = /* @__PURE__ */ new Map();
+    for (let n of existing.nodes)
+      if (!(n.uid && keep.has(n.uid)))
+        for (let d of discoveryList2(isPlainObject(n.item) ? n.item : {}))
+          d.fact && !oldGives.has(d.fact) && oldGives.set(d.fact, { node: n.uid || n.name, text: d.text });
+    for (let n of draft.nodes)
+      for (let d of discoveryList2(isPlainObject(n.item) ? n.item : {})) {
+        let old = d.fact && oldGives.get(d.fact);
+        if (!old) continue;
+        let got2 = isObtained(d.fact);
+        out.push(
+          `事实编号 ${d.fact} 已经由 ${old.node} 使用（「${old.text}」）${got2 ? "，本聊天里已经取得" : ""}；新草稿的 ${n.uid || n.name} 又把它作为发现（「${d.text}」）。${got2 ? "保存后这个新节点会当即算完成。" : ""}如果是同一件事的另一条取得途径可以保留；如果是另一件事，请改用新编号。`
+        );
+      }
+    let produced = /* @__PURE__ */ new Set();
+    for (let n of [...existing.nodes, ...draft.nodes])
+      for (let d of discoveryList2(isPlainObject(n.item) ? n.item : {})) d.fact && produced.add(d.fact);
+    let allIds = new Set([...existing.nodes, ...draft.nodes].map((n) => n.uid).filter(Boolean)), used = /* @__PURE__ */ new Set(), badNodes = /* @__PURE__ */ new Set();
+    for (let unit of draft.units)
+      unit.clue && [unit.clue.enter, unit.clue.end].forEach((c) => {
+        let r = conditionRefs2(c);
+        r.facts.forEach((f) => used.add(f)), r.nodes.forEach((id) => allIds.has(id) || badNodes.add(id));
+      });
+    for (let n of draft.nodes)
+      [n.open, n.early, n.done].forEach((c) => {
+        let r = conditionRefs2(c);
+        r.facts.forEach((f) => used.add(f)), r.nodes.forEach((id) => allIds.has(id) || badNodes.add(id));
+      });
+    for (let l of [...existing.lines || [], ...draft.lines || []]) {
+      for (let f of conditionRefs2(l.open).facts) produced.add(f);
+      l.legacyFact && produced.add(l.legacyFact);
+    }
+    for (let l of draft.lines || []) {
+      let own = new Set(
+        draft.nodes.filter((n) => n.unit.line === l).flatMap((n) => discoveryList2(isPlainObject(n.item) ? n.item : {}).map((d) => d.fact)).filter(Boolean)
+      ), other = new Set(
+        [...existing.nodes, ...draft.nodes].filter((n) => n.unit.line !== l).flatMap((n) => discoveryList2(isPlainObject(n.item) ? n.item : {}).map((d) => d.fact)).filter(Boolean)
+      ), self = [...conditionRefs2(l.open).facts].filter((f) => own.has(f) && !other.has(f));
+      self.length && out.push(
+        `线 ${l.id} 要等的${self.join("、")}只能在这条线自己的节点里拿到，但线没开始时这些节点都打不开，这条线会一直开不了。开启条件里的事实不用写成节点的发现，正文里发生了填表就会记下`
+      );
+    }
+    let orphan = [...used].filter((f) => !produced.has(f));
+    if (orphan.length && out.push(`条件用到了没有任何节点产出的事实：${orphan.join("、")}（玩家永远拿不到，需要补节点或改条件）`), badNodes.size && out.push(`条件引用了不存在的节点：${[...badNodes].join("、")}`), tables)
+      for (let r of tableCondReport2(draftVolumes, tables))
+        r.level !== "ok" && out.push(
+          `${r.where}：${r.raw}——${r.notes.join("；")}${r.level === "bad" ? "。这个条件会一直是未知，用到它的线或节点开不了；可以换成等一件事发生，或者改成手动开始" : ""}`
+        );
+    let oldLines = new Set((existing.lines || []).map((l) => l.id)), dupLines = (draft.lines || []).filter((l) => oldLines.has(l.id)).map((l) => l.id);
+    dupLines.length && out.push(`这些线的编号和已有的线重复：${dupLines.join("、")}`);
+    let allLines = new Set([...existing.lines || [], ...draft.lines || []].map((l) => l.id)), badLines = /* @__PURE__ */ new Set();
+    for (let l of draft.lines || []) for (let id of conditionRefs2(l.open).lines) allLines.has(id) || badLines.add(id);
+    badLines.size && out.push(`开启条件引用了不存在的线：${[...badLines].join("、")}`);
+    let noDone = draft.nodes.filter((n) => n.kind === "main" && !n.done).map((n) => n.uid || n.name);
+    noDone.length && out.push(`这些剧情节点没有完成条件，只能人工标记完成：${noDone.join("、")}`);
+    let noFind = draft.nodes.filter((n) => n.kind === "main" && !discoveryList2(isPlainObject(n.item) ? n.item : {}).length).map((n) => n.uid || n.name);
+    if (noFind.length && out.push(`这些剧情节点没有「发现」：${noFind.join("、")}`), !applied) return out;
+    let reach = clueReachability2(applied, { knownFacts: obtainedFacts, claimedFacts }), list = (xs) => xs.slice(0, 6).map((x) => `${x.stage}${x.node ? `·${x.node}` : ""}（${x.why}）`).join("；");
+    reach.verdict === "blocked" && out.push(`按模组自身推演，有走不通的地方：${list([...reach.stuckStages, ...reach.stuckNodes])}`), reach.verdict === "unknown" && out.push(`有些地方要看时间、知情或表格里的值才能走通，这里判断不了：${list([...reach.stuckStages, ...reach.stuckNodes])}`);
+    for (let r of clueAlternativeRoutes2(applied, { knownFacts: obtainedFacts, claimedFacts }))
+      r.ok || out.push(`替代途径走不通：${r.stage}·${r.node} 单独走完时，${r.why}`);
+    return out;
+  }
+  function buildClueProjection2(state, snapshot, clueProg, settings, { pace = "normal", stay = "", plan = null, notReady = null, checks = null } = {}) {
+    let tag = String(settings.tagName || "剧情参考").trim() || "剧情参考", focus = state.nodeStates.find((s) => s.node.uid && s.node.uid === state.focus.uid), lines2 = [], used = {
+      focus: focus ? focus.node.uid : "",
+      facts: [],
+      discoveries: [],
+      leads: [],
+      candidates: [],
+      scenes: [],
+      offer: "",
+      recognize: plan ? plan.recognize.map((r) => ({ uid: r.uid, line: r.line, entry: r.entry, place: r.place })) : []
+    };
+    if (focus) {
+      let node = focus.node, item = isPlainObject(node.item) ? node.item : {}, stageData = isPlainObject(node.unit.stage.data) ? node.unit.stage.data : {}, instr = clueText2(stageData.AI指令), place = clueText2(item.地点), scene = clueText2(item.场景), finds = discoveryList2(item);
+      used.scenes.push({ uid: node.uid, entry: clueText2(item.入口), place, focus: !0 }), lines2.push(
+        "以下是本轮可演的场景材料。列出的发现尚未发生，只有正文中实际完成相应调查、交谈或行动时才能揭示；中途离开、失败或转去做别的事，就不要揭示，也不要当作已知。"
+      ), stay && lines2.push(stay), instr && lines2.push(`本段要求：${instr}`), place && lines2.push(`地点：${place}`), scene && lines2.push(`场景（初次到达时的样子；人物态度和环境后来的变化以前文为准，不要重置）：${scene}`);
+      let isClaimed = (d) => {
+        if (!d.fact) return !1;
+        let f = snapshot.facts && snapshot.facts.get(d.fact), over = clueProg && clueProg.factOverrides && clueProg.factOverrides[d.fact];
+        return !!(f && f.claimed) && !(over && over.status === "revoked");
+      }, got2 = finds.filter((d) => d.fact && effectiveFact2(d.fact, snapshot, clueProg).confirmed), voiced = finds.filter((d) => !got2.includes(d) && isClaimed(d)), held = finds.filter((d) => !got2.includes(d) && !voiced.includes(d) && d.fact && notReady && notReady.has(d.fact)), pending = finds.filter((d) => !got2.includes(d) && !voiced.includes(d) && !held.includes(d)), gotFacts = new Set([...got2, ...voiced].map((d) => d.fact));
+      held.length && (used.held = held.map((d) => d.fact)), held.length && !pending.length && lines2.push("这一场的具体发现还在准备，这一轮先写到人物和环境，不要写出调查结果。"), pending.length && (lines2.push(got2.length ? "本场景还可能获得的发现（尚未发生）：" : "本场景可能获得的发现（尚未发生）："), pending.forEach((d) => {
+        let ck = checkLine(d, checks);
+        lines2.push(ck ? ck.line : `- ${d.text}`), used.discoveries.push(d.fact || d.text.slice(0, 20)), d.fact && (!ck || ck.reveal) && used.candidates.push({ fact: d.fact, record: d.record });
+      }), // 跑团模式：有带判定的发现时，加一条检定写法（没有判定时什么都不加）
+      hasChecks(pending) && lines2.push(checkRule(settings, [...new Set(pending.flatMap((d) => d && d.check && d.check.skills || []))])));
+      let holdersOf = (id) => [
+        ...new Set(
+          (snapshot.knowledge || []).filter((row2) => row2.fact === id && clueText2(row2.actor)).map((row2) => `${clueText2(row2.actor)}${row2.verified === !0 ? "" : `（${clueText2(row2.credibility) || "未核实"}）`}`)
+        )
+      ], whoText = (id) => {
+        let h = holdersOf(id);
+        return snapshot.knowPresent || (snapshot.knowledge || []).length ? h.length ? `｜知道的人：${h.join("、")}` : "｜知情范围未记录" : "";
+      }, recordedOr = (id, text2) => text2 || `（${id} 已经${snapshot.facts && snapshot.facts.get(id) && snapshot.facts.get(id).claimed ? "有人说出" : "确认"}，但表格没有记录具体内容；沿用正文里已经写出的部分，不要补充）`;
+      got2.length && lines2.push(
+        "本场景已经获得的发现（不要重复揭示）：",
+        ...got2.map((d) => `- ${recordedOr(d.fact, clueText2(effectiveFact2(d.fact, snapshot, clueProg).text))}${whoText(d.fact)}`)
+      ), voiced.length && (lines2.push(
+        "本场景已经有人说出、但尚未核实的内容（只是说法；沿用原话、说话人和听到的人，不要当成事实，也不要重复首次揭示）：",
+        ...voiced.map((d) => {
+          let f = snapshot.facts.get(d.fact), src = clueText2(f.source);
+          return `- ${recordedOr(d.fact, clueText2(f.text))}${src ? `｜来源：${src}` : ""}${whoText(d.fact)}`;
+        })
+      ), voiced.forEach((d) => {
+        used.facts.push(d.fact), used.candidates.push({ fact: d.fact, record: d.record });
+      }));
+      let known = [], claims = [];
+      for (let id of nodeFactRefs2(node)) {
+        if (gotFacts.has(id) || finds.some((d) => d.fact === id && !got2.includes(d))) continue;
+        let eff = effectiveFact2(id, snapshot, clueProg), fact = snapshot.facts && snapshot.facts.get(id);
+        if (eff.confirmed) {
+          let text2 = clueText2(eff.text);
+          known.push(`- ${text2 || `（${id} 已经确认，但表格没有记录具体内容）`}${whoText(id)}`), used.facts.push(id);
+          continue;
+        }
+        let override = clueProg && clueProg.factOverrides && clueProg.factOverrides[id];
+        if (fact && fact.claimed && !(override && override.status === "revoked")) {
+          let text2 = clueText2(fact.text);
+          text2 && (claims.push(`- ${text2}${whoText(id)}`), used.facts.push(id));
+        }
+      }
+      known.length && lines2.push("与本场景相关、已经确认的事实（只有列出的人知道；其他角色要经过告知、展示或亲眼所见才会知道）：", ...known), claims.length && lines2.push("与本场景相关、已经出现过但尚未核实的说法（只是说法，不要当成事实；只有列出的人听到过）：", ...claims);
+    }
+    let leadOf = (s) => ({
+      uid: s.node.uid,
+      text: clueText2(isPlainObject(s.node.item) ? s.node.item.入口 : ""),
+      place: clueText2(isPlainObject(s.node.item) ? s.node.item.地点 : "")
+    });
+    if (plan) {
+      let listed = (uid) => !plan.known || plan.known.has(uid), sameLine = focus ? state.nodeStates.filter(
+        (s) => s.status === "available" && s !== focus && !s.disabled && s.node.uid && s.node.unit.line === focus.node.unit.line && listed(s.node.uid)
+      ).map(leadOf).filter((l) => l.text) : [];
+      sameLine.length && (lines2.push("同一段剧情里另外可以去做的事（由用户选择，不要强行引导）：", ...sameLine.map((l) => `- ${l.text}`)), used.leads = sameLine.map((l) => l.uid), sameLine.forEach((l) => used.scenes.push({ uid: l.uid, entry: l.text, place: l.place, focus: !1 })));
+      let offer = !focus && plan.offer, items = offer ? offer.items.filter((x) => x.entry) : [];
+      items.length && (lines2.push(
+        `可用的后续方向：${items.map((x) => x.entry).join("；")}。${offer.hint ? `（由头：${offer.hint}）` : ""}`,
+        "只有本轮行动自然涉及它时才接入；否则继续眼前的事，不必提及。尚未进入时不要补写调查结果。",
+        ...offer.kind === "side" ? ["如果前文已经发生过类似的事，就接着前文写，不要重演。"] : []
+      ), used.offer = offer.line, used.leads = items.map((x) => x.uid));
+      let sidePaused = !!(clueProg && clueProg.sidePaused), mainPaused = !!(clueProg && clueProg.mainPaused), live2 = (state.lineStates || []).some((s) => s.state === "进行中" && (s.line.kind === "main" ? !mainPaused : !sidePaused));
+      (focus || lines2.length || plan.recognize.length || live2) && (lines2.push(CLUE_OFF_MATERIAL_RULE2), used.guard = !0);
+      for (let r of plan.recognize)
+        used.scenes.some((x) => x.uid === r.uid) || used.scenes.push({ uid: r.uid, entry: r.entry, place: r.place, focus: !1 });
+    } else {
+      let leads = state.nodeStates.filter((s) => s.status === "available" && s !== focus && !s.disabled && s.node.uid).map(leadOf).filter((l) => l.text);
+      leads.length && (lines2.push(
+        focus ? "另外可以去做的事（由用户选择，不要强行引导）：" : "目前可以去做的事（由用户选择，不要强行引导）：",
+        ...leads.map((l) => `- ${l.text}`),
+        "如果用户这一轮去做了上面的某件事，写到他到达、开始就可以；具体查到什么、对方说出什么，留到之后再写，不要自己编造结果。"
+      ), used.leads = leads.map((l) => l.uid), leads.forEach((l) => used.scenes.push({ uid: l.uid, entry: l.text, place: l.place, focus: !1 })));
+    }
+    if (checks && lines2.push(
+      ...freshCheckLines(state.nodeStates, checks, {
+        printed: used.discoveries,
+        isGot: (id) => effectiveFact2(id, snapshot, clueProg).confirmed,
+        discoveriesOf: discoveryList2,
+        used
+      })
+    ), !lines2.length) return { content: "", used };
+    let note = pace === "slow" ? "节奏放慢，细写当下。" : pace === "fast" ? "节奏加快，次要细节一笔带过。" : "", guide = bodyGuideText(settings);
+    return {
+      content: `<${tag}>
+${guide ? `${guide}
+
+` : ""}${note ? `${note}
+` : ""}${lines2.join(`
+`)}
+</${tag}>`,
+      used
+    };
+  }
+  function claimSnapshot2(allFacts, have, claimed) {
+    return new Map(
+      [...allFacts].map((id) => [
+        id,
+        have.has(id) ? { id, status: "confirmed", text: "", raw: "已核实" } : claimed.has(id) ? { id, status: "unconfirmed", claimed: !0, text: "", raw: "存疑" } : { id, status: "unconfirmed", text: "", raw: "未获得" }
+      ])
+    );
+  }
+  function clueReachability2(volumes, { knownFacts = [], claimedFacts = [] } = {}) {
+    let compiled = compileClue2(volumes || []), have = new Set(knownFacts), claimed = new Set(claimedFacts), external = /* @__PURE__ */ new Set(), cfg = normalizeClue2({ mode: "clue", autoFocusSingle: !1 }), gives2 = new Map(
+      compiled.nodes.map((n) => [
+        n,
+        discoveryList2(isPlainObject(n.item) ? n.item : {}).map((d) => d.fact).filter(Boolean)
+      ])
+    ), knowActors = /* @__PURE__ */ new Map(), assumptions = /* @__PURE__ */ new Set(), extAtoms = (cond) => {
+      if (cond) {
+        if (cond.kind === "group") return cond.items.forEach(extAtoms);
+        if (cond.kind === "know")
+          return knowActors.set(cond.fact, (knowActors.get(cond.fact) || /* @__PURE__ */ new Set()).add(cond.actor)), assumptions.add(`${cond.actor} 得知 ${cond.fact}`);
+        ["time", "cell", "count"].includes(cond.kind) && external.add(
+          cond.kind === "time" ? `时间 ${cond.op} ${cond.value}` : cond.kind === "count" ? `表格 ${cond.table} 的计数` : `表格 ${cond.path}`
+        );
+      }
+    };
+    for (let u of compiled.units) u.clue && (extAtoms(u.clue.enter), extAtoms(u.clue.end));
+    for (let n of compiled.nodes) [n.open, n.early, n.done].forEach(extAtoms);
+    for (let l of compiled.lines || []) extAtoms(l.open);
+    for (let [f, ids] of lineTriggerFacts2(compiled)) have.add(f), assumptions.add(`正文里发生线 ${ids.join("、")} 要等的事（${f}）`);
+    let allFacts = /* @__PURE__ */ new Set([...have, ...claimed]);
+    for (let u of compiled.units)
+      u.clue && [u.clue.enter, u.clue.end].forEach((c) => conditionRefs2(c).facts.forEach((f) => allFacts.add(f)));
+    for (let n of compiled.nodes)
+      [n.open, n.early, n.done].forEach((c) => conditionRefs2(c).facts.forEach((f) => allFacts.add(f))), gives2.get(n).forEach((f) => allFacts.add(f));
+    let state = null, lineProg = { lines: {} };
+    for (let round = 0; round < 64; round++) {
+      let facts = claimSnapshot2(allFacts, have, claimed), knowledge = [...knowActors].flatMap(
+        ([fact, actors]) => have.has(fact) ? [...actors].map((actor) => ({ fact, actor, way: "亲见", verified: !0 })) : []
+      );
+      state = computeClueState2(compiled, { facts, knowledge, tables: {}, problems: [] }, { ...emptyClueProgress2(), ...lineProg }, cfg);
+      let before0 = Object.keys(lineProg.lines).length;
+      for (let s of state.lineStates || [])
+        (s.state === "可开启" || s.state === "未触发" && s.cond.v === TRI2.u) && (lineProg.lines[s.line.id] = { started: !0 });
+      if (Object.keys(lineProg.lines).length !== before0) continue;
+      let before = have.size;
+      for (let s of state.nodeStates)
+        (s.status === "available" || s.status === "active" || s.status === "done") && gives2.get(s.node).forEach((f) => have.add(f));
+      if (have.size === before) break;
+    }
+    let stuckStages = [], stuckNodes = [], depends = !1;
+    for (let u of compiled.units) {
+      let s = state.stageStates.get(u.id);
+      if (s.done) continue;
+      let why = s.entered.v !== TRI2.t ? `进不去：${s.entered.reasons.join("；")}` : s.requiredLeft.length ? `必需节点做不完：${s.requiredLeft.map((n) => n.uid || n.name).join("、")}` : `结束条件不满足：${s.end.reasons.join("；")}`;
+      (s.entered.v === TRI2.u || s.end.v === TRI2.u) && (depends = !0), stuckStages.push({
+        stage: stageLabel(u.stage.key),
+        stageId: u.id,
+        why,
+        line: u.line ? u.line.id : "",
+        unknown: s.entered.v === TRI2.u || s.end.v === TRI2.u
+      });
+    }
+    for (let ns of state.nodeStates) {
+      if (ns.status === "done" || !ns.node.required) continue;
+      let reason = ns.status === "locked" ? `一直打不开：${ns.open.reasons.join("；")}` : ns.done.v === TRI2.u ? `完成条件判断不了：${ns.done.reasons.join("；")}` : `打开了也完不成：${ns.done.reasons.join("；")}`;
+      (ns.open.v === TRI2.u || ns.done.v === TRI2.u || !ns.node.done) && (depends = !0), stuckNodes.push({
+        node: ns.node.uid || ns.node.name,
+        nodeName: ns.node.name || ns.node.uid,
+        stageId: ns.node.unit.id,
+        stage: stageLabel(ns.node.unit.stage.key),
+        why: reason,
+        line: ns.node.unit.line ? ns.node.unit.line.id : "",
+        unknown: ns.open.v === TRI2.u || ns.done.v === TRI2.u || !ns.node.done
+      });
+    }
+    return {
+      verdict: !stuckStages.length && !stuckNodes.length ? "ok" : depends ? "unknown" : "blocked",
+      stuckStages,
+      stuckNodes,
+      external: [...external],
+      assumptions: [...assumptions],
+      obtainable: [...have],
+      claimed: [...claimed]
+    };
+  }
+  function clueAlternativeRoutes2(volumes, { knownFacts = [], claimedFacts = [] } = {}) {
+    let compiled = compileClue2(volumes || []), out = [], cfg = normalizeClue2({ mode: "clue", autoFocusSingle: !1 }), units = compiled.units, claimed = new Set(claimedFacts), gives2 = (n) => discoveryList2(isPlainObject(n.item) ? n.item : {}).map((d) => d.fact).filter(Boolean), reach = null, obtainable = () => reach || (reach = new Set(clueReachability2(volumes, { knownFacts, claimedFacts }).obtainable)), all = /* @__PURE__ */ new Set([...knownFacts, ...claimed]), knowActors = /* @__PURE__ */ new Map(), knowAtoms = (cond) => {
+      if (cond) {
+        if (cond.kind === "group") return cond.items.forEach(knowAtoms);
+        cond.kind === "know" && knowActors.set(cond.fact, (knowActors.get(cond.fact) || /* @__PURE__ */ new Set()).add(cond.actor));
+      }
+    };
+    for (let u of units)
+      u.clue && [u.clue.enter, u.clue.end].forEach((c) => (conditionRefs2(c).facts.forEach((f) => all.add(f)), knowAtoms(c)));
+    for (let n of compiled.nodes)
+      [n.open, n.early, n.done].forEach((c) => (conditionRefs2(c).facts.forEach((f) => all.add(f)), knowAtoms(c))), gives2(n).forEach((f) => all.add(f));
+    let snapshot = (have) => ({
+      facts: claimSnapshot2(all, have, claimed),
+      knowledge: [...knowActors].flatMap(
+        ([fact, actors]) => have.has(fact) ? [...actors].map((actor) => ({ fact, actor, way: "亲见", verified: !0 })) : []
+      ),
+      tables: {},
+      problems: []
+    });
+    for (let [ui, u] of units.entries()) {
+      let own = compiled.nodes.filter((n) => n.unit === u), alts = own.filter((n) => n.kind === "main" && !n.required);
+      if (alts.length < 2) continue;
+      let altFacts = new Set(alts.flatMap(gives2)), altIds = new Set(alts.map((n) => n.uid).filter(Boolean)), starts = alts.filter((n) => {
+        let refs = conditionRefs2(n.open);
+        return ![...refs.facts].some((f) => altFacts.has(f) && !gives2(n).includes(f)) && ![...refs.nodes].some((id) => altIds.has(id) && id !== n.uid);
+      });
+      if (starts.length < 2) continue;
+      let base = new Set(knownFacts), got2 = obtainable(), required = own.filter((n) => n.required);
+      for (let n of compiled.nodes) units.indexOf(n.unit) < ui && gives2(n).forEach((f) => got2.has(f) && base.add(f));
+      if (!(units.length && computeClueState2(compiled, snapshot(base), emptyClueProgress2(), cfg).stageStates.get(u.id).entered.v !== TRI2.t))
+        for (let start of starts) {
+          let allowed = /* @__PURE__ */ new Set([start, ...alts.filter((n) => !starts.includes(n)), ...required]), have = new Set(base), used = [start], state = null;
+          for (let round = 0; round < 32; round++) {
+            state = computeClueState2(compiled, snapshot(have), emptyClueProgress2(), cfg);
+            let before = have.size;
+            for (let ns2 of state.nodeStates)
+              allowed.has(ns2.node) && ns2.status !== "locked" && (ns2.node.required || used.includes(ns2.node) || used.push(ns2.node), gives2(ns2.node).forEach((f) => have.add(f)));
+            if (have.size === before) break;
+          }
+          let s = state.stageStates.get(u.id), next = units[ui + 1] && units[ui + 1].line === u.line ? units[ui + 1] : null, ns = next && state.stageStates.get(next.id), tri = (x) => x && x.v, endV = s.done ? TRI2.t : s.entered.v !== TRI2.t ? tri(s.entered) : s.requiredLeft.length ? TRI2.f : tri(s.end), nextV = next ? tri(ns.entered) : TRI2.t, verdict = endV === TRI2.t && nextV === TRI2.t ? "ok" : endV === TRI2.f || endV === TRI2.t && nextV === TRI2.f ? "blocked" : "unknown", why = verdict === "ok" ? "" : endV !== TRI2.t ? `本阶段结束${verdict === "unknown" ? "要看运行时的情况" : "不了"}：${(s.entered.v !== TRI2.t ? s.entered.reasons : s.end.reasons).join("；") || s.requiredLeft.map((n) => n.uid).join("、")}` : `下一阶段${verdict === "unknown" ? "能否进入要看运行时的情况" : "进不去"}：${ns.entered.reasons.join("；")}`, need = verdict === "ok" ? null : endV !== TRI2.t ? s.entered.v !== TRI2.t ? u.clue && u.clue.enter : u.clue && u.clue.end : next && next.clue && next.clue.enter;
+          out.push({
+            stage: stageLabel(u.stage.key),
+            node: used.map((n) => n.uid || n.name).join(" → "),
+            ok: verdict !== "blocked",
+            verdict,
+            why,
+            lineId: u.line ? u.line.id : "",
+            volumeId: u.volume ? u.volume.id : "",
+            stageId: u.id,
+            nodeIds: used.map((n) => n.uid).filter(Boolean),
+            nodeNames: used.map((n) => n.name || n.uid),
+            at: verdict === "ok" ? "" : endV !== TRI2.t ? s.entered.v !== TRI2.t ? "enter" : s.requiredLeft.length ? "required" : "end" : "next",
+            nextStageId: next ? next.id : "",
+            gets: [...have].filter((f) => used.some((n) => gives2(n).includes(f))),
+            needs: need ? [...conditionRefs2(need).facts].filter((f) => !have.has(f)) : [],
+            left: s.requiredLeft.map((n) => n.name || n.uid)
+          });
+        }
+    }
+    return out;
+  }
+  function tableCondChecks2(cond, tables, where = "", out = []) {
+    if (!cond) return out;
+    if (cond.kind === "group") return cond.items.forEach((c) => tableCondChecks2(c, tables, where, out)), out;
+    if (cond.kind === "count") {
+      let f = findSheet2(tables, cond.table), bad = f.error ? `这张卡没有「${cond.table}」这张表` : sheetRows2(f.sheet).col(cond.column) < 0 ? `「${cond.table}」没有「${cond.column}」这一列` : "";
+      out.push({ where, raw: cond.raw, now: "", level: bad ? "bad" : "ok", notes: bad ? [bad] : [], stuck: !!bad });
+    } else if (cond.kind === "cell") {
+      let r = cellCondCheck2(cond, tables);
+      out.push({ where, ...r, stuck: r.level === "bad" || !!cond.sample && !sampleAgrees2(cond) });
+    }
+    return out;
+  }
+  function tableCondReport2(volumes, tables) {
+    let compiled = compileClue2(volumes || []), out = [], visit = (cond, where) => tableCondChecks2(cond, tables, where, out);
+    for (let l of compiled.lines || []) visit(l.open, `线 ${l.id}「${l.name}」的开启条件`);
+    for (let u of compiled.units) u.clue && [u.clue.enter, u.clue.end].forEach((c) => visit(c, stageLabel(u.stage.key)));
+    for (let n of compiled.nodes) [n.open, n.early, n.done].forEach((c) => visit(c, `${stageLabel(n.unit.stage.key)}·${n.name}`));
+    return out;
+  }
+  function cellCondCheck2(cond, tables) {
+    let parts = String(cond.path).split("/").map((x) => x.trim()), notes = [], tierPending = null, res = (level, now2 = "") => ({ raw: cond.raw, now: now2, level, notes, ...tierPending ? { tierPending } : {} });
+    if (parts.length !== 3 || parts.some((x) => !x)) return notes.push(`路径「${cond.path}」应写成 表/行/列`), res("bad");
+    let [table, rowKey2, column] = parts, f = findSheet2(tables, table);
+    if (f.error) return notes.push(`这张卡没有「${table}」这张表`), res("bad");
+    let { col, rows: rows2 } = sheetRows2(f.sheet), c = col(column), sheet = f.sheet;
+    if (c < 0 && col(rowKey2) >= 0 && (c = col(rowKey2), rowKey2 = column), c < 0)
+      return notes.push(`「${table}」没有「${column}」这一列`), res("bad");
+    let note = sheet.note || "", others = rows2.filter((r) => cellText2(r[1]) !== rowKey2 && !r.slice(1).some((x) => cellText2(x) === rowKey2)).map((r) => cellText2(r[c])).filter(Boolean), hits = findRow2(rows2, rowKey2), cell = hits.length === 1 ? cellText2(hits[0][c]) : "";
+    hits.length > 1 && notes.push(`「${table}」里「${rowKey2}」有 ${hits.length} 行，读的时候分不清，会一直是未知`), hits.length || notes.push(
+      others.length ? `表里还没有「${rowKey2}」这一行；同一列别的行已经有值（如「${others[0].slice(0, 30)}」），${rowKey2}出现在表里以后才开始判断` : rows2.length ? `表里还没有「${rowKey2}」这一行，同一列也都还没填，等表里有数据再看` : `「${table}」还没有数据，等表里有数据再核对`
+    );
+    let value = cell;
+    if (cond.pick) {
+      let pool = [cell, ...others].filter(Boolean), readable = pool.filter((x) => cellEntries2(x).length);
+      if (pool.length && !readable.length && notes.push(`「${column}」这一列现在的内容不是按「名字:内容」分条写的，取不出「${cond.pick}」这一项`), cell) {
+        let got2 = pickEntry2(cell, cond.pick);
+        value = got2.state === "ok" ? got2.value : "", got2.state !== "ok" && !/还没有/.test(got2.reason) && notes.push(got2.reason);
+      }
+    }
+    if (cond.sample) {
+      let s = cond.sample, real = [cell, ...others].some((x) => x && (x === s.text || x.includes(s.text))) || note.includes(s.text), proven = !!(cond.pick && cell && pickEntry2(cell, cond.pick).state === "ok");
+      real || proven || notes.push(`样例的原文「${s.text.slice(0, 30)}」不是表里或说明里的真实内容，证明不了插件读得懂这一列`), sampleAgrees2(cond) || notes.push(
+        `样例核对没通过：插件从「${s.text.slice(0, 30)}」里取「${s.key}」得到的是「${(s.key ? pickEntry2(s.text, s.key).value : s.text) || "（取不出）"}」，AI 说是「${s.want}」。运行时这个条件按「读不出来」处理，不会放宽；可以改成手动开始`
+      );
+    }
+    if (cond.tiers) {
+      cond.tierOk || tierOrderInNote2(note, cond.tiers) || ["==", "!="].includes(cond.op) || (tierPending = cond.tiers, notes.push(`档位顺序「${cond.tiers.join(" < ")}」是 AI 推断的，表格说明里没有明写先后（待确认）。确认之前这个条件是未知`));
+      let seen = (t) => note.includes(t) || [cell, ...others].some((x) => x.includes(t)), miss = cond.tiers.filter((t) => !seen(t));
+      miss.length && notes.push(`档位里的${miss.map((t) => `「${t}」`).join("、")}在表格说明和现有数据里都没出现，填表不一定会写`), value && tierIndex2(value, cond.tiers) < 0 && notes.push(`现在的值「${value}」不是档位里的任何一档，这个条件会是未知`);
+    } else if ([">=", "<=", ">", "<"].includes(cond.op) && !Number.isFinite(Number(cond.value)))
+      notes.push(`「${cond.value}」不是数字，比大小要写档位（从低到高的列表）`);
+    else if ((cond.op === "==" || /包含/.test(cond.op)) && cond.value && !Number.isFinite(Number(cond.value))) {
+      let pool = [cell, ...others];
+      if (!note.includes(cond.value) && !pool.some((x) => x.includes(cond.value))) {
+        let long = pool.length && pool.every((x) => x.length > 12);
+        notes.push(
+          long && cond.op === "==" ? `「${column}」每次填的是一句话，「== ${cond.value}」几乎不会成立，可以改用「包含 关键词」，或者改成等某件事发生` : `「${cond.value}」在表格说明和现有数据里都没出现，填表不一定会写出这个词`
+        );
+      }
+    }
+    let now = hits.length ? cond.pick ? value ? `${cond.pick}：${value}` : cell ? `（没有「${cond.pick}」这一项）` : "（空）" : cell || "（空）" : "";
+    return res(notes.length ? "warn" : "ok", now);
+  }
+  function focusScore2(state, snapshot, clueProg) {
+    let focus = state.nodeStates.find((s) => s.node.uid && s.node.uid === state.focus.uid);
+    if (!focus) return 0;
+    let n = 0;
+    for (let d of discoveryList2(isPlainObject(focus.node.item) ? focus.node.item : {})) {
+      if (!d.fact) continue;
+      let f = snapshot.facts && snapshot.facts.get(d.fact), over = clueProg && clueProg.factOverrides && clueProg.factOverrides[d.fact];
+      effectiveFact2(d.fact, snapshot, clueProg).confirmed ? n += 2 : f && f.claimed && !(over && over.status === "revoked") && (n += 1);
+    }
+    return n;
+  }
+  var CLUE_OFF_MATERIAL_RULE2 = "用户转去调查另一件事，而本轮材料没有提供那件事的具体发现时，写到到达、接触和开始调查为止：可以写环境、人物和对方的反应；东西上写着什么、翻开或打开后看到什么、对方说出的关键信息，都不要自己编，待后续材料提供后再写。本轮已经提供的发现、前文已经明确的内容以及普通日常行动，可以按实际行动继续，不必机械等到下一轮。";
+
+  // src/trpg/trpg-timeline.js
+  var PERIOD = "凌晨|清晨|早上|早晨|上午|中午|下午|傍晚|晚上|夜里|夜晚|深夜", CLOCK_SRC = `(${PERIOD})?\\s*(\\d{1,2})(?:[:：](\\d{2})|点(半|(\\d{1,2})分?)?|时)`;
+  function toMinutes(period, h, m) {
+    return h = Number(h), m = Number(m) || 0, h > 24 || m > 59 ? null : (/下午|傍晚|晚上|夜里|夜晚/.test(period || "") && h < 12 || period === "深夜" && h >= 6 && h < 12 ? h += 12 : period === "凌晨" && h === 12 && (h = 0), h % 24 * 60 + m);
+  }
+  function minutesOf(match) {
+    let [, period, h, hm, half, dm] = match;
+    return toMinutes(period, h, hm ?? (half === "半" ? 30 : dm || 0));
+  }
+  function clockText2(minutes) {
+    let t = (minutes % 1440 + 1440) % 1440;
+    return `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
+  }
+  function readClock(value) {
+    let text2 = (Array.isArray(value) ? value.join(" ") : value == null ? "" : String(value)).trim(), last = null;
+    for (let m of text2.matchAll(new RegExp(CLOCK_SRC, "g"))) {
+      let v = minutesOf(m);
+      v != null && (last = v);
+    }
+    return last;
+  }
+  function readGameClock(tables, paths) {
+    for (let path of [].concat(paths || []).filter(Boolean)) {
+      let cell = readCell2(tables || {}, path);
+      if (cell.state === "ok") {
+        let v = readClock(cell.value);
+        if (v != null) return v;
+      }
+    }
+    return null;
+  }
+  function parseTimeline(settingText) {
+    let block = splitBlocks(settingText).find((b) => b.title === KP_BLOCK && !b.cont), out = [];
+    if (!block) return out;
+    let inSection = !1, day = 0, last = -1;
+    for (let line of block.text.split(`
+`)) {
+      let head = /^\s*【([^】]+)】\s*$/.exec(line);
+      if (head) {
+        inSection = head[1].trim() === "时间线";
+        continue;
+      }
+      if (!inSection) continue;
+      let m = new RegExp(`^\\s*-\\s*${CLOCK_SRC}`).exec(line);
+      if (!m) continue;
+      let base = minutesOf(m);
+      if (base == null) continue;
+      let minutes = base + day * 1440;
+      for (; minutes < last; ) day += 1, minutes += 1440;
+      last = minutes, out.push({ minutes, clock: clockText2(minutes), text: line.slice(m[0].length).replace(/^[\s:：,，、\-—]+/, "").trim() });
+    }
+    return out.filter((e) => e.text);
+  }
+  function dueEvents(events, prev, now) {
+    if (!events.length || prev == null || now == null) return [];
+    let end = now;
+    if (end < prev) {
+      if (prev - end < 720) return [];
+      end += 1440;
+    }
+    let hit = (t) => t > prev && t <= end;
+    return events.filter((e) => hit(e.minutes) || e.minutes >= 1440 && hit(e.minutes - 1440) || hit(e.minutes + 1440));
+  }
+  function timelineLines(due, now) {
+    return due.length ? [
+      `模组时间线：现在 ${clockText2(now)}。以下事件已经到点，这一轮或下一轮要让它发生（写法可以随玩家行动调整，不能取消）：`,
+      ...due.map((e) => `- ${e.clock} ${e.text}`)
+    ] : [];
+  }
+  function timelineStep({ events, now, clock, floors }) {
+    if (!events.length || now == null) return { lines: [], next: null };
+    let c = clock && Number.isFinite(clock.minutes) ? clock : null, from = c ? c.floor < floors ? c.minutes : c.floor === floors ? c.from ?? null : null : null;
+    return {
+      lines: timelineLines(dueEvents(events, from, now), now),
+      next: !c || c.floor !== floors ? { floor: floors, minutes: now, from } : null
+    };
+  }
+
+  // src/trpg/trpg-clue-rules.js
+  var COND_MAX_DEPTH2 = 2, ATOM_KEYS2 = ["事实", "知情", "核实", "节点", "表", "时间", "线", "情况"], TRI2 = { t: "true", f: "false", u: "unknown" };
+  function atomString2(key, value) {
+    let v = String(value ?? "").trim();
+    return key === "时间" ? `时间 ${v}` : `${key}: ${v}`;
+  }
+  var TAG_RE2 = /<[A-Za-z_][\w-]*>/g;
+  function splitCompare2(text2, re) {
+    let tags = [], masked = String(text2 ?? "").replace(TAG_RE2, (t) => (tags.push(t), `\0${tags.length - 1}\0`)), m = re.exec(masked);
+    return m && [...m].map((x) => x == null ? x : x.replace(/\u0000(\d+)\u0000/g, (_, i) => tags[+i]));
+  }
+  var sayKey = (text2) => String(text2 ?? "").replace(/[\s\p{P}\p{S}]/gu, "");
+  function parseAtom2(text2) {
+    let raw = String(text2 || "").trim(), m;
+    if (m = /^情况\s*[:：]\s*(.+)$/.exec(raw)) return { kind: "say", text: m[1].trim(), raw };
+    if ((m = /^<if\s+cell\s*=\s*["“]([^"”]+)["”]\s*>?/i.exec(raw)) && (raw = `表: ${m[1].trim()}`), raw = normalizeOps2(raw), m = /^事实\s*[:：]\s*(\S+)$/.exec(raw))
+      return { kind: "fact", fact: m[1], raw };
+    if (m = /^核实\s*[:：]\s*([^@\s]+)$/.exec(raw)) return { kind: "fact", fact: m[1], verified: !0, raw };
+    if (m = /^(知情|核实)\s*[:：]\s*([^@\s]+)\s*@\s*(.+)$/.exec(raw))
+      return { kind: "know", fact: m[2], actor: m[3].trim(), verified: m[1] === "核实", raw };
+    if (m = /^节点\s*[:：]\s*(\S+)$/.exec(raw)) return { kind: "node", node: m[1], raw };
+    if (m = splitCompare2(raw, /^表\s*[:：]\s*(.+?)\s*(==|!=|>=|<=|>|<|不包含|包含)\s*(.*)$/))
+      return { kind: "cell", path: m[1].trim(), op: m[2], value: m[3].trim(), raw };
+    if (m = /^时间\s*(==|!=|>=|<=|>|<)\s*(.+)$/.exec(raw)) return { kind: "time", op: m[1], value: m[2].trim(), raw };
+    if (m = /^线\s*[:：]\s*(\S+?)\s*(==|!=)\s*(\S+)$/.exec(raw)) {
+      let state = m[3].trim();
+      return LINE_STATES2.includes(state) || LINE_STATE_ALIAS2[state] ? { kind: "line", line: m[1], op: m[2], state, raw } : {
+        kind: "bad",
+        raw,
+        error: `线的状态「${state}」不认识，可以写：${[...LINE_STATES2, ...Object.keys(LINE_STATE_ALIAS2)].join("、")}`
+      };
+    }
+    return { kind: "bad", raw, error: `无法识别的条件「${raw}」` };
+  }
+  function parseCondition2(value, errors = [], depth = 0) {
+    if (value == null || value === "" || Array.isArray(value) && !value.length || isPlainObject(value) && !Object.keys(value).length)
+      return null;
+    if (typeof value == "string") {
+      let atom = parseAtom2(value);
+      return atom.kind === "bad" && errors.push(atom.error), atom;
+    }
+    let mode2 = "all", items;
+    if (isPlainObject(value) && Object.keys(value).length === 1 && value.计数 !== void 0) return parseCountAtom2(value.计数, errors);
+    if (isPlainObject(value) && value.表 !== void 0 && Object.keys(value).length > 1 && Object.keys(value).every((k) => CELL_EXTRA_KEYS2.includes(k)))
+      return parseCellExtra2(value, errors);
+    if (isPlainObject(value)) {
+      let keys = Object.keys(value), atoms = keys.filter((key) => ATOM_KEYS2.includes(key));
+      if (atoms.length && atoms.length === keys.length) {
+        let list = atoms.map((key) => atomString2(key, value[key]));
+        if (list.length === 1) return parseCondition2(list[0], errors, depth);
+        value = list;
+      }
+    }
+    if (Array.isArray(value)) items = value;
+    else if (isPlainObject(value) && Array.isArray(value.全部) && Object.keys(value).length === 1) items = value.全部;
+    else if (isPlainObject(value) && Array.isArray(value.任一) && Object.keys(value).length === 1) mode2 = "any", items = value.任一;
+    else return errors.push(`无法识别的条件结构：${JSON.stringify(value).slice(0, 60)}`), { kind: "bad", raw: "", error: "结构错误" };
+    return depth >= COND_MAX_DEPTH2 ? (errors.push("条件嵌套超过两层"), { kind: "bad", raw: "", error: "嵌套过深" }) : { kind: "group", mode: mode2, items: items.map((item) => parseCondition2(item, errors, depth + 1)).filter(Boolean) };
+  }
+  function digitsOf2(text2) {
+    return (String(text2).match(/\d+/g) || []).map(Number);
+  }
+  function compareValues2(a, b) {
+    let na = Number(cellText2(a)), nb = Number(cellText2(b));
+    if (cellText2(a) !== "" && cellText2(b) !== "" && Number.isFinite(na) && Number.isFinite(nb)) return na - nb;
+    let da = digitsOf2(a), db = digitsOf2(b);
+    if (!da.length || !db.length) return null;
+    for (let i = 0; i < Math.max(da.length, db.length); i += 1) {
+      let x = da[i] ?? 0, y = db[i] ?? 0;
+      if (x !== y) return x - y;
+    }
+    return 0;
+  }
+  var TIER_CELL2 = /^\s*(\d+)\s+[\u4e00-\u9fff][^\d]*$/;
+  function sameOrLead2(cell, wanted) {
+    if (sameValue2(cell, wanted)) return !0;
+    let w = cellText2(wanted), m = TIER_CELL2.exec(cellText2(cell));
+    return !!m && /^\d+$/.test(w) && Number(m[1]) === Number(w);
+  }
+  function applyOp2(op, cell, wanted) {
+    if (op === "==") return sameOrLead2(cell, wanted);
+    if (op === "!=") return !sameOrLead2(cell, wanted);
+    let diff = compareValues2(cell, wanted);
+    return diff === null ? null : op === ">=" ? diff >= 0 : op === "<=" ? diff <= 0 : op === ">" ? diff > 0 : diff < 0;
+  }
+  function effectiveFact2(id, snapshot, clueProg) {
+    let over = clueProg && clueProg.factOverrides && clueProg.factOverrides[id], fact = snapshot && snapshot.facts && snapshot.facts.get(id);
+    return over && over.status === "revoked" ? { v: TRI2.f, confirmed: !1, text: "", why: `${id}已人工撤销` } : over && over.status === "confirmed" ? { v: TRI2.t, confirmed: !0, text: fact && fact.text || over.text || "", why: `${id}已人工确认` } : fact ? fact.status === "confirmed" ? { v: TRI2.t, confirmed: !0, text: fact.text, why: `${id}已确认` } : fact.status === "pending" ? { v: TRI2.u, confirmed: !1, text: "", why: `${id}待确认` } : { v: TRI2.f, confirmed: !1, text: "", why: `${id}未核实（${fact.raw || "空"}）` } : { v: TRI2.u, confirmed: !1, text: "", why: `${id}尚无记录` };
+  }
+  function evalAtom2(atom, env) {
+    switch (atom.kind) {
+      case "fact": {
+        let eff = effectiveFact2(atom.fact, { facts: env.facts }, { factOverrides: env.factOverrides });
+        if (atom.verified || eff.v !== TRI2.f) return { v: eff.v, why: eff.why };
+        let fact = env.facts && env.facts.get(atom.fact), over = env.factOverrides && env.factOverrides[atom.fact];
+        return fact && fact.claimed && !(over && over.status === "revoked") ? { v: TRI2.t, why: `${atom.fact}已在正文出现（${fact.raw || "说法"}）` } : { v: eff.v, why: eff.why };
+      }
+      case "know": {
+        let over = env.factOverrides && env.factOverrides[atom.fact];
+        if (over && over.status === "revoked") return { v: TRI2.f, why: `${atom.fact}已人工撤销` };
+        let rows2 = env.knowledge.filter((row2) => row2.fact === atom.fact && row2.actor === atom.actor);
+        return rows2.length ? atom.verified ? rows2.some((row2) => row2.verified === !0) ? { v: TRI2.t, why: `${atom.actor}已核实${atom.fact}` } : rows2.some((row2) => row2.verified === null) ? { v: TRI2.u, why: `无法判断${atom.actor}是否核实${atom.fact}（可信度未绑定或未填写）` } : { v: TRI2.f, why: `${atom.actor}对${atom.fact}仅为${rows2[0].credibility || "未核实"}` } : { v: TRI2.t, why: `${atom.actor}知道${atom.fact}${rows2[0].way ? `（${rows2[0].way}）` : ""}` } : { v: TRI2.u, why: `${atom.actor}没有${atom.fact}的知情记录` };
+      }
+      case "line": {
+        let st9 = env.lineState ? env.lineState(atom.line) : void 0;
+        if (st9 === void 0) return { v: TRI2.u, why: `没有编号为${atom.line}的线` };
+        if (st9 === null)
+          return atom.state === "开过" && env.lineStarted && env.lineStarted(atom.line) ? { v: atom.op === "==" ? TRI2.t : TRI2.f, why: `线${atom.line}已经开始过` } : { v: TRI2.u, why: `线${atom.line}的状态还算不出来（开启条件未知，或线之间循环引用）` };
+        let hit = (LINE_STATE_ALIAS2[atom.state] || [atom.state]).includes(st9);
+        return { v: (atom.op === "==" ? hit : !hit) ? TRI2.t : TRI2.f, why: `线${atom.line}现在是「${st9}」` };
+      }
+      case "count": {
+        let r = countRows2(env.tables, atom.table, atom.column, atom.op, atom.value, applyOp2);
+        if (r.state !== "ok") return { v: TRI2.u, why: r.reason };
+        let test = (n) => atom.cmp === "至少" ? n >= atom.n : atom.cmp === "至多" ? n <= atom.n : n === atom.n, lo = test(r.count), hi = test(r.count + r.unsure), label = `${atom.table}里${atom.column} ${atom.op} ${atom.value}的有${r.count}行${r.unsure ? `，另有${r.unsure}行的值无法比较` : ""}`;
+        return atom.cmp === "等于" && (lo = hi = atom.n >= r.count && atom.n <= r.count + r.unsure && (!r.unsure || null)), lo === hi && lo !== null ? lo ? { v: TRI2.t, why: label } : { v: TRI2.f, why: `${label}（要${atom.cmp} ${atom.n}行）` } : { v: TRI2.u, why: label };
+      }
+      case "say": {
+        let hit = !!(env.sayDone && env.sayDone(atom.text));
+        return { v: hit ? TRI2.t : TRI2.f, why: hit ? `情况「${atom.text}」已成立` : `情况「${atom.text}」还没成立` };
+      }
+      case "node": {
+        let done = env.nodeDone(atom.node);
+        return done === void 0 ? { v: TRI2.u, why: `节点${atom.node}不存在` } : done ? { v: TRI2.t, why: `节点${atom.node}已完成` } : { v: TRI2.f, why: `节点${atom.node}未完成` };
+      }
+      case "cell":
+      case "time": {
+        let paths = atom.kind === "time" ? [].concat(env.timePath || []).filter(Boolean) : [atom.path];
+        if (!paths.length) return { v: TRI2.u, why: "未绑定故事时间" };
+        let cell = null, misses = [];
+        for (let path of paths) {
+          let got2 = readCell2(env.tables, path);
+          if (got2.state === "ok") {
+            cell = got2;
+            break;
+          }
+          misses.push(got2.reason);
+        }
+        if (!cell) return { v: TRI2.u, why: misses.join("；") };
+        let label = atom.kind === "time" ? "时间" : atom.path, value = cell.value;
+        if (atom.sample && !sampleAgrees2(atom))
+          return { v: TRI2.u, why: `${label}：这种写法插件暂时读不出来（样例核对没通过），可以改成手动开始` };
+        if (atom.pick) {
+          let got2 = pickEntry2(value, atom.pick);
+          if (got2.state !== "ok") return { v: TRI2.u, why: `${label}：${got2.reason}` };
+          value = got2.value, label = `${label}里「${atom.pick}」那一项`;
+        }
+        if (atom.tiers && !["==", "!="].includes(atom.op) && !tierOrderKnown2(atom, env.tables))
+          return { v: TRI2.u, why: `${label}：档位顺序「${atom.tiers.join(" < ")}」还没确认，确认前不比大小` };
+        if (atom.kind === "time" && /^\d{1,2}[:：]\d{2}$/.test(String(atom.value).trim()) && !["包含", "不包含"].includes(atom.op)) {
+          let now = readClock(value), want = readClock(atom.value);
+          if (now == null) return { v: TRI2.u, why: `时间「${cellText2(value)}」里读不出钟点` };
+          let d = now - want, hit = { ">=": d >= 0, ">": d > 0, "<=": d <= 0, "<": d < 0, "==": d === 0, "!=": d !== 0 }[atom.op];
+          return { v: hit ? TRI2.t : TRI2.f, why: `时间 ${clockText2(now)}${hit ? "已到" : "未到"} ${clockText2(want)}` };
+        }
+        let ok = atom.op === "包含" || atom.op === "不包含" ? cellText2(value).includes(atom.value) === (atom.op === "包含") : atom.tiers ? tierCompare2(atom.op, value, atom.value, atom.tiers) : applyOp2(atom.op, value, atom.value);
+        return ok === null ? {
+          v: TRI2.u,
+          why: atom.tiers ? `${label}「${cellText2(value)}」不是档位 ${atom.tiers.join("/")} 里的任何一档` : `${label}「${cellText2(value)}」无法与「${atom.value}」比较`
+        } : { v: ok ? TRI2.t : TRI2.f, why: `${label} = ${cellText2(value)}` };
+      }
+      default:
+        return { v: TRI2.u, why: atom.error || "条件错误" };
+    }
+  }
+  function evalCondition2(cond, env) {
+    if (!cond) return { v: TRI2.t, reasons: [] };
+    if (cond.kind !== "group") {
+      let r = evalAtom2(cond, env);
+      return { v: r.v, reasons: [r.why] };
+    }
+    let results = cond.items.map((item) => evalCondition2(item, env));
+    if (cond.mode === "all") {
+      let bad = results.filter((r) => r.v !== TRI2.t);
+      return bad.length ? { v: bad.some((r) => r.v === TRI2.f) ? TRI2.f : TRI2.u, reasons: bad.flatMap((r) => r.reasons) } : { v: TRI2.t, reasons: results.flatMap((r) => r.reasons) };
+    }
+    let hit = results.find((r) => r.v === TRI2.t);
+    return hit ? { v: TRI2.t, reasons: hit.reasons } : {
+      v: results.some((r) => r.v === TRI2.u) ? TRI2.u : TRI2.f,
+      reasons: [`以下任一满足即可：${results.flatMap((r) => r.reasons).join("；")}`]
+    };
+  }
+  function conditionRefs2(cond, out = {
+    facts: /* @__PURE__ */ new Set(),
+    nodes: /* @__PURE__ */ new Set(),
+    knows: /* @__PURE__ */ new Set(),
+    lines: /* @__PURE__ */ new Set()
+  }) {
+    return out.knows || (out.knows = /* @__PURE__ */ new Set()), out.lines || (out.lines = /* @__PURE__ */ new Set()), cond ? cond.kind === "group" ? (cond.items.forEach((item) => conditionRefs2(item, out)), out) : ((cond.kind === "fact" || cond.kind === "know") && out.facts.add(cond.fact), cond.kind === "know" && out.knows.add(`${cond.fact}@${cond.actor}`), cond.kind === "node" && out.nodes.add(cond.node), cond.kind === "line" && out.lines.add(cond.line), out) : out;
+  }
+  function sayAtoms(cond, out = []) {
+    return cond && (cond.kind === "group" ? cond.items.forEach((item) => sayAtoms(item, out)) : cond.kind === "say" && !out.includes(cond.text) && out.push(cond.text)), out;
+  }
+  function prebuiltGaps2(compiled, snapshot, { checkKnowledge = !0 } = {}) {
+    let refs = { facts: /* @__PURE__ */ new Set(), nodes: /* @__PURE__ */ new Set(), knows: /* @__PURE__ */ new Set() };
+    for (let unit of compiled.units) unit.clue && (conditionRefs2(unit.clue.enter, refs), conditionRefs2(unit.clue.end, refs));
+    for (let node of compiled.nodes) for (let cond of [node.open, node.early, node.done]) conditionRefs2(cond, refs);
+    for (let l of compiled.lines || []) conditionRefs2(l.open, refs), l.legacyFact && refs.facts.add(l.legacyFact);
+    let out = [], missingFacts = [...refs.facts].filter((id) => !(snapshot.facts && snapshot.facts.has(id))), present = snapshot.knowPresent;
+    if (missingFacts.length && out.push(`事实表里没有这些编号的行：${missingFacts.join("、")}（条件会一直是「未知」）`), checkKnowledge && present) {
+      let missingKnows = [...refs.knows].filter((k) => !present.has(k));
+      missingKnows.length && out.push(`知情表里还没有这些「事实@角色」的行：${missingKnows.join("、")}`);
+    }
+    return out;
+  }
+  function tableConsistencyHints2(snapshot) {
+    let hints = [], holders = /* @__PURE__ */ new Map();
+    for (let row2 of snapshot.knowledge || []) holders.set(row2.fact, [...holders.get(row2.fact) || [], row2.actor]);
+    for (let [id, fact] of snapshot.facts || []) {
+      let who = holders.get(id) || [];
+      (fact.status === "confirmed" || fact.claimed) && !who.length && snapshot.knowPresent && [...snapshot.knowPresent].some((k) => k.startsWith(`${id}@`)) && hints.push(
+        `${id}在事实表里已记为「${fact.raw || "已确认"}」，但知情表里还没有任何人知道它；如果正文里有人亲见或听到，检查知情表是否漏填`
+      ), fact.status === "unconfirmed" && !fact.claimed && who.length && hints.push(`知情表记录了${who.join("、")}知道${id}，但事实表仍是「${fact.raw}」；检查事实表是否漏填`);
+    }
+    return hints;
+  }
+  var AWAY_PREFIX2 = "@away:", NODE_STATUS_LABELS2 = { locked: "未开放", available: "可进行", active: "进行中", done: "已完成" };
+  function emptyClueProgress2() {
+    return { focus: "", overrides: {}, factOverrides: {}, log: [] };
+  }
+  function isRequired2(node) {
+    let flag2 = isPlainObject(node.item) ? node.item.必需 : void 0;
+    return flag2 == null || flag2 === "" ? node.kind === "main" : flag2 === !0 || flag2 === "是" || flag2 === "true";
+  }
+  function compileClue2(volumes) {
+    let errors = [], units = flattenUnits(volumes), nodes = [], ids = /* @__PURE__ */ new Set();
+    for (let unit of units) {
+      let data = isPlainObject(unit.stage.data) ? unit.stage.data : {}, where = stageLabel(unit.stage.key), errs = [], enter = parseCondition2(data.进入条件, errs), end = parseCondition2(data.结束条件, errs);
+      errs.forEach((e) => errors.push(`${where}：${e}`)), unit.clue = { enter, end, hasEnter: data.进入条件 != null && data.进入条件 !== "" };
+      for (let node of stageNodes(data)) {
+        let item = isPlainObject(node.item) ? node.item : {}, uid = nodeUid2(item), nerrs = [], c = {
+          ...node,
+          uid,
+          unit,
+          required: isRequired2(node),
+          open: parseCondition2(item.开放条件, nerrs),
+          early: parseCondition2(item.提前条件, nerrs),
+          done: parseCondition2(item.完成条件, nerrs)
+        };
+        nerrs.forEach((e) => errors.push(`${where}·${node.name}：${e}`)), uid ? ids.has(uid) ? errors.push(`节点ID「${uid}」重复`) : ids.add(uid) : node.kind === "main" && errors.push(`${where}·${node.name}：缺少稳定ID`), nodes.push(c);
+      }
+    }
+    for (let node of nodes)
+      for (let ref of conditionRefs2(node.open).nodes)
+        ids.has(ref) || errors.push(`${stageLabel(node.unit.stage.key)}·${node.name}：引用了不存在的节点「${ref}」`);
+    for (let node of nodes)
+      for (let cond of [node.early, node.done])
+        for (let ref of conditionRefs2(cond).nodes)
+          ids.has(ref) || errors.push(`${stageLabel(node.unit.stage.key)}·${node.name}：引用了不存在的节点「${ref}」`);
+    for (let node of nodes)
+      node.uid && conditionRefs2(node.done).nodes.has(node.uid) && errors.push(
+        `${stageLabel(node.unit.stage.key)}·${node.name}：完成条件引用了节点自己（${node.uid}），永远不会完成；应写成它自己产出的事实`
+      );
+    for (let unit of units)
+      for (let [label, cond] of [
+        ["进入条件", unit.clue.enter],
+        ["结束条件", unit.clue.end]
+      ])
+        for (let ref of conditionRefs2(cond).nodes)
+          ids.has(ref) || errors.push(`${stageLabel(unit.stage.key)}·${label}：引用了不存在的节点「${ref}」`);
+    let lines2 = compileLines2(units, errors), lineIds = new Set(lines2.map((l) => l.id)), refCheck = (cond, where) => {
+      for (let ref of conditionRefs2(cond).lines) lineIds.has(ref) || errors.push(`${where}：引用了不存在的线「${ref}」`);
+    };
+    for (let l of lines2) refCheck(l.open, `线 ${l.id} 的开启条件`);
+    for (let node of nodes)
+      [node.open, node.early, node.done].forEach((c) => refCheck(c, `${stageLabel(node.unit.stage.key)}·${node.name}`));
+    for (let unit of units) [unit.clue.enter, unit.clue.end].forEach((c) => refCheck(c, stageLabel(unit.stage.key)));
+    return { units, nodes, errors, lines: lines2 };
+  }
+  var sayMemo = /* @__PURE__ */ new WeakMap();
+  function sayDone(conds, text2) {
+    if (!conds) return null;
+    let map = sayMemo.get(conds);
+    return map || sayMemo.set(conds, map = new Map(Object.entries(conds).map(([k, v]) => [sayKey(k), v]))), map.get(sayKey(text2)) || null;
+  }
+  function computeClueState2(compiled, snapshot, clueProg, config = DEFAULT_CLUE2) {
+    let { units, nodes } = compiled, lines2 = compiled.lines || [], byUid = new Map(nodes.filter((n) => n.uid).map((n) => [n.uid, n])), overrides = clueProg.overrides || {}, doneMemo = /* @__PURE__ */ new Map(), visiting = /* @__PURE__ */ new Set(), cycles = [], lineMemo = /* @__PURE__ */ new Map(), lineVisiting = /* @__PURE__ */ new Set(), byLine = new Map(lines2.map((l) => [l.id, l])), env = {
+      facts: snapshot.facts || /* @__PURE__ */ new Map(),
+      knowledge: snapshot.knowledge || [],
+      tables: snapshot.tables || {},
+      timePath: config.bindings && config.bindings.time && config.bindings.time.路径,
+      factOverrides: clueProg.factOverrides || {},
+      // 「情况」条件：KP 检测判成立的记在 clueProg.trpgConds（条件原文 → {floor, quote}），按去掉空白标点后的文字对
+      sayDone: (text2) => !!sayDone(clueProg.trpgConds, text2),
+      nodeDone: (uid) => {
+        let node = byUid.get(uid);
+        return node ? nodeDone(node).v === TRI2.t : void 0;
+      },
+      // 给条件求值用的线状态：开启条件是未知（含循环）而落到「未触发」的，不当成确定的「未触发」交出去，返回 null（GPT 代码审阅 R4）。
+      lineState: (id) => {
+        let l = byLine.get(id);
+        if (!l) return;
+        let s = lineStateOf(l);
+        return s && !s.pending ? s.state : null;
+      },
+      lineStarted: (id) => {
+        let l = byLine.get(id);
+        return !!l && lineEvidence(l);
+      }
+    };
+    function nodeDone(node) {
+      if (node.uid && doneMemo.has(node.uid)) return doneMemo.get(node.uid);
+      let over = node.uid && overrides[node.uid] || {}, result2;
+      return over.done === "force" ? result2 = { v: TRI2.t, reasons: ["人工标记完成"], manual: !0 } : over.done === "undo" ? result2 = { v: TRI2.f, reasons: ["人工撤销完成"], manual: !0 } : node.done ? node.uid && visiting.has(node.uid) ? (cycles.push(node.uid), result2 = { v: TRI2.u, reasons: [`节点${node.uid}条件循环引用`] }) : (node.uid && visiting.add(node.uid), result2 = evalCondition2(node.done, env), node.uid && visiting.delete(node.uid)) : result2 = { v: TRI2.f, reasons: ["没有完成条件，需人工标记"] }, node.uid && doneMemo.set(node.uid, result2), result2;
+    }
+    let stageStates = /* @__PURE__ */ new Map();
+    function stageChain(list, firstEntered) {
+      let prevDone = !0;
+      for (let [k, unit] of list.entries()) {
+        let own = nodes.filter((n) => n.unit === unit), required = own.filter((n) => n.required), gate = k === 0 && firstEntered ? firstEntered() : null, entered = gate && gate.v !== TRI2.t ? gate : unit.clue.hasEnter ? evalCondition2(unit.clue.enter, env) : prevDone ? { v: TRI2.t, reasons: [k === 0 && gate ? gate.reasons[0] : "上一阶段已结束"] } : { v: TRI2.f, reasons: ["上一阶段尚未结束"] }, requiredLeft = required.filter((n) => !(overrides[n.uid] || {}).skip && nodeDone(n).v !== TRI2.t), end = evalCondition2(unit.clue.end, env), done = entered.v === TRI2.t && !requiredLeft.length && end.v === TRI2.t;
+        gate && gate.v !== TRI2.t && (entered = gate), stageStates.set(unit.id, { unit, entered, end, requiredLeft, done: entered.v === TRI2.t && done }), prevDone = entered.v === TRI2.t && done;
+      }
+    }
+    function legacySeen(l) {
+      return !!l.legacyFact && evalAtom2({ kind: "fact", fact: l.legacyFact }, env).v === TRI2.t;
+    }
+    function lineEvidence(l) {
+      return !!((clueProg.lines || {})[l.id] || {}).started || legacySeen(l);
+    }
+    function windowOf(l) {
+      let w = l.window;
+      if (!w) return { v: TRI2.t, reasons: [] };
+      if (w.bad) return { v: TRI2.u, reasons: [`开启时段写得不对：${w.bad}`] };
+      let main = byLine.get(w.main), ms = main ? lineStateOf(main) : null;
+      if (!ms) return { v: TRI2.u, reasons: [`主线${w.main}的状态还算不出来`] };
+      if (ms.state === "完成" || ms.state === "放弃")
+        return { v: TRI2.f, missed: !0, reasons: [`开启时段已过（${w.main} ${ms.state === "完成" ? "已经完成" : "已经放弃"}）`] };
+      if (!ms.started) return { v: TRI2.f, reasons: [`要等主线${w.main}开始`] };
+      let from = w.from ? stageStates.get(w.from) : null, to = w.to ? stageStates.get(w.to) : null;
+      return from && from.entered.v !== TRI2.t ? { v: from.entered.v === TRI2.u ? TRI2.u : TRI2.f, reasons: [`要等${w.main}进入「${w.fromLabel}」`] } : to && to.done ? { v: TRI2.f, missed: !0, reasons: [`开启时段已过（${w.main}的「${w.toLabel}」已经结束）`] } : { v: TRI2.t, reasons: [`在${w.main}的开启时段内`] };
+    }
+    function mainBusy(l) {
+      let at = lines2.indexOf(l);
+      for (let [k, o] of lines2.entries()) {
+        if (o === l || o.kind !== "main" || o.mode !== "auto" && !lineEvidence(o) || !lineEvidence(o) && k > at) continue;
+        let s = lineStateOf(o);
+        if (!s) return `主线${o.id}的状态还算不出来`;
+        if (s.state === "进行中" || s.state === "暂停")
+          return `主线${o.id} ${s.state === "暂停" ? "暂停中（想先玩这条，点「进入」）" : "还在进行"}`;
+      }
+      return "";
+    }
+    function prevMainDone(l) {
+      if (!l.after) return { v: TRI2.t, reasons: [] };
+      let mains = lines2.filter((x) => x.kind === "main"), prev = mains[mains.indexOf(l) - 1];
+      if (!prev) return { v: TRI2.t, reasons: [] };
+      let s = lineStateOf(prev);
+      return s ? s.state === "完成" || s.state === "放弃" ? { v: TRI2.t, reasons: [] } : { v: TRI2.f, reasons: [`排在主线${prev.id}后面，要等它结束`] } : { v: TRI2.u, reasons: [`主线${prev.id}的状态还算不出来`] };
+    }
+    function lineStateOf(l) {
+      if (lineMemo.has(l.id)) return lineMemo.get(l.id);
+      if (lineVisiting.has(l.id)) return cycles.push(`线 ${l.id}`), null;
+      lineVisiting.add(l.id);
+      let man = (clueProg.lines || {})[l.id] || {}, legacy = !man.started && legacySeen(l), evidence = !!man.started || legacy, settled = man.state && (evidence || man.state !== "pause"), cond = settled ? { v: TRI2.t, reasons: [] } : evalCondition2(l.open, env), win = settled || evidence ? { v: TRI2.t, reasons: [] } : windowOf(l), eligible = cond.v === TRI2.t && win.v === TRI2.t, started = evidence, why = man.started ? man.how || "已开始" : legacy ? `开场事实${l.legacyFact}已出现` : "", waitMain = "", after = !evidence && !man.state && l.kind === "main" ? prevMainDone(l) : { v: TRI2.t, reasons: [] };
+      !evidence && !man.state && eligible && l.kind === "main" && l.mode === "auto" && ((waitMain = after.v !== TRI2.t ? after.reasons.join("；") || "要等前一条主线结束" : clueProg.mainPaused ? "主线已全部暂停" : mainBusy(l)) || (started = !0, why = "开启条件已满足"));
+      let state = man.state === "abandon" ? "放弃" : man.state === "done" ? "完成" : man.state === "pause" ? "暂停" : started ? "进行中" : eligible ? "可开启" : "未触发", result2 = {
+        line: l,
+        state,
+        started,
+        eligible,
+        cond,
+        window: win,
+        missed: !started && !man.state && !!win.missed,
+        why,
+        waitMain,
+        manual: man,
+        entries: [],
+        pending: !man.state && !started && (cond.v === TRI2.u || win.v === TRI2.u)
+      };
+      if (state === "进行中") {
+        stageChain(l.units, () => ({ v: TRI2.t, reasons: [`线${l.id}进行中（${why}）`] }));
+        let last = stageStates.get(l.units[l.units.length - 1].id);
+        last && last.done && (result2.state = "完成", result2.why = "最后一个阶段已结束");
+      }
+      return lineVisiting.delete(l.id), lineMemo.set(l.id, result2), result2;
+    }
+    let free = units.filter((u) => !u.line);
+    stageChain(free, null);
+    let lineStates = lines2.map(
+      (l) => lineStateOf(l) || {
+        line: l,
+        state: "未触发",
+        started: !1,
+        eligible: !1,
+        cond: { v: TRI2.u, reasons: ["线之间循环引用"] },
+        window: { v: TRI2.u, reasons: [] },
+        missed: !1,
+        why: "",
+        waitMain: "",
+        manual: {},
+        entries: [],
+        pending: !0
+      }
+    );
+    for (let s of lineStates) {
+      if (s.state === "进行中" || s.state === "完成" && s.started) {
+        stageStates.has(s.line.units[0].id) || stageChain(s.line.units, () => ({ v: TRI2.t, reasons: [`线 ${s.line.id} ${s.state}`] }));
+        continue;
+      }
+      let gate = {
+        v: s.state === "可开启" ? TRI2.f : s.pending ? TRI2.u : TRI2.f,
+        reasons: [`线 ${s.line.id} ${s.missed ? "已错过" : s.state}${s.state === "可开启" ? "，还没开始" : ""}`]
+      };
+      for (let unit of s.line.units) {
+        let own = nodes.filter((n) => n.unit === unit), required = own.filter((n) => n.required);
+        stageStates.set(unit.id, {
+          unit,
+          entered: gate,
+          end: evalCondition2(unit.clue.end, env),
+          requiredLeft: required.filter((n) => !(overrides[n.uid] || {}).skip && nodeDone(n).v !== TRI2.t),
+          done: !1
+        });
+      }
+    }
+    for (let s of lineStates) {
+      if (s.started || s.state !== "可开启") continue;
+      let first = s.line.units[0];
+      !first || first.clue.hasEnter && evalCondition2(first.clue.enter, env).v !== TRI2.t || (s.entries = nodes.filter(
+        (n) => n.unit === first && n.uid && (overrides[n.uid] || {}).open !== "block" && nodeDone(n).v !== TRI2.t && (!n.open || evalCondition2(n.open, env).v === TRI2.t)
+      ).map((n) => n.uid));
+    }
+    let lineOf = new Map(lineStates.map((s) => [s.line, s])), nodeStates = nodes.map((node) => {
+      let over = node.uid && overrides[node.uid] || {}, stage = stageStates.get(node.unit.id), done = nodeDone(node), open, ls = node.unit.line && lineOf.get(node.unit.line);
+      if (ls && ls.state !== "进行中") open = { v: TRI2.f, reasons: [`所在的线 ${ls.line.id} ${ls.missed ? "已错过" : ls.state}`] };
+      else if (ls && ls.line.kind === "side" && clueProg.sidePaused) open = { v: TRI2.f, reasons: ["支线已全部暂停"] };
+      else if (ls && ls.line.kind === "main" && clueProg.mainPaused) open = { v: TRI2.f, reasons: ["主线已全部暂停"] };
+      else if (over.open === "force") open = { v: TRI2.t, reasons: ["人工开放"], manual: !0 };
+      else if (over.open === "block") open = { v: TRI2.f, reasons: ["已手动停用"], manual: !0 };
+      else {
+        let normal = stage.entered.v !== TRI2.t ? { v: stage.entered.v, reasons: [`阶段未进入：${stage.entered.reasons.join("；")}`] } : evalCondition2(node.open, env), early = node.early ? evalCondition2(node.early, env) : null;
+        open = normal.v === TRI2.t ? normal : early && early.v === TRI2.t ? { v: TRI2.t, reasons: ["提前条件满足", ...early.reasons] } : normal;
+      }
+      let status = done.v === TRI2.t ? "done" : open.v === TRI2.t ? "available" : "locked";
+      return { node, status, open, done, skipped: !!over.skip, disabled: over.open === "block", manualOpen: over.open === "force" };
+    }), focus = pickFocus2(nodeStates, clueProg, lines2.length ? { ...config, autoFocusSingle: !1 } : config, snapshot, stageStates);
+    for (let state of nodeStates)
+      state.node.uid && state.node.uid === focus.uid && state.status === "available" && (state.status = "active");
+    let current = units.find((unit) => {
+      let s = stageStates.get(unit.id);
+      return s.entered.v === TRI2.t && !s.done;
+    }) || null;
+    return { nodeStates, stageStates, focus, current, lineStates, cycles: [...new Set(cycles)], problems: snapshot.problems || [] };
+  }
+  function pickFocus2(nodeStates, clueProg, config, snapshot, stageStates) {
+    let usable = (uid) => nodeStates.find((s) => s.node.uid === uid && s.status === "available" && !s.disabled), manual = clueProg.focus || "", awayFrom = manual.startsWith(AWAY_PREFIX2) ? manual.slice(AWAY_PREFIX2.length) : "", sceneBinding = config.bindings && config.bindings.scene, scenePath = sceneBinding && sceneBinding.路径, cell = scenePath ? readCell2(snapshot.tables || {}, scenePath) : null, cellValue = cell && cell.state === "ok" ? cellText2(cell.value) : "", tableMovedOn = !!manual && clueProg.focusSceneAt !== void 0 && (!!clueProg.focusTaken || cell && cell.state === "ok" && cellValue !== clueProg.focusSceneAt);
+    if (manual && !awayFrom && !tableMovedOn && usable(manual)) return { uid: manual, source: "manual" };
+    let tableAway = !1;
+    if (scenePath) {
+      if (cell.state === "ok" && (cellValue !== awayFrom || tableMovedOn) && usable(cellValue))
+        return { uid: cellValue, source: "table" };
+      tableAway = cell.state === "ok" && sceneIsNone2(cell.value, sceneBinding);
+    }
+    if (config.autoFocusSingle !== !1 && !tableAway) {
+      let stageDone = (s) => !!(stageStates && s.node.unit && (stageStates.get(s.node.unit.id) || {}).done), mains = nodeStates.filter(
+        (s) => s.status === "available" && s.node.kind === "main" && s.node.uid && !s.disabled && !stageDone(s)
+      );
+      if (mains.length === 1 && mains[0].node.uid !== awayFrom) return { uid: mains[0].node.uid, source: "auto" };
+      if (mains.length === 1) return { uid: "", source: "away" };
+    }
+    return tableAway || awayFrom && !tableMovedOn ? { uid: "", source: "away" } : manual && !awayFrom && nodeStates.some((s) => s.node.uid === manual && s.status === "done") ? { uid: "", source: "manualDone" } : { uid: "", source: clueProg.focus ? "stale" : "none" };
+  }
+  var LINE_STATES2 = ["未触发", "可开启", "进行中", "暂停", "完成", "放弃"], LINE_STATE_ALIAS2 = { 开过: ["进行中", "暂停", "完成", "放弃"], 开着: ["进行中", "暂停"], 结束: ["完成", "放弃"] };
+  function normalizeOps2(text2) {
+    return String(text2 || "").replace(/＞＝|≥/g, ">=").replace(/＜＝|≤|≦/g, "<=").replace(/！＝|≠/g, "!=").replace(/＝＝/g, "==").replace(/＞/g, ">").replace(/＜/g, "<").replace(/＝/g, "==").replace(/(^|[^=!<>])=(?!=)/g, "$1==");
+  }
+  function parseCountAtom2(value, errors) {
+    let raw = JSON.stringify(value);
+    if (!isPlainObject(value))
+      return errors.push(`计数条件应写成 {表: 表名, 条件: 列 >= 值, 至少: N}：${raw.slice(0, 60)}`), { kind: "bad", raw, error: "计数格式错误" };
+    let table = String(value.表 || "").trim(), m = splitCompare2(normalizeOps2(value.条件), /^(.+?)\s*(==|!=|>=|<=|>|<)\s*(.*)$/), cmp = ["至少", "至多", "等于"].find((k) => value[k] !== void 0 && value[k] !== ""), n = cmp ? Number(value[cmp]) : NaN;
+    return !table || !m || !cmp || !Number.isFinite(n) ? (errors.push(`计数条件缺少表名、条件（列 运算 值）或数量（至少 / 至多 / 等于）：${raw.slice(0, 60)}`), { kind: "bad", raw, error: "计数格式错误" }) : {
+      kind: "count",
+      table,
+      column: m[1].trim(),
+      op: m[2],
+      value: m[3].trim(),
+      cmp,
+      n,
+      raw: `计数: ${table} 中 ${m[1].trim()} ${m[2]} ${m[3].trim()} 的行数${cmp}${n}`
+    };
+  }
+  var CELL_EXTRA_KEYS2 = ["表", "取", "档位", "样例", "顺序"];
+  function parseCellExtra2(value, errors) {
+    let atom = parseAtom2(`表: ${String(value.表 ?? "").trim()}`), raw = JSON.stringify(value).slice(0, 80);
+    if (atom.kind !== "cell") return errors.push(atom.error), atom;
+    if (value.取 !== void 0) {
+      let key = String(value.取 ?? "").trim();
+      if (!key) return errors.push(`「取」没写名字：${raw}`), { kind: "bad", raw, error: "取值格式错误" };
+      atom.pick = key;
+    }
+    if (value.档位 !== void 0) {
+      let tiers = Array.isArray(value.档位) ? value.档位.map((t) => String(t ?? "").trim()).filter(Boolean) : [];
+      if (tiers.length < 2 || new Set(tiers).size !== tiers.length)
+        return errors.push(`档位要写成至少两项、不重复的列表，从低到高：${raw}`), { kind: "bad", raw, error: "档位格式错误" };
+      if (/包含/.test(atom.op)) return errors.push(`「包含」不用写档位：${raw}`), { kind: "bad", raw, error: "档位格式错误" };
+      if (!tiers.includes(atom.value))
+        return errors.push(`条件里的「${atom.value}」不在档位${tiers.join("/")}里：${raw}`), { kind: "bad", raw, error: "档位格式错误" };
+      atom.tiers = tiers, atom.tierOk = String(value.顺序 ?? "").trim() === "已确认";
+    }
+    if (value.样例 !== void 0) {
+      let s = joinFlowSplit2(value.样例, ["原文", "取", "得"]);
+      if (!isPlainObject(s) || s.原文 == null || s.得 == null)
+        return errors.push(`样例要写成 {原文: …, 取: …, 得: …}：${raw}`), { kind: "bad", raw, error: "样例格式错误" };
+      atom.sample = { text: String(s.原文), key: String(s.取 ?? atom.pick ?? "").trim(), want: String(s.得).trim() };
+    }
+    return atom.raw = `${atom.raw}${atom.pick ? `（取「${atom.pick}」）` : ""}${atom.tiers ? `（档位 ${atom.tiers.join("<")}）` : ""}`, atom;
+  }
+  function joinFlowSplit2(obj, keys) {
+    if (!isPlainObject(obj)) return obj;
+    let out = {}, cur = "";
+    for (let [k, v] of Object.entries(obj))
+      if (keys.includes(k)) out[k] = v, cur = k;
+      else if (v == null && cur) out[cur] = `${out[cur] ?? ""},${k}`;
+      else return obj;
+    return out;
+  }
+  function sampleAgrees2(atom) {
+    if (!atom.sample) return null;
+    let s = atom.sample;
+    if (!s.key) return cellText2(s.text) === s.want;
+    let got2 = pickEntry2(s.text, s.key);
+    return got2.state === "ok" && (got2.value === s.want || got2.value.split(/[,，、]/).map((x) => x.trim()).includes(s.want));
+  }
+  function tierOrderKnown2(atom, tables) {
+    if (atom.tierOk) return !0;
+    let f = findSheet2(
+      tables || {},
+      String(atom.path || "").split("/")[0].trim()
+    );
+    return !f.error && tierOrderInNote2(f.sheet.note, atom.tiers);
+  }
+  function confirmTierOrder2(volumes, tiers) {
+    let want = (tiers || []).join(""), changed = !1, walk = (v) => {
+      if (Array.isArray(v)) {
+        let out2 = v.map(walk);
+        return out2.some((x, i) => x !== v[i]) ? out2 : v;
+      }
+      if (!isPlainObject(v)) return v;
+      let out = null;
+      for (let [k, x] of Object.entries(v)) {
+        let y = walk(x);
+        y !== x && ((out = out || { ...v })[k] = y);
+      }
+      let cur = out || v;
+      return cur.表 !== void 0 && Array.isArray(cur.档位) && cur.档位.map((t) => String(t ?? "").trim()).join("") === want && String(cur.顺序 ?? "").trim() !== "已确认" ? (changed = !0, { ...cur, 顺序: "已确认" }) : cur;
+    }, next = (volumes || []).map((vol) => {
+      let line = walk(vol.line), stages = walk(vol.stages);
+      return line === vol.line && stages === vol.stages ? vol : { ...vol, ...vol.line !== void 0 ? { line } : {}, stages };
+    });
+    return changed ? next : volumes;
+  }
+  var LINE_MODES2 = { 条件满足即开始: "auto", 走进去才开始: "enter", 人工: "manual", 等开场: "enter" };
+  function withLineIds2(volumes) {
+    let list = volumes || [];
+    if (!list.some((v) => isPlainObject(v.line))) return list;
+    let used = new Set(list.map((v) => isPlainObject(v.line) ? String(v.line.编号 || "").trim() : "").filter(Boolean)), n = 1, changed = !1, next = list.map((v) => {
+      if (isPlainObject(v.line)) return v;
+      for (; used.has(`M${n}`); ) n++;
+      return used.add(`M${n}`), changed = !0, { ...v, line: { 编号: `M${n}`, 类型: "主线" } };
+    });
+    return changed ? next : list;
+  }
+  function resolveLineWindow2(raw, lines2, errs) {
+    if (raw == null || raw === "") return null;
+    if (!isPlainObject(raw)) return errs.push("开启时段应写成 {主线: M1, 从: 阶段2, 到: 阶段3}"), { bad: "开启时段写法不对" };
+    let mainId = String(raw.主线 || "").trim(), main = lines2.find((l) => l.id === mainId);
+    if (!main) return errs.push(`开启时段引用了不存在的主线「${mainId}」`), { bad: `找不到主线${mainId}` };
+    if (main.kind !== "main") return errs.push(`开启时段里的「${mainId}」不是主线`), { bad: `${mainId}不是主线` };
+    let find = (ref) => {
+      let r = String(ref ?? "").trim();
+      if (!r) return { unit: null };
+      let hits = main.units.filter((u) => {
+        let { short, title: title2 } = splitStageKey(u.stage.key);
+        return [u.stage.key, short, title2, stageLabel(u.stage.key)].map((x) => String(x || "").trim()).includes(r);
+      });
+      return hits.length === 1 ? { unit: hits[0] } : {
+        error: hits.length ? `开启时段里的「${r}」在${mainId}里有好几个同名阶段` : `开启时段里的阶段「${r}」在${mainId}里找不到`
+      };
+    }, from = find(raw.从), to = find(raw.到), bad = from.error || to.error;
+    return bad ? (errs.push(bad), { bad }) : {
+      main: mainId,
+      from: from.unit ? from.unit.id : "",
+      to: to.unit ? to.unit.id : "",
+      fromLabel: from.unit ? stageLabel(from.unit.stage.key) : "",
+      toLabel: to.unit ? stageLabel(to.unit.stage.key) : ""
+    };
+  }
+  function compileLines2(units, errors) {
+    let vols = [...new Set(units.map((u) => u.volume))];
+    if (!vols.some((v) => isPlainObject(v.line))) return [];
+    let named = withLineIds2(vols), lines2 = [], seen = /* @__PURE__ */ new Set(), pend = [];
+    for (let [k, volume] of vols.entries()) {
+      let own = units.filter((u) => u.volume === volume), raw = named[k].line, where = `卷「${volumeLabel(volume.key)}」的线`, id = String(raw.编号 || "").trim(), errs = [];
+      if (!id) {
+        errors.push(`${where}：缺少编号`);
+        continue;
+      }
+      if (seen.has(id)) {
+        errors.push(`${where}：编号「${id}」和别的线重复`);
+        continue;
+      }
+      seen.add(id);
+      let kind = String(raw.类型 || "").trim() === "主线" ? "main" : "side", open = parseCondition2(raw.开启条件, errs), legacyFact = String(raw.开场事实 || "").trim(), modeText = String(raw.开启方式 || "").trim();
+      modeText && !LINE_MODES2[modeText] && errs.push(`开启方式「${modeText}」不认识，可以写：条件满足即开始、走进去才开始、人工`);
+      let mode2 = LINE_MODES2[modeText] === "manual" ? "manual" : kind === "main" ? "auto" : "enter", line = {
+        id,
+        kind,
+        name: volumeLabel(volume.key),
+        brief: clueText2(raw.简介),
+        entryHint: clueText2(raw.入口提示),
+        open,
+        legacyFact,
+        mode: mode2,
+        volume,
+        units: own,
+        synthetic: !isPlainObject(volume.line),
+        window: null,
+        origCond: clueText2(raw.原开启条件),
+        // 接上一条（导入审阅总方案 H / GPT 审阅 R6）：排在前一条主线后面，前一条「结束」（完成或放弃）后才自动开始。
+        // 只管自动开始；手动进入可以跳过它，剧情条件照样要满足。
+        after: kind === "main" && (raw.接上一条 === !0 || raw.接上一条 === "true" || raw.接上一条 === "是")
+      };
+      lines2.push(line), pend.push([line, raw.开启时段, errs, where]);
+    }
+    for (let [l, w, errs, where] of pend)
+      l.window = resolveLineWindow2(w, lines2, errs), errs.forEach((e) => errors.push(`${where}：${e}`));
+    for (let l of lines2) for (let u of l.units) u.line = l;
+    return lines2;
+  }
+  function lineToManual2(volumes, id) {
+    let at = (volumes || []).findIndex((v) => isPlainObject(v.line) && String(v.line.编号 || "").trim() === id);
+    if (at < 0) return volumes;
+    let line = { ...volumes[at].line }, cond = line.开启条件, text2 = cond == null || cond === "" ? "" : typeof cond == "string" ? cond : JSON.stringify(cond).replace(/"/g, "");
+    if (LINE_MODES2[String(line.开启方式 || "").trim()] === "manual" && !text2) return volumes;
+    delete line.开启条件, line.开启方式 = "人工", text2 && (line.原开启条件 = line.原开启条件 ? `${line.原开启条件}；${text2}` : text2);
+    let next = volumes.slice();
+    return next[at] = { ...volumes[at], line }, next;
+  }
+  function lineTriggerFacts2(compiled) {
+    let produced = /* @__PURE__ */ new Set(), out = /* @__PURE__ */ new Map();
+    for (let n of compiled.nodes || []) for (let d of discoveryList2(isPlainObject(n.item) ? n.item : {})) d.fact && produced.add(d.fact);
+    for (let l of compiled.lines || [])
+      for (let f of [...conditionRefs2(l.open).facts, ...l.legacyFact ? [l.legacyFact] : []])
+        produced.has(f) || out.set(f, [...out.get(f) || [], l.id]);
+    return out;
+  }
+  function sceneIsNone2(value, binding) {
+    let v = cellText2(value);
+    return !!v && (v === "无" || v === "离场" || !!binding && binding.离场值 != null && v === cellText2(binding.离场值));
+  }
+
+  // src/trpg/trpg-clue-progress.js
+  var CLUE_OP_KINDS2 = ["open", "done", "skip", "fact", "focus", "pause", "line"];
+  function anchorOf2(chat, index) {
+    let list = Array.isArray(chat) ? chat : [], i = Number.isInteger(index) && index >= 0 && index < list.length ? index : list.length - 1, msg = list[i];
+    return i < 0 || !msg ? { i: -1, swipe: 0, stamp: "" } : { i, swipe: Number(msg.swipe_id) || 0, stamp: String(msg.send_date ?? "") };
+  }
+  function anchorValid2(at, chat) {
+    if (!at || at.i < 0) return !0;
+    let msg = Array.isArray(chat) ? chat[at.i] : null;
+    return !!msg && (Number(msg.swipe_id) || 0) === at.swipe && String(msg.send_date ?? "") === at.stamp;
+  }
+  function normalizeClueOps2(value) {
+    let src = isPlainObject(value) ? value : {};
+    return {
+      // ops 是重建人工状态的依据，不截断；只做无损压缩（见 compactClueOps）。
+      ops: (Array.isArray(src.ops) ? src.ops : []).filter(
+        (op) => isPlainObject(op) && CLUE_OP_KINDS2.includes(op.kind) && typeof op.target == "string"
+      ),
+      log: Array.isArray(src.log) ? src.log.slice(-60) : []
+    };
+  }
+  function effectiveClueProgress2(clueOps, chat) {
+    let out = { focus: "", paused: !1, sidePaused: !1, mainPaused: !1, overrides: {}, factOverrides: {}, lines: {}, log: [] }, valid = (clueOps.ops || []).filter((op) => anchorValid2(op.at, chat));
+    for (let [seq, op] of valid.entries()) {
+      if (op.kind === "line") {
+        let cur2 = { ...out.lines[op.target] || {} };
+        op.value === "start" ? (cur2.started = !0, cur2.evidence = String(op.text || ""), cur2.how = String(op.note || ""), cur2.startAt = op.at ? op.at.i : -1, delete cur2.state) : op.value === "deny" ? (cur2.denied = [...cur2.denied || [], String(op.text || "")], cur2.started && cur2.evidence === String(op.text || "") && (delete cur2.started, delete cur2.evidence, delete cur2.how, delete cur2.startAt)) : op.value === "skip" ? (cur2.skipAt = seq, cur2.skipFloor = op.at ? op.at.i : -1) : op.value === "resume" ? delete cur2.state : op.value ? cur2.state = op.value : (delete cur2.state, delete cur2.started, delete cur2.evidence, delete cur2.how, delete cur2.startAt), Object.keys(cur2).length ? out.lines[op.target] = cur2 : delete out.lines[op.target];
+        continue;
+      }
+      if (op.kind === "pause") {
+        op.target === "side" ? out.sidePaused = !!op.value : op.target === "mains" ? out.mainPaused = !!op.value : out.paused = !!op.value;
+        continue;
+      }
+      if (op.kind === "focus") {
+        out.focus = op.value ? op.target : "", out.focusSceneAt = op.value && op.sceneAt !== void 0 ? String(op.sceneAt) : void 0, out.focusAt = op.value ? op.at : null;
+        continue;
+      }
+      if (op.kind === "fact") {
+        op.value ? out.factOverrides[op.target] = {
+          status: op.value,
+          text: String(op.text || ""),
+          // KP 自动检测判的（备注是「KP判定」）带上来源和楼层；人工确认的没有 by
+          ...op.note === "KP判定" ? { by: "kp", floor: op.at ? op.at.i : -1 } : {}
+        } : delete out.factOverrides[op.target];
+        continue;
+      }
+      let cur = { ...out.overrides[op.target] || {} };
+      op.kind === "skip" ? op.value ? cur.skip = !0 : delete cur.skip : op.value ? cur[op.kind] = op.value : delete cur[op.kind], Object.keys(cur).length ? out.overrides[op.target] = cur : delete out.overrides[op.target];
+    }
+    return out;
+  }
+  function addClueOp2(clueOps, chat, op, now = Date.now()) {
+    let entry = {
+      id: makeId("o"),
+      kind: op.kind,
+      target: String(op.target),
+      value: op.value ?? "",
+      text: op.text ? String(op.text) : void 0,
+      note: op.note ? String(op.note) : void 0,
+      sceneAt: op.sceneAt !== void 0 ? String(op.sceneAt) : void 0,
+      at: anchorOf2(chat, op.atIndex),
+      time: now
+    };
+    for (let key of Object.keys(entry)) entry[key] === void 0 && delete entry[key];
+    return { ...clueOps, ops: compactClueOps2([...clueOps.ops || [], entry]) };
+  }
+  function opSlot2(op) {
+    return op.kind === "focus" ? op.kind : op.kind === "pause" ? `pause:${op.target === "side" ? "side" : op.target === "mains" ? "mains" : "main"}` : op.kind === "line" ? `line:${op.target}:${["start", "deny", "skip"].includes(op.value) ? op.value : "state"}` : `${op.kind}:${op.target}`;
+  }
+  function sameAnchor2(a, b) {
+    return !!a && !!b && a.i === b.i && a.swipe === b.swipe && a.stamp === b.stamp;
+  }
+  function compactClueOps2(ops) {
+    let out = [];
+    for (let op of ops) {
+      let slot = opSlot2(op);
+      out = out.filter((prev) => !(opSlot2(prev) === slot && sameAnchor2(prev.at, op.at))), out.push(op);
+    }
+    return out;
+  }
+  function diffClueStatus2(prev, next) {
+    let changes = [];
+    for (let [uid, status] of Object.entries(next))
+      prev && prev[uid] !== void 0 && prev[uid] !== status && changes.push({ uid, from: prev[uid], to: status });
+    return changes;
+  }
+  function focusTakenOver2(clueProg, stays, chat, cellNow) {
+    if (!clueProg.focus || clueProg.focusSceneAt === void 0) return !1;
+    let at = clueProg.focusAt ? clueProg.focusAt.i : -1, was = clueProg.focusSceneAt;
+    return cellNow !== void 0 && cellNow !== was ? !0 : validStays2(stays, chat).some((x) => x && x.i > at && x.scene !== void 0 && x.scene !== was);
+  }
+  function validStays2(list, chat) {
+    let by = /* @__PURE__ */ new Map();
+    for (let x of Array.isArray(list) ? list : []) {
+      let msg = chat[x.i];
+      msg && !msg.is_user && (Number(msg.swipe_id) || 0) === x.swipe && String(msg.send_date ?? "") === x.stamp && by.set(x.i, x);
+    }
+    let out = [];
+    for (let i = chat.length - 1; i >= 0; i--) {
+      let msg = chat[i];
+      if (!(!msg || msg.is_user)) {
+        if (!by.has(i)) {
+          out.push(null);
+          continue;
+        }
+        out.push(by.get(i));
+      }
+    }
+    return out;
+  }
+  function stayState2(list, chat, { key, score = 0, paused = !1 }) {
+    let rows2 = validStays2(list, chat), out = { rounds: 1, since: -1, idle: 0, resumed: null };
+    if (paused) return out;
+    let p = 0;
+    for (let x of rows2) {
+      if (!x || !x.paused) break;
+      p++;
+    }
+    if (p && (out.resumed = { rounds: p }), !key) return out;
+    let later = score, progressed = !1;
+    out.idle = 1;
+    for (let x of rows2.slice(p)) {
+      if (!x || x.key !== key || x.paused) break;
+      out.rounds++, out.since = x.i, progressed || (x.score < later ? progressed = !0 : out.idle++), later = x.score;
+    }
+    return rows2[p] && rows2[p].key === key && rows2[p].score < score && (out.idle = 0), out;
+  }
+  function stayBand2(n) {
+    return n >= 7 ? 2 : n >= 4 ? 1 : 0;
+  }
+  var STAY_WORDS2 = {
+    long: ["", "有一阵了", "写了很久"],
+    idle: ["最近一直有新的", "最近几轮没有新的", "很久没有新的"],
+    paused: ["停了一会儿", "停了一阵", "停了很久"]
+  };
+  function stayText2(st9, kind) {
+    if (!st9) return "";
+    let lines2 = [], ask2 = [], long = stayBand2(st9.rounds), from = st9.since >= 0 ? `从第 ${st9.since} 楼开始，` : "";
+    if (st9.resumed) {
+      let b = stayBand2(st9.resumed.rounds);
+      lines2.push(`- 刚恢复：${STAY_WORDS2.paused[b]}（暂停了 ${st9.resumed.rounds} 条回复）`), ask2.push(
+        `结合前文，以及本次提供的过去记忆（如果有）接着写。暂停期间发生的事照常算；${kind === "clue" ? "这一场" : "剧情"}按现在的情况自然接上，不用急着补回来。`
+      );
+    }
+    if (long)
+      if (lines2.push(`- 写了多久：${STAY_WORDS2.long[long]}（${from}这是这一${kind === "clue" ? "场" : "段"}的第 ${st9.rounds} 条回复）`), kind === "clue") {
+        let ib = st9.idle >= 7 ? 2 : st9.idle >= 4 ? 1 : 0;
+        lines2.push(
+          `- 发现：${STAY_WORDS2.idle[ib]}（${ib ? `连续 ${st9.idle} 条回复没有新增或核实的发现` : "最近几条回复里有新增或核实的发现"}）`
+        ), ask2.push(
+          st9.resumed ? "" : "结合前文接着写。",
+          `如果环境和人物前面已经交代过，就不必从头再写；说过的话、发生过的事，不要再写一遍。${ib ? "如果用户最近在聊别的、做别的，就跟着用户写，不必每轮把话题引回下面的发现；人物可以带着这件事做别的。等用户提起或采取相应的行动，再接着写。" : ""}`
+        );
+      } else ask2.push(st9.resumed ? "" : "结合前文接着写。", "如果场景和人物前面已经交代过，就不必再铺陈；已经写过的事件，不要再写一遍。");
+    return lines2.length ? [`【这一${kind === "clue" ? "场" : "段"}到现在】`, ...lines2, ask2.filter(Boolean).join("")].join(`
+`) : "";
+  }
+
+  // src/trpg/trpg-kp.js
+  var KP_LEVELS = [
+    { level: 1, label: "给点暗示" },
+    { level: 2, label: "再给一次检定" },
+    { level: 3, label: "直接给线索" }
+  ], KP_STUCK_ROUNDS = 4, KP_HOST_RULE = [
+    "KP 主持口径：你是本模组的 KP，上面「由用户选择，不要强行引导」在跑团里按下面执行：",
+    "- 玩家偏离模组时，通过在场 NPC、环境变化或时间线事件，把注意力自然引回当前场景或上面列出的入口；不替玩家行动，不强制。",
+    "- 不要新增模组里没有的重要人物、地点、线索或事件。",
+    "- 玩家坚持做别的事，就写合理的后果，不为他编新剧情。"
+  ].join(`
+`), KP_UNSET_SOURCES = ["none", "away", "stale", "manualDone"], KP_UNSET_HINT = "本轮场景还没确定，正文只拿到入口，容易自由发挥。";
+  function aiFloorCount2(messages) {
+    return (messages || []).filter((m) => m && !m.is_user).length;
+  }
+  function itemOf(node) {
+    return isPlainObject(node && node.item) ? node.item : {};
+  }
+  function textOf(v) {
+    return Array.isArray(v) ? v.join("、") : v == null ? "" : String(v).trim();
+  }
+  var got = (fact, snap2, prog) => effectiveFact2(fact, snap2, prog).confirmed;
+  function deadDiscoveries(state, snap2, prog, checks) {
+    let out = [];
+    if (!checks) return out;
+    for (let ns of state.nodeStates)
+      for (let d of discoveryList2(itemOf(ns.node))) {
+        let r = d.check && d.fact ? checks[d.fact] : null, kp = d.fact ? checks[`${d.fact}-KP`] : null;
+        !r || r.ok || d.check.fail && GOT_ANYWAY.test(d.check.fail) || kp && kp.ok || got(d.fact, snap2, prog) || out.push({ fact: d.fact, text: d.text, node: ns.node.name || ns.node.uid });
+      }
+    return out;
+  }
+  function stripFacts(value, dead) {
+    if (Array.isArray(value)) return value.map((v) => stripFacts(v, dead));
+    if (!isPlainObject(value)) return value;
+    let out = {};
+    for (let [k, v] of Object.entries(value))
+      out[k] = k === "发现" && Array.isArray(v) ? v.filter((d) => !(isPlainObject(d) && dead.has(String(d.事实 || d.id || "").trim()))).map((d) => stripFacts(d, dead)) : stripFacts(v, dead);
+    return out;
+  }
+  function trpgHealth({ volumes, state, snap: snap2, prog, checks, focus }) {
+    let { known, claimed } = chatFactSets2({ snap: snap2, prog }), dead = deadDiscoveries(state, snap2, prog, checks), deadSet = new Set(dead.map((d) => d.fact)), opts = { knownFacts: known, claimedFacts: claimed }, reach = clueReachability2(stripFacts(volumes || [], deadSet), opts), base = dead.length ? clueReachability2(volumes || [], opts) : reach, lines2 = [], spoil = [];
+    reach.verdict === "ok" ? lines2.push(dead.length ? `有${dead.length}条判定失败的线索，暂时不影响主线` : "主线走得通") : reach.verdict === "blocked" ? lines2.push(
+      dead.length && base.verdict !== "blocked" ? `有${dead.length}条判定失败的线索，主线因此卡住，可以在下面推一把` : "主线现在走不通，需要检查剧本或表格"
+    ) : lines2.push("走不走得通要看表格或时间");
+    let live2 = [...state.stageStates.values()].find((s) => s.entered.v === "true" && !s.done);
+    live2 && live2.requiredLeft.length && lines2.push(`当前阶段还差${live2.requiredLeft.length}个必需节点`);
+    let near = 0;
+    for (let ns of state.nodeStates)
+      (ns.status === "available" || ns.status === "active") && (near += discoveryList2(itemOf(ns.node)).filter((d) => d.fact && !deadSet.has(d.fact) && !got(d.fact, snap2, prog)).length);
+    near && lines2.push(`眼前能拿到的线索${near}条`), focus && KP_UNSET_SOURCES.includes(focus.source) && lines2.push(KP_UNSET_HINT);
+    for (let n of reach.stuckNodes) spoil.push(`${n.nodeName}（${n.stage}）：${n.why}`);
+    for (let d of dead) spoil.push(`判定失败 #${d.fact}（${d.node}）：${d.text}`);
+    return { level: reach.verdict === "blocked" ? "bad" : reach.verdict === "unknown" || dead.length ? "warn" : "ok", lines: lines2, spoil, deadFacts: deadSet };
+  }
+  function kpPushTarget(state, snap2, prog) {
+    let pending = (ns) => discoveryList2(itemOf(ns.node)).filter((d) => d.fact && !got(d.fact, snap2, prog)).map((d) => ({ fact: d.fact, discovery: d, node: ns.node })), focus = state.nodeStates.find((ns) => ns.node.uid && ns.node.uid === state.focus.uid), mine = focus ? pending(focus) : [], live2 = [...state.stageStates.values()].find((s) => s.entered.v === "true" && !s.done), wanted = /* @__PURE__ */ new Set();
+    for (let n of live2 ? live2.requiredLeft : []) for (let cond of [n.open, n.done]) conditionRefs2(cond).facts.forEach((f) => wanted.add(f));
+    let open = (ns) => ns.status === "available" || ns.status === "active", others = state.nodeStates.filter((ns) => ns !== focus && open(ns));
+    return mine.find((x) => wanted.has(x.fact)) || mine[0] || others.filter((ns) => ns.node.required).flatMap(pending)[0] || others.flatMap(pending)[0] || null;
+  }
+  function kpPushLines(push, discovery, node, checks, settings) {
+    let { fact, level } = push, item = itemOf(node), where = [textOf(item.地点), textOf(item.入口)].filter(Boolean);
+    if (level === 1)
+      return {
+        reveal: !1,
+        lines: [
+          `- KP 暗示 #${fact}：这一轮让环境或在场人物给出一点指向这件事的自然暗示（声音、痕迹、有人主动提起）${where.length ? `，可以借用：${where.join("；")}` : ""}。绝不写出发现的内容，不替用户行动。`
+        ]
+      };
+    if (level === 3)
+      return {
+        reveal: !0,
+        lines: [`- KP 给出线索 #${fact}：这一轮通过合理的事件（有人找上门、东西被送来、意外撞见）让用户得到它，写出：${discovery.text}`]
+      };
+    let r = checks && checks[`${fact}-KP`];
+    if (r) {
+      let how = `${r.skill}${r.die != null ? ` 1D100=${r.die}` : ""}${r.value ? `／${r.value}` : ""}，${r.tier}`;
+      return r.ok ? { reveal: !0, lines: [`- 补救检定成功 #${fact}-KP（${how}）：这一轮写出这条发现：${discovery.text}`] } : { reveal: !1, lines: [`- 补救检定失败 #${fact}-KP（${how}）：不要写出这条发现，也不要暗示它是什么。`] };
+    }
+    let skills = [.../* @__PURE__ */ new Set(["灵感", "幸运", ...discovery.check && discovery.check.skills || []])];
+    return {
+      reveal: !1,
+      lines: [
+        `- KP 补救检定 #${fact}-KP：这一轮在正文末尾写检定请求，技能从${skills.join("、")}里挑最合适的一个，编号写 #${fact}-KP。掷骰成功之前不要写出发现内容。`,
+        checkRule(settings)
+      ]
+    };
+  }
+  function kpFind(state, fact) {
+    for (let ns of state.nodeStates) {
+      let d = discoveryList2(itemOf(ns.node)).find((x) => x.fact === fact);
+      if (d) return { discovery: d, node: ns.node };
+    }
+    return null;
+  }
+  function entryList(state) {
+    return state.nodeStates.filter((ns) => ns.status === "available" && !ns.disabled && ns.node.uid && textOf(itemOf(ns.node).入口)).map((ns) => textOf(itemOf(ns.node).入口));
+  }
+  function kpInject(out, { state, snap: snap2, prog, checks, settings, push, floors, timeline: timeline2 }) {
+    let lines2 = [], seen = /* @__PURE__ */ new Set(), add = (p) => {
+      let hit = kpFind(state, p.fact);
+      if (!hit || got(p.fact, snap2, prog)) return;
+      let r = kpPushLines(p, hit.discovery, hit.node, checks, settings);
+      lines2.push(...r.lines), r.reveal && out.used.candidates.push({ fact: p.fact, record: hit.discovery.record }), seen.add(p.fact);
+    };
+    push && push.floor === floors && (push.kind === "steer" ? textOf(push.text) && lines2.push(`KP 拉回（只管这一轮）：${textOf(push.text)}`) : add(push));
+    for (let [code, r] of Object.entries(checks || {}))
+      r.fresh && /-KP$/.test(code) && !seen.has(code.slice(0, -3)) && add({ fact: code.slice(0, -3), level: 2 });
+    if (timeline2) {
+      let step = timelineStep({ events: timeline2.events || [], now: timeline2.now, clock: timeline2.clock, floors });
+      lines2.push(...step.lines), step.next && timeline2.onClock && timeline2.onClock(step.next);
+    }
+    let entries = entryList(state), host = !!(out.content || entries.length);
+    if (!lines2.length && !host) return out;
+    let tag = String(settings.tagName || "剧情参考").trim() || "剧情参考", close = `</${tag}>`, body = [...lines2.length ? ["KP 的安排（只管这一轮）：", ...lines2] : [], ...host ? [KP_HOST_RULE] : []].join(`
+`);
+    if (!out.content) {
+      let list = entries.length ? `目前可以去做的事：
+${entries.map((t) => `- ${t}`).join(`
+`)}
+` : "";
+      return { ...out, content: `<${tag}>
+${list}${body}
+${close}` };
+    }
+    let at = out.content.lastIndexOf(close);
+    return at < 0 ? out : { ...out, content: `${out.content.slice(0, at)}${body}
+${out.content.slice(at)}` };
+  }
+  var STUCK_VERDICTS = ["顺利进行", "在打转", "卡住了"], STUCK_ADVICE = ["不用推", ...KP_LEVELS.map((x) => x.label)];
+  function stuckMessages({ recent, stage, rules, facts, pending, health }) {
+    return [
+      {
+        role: "system",
+        content: [
+          "你是跑团模组的 KP 助手。读最近的正文，判断玩家（调查员）是不是卡住了：找不到下一步、在同一处反复打转、明显忘了或没注意到眼前的线索、一直在做和模组无关的事。只判断，不续写。",
+          "只是在正常探索、刚换场景、刚拿到线索在消化，都算顺利。",
+          "严格按下面格式输出，不要写别的：",
+          "结论：顺利进行 / 在打转 / 卡住了（三选一）",
+          "不剧透：",
+          "- 用玩家能看的话说现在的状况（如：在同一个房间反复搜查、没有去问在场的人），不写线索内容、名字和真相",
+          "剧透：",
+          "- 玩家漏掉了哪条线索、本来该怎么拿到",
+          "建议：不用推 / 给点暗示 / 再给一次检定 / 直接给线索（四选一）",
+          "没卡住时「剧透」写「- 无」，建议写「不用推」。"
+        ].join(`
+`)
+      },
+      {
+        role: "user",
+        content: [
+          `【最近正文】
+${recent.map((m) => `${m.user ? "玩家" : "正文"}：${String(m.text || "").slice(0, 1500)}`).join(`
+
+`) || "（没有）"}`,
+          `【当前阶段的模组内容（作者视角，含仅作者部分）】
+${stage || "（没有进行中的阶段）"}`,
+          rules && `【KP规则】
+${rules}`,
+          `【已确认的事实】
+${facts.length ? facts.map((f) => `- ${f}`).join(`
+`) : "（暂无）"}`,
+          `【眼前还没拿到的线索】
+${pending.length ? pending.map((p) => `- #${p.fact}（${p.node}）：${p.text}`).join(`
+`) : "（没有）"}`,
+          health && health.length ? `【插件推演】
+${health.map((t) => `- ${t}`).join(`
+`)}` : ""
+        ].filter(Boolean).join(`
+
+`)
+      }
+    ];
+  }
+  function parseStuckReply(text2) {
+    let out = { verdict: "", plain: [], spoil: [], advice: "" }, sec = "", none = (t) => /^无[。.]?$/.test(t);
+    for (let raw of String(text2 || "").replace(/\r/g, "").split(`
+`)) {
+      let m = /^[\s#*>]*(结论|不剧透|剧透|建议)[*\s]*[:：]\s*\**\s*(.*)$/.exec(raw);
+      if (m) {
+        sec = m[1];
+        let rest = m[2].trim();
+        sec === "结论" && (out.verdict = STUCK_VERDICTS.find((v) => rest.includes(v)) || ""), sec === "建议" && (out.advice = STUCK_ADVICE.find((v) => rest.includes(v)) || "");
+        continue;
+      }
+      let item = /^\s*[-•]\s*(.+)$/.exec(raw);
+      sec === "不剧透" && item ? out.plain.push(item[1].trim()) : sec === "剧透" && item && out.spoil.push(item[1].trim());
+    }
+    return out.plain = out.plain.filter((t) => !none(t)), out.spoil = out.spoil.filter((t) => !none(t)), out;
+  }
+  function pendingDiscoveries(state, snap2, prog, deadFacts = /* @__PURE__ */ new Set()) {
+    let out = [];
+    for (let ns of state.nodeStates)
+      if (ns.status === "available" || ns.status === "active")
+        for (let d of discoveryList2(itemOf(ns.node)))
+          d.fact && !deadFacts.has(d.fact) && !got(d.fact, snap2, prog) && out.push({ fact: d.fact, node: ns.node.name || ns.node.uid, text: d.text });
+    return out;
+  }
+  var STEER_VERDICTS = ["跟着剧本", "有点偏", "跑偏了"];
+  function steerMessages({ recent, stage, rules, facts }) {
+    return [
+      {
+        role: "system",
+        content: [
+          "你是跑团模组的审稿人。对照模组内容，检查最近的正文有没有偏离剧本。只判断，不续写。",
+          "重点看：编了模组里没有的人物、地点、线索或事件；跳过了当前该进行的场景；提前揭示了还没到时机的内容；该发生的事件（时间线）没有发生。",
+          "严格按下面格式输出，不要写别的：",
+          "结论：跟着剧本 / 有点偏 / 跑偏了（三选一）",
+          "不剧透：",
+          "- 只说偏在哪一类（如：编了模组外的人物、跳过了场景、提前揭示、该发生的事件没发生），不写名字和真相",
+          "剧透：",
+          "- 具体哪里编了、模组里本来该是什么",
+          "拉回建议：",
+          "一段给正文的 KP 指示：不含玩家不该知道的真相；可以写引回到哪个场景或入口、让哪个 NPC 出现。",
+          "没偏的话「不剧透」「剧透」各写「- 无」，拉回建议写「无」。"
+        ].join(`
+`)
+      },
+      {
+        role: "user",
+        content: [
+          `【最近正文】
+${recent.map((m) => `${m.user ? "玩家" : "正文"}：${String(m.text || "").slice(0, 1500)}`).join(`
+
+`) || "（没有）"}`,
+          `【当前阶段的模组内容（作者视角，含仅作者部分）】
+${stage || "（没有进行中的阶段）"}`,
+          rules && `【KP规则】
+${rules}`,
+          `【已确认的事实】
+${facts.length ? facts.map((f) => `- ${f}`).join(`
+`) : "（暂无）"}`
+        ].filter(Boolean).join(`
+
+`)
+      }
+    ];
+  }
+  function parseSteerReply(text2) {
+    let out = { verdict: "", plain: [], spoil: [], steer: "" }, sec = "", steer = [], none = (t) => /^无[。.]?$/.test(t);
+    for (let raw of String(text2 || "").replace(/\r/g, "").split(`
+`)) {
+      let m = /^[\s#*>]*(结论|不剧透|剧透|拉回建议)[*\s]*[:：]\s*\**\s*(.*)$/.exec(raw);
+      if (m) {
+        sec = m[1];
+        let rest = m[2].trim();
+        sec === "结论" ? out.verdict = STEER_VERDICTS.find((v) => rest.includes(v)) || "" : sec === "拉回建议" && rest && steer.push(rest);
+        continue;
+      }
+      let item = /^\s*[-•]\s*(.+)$/.exec(raw);
+      sec === "不剧透" && item ? out.plain.push(item[1].trim()) : sec === "剧透" && item ? out.spoil.push(item[1].trim()) : sec === "拉回建议" && raw.trim() && steer.push(raw.trim());
+    }
+    return out.plain = out.plain.filter((t) => !none(t)), out.spoil = out.spoil.filter((t) => !none(t)), out.steer = steer.join(`
+`).trim(), none(out.steer) && (out.steer = ""), out;
+  }
+  function kpSectionText(settingText, section2) {
+    let block = splitBlocks(settingText).find((b) => b.title === KP_BLOCK && !b.cont), out = [], inSection = !1;
+    if (!block) return "";
+    for (let line of block.text.split(`
+`)) {
+      let head = /^\s*【([^】]+)】\s*$/.exec(line);
+      if (head) {
+        inSection = head[1].trim() === section2;
+        continue;
+      }
+      inSection && line.trim() && out.push(line.replace(/^\s*-\s*/, "").trimEnd());
+    }
+    return out.join(`
+`);
+  }
+  var NPC_FAIL = { ruleset: "IGS的数值规则不是CoC第七版。", "no-model": "IGS没有配置可用的模型。", empty: "没有可交给IGS的文字。", "stats-inactive": "本聊天没有启用IGS的数值系统。", busy: "IGS正在处理另一项调查员档任务，请稍后再试。", unavailable: "IGS暂时无法处理。", "stats-runtime-missing": "IGS的数值系统尚未就绪。" }, NPC_SKIP = { "no-numbers": "没有数值", missing: "没有收到", name: "名字不合规" };
+  function npcImportMessage(r) {
+    if (!r || !r.ok) {
+      let why = r && r.reason;
+      return NPC_FAIL[why] || `失败：${why || "没有收到结果"}`;
+    }
+    let made = r.created || [], skipped = r.skipped || [], parts = [made.length ? `已建立${made.length}个NPC档：${made.join("、")}` : "没有建立新的NPC档"];
+    return skipped.length && parts.push(`跳过：${skipped.map((x) => `${x.name}（${NPC_SKIP[x.reason] || x.reason}）`).join("、")}`), parts.join("。") + "。";
+  }
+
+  // src/trpg/trpg-rows.js
+  var TRPG_ROW_DEPTH = 1, TRPG_ROW_CAP = 30, gives = (n) => discoveryList2(isPlainObject(n.item) ? n.item : {}).map((d) => d.fact).filter(Boolean);
+  function trpgWantFacts(compiled, state, snap2, prog, config, { depth = TRPG_ROW_DEPTH, cap = TRPG_ROW_CAP } = {}) {
+    let want = /* @__PURE__ */ new Set(), have = /* @__PURE__ */ new Set(), add = (ns) => ns.status !== "locked" && gives(ns.node).forEach((f) => want.add(f));
+    for (let ns of state && state.nodeStates || []) add(ns);
+    for (let [id, f] of snap2 && snap2.facts || []) f && f.status === "confirmed" && have.add(id);
+    let knowAtoms = /* @__PURE__ */ new Set();
+    for (let u of compiled.units) u.clue && [u.clue.enter, u.clue.end].forEach((c) => conditionRefs2(c).knows.forEach((k) => knowAtoms.add(k)));
+    for (let n of compiled.nodes) [n.open, n.early, n.done].forEach((c) => conditionRefs2(c).knows.forEach((k) => knowAtoms.add(k)));
+    let base = want.size;
+    for (let layer = 0; layer < depth && want.size - base < cap; layer++) {
+      want.forEach((f) => have.add(f));
+      let facts = new Map(snap2 && snap2.facts ? snap2.facts : []);
+      for (let id of have) facts.set(id, { ...facts.get(id) || {}, id, status: "confirmed", raw: "已核实", text: (facts.get(id) || {}).text || "" });
+      let knowledge = [
+        ...snap2 && snap2.knowledge || [],
+        ...[...knowAtoms].flatMap((k) => {
+          let i = k.lastIndexOf("@"), fact = k.slice(0, i);
+          return have.has(fact) ? [{ fact, actor: k.slice(i + 1), way: "亲见", verified: !0 }] : [];
+        })
+      ], sim = computeClueState2(compiled, { ...snap2 || {}, facts, knowledge }, prog, config), before = want.size;
+      for (let ns of sim.nodeStates) {
+        if (want.size - base >= cap) break;
+        add(ns);
+      }
+      if (want.size === before) break;
+    }
+    return want;
+  }
+  function trpgRowFilter(compiled, want) {
+    let produced = new Set(compiled.nodes.flatMap(gives));
+    return (code) => !produced.has(code) || want.has(code);
+  }
+
+  // src/trpg/trpg-clue-audit.js
+  var AUDIT_MIN2 = 8, AUDIT_SAMPLE2 = 16, AUDIT_MAX_PER_SOURCE2 = 6;
+  function normText2(text2) {
+    return String(text2 || "").replace(/\s+/g, "");
+  }
+  function fingerprints2(text2) {
+    let flat = normText2(text2);
+    if (flat.length < AUDIT_MIN2) return [];
+    if (flat.length <= AUDIT_SAMPLE2 + 4) return [flat];
+    let parts = String(text2 || "").split(/[。！？!?；;\r\n]+/).map(normText2).filter((s) => s.length >= AUDIT_MIN2), out = [];
+    for (let s of parts) {
+      if (out.length >= AUDIT_MAX_PER_SOURCE2) break;
+      out.push(s.slice(0, AUDIT_SAMPLE2));
+    }
+    return out.length ? out : [flat.slice(0, AUDIT_SAMPLE2)];
+  }
+  function authorBlocks2(text2) {
+    return authorSegments2(text2);
+  }
+  function fieldText2(value) {
+    return value == null ? "" : typeof value == "string" ? value : JSON.stringify(value);
+  }
+  function restrictedSources2(project, state, isRevealed = () => !1) {
+    let out = [], focusUid = state && state.focus ? state.focus.uid : "", add = (label, text2, scope) => {
+      let prints = fingerprints2(text2);
+      prints.length && out.push({ label, prints, scope });
+    };
+    for (let block of authorBlocks2(project.setting && project.setting.text)) add("设定·<仅作者>", block, "author");
+    let keyBlocks = (obj, where) => {
+      if (Array.isArray(obj)) return obj.forEach((x) => keyBlocks(x, where));
+      if (isPlainObject(obj))
+        for (let [k, v] of Object.entries(obj)) {
+          for (let block of authorBlocks2(k)) add(`${where}·字段名·<仅作者>`, block, "author");
+          keyBlocks(v, where);
+        }
+    }, seenVol = /* @__PURE__ */ new Set();
+    for (let unit of flattenUnits(project.outline && project.outline.volumes)) {
+      let data = isPlainObject(unit.stage.data) ? unit.stage.data : {}, where = stageLabel(unit.stage.key);
+      seenVol.has(unit.volume) || (seenVol.add(unit.volume), authorBlocks2(unit.volume.key).forEach((b) => add("卷名·<仅作者>", b, "author")));
+      for (let block of authorBlocks2(unit.stage.key)) add(`${where}·阶段名·<仅作者>`, block, "author");
+      keyBlocks(data, where), add(`${where}·作者备注`, data.作者备注, "author");
+      for (let [key, value] of Object.entries(data))
+        if (!NODE_FIELDS.some((f) => f.field === key))
+          for (let block of authorBlocks2(fieldText2(value))) add(`${where}·${key}·<仅作者>`, block, "author");
+      for (let node of stageNodes(data)) {
+        let item = isPlainObject(node.item) ? node.item : {}, uid = nodeUid2(item), place = `${where}·${node.name}`, isFocus = !!uid && uid === focusUid;
+        add(`${place}·作者备注`, item.作者备注, "author");
+        for (let key of Object.keys(item))
+          for (let block of authorBlocks2(fieldText2(item[key]))) add(`${place}·${key}·<仅作者>`, block, "author");
+        if (!isFocus) {
+          add(`${place}·场景`, stripAuthorBlocks2(item.场景), "unrevealed");
+          for (let d of discoveryList2(item)) d.fact && isRevealed(d.fact) || add(`${place}·发现`, d.text, "unrevealed");
+        }
+      }
+    }
+    return out;
+  }
+  function restrictedNames2(project) {
+    let out = [];
+    for (let unit of flattenUnits(project.outline && project.outline.volumes))
+      for (let node of stageNodes(unit.stage.data)) {
+        let name = normText2(node.name);
+        name.length >= 4 && out.push({ label: `${stageLabel(unit.stage.key)}·${node.name}·名称`, print: name });
+      }
+    return out;
+  }
+  function countOccurrences2(hay, needle) {
+    if (!needle) return 0;
+    let n = 0, at = 0;
+    for (; (at = hay.indexOf(needle, at)) >= 0; ) n += 1, at += needle.length;
+    return n;
+  }
+  function auditRequest2(requestText, project, state, projection, { history = [], isRevealed, places = {} } = {}) {
+    let hay = normText2(requestText), leaks = [], strip = (text2, piece) => piece && piece.length >= AUDIT_MIN2 ? text2.split(piece).join("") : text2, projFlat = normText2(projection || ""), scan = strip(hay, projFlat), scanNoHistory = scan;
+    for (let text2 of history) scanNoHistory = strip(scanNoHistory, normText2(text2));
+    for (let src of restrictedSources2(project, state, isRevealed)) {
+      let where = src.scope === "author" ? scan : scanNoHistory, hit = src.prints.find((p) => where.includes(p));
+      hit && leaks.push({ source: src.label, sample: hit, level: "leak", where: leakPlace2(hit, places) });
+    }
+    for (let n of restrictedNames2(project))
+      scanNoHistory.includes(n.print) && leaks.push({ source: n.label, sample: n.print, level: "hint" });
+    let projectionCount = projFlat ? countOccurrences2(hay, projFlat) : 0;
+    return { leaks, projectionCount, duplicated: projectionCount > 1, chars: hay.length };
+  }
+  function leakPlace2(hit, { setting = "", tables = "" } = {}) {
+    return setting && normText2(setting).includes(hit) ? "setting" : tables && normText2(tables).includes(hit) ? "table" : "";
+  }
+  function requestToText2(payload) {
+    return payload == null ? "" : typeof payload == "string" ? payload : Array.isArray(payload) ? payload.map(
+      (m) => typeof m == "string" ? m : m && typeof m.content == "string" ? m.content : Array.isArray(m && m.content) ? m.content.map((p) => p && p.text || "").join(`
+`) : ""
+    ).join(`
+`) : isPlainObject(payload) ? requestToText2(payload.chat || payload.messages || payload.prompt || payload.finalPrompt || "") : "";
+  }
+
+  // src/trpg/trpg-clue-runtime.js
+  var CLUE_LOG_MAX2 = 40, ROUND_TTL_MS2 = 18e4, CANDIDATE_KEEP2 = 40;
+  function acuApi2() {
+    return hostWindow().AutoCardUpdaterAPI || window.AutoCardUpdaterAPI || null;
+  }
+  function createClueRuntime2({ data, getProject, getProgress, setProgress, emit, log, ticket = () => null, ticketValid = () => !0 }) {
+    let lastTableUpdate = 0, lastAudit = null, lastInjected = null, dirty = !0, cache = null, lastStatus = null, tableCallback = null, events = [], round = null;
+    function note(text2) {
+      events.push({ at: Date.now(), text: text2 }), events.length > CLUE_LOG_MAX2 && events.shift(), log(`[线索] ${text2}`);
+    }
+    function project() {
+      let p = getProject();
+      return isClueMode2(p) ? p : null;
+    }
+    function clueOps() {
+      let prog = getProgress();
+      return normalizeClueOps2(prog && prog.clue);
+    }
+    function ensureIds(p) {
+      let fix = (vols) => withLineIds2(withNodeIds2(vols));
+      return fix(p.outline.volumes) === p.outline.volumes ? p : (data.updateProject(p.id, (cur) => ({ ...cur, outline: { ...cur.outline, volumes: fix(cur.outline.volumes) } })), note("已给缺少编号的节点、剧情线补上稳定编号"), data.project(p.id) || p);
+    }
+    function snapshot(p) {
+      let api = acuApi2();
+      if (!api || typeof api.exportTableAsJson != "function")
+        return {
+          facts: /* @__PURE__ */ new Map(),
+          knowledge: [],
+          tables: {},
+          problems: ["没有检测到数据库插件（shujuku），所有线索都按未知算。请确认数据库插件已安装并开启"],
+          api: !1
+        };
+      let tables = cloneTables2(api.exportTableAsJson()), f = readFacts2(tables, p.clue.bindings.facts), k = readKnowledge2(tables, p.clue.bindings.knowledge), problems2 = [...f.problems, ...k.problems], knowPresent = (p.clue.bindings.knowledge || []).length ? k.present : null;
+      p.clue.bindings.facts.length || problems2.push("还没有绑定事实表");
+      let sw = p.clue.bindings.switch, enabled = !0;
+      if (sw && sw.路径) {
+        let cell = readCell2(tables, sw.路径);
+        cell.state !== "ok" ? (problems2.push(`主线开关：${cell.reason}`), enabled = !1) : enabled = sameValue2(cell.value, sw.开启值 ?? 1);
+      }
+      return { facts: f.facts, knowledge: k.rows, knowPresent, tables, problems: problems2, enabled, api: !0 };
+    }
+    function compute() {
+      let p = project();
+      if (!p) return null;
+      if (!dirty && cache && cache.projectId === p.id && cache.outline === p.outline && cache.clue === p.clue) return cache;
+      p = ensureIds(p);
+      let compiled = compileClue2(p.outline.volumes), snap2 = snapshot(p), prog = effectiveClueProgress2(clueOps(), chatMessages()), scenePath = p.clue.bindings.scene && p.clue.bindings.scene.路径, sceneCell = scenePath ? readCell2(snap2.tables || {}, scenePath) : null;
+      prog.focusTaken = focusTakenOver2(
+        prog,
+        (getProgress() || {}).stays,
+        chatMessages(),
+        sceneCell && sceneCell.state === "ok" ? cellText2(sceneCell.value) : void 0
+      ), prog.trpgConds = ((getProgress() || {}).trpgKp || {}).conds || {};
+      let state = computeClueState2(compiled, snap2, prog, p.clue);
+      snap2.api && (p.clue.bindings.facts || []).length && snap2.problems.push(...prebuiltGaps2(compiled, snap2));
+      let unoffered = snap2.api ? unofferedFacts(compiled, snap2, prog) : [], hints = snap2.api ? tableConsistencyHints2(snap2) : [], status = Object.fromEntries(state.nodeStates.filter((s) => s.node.uid).map((s) => [s.node.uid, s.status]));
+      if (lastStatus && lastStatus.projectId === p.id)
+        for (let change of diffClueStatus2(lastStatus.map, status)) {
+          let s = state.nodeStates.find((x) => x.node.uid === change.uid);
+          note(`${s ? s.node.name : change.uid}：${NODE_STATUS_LABELS2[change.from]} → ${NODE_STATUS_LABELS2[change.to]}`);
+        }
+      let multi = compiled.lines.length > 0, known = multi && snap2.api && scenePath ? catalogKnown(snap2.tables, scenePath) : null, plan = multi ? lineEntryPlan(state, prog, {
+        limit: p.clue.sideLimit || 1,
+        offers: lineOffers(),
+        round: aiFloors(),
+        firstOffer: firstOffered(),
+        known
+      }) : null, notReady = multi && snap2.api && (p.clue.bindings.facts || []).length ? factsNotReady(p, snap2) : /* @__PURE__ */ new Set(), away = multi ? linesAway(compiled, state, sceneCell && sceneCell.state === "ok" ? cellText2(sceneCell.value) : "") : {};
+      return lastStatus = { projectId: p.id, map: status }, cache = {
+        projectId: p.id,
+        outline: p.outline,
+        clue: p.clue,
+        compiled,
+        snap: snap2,
+        prog,
+        state,
+        plan,
+        notReady,
+        hints,
+        unoffered,
+        away,
+        at: Date.now()
+      }, dirty = !1, cache;
+    }
+    function linesAway(compiled, state, sceneNowValue) {
+      let uidLine = /* @__PURE__ */ new Map(), placeOf2 = /* @__PURE__ */ new Map(), out = {};
+      for (let n of compiled.nodes)
+        n.uid && n.unit.line && (uidLine.set(n.uid, n.unit.line.id), placeOf2.set(n.uid, clueText2(isPlainObject(n.item) ? n.item.地点 : "")));
+      let prog = getProgress(), rows2 = [{ scene: sceneNowValue || "" }, ...validStays2(prog && prog.stays, chatMessages())];
+      for (let s of state.lineStates || []) {
+        if (s.state !== "进行中") continue;
+        let a = lineAwayInfo(rows2, s.line.id, uidLine, placeOf2);
+        a && (out[s.line.id] = a);
+      }
+      return out;
+    }
+    function factsNotReady(p, snap2) {
+      let diff = prebuildDiff2(prebuildPlan2(p.outline.volumes), snap2, p.clue.bindings), knows = (p.clue.bindings.knowledge || []).length && snap2.knowPresent ? diff.newKnows : [];
+      return /* @__PURE__ */ new Set([...diff.newFacts.map((f) => f.code), ...knows.map((k) => k.fact)]);
+    }
+    function isoKey() {
+      let c = ctx(), bridge = hostWindow().__ACU_USERSCRIPT_BRIDGE__, a = acuIsolationKey(c && c.extensionSettings);
+      return a !== null ? a : acuIsolationKey(bridge && bridge.extension_settings);
+    }
+    var LINE_FLOOR_KEEP = 400;
+    function lineFloors() {
+      let prog = getProgress(), chat = chatMessages();
+      return (prog && Array.isArray(prog.lineFloors) ? prog.lineFloors : []).filter(
+        (x) => chat[x.i] && !chat[x.i].is_user && (Number(chat[x.i].swipe_id) || 0) === x.swipe && String(chat[x.i].send_date ?? "") === x.stamp
+      );
+    }
+    function lineOffers() {
+      return lineFloors().filter((x) => x.offer).map((x) => ({ i: x.i, line: x.offer }));
+    }
+    function firstOffered() {
+      return new Set(
+        lineFloors().map((x) => x.offer).filter(Boolean)
+      );
+    }
+    function aiFloors() {
+      return chatMessages().filter((m) => m && !m.is_user).length;
+    }
+    function bindLineFloor(index, used) {
+      let msg = chatMessages()[index], prog = getProgress();
+      if (!msg || msg.is_user || !prog || !used) return;
+      let list = (Array.isArray(prog.lineFloors) ? prog.lineFloors : []).filter(
+        (x) => !(x.i === index && x.swipe === (Number(msg.swipe_id) || 0))
+      );
+      list.push({
+        i: index,
+        swipe: Number(msg.swipe_id) || 0,
+        stamp: String(msg.send_date ?? ""),
+        recognize: (used.recognize || []).map((r) => ({ uid: r.uid, line: r.line })),
+        offer: used.offer || ""
+      }), setProgress({ ...prog, lineFloors: list.sort((a, b) => a.i - b.i).slice(-LINE_FLOOR_KEEP) }, "line-floor");
+    }
+    var SYNC_DELAY_MS = 1500;
+    let syncTimer = 0, syncing = !1, syncAgain = !1, lastToast = { key: "", at: 0 }, lineBar = null, catalogMissing = !1, labelsWarned = !1;
+    function scheduleSync() {
+      let w = hostWindow();
+      w.clearTimeout(syncTimer), syncTimer = w.setTimeout(() => {
+        syncLines().catch((e) => note(`多线同步出错：${e.message}`));
+      }, SYNC_DELAY_MS);
+    }
+    function sceneSheetKey(p, tables) {
+      let path = p.clue.bindings.scene && p.clue.bindings.scene.路径, name = path ? String(path).split("/")[0].trim() : "", f = name ? findSheet2(tables || {}, name) : { error: "x" };
+      return f.error ? "" : f.sheet.key;
+    }
+    async function syncLines() {
+      if (syncing) return void (syncAgain = !0);
+      let p = project();
+      if (p) {
+        syncing = !0;
+        try {
+          dirty = !0;
+          let c = compute();
+          if (!c || !c.snap.api) return;
+          let t0 = ticket(), chat = chatMessages(), changed = !1, lastAi = -1;
+          if (!c.plan) return void await writeCatalog(p, c, t0);
+          for (let i = chat.length - 1; i >= 0; i--)
+            if (chat[i] && !chat[i].is_user) {
+              lastAi = i;
+              break;
+            }
+          let rec = lastAi >= 0 ? lineFloors().find((x) => x.i === lastAi) : null, path = p.clue.bindings.scene && p.clue.bindings.scene.路径, cell = path ? readCell2(c.snap.tables || {}, path) : null, value = cell && cell.state === "ok" ? cellText2(cell.value) : "", iso = isoKey(), proof = lastAi >= 0 ? fillEvidence(chat[lastAi], sceneSheetKey(p, c.snap.tables), iso) : { ok: !1, reason: "" }, autoStart = c.state.lineStates.filter(
+            (s) => s.line.mode === "auto" && s.state === "进行中" && !s.manual.started && s.why === "开启条件已满足"
+          );
+          if (autoStart.length && lastAi >= 0 && (addOps(
+            autoStart.map((s) => ({
+              kind: "line",
+              target: s.line.id,
+              value: "start",
+              text: `auto@${lastAi}`,
+              note: "开启条件满足，自动开始",
+              atIndex: lastAi
+            }))
+          ), changed = !0), rec && value && rec.recognize.some((r) => r.uid === value)) {
+            let denied = Object.fromEntries(Object.entries(c.prog.lines || {}).map(([k, v]) => [k, v.denied || []])), ev = enterEvidence({
+              allowed: rec.recognize,
+              cell: value,
+              floor: lastAi,
+              swipe: Number(chat[lastAi].swipe_id) || 0,
+              evidenceOk: proof.ok,
+              denied
+            }), ls = ev && c.state.lineStates.find((s) => s.line.id === ev.line);
+            if (proof.ok || note(`当前场景是入口${value}，但${proof.reason}，先不算进入（可以在执行页点「进入」）`), ev && ls && !ls.started && !ls.manual.state) {
+              let slots = sideSlots(c.state.lineStates, p.clue.sideLimit || 1), busy = ls.line.kind === "main" ? mainSlotTaken(c.state.lineStates, ls.line.id) : "";
+              if (busy) note(`没有开始${ev.line}：${busy}`);
+              else if (ls.line.kind === "main" && c.prog.mainPaused) note(`主线已全部暂停：没有开始${ev.line}`);
+              else if (ls.line.kind === "side" && c.prog.sidePaused) note(`支线已全部暂停：没有开始${ev.line}`);
+              else if (ls.line.kind === "side" && slots.full) {
+                let off = slots.used.length === 1 ? c.state.lineStates.find((x) => x.line.id === slots.used[0]) : null;
+                lineToast(
+                  `full:${ev.key}`,
+                  "支线已满",
+                  ls.line.name,
+                  "切换",
+                  () => switchSide(ev.line, ev.key, lastAi, "", ev.uid)
+                );
+              } else
+                addOps([{ kind: "line", target: ev.line, value: "start", text: ev.key, note: "走进了入口", atIndex: lastAi }]), changed = !0, note(`线${ev.line}开始：第${lastAi}楼走进了入口${ev.uid}`), lineToast(
+                  `start:${ev.key}`,
+                  ls.line.kind === "side" ? "支线开始" : "主线开始",
+                  ls.line.name,
+                  "取消",
+                  () => denyStart(ev.line, ev.key)
+                );
+            }
+          }
+          let dueEntry = c.plan.due && rec && rec.recognize.some((r) => r.line === c.plan.due && r.uid === value);
+          if (!changed && c.plan.due && lastAi >= 0 && proof.ok && !dueEntry && (addOps([
+            {
+              kind: "line",
+              target: c.plan.due,
+              value: "skip",
+              note: "提示了3次没有进入，先让后面的上来",
+              atIndex: lastAi
+            }
+          ]), changed = !0, note(`支线${c.plan.due}提示了3次没有进入，排到后面`)), !ticketValid(t0))
+            return;
+          changed && (dirty = !0);
+          let now = compute();
+          now && (await writeCatalog(p, now, t0), await fillRows(p, now, t0));
+        } finally {
+          syncing = !1, syncAgain && (syncAgain = !1, scheduleSync());
+        }
+      }
+    }
+    function addOps(list) {
+      let prog = getProgress();
+      if (!prog) return;
+      let ops = clueOps(), chat = chatMessages();
+      for (let op of list) ops = addClueOp2(ops, chat, op);
+      setProgress({ ...prog, clue: ops }, "clue-op"), invalidate(), list.forEach((op) => note(`操作：${opLabel(op)}`));
+    }
+    function denyStart(id, key) {
+      addOps([{ kind: "line", target: id, value: "deny", text: key, note: "玩家点了取消开启" }]), scheduleSync();
+    }
+    function switchSide(id, key, floor, pauseId = "", uid = "") {
+      let c = (dirty = !0, compute()), p = project();
+      if (!c || !p) return;
+      let s = c.state.lineStates.find((x) => x.line.id === id), used = sideSlots(c.state.lineStates, p.clue.sideLimit || 1).used;
+      if (!s || s.started || s.manual.state && s.manual.state !== "pause" || !s.eligible)
+        return toast("info", "这条支线的状态已经变了，没有切换。");
+      if (c.prog.sidePaused) return toast("info", "支线已全部暂停，没有切换。先点「继续全部支线」。");
+      let off = pauseId || (used.length === 1 ? used[0] : "");
+      if (used.length >= (p.clue.sideLimit || 1) && !used.includes(off))
+        return toast("info", `现在有${used.length}条支线在进行，请到执行页「剧情线」里先暂停其中一条，再点这条的「进入」。`);
+      let ops = [];
+      used.includes(off) && used.length >= (p.clue.sideLimit || 1) && ops.push({ kind: "line", target: off, value: "pause", note: `切换到${id}` }), s.manual.state === "pause" && ops.push({ kind: "line", target: id, value: "resume" }), ops.push({
+        kind: "line",
+        target: id,
+        value: "start",
+        text: key || "manual",
+        note: ops.length ? `从${off}切换过来` : "人工进入",
+        ...Number.isInteger(floor) ? { atIndex: floor } : {}
+      }), (!key || key === "manual") && uid && ops.push({ kind: "focus", target: uid, value: !0, sceneAt: sceneNow() });
+      let offName = ops.length > 1 && (c.state.lineStates.find((x) => x.line.id === off) || { line: { name: off } }).line.name;
+      addOps(ops), scheduleSync(), offName && toast("success", `已换成「${s.line.name}」，「${offName}」先暂停。`);
+    }
+    function enterLine(id, pauseId = "", uid = "") {
+      let c = (dirty = !0, compute()), p = project();
+      if (!c || !p) return;
+      let s = c.state.lineStates.find((x) => x.line.id === id);
+      if (!s || s.started) return;
+      if (!s.eligible) throw new Error("这条线的开启条件还没满足；想早点开，可以修改它的开启条件");
+      let other = s.line.kind === "main" ? mainInProgress(c.state.lineStates, id) : null;
+      if (s.line.kind === "main" && c.prog.mainPaused) throw new Error("主线已全部暂停，先点「继续全部主线」");
+      if (s.line.kind === "side" && c.prog.sidePaused) throw new Error("支线已全部暂停，先点「继续全部支线」");
+      let entry = uid && s.entries.includes(uid) ? uid : s.entries.length === 1 ? s.entries[0] : "";
+      if (s.line.kind === "side" && sideSlots(c.state.lineStates, p.clue.sideLimit || 1).full)
+        return switchSide(id, "manual", void 0, pauseId, entry);
+      addOps([
+        ...other ? [{ kind: "line", target: other.line.id, value: "pause", note: `换成${id}` }] : [],
+        { kind: "line", target: id, value: "start", text: "manual", note: "人工进入" },
+        ...entry ? [{ kind: "focus", target: entry, value: !0, sceneAt: sceneNow() }] : []
+      ]), scheduleSync();
+    }
+    function lineToast(key, tag, text2, action, run) {
+      let p = project();
+      if (!p || p.clue.lineToast === !1 || lastToast.key === key) return;
+      let t0 = ticket(), guarded = () => ticketValid(t0) && project() ? run() : toast("info", "已经切换了聊天或项目，这条提示作废了。");
+      lastToast = { key, at: Date.now() }, lineBar && lineBar({ key, tag, text: text2, action, run: guarded });
+    }
+    async function writeCatalog(p, c, t0) {
+      let api = acuApi2(), col = LINE_CATALOG_COL, path = p.clue.bindings.scene && p.clue.bindings.scene.路径;
+      if (!api || typeof api.updateCell != "function" || !path) return;
+      let [table, row2] = String(path).split("/").map((x) => x.trim()), want = sceneCatalogCell(c.state, c.plan || { recognize: [] }, c.prog), found = findSheet2(c.snap.tables || {}, table);
+      if (found.error) return;
+      let { col: colOf, rows: rows2 } = sheetRows2(found.sheet), ci = colOf(col), hits = findRow2(rows2, row2);
+      if (ci < 0) return catalogMissing || (catalogMissing = !0, note(`线索控制表还没有「${col}」这一列：点一次「创建模板」补上`));
+      if (hits.length !== 1 || cellText2(hits[0][ci]) === want || !ticketValid(t0)) return;
+      let index = found.sheet.content.indexOf(hits[0]);
+      if (index < 1) return;
+      let ok = await Promise.resolve(
+        api.updateCell({ tableName: table, rowIndex: index, colIdentifier: col, value: want, skipNotify: !0 })
+      ).catch(() => !1), back = readCell2(cloneTables2(api.exportTableAsJson()), `${table}/${row2}/${col}`);
+      ok && back.state === "ok" && cellText2(back.value) === want ? note("场景目录已更新") : note("场景目录没写上，下次再试；没写进去的入口先不提示"), invalidate("clue-catalog");
+    }
+    async function fillRows(p, c, t0) {
+      let api = acuApi2(), fb = (p.clue.bindings.facts || [])[0], kb = (p.clue.bindings.knowledge || [])[0];
+      if (!api || typeof api.insertRow != "function" || !fb) return;
+      let labels = isPlainObject(p.clue.labels) ? p.clue.labels : {}, plan = prebuildPlan2(p.outline.volumes), started = new Map(c.state.lineStates.filter((s) => s.started).map((s) => [s.line.id, s])), target = appendTargetFloor(chatMessages(), isoKey()), factLines2 = /* @__PURE__ */ new Map(), triggers = new Set(plan.facts.filter((f) => f.trigger).map((f) => f.code));
+      for (let n of c.compiled.nodes)
+        for (let d of discoveryList2(isPlainObject(n.item) ? n.item : {}))
+          d.fact && factLines2.set(d.fact, (factLines2.get(d.fact) || /* @__PURE__ */ new Set()).add(n.unit.line ? n.unit.line.id : ""));
+      let lineReady = (lid) => {
+        if (!lid) return !0;
+        let s = started.get(lid);
+        return !!s && (s.manual.startAt === void 0 || s.manual.startAt < 0 || target >= s.manual.startAt);
+      }, trpgSet = isTrpg(p) ? trpgWantFacts(c.compiled, c.state, c.snap, c.prog, p.clue) : null, wantFact = (code) => triggers.has(code) || !factLines2.has(code) || [...factLines2.get(code)].some(lineReady) && (!trpgSet || trpgSet.has(code)), diff = prebuildDiff2(
+        { ...plan, facts: plan.facts.filter((f) => wantFact(f.code)), knows: plan.knows.filter((k) => wantFact(k.fact)) },
+        c.snap,
+        p.clue.bindings
+      ), labelOf = (code) => labels[code] || {}, ready = diff.newFacts.filter((f) => labelOf(f.code).label), waiting = diff.newFacts.length - ready.length;
+      if (waiting && !labelsWarned && (labelsWarned = !0, note(`有${waiting}条事实还没有标签，先不补行（采用模组时会自动生成；也可以用「补全表格」）`)), !ready.length && !diff.newKnows.length)
+        return;
+      let factOk = new Set(c.snap.facts ? c.snap.facts.keys() : []), done = [];
+      for (let f of ready) {
+        if (!ticketValid(t0)) return;
+        let l = labelOf(f.code), row2 = { [fb.编号列]: f.code, 标签: l.label, 登记口径: l.criterion || "" };
+        fb.状态列 && (row2[fb.状态列] = "未获得"), await Promise.resolve(api.insertRow({ tableName: fb.表, data: row2, skipNotify: !0 })).catch(() => -1) >= 0 && (factOk.add(f.code), done.push(f.code));
+      }
+      if (kb)
+        for (let k of diff.newKnows) {
+          if (!factOk.has(k.fact) || !ticketValid(t0)) continue;
+          let row2 = { 键: k.key, [kb.事实列]: k.fact, [kb.角色列]: k.actor };
+          kb.方式列 && (row2[kb.方式列] = Array.isArray(kb.未知值) ? kb.未知值[0] : kb.未知值 || "未知"), kb.可信度列 && (row2[kb.可信度列] = "未核实"), await Promise.resolve(api.insertRow({ tableName: kb.表, data: row2, skipNotify: !0 })).catch(() => -1) >= 0 && done.push(k.key);
+        }
+      done.length && (note(`自动补了${done.length}行：${done.slice(0, 6).join("、")}${done.length > 6 ? "……" : ""}`), invalidate("clue-rows"));
+    }
+    function lineAct(id, value, uid = "", s0 = null) {
+      if (s0 && !scopeValid(s0)) throw new Error("已经切换了聊天、项目或推进方式，这次操作没有执行，请重新点一次");
+      if (value === "enter") return enterLine(id, "", uid);
+      if (value === "deny") {
+        let c = compute(), s = c && c.state.lineStates.find((x) => x.line.id === id);
+        return s && s.manual.evidence ? denyStart(id, s.manual.evidence) : act({ kind: "line", target: id, value: "" });
+      }
+      if (value === "resume") {
+        let c = (dirty = !0, compute()), p = project(), s = c && c.state.lineStates.find((x) => x.line.id === id);
+        if (s && s.line.kind === "side" && s.started && sideSlots(c.state.lineStates, p.clue.sideLimit || 1).full)
+          throw new Error("同时进行的支线已经满了：先暂停正在进行的那条，再继续这条");
+        let other = s && s.line.kind === "main" ? mainInProgress(c.state.lineStates, id) : null, mark = s && s.line.kind === "main" && !s.manual.started ? [{ kind: "line", target: id, value: "start", text: "manual", note: "继续" }] : [];
+        if (s && s.line.kind === "main" && c.prog.mainPaused) throw new Error("主线已全部暂停，先点「继续全部主线」");
+        if (other || mark.length)
+          return addOps([
+            ...other ? [{ kind: "line", target: other.line.id, value: "pause", note: `换成${id}` }] : [],
+            { kind: "line", target: id, value: "resume" },
+            ...mark
+          ]), scheduleSync();
+      }
+      act({ kind: "line", target: id, value: value || "" }), scheduleSync();
+    }
+    function toManual(id) {
+      let p = project();
+      return p ? lineToManual2(p.outline.volumes, id) === p.outline.volumes ? !1 : (data.updateProject(p.id, (cur) => ({
+        ...cur,
+        outline: { ...cur.outline, volumes: lineToManual2(cur.outline.volumes, id) }
+      })), invalidate("line-manual"), !0) : !1;
+    }
+    function confirmTiers(tiers) {
+      let p = project();
+      return p ? confirmTierOrder2(p.outline.volumes, tiers) === p.outline.volumes ? !1 : (data.updateProject(p.id, (cur) => ({
+        ...cur,
+        outline: { ...cur.outline, volumes: confirmTierOrder2(cur.outline.volumes, tiers) }
+      })), invalidate("line-tiers"), !0) : !1;
+    }
+    function moveLine(id, dir) {
+      let p = project();
+      if (!p) return;
+      let vols = p.outline.volumes, idOf2 = (v) => isPlainObject(v.line) ? String(v.line.编号 || "").trim() : "", kindOf = (v) => isPlainObject(v.line) ? String(v.line.类型 || "").trim() === "主线" ? "main" : "side" : "", at = vols.findIndex((v) => idOf2(v) === id), kind = at < 0 ? "" : kindOf(vols[at]);
+      if (!kind) return;
+      let to = at + dir;
+      for (; to >= 0 && to < vols.length && kindOf(vols[to]) !== kind; ) to += dir;
+      if (to < 0 || to >= vols.length) return;
+      let c = kind === "main" ? compute() : null, mark = c ? c.state.lineStates.filter((x) => x.line.kind === "main" && x.started && !x.manual.started).map((x) => ({ kind: "line", target: x.line.id, value: "start", text: "manual", note: "调整顺序前已开始" })) : [];
+      mark.length && addOps(mark);
+      let next = vols.slice();
+      [next[at], next[to]] = [next[to], next[at]], data.updateProject(p.id, (cur) => ({ ...cur, outline: { ...cur.outline, volumes: next } })), invalidate("line-order");
+    }
+    function unofferedFacts(compiled, snap2, prog) {
+      let pr = getProgress(), offered = /* @__PURE__ */ new Set();
+      for (let x of pr && Array.isArray(pr.clueCandidates) ? pr.clueCandidates : [])
+        for (let c of x.candidates || []) offered.add(c.fact);
+      for (let id of pr && Array.isArray(pr.clueOffered) ? pr.clueOffered : []) offered.add(id);
+      for (let c of pendingCandidates && pendingCandidates.candidates || []) offered.add(c.fact);
+      let tracked = /* @__PURE__ */ new Set();
+      for (let n of compiled.nodes) for (let d of discoveryList2(isPlainObject(n.item) ? n.item : {})) d.fact && tracked.add(d.fact);
+      let out = [], overs = prog.factOverrides || {};
+      for (let [id, over] of Object.entries(overs)) {
+        if (!tracked.has(id) || !over || over.status !== "revoked") continue;
+        let f = snap2.facts && snap2.facts.get(id);
+        out.push({ id, raw: f ? f.raw : "", text: over.text || f && f.text || "", revoked: !0 });
+      }
+      for (let [id, f] of snap2.facts || [])
+        !tracked.has(id) || offered.has(id) || overs[id] || (f.status === "confirmed" || f.claimed) && out.push({ id, raw: f.raw, text: f.text || "", revoked: !1 });
+      return out;
+    }
+    function opScope() {
+      return { ticket: ticket(), iso: isoKey() };
+    }
+    function scopeValid(s0) {
+      return !!s0 && ticketValid(s0.ticket) && isoKey() === s0.iso;
+    }
+    async function voidFact(id, s0 = opScope()) {
+      let p = project(), c = compute();
+      if (!p || !c || !scopeValid(s0))
+        return { done: !1, table: "none", why: "已经切换了聊天、项目、推进方式或数据隔离，这次作废没有执行，请重新点一次" };
+      let f = c.snap.facts && c.snap.facts.get(id);
+      act({ kind: "fact", target: id, value: "revoked", text: f ? f.text : "", note: "玩家作废：正文可能自己编的" });
+      let r = await voidTables(p, id, s0.ticket, s0.iso).catch((e) => ({ table: "none", why: e && e.message || String(e) }));
+      return invalidate("clue-void"), note(r.table === "ok" ? `作废${id}：表格已改回未获得` : `作废${id}：${r.why || "表格没改"}`), { done: !0, ...r };
+    }
+    var SQL_WORD2 = /^[A-Za-z_\u0080-￿][A-Za-z0-9_$\u0080-￿]*$/;
+    async function voidTables(p, id, t0, iso0) {
+      let api = acuApi2(), fb = (p.clue.bindings.facts || [])[0], kb = (p.clue.bindings.knowledge || [])[0];
+      if (!api || !fb || !fb.状态列) return { table: "none", why: "没有绑定事实表的状态列，表格没改" };
+      if (typeof api.executeSqlMutation != "function" || typeof api.querySql != "function")
+        return {
+          table: "none",
+          why: "数据库不是SQLite存储模式（或还没就绪），插件没法安全改表；需要的话请到数据库里把这条改回「未获得」"
+        };
+      let unknown = Array.isArray(kb && kb.未知值) ? kb.未知值[0] : kb && kb.未知值 || "未知", jobs = [
+        {
+          what: "事实表",
+          sql: [fb.表, fb.状态列, fb.编号列],
+          text: `UPDATE ${fb.表} SET ${fb.状态列} = ? WHERE ${fb.编号列} = ?`,
+          params: ["未获得", id]
+        }
+      ];
+      kb && kb.方式列 && kb.事实列 && jobs.push({
+        what: "知情表",
+        sql: [kb.表, kb.方式列, kb.事实列, ...kb.可信度列 ? [kb.可信度列] : []],
+        text: `UPDATE ${kb.表} SET ${kb.方式列} = ?${kb.可信度列 ? `, ${kb.可信度列} = ?` : ""} WHERE ${kb.事实列} = ?`,
+        params: [unknown, ...kb.可信度列 ? ["未核实"] : [], id]
+      });
+      let bad = jobs.flatMap((j) => j.sql).find((name) => !SQL_WORD2.test(String(name || "")));
+      if (bad !== void 0) return { table: "none", why: `表名或列名「${bad}」带特殊字符，插件没法安全改表` };
+      let failed = [], tried = 0;
+      for (let j of jobs) {
+        if (!ticketValid(t0) || isoKey() !== iso0)
+          return {
+            table: tried ? "partial" : "none",
+            why: tried ? "改表途中切换了聊天、项目或数据隔离，没有全部完成" : "切换了聊天、项目或数据隔离，表格没改"
+          };
+        tried++;
+        let res = await Promise.resolve(api.executeSqlMutation(j.text, j.params)).catch((e) => ({
+          errors: [e && e.message || String(e)]
+        }));
+        res && Array.isArray(res.errors) && res.errors.length && failed.push(`${j.what}：${res.errors[0]}`);
+      }
+      if (!ticketValid(t0) || isoKey() !== iso0) return { table: "partial", why: "改表途中切换了聊天、项目或数据隔离，没法确认表格结果" };
+      let tables = cloneTables2(api.exportTableAsJson()), fr = readFacts2(tables, [fb]), kr = kb && kb.方式列 ? readKnowledge2(tables, [kb]) : null, fact = fr.facts.get(id), knows = kr ? kr.rows.filter((row2) => row2.fact === id) : [], factOk = !fr.problems.length && (!fact || fact.status === "unconfirmed" && !fact.claimed), knowOk = !kr || !kr.problems.length && !knows.length;
+      if (factOk && knowOk && !failed.length) return { table: "ok", why: "" };
+      let why = [
+        failed.join("；"),
+        fr.problems.length ? `事实表读不到：${fr.problems[0]}` : !factOk && "事实表这条还不是「未获得」",
+        kr && kr.problems.length ? `知情表读不到：${kr.problems[0]}` : !knowOk && `知情表还有${knows.map((k) => k.actor).join("、")}记着知道`
+      ].filter(Boolean).join("；");
+      return { table: factOk && knowOk || factOk || knowOk ? "partial" : "none", why: why || "没法确认表格结果" };
+    }
+    function restoreFact(id) {
+      act({ kind: "fact", target: id, value: "", note: "玩家解除作废：按表格判断" });
+      let c = compute();
+      return c ? effectiveFact2(id, c.snap, c.prog) : null;
+    }
+    function invalidate(reason = "") {
+      dirty = !0, reason && emit(reason);
+    }
+    function beginRound(source) {
+      return round = { ticket: ticket(), at: Date.now(), source }, round;
+    }
+    function ensureRound(source) {
+      return round && Date.now() - round.at <= ROUND_TTL_MS2 ? !1 : (beginRound(source), !0);
+    }
+    function roundState() {
+      return round ? Date.now() - round.at > ROUND_TTL_MS2 ? (round = null, { ok: !0 }) : ticketValid(round.ticket) ? { ok: !0 } : { ok: !1, reason: "本轮开始后切换了聊天、项目或推进方式" } : { ok: !0 };
+    }
+    function endRound() {
+      round = null;
+    }
+    function projection() {
+      let c = compute();
+      if (!c) return { content: "", reason: "不是线索模式" };
+      if (!c.snap.api) return { content: "", reason: c.snap.problems[0] };
+      if (c.prog.paused) return { content: "", reason: "主线已暂停（日常游玩）" };
+      if (!c.snap.enabled) return { content: "", reason: "主线开关未开启" };
+      let r = roundState();
+      if (!r.ok) return { content: "", reason: r.reason };
+      let prog = getProgress(), info = stayInfo(c), out = buildClueProjection2(c.state, c.snap, c.prog, data.settings(), {
+        pace: prog && prog.pace,
+        stay: stayText2(stayState2(prog && prog.stays, chatMessages(), info), "clue"),
+        plan: c.plan,
+        notReady: c.notReady,
+        // 跑团模式：从聊天记录算出各检定的结果（core/trpg.js）；不是跑团项目不算
+        checks: isTrpg(project()) ? trpgCheckResults(chatMessages()) : null
+      });
+      return isTrpg(project()) && (out = kpInject(out, {
+        state: c.state,
+        snap: c.snap,
+        prog: c.prog,
+        checks: trpgCheckResults(chatMessages()),
+        settings: data.settings(),
+        push: prog && prog.trpgKp && prog.trpgKp.push,
+        floors: aiFloors(),
+        timeline: trpgTimeline(prog)
+      })), {
+        ...out,
+        reason: out.content ? "" : "当前没有可演的线索场景",
+        lineOnly: !out.content && !!(out.used && out.used.recognize && out.used.recognize.length)
+      };
+    }
+    function trpgTimeline(prog) {
+      let p = project(), events2 = parseTimeline(p && p.setting && p.setting.text);
+      if (!events2.length) return null;
+      let c = compute(), now = c ? readGameClock(c.snap.tables, p.clue.bindings.time && p.clue.bindings.time.路径) : null;
+      return {
+        events: events2,
+        now,
+        clock: prog && prog.trpgKp && prog.trpgKp.clock,
+        onClock: (next) => Promise.resolve().then(() => {
+          let cur = getProgress() || {};
+          setProgress({ ...cur, trpgKp: { ...cur.trpgKp || {}, clock: next } }, "trpg-kp");
+        })
+      };
+    }
+    function stayInfo(cc) {
+      let c = cc || compute();
+      if (!c) return null;
+      let paused = !!c.prog.paused || c.snap.enabled === !1, p = project(), path = p && p.clue.bindings.scene && p.clue.bindings.scene.路径, cell = path ? readCell2(c.snap.tables || {}, path) : null;
+      return {
+        key: paused ? "" : c.state.focus.uid || "",
+        score: focusScore2(c.state, c.snap, c.prog),
+        paused,
+        scene: cell && cell.state === "ok" ? cellText2(cell.value) : ""
+      };
+    }
+    function record(via, out) {
+      lastInjected = {
+        at: Date.now(),
+        via,
+        chars: (out.content || "").length,
+        focus: out.used && out.used.focus || "",
+        facts: out.used ? out.used.facts.slice() : [],
+        leads: out.used ? out.used.leads.slice() : [],
+        reason: out.reason || "",
+        content: out.content || ""
+      };
+      let lineOnly = !out.content && out.lineOnly;
+      pendingCandidates = out.used && (out.content || lineOnly) && ((out.used.candidates || []).length || (out.used.scenes || []).length || out.used.recognize && out.used.recognize.length) ? makePending(lineOnly ? { ...out.used, candidates: [], scenes: [] } : out.used) : null;
+    }
+    function discardPendingCandidates() {
+      pendingCandidates && note("生成已中止，这一次给正文的线索记录作废"), pendingCandidates = null;
+    }
+    let pendingCandidates = null;
+    function makePending(used) {
+      return {
+        at: Date.now(),
+        focus: used.focus,
+        candidates: (used.candidates || []).map((c) => ({ fact: c.fact, record: c.record || "" })),
+        scenes: (used.scenes || []).map((s) => ({ uid: s.uid, entry: s.entry || "", place: s.place || "", focus: !!s.focus })),
+        lines: used.recognize ? { recognize: used.recognize, offer: used.offer || "" } : null,
+        ticket: round ? round.ticket : ticket()
+      };
+    }
+    function bindCandidatesToMessage(index) {
+      let pc = pendingCandidates;
+      if (pendingCandidates = null, !pc || Date.now() - pc.at > ROUND_TTL_MS2 || !ticketValid(pc.ticket)) return;
+      pc.lines && bindLineFloor(index, pc.lines);
+      let msg = chatMessages()[index];
+      if (!msg || msg.is_user) return;
+      let prog = getProgress();
+      if (!prog) return;
+      let list = (Array.isArray(prog.clueCandidates) ? prog.clueCandidates : []).filter(
+        (x) => !(x.i === index && x.swipe === (Number(msg.swipe_id) || 0))
+      ), offered = new Set(Array.isArray(prog.clueOffered) ? prog.clueOffered : []);
+      for (let c of pc.candidates || []) offered.add(c.fact);
+      list.push({
+        i: index,
+        swipe: Number(msg.swipe_id) || 0,
+        stamp: String(msg.send_date ?? ""),
+        focus: pc.focus,
+        candidates: pc.candidates,
+        scenes: pc.scenes
+      }), setProgress({ ...prog, clueCandidates: list.slice(-CANDIDATE_KEEP2), clueOffered: [...offered] }, "clue-candidates");
+    }
+    function auditFinalRequest(payload) {
+      let c = compute();
+      if (!c) return null;
+      let p = project(), text2 = requestToText2(payload);
+      if (!text2) return null;
+      let fresh = lastInjected && Date.now() - lastInjected.at < ROUND_TTL_MS2, out = fresh ? lastInjected.content : "", history = chatMessages().filter((m) => m && !m.is_user && !m.is_system).map((m) => String(m.mes || "")), isRevealed = (id) => effectiveFact2(id, c.snap, c.prog).confirmed, injectedFocus = fresh && out && lastInjected.focus || "", auditState = { ...c.state, focus: { ...c.state.focus, uid: injectedFocus } }, tablesText = Object.values(c.snap && c.snap.tables || {}).map((sh) => sh && Array.isArray(sh.content) ? sh.content.map((r) => Array.isArray(r) ? r.join(" ") : "").join(" ") : "").join(" "), result2 = auditRequest2(text2, p, auditState, out, { history, isRevealed, places: { setting: injectedSetting(p.setting), tables: tablesText } }), leaks = result2.leaks.filter((l) => l.level === "leak");
+      return lastAudit = { ...result2, at: Date.now(), via: lastInjected ? lastInjected.via : "" }, leaks.length && (note(
+        `最终请求核验：发现 ${leaks.length} 处不该出现的剧情（${leaks.slice(0, 3).map((l) => l.source).join("、")}${leaks.length > 3 ? "……" : ""}）`
+      ), toast("warning", `本轮请求里提前出现了还没开放的剧情（${leaks[0].source}）${leaks[0].where === "setting" ? "，在这个项目的设定里" : leaks[0].where === "table" ? "，在数据库表格里" : ""}。到诊断页看怎么处理。`)), result2.duplicated && (note(`最终请求核验：本轮线索内容出现了 ${result2.projectionCount} 次（重复注入）`), toast("warning", "本轮线索内容在正文请求里出现了不止一次，请检查是否同时启用了别的注入路径。")), emit("clue-audit"), result2;
+    }
+    function register() {
+      let api = acuApi2();
+      api && typeof api.registerTableUpdateCallback == "function" && !tableCallback && (tableCallback = () => {
+        lastTableUpdate = Date.now(), invalidate("clue-table"), project() && scheduleSync();
+      }, api.registerTableUpdateCallback(tableCallback), project() && scheduleSync());
+    }
+    function unregisterAll() {
+      let api = acuApi2();
+      try {
+        tableCallback && api && api.unregisterTableUpdateCallback && api.unregisterTableUpdateCallback(tableCallback);
+      } catch {
+      }
+      tableCallback = null;
+    }
+    function act(op) {
+      let p = project(), prog = getProgress();
+      if (!p || !prog) throw new Error("当前项目不是线索模式");
+      let ops = addClueOp2(clueOps(), chatMessages(), op);
+      setProgress({ ...prog, clue: ops }, "clue-op"), invalidate(), note(`人工操作：${opLabel(op)}`);
+    }
+    function opLabel(op) {
+      if (op.kind === "pause")
+        return op.target === "side" ? op.value ? "暂停全部支线" : "继续全部支线" : op.target === "mains" ? op.value ? "暂停全部主线" : "继续全部主线" : op.value ? "暂停剧情" : "继续剧情";
+      if (op.kind === "line")
+        return `${{ start: "开启", pause: "暂停", resume: "继续", done: "标记完成", abandon: "放弃", deny: "取消开启", skip: "跳过", "": "还原手动操作" }[String(op.value || "")] || op.value}线${op.target}${op.note ? `（${op.note}）` : ""}`;
+      let names2 = {
+        open: { force: "手动开放", block: "暂时停用", "": "开放改回按条件判断" },
+        done: { force: "手动完成", undo: "算作没完成", "": "完成改回按表格判断" },
+        skip: { true: "跳过", "": "取消跳过" },
+        focus: { true: "设为本轮场景", "": "取消我选的场景" },
+        fact: { confirmed: "确认线索", revoked: "作废线索", "": "线索改回按表格判断" }
+      }, label = names2[op.kind] && names2[op.kind][String(op.value ?? "")] || op.kind;
+      return op.kind === "focus" && op.value && op.target.startsWith(AWAY_PREFIX2) ? `主角离开${op.target.slice(AWAY_PREFIX2.length)}` : `${label} ${op.target}${op.note ? `（${op.note}）` : ""}`;
+    }
+    function sceneNow() {
+      let p = project(), path = p && p.clue.bindings.scene && p.clue.bindings.scene.路径, c = compute();
+      if (!path || !c) return "";
+      let cell = readCell2(c.snap.tables || {}, path);
+      return cell.state === "ok" ? cellText2(cell.value) : "";
+    }
+    function leaveScene(uid) {
+      uid && act({ kind: "focus", target: `${AWAY_PREFIX2}${uid}`, value: !0, sceneAt: sceneNow() });
+    }
+    function setPaused(paused, target = "main") {
+      act({ kind: "pause", target: target === "side" ? "side" : target === "mains" ? "mains" : "main", value: paused ? !0 : "" }), scheduleSync();
+    }
+    function setFocus(uid) {
+      let c = compute(), s = c && c.state.nodeStates.find((x) => x.node.uid === uid);
+      if (uid && (!s || s.status === "locked" || s.status === "done" || s.disabled))
+        throw new Error("这个节点当前不可进行；需要先满足开放条件，或用「人工开放」");
+      act(
+        uid ? { kind: "focus", target: uid, value: !0, sceneAt: sceneNow() } : { kind: "focus", target: c && c.prog.focus || "", value: "" }
+      );
+    }
+    function plotConflicts() {
+      let api = acuApi2();
+      try {
+        let name = api && typeof api.getCurrentPlotPreset == "function" ? api.getCurrentPlotPreset() : "";
+        return !name || typeof api.getPlotPresetDetails != "function" ? { preset: name || "", items: [] } : { preset: name, items: plotPresetConflicts2(api.getPlotPresetDetails(name)) };
+      } catch {
+        return { preset: "", items: [] };
+      }
+    }
+    function diagnose() {
+      let c = compute(), api = acuApi2();
+      return {
+        mode: project() ? "clue" : "outline",
+        api: !!api,
+        lastTableUpdate,
+        tableAgeMs: lastTableUpdate ? Date.now() - lastTableUpdate : null,
+        lastInjected,
+        lastAudit,
+        problems: c ? [...c.snap.problems, ...c.state.problems.filter((x) => !c.snap.problems.includes(x)), ...c.compiled.errors] : [],
+        enabled: c ? c.snap.enabled : null,
+        paused: c ? !!c.prog.paused : null,
+        plot: plotConflicts(),
+        focus: c ? c.state.focus : null,
+        events: events.slice()
+      };
+    }
+    return {
+      compute,
+      invalidate,
+      projection,
+      act,
+      opScope,
+      voidFact,
+      restoreFact,
+      setFocus,
+      setPaused,
+      lineAct,
+      opLabel,
+      lineToManual: toManual,
+      confirmTiers,
+      moveLine,
+      syncLines,
+      scheduleSync,
+      setLineBar: (fn) => {
+        lineBar = fn;
+      },
+      hideLineBar: () => {
+        lastToast = { key: "", at: 0 }, lineBar && lineBar(null);
+      },
+      stayInfo: () => stayInfo(),
+      register,
+      stop: unregisterAll,
+      diagnose,
+      auditFinalRequest,
+      record,
+      ensureRound,
+      endRound,
+      bindCandidatesToMessage,
+      discardPendingCandidates,
+      leaveScene,
+      lastInjected: () => lastInjected,
+      onChatChanged() {
+        hostWindow().clearTimeout(syncTimer), catalogMissing = !1, labelsWarned = !1, lastToast = { key: "", at: 0 }, lineBar && lineBar(null), lastStatus = null, lastTableUpdate = 0, pendingCandidates = null, round = null, invalidate();
+      }
+    };
+  }
+
+  // src/trpg/trpg-route.js
+  function viewIsTrpg(view) {
+    try {
+      return isTrpg(view && typeof view.project == "function" ? view.project() : null);
+    } catch {
+      return !1;
+    }
+  }
+  var outlineWord = (project) => isTrpg(project) ? "模组" : "大纲", settingWord = (project) => isTrpg(project) ? "公共设定" : "设定";
+  function routeActions(orig, copy) {
+    let out = {};
+    for (let key of /* @__PURE__ */ new Set([...Object.keys(orig), ...Object.keys(copy)]))
+      out[key] = (view, ...args) => ((viewIsTrpg(view) && copy[key] ? copy : orig)[key] || orig[key] || copy[key])(view, ...args);
+    return out;
+  }
+  var BOTH = /* @__PURE__ */ new Set(["stop", "setLineBar", "hideLineBar", "onChatChanged", "endRound", "discardPendingCandidates"]);
+  function routeRuntime(orig, copy, useCopy) {
+    let out = {};
+    for (let key of Object.keys(orig))
+      out[key] = (...args) => {
+        let cur = useCopy() ? copy : orig, other = cur === copy ? orig : copy;
+        return key === "register" ? (other.stop(), cur.register(...args)) : key === "invalidate" ? (other.invalidate(), cur.invalidate(...args)) : BOTH.has(key) ? (other[key](...args), cur[key](...args)) : cur[key](...args);
+      };
+    return out;
+  }
+
+  // src/trpg/trpg-changes.js
+  function trpgChangesText(c) {
+    if (!c || !c.compiled || !c.state) return "";
+    let states = {};
+    for (let [id, s] of c.state.stageStates) s && s.done && (states[id] = "done");
+    return changesText(c.compiled.units, states);
   }
 
   // src/host/llm.js
@@ -8167,6 +10731,1265 @@ ${mark}` } : m) : [{ role: "system", content: mark }, ...messages];
     }
     throw new Error("当前酒馆不支持后台生成，请改用独立接口");
   }
+
+  // src/ui/styles.js
+  var CSS = `
+.pi-root{--pi-accent:#E8507B;--pi-accent-soft:#FEF0F3;--pi-dark:#1E1E2E;--pi-bg:#FFFFFF;--pi-surf:#F3F4F7;--pi-fill:#F5F6F8;--pi-fill2:#ECEDF1;--pi-line:#ECECF1;--pi-rule:#C9CAD3;--pi-txt:#1E1E2E;--pi-txt2:#7C7C8A;--pi-ok:#2E9E6A;--pi-ok-soft:#E9F7F0;--pi-warn:#C98A12;--pi-warn-soft:#FDF5E4;--pi-danger:#D64545;--pi-danger-soft:#FDEDED;--pi-add:#E9F7F0;--pi-del:#FDEDED;--pi-on-dark:#FFFFFF;--pi-knob:#FFFFFF;--pi-user-bg:#1E1E2E;--pi-user-txt:#FFFFFF;--pi-user-txt2:#B4B4C0;--pi-user-hover:#34344A;--pi-r:14px;--pi-r-in:10px;--pi-shadow:0 8px 32px rgba(0,0,0,.15);--pi-font:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei","PingFang SC",sans-serif;--pi-mono:Consolas,"JetBrains Mono",monospace;font-family:var(--pi-font);color:var(--pi-txt);font-size:14px;line-height:1.55}
+.pi-root.is-night{--pi-accent:#F0688F;--pi-accent-soft:#3A2230;--pi-dark:#E6E6EE;--pi-bg:#1F1F2A;--pi-surf:#16161F;--pi-fill:#282835;--pi-fill2:#313140;--pi-line:#2C2C38;--pi-rule:#4A4A5A;--pi-txt:#E6E6EE;--pi-txt2:#9A9AA8;--pi-ok:#4CC08A;--pi-ok-soft:#1C3329;--pi-warn:#E0A63A;--pi-warn-soft:#3A3020;--pi-danger:#EF6B6B;--pi-danger-soft:#3D2224;--pi-add:#1C3329;--pi-del:#3D2224;--pi-on-dark:#16161F;--pi-knob:#F4F4F8;--pi-user-bg:#3A3A4C;--pi-user-txt:#E6E6EE;--pi-user-txt2:#A8A8B6;--pi-user-hover:#4A4A5E;--pi-shadow:0 8px 32px rgba(0,0,0,.5);color-scheme:dark}
+.pi-root *,.pi-root *::before,.pi-root *::after{box-sizing:border-box;text-shadow:none}
+.pi-root ::-webkit-scrollbar{display:none}
+.pi-root [hidden]{display:none!important}
+.pi-root input[type=checkbox]{-webkit-appearance:none;appearance:none;display:inline-grid;place-content:center;width:16px;height:16px;margin:0;padding:0;border:0;outline:0;border-radius:4px;background:var(--pi-fill2);box-shadow:inset 0 0 0 1.5px var(--pi-rule);filter:none;transform:none;overflow:hidden;flex-shrink:0;cursor:pointer}
+.pi-root input[type=checkbox]::before{content:"";width:10px;height:10px;transform:scale(0);transition:transform .12s;background:var(--pi-knob);box-shadow:none;clip-path:polygon(14% 44%,0 65%,50% 100%,100% 16%,80% 0%,43% 62%)}
+.pi-root input[type=checkbox]:checked{background:var(--pi-accent);box-shadow:none}
+.pi-root input[type=checkbox]:checked::before{transform:scale(1)}
+.pi-root input[type=checkbox]:disabled{opacity:.45;cursor:not-allowed}
+.pi-root input[type=checkbox]:focus-visible{box-shadow:0 0 0 2px var(--pi-accent-soft),inset 0 0 0 1.5px var(--pi-accent)}
+.pi-overlay{position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;z-index:2147483643;display:flex;align-items:center;justify-content:center;background:rgba(20,20,30,.28)}
+.pi-panel{position:relative;width:880px;max-width:96vw;height:88vh;max-height:88vh;background:var(--pi-surf);border-radius:var(--pi-r);box-shadow:var(--pi-shadow);display:grid;grid-template-columns:220px 1fr;overflow:hidden}
+.pi-scrim{display:none}
+.pi-side{background:var(--pi-bg);display:flex;flex-direction:column;min-height:0}
+.pi-side-hd{padding:14px 14px 8px;font-weight:700;font-size:15px;color:var(--pi-dark);display:flex;align-items:center;gap:6px}
+.pi-side-hd small{font-weight:400;color:var(--pi-txt2);font-size:11px}
+.pi-side-hd .pi-spacer{flex:1}
+.pi-icon-btn.is-on{color:var(--pi-accent);background:var(--pi-accent-soft)}
+.pi-plist{flex:1;overflow-y:auto;padding:0 8px;scrollbar-width:none}
+.pi-group{margin:6px 0}
+.pi-group-hd{display:flex;align-items:center;gap:4px;width:100%;padding:4px 6px;border:0;background:none;color:var(--pi-txt2);font-size:12px;cursor:pointer;font-family:inherit}
+.pi-group-hd small{margin-left:auto;font-size:11px}
+.pi-group.is-collapsed .pi-pitem{display:none}
+.pi-plist.is-searching .pi-group.is-collapsed .pi-pitem{display:flex}
+.pi-psearch{position:relative;margin:0 8px 6px}
+.pi-psearch.is-wb{margin:0 0 8px}
+.pi-psearch.is-wb .pi-inp{padding-right:36px}
+.pi-psearch .pi-search-x{position:absolute;right:4px;top:50%;transform:translateY(-50%)}
+.pi-psearch>svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--pi-txt2);pointer-events:none}
+.pi-psearch .pi-inp{padding-left:30px}
+.pi-pitem{display:flex;align-items:center;gap:6px;width:100%;padding:7px 10px;border:0;border-radius:var(--pi-r-in);background:none;color:var(--pi-txt);font-size:13px;text-align:left;cursor:pointer;font-family:inherit;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+.pi-pitem:hover{background:var(--pi-surf)}
+.pi-pitem.is-sel{background:var(--pi-accent-soft);color:var(--pi-accent);font-weight:600}
+.pi-pitem .pi-dot{width:7px;height:7px;border-radius:50%;background:var(--pi-accent);flex-shrink:0}
+.pi-pitem .pi-pname{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pi-side-ft{padding:8px;display:flex;flex-direction:column;gap:4px}
+.pi-main{display:flex;flex-direction:column;min-width:0;min-height:0}
+.pi-top{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:8px;padding:10px 14px;background:var(--pi-bg)}
+.pi-top-lead{grid-column:1;display:flex;align-items:center;gap:4px;min-width:0}
+.pi-top-title{font-weight:700;color:var(--pi-dark);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pi-top-end{grid-column:3;justify-self:end;display:flex;align-items:center;gap:6px}
+.pi-icon-btn{width:28px;height:28px;border:0;border-radius:8px;background:none;color:var(--pi-txt2);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;padding:0}
+.pi-icon-btn:hover{color:var(--pi-dark);background:var(--pi-surf)}
+.pi-icon-btn.is-danger:hover{color:var(--pi-danger);background:var(--pi-danger-soft)}
+.pi-menu{display:none}
+.pi-tabs{grid-column:2;display:grid;grid-auto-flow:column;grid-auto-columns:64px;gap:4px}
+.pi-tab{text-align:center;padding:6px 0;border:0;border-radius:20px;background:none;color:var(--pi-txt2);font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:inherit}
+.pi-tab:hover{color:var(--pi-dark)}
+.pi-tab.is-sel{background:var(--pi-dark);color:var(--pi-on-dark)}
+.pi-close{width:30px;height:30px;border:0;border-radius:50%;background:var(--pi-surf);color:var(--pi-txt2);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.pi-close:hover{color:var(--pi-dark)}
+.pi-body{flex:1;overflow-y:auto;padding:14px;scrollbar-width:none;min-height:0}
+.pi-body.is-chat{display:flex;flex-direction:column;overflow:hidden}
+.pi-card{background:var(--pi-bg);border-radius:var(--pi-r);padding:14px 16px;margin-bottom:10px}
+.pi-card h3{margin:0 0 10px;font-size:14px;font-weight:600;color:var(--pi-dark);display:flex;align-items:center;gap:8px;min-height:26px}
+.pi-card h3 .pi-meta{font-size:12px;font-weight:400;color:var(--pi-txt2)}
+.pi-card h3 .pi-spacer{flex:1}
+.pi-hint{font-size:12px;color:var(--pi-txt2);margin:4px 0}
+.pi-hint.is-warn{color:var(--pi-warn);font-weight:600}
+.pi-empty{text-align:center;color:var(--pi-txt2);padding:40px 10px;font-size:13px}
+.pi-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.pi-row>.pi-grow{flex:1;min-width:0}
+.pi-field{display:flex;flex-direction:column;gap:3px;margin-bottom:8px;min-width:0}
+.pi-field>span{font-size:12px;color:var(--pi-txt2);font-weight:500}
+.pi-row.is-top{align-items:flex-start}
+.pi-row.is-todo{flex-wrap:nowrap;margin:8px 0}
+.pi-row.is-todo>.pi-hint{flex:1;min-width:0;margin:0}
+.pi-row.is-todo>.pi-btn{flex:none;white-space:nowrap}
+.pi-inline{display:flex;gap:8px;align-items:stretch}
+.pi-inline>.pi-inp,.pi-inline>.pi-sel{flex:1;min-width:0}
+.pi-inline>.pi-btn{min-height:0;flex-shrink:0;width:96px}
+.pi-inline>.pi-grow{flex:1;min-width:0;display:flex}
+.pi-inline>.pi-grow>.pi-inp,.pi-inline>.pi-grow>.pi-sel{flex:1;min-width:0}
+.pi-equal,.pi-tools{display:grid;grid-template-columns:repeat(var(--pi-cols,3),minmax(0,1fr));gap:8px;align-items:stretch}
+.pi-equal>.pi-btn,.pi-tools>.pi-btn{width:100%;padding:0 6px;white-space:normal;line-height:1.3}
+.pi-equal.is-one,.pi-tools.is-c1{--pi-cols:1}
+.pi-tools.is-c2{--pi-cols:2}
+.pi-tools.is-c3{--pi-cols:3}
+.pi-tools.is-c3>.pi-btn{white-space:nowrap}
+@media(max-width:420px){.pi-tools.is-c3>.pi-btn{padding:0 2px}}
+.pi-tools.is-c4{--pi-cols:4}
+.pi-tools{margin:2px 0 10px}
+.pi-tools.is-end{margin:10px 0 0}
+.pi-tools>.pi-check{grid-column:1/-1;padding:0}
+.pi-pair{display:grid;grid-template-columns:repeat(var(--pi-cols,2),minmax(0,1fr));gap:0 10px}
+.pi-pair.is-c3{--pi-cols:3}
+.pi-pair.is-c4{--pi-cols:4}
+.pi-pair .pi-inp,.pi-pair .pi-sel{width:100%}
+.pi-extra{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) 28px;gap:0 8px;align-items:end}
+.pi-extra .pi-inp,.pi-extra .pi-sel{width:100%}
+.pi-extra .pi-field{margin-bottom:8px}
+.pi-extra .pi-icon-btn{margin-bottom:8px;align-self:end;height:36px}
+.pi-presets{display:flex;flex-direction:column;gap:6px;margin-bottom:8px}
+.pi-preset-pick{flex:1;min-width:0;display:flex;align-items:center;gap:8px;padding:4px 0;border:0;background:none;color:inherit;cursor:pointer;text-align:left;font-family:inherit}
+.pi-preset:hover{background:var(--pi-fill2)}
+.pi-preset{display:flex;align-items:center;gap:8px;padding:4px 6px 4px 12px;background:var(--pi-fill);border-radius:var(--pi-r-in);min-width:0}
+.pi-preset-name{font-weight:600;font-size:13px;flex-shrink:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pi-preset-model{flex:1;min-width:0;font-size:12px;color:var(--pi-txt2);font-family:var(--pi-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pi-wb-sec{margin-top:8px}
+.pi-wb-sec-hd{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--pi-txt2);padding:4px 0;margin-bottom:2px}
+.pi-wb-sec-hd small{font-weight:400}
+.pi-wb-bulk{margin-left:auto;display:flex;gap:4px}
+.pi-wb-bulk>.pi-btn{min-width:96px}
+.pi-wb-sub{margin:4px 0 0 4px;padding-left:10px;border-left:2px solid var(--pi-line)}
+.pi-wb-sub-hd{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--pi-txt2);padding:4px 0 2px}
+.pi-wb-sub-hd small{font-weight:400}
+.pi-wb-sub-hd.is-fold{cursor:pointer}
+.pi-wb-item{min-width:0}
+.pi-wb-name{flex:1;min-width:0;display:flex;align-items:center;gap:4px;padding:0;border:0;background:none;color:inherit;font:inherit;cursor:pointer;text-align:left}
+.pi-wb-name .pi-wb-title{flex:1}
+.pi-wb-edit{margin:4px 0 10px 23px;padding:12px;background:var(--pi-fill);border-radius:var(--pi-r-in)}
+.pi-wb-memo{display:inline-flex;align-items:center;gap:4px;font-weight:500;flex-shrink:0}
+.pi-wb-memo{margin-left:auto;font-size:12px;color:var(--pi-txt2)}
+.pi-wb-memo .pi-inp.is-num{width:52px;height:26px;padding:2px 6px;font-size:12px;text-align:center}
+.pi-wb-sub-hd>input[type=checkbox],.pi-wb-sub-hd>.pi-wb-pad{width:15px;height:15px;margin:0;flex-shrink:0;accent-color:var(--pi-accent)}
+.pi-fix{display:flex;align-items:flex-start;gap:8px;padding:4px 0;font-size:13px}
+.pi-fix-text{flex:1;min-width:0}
+.pi-fix-acts{display:grid;grid-template-columns:repeat(3,56px);gap:4px;flex-shrink:0}
+.pi-fix-acts>.pi-btn{width:100%;padding:0}
+.pi-ref-book+.pi-ref-book{margin-top:12px;padding-top:8px;border-top:1px solid var(--pi-line)}
+.pi-ref-top{display:flex;align-items:center;gap:4px;margin:0 0 6px}
+.pi-pace-cell.pi-ol-sw{margin:0 0 10px;padding:6px 10px;border-radius:var(--pi-r-in);font-size:13px;font-weight:400;color:var(--pi-txt)}
+.pi-ol-row{gap:6px}
+.pi-ol-row .pi-meta{min-width:44px;text-align:right}
+.pi-ref-list.is-off{opacity:.45;pointer-events:none}
+.pi-ol-foot{display:flex;justify-content:space-between;gap:8px;border-top:1px solid var(--pi-line);padding-top:8px;margin-top:8px}
+.pi-ref-top .pi-spacer{flex:1}
+.pi-chip:disabled{opacity:.45;cursor:not-allowed}
+.pi-wb-field{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pi-wb-row{display:flex;align-items:center;gap:8px;padding:3px 0;min-width:0}
+.pi-wb-row input{width:15px;height:15px;margin:0;accent-color:var(--pi-accent);flex-shrink:0;cursor:pointer}
+.pi-switch{position:relative;flex-shrink:0;width:38px;height:22px;padding:0;border:0;border-radius:11px;background:var(--pi-fill2);cursor:pointer;transition:background .15s}
+.pi-switch::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:var(--pi-rule);transition:left .15s}
+.pi-switch.is-on{background:var(--pi-accent)}
+.pi-switch.is-on::after{left:19px;background:var(--pi-knob)}
+.pi-switch:disabled{opacity:.6;cursor:wait}
+.pi-wb-title{flex:1;min-width:0;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pi-wb-row.is-off .pi-wb-title{color:var(--pi-txt2)}
+.pi-set-row{display:flex;align-items:center;gap:8px;margin-top:6px;padding-top:8px;border-top:1px solid var(--pi-line);font-size:12px;color:var(--pi-txt2);font-weight:500}
+.pi-set-row .pi-spacer{flex:1}
+.pi-set-sub{margin-top:6px}
+.pi-book{border-radius:var(--pi-r-in);margin:0 -6px}
+.pi-book+.pi-book{margin-top:2px}
+.pi-book-hd{display:flex;align-items:center;gap:8px;padding:9px 8px;border-radius:var(--pi-r-in);cursor:pointer}
+.pi-book-hd:hover{background:var(--pi-fill)}
+.pi-book-hd .pi-etitle{flex:1;min-width:0;font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pi-book.is-open>.pi-book-hd{background:var(--pi-fill)}
+.pi-book-bd{padding:6px 8px 10px}
+.pi-meta{font-size:12px;color:var(--pi-txt2);white-space:nowrap}
+.pi-tbar{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
+.pi-tbtn{display:inline-flex;align-items:center;gap:5px;height:30px;padding:0 11px 0 9px;border:0;border-radius:16px;background:var(--pi-fill);color:var(--pi-dark);font:inherit;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap}
+.pi-tbtn svg{width:14px;height:14px;flex-shrink:0;color:var(--pi-txt2)}
+.pi-tbtn:hover:not(:disabled){background:var(--pi-fill2)}
+.pi-tbtn.is-danger,.pi-tbtn.is-danger svg{color:var(--pi-danger)}
+.pi-tbtn.is-more{padding:0 9px;margin-left:auto}
+.pi-tbtn:disabled{opacity:.4;cursor:not-allowed}
+.pi-wb-info{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:2px 0 8px}
+.pi-wb-info.is-pick{gap:2px}
+.pi-wb-info .pi-spacer{flex:1}
+.pi-wb-tokens{display:contents}
+.pi-wb-count{font-size:12px;font-weight:600;color:var(--pi-dark)}
+.pi-menu-list{display:flex;flex-direction:column;gap:2px;max-height:360px;overflow-y:auto;margin:0 -6px}
+.pi-menu-item{display:flex;align-items:center;gap:10px;width:100%;padding:10px 10px;border:0;border-radius:var(--pi-r-in);background:none;color:var(--pi-dark);font:inherit;font-size:13px;text-align:left;cursor:pointer}
+.pi-menu-item:hover{background:var(--pi-fill)}
+.pi-menu-item svg{width:16px;height:16px;color:var(--pi-txt2);flex-shrink:0}
+.pi-menu-item.is-danger,.pi-menu-item.is-danger svg{color:var(--pi-danger)}
+.pi-menu-item>span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+label.pi-wb-row{cursor:pointer}
+.pi-acts{margin-top:12px}
+.pi-seg{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:2px;padding:3px;background:var(--pi-surf);border-radius:20px;margin-bottom:6px}
+.pi-seg-btn{padding:5px 6px;border:0;border-radius:16px;background:none;color:var(--pi-txt2);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pi-seg-btn.is-sel{background:var(--pi-bg);color:var(--pi-dark);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.pi-inp,.pi-sel{height:36px}
+.pi-inp,.pi-sel,.pi-ta{width:100%;padding:7px 11px;border:1.5px solid transparent;border-radius:var(--pi-r-in);font-size:13px;color:var(--pi-txt);background:var(--pi-fill);outline:none;font-family:inherit}
+.pi-inp:focus,.pi-sel:focus,.pi-ta:focus{border-color:var(--pi-accent);background:var(--pi-bg)}
+.pi-inp.is-num{width:84px}
+.pi-ta{resize:vertical;min-height:80px;line-height:1.6}
+.pi-ta.is-mono{font-family:var(--pi-mono);font-size:12px;line-height:1.5}
+.pi-ta.is-tall{min-height:360px}
+.pi-btn{min-height:32px;padding:0 14px;border:0;border-radius:20px;background:var(--pi-fill);color:var(--pi-dark);font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:5px;white-space:nowrap;font-family:inherit}
+.pi-btn:hover{background:var(--pi-fill2)}
+.pi-btn:active{transform:scale(.97)}
+.pi-btn:disabled{opacity:.45;cursor:not-allowed;transform:none}
+.pi-btn.is-primary{background:var(--pi-dark);color:var(--pi-on-dark)}
+.pi-btn.is-primary:hover{opacity:.86}
+.pi-btn.is-danger{color:var(--pi-danger);background:var(--pi-danger-soft)}
+.pi-btn.is-danger:hover{background:var(--pi-danger-soft);opacity:.8}
+.pi-btn.is-ghost{background:none;color:var(--pi-txt2)}
+.pi-btn.is-ghost:hover{color:var(--pi-dark);background:var(--pi-fill)}
+.pi-btn.is-ghost.is-danger{color:var(--pi-danger)}
+.pi-btn.is-sm{min-height:26px;padding:0 10px;font-size:12px}
+.pi-btn.is-block{width:100%;justify-content:flex-start}
+.pi-badge{display:inline-flex;align-items:center;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:600;background:var(--pi-fill);color:var(--pi-txt2);white-space:nowrap}
+.pi-badge.is-accent{background:var(--pi-accent-soft);color:var(--pi-accent)}
+.pi-badge.is-ok{background:var(--pi-ok-soft);color:var(--pi-ok)}
+.pi-badge.is-warn{background:var(--pi-warn-soft);color:var(--pi-warn)}
+.pi-badge.is-danger{background:var(--pi-danger-soft);color:var(--pi-danger)}
+.pi-badge.is-dark{background:var(--pi-dark);color:var(--pi-on-dark)}
+.pi-check{display:flex;align-items:flex-start;gap:8px;padding:4px 0;font-size:13px;cursor:pointer}
+.pi-check input{width:15px;height:15px;margin-top:3px;accent-color:var(--pi-accent);flex-shrink:0;cursor:pointer}
+
+
+
+
+
+
+/* 线索标签弹窗：开头一段白话说明、每条线索先说清是什么（雾港实测：第一次看到弹窗不知道在填什么）。 */
+
+
+
+
+
+
+
+/* 折叠的箭头（用户 2026-11-08：浏览器自带的小三角不好看）：所有 <summary> 换成「»」，展开时转 90°。 */
+
+
+
+
+
+
+@media (prefers-reduced-motion:reduce){.pi-root summary::before{transition:none}}
+/* 标黄的说明：前面一个黄色圆圈问号（代替「·」）。 */
+
+.pi-note-line{margin:4px 0;font-size:12px;color:var(--pi-txt2);line-height:1.5}
+.pi-line-row{padding:8px 0;border-top:1px solid var(--pi-line)}
+.pi-line-row:first-of-type{border-top:0}
+/* 第四批：剧情线两层，按钮右边对齐；菜单分组；需要处理里的标签提示 */
+.pi-line-head{display:flex;align-items:flex-start;gap:8px}
+.pi-line-head .pi-line-name{flex:1;min-width:0;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.45;padding-top:3px;font-weight:500}
+.pi-line-acts{display:flex;align-items:center;gap:4px;flex:none}
+.pi-line-acts>.pi-btn{width:auto;min-width:56px}
+.pi-line-tags{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:2px 0}
+.pi-line-menu-g{display:flex;flex-direction:column}
+.pi-line-menu-g+.pi-line-menu-g{border-top:1px solid var(--pi-line);margin-top:4px;padding-top:4px}
+.pi-line-menu .pi-btn.is-danger{color:var(--pi-danger)}
+.pi-labels-todo{gap:8px;align-items:center;flex-wrap:nowrap}
+.pi-labels-todo .pi-hint{flex:1;min-width:0;margin:0}
+.pi-labels-todo .pi-btn{width:auto;flex:none}
+.pi-line-row .pi-row{flex-wrap:wrap;gap:6px}
+.pi-line-opts{flex-wrap:wrap;gap:6px 16px;margin:4px 0 6px}
+.pi-line-opts .pi-check{align-items:center;gap:6px}
+.pi-line-opts .pi-check>span{white-space:nowrap}
+.pi-line-opts .pi-sel{width:auto;min-width:0}
+.pi-note-line::before{content:"备注：";font-weight:600}
+
+
+
+
+
+.pi-check.is-off{color:var(--pi-txt2);text-decoration:line-through}
+.pi-entry{border-radius:var(--pi-r-in);margin-bottom:6px;background:var(--pi-fill)}
+:is(.pi-entry,.pi-node,.pi-wb-edit) :is(.pi-inp,.pi-sel,.pi-ta,.pi-pre,.pi-badge,.pi-btn:not(.is-primary):not(.is-ghost):not(.is-danger)){background:var(--pi-bg)}
+:is(.pi-entry,.pi-node,.pi-wb-edit) .pi-btn:not(.is-primary):not(.is-ghost):not(.is-danger):hover{background:var(--pi-fill2)}
+.pi-entry.is-off{opacity:.55}
+.pi-entry-hd{display:flex;align-items:center;gap:8px;padding:9px 12px;cursor:pointer}
+.pi-entry-hd .pi-meta{font-size:12px;color:var(--pi-txt2);white-space:nowrap}
+.pi-entry-hd .pi-pos{font-size:11px;font-weight:600;color:var(--pi-txt2);background:var(--pi-bg);border-radius:6px;padding:1px 6px;white-space:nowrap}
+.pi-entry-hd .pi-etitle{flex:1;min-width:0;font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pi-entry-bd{padding:2px 12px 12px}
+.pi-pre{white-space:pre-wrap;word-break:break-word;font-family:var(--pi-mono);font-size:12px;line-height:1.5;background:var(--pi-surf);border-radius:var(--pi-r-in);padding:8px 10px;max-height:320px;overflow:auto;margin:6px 0 0}
+.pi-tl-vol{font-size:12px;font-weight:600;color:var(--pi-txt2);margin:12px 0 4px}
+.pi-tl-vol:first-child{margin-top:4px}
+.pi-tl{position:relative}
+.pi-tl-item{position:relative;padding:0 0 4px 26px}
+.pi-tl-item::before{content:"";position:absolute;left:8px;top:22px;bottom:-4px;border-left:2px dashed var(--pi-rule)}
+.pi-tl-item:last-child::before{display:none}
+.pi-tl-item.is-done::before{border-left-style:solid;border-left-color:var(--pi-txt2)}
+.pi-tl-dot{position:absolute;left:1px;top:9px;width:16px;height:16px;border-radius:50%;border:3px solid var(--pi-rule);background:var(--pi-bg)}
+.pi-tl-item.is-done .pi-tl-dot{border-color:var(--pi-txt2);background:var(--pi-txt2)}
+.pi-tl-item.is-next .pi-tl-dot{border-color:var(--pi-dark)}
+.pi-tl-item.is-active .pi-tl-dot{border-color:var(--pi-accent);box-shadow:0 0 0 4px var(--pi-accent-soft)}
+.pi-tl-box{border-radius:var(--pi-r-in);padding:0 4px 0 10px}
+.pi-tl-item.is-active .pi-tl-box{background:var(--pi-fill);padding-bottom:8px}
+.pi-tl-hd{display:flex;align-items:center;gap:8px;min-height:34px}
+.pi-tl-name{flex:1;min-width:0;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pi-tl-item.is-done .pi-tl-name{color:var(--pi-txt2)}
+.pi-tl-item.is-active .pi-tl-name{font-weight:600}
+.pi-tl-state{font-size:12px;color:var(--pi-txt2);white-space:nowrap}
+.pi-tl-item.is-active .pi-tl-state{color:var(--pi-accent);font-weight:600}
+.pi-tl-nodes{padding:0 4px 0 2px}
+.pi-tl-nodes .pi-badge{background:var(--pi-bg)}
+.pi-tl-nodes .pi-hint{margin:6px 0 2px}
+.pi-tree{display:grid;grid-template-columns:220px 1fr;gap:10px;align-items:start}
+.pi-tree-list{background:var(--pi-bg);border-radius:var(--pi-r);padding:8px;max-height:calc(88vh - 140px);overflow-y:auto;scrollbar-width:none}
+.pi-titem{display:flex;align-items:center;gap:6px;width:100%;padding:5px 8px;border:0;border-radius:8px;background:none;text-align:left;font-size:13px;color:var(--pi-txt);cursor:pointer;font-family:inherit}
+.pi-titem:hover{background:var(--pi-surf)}
+.pi-titem.is-sel{background:var(--pi-accent-soft);color:var(--pi-accent);font-weight:600}
+.pi-titem.is-vol{font-weight:700;color:var(--pi-dark)}
+.pi-titem.is-stage{padding-left:18px}
+.pi-titem .pi-pname{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pi-node{background:var(--pi-fill);border-radius:var(--pi-r-in);padding:10px 12px;margin-bottom:8px}
+.pi-pace{display:flex;align-items:center;gap:10px;margin:0 0 10px}
+.pi-pace-label{font-size:12px;color:var(--pi-txt2);font-weight:500;flex-shrink:0}
+.pi-pace .pi-seg{flex:1;margin:0}
+.pi-node-seg{margin:0 0 10px}
+.pi-node-hd{display:flex;align-items:center;gap:6px;margin-bottom:6px}
+.pi-node-hd .pi-grow{flex:1}
+.pi-node-hd>.pi-btn{min-width:60px}
+.pi-chat{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding:4px 2px 10px;scrollbar-width:none;min-height:0}
+.pi-msg{max-width:86%;padding:9px 12px;border-radius:var(--pi-r);background:var(--pi-bg);font-size:13px;line-height:1.65;word-break:break-word}
+.pi-md>:first-child{margin-top:0}
+.pi-md>:last-child{margin-bottom:0}
+.pi-md p{margin:0 0 8px}
+.pi-md-h{font-weight:700;margin:12px 0 6px;line-height:1.4}
+.pi-md-h.is-h1{font-size:16px}
+.pi-md-h.is-h2{font-size:15px}
+.pi-md-h.is-h3,.pi-md-h.is-h4{font-size:14px}
+.pi-md ul,.pi-md ol{margin:0 0 8px;padding-left:20px}
+.pi-md li.is-sub{margin-left:16px}
+.pi-md blockquote{margin:0 0 8px;padding:2px 0 2px 10px;border-left:3px solid var(--pi-line);color:var(--pi-txt2)}
+.pi-md hr{border:0;border-top:1px solid var(--pi-line);margin:10px 0}
+.pi-md code{font-family:var(--pi-mono);font-size:12px;line-height:inherit;color:var(--pi-txt);background:var(--pi-fill2);border:0;border-radius:4px;padding:1px 4px}
+.pi-md .pi-pre{margin:0 0 8px}
+.pi-md-table{overflow-x:auto;margin:0 0 8px}
+.pi-md table{border-collapse:collapse;font-size:12px}
+.pi-md th,.pi-md td{border:1px solid var(--pi-line);padding:4px 8px;text-align:left}
+.pi-md th{background:var(--pi-surf)}
+.pi-msg.is-user .pi-md code,.pi-msg.is-user .pi-md th,.pi-msg.is-user .pi-md .pi-pre{background:var(--pi-user-hover);color:var(--pi-user-txt)}
+.pi-msg.is-user .pi-md blockquote{color:var(--pi-user-txt2);border-color:var(--pi-user-hover)}
+.pi-msg.is-user .pi-md th,.pi-msg.is-user .pi-md td{border-color:var(--pi-user-hover)}
+.pi-msg.is-user{align-self:flex-end;background:var(--pi-user-bg);color:var(--pi-user-txt)}
+.pi-msg.is-ai{align-self:flex-start}
+.pi-msg-tools{display:flex;align-items:center;gap:2px;margin-top:6px;flex-wrap:nowrap}
+.pi-msg-tools .pi-btn{width:auto;white-space:nowrap}
+.pi-msg-gap{flex:1}
+.pi-msg-more{width:28px;height:26px;font-size:16px;line-height:1;color:var(--pi-txt2)}
+.pi-msg.is-user .pi-btn.is-ghost{color:var(--pi-user-txt2)}
+.pi-msg.is-user .pi-btn.is-ghost:hover{color:var(--pi-user-txt);background:var(--pi-user-hover)}
+.pi-msg-fold{align-self:center;font-size:12px;color:var(--pi-txt2);background:var(--pi-bg);border-radius:20px;padding:4px 12px}
+.pi-compose{display:flex;gap:8px;align-items:center;padding-top:8px}
+.pi-compose .pi-ta{flex:1;height:44px;min-height:44px;resize:none;padding:10px 12px;line-height:1.5;background:var(--pi-bg)}
+.pi-send{width:40px;height:40px;border:0;border-radius:50%;background:var(--pi-dark);color:var(--pi-on-dark);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0}
+.pi-send:hover{opacity:.86}
+.pi-send:active{transform:scale(.95)}
+.pi-send:disabled{opacity:.45;cursor:not-allowed;transform:none}
+.pi-refs{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
+.pi-chip{display:inline-flex;align-items:center;gap:4px;padding:4px 11px;border:0;border-radius:20px;font-size:12px;cursor:pointer;background:var(--pi-bg);color:var(--pi-txt2);font-family:inherit}
+.pi-card .pi-chip{background:var(--pi-fill)}
+.pi-compose-side{width:40px;height:40px;border:0;border-radius:50%;background:var(--pi-bg);color:var(--pi-txt2);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0}
+.pi-compose-side:hover{color:var(--pi-danger);background:var(--pi-danger-soft)}
+.pi-block-chip{padding:0 4px 0 0;gap:0}
+.pi-block-chip>button{border:0;background:none;color:inherit;font:inherit;cursor:pointer;padding:3px 4px 3px 10px}
+.pi-block-chip>.pi-block-del{padding:3px 4px;display:inline-flex;align-items:center;opacity:.6}
+.pi-block-chip>.pi-block-del svg{width:10px;height:10px}
+.pi-block-chip>.pi-block-del:hover{opacity:1;color:var(--pi-danger)}
+.pi-block-chip>.pi-block-eye{padding:3px 2px;display:inline-flex;align-items:center;opacity:.6}
+.pi-block-chip>.pi-block-eye svg{width:12px;height:12px}
+.pi-block-chip>.pi-block-eye:hover{opacity:1}
+.pi-block-chip.is-mute{color:var(--pi-rule)}
+.pi-block-chip.is-mute>button:first-child{text-decoration:line-through}
+.pi-chip.is-on{color:var(--pi-accent);background:var(--pi-accent-soft)}
+.pi-diff{font-family:var(--pi-mono);font-size:12px;line-height:1.5;white-space:pre-wrap;word-break:break-word;background:var(--pi-surf);border-radius:var(--pi-r-in);padding:6px 0;max-height:360px;overflow:auto}
+.pi-diff div{padding:0 10px}
+.pi-diff .is-add{background:var(--pi-add)}
+.pi-diff .is-del{background:var(--pi-del);text-decoration:line-through;color:var(--pi-txt2)}
+.pi-toc{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px}
+.pi-files{display:flex;flex-direction:column;gap:6px;font-size:12px}.pi-file{background:var(--pi-fill);border-radius:var(--pi-r-in);padding:8px 10px}.pi-file-name{font-weight:600;overflow-wrap:anywhere;margin-bottom:2px}.pi-file-row{display:flex;align-items:center;gap:4px;min-height:28px}.pi-file-k{color:var(--pi-txt2);flex:none;width:5.5em}.pi-file-row>.pi-meta{flex:1 1 auto;min-width:0}.pi-file-row .pi-btn{flex:none;white-space:nowrap;padding:0 8px}
+
+
+
+
+
+
+
+
+.pi-files .is-missing{color:var(--pi-danger)}
+.pi-diag-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--pi-line);font-size:12px}
+.pi-diag-row:last-child{border-bottom:0}
+.pi-diag-text{flex:1;min-width:0}
+.pi-copy-box{position:fixed;left:0;top:0;width:1px;height:1px;opacity:0}
+.pi-status{font-size:12px;color:var(--pi-txt2);min-height:1em}
+.pi-status.is-err{color:var(--pi-danger)}
+.pi-spin{display:inline-block;width:12px;height:12px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:pi-spin .8s linear infinite}
+@keyframes pi-spin{to{transform:rotate(360deg)}}
+.pi-dialog{position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;z-index:2147483645;display:flex;align-items:center;justify-content:center;background:rgba(20,20,30,.28)}
+.pi-dialog-box{width:440px;max-width:92vw;max-height:80vh;overflow-y:auto;background:var(--pi-bg);border-radius:var(--pi-r);box-shadow:var(--pi-shadow);padding:16px;scrollbar-width:none}
+.pi-dialog-box h4{margin:0 0 8px;font-size:15px;color:var(--pi-dark)}
+.pi-dialog-box .pi-dlg-acts{display:flex;gap:8px;justify-content:flex-end;margin-top:12px;flex-wrap:wrap}
+.pi-dialog-box .pi-dlg-acts>.pi-btn{min-width:88px}
+.pi-dialog-box ul{margin:6px 0;padding-left:18px;font-size:12px;color:var(--pi-txt2);max-height:200px;overflow-y:auto}
+.pi-notices{position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;z-index:2147483641;display:flex;flex-direction:column;justify-content:flex-end;align-items:flex-end;gap:8px;padding:16px;box-sizing:border-box;pointer-events:none}
+.pi-unoffered-tip{display:block;font-size:11px;color:var(--pi-txt2);margin-top:2px}
+.pi-topbar{position:fixed;left:50%;transform:translateX(-50%);z-index:2147483643;width:min(400px,calc(100vw - 16px - env(safe-area-inset-left,0px) - env(safe-area-inset-right,0px)));box-sizing:border-box;display:flex;align-items:center;gap:10px;padding:8px 8px 8px 14px;background:var(--pi-bg);color:var(--pi-txt);border-radius:var(--pi-r);box-shadow:var(--pi-shadow);font-size:13px;margin-top:6px}
+.pi-topbar-dot{flex:none;width:8px;height:8px;border-radius:50%;background:var(--pi-accent)}
+.pi-topbar-body{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.35}
+.pi-topbar-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:var(--pi-dark)}
+.pi-topbar-tag{font-size:11px;color:var(--pi-txt2)}
+.pi-topbar-acts{flex:none;display:flex;gap:6px}
+.pi-topbar-acts .pi-btn{min-width:52px}
+.pi-topbar-act.is-armed{color:var(--pi-danger);background:var(--pi-danger-soft)}
+@media (max-width:600px){.pi-topbar{font-size:14px}.pi-topbar-acts .pi-btn.is-sm{min-height:32px;font-size:13px}}
+.pi-notice{pointer-events:auto;width:340px;max-width:100%;background:var(--pi-bg);border-radius:var(--pi-r);box-shadow:var(--pi-shadow);padding:12px 14px;border-left:4px solid var(--pi-accent)}
+.pi-notice b{display:block;font-size:13px;color:var(--pi-dark);margin-bottom:3px}
+.pi-notice p{margin:0 0 8px;font-size:12px;color:var(--pi-txt2)}
+.pi-notice .pi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:6px}
+.pi-notice .pi-row>.pi-btn{width:100%;padding:0 6px}
+@media (max-width:720px){
+.pi-overlay{align-items:stretch}
+.pi-panel{grid-template-columns:minmax(0,1fr);width:100vw;max-width:100vw;height:100vh;height:100dvh;max-height:none;border-radius:0}
+.pi-side{position:absolute;top:0;left:0;bottom:0;width:min(280px,82vw);z-index:2;transform:translateX(-100%);transition:transform .2s ease;box-shadow:var(--pi-shadow)}
+.pi-panel.is-drawer .pi-side{transform:none}
+.pi-panel.is-drawer .pi-scrim{display:block;position:absolute;top:0;left:0;width:100%;height:100%;z-index:1;background:rgba(20,20,30,.28)}
+.pi-menu{display:inline-flex}
+.pi-top{grid-template-columns:minmax(0,1fr) auto;row-gap:8px}
+.pi-top-end{grid-column:2}
+.pi-tabs{grid-column:1/-1;grid-row:2;grid-auto-columns:1fr}
+.pi-tree{grid-template-columns:minmax(0,1fr)}
+.pi-entry-hd{flex-wrap:wrap}
+.pi-wb .pi-entry-hd{flex-wrap:nowrap}
+.pi-card h3{flex-wrap:wrap}
+.pi-tools.is-c4{--pi-cols:2}
+.pi-tree-list{max-height:220px}
+.pi-msg{max-width:94%}
+.pi-body{padding:10px}
+.pi-notices{justify-content:flex-start;align-items:stretch;padding:calc(10px + env(safe-area-inset-top,0px)) 10px 10px}
+.pi-notice{width:auto}
+.pi-dialog{align-items:flex-start;box-sizing:border-box;padding-top:calc(56px + env(safe-area-inset-top,0px))}
+.pi-dialog-box{max-height:calc(100dvh - 80px)}
+.pi-dialog-box{display:flex;flex-direction:column;overflow:hidden}
+.pi-dialog-box>h4{flex:none}
+.pi-dialog-box>.pi-dlg-body{flex:1 1 auto;min-height:0;overflow-y:auto;scrollbar-width:none}
+.pi-dialog-box>.pi-dlg-acts{flex:none}
+}
+/* wb-tools v0.1.23 */
+.pi-wb-sort{display:flex;align-items:center;gap:8px;margin:0 0 8px}
+.pi-wb-sort .pi-sel{width:auto;min-width:0}
+.pi-wb-adv{display:flex;align-items:center;gap:6px;width:100%;padding:6px 0;border:0;background:none;color:var(--pi-txt2);font:inherit;font-size:12px;font-weight:600;cursor:pointer}
+.pi-wb-adv-bd{display:flex;flex-direction:column;gap:8px}
+.pi-wb-hit{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:var(--pi-r-in);background:var(--pi-fill);margin:4px 0}
+.pi-wb-hit .pi-wb-title{flex:1;min-width:0}
+.pi-wb-hit>.pi-sel{flex:0 0 auto;width:auto;background:var(--pi-bg)}
+.pi-wb-hit .pi-wb-title>small{color:var(--pi-txt2);font-size:12px}
+.pi-wb-hit .pi-meta{max-width:60%;overflow:hidden;text-overflow:ellipsis}
+.pi-dlg-body .pi-menu-item .pi-meta{max-width:50%;overflow:hidden;text-overflow:ellipsis}
+/* /wb-tools v0.1.23 */
+/* outline v0.1.23 */
+.pi-ov-stage{display:flex;flex-direction:column;gap:2px;width:100%;margin:0 0 6px;padding:8px 10px;border:0;border-radius:var(--pi-r-in);background:var(--pi-fill);color:var(--pi-txt);text-align:left;font-family:inherit;font-size:13px;cursor:pointer}
+.pi-ov-stage:hover{background:var(--pi-fill2)}
+.pi-ov-stage.is-active{background:var(--pi-accent-soft);color:var(--pi-accent)}
+.pi-ov-stage.is-done{color:var(--pi-txt2)}
+.pi-ov-title{font-weight:600}
+.pi-ov-node{white-space:normal}
+.pi-ov-stage.is-active .pi-meta{color:var(--pi-accent)}
+.pi-block{display:block}
+.pi-hist{display:flex;align-items:center;gap:8px;padding:6px 0}
+.pi-hist>.pi-grow{flex:1;min-width:0;overflow-wrap:anywhere}
+.pi-hist-n{flex-shrink:0;white-space:nowrap}
+.pi-titem.is-issue{align-items:flex-start}
+.pi-titem.is-issue .pi-pname{white-space:normal;overflow:visible;text-overflow:clip;line-height:1.5}
+.pi-vitem{padding:8px 10px;margin:0 0 6px;border-radius:var(--pi-r-in);background:var(--pi-fill)}
+.pi-vitem .pi-ta{background:var(--pi-bg)}
+.pi-vrow{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--pi-dark)}
+.pi-vrow>.pi-grow{flex:1;min-width:0;overflow-wrap:anywhere}
+.pi-vitem .pi-hint{margin:6px 0 0}
+.pi-err{margin:2px 0 6px}
+.pi-err>summary{font-size:12px;color:var(--pi-txt2);cursor:pointer}
+.pi-err .pi-meta{margin-top:2px;overflow-wrap:anywhere}
+.pi-node .pi-play>summary{font-size:12px;font-weight:500;color:var(--pi-txt2)}
+.pi-menu-item:disabled{opacity:.4;cursor:default;pointer-events:none}
+/* /outline v0.1.23 */
+/* threads v0.1.23 */
+.pi-hook{display:flex;align-items:center;gap:6px}
+.pi-node-row{display:flex;align-items:center;gap:8px;min-height:32px;font-size:13px}
+.pi-node-name{flex:1;min-width:0}
+.pi-node-row.is-off,.pi-node-row.is-off .pi-badge,.pi-node-row.is-quiet{color:var(--pi-txt2)}
+.pi-tl-nodes .pi-kind.is-main{background:var(--pi-dark);color:var(--pi-on-dark)}
+.pi-tl-nodes .pi-kind.is-side{background:var(--pi-bg);color:var(--pi-txt)}
+.pi-tl-nodes .pi-kind.is-world{background:transparent;color:var(--pi-txt2);padding-left:0;padding-right:0}
+.pi-tl-nodes .pi-node-row.is-off .pi-kind{background:var(--pi-fill2);color:var(--pi-txt2)}
+.pi-node-row.is-off .pi-node-txt{text-decoration:line-through}
+.pi-hook>.pi-node-row{flex:1;min-width:0}
+.pi-meta-btn{min-height:32px;min-width:40px;padding:0 2px;border:0;background:none;font:inherit;font-size:12px;cursor:pointer;color:var(--pi-txt2);text-align:right}
+.pi-meta-btn.is-dot{display:inline-flex;align-items:center;gap:5px}
+.pi-meta-btn.is-dot::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--pi-accent)}
+.pi-check.is-quiet{color:var(--pi-txt2)}
+.pi-pace-cell{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 10px;border-radius:20px;background:var(--pi-surf);font-size:12px;font-weight:600;color:var(--pi-txt2)}
+.pi-pace .pi-pair{flex:1;gap:6px}
+.pi-pace-label{min-width:56px}
+.pi-clock{width:100%;border:0;background:none;color:var(--pi-txt);font:inherit;font-size:13px;font-weight:400;text-align:left;align-items:center}
+.pi-clock-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pi-clock-dots{display:inline-flex;gap:3px}
+.pi-clock-dots i{width:6px;height:6px;border-radius:50%;background:var(--pi-rule)}
+.pi-clock-dots i.is-on{background:var(--pi-dark)}
+.pi-play{margin-top:4px}
+.pi-play>summary{font-size:12px;font-weight:600;color:var(--pi-txt2);cursor:pointer;padding:4px 0}
+/* /threads v0.1.23 */
+
+.pi-tools.is-c5{--pi-cols:5}
+/* 酒馆主题会全局改 textarea / select / input：半透明黑底、自己的边框、下拉箭头、占位字颜色，不少美化主题还带 !important
+   （实测「双色盒子-深色毛玻璃」：背景和边框都是 !important）。插件里的输入框要跟插件的明暗配色走，所以这几项也用 !important 重设，只作用于插件自己的输入框。 */
+.pi-root :is(textarea.pi-ta,input.pi-inp,select.pi-sel){background-color:var(--pi-fill)!important;background-image:none;color:var(--pi-txt)!important;border:1.5px solid var(--pi-line)!important;border-radius:var(--pi-r-in)!important;box-shadow:none!important;margin:0!important;max-height:none;font-family:var(--pi-font);font-size:13px;-webkit-text-fill-color:currentColor;backdrop-filter:none!important}
+.pi-root :is(textarea.pi-ta,input.pi-inp,select.pi-sel):hover{border-color:var(--pi-rule)!important}
+.pi-root textarea.pi-ta.is-mono{font-family:var(--pi-mono);font-size:12px}
+.pi-root .pi-wb-memo input.pi-inp.is-num{font-size:12px}
+.pi-root :is(.pi-entry,.pi-node,.pi-wb-edit,.pi-compose) :is(textarea.pi-ta,input.pi-inp,select.pi-sel){background-color:var(--pi-bg)!important}
+.pi-root :is(textarea.pi-ta,input.pi-inp)[readonly]{background-color:var(--pi-surf)!important}
+.pi-root :is(textarea.pi-ta,input.pi-inp,select.pi-sel):focus{border-color:var(--pi-accent)!important;background-color:var(--pi-bg)!important;outline:none}
+.pi-root select.pi-sel{-webkit-appearance:none;appearance:none;padding-right:30px;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%237C7C8A' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")!important;background-repeat:no-repeat!important;background-position:right 11px center!important;background-size:10px 6px!important}
+.pi-root select.pi-sel option{background-color:var(--pi-bg)!important;color:var(--pi-txt)!important}
+.pi-root :is(textarea.pi-ta,input.pi-inp)::placeholder{color:var(--pi-txt2)!important;opacity:.75;-webkit-text-fill-color:var(--pi-txt2)}
+.pi-root :is(textarea.pi-ta,input.pi-inp):focus::placeholder{color:transparent!important;-webkit-text-fill-color:transparent}
+.pi-imp-stage{border-top:1px solid var(--pi-line);padding:8px 0}
+.pi-wbkind{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;padding:6px 0;border-bottom:1px solid var(--pi-line)}
+.pi-wbkind>span{flex:1 1 100%;font-size:13px}
+.pi-wbkind .pi-check{padding:0}
+.pi-prebuild-row{padding:8px 0;border-bottom:1px solid var(--pi-line)}
+.pi-prebuild-row.is-warn{background:var(--pi-warn-soft);margin:0 -8px;padding:8px;border-radius:var(--pi-r-in)}
+.pi-fr-warn:empty{display:none}
+/* 线索标签弹窗：开头一段白话说明、每条线索先说清是什么（雾港实测：第一次看到弹窗不知道在填什么）。 */
+.pi-fr-intro{background:var(--pi-surf);border-radius:var(--pi-r-in);padding:10px 12px;margin:0 0 10px;font-size:12.5px;line-height:1.65;color:var(--pi-txt)}
+.pi-fr-intro p{margin:0 0 6px}
+.pi-fr-intro p:last-child{margin-bottom:0}
+.pi-fr-intro .is-example{color:var(--pi-txt2)}
+.pi-fr-title{margin:14px 0 6px;font-size:13px;font-weight:600;color:var(--pi-dark)}
+.pi-fr-more{margin:0 0 10px}
+.pi-fr-more summary{cursor:pointer}
+/* 折叠的箭头（用户 2026-11-08：浏览器自带的小三角不好看）：所有 <summary> 换成「»」，展开时转 90°。 */
+.pi-root summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:6px;user-select:none}
+.pi-root summary::-webkit-details-marker{display:none}
+.pi-root summary::marker{content:""}
+.pi-root summary::before{content:"»";flex:none;display:inline-block;width:12px;text-align:center;font-size:14px;line-height:1;color:var(--pi-txt2);transition:transform .15s ease}
+.pi-root details[open]>summary::before{transform:rotate(90deg)}
+.pi-root summary:hover::before{color:var(--pi-accent)}
+@media (prefers-reduced-motion:reduce){.pi-root summary::before{transition:none}}
+/* 标黄的说明：前面一个黄色圆圈问号（代替「·」）。 */
+.pi-warn-line{display:flex;align-items:flex-start;gap:6px;margin:4px 0;font-size:12px;font-weight:600;color:var(--pi-warn);line-height:1.5}
+.pi-warn-line::before{content:"?";flex:none;width:15px;height:15px;margin-top:1px;border:1.5px solid currentColor;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;line-height:1;box-sizing:border-box}
+.pi-fr-hd{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:4px}
+.pi-fr-hd .pi-meta{font-size:11px;color:var(--pi-txt2);font-family:var(--pi-mono)}
+.pi-fr-answer{margin:0 0 6px;padding:6px 10px;border-left:3px solid var(--pi-rule);font-size:12px;color:var(--pi-txt);background:var(--pi-fill);border-radius:0 6px 6px 0}
+.pi-fr-answer .pi-meta{color:var(--pi-txt2);font-size:11px}
+/* 展开后整段显示，由面板主体滚动（导入审阅页实测：限高 320px 且滚动条隐藏，看起来像内容被截断）。 */
+.pi-pre.is-full{max-height:none;overflow:visible}
+/* 仍然限高的代码框：显示细滚动条，让人看得出里面还能滚。 */
+.pi-root .pi-pre:not(.is-full){scrollbar-width:thin}
+.pi-root .pi-pre:not(.is-full)::-webkit-scrollbar{display:block;width:6px;height:6px}
+.pi-root .pi-pre:not(.is-full)::-webkit-scrollbar-thumb{background:var(--pi-rule);border-radius:3px}
+/* 第四批：大纲编辑紧凑字段 */
+.pi-ol-auto{margin:-6px 0 2px}
+.pi-pair2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 10px}
+.pi-pair2 .pi-inp{width:100%}
+.pi-namehd{display:flex;align-items:center;gap:6px}
+.pi-req{border:0;cursor:pointer;font:inherit;font-size:11px;line-height:18px;padding:0 9px;border-radius:10px;background:var(--pi-fill2);color:var(--pi-txt2)}
+.pi-req.is-on{background:var(--pi-accent-soft);color:var(--pi-accent)}
+.pi-ta-auto{min-height:58px;resize:vertical;overflow-y:auto}
+.pi-fold{margin:2px 0 10px}
+.pi-fold>summary{list-style:none;cursor:pointer;display:flex;align-items:baseline;gap:8px;font-size:13px;color:var(--pi-txt2);padding:4px 0}
+.pi-fold>summary::-webkit-details-marker{display:none}
+.pi-root .pi-fold>summary::before{content:'▸';font-size:10px;color:var(--pi-txt2)}
+.pi-root .pi-fold[open]>summary::before{content:'▾'}
+.pi-fold>summary b{font-weight:500;color:var(--pi-dark);white-space:nowrap}
+.pi-fold>summary span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pi-clue-node{background:var(--pi-fill);border-radius:var(--pi-r-in);padding:4px 8px;margin:4px 0}
+.pi-clue-hd{display:flex;align-items:center;gap:8px;min-height:30px;cursor:pointer}
+.pi-clue-name{flex:1;min-width:0;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pi-clue-why{margin:2px 0 4px;padding-left:20px;font-size:12px;color:var(--pi-txt2)}
+.pi-hint.is-off{opacity:.5;text-decoration:line-through}
+/* 新手教程（41a_ui_tour.js）：遮罩挖一个洞亮出目标，旁边一个气泡。层级在面板之上、弹窗之下。 */
+.pi-tour{position:fixed;inset:0;z-index:2147483644;isolation:isolate}
+.pi-tour-mask{position:absolute;inset:0;width:100%;height:100%;pointer-events:auto}
+.pi-tour-mask path{fill:rgba(10,10,18,.72)}
+.pi-tour-hole{position:fixed;border:2px solid var(--pi-accent);border-radius:10px;box-shadow:0 0 0 4px var(--pi-accent-soft);pointer-events:none;transition:left .18s,top .18s,width .18s,height .18s}
+.pi-tour-pop{position:fixed;width:min(320px,calc(100vw - 24px));background:var(--pi-bg);color:var(--pi-txt);border-radius:var(--pi-r);box-shadow:var(--pi-shadow);padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.pi-tour-hd{display:flex;align-items:center;gap:8px}
+.pi-tour-icon{flex:none;width:18px;height:18px;border-radius:50%;border:1.5px solid var(--pi-accent);color:var(--pi-accent);display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;line-height:1}
+.pi-tour-title{flex:1;min-width:0;font-size:14px;font-weight:600;color:var(--pi-dark)}
+.pi-tour-x{flex:none;width:26px;height:26px;border:0;border-radius:8px;background:none;color:var(--pi-txt2);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0}
+.pi-tour-x:hover{color:var(--pi-dark);background:var(--pi-surf)}
+.pi-tour-body{margin:0;font-size:13px;line-height:1.65;color:var(--pi-txt)}
+.pi-tour-ft{display:flex;align-items:center;gap:8px}
+.pi-tour-count{font-size:12px;color:var(--pi-txt2);font-variant-numeric:tabular-nums}
+@media (prefers-reduced-motion:reduce){.pi-tour-hole{transition:none}}
+/* 复选框（用户 2026-11-08）：酒馆主题会改 input[type=checkbox] 的底色、阴影边框和 ::before 勾选色，插件里的复选框跟着变。
+   换成插件自己画的：圆角方框，勾选时填插件强调色、白色对勾（内嵌 SVG，小尺寸也清楚）；亮暗两种模式都跟随插件配色。只作用于插件面板。 */
+.pi-root:not(#pi-x) input[type=checkbox]{-webkit-appearance:none!important;appearance:none!important;width:16px!important;height:16px!important;min-width:16px;margin:2px 0 0!important;padding:0!important;border:1.5px solid var(--pi-rule)!important;border-radius:4px!important;background:var(--pi-bg)!important;box-shadow:none!important;filter:none!important;transform:none!important;display:inline-grid!important;place-content:center;cursor:pointer;flex-shrink:0;vertical-align:middle;transition:background-color .12s,border-color .12s}
+.pi-root:not(#pi-x) input[type=checkbox]::before{content:none!important;display:none!important}
+.pi-root:not(#pi-x) input[type=checkbox]:checked{background:var(--pi-accent) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.4l3 3 6-6.4' fill='none' stroke='%23fff' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/12px 12px no-repeat!important;border-color:var(--pi-accent)!important}
+.pi-root:not(#pi-x) input[type=checkbox]:hover:not(:disabled){border-color:var(--pi-accent)!important}
+.pi-root:not(#pi-x) input[type=checkbox]:focus-visible{outline:2px solid var(--pi-accent)!important;outline-offset:2px}
+.pi-root:not(#pi-x) input[type=checkbox]:disabled{opacity:.45;cursor:not-allowed}
+@media (prefers-reduced-motion:reduce){.pi-root:not(#pi-x) input[type=checkbox]{transition:none}}
+/* 插件面板保持自己的字体（用户 2026-11-08 选定）：酒馆主题会对所有元素强制 font-family / font-weight（如「双色盒子」主题的宋体加粗 !important）。
+   这里先把插件里的元素统一恢复成插件字体、正常粗细、无文字阴影（酒馆的 --shadowWidth），再按插件原有的层级把加粗、等宽字体补回来。只作用于插件面板。由 tools/ui-preview/font-block.mjs 生成。 */
+.pi-root:not(#pi-x),.pi-root:not(#pi-x) *:not(svg):not(svg *){font-family:var(--pi-font)!important;font-weight:400!important;text-shadow:none!important}
+:is(.pi-root:not(#pi-x) .pi-side-hd small,.pi-root:not(#pi-x) .pi-card h3 .pi-meta,.pi-root:not(#pi-x) .pi-wb-sec-hd small,.pi-root:not(#pi-x) .pi-wb-sub-hd small){font-weight:400!important}
+:is(.pi-root:not(#pi-x) .pi-field>span,.pi-root:not(#pi-x) .pi-wb-memo,.pi-root:not(#pi-x) .pi-set-row,.pi-root:not(#pi-x) .pi-pace-label){font-weight:500!important}
+:is(.pi-root:not(#pi-x) .pi-pitem.is-sel,.pi-root:not(#pi-x) .pi-tab,.pi-root:not(#pi-x) .pi-card h3,.pi-root:not(#pi-x) .pi-hint.is-warn,.pi-root:not(#pi-x) .pi-preset-name,.pi-root:not(#pi-x) .pi-wb-sub-hd,.pi-root:not(#pi-x) .pi-book-hd .pi-etitle,.pi-root:not(#pi-x) .pi-tbtn,.pi-root:not(#pi-x) .pi-wb-count,.pi-root:not(#pi-x) .pi-seg-btn,.pi-root:not(#pi-x) .pi-btn,.pi-root:not(#pi-x) .pi-badge,.pi-root:not(#pi-x) .pi-fr-title,.pi-root:not(#pi-x) /* 标黄的说明：前面一个黄色圆圈问号（代替「·」）。 */
+.pi-warn-line,.pi-root:not(#pi-x) .pi-entry-hd .pi-pos,.pi-root:not(#pi-x) .pi-entry-hd .pi-etitle,.pi-root:not(#pi-x) .pi-tl-vol,.pi-root:not(#pi-x) .pi-tl-item.is-active .pi-tl-name,.pi-root:not(#pi-x) .pi-tl-item.is-active .pi-tl-state,.pi-root:not(#pi-x) .pi-titem.is-sel,.pi-root:not(#pi-x) .pi-files th,.pi-root:not(#pi-x) .pi-tour-title){font-weight:600!important}
+:is(.pi-root:not(#pi-x) .pi-side-hd,.pi-root:not(#pi-x) .pi-top-title,.pi-root:not(#pi-x) .pi-wb-sec-hd,.pi-root:not(#pi-x) .pi-titem.is-vol,.pi-root:not(#pi-x) .pi-md-h,.pi-root:not(#pi-x) .pi-pf-imp-name){font-weight:700!important}
+:is(.pi-root:not(#pi-x) .pi-warn-line::before,.pi-root:not(#pi-x) .pi-tour-icon){font-weight:800!important}
+.pi-root:not(#pi-x) :is(b,strong,h1,h2,h3,h4){font-weight:600!important}
+:is(.pi-root:not(#pi-x) .pi-preset-model,.pi-root:not(#pi-x) textarea.pi-ta.is-mono,.pi-root:not(#pi-x) .pi-ta.is-mono,.pi-root:not(#pi-x) .pi-fr-hd .pi-meta,.pi-root:not(#pi-x) .pi-pre,.pi-root:not(#pi-x) .pi-md code,.pi-root:not(#pi-x) .pi-diff){font-family:var(--pi-mono)!important}
+/* 插件面板保持自己的字体结束 */
+/* persona v0.1.27 */
+.pi-pl-row{padding:6px 0 2px}
+.pi-pl-hd{display:flex;align-items:center;gap:8px;min-height:30px}
+.pi-pl-name{flex:1;min-width:0;font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pi-pl-row.is-lost .pi-pl-name{color:var(--pi-txt2)}
+.pi-pl-row .pi-refs{margin-bottom:2px}
+.pi-pl-row+.pi-pl-row{margin-top:6px;padding-top:10px;border-top:1px solid var(--pi-line)}
+.pi-pl-tag{flex:none;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:600;white-space:nowrap;background:var(--pi-fill2);color:var(--pi-txt2)}
+.pi-pl-tag.is-ok{background:var(--pi-ok-soft);color:var(--pi-ok)}
+.pi-pl-tag.is-warn{background:var(--pi-warn-soft);color:var(--pi-warn)}
+.pi-pl-tag.is-accent{background:var(--pi-accent-soft);color:var(--pi-accent)}
+.pi-pl-row .pi-chip.is-past{color:var(--pi-txt)}
+.pi-pl-row .pi-chip.is-next{background:transparent;color:var(--pi-txt2);box-shadow:inset 0 0 0 1px var(--pi-rule)}
+.pi-pl-row .pi-chip.is-on{background:var(--pi-accent);color:var(--pi-on-dark);font-weight:600;box-shadow:none}
+.pi-group.is-persona .pi-group-hd{color:var(--pi-txt);font-size:13px;font-weight:600;padding:6px 6px}
+.pi-group.is-persona .pi-group-hd small{min-width:18px;padding:0 6px;border-radius:9px;text-align:center;font-size:11px;font-weight:600;background:var(--pi-fill2);color:var(--pi-txt2)}
+.pi-group.is-persona+.pi-group.is-persona{margin-top:10px}
+.pi-ps .pi-node-hd .pi-inp{flex:1;min-width:0}
+.pi-ps{background:var(--pi-fill)}
+.pi-icon-btn:disabled{opacity:.35;cursor:not-allowed}
+/* /persona v0.1.27 */
+/* 导入审阅（逐页） */
+.pi-imp-crumb{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--pi-txt2);margin:0 0 8px 2px}
+.pi-imp-crumb b{color:var(--pi-dark)}
+.pi-imp-crumb-a{border:0;background:none;padding:0;color:var(--pi-txt2);font:inherit;cursor:pointer}
+.pi-imp-crumb-a:hover{color:var(--pi-accent)}
+.pi-imp-crumb .pi-imp-crumb-end{margin-left:auto}
+.pi-imp-kind{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:4px 0 6px}
+.pi-imp-kind-btn{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:9px 10px;background:var(--pi-fill);border-radius:var(--pi-r-in);cursor:pointer;border:1.5px solid transparent;text-align:left;font-family:inherit;color:inherit}
+.pi-imp-kind-btn.is-sel{border-color:var(--pi-accent);background:var(--pi-accent-soft)}
+.pi-imp-kind-btn b{font-size:13px;color:var(--pi-dark)}
+.pi-imp-kind-btn span{font-size:11px;color:var(--pi-txt2);line-height:1.4}
+/* 第四批：导入页原文框变矮、文件名、推进方式下拉 */
+.pi-imp-text{min-height:180px;height:180px;resize:vertical}
+.pi-imp-file{margin:-2px 0 8px}.pi-imp-file .pi-btn{width:auto}
+.pi-imp-chip{display:flex;flex-direction:column;gap:2px;padding:8px 10px;margin:0 0 10px;background:var(--pi-fill);border-radius:var(--pi-r-in);font-size:13px}
+.pi-imp-chip-name{color:var(--pi-dark);word-break:break-all}
+.pi-imp-chip-sub{font-size:12px;color:var(--pi-txt2)}
+.pi-rv-state{font-size:12px;color:var(--pi-txt2);margin:-4px 0 8px}
+.pi-rv-line{display:flex;align-items:center;gap:6px;padding:6px 8px;background:var(--pi-fill);border-radius:var(--pi-r-in);margin:0 0 8px}
+.pi-rv-arr{flex:none;width:30px;height:30px;border:0;border-radius:15px;background:var(--pi-bg);color:var(--pi-dark);box-shadow:0 1px 2px rgba(0,0,0,.06);font:inherit;font-size:15px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.pi-rv-arr:disabled{opacity:.3;cursor:default;box-shadow:none}
+.pi-rv-lname{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:0;border:0;background:none;padding:2px 4px;font:inherit;cursor:pointer;text-align:center;color:var(--pi-txt)}
+.pi-rv-lname b{max-width:100%;font-size:14px;font-weight:600;color:var(--pi-dark);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pi-rv-lname span{font-size:11px;line-height:1.3;color:var(--pi-txt2)}
+.pi-rv-state.is-draft{color:var(--pi-warn)}
+.pi-rv-tag{display:inline-block;font-style:normal;font-size:11px;line-height:16px;padding:0 6px;border-radius:8px;background:var(--pi-fill2);color:var(--pi-txt);margin-right:6px}
+.pi-rv-full{padding:8px 10px;background:var(--pi-fill);border-radius:var(--pi-r-in);margin:4px 0;font-size:12px;line-height:1.6;color:var(--pi-txt)}
+.pi-rv-full>b{font-size:13px;color:var(--pi-dark);font-weight:600;margin-right:6px}
+.pi-rv-full dl{margin:4px 0 0;display:grid;grid-template-columns:auto minmax(0,1fr);gap:2px 8px}
+.pi-rv-full dt{color:var(--pi-txt2)}
+.pi-rv-full dd{margin:0;overflow-wrap:anywhere}
+.pi-rv-auth{color:var(--pi-txt2);border-top:1px dashed var(--pi-rule);margin-top:6px;padding-top:4px}
+.pi-rv-fulltg{width:auto}
+.pi-rv-title .pi-rv-end{margin-left:auto}
+.pi-ol-write{width:100%;margin-top:2px}
+.pi-ol-tools{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:8px}
+.pi-ol-tools .pi-btn{width:100%}
+.pi-ol-tools .pi-badge{margin-left:6px}
+.pi-run-fold{border:0;background:none;padding:0;font:inherit;font-weight:600;color:var(--pi-dark);cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.pi-run-fold.is-sub{font-size:12px;font-weight:400;color:var(--pi-txt2);margin:6px 0 2px}
+.pi-run-set h3 .pi-meta{margin-left:8px}
+.pi-run-sec{padding:10px 0;border-top:1px solid var(--pi-line);display:flex;flex-direction:column;gap:6px}
+.pi-run-sec-hd{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--pi-dark)}
+.pi-run-set .pi-line-opts,.pi-run-set .pi-pace{padding-top:10px;border-top:1px solid var(--pi-line);margin-top:4px}
+.pi-line-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pi-line-more{position:relative;flex:none;display:inline-block}
+.pi-line-more>summary{list-style:none;cursor:pointer}
+.pi-line-more>summary::-webkit-details-marker{display:none}
+.pi-root .pi-line-more>summary::before{content:none;display:none}
+.pi-line-more>summary.pi-icon-btn{display:inline-flex;align-items:center;justify-content:center}
+.pi-line-row>.pi-row{flex-wrap:nowrap}
+.pi-line-row>.pi-row>.pi-badge,.pi-line-row>.pi-row>.pi-btn{flex:none}
+.pi-line-row>.pi-row>.pi-spacer{flex:1 1 auto;min-width:4px}
+.pi-rl-stack{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
+.pi-rl-stack .pi-row.is-todo,.pi-rl-stack>.pi-hint{background:var(--pi-warn-soft);border-radius:var(--pi-r-in);padding:8px 10px;margin:0}
+.pi-rl-stack .pi-btn{background:var(--pi-dark);color:var(--pi-on-dark)}
+.pi-root:not(#pi-x) .pi-rl-cur .pi-hint.is-warn{font-weight:400!important;font-size:13px}
+.pi-rl-lines .pi-btn.is-primary{background:var(--pi-bg);color:var(--pi-txt)}
+.pi-rl-status{margin-bottom:10px;flex-wrap:nowrap}
+.pi-rl-status>b{flex:none}
+.pi-rl-status .pi-grow{flex:1 1 0;min-width:0}
+.pi-rl-focus{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--pi-fill);border-radius:var(--pi-r-in);padding:10px 12px;font-size:13px}
+.pi-rl-focus.is-col{flex-direction:column;align-items:stretch}
+.pi-rl-focus>.pi-grow{flex:1;min-width:60px}
+.pi-rl-focus .pi-btn:not(.is-primary),.pi-rl-lines .pi-btn:not(.is-primary),.pi-rl-sec .pi-btn:not(.is-primary),.pi-rl-sec .pi-sel{background:var(--pi-bg)}
+.pi-rl-foot{margin:10px 0 0}
+.pi-rl-lines{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+.pi-rl-lines .pi-line-row{background:var(--pi-fill);border-radius:var(--pi-r-in);padding:6px 6px 6px 12px;border-top:0}
+.pi-rl-lines .pi-line-head{align-items:center;gap:6px}
+.pi-rl-lines .pi-line-head .pi-line-name{padding-top:0;font-weight:600;font-size:13px}
+.pi-rl-lines .pi-line-row .pi-hint{margin:2px 6px 4px 0}
+.pi-rl-kind{padding:1px 8px;border-radius:10px;font-size:11px;flex:none}
+.pi-tl-hd.is-fold{cursor:pointer}
+.pi-tl-hd.is-fold .pi-tl-state:last-child{font-size:13px}
+.pi-tl>.pi-tl-item{padding-bottom:4px}
+.pi-tl-nodes .pi-clue-node{background:transparent;padding:0;margin:0}
+.pi-tl-nodes .pi-clue-node.is-focus{background:var(--pi-accent-soft)}
+.pi-tl-nodes .pi-clue-hd{padding:0 0 0 8px}
+.pi-tl-nodes .pi-clue-name{flex:1;min-width:0}
+.pi-rl-sec{background:var(--pi-fill);border-radius:var(--pi-r-in);padding:10px 12px;margin-top:8px;display:flex;flex-direction:column;gap:8px}
+.pi-rl-sec .pi-run-sec{border-top:0;padding:0}
+.pi-rl-sec .pi-run-fold{align-self:flex-start}
+.pi-rl-sec .pi-pace,.pi-rl-sec .pi-line-opts{padding-top:0;border-top:0;margin:0}
+.pi-rl-sec .pi-ta{background:var(--pi-bg)}
+.pi-rl-sec .pi-status:empty{display:none}
+.pi-rl-sec .pi-tools .pi-btn.is-wide{width:100%;flex:1}
+.pi-rl-status .pi-meta{white-space:normal}
+.pi-rl-sec .pi-seg,.pi-rl-focus .pi-sel{background:var(--pi-bg)}
+.pi-rl-sec .pi-seg-btn.is-sel{background:var(--pi-accent-soft);color:var(--pi-accent);box-shadow:none;font-weight:600}
+.pi-rl-sec .pi-inp,.pi-rl-sec .pi-sel,.pi-rl-focus .pi-inp{background:var(--pi-bg)}
+.pi-root:not(#pi-x) .pi-tl-item.is-active .pi-tl-state.is-left{color:var(--pi-txt2);font-weight:400!important;font-size:12px}
+.pi-tl-hd .pi-tl-name{flex:0 1 auto;margin-right:auto}
+.pi-run-set h3{flex-wrap:nowrap}
+.pi-run-set h3 .pi-run-fold{flex:none}
+.pi-run-set h3 .pi-meta{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pi-card h3 .pi-pause-menu{margin-left:auto}
+.pi-line-menu{position:absolute;right:0;left:auto;top:calc(100% + 4px);z-index:5;display:flex;flex-direction:column;min-width:120px;padding:4px;background:var(--pi-bg);border-radius:10px;box-shadow:var(--pi-shadow)}
+.pi-line-menu .pi-btn{width:100%;justify-content:flex-start}
+.pi-line-foot{margin-top:8px}
+.pi-line-seg{margin:2px 0 8px}
+.pi-line-card .pi-line-search{width:100%;margin:0 0 8px}
+.pi-line-endfoot{display:flex;align-items:center;gap:8px;margin-top:10px}
+.pi-fold-log td{vertical-align:top}
+.pi-fold-log td:last-child{text-align:right;width:1%}
+.pi-rv-tbl{display:flex;flex-direction:column;gap:6px;margin:6px 0 0 26px;padding:8px 10px;background:var(--pi-fill);border-radius:var(--pi-r-in)}
+.pi-rv-tbl-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.pi-rv-tbl-row.is-cmp{grid-template-columns:auto minmax(0,1fr)}
+.pi-rv-tbl .pi-sel,.pi-rv-tbl .pi-inp{width:100%;min-width:0}
+.pi-rv-tbl .pi-hint{margin:0}
+.pi-rv-tbl-now{display:flex;align-items:center;flex-wrap:wrap;gap:6px}
+.pi-rv-names{margin:0;padding-left:18px;font-size:13px;line-height:1.6;color:var(--pi-txt)}
+.pi-rv-nav{display:flex;align-items:center;gap:6px;margin:2px 0 10px}
+.pi-rv-nav>.pi-btn{width:auto}
+.pi-rv-dots{flex:1;display:flex;gap:4px;justify-content:center;flex-wrap:wrap}
+.pi-rv-dot{width:22px;height:22px;border-radius:11px;border:0;padding:0;background:var(--pi-fill);font-size:11px;display:flex;align-items:center;justify-content:center;color:var(--pi-txt2);font-weight:600;cursor:pointer;font-family:inherit}
+.pi-rv-dot.is-cur{background:var(--pi-dark);color:var(--pi-on-dark)}
+.pi-rv-dot.is-err{background:var(--pi-warn-soft);color:var(--pi-warn)}
+.pi-rv-dot.is-chg{background:var(--pi-accent-soft);color:var(--pi-accent)}
+.pi-rv-title{display:flex;align-items:center;gap:8px;margin:0 0 4px}
+.pi-rv-title b{font-size:15px;color:var(--pi-dark)}
+.pi-rv-node{display:flex;flex-direction:column;gap:1px;padding:7px 10px;background:var(--pi-fill);border-radius:var(--pi-r-in);margin:4px 0}
+.pi-rv-node b{font-size:13px;color:var(--pi-dark);font-weight:600}
+.pi-rv-node span{font-size:12px;color:var(--pi-txt2)}
+.pi-rv-issue{padding:9px 11px;border-radius:var(--pi-r-in);background:var(--pi-warn-soft);margin:6px 0;display:flex;flex-direction:column;gap:4px}
+.pi-rv-issue.is-ask{background:var(--pi-fill)}
+.pi-rv-issue p{margin:0;font-size:13px;color:var(--pi-txt);line-height:1.5}
+.pi-rv-fix{font-size:12px;color:var(--pi-txt2)}
+.pi-rv-fix b{color:var(--pi-dark);font-weight:600}
+.pi-rv-issue .pi-row{gap:6px}
+.pi-rv-issue .pi-btn{width:auto}
+.pi-rv-tech{font-family:var(--pi-mono);word-break:break-all}
+.pi-rv-sec{font-size:12px;font-weight:600;color:var(--pi-txt2);margin:12px 0 4px}
+.pi-check-item{flex-direction:column;gap:2px}
+.pi-check-item .pi-check-fix{font-size:12px}
+.pi-dc-bar{display:flex;align-items:center;gap:8px;margin-bottom:8px;min-width:0}
+.pi-dc-refs{display:inline-flex;align-items:center;gap:6px;min-width:0;padding:5px 12px;border:0;border-radius:16px;background:var(--pi-bg);color:var(--pi-txt);font-size:12px;cursor:pointer;font-family:inherit}
+.pi-dc-refs i{font-style:normal;color:var(--pi-accent);font-weight:600}
+.pi-dc-refs small{color:var(--pi-txt2);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.pi-dc-caret{color:var(--pi-txt2);font-size:10px}
+.pi-dc-act{display:inline-flex;align-items:center;gap:5px;flex:none;margin-left:auto;padding:5px 12px;border-radius:16px;border:1px solid var(--pi-rule);background:var(--pi-bg);color:var(--pi-dark);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit}
+.pi-dc-act svg{width:13px;height:13px}
+.pi-dc-refs-open{display:flex;flex-wrap:wrap;gap:6px;padding:8px 10px;background:var(--pi-bg);border-radius:var(--pi-r-in);margin-bottom:8px}
+.pi-rv-dot.is-note{position:relative}
+/* 第四批（2026-11-16）：审阅页页签、顶部灰字状态、问题标题旁的全部加入意见、底部两个按钮吸在卡片底部 */
+.pi-rv-nav{margin:0 0 12px}
+.pi-rv-dots{justify-content:flex-start;flex-wrap:nowrap;overflow-x:auto;gap:6px;padding:2px 0;scrollbar-width:none}
+.pi-rv-dot{width:auto;height:30px;border-radius:15px;padding:0 12px;font-size:12px;font-weight:500;white-space:nowrap;flex:none}
+.pi-rv-dot.is-note::after{right:2px;top:2px}
+.pi-rv-state,.pi-rv-state.is-draft{color:var(--pi-txt2);margin:-6px 0 10px}
+.pi-rv h3 .pi-rv-end{margin-left:auto;display:flex;gap:6px}
+.pi-rv-sec{display:flex;align-items:center;gap:8px}
+.pi-rv-issues{border:0;cursor:pointer;font:inherit;font-size:11px}
+.pi-rv-fillall{margin-left:auto;border:0;background:none;padding:4px 0;font-size:12px;font-weight:500;color:var(--pi-accent);cursor:pointer}
+.pi-rv-pending{margin:0 0 8px 2px}
+.pi-rv-pending .pi-hint{display:flex;align-items:center;gap:8px;margin:0}
+.pi-rv-pending .pi-rv-fillall{flex:none;min-height:36px;padding:0 8px;margin-right:-8px}
+.pi-dialog-box .pi-pf-imp-ttl{margin:0 0 4px;font-size:12px;color:var(--pi-txt2)}
+.pi-dialog-box .pi-pf-imp-name{margin:0 0 14px;font-size:18px;line-height:1.35;color:var(--pi-dark);overflow-wrap:anywhere}
+.pi-pf-imp-pills{display:flex;flex-wrap:wrap;gap:6px}
+.pi-pf-imp-pills .pi-badge{padding:2px 10px;font-size:12px;background:var(--pi-fill)}
+.pi-dialog-box .pi-pf-imp-note{margin:16px 0 8px;padding-top:12px;border-top:1px solid var(--pi-line);font-size:12px;color:var(--pi-txt2)}
+.pi-dialog-box .pi-pf-imp-note.is-warn{color:var(--pi-warn)}
+.pi-rv-foot{position:sticky;bottom:0;z-index:2;margin:14px -16px -14px;padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px));background:var(--pi-bg);border-top:1px solid var(--pi-line);border-radius:0 0 var(--pi-r) var(--pi-r)}
+
+.pi-rv-dot.is-note::after{content:"";position:absolute;right:-1px;top:-1px;width:7px;height:7px;border-radius:4px;background:var(--pi-accent)}
+.pi-rv-q{display:flex;flex-direction:column;gap:4px;padding:8px 10px;background:var(--pi-fill);border-radius:var(--pi-r-in);margin:6px 0}
+.pi-rv-q-go{align-self:flex-start;border:0;background:none;padding:0;font-size:12px;font-weight:600;color:var(--pi-accent);cursor:pointer;font-family:inherit}
+.pi-rv-q .pi-ta{background:var(--pi-bg)}
+.pi-rv-chg{font-size:12px;color:var(--pi-txt);padding:2px 0 2px 10px;border-left:2px solid var(--pi-accent);margin:3px 0}
+.pi-rv-ok{display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:var(--pi-r-in);background:var(--pi-ok-soft);color:var(--pi-ok);font-size:13px;font-weight:600}
+.pi-rv-foot{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.pi-rv-foot .pi-btn{width:100%}
+.pi-rv-when{padding:9px 11px;background:var(--pi-fill);border-radius:var(--pi-r-in);font-size:13px;color:var(--pi-txt)}
+.pi-rv-when.is-warn{background:var(--pi-warn-soft);color:var(--pi-warn);font-weight:600}
+.pi-rv-opts{display:flex;flex-direction:column;gap:4px;margin-top:6px}
+.pi-rv-inp{padding-left:11px}
+.pi-rv-yaml{font-family:var(--pi-mono);font-size:12px;min-height:140px}
+.pi-rv-undo{margin:8px 0 0}
+.pi-rv-undo .pi-btn{width:auto}
+/* /导入审阅 */
+/* 进度条、大按钮（11-23） */
+.pi-prog{margin:8px 0}
+.pi-prog-bar{height:5px;border-radius:3px;background:var(--pi-fill2);overflow:hidden}
+.pi-prog-bar>i{display:block;height:100%;width:0;background:var(--pi-accent);border-radius:3px;transition:width .5s ease}
+.pi-prog.is-done .pi-prog-bar>i{background:var(--pi-ok)}
+.pi-prog-text{margin:5px 0 0;font-size:11.5px;color:var(--pi-txt2);font-variant-numeric:tabular-nums}
+.pi-btn.is-lg{min-height:38px;width:100%;gap:7px;font-size:13.5px;font-weight:600;letter-spacing:.06em}
+.pi-btn.is-lg svg{flex-shrink:0;opacity:.9}
+.pi-btn.is-lg.is-busy:disabled{opacity:1;background:var(--pi-fill2);color:var(--pi-txt2)}
+.pi-btn.is-lg.is-done{background:var(--pi-ok-soft);color:var(--pi-ok)}
+.pi-fr-start{margin:2px 0 4px}
+.pi-fr-hd .pi-fr-st{margin-left:auto}
+.pi-fr-intro summary{cursor:pointer;font-weight:600;color:var(--pi-dark)}
+.pi-fr-intro[open] summary{margin-bottom:6px}
+.pi-rv-foot .pi-prog{grid-column:1/-1;margin:0}
+.pi-rv-done{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 12px;margin:8px 0;background:var(--pi-ok-soft);border-radius:var(--pi-r-in);font-size:13px;color:var(--pi-txt)}
+.pi-rv-done>span{flex:1;min-width:140px}
+.pi-rv-done .pi-btn{width:auto}
+.pi-rv-extra{margin:8px 0 0}
+.pi-rv-extra summary{cursor:pointer}
+.pi-rv-extra .pi-field{margin-top:6px}
+/* 折叠箭头（用户 2026-11-23 选定）：浅灰小圆里的细线箭头，收起朝右、展开转向下；标题不换行，旁边的说明放不下显示省略号。 */
+.pi-fold-ic{width:20px;height:20px;border-radius:50%;background:var(--pi-surf);color:var(--pi-txt2);display:inline-flex;align-items:center;justify-content:center;flex:none;transition:background .15s ease}
+.pi-fold-ic svg{display:block;transition:transform .15s ease}
+.pi-fold-ic.is-open svg{transform:rotate(90deg)}
+.pi-run-fold:has(>.pi-fold-ic){gap:8px;min-height:32px;min-width:0}
+.pi-run-fold:has(>.pi-fold-ic)>span{white-space:nowrap}
+.pi-run-fold:hover .pi-fold-ic{background:var(--pi-fill2)}
+.pi-run-fold.is-sub{display:flex;width:100%;font-size:13px;font-weight:600;color:var(--pi-dark);margin:8px 0 2px;padding:2px 6px;border-radius:8px}
+.pi-run-fold.is-sub:hover{background:var(--pi-surf)}
+.pi-fold-count{flex:none;background:var(--pi-surf);color:var(--pi-txt2);border-radius:999px;padding:0 7px;font-size:11px;line-height:18px;font-weight:400}
+.pi-run-fold.is-sub .pi-fold-count{margin-left:auto}
+.pi-run-set h3:has(.pi-fold-ic){flex-wrap:nowrap}
+.pi-run-set h3:has(.pi-fold-ic) .pi-meta{flex:1 1 0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pi-root summary::before{content:'';width:20px;height:20px;border-radius:50%;font-size:0;background:var(--pi-surf) url(data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20viewBox=%220%200%2024%2024%22%20fill=%22none%22%20stroke=%22%238A8A9A%22%20stroke-width=%222.4%22%20stroke-linecap=%22round%22%20stroke-linejoin=%22round%22%3E%3Cpolyline%20points=%229%206%2015%2012%209%2018%22/%3E%3C/svg%3E) center/12px 12px no-repeat;transition:transform .15s ease}
+.pi-root summary:hover::before{background-color:var(--pi-fill2)}
+.pi-root .pi-fold>summary::before{content:'';width:20px;height:20px;border-radius:50%;font-size:0;background:var(--pi-surf) url(data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20viewBox=%220%200%2024%2024%22%20fill=%22none%22%20stroke=%22%238A8A9A%22%20stroke-width=%222.4%22%20stroke-linecap=%22round%22%20stroke-linejoin=%22round%22%3E%3Cpolyline%20points=%229%206%2015%2012%209%2018%22/%3E%3C/svg%3E) center/12px 12px no-repeat;transition:transform .15s ease}
+.pi-root .pi-fold[open]>summary::before{content:'';transform:rotate(90deg)}
+.pi-fold>summary{align-items:center}
+.pi-pause-menu>summary svg{vertical-align:middle;margin-left:2px;color:var(--pi-txt2)}
+.pi-dc-caret{display:inline-flex;color:var(--pi-txt2)}
+.pi-dc-caret svg{transition:transform .15s ease}
+.pi-dc-caret.is-open svg{transform:rotate(180deg)}
+/* 线索执行页的阶段（合并前的写法）：左边一条色带，进行中用强调色；多条线时阶段名前是线名 */
+.pi-clue-stage{margin:8px 0 12px;padding:0 0 0 10px;border-left:3px solid var(--pi-rule)}
+.pi-clue-stage.is-active{border-left-color:var(--pi-accent)}
+.pi-clue-stage.is-done{border-left-color:var(--pi-txt2);opacity:.8}
+.pi-clue-stage .pi-tl-name{font-weight:600}
+.pi-clue-line{color:var(--pi-txt2);font-weight:400;margin-right:6px}
+/* 剧情线选项那一行：窄屏时选项和长说明可以折行，不撑出卡片 */
+.pi-line-opts{flex-wrap:wrap;row-gap:6px}
+.pi-line-opts .pi-check{min-width:0;flex:1 1 auto}
+.pi-line-opts .pi-check span{white-space:normal;min-width:0}
+`, ICONS = {
+    // 折叠和下拉用的细线箭头（用户 2026-11-23 选定圆底样式）
+    chev: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>',
+    chevDown: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>',
+    close: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
+    plus: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
+    gear: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M6.9 1.8h2.2l.4 1.7 1.2.5 1.5-.9 1.6 1.6-.9 1.5.5 1.2 1.7.4v2.2l-1.7.4-.5 1.2.9 1.5-1.6 1.6-1.5-.9-1.2.5-.4 1.7H6.9l-.4-1.7-1.2-.5-1.5.9-1.6-1.6.9-1.5-.5-1.2-1.7-.4V6.9l1.7-.4.5-1.2-.9-1.5 1.6-1.6 1.5.9 1.2-.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><circle cx="8" cy="8" r="2.1" stroke="currentColor" stroke-width="1.3"/></svg>',
+    box: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M2 4.5L8 2l6 2.5v7L8 14l-6-2.5v-7z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M2 4.5L8 7l6-2.5M8 7v7" stroke="currentColor" stroke-width="1.3"/></svg>',
+    caret: '<svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M3 2l4 3-4 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    caretDown: '<svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 3l3 4 3-4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    send: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 13V3M3.5 7.5L8 3l4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    trash: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M2.5 4h11M6.5 4V2.5h3V4M4 4l.7 9.5h6.6L12 4M6.8 6.5v4.5M9.2 6.5v4.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    menu: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2.5 4h11M2.5 8h11M2.5 12h11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
+    spark: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 1.8l1.3 4.9 4.9 1.3-4.9 1.3L8 14.2l-1.3-4.9L1.8 8l4.9-1.3L8 1.8z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>',
+    check: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3.5 8.5l3 3 6-7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    pencil: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M10.5 2.5l3 3-8 8h-3v-3l8-8z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M9 4l3 3" stroke="currentColor" stroke-width="1.3"/></svg>',
+    search: '<svg width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.4"/><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
+    book: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 2.5h7.5a2 2 0 012 2v9H5a2 2 0 01-2-2v-9z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M3 11.5a2 2 0 012-2h7.5M6 5.5h4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>',
+    moon: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M13.5 9.8A5.8 5.8 0 016.2 2.5a5.8 5.8 0 107.3 7.3z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>',
+    sun: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.4"/><path d="M8 1.5v1.6M8 12.9v1.6M1.5 8h1.6M12.9 8h1.6M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M3.4 12.6l1.1-1.1M11.5 4.5l1.1-1.1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
+    // 世界书工具栏：统一 16 格、1.4 线宽、圆角端点。
+    copy: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.4"/><path d="M10.5 5.5V3.8A1.3 1.3 0 009.2 2.5H3.8a1.3 1.3 0 00-1.3 1.3v5.4a1.3 1.3 0 001.3 1.3h1.7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
+    download: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 2.5v7.5M4.8 7L8 10.2 11.2 7M2.5 12.5v1h11v-1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    upload: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 10.5V3M4.8 6.2L8 3l3.2 3.2M2.5 12.5v1h11v-1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    folder: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 4.3c0-.7.6-1.3 1.3-1.3h2.9l1.5 1.6h5c.7 0 1.3.6 1.3 1.3v6.8c0 .7-.6 1.3-1.3 1.3H3.3c-.7 0-1.3-.6-1.3-1.3V4.3z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>',
+    bookPlus: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 2.5h7.5a2 2 0 012 2v4M3 2.5v9a2 2 0 002 2h4M3 11.5a2 2 0 012-2h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M12.5 10.5v4M10.5 12.5h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
+    entryPlus: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M9.5 13.5H4a1.5 1.5 0 01-1.5-1.5V4A1.5 1.5 0 014 2.5h8A1.5 1.5 0 0113.5 4v5.5M5.5 6h5M5.5 9h3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M12.5 11v4M10.5 13h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
+    chat: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3.5 2.5h9A1.5 1.5 0 0114 4v6a1.5 1.5 0 01-1.5 1.5H7l-3 2.5v-2.5h-.5A1.5 1.5 0 012 10V4a1.5 1.5 0 011.5-1.5z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>',
+    card: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="3" y="1.5" width="10" height="13" rx="1.5" stroke="currentColor" stroke-width="1.4"/><circle cx="8" cy="6.5" r="2" stroke="currentColor" stroke-width="1.4"/><path d="M5.5 11.5h5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
+    checks: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2.5" y="2.5" width="4" height="4" rx="1" stroke="currentColor" stroke-width="1.4"/><rect x="2.5" y="9.5" width="4" height="4" rx="1" stroke="currentColor" stroke-width="1.4"/><path d="M9 4.5h4.5M9 11.5h4.5M3.6 11.5l.9.9 1.4-1.6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    checkAll: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2.5" y="2.5" width="11" height="11" rx="2" stroke="currentColor" stroke-width="1.4"/><path d="M5.3 8.2l1.9 1.9 3.6-4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    wand: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 13l7.5-7.5M9 4l3 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M12 1.8v2M11 2.8h2M13.8 6.2v1.4M13.1 6.9h1.4M5.5 2v1.4M4.8 2.7h1.4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>',
+    replace: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2.5 5.5h9l-2.2-2.2M13.5 10.5h-9l2.2 2.2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    move: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 4.3c0-.7.6-1.3 1.3-1.3h2.9l1.5 1.6h5c.7 0 1.3.6 1.3 1.3v6.8c0 .7-.6 1.3-1.3 1.3H3.3c-.7 0-1.3-.6-1.3-1.3V4.3z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M5.5 9h5M8.8 7.2L10.6 9 8.8 10.8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    sort: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4.5 2.5v11M2.5 11.5l2 2 2-2M9 4h4.5M9 8h3.5M9 12h2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    eye: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.4"/></svg>',
+    eyeOff: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6.2 3.8A6.6 6.6 0 018 3.5c4 0 6.5 4.5 6.5 4.5a11.6 11.6 0 01-1.7 2.2M10.4 11.9A6.3 6.3 0 018 12.5C4 12.5 1.5 8 1.5 8a11.4 11.4 0 012.6-3M2.5 2.5l11 11" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    more: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="3.5" cy="8" r="1.3"/><circle cx="8" cy="8" r="1.3"/><circle cx="12.5" cy="8" r="1.3"/></svg>',
+    pulse: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M1.5 8.5h3l1.8-4 3 8 1.9-4h3.3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    file: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M4 1h5.5L13 4.5V14a1 1 0 01-1 1H4a1 1 0 01-1-1V2a1 1 0 011-1z" stroke="currentColor" stroke-width="1.2"/><path d="M9 1v4h4" stroke="currentColor" stroke-width="1.2"/></svg>',
+    arrowUp: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 13V3M4 7l4-4 4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    arrowDown: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 3v10M4 9l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    undo: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M5.5 3L2.5 6l3 3M2.5 6h6.2a4.3 4.3 0 010 8.5H6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+  };
+  function foldIcon(open) {
+    return `<span class="pi-fold-ic${open ? " is-open" : ""}">${ICONS.chev}</span>`;
+  }
+
+  // src/ui/dom.js
+  var STYLE_ID = "pi-style";
+  function esc(value) {
+    return String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]);
+  }
+  function ensureStyle() {
+    let doc = hostDocument();
+    if (doc.getElementById(STYLE_ID)) return;
+    let style = doc.createElement("style");
+    style.id = STYLE_ID, style.textContent = CSS, doc.head.appendChild(style);
+  }
+  function removeStyle() {
+    hostDocument().getElementById(STYLE_ID)?.remove();
+  }
+  var night = !1;
+  function setNight(value) {
+    night = !!value;
+    for (let node of hostDocument().querySelectorAll(".pi-root")) node.classList.toggle("is-night", night);
+  }
+  var isNight = () => night;
+  function el(html) {
+    let box = hostDocument().createElement("div");
+    box.innerHTML = html.trim();
+    let node = box.firstElementChild;
+    return node && node.classList.contains("pi-root") && node.classList.toggle("is-night", night), node;
+  }
+  function options(list, value) {
+    return list.map((item) => `<option value="${esc(item.value)}"${String(item.value) === String(value) ? " selected" : ""}>${esc(item.label)}</option>`).join("");
+  }
+  function openDialog({ title: title2, html = "", actions: actions12 = [{ label: "确定", value: !0, primary: !0 }], onMount } = {}) {
+    let doc = hostDocument();
+    return new Promise((resolve) => {
+      let root = el(`<div class="pi-root pi-dialog"><div class="pi-dialog-box" role="dialog">
+            ${title2 ? `<h4>${esc(title2)}</h4>` : ""}<div class="pi-dlg-body">${html}</div>
+            <div class="pi-dlg-acts">${actions12.map((action, index) => `<button type="button" class="pi-btn${action.primary ? " is-primary" : ""}${action.danger ? " is-danger" : ""}" data-dlg="${index}">${esc(action.label)}</button>`).join("")}</div>
+        </div></div>`), finish = (value) => {
+        doc.removeEventListener("keydown", onKey, !0), root.remove(), resolve(value);
+      }, onKey = (event) => {
+        event.key === "Escape" && (event.stopPropagation(), finish(null));
+      };
+      root.addEventListener("click", (event) => {
+        if (event.target === root) return finish(null);
+        let pick = event.target.closest("[data-dlg-value]");
+        if (pick) return finish(pick.dataset.dlgValue);
+        let button = event.target.closest("[data-dlg]");
+        if (!button) return;
+        let action = actions12[Number(button.dataset.dlg)], value = typeof action.value == "function" ? action.value(root) : action.value;
+        value !== void 0 && finish(value);
+      }), doc.addEventListener("keydown", onKey, !0), layerParent(doc).appendChild(root), onMount && onMount(root), root.querySelector("input,textarea,select")?.focus();
+    });
+  }
+  function layerParent(doc) {
+    return doc.documentElement || doc.body;
+  }
+  function confirmDialog({ title: title2, body = "", list = [], okLabel = "确定", danger = !1 }) {
+    let html = `${body ? `<p class="pi-hint">${esc(body)}</p>` : ""}${list.length ? `<ul>${list.map((item) => `<li>${esc(item)}</li>`).join("")}</ul>` : ""}`;
+    return openDialog({ title: title2, html, actions: [{ label: "取消", value: !1 }, { label: okLabel, value: !0, primary: !danger, danger }] }).then(Boolean);
+  }
+  function promptDialog({ title: title2, label = "", value = "", multiline = !1, placeholder = "" }) {
+    let input2 = multiline ? `<textarea class="pi-ta is-mono is-tall" data-dlg-input placeholder="${esc(placeholder)}">${esc(value)}</textarea>` : `<input class="pi-inp" data-dlg-input value="${esc(value)}" placeholder="${esc(placeholder)}">`;
+    return openDialog({
+      title: title2,
+      html: `<label class="pi-field">${label ? `<span>${esc(label)}</span>` : ""}${input2}</label>`,
+      actions: [{ label: "取消", value: null }, { label: "确定", primary: !0, value: (root) => root.querySelector("[data-dlg-input]").value }]
+    });
+  }
+  function menuDialog({ title: title2, items }) {
+    let html = `<div class="pi-menu-list">${items.map((item) => `<button type="button" class="pi-menu-item${item.danger ? " is-danger" : ""}" data-dlg-value="${esc(item.value)}"${item.disabled ? " disabled" : ""}>${item.icon || ""}<span>${esc(item.label)}</span></button>`).join("")}</div>`;
+    return openDialog({ title: title2, html, actions: [{ label: "取消", value: null }] });
+  }
+  function choiceDialog({ title: title2, body = "", choices }) {
+    return openDialog({ title: title2, html: body ? `<p class="pi-hint">${esc(body)}</p>` : "", actions: choices });
+  }
+  function pickFiles({ accept = "", multiple = !1 } = {}) {
+    let doc = hostDocument();
+    return new Promise((resolve) => {
+      let input2 = doc.createElement("input");
+      input2.type = "file", input2.accept = accept, input2.multiple = multiple, input2.hidden = !0, input2.addEventListener("change", () => {
+        resolve([...input2.files]), input2.remove();
+      }), input2.addEventListener("cancel", () => {
+        resolve([]), input2.remove();
+      }), doc.body.appendChild(input2), input2.click();
+    });
+  }
+
+  // src/core/guide.js
+  var FANFIC_GUIDE = `# 同人世界观速成
+
+## 用途
+
+用户给出原作、角色、类型、基调中的任意几项，产出一段世界观正文。插件会在开玩后每一轮把它交给正文模型。要复制到酒馆世界书时，只复制公开部分，删去整段 <仅作者>…</仅作者>（世界书不会去掉它）。
+
+## 语言基准（最高优先级）
+
+- 使用客观、清楚的现代书面语，直白易懂；去掉明显北方方言腔（儿、咱、甭、咋、得嘞等）和旧小说、话本的腔调（只见、却说、看官、端的、怎生等）。
+- 直接写事实、规则和结果：不把一步动作拆成慢镜头，不堆眉梢、嘴角、指尖这类身体零件，不写“不是X而是Y”式澄清，不把情绪和话拟物化。
+- 正文只写这个世界的既有事实与行动边界。不写“由AI把握、关系自然生成”这类生成器指令，不写“见XX条目”式交叉引用，不写作者说明。
+- 人称按设定定：性转、身份错位或性别认知有出入的题材，核心角色第一人称与旁白用“他”，其他角色口中与认知中用“她”；其余题材按用户指定。用户另有要求时一律按用户。
+
+## 适用
+
+只产出正文，不产出条目字段、条目标题、uid、触发方式或打包信息。
+
+输入可以只有一句话，也可以是完整设定。默认交付一段完整的世界观正文；人物、地点、机制需要单独成篇时，另出一段独立正文，不在同一段里堆索引。
+
+不写小说正文、不写场面描写、不写角色对白，不替用户写人设。
+
+## 输入
+
+从用户原话里取这几项，缺的按“补定”处理：
+
+- 原作与角色：基于哪部作品、哪几个人物、谁是核心。
+- 类型与基调：斜杠或顿号连写，如“现代都市AU / 性转 / 因果报应 / 荒诞喜剧”。
+- 时代与舞台：现代、古代、架空；故事主要发生在哪。
+- 特殊机制：这个AU自带的设定，如第二性别系统、种族、行业分层、契约或规则。
+- 尺度：是否涉及成人内容，允许写到什么程度。
+- 篇幅：只要声明加铁则，还是要人物档案、场景库与钩子库。
+
+## 执行步骤
+
+1. 定声明。一句话交代基于什么作品与人物、什么类型、什么时代、什么基调，缺项按“补定”填。
+2. 定铁则。写这个AU不可违背的几条：总受或总攻、知情圈、欠债或因果归属、性格是否锁死、NSFW尺度、人称。每条一句，能约束角色行为，不解释理由。
+3. 定机制。每个特殊机制写四件事：是什么、作用对象、触发或运行条件、代价与后果。沿用到能直接推进剧情就停，不发明第二套系统。
+4. 定信息差。写清谁知道真相、谁不知道、各方各自不知道什么。暂时不能揭示的真相本身，写进正文末尾的 <仅作者>…</仅作者>；信息差只写「谁知道这件事、谁不知道」，不写出真相的内容。
+5. 定人物处境。写身份、社会位置、开局状态、与核心角色的旧账。性格默认不写死。
+6. 定场景与钩子。场景写地点、用途与限制；钩子只写可观察信号与开放倾向，标明是可用素材。
+7. 定边界。写核心角色不会出现的状态与不许写成的内容；只写会改变写作走向的几条。
+8. 组装正文，过一遍出稿速查。
+
+## 正文骨架
+
+默认按下面顺序写；篇幅小时可只保留声明、铁则、机制、说明。全篇只写已发生的事实与现状，不写日后必然走向，长线悬念写成留白。
+
+\`\`\`
+世界观声明:
+基于: [原作与角色]
+类型: [类型与基调]
+时代: [时代与舞台]
+基调: [关键词，顿号连写]
+
+铁则:
+- [最硬的一条，如谁总受]
+- [知情圈范围]
+- [欠债或因果归属]
+- [性格是否锁死]
+- [NSFW尺度]
+- [人称规则]
+
+[机制名]设定:
+- [机制是什么]
+- [作用对象]
+- [触发或运行条件]
+- [代价与后果]
+
+人物档案:
+[角色名]——[身份与在权力或关系网中的位置]
+- [开局状态]
+- [与核心角色的旧账]
+- [行为边界]
+
+信息差结构:
+- [谁知道真相]
+- [谁不知道]
+- [各方各自不知道什么]
+
+核心矛盾:
+- [身体或处境矛盾]
+- [心理矛盾]
+
+场景库:
+- [地点或场景：定位、在这里能发生什么、有什么限制]
+
+钩子库:
+- [可用素材，不是必须发生的事。只写可观察信号与开放倾向]
+
+NSFW指引（涉及成人内容时）:
+- 基调：[写到什么程度]
+- 可用方向：[哪几类场景]
+- 不允许的内容：[明确不写的几项]
+
+不会出现的状态:
+- [核心角色明确不会做的事，如不会主动示弱、不会突然接受现状]
+
+说明:
+- [未发生当作大纲，已发生当作起点与既定事实]
+- [留白与长线悬念]
+\`\`\`
+
+用户要单独成篇时，按同样写法另起一段正文。
+
+- 信息差条目多时用表格：表头列角色，单元格写各自知道与不知道什么，行写事实项。
+- 需要模型少回放的旧事，在该段后加一句中性的说明，如\`（已经过去，正文不必反复提起）\`。不写「AI禁止……」这类命令：设定会原样交给正文模型，命令式的提醒反而让它反复想起这件事。
+- 暂时不能揭示的真相（幕后真相、真实身份、结局安排）写进正文末尾的一段 <仅作者>…</仅作者>，插件不会把它交给正文模型，作者以后写大纲还要用。
+- 硬约束前可加\`⚠️\`，只标真正会让写作跑偏的几条。
+- 后补设定用一段\`[追加]\`收尾，只写新增事实，不改动前面已写内容。
+
+## 出稿速查
+
+- [ ] 全部内容只服务于“这个世界是什么、怎么运转、人物处在什么位置”，没有条目化表述。
+- [ ] 声明与铁则必写；机制、信息差、人物处境、场景库、钩子库按题材补齐，不写无关分块。
+- [ ] 铁则每条只约束一件事，不解释理由，不写“因为/所以”。
+- [ ] 机制写清是什么、作用对象、触发条件、代价与后果。
+- [ ] 信息差单独成段，写清谁知道、谁不知道、各方各自不知道什么；暂时不能揭示的真相写在 <仅作者> 里，其他分块没有写出它。
+- [ ] 场景库写清地点与用途；钩子库标明是可用素材，不写成必将发生的事件。
+- [ ] 只写已发生事实与现状，没有必然走向；长线悬念写成留白。
+- [ ] 性格默认未锁死；用户未指定的关系结论未被坐实。
+- [ ] 人称符合设定：涉及性转或身份错位时，核心角色用“他”，其他角色口中与认知中用“她”；其余题材按用户指定。
+- [ ] 没有堆砌身体零件、动作慢镜头、抽象拟物、方言腔和旧小说腔。
+- [ ] 核心角色不会出现的状态已写明，只写会改变写作走向的几条。
+
+## 输出
+
+只回三段，不加额外说明：
+
+1. 世界观正文：纯文本，按正文骨架的分块与标题写，每个分块标题单独一行、以冒号结尾。
+2. 补定：一行一条，列出替用户补齐的项，方便他改；没有补定时省略。
+3. 速查：单独一行 \`速查：PASS / FAIL。\``, GENERIC_GUIDE = `# 写作基准（通用）
+
+## 你在帮用户做什么
+
+用户在用剧情注入器为一张角色卡准备剧情。东西分三处放：
+- 设定：这个世界现在是什么样、人物处在什么位置、什么规则不能破。开玩后每一轮都作为常驻资料交给正文模型。卡本身有世界书时，设定可以是空的。
+- 大纲：剧情按阶段怎么走。开玩后只注入当前阶段的内容。
+- 线索模式下，主角查到了什么、谁知道了什么，记在数据库的表格里，由插件按条件开放下一步。
+所以设定只写现状和规则；会随剧情变化的东西（接下来发生什么、谁什么时候知道真相）交给大纲和表格。整理出来的设定是纯文本。要复制到酒馆世界书时，只复制公开部分，删去整段 <仅作者>…</仅作者>（世界书不会去掉它）。
+
+## 语言（最高优先级）
+
+- 用客观、清楚的现代书面语，像说明文那样写：直接写事实、规则和结果。
+- 不用口语腔：不用「咱、俺、甭、咋、啥、得嘞、可不是嘛」，不加儿化音，不用「呢、呀、嘛、哩」这类语气词收尾。
+- 不用古白话腔：不用「只见、却说、看官、端的、怎生、恁地、那厢」这类旧小说、话本的套语，不模仿章回体。古代背景也写成现代书面语，只在专名和器物上用当时的叫法（官职、地名、衣物等）。
+- 不写慢镜头，不堆眉梢、嘴角、指尖这类身体细节，不写「不是 X 而是 Y」式的澄清，不给情绪打比方。
+- 不写给 AI 的指令（「由 AI 把握」「关系自然发展」），不写「见某某条目」的交叉引用，不写作者说明。
+- 人称、称呼按用户要求。题材涉及性转、身份错位时，写明旁白和各个角色分别怎么称呼核心角色。
+
+## 讨论时怎么配合
+
+- 先回应用户的想法，再指出缺口或前后矛盾，最后给两三个可选方向，标明各自会带来什么。不替用户拍板，不写小说正文。
+- 只把用户已经确认的内容当作定论；还在商量的，说清楚是建议。
+- 谈到剧情时，按大纲能直接用的样子说：分几个阶段，每个阶段主角要做成哪几件事、在什么地方。
+- 用线索推进时，再说清三件事：主角靠什么行动拿到什么信息；哪些信息只是某人的说法、哪些是实物或亲眼所见；拿到之后能去哪里、有没有别的路可以绕过去。
+- 用户提到的秘密、幕后真相，讨论时可以直说，同时提醒它在大纲里要放进 <仅作者>。
+- 和用户说话用平常的说法，不用插件内部的叫法（不说「事实表」「知情表」「节点」「阶段键」），说「主角查到了什么」「谁知道这件事」「这一步」。
+- 讨论页只讨论，不输出大纲格式。用户想改大纲时，提醒他点讨论页上方的「审阅修改」，选好剧情线逐页写意见。
+- 参考资料（设定、大纲、正文、世界书、剧情进度）里已经写明的内容，以参考资料为准；和用户这一轮说的冲突时，指出来问用户。
+- 用户要你整理成设定时，按下面「输出」的格式写；平时讨论用正常对话。
+
+## 秘密分两层
+
+- **作者知道、角色和正文都不该知道的**（幕后真相、真实身份、结局安排）：用 <仅作者>…</仅作者> 包住。插件不会把它交给正文模型，但讨论和写大纲时你能看到。
+- **一部分角色知道、另一部分不知道的**：写进「信息差」。这是正文要演出来的，正文模型需要知道谁知道什么。
+- 主角不知道的事，不要写成「主角隐约感到……」去暗示。
+- 秘密本身只能出现在 <仅作者> 里。信息差、铁则、人物里写到「某人不知道这件事」时，只写他不知道什么方面（「不知道货的真正去向」），不把秘密的内容写出来（不写「不知道是某某偷的」）。
+- 用户讲过的秘密不能丢：整理设定时，把它完整写进一段 <仅作者>…</仅作者>（放在设定末尾即可），作者以后写大纲还要用。
+
+## 输入
+
+从用户的话里取这几项；缺的按「补定」处理，用户另有说法就以用户为准：
+
+- 题材来源：原创，还是基于某部作品（哪部、哪几个人物、谁是核心）。
+- 类型与基调：如「民国 / 悬疑 / 慢节奏」「现代 / 日常 / 轻喜剧」。
+- 时代与舞台：故事主要发生在哪。
+- 主角：通常是 {{user}}，写清楚主角在这个世界里的身份和处境；用户没说的不替他设定性格。
+- 特殊规则：这个世界独有的机制（超能力、契约、行业规矩、第二性别、跑团规则等）。
+- 尺度：是否涉及成人内容，写到什么程度。
+- 篇幅：只要几条要点，还是要人物、地点、机制都展开。
+
+## 设定的分块
+
+只有「声明」必写，其他分块按题材需要取用；小设定写三四块就够，不要为了齐全硬写。每块一个标题，单独一行，以冒号结尾。
+
+\`\`\`
+声明:
+题材: [原创 / 基于某作品的哪几个人物]
+类型: [类型与基调]
+舞台: [时代与地点]
+主角: [{{user}} 在这个世界里的身份和处境]
+
+铁则:
+- [这个世界不能破的规则，每条一句，只约束一件事，不解释理由]
+
+[机制名]:
+- 是什么、作用在谁身上、怎么触发、代价是什么。写到能推动剧情为止，不另造第二套体系。
+
+人物:
+[名字]：[身份，在关系网里的位置]
+- 现在的处境
+- 和主角的关系、旧账
+- 处事方式和底线（会怎么做、绝不会做什么；不写「他其实很温柔」这类结论）
+
+信息差:
+- 每个关键角色知道什么、不知道什么、误会了什么。条目多时用表格：行是事实，列是角色。
+
+地点:
+- [地点]：在这里能做什么、有什么限制、谁常在这里。
+
+可用素材:
+- 可以随时用进正文的小事、传闻、可观察的迹象。标明是素材，不是必然发生的事。
+
+尺度（涉及成人内容时）:
+- 写到什么程度、可以写哪几类、明确不写的内容。
+
+少提的旧事:
+- 已经过去、正文不必反复回忆的事，一句话写清是什么，并注明「已经过去，正文不必反复提起」。
+
+[追加]
+- 后补的设定写在这里，只写新增事实，不改前面的内容。
+\`\`\`
+
+- 全篇只写已经发生的事和现在的状态，不写「将来一定会」。长线悬念写成留白，或者放进 <仅作者>。
+- 核心角色明显不会做的事（比如「不会主动示弱」），写在「人物」里他的「处事方式和底线」下面，不另开分块。
+- 只有真正会让写作跑偏的硬约束，才在句首加「⚠」。
+
+## 出稿速查
+
+- [ ] 写的都是「这个世界现在是什么样」，没有剧情走向、没有给 AI 的指令。
+- [ ] 声明写了；其他分块只写了题材需要的。
+- [ ] 铁则每条只约束一件事，不解释理由。
+- [ ] 机制写清了是什么、对谁、怎么触发、代价。
+- [ ] 用户讲过的秘密都写进了 <仅作者>，一条没丢；信息差、铁则、人物里没有写出秘密的内容；角色之间的知情差写进了信息差。
+- [ ] 人物写的是处境和处事方式，没有替用户定下的性格结论和关系结论。
+- [ ] 现代书面语，没有口语腔、古白话腔，没有堆身体细节、慢镜头和比喻。
+
+## 输出
+
+整理设定时只回三段，不加别的说明：
+
+1. 世界观正文：纯文本，按上面的分块和标题写，可以直接作为设定使用。
+2. 补定：一行一条，列出你替用户补上的内容，方便他改；没有补定就省略这一段。
+3. 速查：单独一行，写「速查：PASS」或「速查：FAIL」。
+
+讨论时不用这个格式，正常对话即可。`, GUIDE_PRESETS = [
+    {
+      value: "generic",
+      label: "通用",
+      title: "写作基准（通用）",
+      text: GENERIC_GUIDE,
+      opener: "你在帮用户构思一个故事的设定和剧情：一起把世界观、人物处境、信息差和大纲方向想清楚。"
+    },
+    {
+      value: "fanfic",
+      label: "同人世界观速成",
+      title: "写作基准：同人世界观速成",
+      text: FANFIC_GUIDE,
+      opener: "你在帮用户构思一条同人 if 线：一起把世界观、人物处境、信息差和大纲方向想清楚。"
+    },
+    {
+      value: "custom",
+      label: "自定义",
+      title: "写作基准（自定义）",
+      text: "",
+      opener: "你在帮用户构思一个故事的设定和剧情：一起把世界观、人物处境、信息差和大纲方向想清楚。"
+    }
+  ];
+  function resolveGuide(settings) {
+    let s = settings || {}, key = GUIDE_PRESETS.some((x) => x.value === s.guidePreset) ? s.guidePreset : "generic", p = GUIDE_PRESETS.find((x) => x.value === key), custom = String(s.guide || "").trim();
+    return key === "custom" && !custom && (p = GUIDE_PRESETS[0]), { preset: p.value, title: p.title, text: key === "custom" && custom ? custom : p.text, opener: p.opener };
+  }
+  var BUILTIN_GUIDE = GENERIC_GUIDE;
 
   // src/core/clue-template.js
   var FACT_VERIFIED_OLD = "已核实：正文里主角实际取得了这项结果，而且有可靠依据（亲眼看到实物、读到原件、得到明确验证）。", FACT_VERIFIED_RULE = "    · 已核实：正文里实际出现了这一行口径所说的结果（口径写了由谁取得，以那个人为准），而且有可靠依据（亲眼看到实物、读到原件、得到明确验证）。", CLUE_TPL_MARK_BEGIN = "【线索主线附加规则·剧情注入器】", CLUE_TPL_MARK_END = "【附加规则结束】", CLUE_TPL_PLACE = (depth, order, position = "at_depth_as_system") => ({ position, depth, order });
@@ -9235,280 +13058,590 @@ ${list.join(`
 要数好几个人时：表里有能数的列，就用 {计数: …}，例：「至少三个人关系到 2 以上」、关系表有「阶段」列 → {计数: {表: 关系表, 条件: 阶段 >= 2, 至少: 3}}，这种不要写成人工。表里没有能代表它的列（如「和几个人单独来往过」，表里没有记单独来往的列），不要硬凑，开启条件不写，写「开启方式: 人工」，把原来的要求写进「原开启条件」（一句话）。` : "";
   }
 
-  // src/core/guide.js
-  var FANFIC_GUIDE = `# 同人世界观速成
-
-## 用途
-
-用户给出原作、角色、类型、基调中的任意几项，产出一段世界观正文。插件会在开玩后每一轮把它交给正文模型。要复制到酒馆世界书时，只复制公开部分，删去整段 <仅作者>…</仅作者>（世界书不会去掉它）。
-
-## 语言基准（最高优先级）
-
-- 使用客观、清楚的现代书面语，直白易懂；去掉明显北方方言腔（儿、咱、甭、咋、得嘞等）和旧小说、话本的腔调（只见、却说、看官、端的、怎生等）。
-- 直接写事实、规则和结果：不把一步动作拆成慢镜头，不堆眉梢、嘴角、指尖这类身体零件，不写“不是X而是Y”式澄清，不把情绪和话拟物化。
-- 正文只写这个世界的既有事实与行动边界。不写“由AI把握、关系自然生成”这类生成器指令，不写“见XX条目”式交叉引用，不写作者说明。
-- 人称按设定定：性转、身份错位或性别认知有出入的题材，核心角色第一人称与旁白用“他”，其他角色口中与认知中用“她”；其余题材按用户指定。用户另有要求时一律按用户。
-
-## 适用
-
-只产出正文，不产出条目字段、条目标题、uid、触发方式或打包信息。
-
-输入可以只有一句话，也可以是完整设定。默认交付一段完整的世界观正文；人物、地点、机制需要单独成篇时，另出一段独立正文，不在同一段里堆索引。
-
-不写小说正文、不写场面描写、不写角色对白，不替用户写人设。
-
-## 输入
-
-从用户原话里取这几项，缺的按“补定”处理：
-
-- 原作与角色：基于哪部作品、哪几个人物、谁是核心。
-- 类型与基调：斜杠或顿号连写，如“现代都市AU / 性转 / 因果报应 / 荒诞喜剧”。
-- 时代与舞台：现代、古代、架空；故事主要发生在哪。
-- 特殊机制：这个AU自带的设定，如第二性别系统、种族、行业分层、契约或规则。
-- 尺度：是否涉及成人内容，允许写到什么程度。
-- 篇幅：只要声明加铁则，还是要人物档案、场景库与钩子库。
-
-## 执行步骤
-
-1. 定声明。一句话交代基于什么作品与人物、什么类型、什么时代、什么基调，缺项按“补定”填。
-2. 定铁则。写这个AU不可违背的几条：总受或总攻、知情圈、欠债或因果归属、性格是否锁死、NSFW尺度、人称。每条一句，能约束角色行为，不解释理由。
-3. 定机制。每个特殊机制写四件事：是什么、作用对象、触发或运行条件、代价与后果。沿用到能直接推进剧情就停，不发明第二套系统。
-4. 定信息差。写清谁知道真相、谁不知道、各方各自不知道什么。暂时不能揭示的真相本身，写进正文末尾的 <仅作者>…</仅作者>；信息差只写「谁知道这件事、谁不知道」，不写出真相的内容。
-5. 定人物处境。写身份、社会位置、开局状态、与核心角色的旧账。性格默认不写死。
-6. 定场景与钩子。场景写地点、用途与限制；钩子只写可观察信号与开放倾向，标明是可用素材。
-7. 定边界。写核心角色不会出现的状态与不许写成的内容；只写会改变写作走向的几条。
-8. 组装正文，过一遍出稿速查。
-
-## 正文骨架
-
-默认按下面顺序写；篇幅小时可只保留声明、铁则、机制、说明。全篇只写已发生的事实与现状，不写日后必然走向，长线悬念写成留白。
-
-\`\`\`
-世界观声明:
-基于: [原作与角色]
-类型: [类型与基调]
-时代: [时代与舞台]
-基调: [关键词，顿号连写]
-
-铁则:
-- [最硬的一条，如谁总受]
-- [知情圈范围]
-- [欠债或因果归属]
-- [性格是否锁死]
-- [NSFW尺度]
-- [人称规则]
-
-[机制名]设定:
-- [机制是什么]
-- [作用对象]
-- [触发或运行条件]
-- [代价与后果]
-
-人物档案:
-[角色名]——[身份与在权力或关系网中的位置]
-- [开局状态]
-- [与核心角色的旧账]
-- [行为边界]
-
-信息差结构:
-- [谁知道真相]
-- [谁不知道]
-- [各方各自不知道什么]
-
-核心矛盾:
-- [身体或处境矛盾]
-- [心理矛盾]
-
-场景库:
-- [地点或场景：定位、在这里能发生什么、有什么限制]
-
-钩子库:
-- [可用素材，不是必须发生的事。只写可观察信号与开放倾向]
-
-NSFW指引（涉及成人内容时）:
-- 基调：[写到什么程度]
-- 可用方向：[哪几类场景]
-- 不允许的内容：[明确不写的几项]
-
-不会出现的状态:
-- [核心角色明确不会做的事，如不会主动示弱、不会突然接受现状]
-
-说明:
-- [未发生当作大纲，已发生当作起点与既定事实]
-- [留白与长线悬念]
-\`\`\`
-
-用户要单独成篇时，按同样写法另起一段正文。
-
-- 信息差条目多时用表格：表头列角色，单元格写各自知道与不知道什么，行写事实项。
-- 需要模型少回放的旧事，在该段后加一句中性的说明，如\`（已经过去，正文不必反复提起）\`。不写「AI禁止……」这类命令：设定会原样交给正文模型，命令式的提醒反而让它反复想起这件事。
-- 暂时不能揭示的真相（幕后真相、真实身份、结局安排）写进正文末尾的一段 <仅作者>…</仅作者>，插件不会把它交给正文模型，作者以后写大纲还要用。
-- 硬约束前可加\`⚠️\`，只标真正会让写作跑偏的几条。
-- 后补设定用一段\`[追加]\`收尾，只写新增事实，不改动前面已写内容。
-
-## 出稿速查
-
-- [ ] 全部内容只服务于“这个世界是什么、怎么运转、人物处在什么位置”，没有条目化表述。
-- [ ] 声明与铁则必写；机制、信息差、人物处境、场景库、钩子库按题材补齐，不写无关分块。
-- [ ] 铁则每条只约束一件事，不解释理由，不写“因为/所以”。
-- [ ] 机制写清是什么、作用对象、触发条件、代价与后果。
-- [ ] 信息差单独成段，写清谁知道、谁不知道、各方各自不知道什么；暂时不能揭示的真相写在 <仅作者> 里，其他分块没有写出它。
-- [ ] 场景库写清地点与用途；钩子库标明是可用素材，不写成必将发生的事件。
-- [ ] 只写已发生事实与现状，没有必然走向；长线悬念写成留白。
-- [ ] 性格默认未锁死；用户未指定的关系结论未被坐实。
-- [ ] 人称符合设定：涉及性转或身份错位时，核心角色用“他”，其他角色口中与认知中用“她”；其余题材按用户指定。
-- [ ] 没有堆砌身体零件、动作慢镜头、抽象拟物、方言腔和旧小说腔。
-- [ ] 核心角色不会出现的状态已写明，只写会改变写作走向的几条。
-
-## 输出
-
-只回三段，不加额外说明：
-
-1. 世界观正文：纯文本，按正文骨架的分块与标题写，每个分块标题单独一行、以冒号结尾。
-2. 补定：一行一条，列出替用户补齐的项，方便他改；没有补定时省略。
-3. 速查：单独一行 \`速查：PASS / FAIL。\``, GENERIC_GUIDE = `# 写作基准（通用）
-
-## 你在帮用户做什么
-
-用户在用剧情注入器为一张角色卡准备剧情。东西分三处放：
-- 设定：这个世界现在是什么样、人物处在什么位置、什么规则不能破。开玩后每一轮都作为常驻资料交给正文模型。卡本身有世界书时，设定可以是空的。
-- 大纲：剧情按阶段怎么走。开玩后只注入当前阶段的内容。
-- 线索模式下，主角查到了什么、谁知道了什么，记在数据库的表格里，由插件按条件开放下一步。
-所以设定只写现状和规则；会随剧情变化的东西（接下来发生什么、谁什么时候知道真相）交给大纲和表格。整理出来的设定是纯文本。要复制到酒馆世界书时，只复制公开部分，删去整段 <仅作者>…</仅作者>（世界书不会去掉它）。
-
-## 语言（最高优先级）
-
-- 用客观、清楚的现代书面语，像说明文那样写：直接写事实、规则和结果。
-- 不用口语腔：不用「咱、俺、甭、咋、啥、得嘞、可不是嘛」，不加儿化音，不用「呢、呀、嘛、哩」这类语气词收尾。
-- 不用古白话腔：不用「只见、却说、看官、端的、怎生、恁地、那厢」这类旧小说、话本的套语，不模仿章回体。古代背景也写成现代书面语，只在专名和器物上用当时的叫法（官职、地名、衣物等）。
-- 不写慢镜头，不堆眉梢、嘴角、指尖这类身体细节，不写「不是 X 而是 Y」式的澄清，不给情绪打比方。
-- 不写给 AI 的指令（「由 AI 把握」「关系自然发展」），不写「见某某条目」的交叉引用，不写作者说明。
-- 人称、称呼按用户要求。题材涉及性转、身份错位时，写明旁白和各个角色分别怎么称呼核心角色。
-
-## 讨论时怎么配合
-
-- 先回应用户的想法，再指出缺口或前后矛盾，最后给两三个可选方向，标明各自会带来什么。不替用户拍板，不写小说正文。
-- 只把用户已经确认的内容当作定论；还在商量的，说清楚是建议。
-- 谈到剧情时，按大纲能直接用的样子说：分几个阶段，每个阶段主角要做成哪几件事、在什么地方。
-- 用线索推进时，再说清三件事：主角靠什么行动拿到什么信息；哪些信息只是某人的说法、哪些是实物或亲眼所见；拿到之后能去哪里、有没有别的路可以绕过去。
-- 用户提到的秘密、幕后真相，讨论时可以直说，同时提醒它在大纲里要放进 <仅作者>。
-- 和用户说话用平常的说法，不用插件内部的叫法（不说「事实表」「知情表」「节点」「阶段键」），说「主角查到了什么」「谁知道这件事」「这一步」。
-- 讨论页只讨论，不输出大纲格式。用户想改大纲时，提醒他点讨论页上方的「审阅修改」，选好剧情线逐页写意见。
-- 参考资料（设定、大纲、正文、世界书、剧情进度）里已经写明的内容，以参考资料为准；和用户这一轮说的冲突时，指出来问用户。
-- 用户要你整理成设定时，按下面「输出」的格式写；平时讨论用正常对话。
-
-## 秘密分两层
-
-- **作者知道、角色和正文都不该知道的**（幕后真相、真实身份、结局安排）：用 <仅作者>…</仅作者> 包住。插件不会把它交给正文模型，但讨论和写大纲时你能看到。
-- **一部分角色知道、另一部分不知道的**：写进「信息差」。这是正文要演出来的，正文模型需要知道谁知道什么。
-- 主角不知道的事，不要写成「主角隐约感到……」去暗示。
-- 秘密本身只能出现在 <仅作者> 里。信息差、铁则、人物里写到「某人不知道这件事」时，只写他不知道什么方面（「不知道货的真正去向」），不把秘密的内容写出来（不写「不知道是某某偷的」）。
-- 用户讲过的秘密不能丢：整理设定时，把它完整写进一段 <仅作者>…</仅作者>（放在设定末尾即可），作者以后写大纲还要用。
-
-## 输入
-
-从用户的话里取这几项；缺的按「补定」处理，用户另有说法就以用户为准：
-
-- 题材来源：原创，还是基于某部作品（哪部、哪几个人物、谁是核心）。
-- 类型与基调：如「民国 / 悬疑 / 慢节奏」「现代 / 日常 / 轻喜剧」。
-- 时代与舞台：故事主要发生在哪。
-- 主角：通常是 {{user}}，写清楚主角在这个世界里的身份和处境；用户没说的不替他设定性格。
-- 特殊规则：这个世界独有的机制（超能力、契约、行业规矩、第二性别、跑团规则等）。
-- 尺度：是否涉及成人内容，写到什么程度。
-- 篇幅：只要几条要点，还是要人物、地点、机制都展开。
-
-## 设定的分块
-
-只有「声明」必写，其他分块按题材需要取用；小设定写三四块就够，不要为了齐全硬写。每块一个标题，单独一行，以冒号结尾。
-
-\`\`\`
-声明:
-题材: [原创 / 基于某作品的哪几个人物]
-类型: [类型与基调]
-舞台: [时代与地点]
-主角: [{{user}} 在这个世界里的身份和处境]
-
-铁则:
-- [这个世界不能破的规则，每条一句，只约束一件事，不解释理由]
-
-[机制名]:
-- 是什么、作用在谁身上、怎么触发、代价是什么。写到能推动剧情为止，不另造第二套体系。
-
-人物:
-[名字]：[身份，在关系网里的位置]
-- 现在的处境
-- 和主角的关系、旧账
-- 处事方式和底线（会怎么做、绝不会做什么；不写「他其实很温柔」这类结论）
-
-信息差:
-- 每个关键角色知道什么、不知道什么、误会了什么。条目多时用表格：行是事实，列是角色。
-
-地点:
-- [地点]：在这里能做什么、有什么限制、谁常在这里。
-
-可用素材:
-- 可以随时用进正文的小事、传闻、可观察的迹象。标明是素材，不是必然发生的事。
-
-尺度（涉及成人内容时）:
-- 写到什么程度、可以写哪几类、明确不写的内容。
-
-少提的旧事:
-- 已经过去、正文不必反复回忆的事，一句话写清是什么，并注明「已经过去，正文不必反复提起」。
-
-[追加]
-- 后补的设定写在这里，只写新增事实，不改前面的内容。
-\`\`\`
-
-- 全篇只写已经发生的事和现在的状态，不写「将来一定会」。长线悬念写成留白，或者放进 <仅作者>。
-- 核心角色明显不会做的事（比如「不会主动示弱」），写在「人物」里他的「处事方式和底线」下面，不另开分块。
-- 只有真正会让写作跑偏的硬约束，才在句首加「⚠」。
-
-## 出稿速查
-
-- [ ] 写的都是「这个世界现在是什么样」，没有剧情走向、没有给 AI 的指令。
-- [ ] 声明写了；其他分块只写了题材需要的。
-- [ ] 铁则每条只约束一件事，不解释理由。
-- [ ] 机制写清了是什么、对谁、怎么触发、代价。
-- [ ] 用户讲过的秘密都写进了 <仅作者>，一条没丢；信息差、铁则、人物里没有写出秘密的内容；角色之间的知情差写进了信息差。
-- [ ] 人物写的是处境和处事方式，没有替用户定下的性格结论和关系结论。
-- [ ] 现代书面语，没有口语腔、古白话腔，没有堆身体细节、慢镜头和比喻。
-
-## 输出
-
-整理设定时只回三段，不加别的说明：
-
-1. 世界观正文：纯文本，按上面的分块和标题写，可以直接作为设定使用。
-2. 补定：一行一条，列出你替用户补上的内容，方便他改；没有补定就省略这一段。
-3. 速查：单独一行，写「速查：PASS」或「速查：FAIL」。
-
-讨论时不用这个格式，正常对话即可。`, GUIDE_PRESETS = [
-    {
-      value: "generic",
-      label: "通用",
-      title: "写作基准（通用）",
-      text: GENERIC_GUIDE,
-      opener: "你在帮用户构思一个故事的设定和剧情：一起把世界观、人物处境、信息差和大纲方向想清楚。"
-    },
-    {
-      value: "fanfic",
-      label: "同人世界观速成",
-      title: "写作基准：同人世界观速成",
-      text: FANFIC_GUIDE,
-      opener: "你在帮用户构思一条同人 if 线：一起把世界观、人物处境、信息差和大纲方向想清楚。"
-    },
-    {
-      value: "custom",
-      label: "自定义",
-      title: "写作基准（自定义）",
-      text: "",
-      opener: "你在帮用户构思一个故事的设定和剧情：一起把世界观、人物处境、信息差和大纲方向想清楚。"
-    }
-  ];
-  function resolveGuide(settings) {
-    let s = settings || {}, key = GUIDE_PRESETS.some((x) => x.value === s.guidePreset) ? s.guidePreset : "generic", p = GUIDE_PRESETS.find((x) => x.value === key), custom = String(s.guide || "").trim();
-    return key === "custom" && !custom && (p = GUIDE_PRESETS[0]), { preset: p.value, title: p.title, text: key === "custom" && custom ? custom : p.text, opener: p.opener };
+  // src/ui/ai.js
+  function ask(view, role, messages, { signal, onText } = {}) {
+    return requestLlm(messages, resolveLlm(view.data.settings(), role), { signal, onText });
   }
-  var BUILTIN_GUIDE = GENERIC_GUIDE;
+  function guideText(view) {
+    return guideInfo(view).text;
+  }
+  async function talkText(view, limit = 3e4) {
+    let chat = await view.data.loadChat(view.projectId);
+    return transcript(chat.summary, chat.messages, limit);
+  }
+  async function runTask(view, key, job) {
+    if (view.busy[key]) return null;
+    let projectId = view.projectId;
+    view.setBusy(key, !0);
+    try {
+      let result2 = await job();
+      return view.projectId === projectId ? result2 : null;
+    } finally {
+      view.setBusy(key, !1);
+    }
+  }
+  function guideInfo(view) {
+    return resolveGuide(view.data.settings());
+  }
+
+  // src/trpg/trpg-steer.js
+  var result = null, VERDICT_BADGE = { 跟着剧本: "is-ok", 有点偏: "is-warn", 跑偏了: "is-warn" };
+  function nodeName(ns) {
+    return ns.node.name || ns.node.uid;
+  }
+  function sceneHintHtml(c) {
+    if (!c || !KP_UNSET_SOURCES.includes(c.state.focus.source)) return "";
+    let nodes = c.state.nodeStates.filter((ns) => (ns.status === "available" || ns.status === "active") && !ns.disabled && ns.node.uid);
+    return `<p class="pi-hint is-warn">${KP_UNSET_HINT}</p>${nodes.length ? `<div class="pi-row"><select class="pi-sel pi-grow" data-kp-scene>${nodes.map((ns) => `<option value="${esc(ns.node.uid)}">${esc(nodeName(ns))}</option>`).join("")}</select><button type="button" class="pi-btn is-sm" data-act="kp-scene">设为本轮场景</button></div>` : ""}`;
+  }
+  function timelineHintHtml(project, now) {
+    return now == null && parseTimeline(project.setting && project.setting.text).length ? '<p class="pi-hint">没有读到游戏内时间，时间线不会自动推进。</p>' : "";
+  }
+  function steerResultHtml(project) {
+    let r = result && result.projectId === project.id ? result : null;
+    return r ? `<p class="pi-hint">${r.verdict ? `<span class="pi-badge ${VERDICT_BADGE[r.verdict]}">${esc(r.verdict)}</span>` : "没有认出结论，可以再检查一次。"} ${esc(r.plain.join("；"))}${r.spoil.length ? ` <button type="button" class="pi-btn is-sm is-ghost" data-act="kp-steer-spoil">${r.open ? "收起" : "展开（会剧透）"}</button>` : ""}</p>${r.open ? r.spoil.map((t) => `<p class="pi-hint">${esc(t)}</p>`).join("") : ""}${r.steer ? '<p class="pi-hint"><button type="button" class="pi-btn is-sm" data-act="kp-steer-apply">按建议拉回</button></p>' : ""}` : "";
+  }
+  function liveStage(c) {
+    let focus = c.state.nodeStates.find((s) => s.node.uid && s.node.uid === c.state.focus.uid);
+    return focus && c.state.stageStates.get(focus.node.unit.id) || [...c.state.stageStates.values()].find((s) => s.entered.v === "true" && !s.done);
+  }
+  function buildRequest(view, project, c) {
+    return steerMessages(steerContext(project, c));
+  }
+  function steerContext(project, c) {
+    let recent = chatMessages().filter((m) => m && !m.is_system && String(m.mes || "").trim()).slice(-6).map((m) => ({ user: !!m.is_user, text: m.mes })), live2 = liveStage(c), stage = live2 && live2.unit.stage ? stringifyYaml({ [live2.unit.stage.key || live2.unit.id]: live2.unit.stage.data }) : "", block = splitBlocks(project.setting && project.setting.text).find((b) => b.title === KP_BLOCK && !b.cont), facts = chatFactSets2({ snap: c.snap, prog: c.prog }).known.map((id) => {
+      let text2 = effectiveFact2(id, c.snap, c.prog).text;
+      return `${id}${text2 ? `：${Array.isArray(text2) ? text2.join("、") : text2}` : ""}`;
+    });
+    return { recent, stage, rules: block ? block.text : "", facts };
+  }
+  var steerActions = {
+    "kp-scene"(view, target) {
+      let sel = target.parentElement && target.parentElement.querySelector("[data-kp-scene]");
+      if (!(!sel || !sel.value)) {
+        try {
+          view.runtime.clue.setFocus(sel.value);
+        } catch (error) {
+          toast("error", error && error.message || String(error));
+        }
+        view.renderBody();
+      }
+    },
+    "kp-steer-spoil"(view) {
+      result && (result.open = !result.open), view.renderBody();
+    },
+    async "kp-steer"(view) {
+      let c = view.runtime.clue.compute();
+      if (!c) return;
+      let project = view.project(), messages = buildRequest(view, project, c);
+      try {
+        let reply2 = await runTask(view, "kp-steer", () => ask(view, "outline", messages));
+        if (reply2 == null) return;
+        result = { ...parseSteerReply(reply2), projectId: view.projectId, open: !1 };
+      } catch (error) {
+        toast("error", `对照剧本失败：${error && error.message || error}`);
+      }
+      view.renderBody();
+    },
+    // 这里不直接写进度：由 kpCard 的 saveKp 统一保存，见 trpg-kp-card.js
+    "kp-steer-apply"(view) {
+      if (!result || !result.steer) return;
+      let prog = view.runtime.progress();
+      view.runtime.setProgress(
+        { ...prog, trpgKp: { ...prog.trpgKp || {}, push: { kind: "steer", text: result.steer, floor: aiFloorCount2(chatMessages()) } } },
+        "trpg-kp"
+      ), toast("success", "下一轮会按建议拉回。"), view.renderBody();
+    }
+  };
+
+  // src/core/check.js
+  function cleanFloorText(text2, limit = 3e3) {
+    let out = String(text2 || "");
+    return out = out.replace(/<(think|thinking|reasoning|status|statusbar|状态栏|details)\b[^>]*>[\s\S]*?<\/\1>/gi, ""), out = out.replace(/```[\s\S]*?```/g, ""), out = out.replace(/<\s*剧情推进\s*\/?\s*>/g, ""), out = out.replace(/<[^>\n]{1,80}>/g, ""), out = out.replace(/\n{3,}/g, `
+
+`).trim(), out.length > limit ? out.slice(-limit) : out;
+  }
+  function threadRules(threads) {
+    if (!threads) return null;
+    let clocks = Array.isArray(threads.clocks) ? threads.clocks : [], keys = [], rules = [];
+    if (clocks.length && (keys.push('"clocks":[{"name":"进度钟名称","tick":推进格数,"happened":true或false}]'), rules.push(
+      `clocks 对照剧情索引里的【世界进度钟】（${clocks.map((clock) => `${clock.name} ${clock.filled}/${clock.total}`).join("、")}）：正文里有推动这件事的进展就填正数，每次最多 2 格；玩家出手阻止、使局势缓和就填负数；没有变化就省略。只有正文已经写出这件事发生时，happened 才填 true。`
+    )), threads.hooks && (keys.push('"hooks":["支线名"]'), rules.push(
+      "hooks 填【支线钩子】里标为「待触发」、出现条件已在正文中满足的支线名。支线已经在正文里演出时，把支线名填进 done；支线链只在当前这一步演出时填。"
+    )), threads.newThread) {
+      keys.push('"newThread":{"name":"线名","summary":"一句话概括"}'), rules.push(
+        "玩家在正文里主动开了一条大纲和剧情索引里都没有的线（例如接下新的委托、追查新的线索、发展新的关系）时填 newThread，没有就填 null。"
+      );
+      let ignored = Array.isArray(threads.ignored) ? threads.ignored.slice(-10) : [];
+      ignored.length && rules.push(`以下线已被忽略，不要再填进 newThread：${ignored.join("、")}。`);
+    }
+    return clocks.length && threads.readTo > 0 && rules.push("标有「已读」的楼层上次检测已经读过，clocks 只按之后的新楼层推进；没有新楼层时省略 clocks 的推进。"), keys.length ? { keys, rules, hooks: !!threads.hooks, readTo: clocks.length && Number(threads.readTo) || 0 } : null;
+  }
+  var PERSONA_KEY = '"personas":[{"line":"线名","to":"下一阶段名","floor":依据所在楼号,"reason":"一句话依据"}]', PERSONA_RULE = "personas 对照【人设阶段】：只填正文里已经写出、满足该线「进入条件」的线；to 只能填该线的下一阶段名，不能跳段、不能退回；floor 填依据所在的楼号，reason 写一句依据。没有满足的就填空数组。";
+  function personaLines(items) {
+    return items.map(
+      (item) => `- ${item.group ? `${item.group}·` : ""}${item.name}：当前「${item.from}」；下一阶段「${item.to}」，进入条件：${item.cond || "（未写，按阶段名判断）"}`
+    ).join(`
+`);
+  }
+  var FACT_KEY = '"facts":[{"id":"编号","floor":写出这件事的楼号}]', FACT_RULE = "facts 对照【待确认的事】：只有正文已经明确写出这件事发生了才填，id 原样照抄，floor 填写出它的楼号。只是提到、计划、猜测、角色以为的都不算。没有就填空数组。";
+  function factLines(items) {
+    return items.map((item) => `- ${item.id}：${item.text}`).join(`
+`);
+  }
+  var EMPTY_NAMES = /^(?:无|没有|暂无|空|none|null|nil|n\/a|na|undefined|-|—|无新线|没有新线|没有新的线)$/i, isEmptyName = (name) => EMPTY_NAMES.test(
+    String(name).trim().replace(/[。．.！!？?；;，,、\s]+$/, "").trim()
+  );
+  function buildCheckMessages(unit, index, floors, threads = null, personas2 = null, facts = null) {
+    let extra = threadRules(threads), pItems = Array.isArray(personas2) ? personas2 : [], fItems = Array.isArray(facts) ? facts : [], format = '{"done":["节点名"],"stageDone":true或false,"offTrack":true或false,"offReason":"偏离说明，没有就留空","reason":"一句话"}', system = [
+      "你是剧情进度核对员。根据最近的正文，对照剧情索引判断进度。",
+      "只认正文里已经写出的事件，计划、预告、角色设想不算发生。",
+      "若剧情走了某个节点的「偏转」分支，在 reason 里写明是哪个节点、怎么偏的。",
+      "另外判断剧情是否严重偏离大纲：正文的走向已经和【当前】【下一段】冲突，照原计划写下去会接不上（例如关键人物已死、关键事件已不可能发生、地点或立场彻底改变）。普通的细节出入、走了偏转分支都不算严重偏离。",
+      `只输出一个 JSON 对象，不加说明：${extra || pItems.length || fItems.length ? `${format.slice(0, -1)}${[...extra ? extra.keys : [], ...pItems.length ? [PERSONA_KEY] : [], ...fItems.length ? [FACT_KEY] : []].map((key) => `,${key}`).join("")}}` : format}`,
+      `done 只填${extra && extra.hooks ? "【当前】或【支线钩子】" : "【当前】"}里出现过的节点名，原样照抄；stageDone 表示当前段所有主线节点都已发生、剧情已进入下一段。`,
+      ...extra ? extra.rules : [],
+      ...pItems.length ? [PERSONA_RULE] : [],
+      ...fItems.length ? [FACT_RULE] : []
+    ].join(`
+`), readTo = extra ? extra.readTo : 0, user = [
+      `【剧情索引】
+${index}`,
+      ...pItems.length ? ["", `【人设阶段】
+${personaLines(pItems)}`] : [],
+      ...fItems.length ? ["", `【待确认的事】
+${factLines(fItems)}`] : [],
+      "",
+      "【最近正文】",
+      ...floors.map((floor) => `【第 ${floor.index} 楼${readTo > 0 && floor.index < readTo ? "·已读" : ""}】
+${floor.text}`)
+    ].join(`
+`);
+    return [
+      { role: "system", content: system },
+      { role: "user", content: user }
+    ];
+  }
+  function buildPersonaCheckMessages(items, floors, facts = []) {
+    let fItems = Array.isArray(facts) ? facts : [], system = [
+      items.length ? "你是人设阶段核对员。根据最近的正文，判断下列人设线是否已经进入下一阶段。" : "你是剧情核对员。根据最近的正文，判断下列事情是否已经在正文中发生。",
+      ...items.length && fItems.length ? ["同时判断【待确认的事】是否已经发生。"] : [],
+      "只认正文里已经写出的事件，计划、预告、角色设想不算发生。",
+      `只输出一个 JSON 对象，不加说明：{${[...items.length ? [PERSONA_KEY] : [], ...fItems.length ? [FACT_KEY] : []].join(",")}}`,
+      ...items.length ? [PERSONA_RULE] : [],
+      ...fItems.length ? [FACT_RULE] : []
+    ].join(`
+`), user = [
+      ...items.length ? [`【人设阶段】
+${personaLines(items)}`] : [],
+      ...fItems.length ? [`${items.length ? `
+` : ""}【待确认的事】
+${factLines(fItems)}`] : [],
+      "",
+      "【最近正文】",
+      ...floors.map((floor) => `【第 ${floor.index} 楼】
+${floor.text}`)
+    ].join(`
+`);
+    return [
+      { role: "system", content: system },
+      { role: "user", content: user }
+    ];
+  }
+  function parseCheckReply(text2) {
+    let raw = String(text2 || ""), start = raw.indexOf("{"), end = raw.lastIndexOf("}");
+    if (start < 0 || end <= start) throw new Error("检测结果不是 JSON");
+    let value;
+    try {
+      value = JSON.parse(raw.slice(start, end + 1));
+    } catch {
+      throw new Error("检测结果 JSON 无法解析");
+    }
+    let done = Array.isArray(value.done) ? value.done.map((item) => String(item).trim()).filter(Boolean) : [], flag2 = (item) => item === !0 || item === "true";
+    return {
+      done,
+      stageDone: flag2(value.stageDone),
+      offTrack: flag2(value.offTrack),
+      offReason: String(value.offReason || "").trim(),
+      reason: String(value.reason || "").trim(),
+      clocks: parseClocks(value.clocks, flag2),
+      hooks: names(value.hooks),
+      newThread: parseThread(value.newThread),
+      ...Array.isArray(value.personas) ? { personas: parsePersonaMoves(value.personas) } : {},
+      ...Array.isArray(value.facts) ? { facts: parseFactHits(value.facts) } : {}
+    };
+  }
+  var CLOCK_TICK_MAX = 2, names = (list) => Array.isArray(list) ? list.map((item) => String(item ?? "").trim()).filter(Boolean) : [];
+  function parseClocks(raw, flag2) {
+    return (Array.isArray(raw) ? raw : raw && typeof raw == "object" ? Object.entries(raw).map(([name, item]) => item && typeof item == "object" ? { name, ...item } : { name, tick: item }) : []).filter((item) => item && typeof item == "object").map((item) => {
+      let tick = Math.round(Number(item.tick ?? item.advance ?? item.推进));
+      return {
+        name: String(item.name ?? item.名称 ?? "").trim(),
+        tick: Number.isFinite(tick) ? Math.min(CLOCK_TICK_MAX, tick) : 0,
+        happened: flag2(item.happened ?? item.发生)
+      };
+    }).filter((item) => item.name);
+  }
+  function parseFactHits(raw) {
+    return (Array.isArray(raw) ? raw : []).map((item) => typeof item == "string" ? { id: item } : item).filter((item) => item && typeof item == "object").map((item) => ({ id: String(item.id ?? item.编号 ?? "").trim(), floor: Math.round(Number(item.floor ?? item.楼)) || 0 })).filter((item) => item.id);
+  }
+  function parsePersonaMoves(raw) {
+    return (Array.isArray(raw) ? raw : []).filter((item) => item && typeof item == "object").map((item) => ({
+      line: String(item.line ?? item.线 ?? "").trim(),
+      to: String(item.to ?? item.到 ?? "").trim(),
+      floor: Math.round(Number(item.floor ?? item.楼)) || 0,
+      reason: String(item.reason ?? item.依据 ?? "").trim()
+    })).filter((item) => item.line && item.to);
+  }
+  function parseThread(raw) {
+    if (!raw) return null;
+    let item = typeof raw == "string" ? { name: raw } : raw;
+    if (typeof item != "object") return null;
+    let name = String(item.name ?? item.名称 ?? "").trim().slice(0, 40);
+    return name && !isEmptyName(name) ? {
+      name,
+      summary: String(item.summary ?? item.概括 ?? "").trim().slice(0, 200)
+    } : null;
+  }
+  function buildClueCheckMessages(material, floors, personas2 = []) {
+    let system = [
+      "你是剧情核对员。根据最近的正文，判断下面这个场景里列出的发现是否已经在正文中实际发生。",
+      "只认正文里已经写出的事件：到了地点不等于找到证据，答应提供不等于已经拿到，计划和猜测都不算。",
+      `只输出一个 JSON 对象，不加说明：{"done":["已发生的发现原文"],"stageDone":true或false,"offTrack":false,"offReason":"","reason":"一句话说明依据"${personas2.length ? `,${PERSONA_KEY}` : ""}}`,
+      "done 只能照抄下面【可能的发现】里的条目；stageDone 表示这个场景已经结束。",
+      ...personas2.length ? [PERSONA_RULE] : []
+    ].join(`
+`), user = ["【场景】", material, ...personas2.length ? [`【人设阶段】
+${personaLines(personas2)}`] : [], "", "【最近正文】", ...floors.map((floor) => `【第 ${floor.index} 楼】
+${floor.text}`)].join(`
+`);
+    return [
+      { role: "system", content: system },
+      { role: "user", content: user }
+    ];
+  }
+
+  // src/trpg/trpg-kp-check.js
+  var KP_LOG_MAX = 20, KP_NOTE = "KP判定", QUOTE_MIN = 4, kpAutoOn = (settings) => !settings || settings.trpgAutoCheck !== !1;
+  function recentTwo(messages, limit = 4e3) {
+    let out = [];
+    for (let i = (messages || []).length - 1; i >= 0 && out.length < 2; i -= 1) {
+      let m = messages[i];
+      if (!m || m.is_system) continue;
+      let text2 = cleanFloorText(m.mes, limit);
+      text2 && out.unshift({ user: !!m.is_user, text: text2 });
+    }
+    return out;
+  }
+  function kpCandidates({ prog, chat, floor, state, snap: snap2, effective, checks }) {
+    let msg = chat && chat[floor];
+    if (!msg || msg.is_user) return [];
+    let entry = (Array.isArray(prog && prog.clueCandidates) ? prog.clueCandidates : []).find(
+      (x) => x.i === floor && x.swipe === (Number(msg.swipe_id) || 0) && String(x.stamp ?? "") === String(msg.send_date ?? "")
+    ), out = [], seen = /* @__PURE__ */ new Set();
+    for (let c of entry && entry.candidates || []) {
+      if (!c || !c.fact || seen.has(c.fact)) continue;
+      let hit = kpFind(state, c.fact);
+      if (!hit || effective(c.fact, snap2).confirmed) continue;
+      let d = hit.discovery, gate = d.check ? checkLine(d, checks) : null;
+      gate && !gate.reveal || (seen.add(c.fact), out.push({ fact: c.fact, text: d.text, record: c.record || d.record || "" }));
+    }
+    return out;
+  }
+  function kpPendingSays({ compiled, state, conds }) {
+    let done = new Set(Object.keys(conds || {}).map(sayKey)), out = [], add = (cond) => sayAtoms(cond).forEach((t) => !done.has(sayKey(t)) && !out.includes(t) && out.push(t)), units = compiled.units || [];
+    for (let [i, unit] of units.entries()) {
+      let st9 = state.stageStates.get(unit.id);
+      if (!st9 || st9.entered.v !== "true" || st9.done) continue;
+      add(unit.clue.end);
+      let next = units[i + 1];
+      next && next.clue && next.clue.hasEnter && add(next.clue.enter);
+      for (let ns of state.nodeStates)
+        ns.node.unit !== unit || ns.skipped || ns.disabled || (ns.status === "locked" && add(ns.node.open), (ns.status === "available" || ns.status === "active") && add(ns.node.done));
+    }
+    return out;
+  }
+  function kpScenes(state) {
+    return state.nodeStates.filter((ns) => (ns.status === "available" || ns.status === "active") && !ns.disabled && ns.node.uid).map((ns) => ({ uid: ns.node.uid, name: ns.node.name || ns.node.uid, entry: String(ns.node.item && ns.node.item.入口 || "") }));
+  }
+  function kpCheckMessages({ recent, candidates, says, scenes, stage, rules, labelOf = (id) => id }) {
+    return [
+      {
+        role: "system",
+        content: [
+          "你是跑团模组的 KP 助手。读最近的正文，判断下面列出的条目有没有真的发生。只判断，不续写。",
+          "规则：",
+          "1. 只判断列出来的条目，不要判断别的，也不要补充没列出来的。",
+          "2. pass 为 true 时，quote 必须是从正文里原样抄下来的一句话作为证据；抄不出原句，就判 false。",
+          "3. 线索的「记录」是判断标准，不要放宽。正文只是暗示、猜测、路过、还没真正到手的，判 false。",
+          "4. 条件按字面判断，正文里已经发生、已经成立才算。",
+          "5. scene：这一轮故事主要发生的场景，填「场景」列表里的编号；不确定就留空。",
+          "6. offTrack：正文明显偏离了当前阶段的模组内容（编了模组里没有的重要人物、地点、线索，跳过了该进行的内容，提前揭示了后面的真相）才算 true；玩家做了计划外的小事不算。offReason 用玩家看得到的话写，不写具体真相；pullBack 是给正文的一小段拉回建议，同样不写玩家不该知道的真相。没偏离时 offReason、pullBack 留空。",
+          "严格输出一个 JSON，不要写别的：",
+          '{"facts":[{"id":"编号","pass":true,"quote":"正文原句","why":"一句话"}],"conds":[{"text":"条件原文","pass":true,"quote":"正文原句"}],"scene":"节点编号或空","offTrack":false,"offReason":"","pullBack":""}',
+          "没有要判断的线索或条件时，facts、conds 写空数组。"
+        ].join(`
+`)
+      },
+      {
+        role: "user",
+        content: [
+          `【最近正文】
+${recent.map((m) => `${m.user ? "玩家" : "正文"}：${m.text}`).join(`
+
+`) || "（没有）"}`,
+          candidates.length ? `【要判断的线索】
+${candidates.map((c) => `- id ${c.fact}（${labelOf(c.fact)}）：${c.text}${c.record ? `
+  记录标准：${c.record}` : ""}`).join(`
+`)}` : `【要判断的线索】
+（没有）`,
+          says.length ? `【要判断的条件】
+${says.map((t) => `- ${t}`).join(`
+`)}` : `【要判断的条件】
+（没有）`,
+          scenes.length ? `【场景】
+${scenes.map((s) => `- ${s.uid}：${s.name}${s.entry ? `（${s.entry}）` : ""}`).join(`
+`)}` : "",
+          `【当前阶段的模组内容（作者视角）】
+${stage || "（没有进行中的阶段）"}`,
+          rules && `【KP规则】
+${rules}`
+        ].filter(Boolean).join(`
+
+`)
+      }
+    ];
+  }
+  var flag = (v) => v === !0 || v === "true", str2 = (v) => String(v ?? "").trim();
+  function parseKpReply(text2) {
+    let raw = String(text2 || ""), a = raw.indexOf("{"), b = raw.lastIndexOf("}");
+    if (a < 0 || b <= a) throw new Error("检测结果不是 JSON");
+    let v;
+    try {
+      v = JSON.parse(raw.slice(a, b + 1));
+    } catch {
+      throw new Error("检测结果 JSON 无法解析");
+    }
+    let list = (x) => Array.isArray(x) ? x.filter((i) => i && typeof i == "object") : [];
+    return {
+      facts: list(v.facts).map((x) => ({ id: str2(x.id), pass: flag(x.pass), quote: str2(x.quote), why: str2(x.why) })),
+      conds: list(v.conds).map((x) => ({ text: str2(x.text), pass: flag(x.pass), quote: str2(x.quote), why: str2(x.why) })),
+      scene: str2(v.scene),
+      offTrack: flag(v.offTrack),
+      offReason: str2(v.offReason),
+      pullBack: str2(v.pullBack)
+    };
+  }
+  function quoteIn(quote, hay) {
+    let q = sayKey(quote);
+    return q.length >= QUOTE_MIN && sayKey(hay).includes(q);
+  }
+  function verifyKp(parsed, { candidates, says, scenes, recent }) {
+    let all = recent.map((m) => m.text).join(`
+`), ai = recent.filter((m) => !m.user).map((m) => m.text).join(`
+`), facts = [];
+    for (let c of candidates) {
+      let r = parsed.facts.find((x) => x.id === c.fact);
+      if (!r) {
+        facts.push({ id: c.fact, ok: !1, why: "", note: "检测没有给出结论", quote: "" });
+        continue;
+      }
+      let ok = r.pass && quoteIn(r.quote, ai);
+      facts.push({ id: c.fact, ok, why: r.why, quote: r.quote, note: ok ? "" : r.pass ? "给出的原句在正文里找不到" : "正文里没有拿到" });
+    }
+    let conds = [];
+    for (let text2 of says) {
+      let r = parsed.conds.find((x) => sayKey(x.text) === sayKey(text2));
+      if (!r) {
+        conds.push({ text: text2, ok: !1, why: "", note: "检测没有给出结论", quote: "" });
+        continue;
+      }
+      let ok = r.pass && quoteIn(r.quote, all);
+      conds.push({ text: text2, ok, why: r.why, quote: r.quote, note: ok ? "" : r.pass ? "给出的原句在正文里找不到" : "还没成立" });
+    }
+    let scene = scenes.find((s) => s.uid === parsed.scene);
+    return {
+      facts,
+      conds,
+      scene: scene ? scene.uid : "",
+      sceneName: scene ? scene.name : "",
+      offTrack: parsed.offTrack,
+      offReason: parsed.offReason,
+      pullBack: parsed.pullBack
+    };
+  }
+  function kpFactLabel(labels, id, text2) {
+    return labels && labels[id] && labels[id].label || (String(text2 || "").length > 12 ? `${String(text2).slice(0, 12)}…` : String(text2 || "") || "一条线索");
+  }
+  function kpLogEntry({ floor, at = Date.now(), result: result2, labelOf, scenes, off }) {
+    return {
+      at,
+      floor,
+      facts: result2.facts.map((x) => ({ label: labelOf(x.id), ok: x.ok, why: x.ok ? x.why : x.note || x.why, quote: x.ok ? x.quote : "" })),
+      conds: result2.conds.map((x) => ({ text: x.text, ok: x.ok, why: x.ok ? x.why : x.note || x.why, quote: x.ok ? x.quote : "" })),
+      scene: result2.sceneName || "",
+      off: !!off,
+      offReason: result2.offTrack ? result2.offReason : ""
+    };
+  }
+  function pushLog(log, entry) {
+    return [...Array.isArray(log) ? log : [], entry].slice(-KP_LOG_MAX);
+  }
+  function kpSummary(entry) {
+    return entry ? `拿到${entry.facts.filter((x) => x.ok).length}条线索 · ${entry.scene ? `场景${entry.scene}` : "场景没变"} · ${entry.off ? "偏离了模组" : "未偏离"}` : "";
+  }
+
+  // src/trpg/trpg-kp-run.js
+  var CHECK_RETRIES = 3, RETRY_GAP_MS = 2e3;
+  function createKpRunner(deps) {
+    let { data, notice, log } = deps, running2 = !1, again = !1, lastKey = "";
+    function kpOf() {
+      return (deps.getProgress() || {}).trpgKp || {};
+    }
+    function saveKp2(patch) {
+      let prog = deps.getProgress();
+      prog && deps.setProgress({ ...prog, trpgKp: { ...prog.trpgKp || {}, ...patch } }, "trpg-kp");
+    }
+    async function run({ floor = -1, manual = !1 } = {}) {
+      let project = deps.getProject();
+      if (!project || !kpAutoOn(data.settings())) return null;
+      if (running2) return again = !0, log("跑团检测：上一次还没结束，结束后再检测"), null;
+      let chat = chatMessages(), at = floor >= 0 && chat[floor] && !chat[floor].is_user ? floor : chat.length - 1, msg = chat[at];
+      if (!msg || msg.is_user || msg.is_system) return null;
+      let key = `${deps.ticket().chat}:${at}:${Number(msg.swipe_id) || 0}:${msg.send_date ?? ""}`;
+      if (!manual && key === lastKey) return null;
+      let c = deps.clue.compute();
+      if (!c || !c.snap.api || c.prog.paused || !c.snap.enabled) return null;
+      running2 = !0;
+      let iso0 = deps.clue.opScope().iso, t = deps.ticket();
+      try {
+        lastKey = key;
+        let checks = trpgCheckResults(chat), recent = recentTwo(chat), candidates = kpCandidates({ prog: deps.getProgress(), chat, floor: at, state: c.state, snap: c.snap, effective: (id, snap2) => effectiveFact2(id, snap2, c.prog), checks }), says = kpPendingSays({ compiled: c.compiled, state: c.state, conds: c.prog.trpgConds }), scenes = kpScenes(c.state), labels = isPlainObject(project.clue.labels) ? project.clue.labels : {}, labelOf = (id) => kpFactLabel(labels, id, (candidates.find((x) => x.fact === id) || {}).text), ctx2 = steerContext(project, c), messages = kpCheckMessages({ recent, candidates, says, scenes, stage: ctx2.stage, rules: ctx2.rules, labelOf });
+        log(`跑团检测：第 ${at} 楼，${candidates.length} 条线索、${says.length} 个条件`);
+        let parsed = null;
+        for (let attempt = 0; ; attempt += 1)
+          try {
+            if (!deps.ticketValid(t)) return null;
+            parsed = parseKpReply(await requestLlm(messages, resolveLlm(data.settings(), "check"), { timeoutMs: 12e4 }));
+            break;
+          } catch (error) {
+            if (!deps.ticketValid(t) || attempt >= CHECK_RETRIES) throw error;
+            log(`跑团检测请求失败：${error.message}，${RETRY_GAP_MS / 1e3} 秒后第 ${attempt + 1} 次重试`), await new Promise((resolve) => deps.setTimeout(resolve, RETRY_GAP_MS));
+          }
+        if (!deps.ticketValid(t)) return log("跑团检测返回时聊天或项目已切换，结果丢弃"), null;
+        let now = chatMessages()[at];
+        if (!now || now.send_date !== msg.send_date || (Number(now.swipe_id) || 0) !== (Number(msg.swipe_id) || 0))
+          return log("跑团检测返回时这一楼已经变了，结果丢弃"), null;
+        notice.hide("checkfail");
+        let result2 = verifyKp(parsed, { candidates, says, scenes, recent }), prog0 = c.prog.factOverrides || {}, recorded = [];
+        for (let f of result2.facts)
+          if (!(!f.ok || prog0[f.id]))
+            try {
+              let text2 = (candidates.find((x) => x.fact === f.id) || {}).text || "";
+              deps.clue.act({ kind: "fact", target: f.id, value: "confirmed", text: text2, note: KP_NOTE }), recorded.push({ id: f.id, text: text2, label: labelOf(f.id) });
+            } catch (error) {
+              log(`跑团检测：记录线索失败：${error.message}`);
+            }
+        if (result2.scene && result2.scene !== c.state.focus.uid)
+          try {
+            deps.clue.setFocus(result2.scene);
+          } catch (error) {
+            log(`跑团检测：设场景失败：${error.message}`);
+          }
+        let stage = c.state.current ? c.state.current.id : "", kp = kpOf(), muted = !!stage && kp.offMuted === stage, conds = { ...kp.conds || {} };
+        for (let x of result2.conds) x.ok && (conds[x.text] = { floor: at, quote: x.quote });
+        let tables = await mirrorTables(recorded, project, t, iso0);
+        return deps.ticketValid(t) ? (saveKp2({ conds, log: pushLog(kp.log, { ...kpLogEntry({ floor: at, result: result2, labelOf, off: result2.offTrack }), ...tables.length ? { tables } : {} }) }), deps.clue.invalidate("kp-check"), result2.offTrack && !muted && offerOffTrack({ result: result2, stage }), log(`跑团检测完成：拿到 ${result2.facts.filter((x) => x.ok).length} 条线索，${result2.conds.filter((x) => x.ok).length} 个条件成立${result2.offTrack ? "，偏离模组" : ""}`), result2) : (log("跑团检测写表后聊天或项目已切换，不再保存日志"), null);
+      } catch (error) {
+        return deps.ticketValid(t) && (lastKey = "", log(`跑团检测失败：${error.message}`), notice.show({
+          id: "checkfail",
+          title: "跑团检测失败",
+          body: `已自动重试${CHECK_RETRIES}次：${error.message}`,
+          actions: [
+            { label: "重试", primary: !0, run: () => run({ floor: at, manual: !0 }) },
+            { label: "关闭", run: () => {
+            } }
+          ]
+        })), null;
+      } finally {
+        running2 = !1, again && (again = !1, deps.setTimeout(() => run({ floor: -1 }), 0));
+      }
+    }
+    async function mirrorTables(items, project, t, iso0) {
+      if (!items.length) return [];
+      let api = acuApi2(), fb = ((project.clue.bindings || {}).facts || [])[0], kb = ((project.clue.bindings || {}).knowledge || [])[0], first = (v, d = "") => String(Array.isArray(v) ? v[0] ?? d : v ?? d), live2 = () => deps.ticketValid(t) && deps.clue.opScope().iso === iso0, tableNow = (name) => {
+        deps.clue.invalidate();
+        let now = deps.clue.compute(), sh = findSheet2(now && now.snap.tables || {}, name);
+        return sh.error ? null : { sheet: sh.sheet, col: sheetRows2(sh.sheet).col };
+      }, writeRow = async (name, find, data2) => {
+        if (!live2()) return "写表前切换了聊天、项目或数据隔离";
+        let t0 = tableNow(name), at = t0 ? find(t0) : -1;
+        if (at === -2) return "表里有多行同一个编号，没写";
+        if (at < 1) return "表里还没有这一行，没写";
+        if (Object.keys(data2).some((k) => t0.col(k) < 0)) return `表里缺少列：${Object.keys(data2).filter((k) => t0.col(k) < 0).join("、")}`;
+        if (typeof api.updateRow == "function") await Promise.resolve(api.updateRow(name, at, data2)).catch(() => !1);
+        else
+          for (let [k, v] of Object.entries(data2)) {
+            if (!live2()) break;
+            let t2 = tableNow(name), at2 = t2 ? find(t2) : -1;
+            if (at2 < 1) break;
+            await Promise.resolve(api.updateCell({ tableName: name, rowIndex: at2, colIdentifier: k, value: v, skipNotify: !0 })).catch(() => !1);
+          }
+        if (!live2()) return "写表途中切换了聊天、项目或数据隔离，没法确认结果";
+        let t3 = tableNow(name), at3 = t3 ? find(t3) : -1;
+        return at3 >= 1 && Object.entries(data2).every(([k, v]) => cellText2(t3.sheet.content[at3][t3.col(k)]) === cellText2(v)) ? "ok" : "写了但回读对不上";
+      }, findBy = (cols, test) => (t0) => {
+        let idx = cols.map((n) => t0.col(n));
+        if (idx.some((i) => i < 0)) return -1;
+        let hits = [];
+        return t0.sheet.content.forEach((r, k) => k > 0 && Array.isArray(r) && test(idx.map((i) => cellText2(r[i]))) && hits.push(k)), hits.length > 1 ? -2 : hits.length ? hits[0] : -1;
+      }, out = [];
+      try {
+        if (!api || !fb || !fb.状态列 || typeof api.updateRow != "function" && typeof api.updateCell != "function")
+          return items.map((x) => ({ label: x.label, fact: "没有可写的数据库接口，或没绑定事实表状态列" }));
+        for (let x of items) {
+          let data2 = { [fb.状态列]: first(fb.已核实值, "已核实") };
+          fb.内容列 && x.text && (data2[fb.内容列] = x.text);
+          let entry = { label: x.label, fact: await writeRow(fb.表, findBy([fb.编号列], ([c]) => c === x.id), data2) };
+          if (kb && kb.方式列 && kb.事实列 && kb.角色列 && entry.fact === "ok") {
+            let kd = { [kb.方式列]: first(kb.有效值, "亲见") };
+            kb.可信度列 && (kd[kb.可信度列] = first(kb.已核实值, "已核实")), entry.know = await writeRow(kb.表, findBy([kb.事实列, kb.角色列], ([f, a]) => f === x.id && SELF_KEYS2.includes(a.toLowerCase())), kd);
+          }
+          out.push(entry);
+        }
+      } catch (error) {
+        out.push({ label: "", fact: `写表出错：${error.message}` });
+      }
+      return out;
+    }
+    function offerOffTrack({ result: result2, stage }) {
+      let actions12 = [];
+      result2.pullBack && actions12.push({
+        label: "按建议拉回",
+        primary: !0,
+        // 先给玩家看 KP 打算怎么拉回、可以改；取消就把提示卡放回去
+        run: async () => {
+          let text2 = await promptDialog({ title: "按建议拉回", label: "下一轮正文会这样把剧情引回来，可以修改", value: result2.pullBack, multiline: !0 });
+          if (text2 == null || !String(text2).trim()) return offerOffTrack({ result: result2, stage });
+          saveKp2({ push: { kind: "steer", text: String(text2).trim(), floor: aiFloorCount2(chatMessages()) } }), notice.hide("kp-offtrack");
+        }
+      }), actions12.push({
+        label: "给点线索",
+        run: async () => {
+          let c = deps.clue.compute(), target = c && kpPushTarget(c.state, c.snap, c.prog);
+          if (!target) return notice.show({ id: "kp-offtrack", title: "眼下没有能推的线索", body: "", timeout: 4e3 });
+          let pick = await menuDialog({ title: "给点线索", items: KP_LEVELS.map((x) => ({ label: x.label, value: String(x.level) })) });
+          pick && (saveKp2({ push: { fact: target.fact, level: Number(pick), floor: aiFloorCount2(chatMessages()) } }), notice.hide("kp-offtrack"));
+        }
+      }), actions12.push({ label: "这次不管", run: () => notice.hide("kp-offtrack") }), stage && actions12.push({ label: "本阶段不再提醒", run: () => (saveKp2({ offMuted: stage }), notice.hide("kp-offtrack")) }), notice.show({ id: "kp-offtrack", title: "剧情偏离模组", body: result2.offReason || "正文走向和当前阶段的内容对不上。", actions: actions12 });
+    }
+    function clearKp() {
+      let c = deps.clue.compute(), ids = Object.entries(c && c.prog.factOverrides || {}).filter(([, v]) => v && v.by === "kp").map(([id]) => id);
+      for (let id of ids) deps.clue.act({ kind: "fact", target: id, value: "", note: "清空KP记录" });
+      return saveKp2({ conds: {}, log: [], offMuted: "" }), lastKey = "", deps.clue.invalidate("kp-clear"), ids.length;
+    }
+    return { run, clearKp, reset: () => (again = !1, lastKey = "") };
+  }
 
   // src/core/infinite-state.js
   var POLLUTION_LINE = /^[ \t　]*污染[^\n]*$/gm, NEGATION = /(?:未|没|不|尚未|还没|还未)$/;
@@ -9930,7 +14063,7 @@ ${horrorGuide}` : "",
   }
 
   // src/app/runtime.js
-  var VIRTUAL_WORLD = "剧情注入器", LOG_MAX2 = 40, PENDING_MAX_MS = 3e4, CHECK_RETRIES = 3, RETRY_GAP_MS = 2e3, WORLD_RETRIES = 2, WORLD_WAIT_MS = 9e4, placeOf = (unit) => `${volumeLabel(unit.volume.key)}·${stageLabel(unit.stage.key)}`;
+  var VIRTUAL_WORLD = "剧情注入器", LOG_MAX2 = 40, PENDING_MAX_MS = 3e4, CHECK_RETRIES2 = 3, RETRY_GAP_MS2 = 2e3, WORLD_RETRIES = 2, WORLD_WAIT_MS = 9e4, placeOf = (unit) => `${volumeLabel(unit.volume.key)}·${stageLabel(unit.stage.key)}`;
   function createRuntime({ data, notice, emit, askReason = async () => "" }) {
     let view = hostWindow();
     setIgsView(view);
@@ -9938,7 +14071,7 @@ ${horrorGuide}` : "",
     function log(text2) {
       logs.push({ at: Date.now(), text: text2 }), logs.length > LOG_MAX2 && logs.shift();
     }
-    let clue = createClueRuntime({
+    let clueDeps = {
       data,
       getProject: () => activeProject(),
       getProgress: () => currentProgress(),
@@ -9947,6 +14080,25 @@ ${horrorGuide}` : "",
       log,
       ticket: () => ticket(),
       ticketValid: (t) => ticketValid(t)
+    }, clueOrig = createClueRuntime(clueDeps), clue = routeRuntime(clueOrig, createClueRuntime2(clueDeps), () => isTrpg(activeProject()));
+    for (let [key, value] of Object.entries(clueOrig)) typeof value != "function" && (clue[key] = value);
+    let clueOnly = () => clueMode() && !isTrpg(activeProject()), kpPending = !1, kpFloor = -1, kpTimer = 0, kpRunner = createKpRunner({
+      data,
+      notice,
+      log,
+      clue: {
+        compute: () => clue.compute(),
+        act: (op) => clue.act(op),
+        setFocus: (uid) => clue.setFocus(uid),
+        invalidate: (reason) => clue.invalidate(reason),
+        opScope: () => clue.opScope()
+      },
+      getProject: () => isTrpg(activeProject()) ? activeProject() : null,
+      getProgress: () => currentProgress(),
+      setProgress: (next, reason) => setProgress(next, reason),
+      ticket: () => ticket(),
+      ticketValid: (t) => ticketValid(t),
+      setTimeout: (fn, ms) => view.setTimeout(fn, ms)
     });
     function clueMode() {
       return !isInfinite(activeProject()) && isClueMode(activeProject());
@@ -10169,7 +14321,9 @@ ${horrorGuide}` : "",
       next !== prog.stays && setProgress({ ...prog, stays: next }, "stay");
     }
     function buildClueEntries(project, prog) {
-      let defaults = { ...DEFAULT_PARAMS, ...project.defaults }, out = [], settingText = injectedSetting(project.setting);
+      let defaults = { ...DEFAULT_PARAMS, ...project.defaults }, out = [], settingText = isTrpg(project) ? [injectedSetting(project.setting), trpgChangesText(clue.compute())].filter(Boolean).join(`
+
+`) : injectedSetting(project.setting);
       settingText && out.push({
         slotId: SETTING_SLOT,
         kind: "setting",
@@ -10219,7 +14373,7 @@ ${horrorGuide}` : "",
     }
     async function onEntriesLoaded(payload) {
       if (!(!payload || !Array.isArray(payload.chatLore))) {
-        opening && await waitOpening(), refreshPersonas(), clueMode() && await clue.awaitPlotScene().catch((e) => log(`读剧情推进结果出错：${e.message}`));
+        opening && await waitOpening(), refreshPersonas(), clueOnly() && await clue.awaitPlotScene().catch((e) => log(`读剧情推进结果出错：${e.message}`));
         try {
           payload.chatLore.push(...virtualEntries({ recordClue: !0 }));
         } catch (error) {
@@ -10705,7 +14859,7 @@ ${horrorGuide}` : "",
     }
     function personaCheckItems(floors) {
       let project = activeProject(), prog = currentProgress();
-      return !hasPersonas(project) || !prog || data.settings().personaMode === "off" ? [] : checkItems(
+      return isTrpg(project) || !hasPersonas(project) || !prog || data.settings().personaMode === "off" ? [] : checkItems(
         project,
         prog,
         floors.map((floor) => floor.text).join(`
@@ -10718,6 +14872,7 @@ ${horrorGuide}` : "",
       );
     }
     function offerPersonaMoves(items, replyMoves) {
+      if (isTrpg(activeProject())) return;
       let scope = ticket(), project = activeProject(), moves = resolveMoves(items, replyMoves);
       if (!moves.length || !project) return;
       let lines2 = moves.map(moveText), adopt = () => {
@@ -10772,8 +14927,8 @@ ${horrorGuide}` : "",
             result2 = parseCheckReply(await requestLlm(messages, resolveLlm(settings, "check"), { timeoutMs: 12e4 }));
             break;
           } catch (error) {
-            if (!ticketValid(scope) || attempt >= CHECK_RETRIES) throw error;
-            log(`检测请求失败：${error.message}，${RETRY_GAP_MS / 1e3} 秒后第 ${attempt + 1} 次重试`), await new Promise((resolve) => view.setTimeout(resolve, RETRY_GAP_MS));
+            if (!ticketValid(scope) || attempt >= CHECK_RETRIES2) throw error;
+            log(`检测请求失败：${error.message}，${RETRY_GAP_MS2 / 1e3} 秒后第 ${attempt + 1} 次重试`), await new Promise((resolve) => view.setTimeout(resolve, RETRY_GAP_MS2));
           }
         if (!ticketValid(scope)) return null;
         notice.hide("checkfail");
@@ -10785,7 +14940,7 @@ ${horrorGuide}` : "",
         return ticketValid(scope) && (setProgress({ ...currentProgress(), lastFailFloor: floorCount() }), log(`检测失败：${error.message}`), notice.show({
           id: "checkfail",
           title: "进度检测失败",
-          body: `已自动重试${CHECK_RETRIES}次：${error.message}`,
+          body: `已自动重试${CHECK_RETRIES2}次：${error.message}`,
           actions: [
             { label: "重试", primary: !0, run: () => checkNow({ manual }) },
             { label: "关闭", run: () => {
@@ -10823,8 +14978,8 @@ ${horrorGuide}` : "",
             result2 = parseCheckReply(await requestLlm(messages, resolveLlm(settings, "check"), { timeoutMs: 12e4 }));
             break;
           } catch (error) {
-            if (!ticketValid(t) || attempt >= CHECK_RETRIES) throw error;
-            log(`检测请求失败：${error.message}，${RETRY_GAP_MS / 1e3} 秒后第 ${attempt + 1} 次重试`), await new Promise((resolve) => view.setTimeout(resolve, RETRY_GAP_MS));
+            if (!ticketValid(t) || attempt >= CHECK_RETRIES2) throw error;
+            log(`检测请求失败：${error.message}，${RETRY_GAP_MS2 / 1e3} 秒后第 ${attempt + 1} 次重试`), await new Promise((resolve) => view.setTimeout(resolve, RETRY_GAP_MS2));
           }
         if (!ticketValid(t)) return log("检测返回时聊天、项目或推进方式已切换，结果丢弃"), null;
         if (olKey(currentProgress()) !== key0) return log("检测返回时剧情线或当前阶段已经变了，结果丢弃"), null;
@@ -10848,7 +15003,7 @@ ${horrorGuide}` : "",
         return ticketValid(t) ? (setProgress({ ...currentProgress(), lastFailFloor: floorCount() }), log(`检测失败：${error.message}`), notice.show({
           id: "checkfail",
           title: "进度检测失败",
-          body: `已自动重试${CHECK_RETRIES}次：${error.message}`,
+          body: `已自动重试${CHECK_RETRIES2}次：${error.message}`,
           actions: [
             { label: "重试", primary: !0, run: () => checkNow({ manual }) },
             { label: "关闭", run: () => {
@@ -10899,7 +15054,16 @@ ${finds.map((d) => `- ${d.text}`).join(`
       delete next.lastFailFloor, setProgress(next, "floor");
     }
     function runPending() {
-      view.clearTimeout(pendingTimer), pendingCheck && (pendingCheck = !1, checkNow());
+      view.clearTimeout(pendingTimer), pendingCheck && (pendingCheck = !1, checkNow()), view.clearTimeout(kpTimer), kpPending && (kpPending = !1, kpRunner.run({ floor: kpFloor }));
+    }
+    function queueKp(messageId) {
+      if (kpFloor = Number(messageId), !generating) {
+        view.setTimeout(() => kpRunner.run({ floor: kpFloor }), 0);
+        return;
+      }
+      kpPending || (kpPending = !0, log("跑团检测：主回复仍在生成，生成结束后检测"), view.clearTimeout(kpTimer), kpTimer = view.setTimeout(() => {
+        kpPending && (log("跑团检测：等待生成结束超时，直接检测"), kpPending = !1, kpRunner.run({ floor: kpFloor }));
+      }, PENDING_MAX_MS));
     }
     function queueCheck() {
       if (!generating) {
@@ -10911,7 +15075,7 @@ ${finds.map((d) => `- ${d.text}`).join(`
       }, PENDING_MAX_MS));
     }
     async function onGenerationStarted(type, options2, dryRun) {
-      dryRun || (generating = !0, clueMode() && (clue.register(), clue.invalidate(), clue.ensureRound(String(type || "generate")))), !dryRun && clueMode() && await clue.syncPlotPreset({ force: !0 }).catch((e) => log(`推进预设出错：${e.message}`));
+      dryRun || (generating = !0, clueMode() && (clue.register(), clue.invalidate(), clue.ensureRound(String(type || "generate")))), !dryRun && clueOnly() && await clue.syncPlotPreset({ force: !0 }).catch((e) => log(`推进预设出错：${e.message}`));
     }
     function onGenerationEnded() {
       generating = !1, clue.endRound(), runPending();
@@ -10926,7 +15090,7 @@ ${finds.map((d) => `- ${d.text}`).join(`
         return;
       }
       if (recordStay(messageId), clueMode()) {
-        clue.bindCandidatesToMessage(Number(messageId)), clue.invalidate(), log(`收到第 ${messageId} 楼：线索模式不做自动检测，等待填表结果`), emit("floor");
+        clue.bindCandidatesToMessage(Number(messageId)), clue.invalidate(), log(`收到第 ${messageId} 楼：线索模式不做自动检测，等待填表结果`), isTrpg(project) && queueKp(messageId), emit("floor");
         return;
       }
       if (isInfinite(project)) {
@@ -10945,7 +15109,7 @@ ${finds.map((d) => `- ${d.text}`).join(`
       clampBase() && emit("floor");
     }
     async function onChatChanged() {
-      olNotified = null, bumpEpoch(), clue.onChatChanged(), clue.register(), alignedPersonas = null, progress = null, progressFor = "", abandonOpening(), lastRead = null, pendingCheck = !1, view.clearTimeout(pendingTimer), chatStartFloors = floorCount(), notice.hide("advance"), notice.hide("offtrack"), notice.hide("thread"), notice.hide("persona");
+      olNotified = null, bumpEpoch(), clue.onChatChanged(), clue.register(), alignedPersonas = null, progress = null, progressFor = "", abandonOpening(), lastRead = null, pendingCheck = !1, view.clearTimeout(pendingTimer), kpPending = !1, view.clearTimeout(kpTimer), kpRunner.reset(), chatStartFloors = floorCount(), notice.hide("advance"), notice.hide("offtrack"), notice.hide("thread"), notice.hide("persona");
       let id = activeId();
       if (id)
         try {
@@ -10981,7 +15145,7 @@ ${finds.map((d) => `- ${d.text}`).join(`
       if (!(payload && payload.dryRun))
         try {
           if (isBackgroundRequest(requestToText(payload))) return log("插件自己的后台请求（讨论、整理、导入、检测），不做正文核验");
-          clueMode() ? (clue.stripPlotSceneFrom(payload), clue.auditFinalRequest(payload)) : auditOutline(payload);
+          clueMode() ? (clueOnly() && clue.stripPlotSceneFrom(payload), clue.auditFinalRequest(payload)) : auditOutline(payload);
         } catch (error) {
           log(`最终请求核验出错：${error.message}`);
         }
@@ -11095,6 +15259,7 @@ ${finds.map((d) => `- ${d.text}`).join(`
       olAct,
       olSetFlow,
       isClueMode: clueMode,
+      kp: kpRunner,
       bumpEpoch,
       ticket,
       ticketValid,
@@ -11142,987 +15307,6 @@ ${finds.map((d) => `- ${d.text}`).join(`
       })
     );
     return changed ? { ...progress, slots } : progress;
-  }
-
-  // src/ui/styles.js
-  var CSS = `
-.pi-root{--pi-accent:#E8507B;--pi-accent-soft:#FEF0F3;--pi-dark:#1E1E2E;--pi-bg:#FFFFFF;--pi-surf:#F3F4F7;--pi-fill:#F5F6F8;--pi-fill2:#ECEDF1;--pi-line:#ECECF1;--pi-rule:#C9CAD3;--pi-txt:#1E1E2E;--pi-txt2:#7C7C8A;--pi-ok:#2E9E6A;--pi-ok-soft:#E9F7F0;--pi-warn:#C98A12;--pi-warn-soft:#FDF5E4;--pi-danger:#D64545;--pi-danger-soft:#FDEDED;--pi-add:#E9F7F0;--pi-del:#FDEDED;--pi-on-dark:#FFFFFF;--pi-knob:#FFFFFF;--pi-user-bg:#1E1E2E;--pi-user-txt:#FFFFFF;--pi-user-txt2:#B4B4C0;--pi-user-hover:#34344A;--pi-r:14px;--pi-r-in:10px;--pi-shadow:0 8px 32px rgba(0,0,0,.15);--pi-font:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei","PingFang SC",sans-serif;--pi-mono:Consolas,"JetBrains Mono",monospace;font-family:var(--pi-font);color:var(--pi-txt);font-size:14px;line-height:1.55}
-.pi-root.is-night{--pi-accent:#F0688F;--pi-accent-soft:#3A2230;--pi-dark:#E6E6EE;--pi-bg:#1F1F2A;--pi-surf:#16161F;--pi-fill:#282835;--pi-fill2:#313140;--pi-line:#2C2C38;--pi-rule:#4A4A5A;--pi-txt:#E6E6EE;--pi-txt2:#9A9AA8;--pi-ok:#4CC08A;--pi-ok-soft:#1C3329;--pi-warn:#E0A63A;--pi-warn-soft:#3A3020;--pi-danger:#EF6B6B;--pi-danger-soft:#3D2224;--pi-add:#1C3329;--pi-del:#3D2224;--pi-on-dark:#16161F;--pi-knob:#F4F4F8;--pi-user-bg:#3A3A4C;--pi-user-txt:#E6E6EE;--pi-user-txt2:#A8A8B6;--pi-user-hover:#4A4A5E;--pi-shadow:0 8px 32px rgba(0,0,0,.5);color-scheme:dark}
-.pi-root *,.pi-root *::before,.pi-root *::after{box-sizing:border-box;text-shadow:none}
-.pi-root ::-webkit-scrollbar{display:none}
-.pi-root [hidden]{display:none!important}
-.pi-root input[type=checkbox]{-webkit-appearance:none;appearance:none;display:inline-grid;place-content:center;width:16px;height:16px;margin:0;padding:0;border:0;outline:0;border-radius:4px;background:var(--pi-fill2);box-shadow:inset 0 0 0 1.5px var(--pi-rule);filter:none;transform:none;overflow:hidden;flex-shrink:0;cursor:pointer}
-.pi-root input[type=checkbox]::before{content:"";width:10px;height:10px;transform:scale(0);transition:transform .12s;background:var(--pi-knob);box-shadow:none;clip-path:polygon(14% 44%,0 65%,50% 100%,100% 16%,80% 0%,43% 62%)}
-.pi-root input[type=checkbox]:checked{background:var(--pi-accent);box-shadow:none}
-.pi-root input[type=checkbox]:checked::before{transform:scale(1)}
-.pi-root input[type=checkbox]:disabled{opacity:.45;cursor:not-allowed}
-.pi-root input[type=checkbox]:focus-visible{box-shadow:0 0 0 2px var(--pi-accent-soft),inset 0 0 0 1.5px var(--pi-accent)}
-.pi-overlay{position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;z-index:10050;display:flex;align-items:center;justify-content:center;background:rgba(20,20,30,.28)}
-.pi-panel{position:relative;width:880px;max-width:96vw;height:88vh;max-height:88vh;background:var(--pi-surf);border-radius:var(--pi-r);box-shadow:var(--pi-shadow);display:grid;grid-template-columns:220px 1fr;overflow:hidden}
-.pi-scrim{display:none}
-.pi-side{background:var(--pi-bg);display:flex;flex-direction:column;min-height:0}
-.pi-side-hd{padding:14px 14px 8px;font-weight:700;font-size:15px;color:var(--pi-dark);display:flex;align-items:center;gap:6px}
-.pi-side-hd small{font-weight:400;color:var(--pi-txt2);font-size:11px}
-.pi-side-hd .pi-spacer{flex:1}
-.pi-icon-btn.is-on{color:var(--pi-accent);background:var(--pi-accent-soft)}
-.pi-plist{flex:1;overflow-y:auto;padding:0 8px;scrollbar-width:none}
-.pi-group{margin:6px 0}
-.pi-group-hd{display:flex;align-items:center;gap:4px;width:100%;padding:4px 6px;border:0;background:none;color:var(--pi-txt2);font-size:12px;cursor:pointer;font-family:inherit}
-.pi-group-hd small{margin-left:auto;font-size:11px}
-.pi-group.is-collapsed .pi-pitem{display:none}
-.pi-plist.is-searching .pi-group.is-collapsed .pi-pitem{display:flex}
-.pi-psearch{position:relative;margin:0 8px 6px}
-.pi-psearch.is-wb{margin:0 0 8px}
-.pi-psearch.is-wb .pi-inp{padding-right:36px}
-.pi-psearch .pi-search-x{position:absolute;right:4px;top:50%;transform:translateY(-50%)}
-.pi-psearch>svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--pi-txt2);pointer-events:none}
-.pi-psearch .pi-inp{padding-left:30px}
-.pi-pitem{display:flex;align-items:center;gap:6px;width:100%;padding:7px 10px;border:0;border-radius:var(--pi-r-in);background:none;color:var(--pi-txt);font-size:13px;text-align:left;cursor:pointer;font-family:inherit;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
-.pi-pitem:hover{background:var(--pi-surf)}
-.pi-pitem.is-sel{background:var(--pi-accent-soft);color:var(--pi-accent);font-weight:600}
-.pi-pitem .pi-dot{width:7px;height:7px;border-radius:50%;background:var(--pi-accent);flex-shrink:0}
-.pi-pitem .pi-pname{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pi-side-ft{padding:8px;display:flex;flex-direction:column;gap:4px}
-.pi-main{display:flex;flex-direction:column;min-width:0;min-height:0}
-.pi-top{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:8px;padding:10px 14px;background:var(--pi-bg)}
-.pi-top-lead{grid-column:1;display:flex;align-items:center;gap:4px;min-width:0}
-.pi-top-title{font-weight:700;color:var(--pi-dark);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pi-top-end{grid-column:3;justify-self:end;display:flex;align-items:center;gap:6px}
-.pi-icon-btn{width:28px;height:28px;border:0;border-radius:8px;background:none;color:var(--pi-txt2);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;padding:0}
-.pi-icon-btn:hover{color:var(--pi-dark);background:var(--pi-surf)}
-.pi-icon-btn.is-danger:hover{color:var(--pi-danger);background:var(--pi-danger-soft)}
-.pi-menu{display:none}
-.pi-tabs{grid-column:2;display:grid;grid-auto-flow:column;grid-auto-columns:64px;gap:4px}
-.pi-tab{text-align:center;padding:6px 0;border:0;border-radius:20px;background:none;color:var(--pi-txt2);font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:inherit}
-.pi-tab:hover{color:var(--pi-dark)}
-.pi-tab.is-sel{background:var(--pi-dark);color:var(--pi-on-dark)}
-.pi-close{width:30px;height:30px;border:0;border-radius:50%;background:var(--pi-surf);color:var(--pi-txt2);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.pi-close:hover{color:var(--pi-dark)}
-.pi-body{flex:1;overflow-y:auto;padding:14px;scrollbar-width:none;min-height:0}
-.pi-body.is-chat{display:flex;flex-direction:column;overflow:hidden}
-.pi-card{background:var(--pi-bg);border-radius:var(--pi-r);padding:14px 16px;margin-bottom:10px}
-.pi-card h3{margin:0 0 10px;font-size:14px;font-weight:600;color:var(--pi-dark);display:flex;align-items:center;gap:8px;min-height:26px}
-.pi-card h3 .pi-meta{font-size:12px;font-weight:400;color:var(--pi-txt2)}
-.pi-card h3 .pi-spacer{flex:1}
-.pi-hint{font-size:12px;color:var(--pi-txt2);margin:4px 0}
-.pi-hint.is-warn{color:var(--pi-warn);font-weight:600}
-.pi-empty{text-align:center;color:var(--pi-txt2);padding:40px 10px;font-size:13px}
-.pi-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.pi-row>.pi-grow{flex:1;min-width:0}
-.pi-field{display:flex;flex-direction:column;gap:3px;margin-bottom:8px;min-width:0}
-.pi-field>span{font-size:12px;color:var(--pi-txt2);font-weight:500}
-.pi-row.is-top{align-items:flex-start}
-.pi-row.is-todo{flex-wrap:nowrap;margin:8px 0}
-.pi-row.is-todo>.pi-hint{flex:1;min-width:0;margin:0}
-.pi-row.is-todo>.pi-btn{flex:none;white-space:nowrap}
-.pi-inline{display:flex;gap:8px;align-items:stretch}
-.pi-inline>.pi-inp,.pi-inline>.pi-sel{flex:1;min-width:0}
-.pi-inline>.pi-btn{min-height:0;flex-shrink:0;width:96px}
-.pi-inline>.pi-grow{flex:1;min-width:0;display:flex}
-.pi-inline>.pi-grow>.pi-inp,.pi-inline>.pi-grow>.pi-sel{flex:1;min-width:0}
-.pi-equal,.pi-tools{display:grid;grid-template-columns:repeat(var(--pi-cols,3),minmax(0,1fr));gap:8px;align-items:stretch}
-.pi-equal>.pi-btn,.pi-tools>.pi-btn{width:100%;padding:0 6px;white-space:normal;line-height:1.3}
-.pi-equal.is-one,.pi-tools.is-c1{--pi-cols:1}
-.pi-tools.is-c2{--pi-cols:2}
-.pi-tools.is-c3{--pi-cols:3}
-.pi-tools.is-c3>.pi-btn{white-space:nowrap}
-@media(max-width:420px){.pi-tools.is-c3>.pi-btn{padding:0 2px}}
-.pi-tools.is-c4{--pi-cols:4}
-.pi-tools{margin:2px 0 10px}
-.pi-tools.is-end{margin:10px 0 0}
-.pi-tools>.pi-check{grid-column:1/-1;padding:0}
-.pi-pair{display:grid;grid-template-columns:repeat(var(--pi-cols,2),minmax(0,1fr));gap:0 10px}
-.pi-pair.is-c3{--pi-cols:3}
-.pi-pair.is-c4{--pi-cols:4}
-.pi-pair .pi-inp,.pi-pair .pi-sel{width:100%}
-.pi-extra{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) 28px;gap:0 8px;align-items:end}
-.pi-extra .pi-inp,.pi-extra .pi-sel{width:100%}
-.pi-extra .pi-field{margin-bottom:8px}
-.pi-extra .pi-icon-btn{margin-bottom:8px;align-self:end;height:36px}
-.pi-presets{display:flex;flex-direction:column;gap:6px;margin-bottom:8px}
-.pi-preset-pick{flex:1;min-width:0;display:flex;align-items:center;gap:8px;padding:4px 0;border:0;background:none;color:inherit;cursor:pointer;text-align:left;font-family:inherit}
-.pi-preset:hover{background:var(--pi-fill2)}
-.pi-preset{display:flex;align-items:center;gap:8px;padding:4px 6px 4px 12px;background:var(--pi-fill);border-radius:var(--pi-r-in);min-width:0}
-.pi-preset-name{font-weight:600;font-size:13px;flex-shrink:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pi-preset-model{flex:1;min-width:0;font-size:12px;color:var(--pi-txt2);font-family:var(--pi-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pi-wb-sec{margin-top:8px}
-.pi-wb-sec-hd{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--pi-txt2);padding:4px 0;margin-bottom:2px}
-.pi-wb-sec-hd small{font-weight:400}
-.pi-wb-bulk{margin-left:auto;display:flex;gap:4px}
-.pi-wb-bulk>.pi-btn{min-width:96px}
-.pi-wb-sub{margin:4px 0 0 4px;padding-left:10px;border-left:2px solid var(--pi-line)}
-.pi-wb-sub-hd{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--pi-txt2);padding:4px 0 2px}
-.pi-wb-sub-hd small{font-weight:400}
-.pi-wb-sub-hd.is-fold{cursor:pointer}
-.pi-wb-item{min-width:0}
-.pi-wb-name{flex:1;min-width:0;display:flex;align-items:center;gap:4px;padding:0;border:0;background:none;color:inherit;font:inherit;cursor:pointer;text-align:left}
-.pi-wb-name .pi-wb-title{flex:1}
-.pi-wb-edit{margin:4px 0 10px 23px;padding:12px;background:var(--pi-fill);border-radius:var(--pi-r-in)}
-.pi-wb-memo{display:inline-flex;align-items:center;gap:4px;font-weight:500;flex-shrink:0}
-.pi-wb-memo{margin-left:auto;font-size:12px;color:var(--pi-txt2)}
-.pi-wb-memo .pi-inp.is-num{width:52px;height:26px;padding:2px 6px;font-size:12px;text-align:center}
-.pi-wb-sub-hd>input[type=checkbox],.pi-wb-sub-hd>.pi-wb-pad{width:15px;height:15px;margin:0;flex-shrink:0;accent-color:var(--pi-accent)}
-.pi-fix{display:flex;align-items:flex-start;gap:8px;padding:4px 0;font-size:13px}
-.pi-fix-text{flex:1;min-width:0}
-.pi-fix-acts{display:grid;grid-template-columns:repeat(3,56px);gap:4px;flex-shrink:0}
-.pi-fix-acts>.pi-btn{width:100%;padding:0}
-.pi-ref-book+.pi-ref-book{margin-top:12px;padding-top:8px;border-top:1px solid var(--pi-line)}
-.pi-ref-top{display:flex;align-items:center;gap:4px;margin:0 0 6px}
-.pi-pace-cell.pi-ol-sw{margin:0 0 10px;padding:6px 10px;border-radius:var(--pi-r-in);font-size:13px;font-weight:400;color:var(--pi-txt)}
-.pi-ol-row{gap:6px}
-.pi-ol-row .pi-meta{min-width:44px;text-align:right}
-.pi-ref-list.is-off{opacity:.45;pointer-events:none}
-.pi-ol-foot{display:flex;justify-content:space-between;gap:8px;border-top:1px solid var(--pi-line);padding-top:8px;margin-top:8px}
-.pi-ref-top .pi-spacer{flex:1}
-.pi-chip:disabled{opacity:.45;cursor:not-allowed}
-.pi-wb-field{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pi-wb-row{display:flex;align-items:center;gap:8px;padding:3px 0;min-width:0}
-.pi-wb-row input{width:15px;height:15px;margin:0;accent-color:var(--pi-accent);flex-shrink:0;cursor:pointer}
-.pi-switch{position:relative;flex-shrink:0;width:38px;height:22px;padding:0;border:0;border-radius:11px;background:var(--pi-fill2);cursor:pointer;transition:background .15s}
-.pi-switch::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:var(--pi-rule);transition:left .15s}
-.pi-switch.is-on{background:var(--pi-accent)}
-.pi-switch.is-on::after{left:19px;background:var(--pi-knob)}
-.pi-switch:disabled{opacity:.6;cursor:wait}
-.pi-wb-title{flex:1;min-width:0;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pi-wb-row.is-off .pi-wb-title{color:var(--pi-txt2)}
-.pi-set-row{display:flex;align-items:center;gap:8px;margin-top:6px;padding-top:8px;border-top:1px solid var(--pi-line);font-size:12px;color:var(--pi-txt2);font-weight:500}
-.pi-set-row .pi-spacer{flex:1}
-.pi-set-sub{margin-top:6px}
-.pi-book{border-radius:var(--pi-r-in);margin:0 -6px}
-.pi-book+.pi-book{margin-top:2px}
-.pi-book-hd{display:flex;align-items:center;gap:8px;padding:9px 8px;border-radius:var(--pi-r-in);cursor:pointer}
-.pi-book-hd:hover{background:var(--pi-fill)}
-.pi-book-hd .pi-etitle{flex:1;min-width:0;font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pi-book.is-open>.pi-book-hd{background:var(--pi-fill)}
-.pi-book-bd{padding:6px 8px 10px}
-.pi-meta{font-size:12px;color:var(--pi-txt2);white-space:nowrap}
-.pi-tbar{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
-.pi-tbtn{display:inline-flex;align-items:center;gap:5px;height:30px;padding:0 11px 0 9px;border:0;border-radius:16px;background:var(--pi-fill);color:var(--pi-dark);font:inherit;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap}
-.pi-tbtn svg{width:14px;height:14px;flex-shrink:0;color:var(--pi-txt2)}
-.pi-tbtn:hover:not(:disabled){background:var(--pi-fill2)}
-.pi-tbtn.is-danger,.pi-tbtn.is-danger svg{color:var(--pi-danger)}
-.pi-tbtn.is-more{padding:0 9px;margin-left:auto}
-.pi-tbtn:disabled{opacity:.4;cursor:not-allowed}
-.pi-wb-info{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:2px 0 8px}
-.pi-wb-info.is-pick{gap:2px}
-.pi-wb-info .pi-spacer{flex:1}
-.pi-wb-tokens{display:contents}
-.pi-wb-count{font-size:12px;font-weight:600;color:var(--pi-dark)}
-.pi-menu-list{display:flex;flex-direction:column;gap:2px;max-height:360px;overflow-y:auto;margin:0 -6px}
-.pi-menu-item{display:flex;align-items:center;gap:10px;width:100%;padding:10px 10px;border:0;border-radius:var(--pi-r-in);background:none;color:var(--pi-dark);font:inherit;font-size:13px;text-align:left;cursor:pointer}
-.pi-menu-item:hover{background:var(--pi-fill)}
-.pi-menu-item svg{width:16px;height:16px;color:var(--pi-txt2);flex-shrink:0}
-.pi-menu-item.is-danger,.pi-menu-item.is-danger svg{color:var(--pi-danger)}
-.pi-menu-item>span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-label.pi-wb-row{cursor:pointer}
-.pi-acts{margin-top:12px}
-.pi-seg{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:2px;padding:3px;background:var(--pi-surf);border-radius:20px;margin-bottom:6px}
-.pi-seg-btn{padding:5px 6px;border:0;border-radius:16px;background:none;color:var(--pi-txt2);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.pi-seg-btn.is-sel{background:var(--pi-bg);color:var(--pi-dark);box-shadow:0 1px 3px rgba(0,0,0,.12)}
-.pi-inp,.pi-sel{height:36px}
-.pi-inp,.pi-sel,.pi-ta{width:100%;padding:7px 11px;border:1.5px solid transparent;border-radius:var(--pi-r-in);font-size:13px;color:var(--pi-txt);background:var(--pi-fill);outline:none;font-family:inherit}
-.pi-inp:focus,.pi-sel:focus,.pi-ta:focus{border-color:var(--pi-accent);background:var(--pi-bg)}
-.pi-inp.is-num{width:84px}
-.pi-ta{resize:vertical;min-height:80px;line-height:1.6}
-.pi-ta.is-mono{font-family:var(--pi-mono);font-size:12px;line-height:1.5}
-.pi-ta.is-tall{min-height:360px}
-.pi-btn{min-height:32px;padding:0 14px;border:0;border-radius:20px;background:var(--pi-fill);color:var(--pi-dark);font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:5px;white-space:nowrap;font-family:inherit}
-.pi-btn:hover{background:var(--pi-fill2)}
-.pi-btn:active{transform:scale(.97)}
-.pi-btn:disabled{opacity:.45;cursor:not-allowed;transform:none}
-.pi-btn.is-primary{background:var(--pi-dark);color:var(--pi-on-dark)}
-.pi-btn.is-primary:hover{opacity:.86}
-.pi-btn.is-danger{color:var(--pi-danger);background:var(--pi-danger-soft)}
-.pi-btn.is-danger:hover{background:var(--pi-danger-soft);opacity:.8}
-.pi-btn.is-ghost{background:none;color:var(--pi-txt2)}
-.pi-btn.is-ghost:hover{color:var(--pi-dark);background:var(--pi-fill)}
-.pi-btn.is-ghost.is-danger{color:var(--pi-danger)}
-.pi-btn.is-sm{min-height:26px;padding:0 10px;font-size:12px}
-.pi-btn.is-block{width:100%;justify-content:flex-start}
-.pi-badge{display:inline-flex;align-items:center;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:600;background:var(--pi-fill);color:var(--pi-txt2);white-space:nowrap}
-.pi-badge.is-accent{background:var(--pi-accent-soft);color:var(--pi-accent)}
-.pi-badge.is-ok{background:var(--pi-ok-soft);color:var(--pi-ok)}
-.pi-badge.is-warn{background:var(--pi-warn-soft);color:var(--pi-warn)}
-.pi-badge.is-danger{background:var(--pi-danger-soft);color:var(--pi-danger)}
-.pi-badge.is-dark{background:var(--pi-dark);color:var(--pi-on-dark)}
-.pi-check{display:flex;align-items:flex-start;gap:8px;padding:4px 0;font-size:13px;cursor:pointer}
-.pi-check input{width:15px;height:15px;margin-top:3px;accent-color:var(--pi-accent);flex-shrink:0;cursor:pointer}
-
-
-
-
-
-
-/* 线索标签弹窗：开头一段白话说明、每条线索先说清是什么（雾港实测：第一次看到弹窗不知道在填什么）。 */
-
-
-
-
-
-
-
-/* 折叠的箭头（用户 2026-11-08：浏览器自带的小三角不好看）：所有 <summary> 换成「»」，展开时转 90°。 */
-
-
-
-
-
-
-@media (prefers-reduced-motion:reduce){.pi-root summary::before{transition:none}}
-/* 标黄的说明：前面一个黄色圆圈问号（代替「·」）。 */
-
-.pi-note-line{margin:4px 0;font-size:12px;color:var(--pi-txt2);line-height:1.5}
-.pi-line-row{padding:8px 0;border-top:1px solid var(--pi-line)}
-.pi-line-row:first-of-type{border-top:0}
-/* 第四批：剧情线两层，按钮右边对齐；菜单分组；需要处理里的标签提示 */
-.pi-line-head{display:flex;align-items:flex-start;gap:8px}
-.pi-line-head .pi-line-name{flex:1;min-width:0;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.45;padding-top:3px;font-weight:500}
-.pi-line-acts{display:flex;align-items:center;gap:4px;flex:none}
-.pi-line-acts>.pi-btn{width:auto;min-width:56px}
-.pi-line-tags{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:2px 0}
-.pi-line-menu-g{display:flex;flex-direction:column}
-.pi-line-menu-g+.pi-line-menu-g{border-top:1px solid var(--pi-line);margin-top:4px;padding-top:4px}
-.pi-line-menu .pi-btn.is-danger{color:var(--pi-danger)}
-.pi-labels-todo{gap:8px;align-items:center;flex-wrap:nowrap}
-.pi-labels-todo .pi-hint{flex:1;min-width:0;margin:0}
-.pi-labels-todo .pi-btn{width:auto;flex:none}
-.pi-line-row .pi-row{flex-wrap:wrap;gap:6px}
-.pi-line-opts{flex-wrap:wrap;gap:6px 16px;margin:4px 0 6px}
-.pi-line-opts .pi-check{align-items:center;gap:6px}
-.pi-line-opts .pi-check>span{white-space:nowrap}
-.pi-line-opts .pi-sel{width:auto;min-width:0}
-.pi-note-line::before{content:"备注：";font-weight:600}
-
-
-
-
-
-.pi-check.is-off{color:var(--pi-txt2);text-decoration:line-through}
-.pi-entry{border-radius:var(--pi-r-in);margin-bottom:6px;background:var(--pi-fill)}
-:is(.pi-entry,.pi-node,.pi-wb-edit) :is(.pi-inp,.pi-sel,.pi-ta,.pi-pre,.pi-badge,.pi-btn:not(.is-primary):not(.is-ghost):not(.is-danger)){background:var(--pi-bg)}
-:is(.pi-entry,.pi-node,.pi-wb-edit) .pi-btn:not(.is-primary):not(.is-ghost):not(.is-danger):hover{background:var(--pi-fill2)}
-.pi-entry.is-off{opacity:.55}
-.pi-entry-hd{display:flex;align-items:center;gap:8px;padding:9px 12px;cursor:pointer}
-.pi-entry-hd .pi-meta{font-size:12px;color:var(--pi-txt2);white-space:nowrap}
-.pi-entry-hd .pi-pos{font-size:11px;font-weight:600;color:var(--pi-txt2);background:var(--pi-bg);border-radius:6px;padding:1px 6px;white-space:nowrap}
-.pi-entry-hd .pi-etitle{flex:1;min-width:0;font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pi-entry-bd{padding:2px 12px 12px}
-.pi-pre{white-space:pre-wrap;word-break:break-word;font-family:var(--pi-mono);font-size:12px;line-height:1.5;background:var(--pi-surf);border-radius:var(--pi-r-in);padding:8px 10px;max-height:320px;overflow:auto;margin:6px 0 0}
-.pi-tl-vol{font-size:12px;font-weight:600;color:var(--pi-txt2);margin:12px 0 4px}
-.pi-tl-vol:first-child{margin-top:4px}
-.pi-tl{position:relative}
-.pi-tl-item{position:relative;padding:0 0 4px 26px}
-.pi-tl-item::before{content:"";position:absolute;left:8px;top:22px;bottom:-4px;border-left:2px dashed var(--pi-rule)}
-.pi-tl-item:last-child::before{display:none}
-.pi-tl-item.is-done::before{border-left-style:solid;border-left-color:var(--pi-txt2)}
-.pi-tl-dot{position:absolute;left:1px;top:9px;width:16px;height:16px;border-radius:50%;border:3px solid var(--pi-rule);background:var(--pi-bg)}
-.pi-tl-item.is-done .pi-tl-dot{border-color:var(--pi-txt2);background:var(--pi-txt2)}
-.pi-tl-item.is-next .pi-tl-dot{border-color:var(--pi-dark)}
-.pi-tl-item.is-active .pi-tl-dot{border-color:var(--pi-accent);box-shadow:0 0 0 4px var(--pi-accent-soft)}
-.pi-tl-box{border-radius:var(--pi-r-in);padding:0 4px 0 10px}
-.pi-tl-item.is-active .pi-tl-box{background:var(--pi-fill);padding-bottom:8px}
-.pi-tl-hd{display:flex;align-items:center;gap:8px;min-height:34px}
-.pi-tl-name{flex:1;min-width:0;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pi-tl-item.is-done .pi-tl-name{color:var(--pi-txt2)}
-.pi-tl-item.is-active .pi-tl-name{font-weight:600}
-.pi-tl-state{font-size:12px;color:var(--pi-txt2);white-space:nowrap}
-.pi-tl-item.is-active .pi-tl-state{color:var(--pi-accent);font-weight:600}
-.pi-tl-nodes{padding:0 4px 0 2px}
-.pi-tl-nodes .pi-badge{background:var(--pi-bg)}
-.pi-tl-nodes .pi-hint{margin:6px 0 2px}
-.pi-tree{display:grid;grid-template-columns:220px 1fr;gap:10px;align-items:start}
-.pi-tree-list{background:var(--pi-bg);border-radius:var(--pi-r);padding:8px;max-height:calc(88vh - 140px);overflow-y:auto;scrollbar-width:none}
-.pi-titem{display:flex;align-items:center;gap:6px;width:100%;padding:5px 8px;border:0;border-radius:8px;background:none;text-align:left;font-size:13px;color:var(--pi-txt);cursor:pointer;font-family:inherit}
-.pi-titem:hover{background:var(--pi-surf)}
-.pi-titem.is-sel{background:var(--pi-accent-soft);color:var(--pi-accent);font-weight:600}
-.pi-titem.is-vol{font-weight:700;color:var(--pi-dark)}
-.pi-titem.is-stage{padding-left:18px}
-.pi-titem .pi-pname{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pi-node{background:var(--pi-fill);border-radius:var(--pi-r-in);padding:10px 12px;margin-bottom:8px}
-.pi-pace{display:flex;align-items:center;gap:10px;margin:0 0 10px}
-.pi-pace-label{font-size:12px;color:var(--pi-txt2);font-weight:500;flex-shrink:0}
-.pi-pace .pi-seg{flex:1;margin:0}
-.pi-node-seg{margin:0 0 10px}
-.pi-node-hd{display:flex;align-items:center;gap:6px;margin-bottom:6px}
-.pi-node-hd .pi-grow{flex:1}
-.pi-node-hd>.pi-btn{min-width:60px}
-.pi-chat{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding:4px 2px 10px;scrollbar-width:none;min-height:0}
-.pi-msg{max-width:86%;padding:9px 12px;border-radius:var(--pi-r);background:var(--pi-bg);font-size:13px;line-height:1.65;word-break:break-word}
-.pi-md>:first-child{margin-top:0}
-.pi-md>:last-child{margin-bottom:0}
-.pi-md p{margin:0 0 8px}
-.pi-md-h{font-weight:700;margin:12px 0 6px;line-height:1.4}
-.pi-md-h.is-h1{font-size:16px}
-.pi-md-h.is-h2{font-size:15px}
-.pi-md-h.is-h3,.pi-md-h.is-h4{font-size:14px}
-.pi-md ul,.pi-md ol{margin:0 0 8px;padding-left:20px}
-.pi-md li.is-sub{margin-left:16px}
-.pi-md blockquote{margin:0 0 8px;padding:2px 0 2px 10px;border-left:3px solid var(--pi-line);color:var(--pi-txt2)}
-.pi-md hr{border:0;border-top:1px solid var(--pi-line);margin:10px 0}
-.pi-md code{font-family:var(--pi-mono);font-size:12px;line-height:inherit;color:var(--pi-txt);background:var(--pi-fill2);border:0;border-radius:4px;padding:1px 4px}
-.pi-md .pi-pre{margin:0 0 8px}
-.pi-md-table{overflow-x:auto;margin:0 0 8px}
-.pi-md table{border-collapse:collapse;font-size:12px}
-.pi-md th,.pi-md td{border:1px solid var(--pi-line);padding:4px 8px;text-align:left}
-.pi-md th{background:var(--pi-surf)}
-.pi-msg.is-user .pi-md code,.pi-msg.is-user .pi-md th,.pi-msg.is-user .pi-md .pi-pre{background:var(--pi-user-hover);color:var(--pi-user-txt)}
-.pi-msg.is-user .pi-md blockquote{color:var(--pi-user-txt2);border-color:var(--pi-user-hover)}
-.pi-msg.is-user .pi-md th,.pi-msg.is-user .pi-md td{border-color:var(--pi-user-hover)}
-.pi-msg.is-user{align-self:flex-end;background:var(--pi-user-bg);color:var(--pi-user-txt)}
-.pi-msg.is-ai{align-self:flex-start}
-.pi-msg-tools{display:flex;align-items:center;gap:2px;margin-top:6px;flex-wrap:nowrap}
-.pi-msg-tools .pi-btn{width:auto;white-space:nowrap}
-.pi-msg-gap{flex:1}
-.pi-msg-more{width:28px;height:26px;font-size:16px;line-height:1;color:var(--pi-txt2)}
-.pi-msg.is-user .pi-btn.is-ghost{color:var(--pi-user-txt2)}
-.pi-msg.is-user .pi-btn.is-ghost:hover{color:var(--pi-user-txt);background:var(--pi-user-hover)}
-.pi-msg-fold{align-self:center;font-size:12px;color:var(--pi-txt2);background:var(--pi-bg);border-radius:20px;padding:4px 12px}
-.pi-compose{display:flex;gap:8px;align-items:center;padding-top:8px}
-.pi-compose .pi-ta{flex:1;height:44px;min-height:44px;resize:none;padding:10px 12px;line-height:1.5;background:var(--pi-bg)}
-.pi-send{width:40px;height:40px;border:0;border-radius:50%;background:var(--pi-dark);color:var(--pi-on-dark);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0}
-.pi-send:hover{opacity:.86}
-.pi-send:active{transform:scale(.95)}
-.pi-send:disabled{opacity:.45;cursor:not-allowed;transform:none}
-.pi-refs{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
-.pi-chip{display:inline-flex;align-items:center;gap:4px;padding:4px 11px;border:0;border-radius:20px;font-size:12px;cursor:pointer;background:var(--pi-bg);color:var(--pi-txt2);font-family:inherit}
-.pi-card .pi-chip{background:var(--pi-fill)}
-.pi-compose-side{width:40px;height:40px;border:0;border-radius:50%;background:var(--pi-bg);color:var(--pi-txt2);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0}
-.pi-compose-side:hover{color:var(--pi-danger);background:var(--pi-danger-soft)}
-.pi-block-chip{padding:0 4px 0 0;gap:0}
-.pi-block-chip>button{border:0;background:none;color:inherit;font:inherit;cursor:pointer;padding:3px 4px 3px 10px}
-.pi-block-chip>.pi-block-del{padding:3px 4px;display:inline-flex;align-items:center;opacity:.6}
-.pi-block-chip>.pi-block-del svg{width:10px;height:10px}
-.pi-block-chip>.pi-block-del:hover{opacity:1;color:var(--pi-danger)}
-.pi-block-chip>.pi-block-eye{padding:3px 2px;display:inline-flex;align-items:center;opacity:.6}
-.pi-block-chip>.pi-block-eye svg{width:12px;height:12px}
-.pi-block-chip>.pi-block-eye:hover{opacity:1}
-.pi-block-chip.is-mute{color:var(--pi-rule)}
-.pi-block-chip.is-mute>button:first-child{text-decoration:line-through}
-.pi-chip.is-on{color:var(--pi-accent);background:var(--pi-accent-soft)}
-.pi-diff{font-family:var(--pi-mono);font-size:12px;line-height:1.5;white-space:pre-wrap;word-break:break-word;background:var(--pi-surf);border-radius:var(--pi-r-in);padding:6px 0;max-height:360px;overflow:auto}
-.pi-diff div{padding:0 10px}
-.pi-diff .is-add{background:var(--pi-add)}
-.pi-diff .is-del{background:var(--pi-del);text-decoration:line-through;color:var(--pi-txt2)}
-.pi-toc{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px}
-.pi-files{display:flex;flex-direction:column;gap:6px;font-size:12px}.pi-file{background:var(--pi-fill);border-radius:var(--pi-r-in);padding:8px 10px}.pi-file-name{font-weight:600;overflow-wrap:anywhere;margin-bottom:2px}.pi-file-row{display:flex;align-items:center;gap:4px;min-height:28px}.pi-file-k{color:var(--pi-txt2);flex:none;width:5.5em}.pi-file-row>.pi-meta{flex:1 1 auto;min-width:0}.pi-file-row .pi-btn{flex:none;white-space:nowrap;padding:0 8px}
-
-
-
-
-
-
-
-
-.pi-files .is-missing{color:var(--pi-danger)}
-.pi-diag-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--pi-line);font-size:12px}
-.pi-diag-row:last-child{border-bottom:0}
-.pi-diag-text{flex:1;min-width:0}
-.pi-copy-box{position:fixed;left:0;top:0;width:1px;height:1px;opacity:0}
-.pi-status{font-size:12px;color:var(--pi-txt2);min-height:1em}
-.pi-status.is-err{color:var(--pi-danger)}
-.pi-spin{display:inline-block;width:12px;height:12px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:pi-spin .8s linear infinite}
-@keyframes pi-spin{to{transform:rotate(360deg)}}
-.pi-dialog{position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;z-index:10060;display:flex;align-items:center;justify-content:center;background:rgba(20,20,30,.28)}
-.pi-dialog-box{width:440px;max-width:92vw;max-height:80vh;overflow-y:auto;background:var(--pi-bg);border-radius:var(--pi-r);box-shadow:var(--pi-shadow);padding:16px;scrollbar-width:none}
-.pi-dialog-box h4{margin:0 0 8px;font-size:15px;color:var(--pi-dark)}
-.pi-dialog-box .pi-dlg-acts{display:flex;gap:8px;justify-content:flex-end;margin-top:12px;flex-wrap:wrap}
-.pi-dialog-box .pi-dlg-acts>.pi-btn{min-width:88px}
-.pi-dialog-box ul{margin:6px 0;padding-left:18px;font-size:12px;color:var(--pi-txt2);max-height:200px;overflow-y:auto}
-.pi-notices{position:fixed;top:0;left:0;width:100vw;height:100vh;height:100dvh;z-index:10040;display:flex;flex-direction:column;justify-content:flex-end;align-items:flex-end;gap:8px;padding:16px;box-sizing:border-box;pointer-events:none}
-.pi-unoffered-tip{display:block;font-size:11px;color:var(--pi-txt2);margin-top:2px}
-.pi-topbar{position:fixed;left:50%;transform:translateX(-50%);z-index:10050;width:min(400px,calc(100vw - 16px - env(safe-area-inset-left,0px) - env(safe-area-inset-right,0px)));box-sizing:border-box;display:flex;align-items:center;gap:10px;padding:8px 8px 8px 14px;background:var(--pi-bg);color:var(--pi-txt);border-radius:var(--pi-r);box-shadow:var(--pi-shadow);font-size:13px;margin-top:6px}
-.pi-topbar-dot{flex:none;width:8px;height:8px;border-radius:50%;background:var(--pi-accent)}
-.pi-topbar-body{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.35}
-.pi-topbar-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:var(--pi-dark)}
-.pi-topbar-tag{font-size:11px;color:var(--pi-txt2)}
-.pi-topbar-acts{flex:none;display:flex;gap:6px}
-.pi-topbar-acts .pi-btn{min-width:52px}
-.pi-topbar-act.is-armed{color:var(--pi-danger);background:var(--pi-danger-soft)}
-@media (max-width:600px){.pi-topbar{font-size:14px}.pi-topbar-acts .pi-btn.is-sm{min-height:32px;font-size:13px}}
-.pi-notice{pointer-events:auto;width:340px;max-width:100%;background:var(--pi-bg);border-radius:var(--pi-r);box-shadow:var(--pi-shadow);padding:12px 14px;border-left:4px solid var(--pi-accent)}
-.pi-notice b{display:block;font-size:13px;color:var(--pi-dark);margin-bottom:3px}
-.pi-notice p{margin:0 0 8px;font-size:12px;color:var(--pi-txt2)}
-.pi-notice .pi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:6px}
-.pi-notice .pi-row>.pi-btn{width:100%;padding:0 6px}
-@media (max-width:720px){
-.pi-overlay{align-items:stretch}
-.pi-panel{grid-template-columns:minmax(0,1fr);width:100vw;max-width:100vw;height:100vh;height:100dvh;max-height:none;border-radius:0}
-.pi-side{position:absolute;top:0;left:0;bottom:0;width:min(280px,82vw);z-index:2;transform:translateX(-100%);transition:transform .2s ease;box-shadow:var(--pi-shadow)}
-.pi-panel.is-drawer .pi-side{transform:none}
-.pi-panel.is-drawer .pi-scrim{display:block;position:absolute;top:0;left:0;width:100%;height:100%;z-index:1;background:rgba(20,20,30,.28)}
-.pi-menu{display:inline-flex}
-.pi-top{grid-template-columns:minmax(0,1fr) auto;row-gap:8px}
-.pi-top-end{grid-column:2}
-.pi-tabs{grid-column:1/-1;grid-row:2;grid-auto-columns:1fr}
-.pi-tree{grid-template-columns:minmax(0,1fr)}
-.pi-entry-hd{flex-wrap:wrap}
-.pi-wb .pi-entry-hd{flex-wrap:nowrap}
-.pi-card h3{flex-wrap:wrap}
-.pi-tools.is-c4{--pi-cols:2}
-.pi-tree-list{max-height:220px}
-.pi-msg{max-width:94%}
-.pi-body{padding:10px}
-.pi-notices{justify-content:flex-start;align-items:stretch;padding:calc(10px + env(safe-area-inset-top,0px)) 10px 10px}
-.pi-notice{width:auto}
-.pi-dialog{align-items:flex-start;box-sizing:border-box;padding-top:calc(56px + env(safe-area-inset-top,0px))}
-.pi-dialog-box{max-height:calc(100dvh - 80px)}
-.pi-dialog-box{display:flex;flex-direction:column;overflow:hidden}
-.pi-dialog-box>h4{flex:none}
-.pi-dialog-box>.pi-dlg-body{flex:1 1 auto;min-height:0;overflow-y:auto;scrollbar-width:none}
-.pi-dialog-box>.pi-dlg-acts{flex:none}
-}
-/* wb-tools v0.1.23 */
-.pi-wb-sort{display:flex;align-items:center;gap:8px;margin:0 0 8px}
-.pi-wb-sort .pi-sel{width:auto;min-width:0}
-.pi-wb-adv{display:flex;align-items:center;gap:6px;width:100%;padding:6px 0;border:0;background:none;color:var(--pi-txt2);font:inherit;font-size:12px;font-weight:600;cursor:pointer}
-.pi-wb-adv-bd{display:flex;flex-direction:column;gap:8px}
-.pi-wb-hit{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:var(--pi-r-in);background:var(--pi-fill);margin:4px 0}
-.pi-wb-hit .pi-wb-title{flex:1;min-width:0}
-.pi-wb-hit>.pi-sel{flex:0 0 auto;width:auto;background:var(--pi-bg)}
-.pi-wb-hit .pi-wb-title>small{color:var(--pi-txt2);font-size:12px}
-.pi-wb-hit .pi-meta{max-width:60%;overflow:hidden;text-overflow:ellipsis}
-.pi-dlg-body .pi-menu-item .pi-meta{max-width:50%;overflow:hidden;text-overflow:ellipsis}
-/* /wb-tools v0.1.23 */
-/* outline v0.1.23 */
-.pi-ov-stage{display:flex;flex-direction:column;gap:2px;width:100%;margin:0 0 6px;padding:8px 10px;border:0;border-radius:var(--pi-r-in);background:var(--pi-fill);color:var(--pi-txt);text-align:left;font-family:inherit;font-size:13px;cursor:pointer}
-.pi-ov-stage:hover{background:var(--pi-fill2)}
-.pi-ov-stage.is-active{background:var(--pi-accent-soft);color:var(--pi-accent)}
-.pi-ov-stage.is-done{color:var(--pi-txt2)}
-.pi-ov-title{font-weight:600}
-.pi-ov-node{white-space:normal}
-.pi-ov-stage.is-active .pi-meta{color:var(--pi-accent)}
-.pi-block{display:block}
-.pi-hist{display:flex;align-items:center;gap:8px;padding:6px 0}
-.pi-hist>.pi-grow{flex:1;min-width:0;overflow-wrap:anywhere}
-.pi-hist-n{flex-shrink:0;white-space:nowrap}
-.pi-titem.is-issue{align-items:flex-start}
-.pi-titem.is-issue .pi-pname{white-space:normal;overflow:visible;text-overflow:clip;line-height:1.5}
-.pi-vitem{padding:8px 10px;margin:0 0 6px;border-radius:var(--pi-r-in);background:var(--pi-fill)}
-.pi-vitem .pi-ta{background:var(--pi-bg)}
-.pi-vrow{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--pi-dark)}
-.pi-vrow>.pi-grow{flex:1;min-width:0;overflow-wrap:anywhere}
-.pi-vitem .pi-hint{margin:6px 0 0}
-.pi-err{margin:2px 0 6px}
-.pi-err>summary{font-size:12px;color:var(--pi-txt2);cursor:pointer}
-.pi-err .pi-meta{margin-top:2px;overflow-wrap:anywhere}
-.pi-node .pi-play>summary{font-size:12px;font-weight:500;color:var(--pi-txt2)}
-.pi-menu-item:disabled{opacity:.4;cursor:default;pointer-events:none}
-/* /outline v0.1.23 */
-/* threads v0.1.23 */
-.pi-hook{display:flex;align-items:center;gap:6px}
-.pi-node-row{display:flex;align-items:center;gap:8px;min-height:32px;font-size:13px}
-.pi-node-name{flex:1;min-width:0}
-.pi-node-row.is-off,.pi-node-row.is-off .pi-badge,.pi-node-row.is-quiet{color:var(--pi-txt2)}
-.pi-tl-nodes .pi-kind.is-main{background:var(--pi-dark);color:var(--pi-on-dark)}
-.pi-tl-nodes .pi-kind.is-side{background:var(--pi-bg);color:var(--pi-txt)}
-.pi-tl-nodes .pi-kind.is-world{background:transparent;color:var(--pi-txt2);padding-left:0;padding-right:0}
-.pi-tl-nodes .pi-node-row.is-off .pi-kind{background:var(--pi-fill2);color:var(--pi-txt2)}
-.pi-node-row.is-off .pi-node-txt{text-decoration:line-through}
-.pi-hook>.pi-node-row{flex:1;min-width:0}
-.pi-meta-btn{min-height:32px;min-width:40px;padding:0 2px;border:0;background:none;font:inherit;font-size:12px;cursor:pointer;color:var(--pi-txt2);text-align:right}
-.pi-meta-btn.is-dot{display:inline-flex;align-items:center;gap:5px}
-.pi-meta-btn.is-dot::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--pi-accent)}
-.pi-check.is-quiet{color:var(--pi-txt2)}
-.pi-pace-cell{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 10px;border-radius:20px;background:var(--pi-surf);font-size:12px;font-weight:600;color:var(--pi-txt2)}
-.pi-pace .pi-pair{flex:1;gap:6px}
-.pi-pace-label{min-width:56px}
-.pi-clock{width:100%;border:0;background:none;color:var(--pi-txt);font:inherit;font-size:13px;font-weight:400;text-align:left;align-items:center}
-.pi-clock-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pi-clock-dots{display:inline-flex;gap:3px}
-.pi-clock-dots i{width:6px;height:6px;border-radius:50%;background:var(--pi-rule)}
-.pi-clock-dots i.is-on{background:var(--pi-dark)}
-.pi-play{margin-top:4px}
-.pi-play>summary{font-size:12px;font-weight:600;color:var(--pi-txt2);cursor:pointer;padding:4px 0}
-/* /threads v0.1.23 */
-
-.pi-tools.is-c5{--pi-cols:5}
-/* 酒馆主题会全局改 textarea / select / input：半透明黑底、自己的边框、下拉箭头、占位字颜色，不少美化主题还带 !important
-   （实测「双色盒子-深色毛玻璃」：背景和边框都是 !important）。插件里的输入框要跟插件的明暗配色走，所以这几项也用 !important 重设，只作用于插件自己的输入框。 */
-.pi-root :is(textarea.pi-ta,input.pi-inp,select.pi-sel){background-color:var(--pi-fill)!important;background-image:none;color:var(--pi-txt)!important;border:1.5px solid var(--pi-line)!important;border-radius:var(--pi-r-in)!important;box-shadow:none!important;margin:0!important;max-height:none;font-family:var(--pi-font);font-size:13px;-webkit-text-fill-color:currentColor;backdrop-filter:none!important}
-.pi-root :is(textarea.pi-ta,input.pi-inp,select.pi-sel):hover{border-color:var(--pi-rule)!important}
-.pi-root textarea.pi-ta.is-mono{font-family:var(--pi-mono);font-size:12px}
-.pi-root .pi-wb-memo input.pi-inp.is-num{font-size:12px}
-.pi-root :is(.pi-entry,.pi-node,.pi-wb-edit,.pi-compose) :is(textarea.pi-ta,input.pi-inp,select.pi-sel){background-color:var(--pi-bg)!important}
-.pi-root :is(textarea.pi-ta,input.pi-inp)[readonly]{background-color:var(--pi-surf)!important}
-.pi-root :is(textarea.pi-ta,input.pi-inp,select.pi-sel):focus{border-color:var(--pi-accent)!important;background-color:var(--pi-bg)!important;outline:none}
-.pi-root select.pi-sel{-webkit-appearance:none;appearance:none;padding-right:30px;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%237C7C8A' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")!important;background-repeat:no-repeat!important;background-position:right 11px center!important;background-size:10px 6px!important}
-.pi-root select.pi-sel option{background-color:var(--pi-bg)!important;color:var(--pi-txt)!important}
-.pi-root :is(textarea.pi-ta,input.pi-inp)::placeholder{color:var(--pi-txt2)!important;opacity:.75;-webkit-text-fill-color:var(--pi-txt2)}
-.pi-root :is(textarea.pi-ta,input.pi-inp):focus::placeholder{color:transparent!important;-webkit-text-fill-color:transparent}
-.pi-imp-stage{border-top:1px solid var(--pi-line);padding:8px 0}
-.pi-wbkind{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;padding:6px 0;border-bottom:1px solid var(--pi-line)}
-.pi-wbkind>span{flex:1 1 100%;font-size:13px}
-.pi-wbkind .pi-check{padding:0}
-.pi-prebuild-row{padding:8px 0;border-bottom:1px solid var(--pi-line)}
-.pi-prebuild-row.is-warn{background:var(--pi-warn-soft);margin:0 -8px;padding:8px;border-radius:var(--pi-r-in)}
-.pi-fr-warn:empty{display:none}
-/* 线索标签弹窗：开头一段白话说明、每条线索先说清是什么（雾港实测：第一次看到弹窗不知道在填什么）。 */
-.pi-fr-intro{background:var(--pi-surf);border-radius:var(--pi-r-in);padding:10px 12px;margin:0 0 10px;font-size:12.5px;line-height:1.65;color:var(--pi-txt)}
-.pi-fr-intro p{margin:0 0 6px}
-.pi-fr-intro p:last-child{margin-bottom:0}
-.pi-fr-intro .is-example{color:var(--pi-txt2)}
-.pi-fr-title{margin:14px 0 6px;font-size:13px;font-weight:600;color:var(--pi-dark)}
-.pi-fr-more{margin:0 0 10px}
-.pi-fr-more summary{cursor:pointer}
-/* 折叠的箭头（用户 2026-11-08：浏览器自带的小三角不好看）：所有 <summary> 换成「»」，展开时转 90°。 */
-.pi-root summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:6px;user-select:none}
-.pi-root summary::-webkit-details-marker{display:none}
-.pi-root summary::marker{content:""}
-.pi-root summary::before{content:"»";flex:none;display:inline-block;width:12px;text-align:center;font-size:14px;line-height:1;color:var(--pi-txt2);transition:transform .15s ease}
-.pi-root details[open]>summary::before{transform:rotate(90deg)}
-.pi-root summary:hover::before{color:var(--pi-accent)}
-@media (prefers-reduced-motion:reduce){.pi-root summary::before{transition:none}}
-/* 标黄的说明：前面一个黄色圆圈问号（代替「·」）。 */
-.pi-warn-line{display:flex;align-items:flex-start;gap:6px;margin:4px 0;font-size:12px;font-weight:600;color:var(--pi-warn);line-height:1.5}
-.pi-warn-line::before{content:"?";flex:none;width:15px;height:15px;margin-top:1px;border:1.5px solid currentColor;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;line-height:1;box-sizing:border-box}
-.pi-fr-hd{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:4px}
-.pi-fr-hd .pi-meta{font-size:11px;color:var(--pi-txt2);font-family:var(--pi-mono)}
-.pi-fr-answer{margin:0 0 6px;padding:6px 10px;border-left:3px solid var(--pi-rule);font-size:12px;color:var(--pi-txt);background:var(--pi-fill);border-radius:0 6px 6px 0}
-.pi-fr-answer .pi-meta{color:var(--pi-txt2);font-size:11px}
-/* 展开后整段显示，由面板主体滚动（导入审阅页实测：限高 320px 且滚动条隐藏，看起来像内容被截断）。 */
-.pi-pre.is-full{max-height:none;overflow:visible}
-/* 仍然限高的代码框：显示细滚动条，让人看得出里面还能滚。 */
-.pi-root .pi-pre:not(.is-full){scrollbar-width:thin}
-.pi-root .pi-pre:not(.is-full)::-webkit-scrollbar{display:block;width:6px;height:6px}
-.pi-root .pi-pre:not(.is-full)::-webkit-scrollbar-thumb{background:var(--pi-rule);border-radius:3px}
-/* 第四批：大纲编辑紧凑字段 */
-.pi-ol-auto{margin:-6px 0 2px}
-.pi-pair2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 10px}
-.pi-pair2 .pi-inp{width:100%}
-.pi-namehd{display:flex;align-items:center;gap:6px}
-.pi-req{border:0;cursor:pointer;font:inherit;font-size:11px;line-height:18px;padding:0 9px;border-radius:10px;background:var(--pi-fill2);color:var(--pi-txt2)}
-.pi-req.is-on{background:var(--pi-accent-soft);color:var(--pi-accent)}
-.pi-ta-auto{min-height:58px;resize:vertical;overflow-y:auto}
-.pi-fold{margin:2px 0 10px}
-.pi-fold>summary{list-style:none;cursor:pointer;display:flex;align-items:baseline;gap:8px;font-size:13px;color:var(--pi-txt2);padding:4px 0}
-.pi-fold>summary::-webkit-details-marker{display:none}
-.pi-root .pi-fold>summary::before{content:'▸';font-size:10px;color:var(--pi-txt2)}
-.pi-root .pi-fold[open]>summary::before{content:'▾'}
-.pi-fold>summary b{font-weight:500;color:var(--pi-dark);white-space:nowrap}
-.pi-fold>summary span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pi-clue-node{background:var(--pi-fill);border-radius:var(--pi-r-in);padding:4px 8px;margin:4px 0}
-.pi-clue-hd{display:flex;align-items:center;gap:8px;min-height:30px;cursor:pointer}
-.pi-clue-name{flex:1;min-width:0;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pi-clue-why{margin:2px 0 4px;padding-left:20px;font-size:12px;color:var(--pi-txt2)}
-.pi-hint.is-off{opacity:.5;text-decoration:line-through}
-/* 新手教程（41a_ui_tour.js）：遮罩挖一个洞亮出目标，旁边一个气泡。层级在面板（10050）之上、弹窗（10060）之下。 */
-.pi-tour{position:fixed;inset:0;z-index:10055;isolation:isolate}
-.pi-tour-mask{position:absolute;inset:0;width:100%;height:100%;pointer-events:auto}
-.pi-tour-mask path{fill:rgba(10,10,18,.72)}
-.pi-tour-hole{position:fixed;border:2px solid var(--pi-accent);border-radius:10px;box-shadow:0 0 0 4px var(--pi-accent-soft);pointer-events:none;transition:left .18s,top .18s,width .18s,height .18s}
-.pi-tour-pop{position:fixed;width:min(320px,calc(100vw - 24px));background:var(--pi-bg);color:var(--pi-txt);border-radius:var(--pi-r);box-shadow:var(--pi-shadow);padding:12px 14px;display:flex;flex-direction:column;gap:8px}
-.pi-tour-hd{display:flex;align-items:center;gap:8px}
-.pi-tour-icon{flex:none;width:18px;height:18px;border-radius:50%;border:1.5px solid var(--pi-accent);color:var(--pi-accent);display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;line-height:1}
-.pi-tour-title{flex:1;min-width:0;font-size:14px;font-weight:600;color:var(--pi-dark)}
-.pi-tour-x{flex:none;width:26px;height:26px;border:0;border-radius:8px;background:none;color:var(--pi-txt2);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0}
-.pi-tour-x:hover{color:var(--pi-dark);background:var(--pi-surf)}
-.pi-tour-body{margin:0;font-size:13px;line-height:1.65;color:var(--pi-txt)}
-.pi-tour-ft{display:flex;align-items:center;gap:8px}
-.pi-tour-count{font-size:12px;color:var(--pi-txt2);font-variant-numeric:tabular-nums}
-@media (prefers-reduced-motion:reduce){.pi-tour-hole{transition:none}}
-/* 复选框（用户 2026-11-08）：酒馆主题会改 input[type=checkbox] 的底色、阴影边框和 ::before 勾选色，插件里的复选框跟着变。
-   换成插件自己画的：圆角方框，勾选时填插件强调色、白色对勾（内嵌 SVG，小尺寸也清楚）；亮暗两种模式都跟随插件配色。只作用于插件面板。 */
-.pi-root:not(#pi-x) input[type=checkbox]{-webkit-appearance:none!important;appearance:none!important;width:16px!important;height:16px!important;min-width:16px;margin:2px 0 0!important;padding:0!important;border:1.5px solid var(--pi-rule)!important;border-radius:4px!important;background:var(--pi-bg)!important;box-shadow:none!important;filter:none!important;transform:none!important;display:inline-grid!important;place-content:center;cursor:pointer;flex-shrink:0;vertical-align:middle;transition:background-color .12s,border-color .12s}
-.pi-root:not(#pi-x) input[type=checkbox]::before{content:none!important;display:none!important}
-.pi-root:not(#pi-x) input[type=checkbox]:checked{background:var(--pi-accent) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.4l3 3 6-6.4' fill='none' stroke='%23fff' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/12px 12px no-repeat!important;border-color:var(--pi-accent)!important}
-.pi-root:not(#pi-x) input[type=checkbox]:hover:not(:disabled){border-color:var(--pi-accent)!important}
-.pi-root:not(#pi-x) input[type=checkbox]:focus-visible{outline:2px solid var(--pi-accent)!important;outline-offset:2px}
-.pi-root:not(#pi-x) input[type=checkbox]:disabled{opacity:.45;cursor:not-allowed}
-@media (prefers-reduced-motion:reduce){.pi-root:not(#pi-x) input[type=checkbox]{transition:none}}
-/* 插件面板保持自己的字体（用户 2026-11-08 选定）：酒馆主题会对所有元素强制 font-family / font-weight（如「双色盒子」主题的宋体加粗 !important）。
-   这里先把插件里的元素统一恢复成插件字体、正常粗细、无文字阴影（酒馆的 --shadowWidth），再按插件原有的层级把加粗、等宽字体补回来。只作用于插件面板。由 tools/ui-preview/font-block.mjs 生成。 */
-.pi-root:not(#pi-x),.pi-root:not(#pi-x) *:not(svg):not(svg *){font-family:var(--pi-font)!important;font-weight:400!important;text-shadow:none!important}
-:is(.pi-root:not(#pi-x) .pi-side-hd small,.pi-root:not(#pi-x) .pi-card h3 .pi-meta,.pi-root:not(#pi-x) .pi-wb-sec-hd small,.pi-root:not(#pi-x) .pi-wb-sub-hd small){font-weight:400!important}
-:is(.pi-root:not(#pi-x) .pi-field>span,.pi-root:not(#pi-x) .pi-wb-memo,.pi-root:not(#pi-x) .pi-set-row,.pi-root:not(#pi-x) .pi-pace-label){font-weight:500!important}
-:is(.pi-root:not(#pi-x) .pi-pitem.is-sel,.pi-root:not(#pi-x) .pi-tab,.pi-root:not(#pi-x) .pi-card h3,.pi-root:not(#pi-x) .pi-hint.is-warn,.pi-root:not(#pi-x) .pi-preset-name,.pi-root:not(#pi-x) .pi-wb-sub-hd,.pi-root:not(#pi-x) .pi-book-hd .pi-etitle,.pi-root:not(#pi-x) .pi-tbtn,.pi-root:not(#pi-x) .pi-wb-count,.pi-root:not(#pi-x) .pi-seg-btn,.pi-root:not(#pi-x) .pi-btn,.pi-root:not(#pi-x) .pi-badge,.pi-root:not(#pi-x) .pi-fr-title,.pi-root:not(#pi-x) /* 标黄的说明：前面一个黄色圆圈问号（代替「·」）。 */
-.pi-warn-line,.pi-root:not(#pi-x) .pi-entry-hd .pi-pos,.pi-root:not(#pi-x) .pi-entry-hd .pi-etitle,.pi-root:not(#pi-x) .pi-tl-vol,.pi-root:not(#pi-x) .pi-tl-item.is-active .pi-tl-name,.pi-root:not(#pi-x) .pi-tl-item.is-active .pi-tl-state,.pi-root:not(#pi-x) .pi-titem.is-sel,.pi-root:not(#pi-x) .pi-files th,.pi-root:not(#pi-x) .pi-tour-title){font-weight:600!important}
-:is(.pi-root:not(#pi-x) .pi-side-hd,.pi-root:not(#pi-x) .pi-top-title,.pi-root:not(#pi-x) .pi-wb-sec-hd,.pi-root:not(#pi-x) .pi-titem.is-vol,.pi-root:not(#pi-x) .pi-md-h,.pi-root:not(#pi-x) .pi-pf-imp-name){font-weight:700!important}
-:is(.pi-root:not(#pi-x) .pi-warn-line::before,.pi-root:not(#pi-x) .pi-tour-icon){font-weight:800!important}
-.pi-root:not(#pi-x) :is(b,strong,h1,h2,h3,h4){font-weight:600!important}
-:is(.pi-root:not(#pi-x) .pi-preset-model,.pi-root:not(#pi-x) textarea.pi-ta.is-mono,.pi-root:not(#pi-x) .pi-ta.is-mono,.pi-root:not(#pi-x) .pi-fr-hd .pi-meta,.pi-root:not(#pi-x) .pi-pre,.pi-root:not(#pi-x) .pi-md code,.pi-root:not(#pi-x) .pi-diff){font-family:var(--pi-mono)!important}
-/* 插件面板保持自己的字体结束 */
-/* persona v0.1.27 */
-.pi-pl-row{padding:6px 0 2px}
-.pi-pl-hd{display:flex;align-items:center;gap:8px;min-height:30px}
-.pi-pl-name{flex:1;min-width:0;font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pi-pl-row.is-lost .pi-pl-name{color:var(--pi-txt2)}
-.pi-pl-row .pi-refs{margin-bottom:2px}
-.pi-pl-row+.pi-pl-row{margin-top:6px;padding-top:10px;border-top:1px solid var(--pi-line)}
-.pi-pl-tag{flex:none;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:600;white-space:nowrap;background:var(--pi-fill2);color:var(--pi-txt2)}
-.pi-pl-tag.is-ok{background:var(--pi-ok-soft);color:var(--pi-ok)}
-.pi-pl-tag.is-warn{background:var(--pi-warn-soft);color:var(--pi-warn)}
-.pi-pl-tag.is-accent{background:var(--pi-accent-soft);color:var(--pi-accent)}
-.pi-pl-row .pi-chip.is-past{color:var(--pi-txt)}
-.pi-pl-row .pi-chip.is-next{background:transparent;color:var(--pi-txt2);box-shadow:inset 0 0 0 1px var(--pi-rule)}
-.pi-pl-row .pi-chip.is-on{background:var(--pi-accent);color:var(--pi-on-dark);font-weight:600;box-shadow:none}
-.pi-group.is-persona .pi-group-hd{color:var(--pi-txt);font-size:13px;font-weight:600;padding:6px 6px}
-.pi-group.is-persona .pi-group-hd small{min-width:18px;padding:0 6px;border-radius:9px;text-align:center;font-size:11px;font-weight:600;background:var(--pi-fill2);color:var(--pi-txt2)}
-.pi-group.is-persona+.pi-group.is-persona{margin-top:10px}
-.pi-ps .pi-node-hd .pi-inp{flex:1;min-width:0}
-.pi-ps{background:var(--pi-fill)}
-.pi-icon-btn:disabled{opacity:.35;cursor:not-allowed}
-/* /persona v0.1.27 */
-/* 导入审阅（逐页） */
-.pi-imp-crumb{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--pi-txt2);margin:0 0 8px 2px}
-.pi-imp-crumb b{color:var(--pi-dark)}
-.pi-imp-crumb-a{border:0;background:none;padding:0;color:var(--pi-txt2);font:inherit;cursor:pointer}
-.pi-imp-crumb-a:hover{color:var(--pi-accent)}
-.pi-imp-crumb .pi-imp-crumb-end{margin-left:auto}
-.pi-imp-kind{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:4px 0 6px}
-.pi-imp-kind-btn{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:9px 10px;background:var(--pi-fill);border-radius:var(--pi-r-in);cursor:pointer;border:1.5px solid transparent;text-align:left;font-family:inherit;color:inherit}
-.pi-imp-kind-btn.is-sel{border-color:var(--pi-accent);background:var(--pi-accent-soft)}
-.pi-imp-kind-btn b{font-size:13px;color:var(--pi-dark)}
-.pi-imp-kind-btn span{font-size:11px;color:var(--pi-txt2);line-height:1.4}
-/* 第四批：导入页原文框变矮、文件名、推进方式下拉 */
-.pi-imp-text{min-height:180px;height:180px;resize:vertical}
-.pi-imp-file{margin:-2px 0 8px}.pi-imp-file .pi-btn{width:auto}
-.pi-imp-chip{display:flex;flex-direction:column;gap:2px;padding:8px 10px;margin:0 0 10px;background:var(--pi-fill);border-radius:var(--pi-r-in);font-size:13px}
-.pi-imp-chip-name{color:var(--pi-dark);word-break:break-all}
-.pi-imp-chip-sub{font-size:12px;color:var(--pi-txt2)}
-.pi-rv-state{font-size:12px;color:var(--pi-txt2);margin:-4px 0 8px}
-.pi-rv-line{display:flex;align-items:center;gap:6px;padding:6px 8px;background:var(--pi-fill);border-radius:var(--pi-r-in);margin:0 0 8px}
-.pi-rv-arr{flex:none;width:30px;height:30px;border:0;border-radius:15px;background:var(--pi-bg);color:var(--pi-dark);box-shadow:0 1px 2px rgba(0,0,0,.06);font:inherit;font-size:15px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center}
-.pi-rv-arr:disabled{opacity:.3;cursor:default;box-shadow:none}
-.pi-rv-lname{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:0;border:0;background:none;padding:2px 4px;font:inherit;cursor:pointer;text-align:center;color:var(--pi-txt)}
-.pi-rv-lname b{max-width:100%;font-size:14px;font-weight:600;color:var(--pi-dark);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pi-rv-lname span{font-size:11px;line-height:1.3;color:var(--pi-txt2)}
-.pi-rv-state.is-draft{color:var(--pi-warn)}
-.pi-rv-tag{display:inline-block;font-style:normal;font-size:11px;line-height:16px;padding:0 6px;border-radius:8px;background:var(--pi-fill2);color:var(--pi-txt);margin-right:6px}
-.pi-rv-full{padding:8px 10px;background:var(--pi-fill);border-radius:var(--pi-r-in);margin:4px 0;font-size:12px;line-height:1.6;color:var(--pi-txt)}
-.pi-rv-full>b{font-size:13px;color:var(--pi-dark);font-weight:600;margin-right:6px}
-.pi-rv-full dl{margin:4px 0 0;display:grid;grid-template-columns:auto minmax(0,1fr);gap:2px 8px}
-.pi-rv-full dt{color:var(--pi-txt2)}
-.pi-rv-full dd{margin:0;overflow-wrap:anywhere}
-.pi-rv-auth{color:var(--pi-txt2);border-top:1px dashed var(--pi-rule);margin-top:6px;padding-top:4px}
-.pi-rv-fulltg{width:auto}
-.pi-rv-title .pi-rv-end{margin-left:auto}
-.pi-ol-write{width:100%;margin-top:2px}
-.pi-ol-tools{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:8px}
-.pi-ol-tools .pi-btn{width:100%}
-.pi-ol-tools .pi-badge{margin-left:6px}
-.pi-run-fold{border:0;background:none;padding:0;font:inherit;font-weight:600;color:var(--pi-dark);cursor:pointer;display:inline-flex;align-items:center;gap:6px}
-.pi-run-fold.is-sub{font-size:12px;font-weight:400;color:var(--pi-txt2);margin:6px 0 2px}
-.pi-run-set h3 .pi-meta{margin-left:8px}
-.pi-run-sec{padding:10px 0;border-top:1px solid var(--pi-line);display:flex;flex-direction:column;gap:6px}
-.pi-run-sec-hd{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--pi-dark)}
-.pi-run-set .pi-line-opts,.pi-run-set .pi-pace{padding-top:10px;border-top:1px solid var(--pi-line);margin-top:4px}
-.pi-line-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pi-line-more{position:relative;flex:none;display:inline-block}
-.pi-line-more>summary{list-style:none;cursor:pointer}
-.pi-line-more>summary::-webkit-details-marker{display:none}
-.pi-root .pi-line-more>summary::before{content:none;display:none}
-.pi-line-more>summary.pi-icon-btn{display:inline-flex;align-items:center;justify-content:center}
-.pi-line-row>.pi-row{flex-wrap:nowrap}
-.pi-line-row>.pi-row>.pi-badge,.pi-line-row>.pi-row>.pi-btn{flex:none}
-.pi-line-row>.pi-row>.pi-spacer{flex:1 1 auto;min-width:4px}
-.pi-rl-stack{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
-.pi-rl-stack .pi-row.is-todo,.pi-rl-stack>.pi-hint{background:var(--pi-warn-soft);border-radius:var(--pi-r-in);padding:8px 10px;margin:0}
-.pi-rl-stack .pi-btn{background:var(--pi-dark);color:var(--pi-on-dark)}
-.pi-root:not(#pi-x) .pi-rl-cur .pi-hint.is-warn{font-weight:400!important;font-size:13px}
-.pi-rl-lines .pi-btn.is-primary{background:var(--pi-bg);color:var(--pi-txt)}
-.pi-rl-status{margin-bottom:10px;flex-wrap:nowrap}
-.pi-rl-status>b{flex:none}
-.pi-rl-status .pi-grow{flex:1 1 0;min-width:0}
-.pi-rl-focus{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--pi-fill);border-radius:var(--pi-r-in);padding:10px 12px;font-size:13px}
-.pi-rl-focus.is-col{flex-direction:column;align-items:stretch}
-.pi-rl-focus>.pi-grow{flex:1;min-width:60px}
-.pi-rl-focus .pi-btn:not(.is-primary),.pi-rl-lines .pi-btn:not(.is-primary),.pi-rl-sec .pi-btn:not(.is-primary),.pi-rl-sec .pi-sel{background:var(--pi-bg)}
-.pi-rl-foot{margin:10px 0 0}
-.pi-rl-lines{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
-.pi-rl-lines .pi-line-row{background:var(--pi-fill);border-radius:var(--pi-r-in);padding:6px 6px 6px 12px;border-top:0}
-.pi-rl-lines .pi-line-head{align-items:center;gap:6px}
-.pi-rl-lines .pi-line-head .pi-line-name{padding-top:0;font-weight:600;font-size:13px}
-.pi-rl-lines .pi-line-row .pi-hint{margin:2px 6px 4px 0}
-.pi-rl-kind{padding:1px 8px;border-radius:10px;font-size:11px;flex:none}
-.pi-tl-hd.is-fold{cursor:pointer}
-.pi-tl-hd.is-fold .pi-tl-state:last-child{font-size:13px}
-.pi-tl>.pi-tl-item{padding-bottom:4px}
-.pi-tl-nodes .pi-clue-node{background:transparent;padding:0;margin:0}
-.pi-tl-nodes .pi-clue-node.is-focus{background:var(--pi-accent-soft)}
-.pi-tl-nodes .pi-clue-hd{padding:0 0 0 8px}
-.pi-tl-nodes .pi-clue-name{flex:1;min-width:0}
-.pi-rl-sec{background:var(--pi-fill);border-radius:var(--pi-r-in);padding:10px 12px;margin-top:8px;display:flex;flex-direction:column;gap:8px}
-.pi-rl-sec .pi-run-sec{border-top:0;padding:0}
-.pi-rl-sec .pi-run-fold{align-self:flex-start}
-.pi-rl-sec .pi-pace,.pi-rl-sec .pi-line-opts{padding-top:0;border-top:0;margin:0}
-.pi-rl-sec .pi-ta{background:var(--pi-bg)}
-.pi-rl-sec .pi-status:empty{display:none}
-.pi-rl-sec .pi-tools .pi-btn.is-wide{width:100%;flex:1}
-.pi-rl-status .pi-meta{white-space:normal}
-.pi-rl-sec .pi-seg,.pi-rl-focus .pi-sel{background:var(--pi-bg)}
-.pi-rl-sec .pi-seg-btn.is-sel{background:var(--pi-accent-soft);color:var(--pi-accent);box-shadow:none;font-weight:600}
-.pi-rl-sec .pi-inp,.pi-rl-sec .pi-sel,.pi-rl-focus .pi-inp{background:var(--pi-bg)}
-.pi-root:not(#pi-x) .pi-tl-item.is-active .pi-tl-state.is-left{color:var(--pi-txt2);font-weight:400!important;font-size:12px}
-.pi-tl-hd .pi-tl-name{flex:0 1 auto;margin-right:auto}
-.pi-run-set h3{flex-wrap:nowrap}
-.pi-run-set h3 .pi-run-fold{flex:none}
-.pi-run-set h3 .pi-meta{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pi-card h3 .pi-pause-menu{margin-left:auto}
-.pi-line-menu{position:absolute;right:0;left:auto;top:calc(100% + 4px);z-index:5;display:flex;flex-direction:column;min-width:120px;padding:4px;background:var(--pi-bg);border-radius:10px;box-shadow:var(--pi-shadow)}
-.pi-line-menu .pi-btn{width:100%;justify-content:flex-start}
-.pi-line-foot{margin-top:8px}
-.pi-line-seg{margin:2px 0 8px}
-.pi-line-card .pi-line-search{width:100%;margin:0 0 8px}
-.pi-line-endfoot{display:flex;align-items:center;gap:8px;margin-top:10px}
-.pi-fold-log td{vertical-align:top}
-.pi-fold-log td:last-child{text-align:right;width:1%}
-.pi-rv-tbl{display:flex;flex-direction:column;gap:6px;margin:6px 0 0 26px;padding:8px 10px;background:var(--pi-fill);border-radius:var(--pi-r-in)}
-.pi-rv-tbl-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
-.pi-rv-tbl-row.is-cmp{grid-template-columns:auto minmax(0,1fr)}
-.pi-rv-tbl .pi-sel,.pi-rv-tbl .pi-inp{width:100%;min-width:0}
-.pi-rv-tbl .pi-hint{margin:0}
-.pi-rv-tbl-now{display:flex;align-items:center;flex-wrap:wrap;gap:6px}
-.pi-rv-names{margin:0;padding-left:18px;font-size:13px;line-height:1.6;color:var(--pi-txt)}
-.pi-rv-nav{display:flex;align-items:center;gap:6px;margin:2px 0 10px}
-.pi-rv-nav>.pi-btn{width:auto}
-.pi-rv-dots{flex:1;display:flex;gap:4px;justify-content:center;flex-wrap:wrap}
-.pi-rv-dot{width:22px;height:22px;border-radius:11px;border:0;padding:0;background:var(--pi-fill);font-size:11px;display:flex;align-items:center;justify-content:center;color:var(--pi-txt2);font-weight:600;cursor:pointer;font-family:inherit}
-.pi-rv-dot.is-cur{background:var(--pi-dark);color:var(--pi-on-dark)}
-.pi-rv-dot.is-err{background:var(--pi-warn-soft);color:var(--pi-warn)}
-.pi-rv-dot.is-chg{background:var(--pi-accent-soft);color:var(--pi-accent)}
-.pi-rv-title{display:flex;align-items:center;gap:8px;margin:0 0 4px}
-.pi-rv-title b{font-size:15px;color:var(--pi-dark)}
-.pi-rv-node{display:flex;flex-direction:column;gap:1px;padding:7px 10px;background:var(--pi-fill);border-radius:var(--pi-r-in);margin:4px 0}
-.pi-rv-node b{font-size:13px;color:var(--pi-dark);font-weight:600}
-.pi-rv-node span{font-size:12px;color:var(--pi-txt2)}
-.pi-rv-issue{padding:9px 11px;border-radius:var(--pi-r-in);background:var(--pi-warn-soft);margin:6px 0;display:flex;flex-direction:column;gap:4px}
-.pi-rv-issue.is-ask{background:var(--pi-fill)}
-.pi-rv-issue p{margin:0;font-size:13px;color:var(--pi-txt);line-height:1.5}
-.pi-rv-fix{font-size:12px;color:var(--pi-txt2)}
-.pi-rv-fix b{color:var(--pi-dark);font-weight:600}
-.pi-rv-issue .pi-row{gap:6px}
-.pi-rv-issue .pi-btn{width:auto}
-.pi-rv-tech{font-family:var(--pi-mono);word-break:break-all}
-.pi-rv-sec{font-size:12px;font-weight:600;color:var(--pi-txt2);margin:12px 0 4px}
-.pi-check-item{flex-direction:column;gap:2px}
-.pi-check-item .pi-check-fix{font-size:12px}
-.pi-dc-bar{display:flex;align-items:center;gap:8px;margin-bottom:8px;min-width:0}
-.pi-dc-refs{display:inline-flex;align-items:center;gap:6px;min-width:0;padding:5px 12px;border:0;border-radius:16px;background:var(--pi-bg);color:var(--pi-txt);font-size:12px;cursor:pointer;font-family:inherit}
-.pi-dc-refs i{font-style:normal;color:var(--pi-accent);font-weight:600}
-.pi-dc-refs small{color:var(--pi-txt2);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
-.pi-dc-caret{color:var(--pi-txt2);font-size:10px}
-.pi-dc-act{display:inline-flex;align-items:center;gap:5px;flex:none;margin-left:auto;padding:5px 12px;border-radius:16px;border:1px solid var(--pi-rule);background:var(--pi-bg);color:var(--pi-dark);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit}
-.pi-dc-act svg{width:13px;height:13px}
-.pi-dc-refs-open{display:flex;flex-wrap:wrap;gap:6px;padding:8px 10px;background:var(--pi-bg);border-radius:var(--pi-r-in);margin-bottom:8px}
-.pi-rv-dot.is-note{position:relative}
-/* 第四批（2026-11-16）：审阅页页签、顶部灰字状态、问题标题旁的全部加入意见、底部两个按钮吸在卡片底部 */
-.pi-rv-nav{margin:0 0 12px}
-.pi-rv-dots{justify-content:flex-start;flex-wrap:nowrap;overflow-x:auto;gap:6px;padding:2px 0;scrollbar-width:none}
-.pi-rv-dot{width:auto;height:30px;border-radius:15px;padding:0 12px;font-size:12px;font-weight:500;white-space:nowrap;flex:none}
-.pi-rv-dot.is-note::after{right:2px;top:2px}
-.pi-rv-state,.pi-rv-state.is-draft{color:var(--pi-txt2);margin:-6px 0 10px}
-.pi-rv h3 .pi-rv-end{margin-left:auto;display:flex;gap:6px}
-.pi-rv-sec{display:flex;align-items:center;gap:8px}
-.pi-rv-issues{border:0;cursor:pointer;font:inherit;font-size:11px}
-.pi-rv-fillall{margin-left:auto;border:0;background:none;padding:4px 0;font-size:12px;font-weight:500;color:var(--pi-accent);cursor:pointer}
-.pi-rv-pending{margin:0 0 8px 2px}
-.pi-rv-pending .pi-hint{display:flex;align-items:center;gap:8px;margin:0}
-.pi-rv-pending .pi-rv-fillall{flex:none;min-height:36px;padding:0 8px;margin-right:-8px}
-.pi-dialog-box .pi-pf-imp-ttl{margin:0 0 4px;font-size:12px;color:var(--pi-txt2)}
-.pi-dialog-box .pi-pf-imp-name{margin:0 0 14px;font-size:18px;line-height:1.35;color:var(--pi-dark);overflow-wrap:anywhere}
-.pi-pf-imp-pills{display:flex;flex-wrap:wrap;gap:6px}
-.pi-pf-imp-pills .pi-badge{padding:2px 10px;font-size:12px;background:var(--pi-fill)}
-.pi-dialog-box .pi-pf-imp-note{margin:16px 0 8px;padding-top:12px;border-top:1px solid var(--pi-line);font-size:12px;color:var(--pi-txt2)}
-.pi-dialog-box .pi-pf-imp-note.is-warn{color:var(--pi-warn)}
-.pi-rv-foot{position:sticky;bottom:0;z-index:2;margin:14px -16px -14px;padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px));background:var(--pi-bg);border-top:1px solid var(--pi-line);border-radius:0 0 var(--pi-r) var(--pi-r)}
-
-.pi-rv-dot.is-note::after{content:"";position:absolute;right:-1px;top:-1px;width:7px;height:7px;border-radius:4px;background:var(--pi-accent)}
-.pi-rv-q{display:flex;flex-direction:column;gap:4px;padding:8px 10px;background:var(--pi-fill);border-radius:var(--pi-r-in);margin:6px 0}
-.pi-rv-q-go{align-self:flex-start;border:0;background:none;padding:0;font-size:12px;font-weight:600;color:var(--pi-accent);cursor:pointer;font-family:inherit}
-.pi-rv-q .pi-ta{background:var(--pi-bg)}
-.pi-rv-chg{font-size:12px;color:var(--pi-txt);padding:2px 0 2px 10px;border-left:2px solid var(--pi-accent);margin:3px 0}
-.pi-rv-ok{display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:var(--pi-r-in);background:var(--pi-ok-soft);color:var(--pi-ok);font-size:13px;font-weight:600}
-.pi-rv-foot{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
-.pi-rv-foot .pi-btn{width:100%}
-.pi-rv-when{padding:9px 11px;background:var(--pi-fill);border-radius:var(--pi-r-in);font-size:13px;color:var(--pi-txt)}
-.pi-rv-when.is-warn{background:var(--pi-warn-soft);color:var(--pi-warn);font-weight:600}
-.pi-rv-opts{display:flex;flex-direction:column;gap:4px;margin-top:6px}
-.pi-rv-inp{padding-left:11px}
-.pi-rv-yaml{font-family:var(--pi-mono);font-size:12px;min-height:140px}
-.pi-rv-undo{margin:8px 0 0}
-.pi-rv-undo .pi-btn{width:auto}
-/* /导入审阅 */
-/* 进度条、大按钮（11-23） */
-.pi-prog{margin:8px 0}
-.pi-prog-bar{height:5px;border-radius:3px;background:var(--pi-fill2);overflow:hidden}
-.pi-prog-bar>i{display:block;height:100%;width:0;background:var(--pi-accent);border-radius:3px;transition:width .5s ease}
-.pi-prog.is-done .pi-prog-bar>i{background:var(--pi-ok)}
-.pi-prog-text{margin:5px 0 0;font-size:11.5px;color:var(--pi-txt2);font-variant-numeric:tabular-nums}
-.pi-btn.is-lg{min-height:38px;width:100%;gap:7px;font-size:13.5px;font-weight:600;letter-spacing:.06em}
-.pi-btn.is-lg svg{flex-shrink:0;opacity:.9}
-.pi-btn.is-lg.is-busy:disabled{opacity:1;background:var(--pi-fill2);color:var(--pi-txt2)}
-.pi-btn.is-lg.is-done{background:var(--pi-ok-soft);color:var(--pi-ok)}
-.pi-fr-start{margin:2px 0 4px}
-.pi-fr-hd .pi-fr-st{margin-left:auto}
-.pi-fr-intro summary{cursor:pointer;font-weight:600;color:var(--pi-dark)}
-.pi-fr-intro[open] summary{margin-bottom:6px}
-.pi-rv-foot .pi-prog{grid-column:1/-1;margin:0}
-.pi-rv-done{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 12px;margin:8px 0;background:var(--pi-ok-soft);border-radius:var(--pi-r-in);font-size:13px;color:var(--pi-txt)}
-.pi-rv-done>span{flex:1;min-width:140px}
-.pi-rv-done .pi-btn{width:auto}
-.pi-rv-extra{margin:8px 0 0}
-.pi-rv-extra summary{cursor:pointer}
-.pi-rv-extra .pi-field{margin-top:6px}
-/* 折叠箭头（用户 2026-11-23 选定）：浅灰小圆里的细线箭头，收起朝右、展开转向下；标题不换行，旁边的说明放不下显示省略号。 */
-.pi-fold-ic{width:20px;height:20px;border-radius:50%;background:var(--pi-surf);color:var(--pi-txt2);display:inline-flex;align-items:center;justify-content:center;flex:none;transition:background .15s ease}
-.pi-fold-ic svg{display:block;transition:transform .15s ease}
-.pi-fold-ic.is-open svg{transform:rotate(90deg)}
-.pi-run-fold{gap:8px;min-height:32px;min-width:0}
-.pi-run-fold>span{white-space:nowrap}
-.pi-run-fold:hover .pi-fold-ic{background:var(--pi-fill2)}
-.pi-run-fold.is-sub{display:flex;width:100%;font-size:13px;font-weight:600;color:var(--pi-dark);margin:8px 0 2px;padding:2px 6px;border-radius:8px}
-.pi-run-fold.is-sub:hover{background:var(--pi-surf)}
-.pi-fold-count{flex:none;background:var(--pi-surf);color:var(--pi-txt2);border-radius:999px;padding:0 7px;font-size:11px;line-height:18px;font-weight:400}
-.pi-run-fold.is-sub .pi-fold-count{margin-left:auto}
-.pi-run-set h3{flex-wrap:nowrap}
-.pi-run-set h3 .pi-meta{flex:1 1 0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pi-root summary::before{content:'';width:20px;height:20px;border-radius:50%;font-size:0;background:var(--pi-surf) url(data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20viewBox=%220%200%2024%2024%22%20fill=%22none%22%20stroke=%22%238A8A9A%22%20stroke-width=%222.4%22%20stroke-linecap=%22round%22%20stroke-linejoin=%22round%22%3E%3Cpolyline%20points=%229%206%2015%2012%209%2018%22/%3E%3C/svg%3E) center/12px 12px no-repeat;transition:transform .15s ease}
-.pi-root summary:hover::before{background-color:var(--pi-fill2)}
-.pi-root .pi-fold>summary::before{content:'';width:20px;height:20px;border-radius:50%;font-size:0;background:var(--pi-surf) url(data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20viewBox=%220%200%2024%2024%22%20fill=%22none%22%20stroke=%22%238A8A9A%22%20stroke-width=%222.4%22%20stroke-linecap=%22round%22%20stroke-linejoin=%22round%22%3E%3Cpolyline%20points=%229%206%2015%2012%209%2018%22/%3E%3C/svg%3E) center/12px 12px no-repeat;transition:transform .15s ease}
-.pi-root .pi-fold[open]>summary::before{content:'';transform:rotate(90deg)}
-.pi-fold>summary{align-items:center}
-.pi-pause-menu>summary svg{vertical-align:middle;margin-left:2px;color:var(--pi-txt2)}
-.pi-dc-caret{display:inline-flex;color:var(--pi-txt2)}
-.pi-dc-caret svg{transition:transform .15s ease}
-.pi-dc-caret.is-open svg{transform:rotate(180deg)}
-/* 线索执行页的阶段（合并前的写法）：左边一条色带，进行中用强调色；多条线时阶段名前是线名 */
-.pi-clue-stage{margin:8px 0 12px;padding:0 0 0 10px;border-left:3px solid var(--pi-rule)}
-.pi-clue-stage.is-active{border-left-color:var(--pi-accent)}
-.pi-clue-stage.is-done{border-left-color:var(--pi-txt2);opacity:.8}
-.pi-clue-stage .pi-tl-name{font-weight:600}
-.pi-clue-line{color:var(--pi-txt2);font-weight:400;margin-right:6px}
-/* 剧情线选项那一行：窄屏时选项和长说明可以折行，不撑出卡片 */
-.pi-line-opts{flex-wrap:wrap;row-gap:6px}
-.pi-line-opts .pi-check{min-width:0;flex:1 1 auto}
-.pi-line-opts .pi-check span{white-space:normal;min-width:0}
-`, ICONS = {
-    // 折叠和下拉用的细线箭头（用户 2026-11-23 选定圆底样式）
-    chev: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>',
-    chevDown: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>',
-    close: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
-    plus: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
-    gear: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M6.9 1.8h2.2l.4 1.7 1.2.5 1.5-.9 1.6 1.6-.9 1.5.5 1.2 1.7.4v2.2l-1.7.4-.5 1.2.9 1.5-1.6 1.6-1.5-.9-1.2.5-.4 1.7H6.9l-.4-1.7-1.2-.5-1.5.9-1.6-1.6.9-1.5-.5-1.2-1.7-.4V6.9l1.7-.4.5-1.2-.9-1.5 1.6-1.6 1.5.9 1.2-.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><circle cx="8" cy="8" r="2.1" stroke="currentColor" stroke-width="1.3"/></svg>',
-    box: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M2 4.5L8 2l6 2.5v7L8 14l-6-2.5v-7z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M2 4.5L8 7l6-2.5M8 7v7" stroke="currentColor" stroke-width="1.3"/></svg>',
-    caret: '<svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M3 2l4 3-4 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    caretDown: '<svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 3l3 4 3-4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    send: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 13V3M3.5 7.5L8 3l4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    trash: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M2.5 4h11M6.5 4V2.5h3V4M4 4l.7 9.5h6.6L12 4M6.8 6.5v4.5M9.2 6.5v4.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    menu: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2.5 4h11M2.5 8h11M2.5 12h11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
-    spark: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 1.8l1.3 4.9 4.9 1.3-4.9 1.3L8 14.2l-1.3-4.9L1.8 8l4.9-1.3L8 1.8z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>',
-    check: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3.5 8.5l3 3 6-7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    pencil: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M10.5 2.5l3 3-8 8h-3v-3l8-8z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M9 4l3 3" stroke="currentColor" stroke-width="1.3"/></svg>',
-    search: '<svg width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.4"/><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
-    book: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 2.5h7.5a2 2 0 012 2v9H5a2 2 0 01-2-2v-9z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M3 11.5a2 2 0 012-2h7.5M6 5.5h4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>',
-    moon: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M13.5 9.8A5.8 5.8 0 016.2 2.5a5.8 5.8 0 107.3 7.3z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>',
-    sun: '<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.4"/><path d="M8 1.5v1.6M8 12.9v1.6M1.5 8h1.6M12.9 8h1.6M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M3.4 12.6l1.1-1.1M11.5 4.5l1.1-1.1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
-    // 世界书工具栏：统一 16 格、1.4 线宽、圆角端点。
-    copy: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.4"/><path d="M10.5 5.5V3.8A1.3 1.3 0 009.2 2.5H3.8a1.3 1.3 0 00-1.3 1.3v5.4a1.3 1.3 0 001.3 1.3h1.7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
-    download: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 2.5v7.5M4.8 7L8 10.2 11.2 7M2.5 12.5v1h11v-1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    upload: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 10.5V3M4.8 6.2L8 3l3.2 3.2M2.5 12.5v1h11v-1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    folder: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 4.3c0-.7.6-1.3 1.3-1.3h2.9l1.5 1.6h5c.7 0 1.3.6 1.3 1.3v6.8c0 .7-.6 1.3-1.3 1.3H3.3c-.7 0-1.3-.6-1.3-1.3V4.3z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>',
-    bookPlus: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 2.5h7.5a2 2 0 012 2v4M3 2.5v9a2 2 0 002 2h4M3 11.5a2 2 0 012-2h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M12.5 10.5v4M10.5 12.5h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
-    entryPlus: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M9.5 13.5H4a1.5 1.5 0 01-1.5-1.5V4A1.5 1.5 0 014 2.5h8A1.5 1.5 0 0113.5 4v5.5M5.5 6h5M5.5 9h3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M12.5 11v4M10.5 13h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
-    chat: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3.5 2.5h9A1.5 1.5 0 0114 4v6a1.5 1.5 0 01-1.5 1.5H7l-3 2.5v-2.5h-.5A1.5 1.5 0 012 10V4a1.5 1.5 0 011.5-1.5z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>',
-    card: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="3" y="1.5" width="10" height="13" rx="1.5" stroke="currentColor" stroke-width="1.4"/><circle cx="8" cy="6.5" r="2" stroke="currentColor" stroke-width="1.4"/><path d="M5.5 11.5h5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
-    checks: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2.5" y="2.5" width="4" height="4" rx="1" stroke="currentColor" stroke-width="1.4"/><rect x="2.5" y="9.5" width="4" height="4" rx="1" stroke="currentColor" stroke-width="1.4"/><path d="M9 4.5h4.5M9 11.5h4.5M3.6 11.5l.9.9 1.4-1.6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    checkAll: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2.5" y="2.5" width="11" height="11" rx="2" stroke="currentColor" stroke-width="1.4"/><path d="M5.3 8.2l1.9 1.9 3.6-4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    wand: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 13l7.5-7.5M9 4l3 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M12 1.8v2M11 2.8h2M13.8 6.2v1.4M13.1 6.9h1.4M5.5 2v1.4M4.8 2.7h1.4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>',
-    replace: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2.5 5.5h9l-2.2-2.2M13.5 10.5h-9l2.2 2.2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    move: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 4.3c0-.7.6-1.3 1.3-1.3h2.9l1.5 1.6h5c.7 0 1.3.6 1.3 1.3v6.8c0 .7-.6 1.3-1.3 1.3H3.3c-.7 0-1.3-.6-1.3-1.3V4.3z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M5.5 9h5M8.8 7.2L10.6 9 8.8 10.8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    sort: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4.5 2.5v11M2.5 11.5l2 2 2-2M9 4h4.5M9 8h3.5M9 12h2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    eye: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.4"/></svg>',
-    eyeOff: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6.2 3.8A6.6 6.6 0 018 3.5c4 0 6.5 4.5 6.5 4.5a11.6 11.6 0 01-1.7 2.2M10.4 11.9A6.3 6.3 0 018 12.5C4 12.5 1.5 8 1.5 8a11.4 11.4 0 012.6-3M2.5 2.5l11 11" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    more: '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="3.5" cy="8" r="1.3"/><circle cx="8" cy="8" r="1.3"/><circle cx="12.5" cy="8" r="1.3"/></svg>',
-    pulse: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M1.5 8.5h3l1.8-4 3 8 1.9-4h3.3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    file: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M4 1h5.5L13 4.5V14a1 1 0 01-1 1H4a1 1 0 01-1-1V2a1 1 0 011-1z" stroke="currentColor" stroke-width="1.2"/><path d="M9 1v4h4" stroke="currentColor" stroke-width="1.2"/></svg>',
-    arrowUp: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 13V3M4 7l4-4 4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    arrowDown: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 3v10M4 9l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    undo: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M5.5 3L2.5 6l3 3M2.5 6h6.2a4.3 4.3 0 010 8.5H6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>'
-  };
-  function foldIcon(open) {
-    return `<span class="pi-fold-ic${open ? " is-open" : ""}">${ICONS.chev}</span>`;
-  }
-
-  // src/ui/dom.js
-  var STYLE_ID = "pi-style";
-  function esc(value) {
-    return String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]);
-  }
-  function ensureStyle() {
-    let doc = hostDocument();
-    if (doc.getElementById(STYLE_ID)) return;
-    let style = doc.createElement("style");
-    style.id = STYLE_ID, style.textContent = CSS, doc.head.appendChild(style);
-  }
-  function removeStyle() {
-    hostDocument().getElementById(STYLE_ID)?.remove();
-  }
-  var night = !1;
-  function setNight(value) {
-    night = !!value;
-    for (let node of hostDocument().querySelectorAll(".pi-root")) node.classList.toggle("is-night", night);
-  }
-  var isNight = () => night;
-  function el(html) {
-    let box = hostDocument().createElement("div");
-    box.innerHTML = html.trim();
-    let node = box.firstElementChild;
-    return node && node.classList.contains("pi-root") && node.classList.toggle("is-night", night), node;
-  }
-  function options(list, value) {
-    return list.map((item) => `<option value="${esc(item.value)}"${String(item.value) === String(value) ? " selected" : ""}>${esc(item.label)}</option>`).join("");
-  }
-  function openDialog({ title: title2, html = "", actions: actions12 = [{ label: "确定", value: !0, primary: !0 }], onMount } = {}) {
-    let doc = hostDocument();
-    return new Promise((resolve) => {
-      let root = el(`<div class="pi-root pi-dialog"><div class="pi-dialog-box" role="dialog">
-            ${title2 ? `<h4>${esc(title2)}</h4>` : ""}<div class="pi-dlg-body">${html}</div>
-            <div class="pi-dlg-acts">${actions12.map((action, index) => `<button type="button" class="pi-btn${action.primary ? " is-primary" : ""}${action.danger ? " is-danger" : ""}" data-dlg="${index}">${esc(action.label)}</button>`).join("")}</div>
-        </div></div>`), finish = (value) => {
-        doc.removeEventListener("keydown", onKey, !0), root.remove(), resolve(value);
-      }, onKey = (event) => {
-        event.key === "Escape" && (event.stopPropagation(), finish(null));
-      };
-      root.addEventListener("click", (event) => {
-        if (event.target === root) return finish(null);
-        let pick = event.target.closest("[data-dlg-value]");
-        if (pick) return finish(pick.dataset.dlgValue);
-        let button = event.target.closest("[data-dlg]");
-        if (!button) return;
-        let action = actions12[Number(button.dataset.dlg)], value = typeof action.value == "function" ? action.value(root) : action.value;
-        value !== void 0 && finish(value);
-      }), doc.addEventListener("keydown", onKey, !0), doc.body.appendChild(root), onMount && onMount(root), root.querySelector("input,textarea,select")?.focus();
-    });
-  }
-  function confirmDialog({ title: title2, body = "", list = [], okLabel = "确定", danger = !1 }) {
-    let html = `${body ? `<p class="pi-hint">${esc(body)}</p>` : ""}${list.length ? `<ul>${list.map((item) => `<li>${esc(item)}</li>`).join("")}</ul>` : ""}`;
-    return openDialog({ title: title2, html, actions: [{ label: "取消", value: !1 }, { label: okLabel, value: !0, primary: !danger, danger }] }).then(Boolean);
-  }
-  function promptDialog({ title: title2, label = "", value = "", multiline = !1, placeholder = "" }) {
-    let input2 = multiline ? `<textarea class="pi-ta is-mono is-tall" data-dlg-input placeholder="${esc(placeholder)}">${esc(value)}</textarea>` : `<input class="pi-inp" data-dlg-input value="${esc(value)}" placeholder="${esc(placeholder)}">`;
-    return openDialog({
-      title: title2,
-      html: `<label class="pi-field">${label ? `<span>${esc(label)}</span>` : ""}${input2}</label>`,
-      actions: [{ label: "取消", value: null }, { label: "确定", primary: !0, value: (root) => root.querySelector("[data-dlg-input]").value }]
-    });
-  }
-  function menuDialog({ title: title2, items }) {
-    let html = `<div class="pi-menu-list">${items.map((item) => `<button type="button" class="pi-menu-item${item.danger ? " is-danger" : ""}" data-dlg-value="${esc(item.value)}"${item.disabled ? " disabled" : ""}>${item.icon || ""}<span>${esc(item.label)}</span></button>`).join("")}</div>`;
-    return openDialog({ title: title2, html, actions: [{ label: "取消", value: null }] });
-  }
-  function choiceDialog({ title: title2, body = "", choices }) {
-    return openDialog({ title: title2, html: body ? `<p class="pi-hint">${esc(body)}</p>` : "", actions: choices });
-  }
-  function pickFiles({ accept = "", multiple = !1 } = {}) {
-    let doc = hostDocument();
-    return new Promise((resolve) => {
-      let input2 = doc.createElement("input");
-      input2.type = "file", input2.accept = accept, input2.multiple = multiple, input2.hidden = !0, input2.addEventListener("change", () => {
-        resolve([...input2.files]), input2.remove();
-      }), input2.addEventListener("cancel", () => {
-        resolve([]), input2.remove();
-      }), doc.body.appendChild(input2), input2.click();
-    });
   }
 
   // src/ui/tour.js
@@ -12529,7 +15713,7 @@ label.pi-wb-row{cursor:pointer}
           </div></div>`), layer.addEventListener("click", (event) => {
         let b = event.target.closest("[data-tour]");
         b && (b.dataset.tour === "next" ? step(1) : b.dataset.tour === "prev" ? step(-1) : stop(!0));
-      }), doc.body.appendChild(layer), doc.addEventListener("keydown", onKey, !0), win.addEventListener("resize", relayout), win.addEventListener("scroll", relayout, !0), show(available()[0].i), !0);
+      }), layerParent(doc).appendChild(layer), doc.addEventListener("keydown", onKey, !0), win.addEventListener("resize", relayout), win.addEventListener("scroll", relayout, !0), show(available()[0].i), !0);
     }
     function stop(done) {
       layer && (done && markTourDone(data, scope), doc.removeEventListener("keydown", onKey, !0), win.removeEventListener("resize", relayout), win.removeEventListener("scroll", relayout, !0), raf && cancelFrame(raf), raf = 0, layer.remove(), layer = null);
@@ -12626,32 +15810,6 @@ label.pi-wb-row{cursor:pointer}
     refreshOn: () => refreshOn3,
     render: () => render3
   });
-
-  // src/ui/ai.js
-  function ask(view, role, messages, { signal, onText } = {}) {
-    return requestLlm(messages, resolveLlm(view.data.settings(), role), { signal, onText });
-  }
-  function guideText(view) {
-    return guideInfo(view).text;
-  }
-  async function talkText(view, limit = 3e4) {
-    let chat = await view.data.loadChat(view.projectId);
-    return transcript(chat.summary, chat.messages, limit);
-  }
-  async function runTask(view, key, job) {
-    if (view.busy[key]) return null;
-    let projectId = view.projectId;
-    view.setBusy(key, !0);
-    try {
-      let result2 = await job();
-      return view.projectId === projectId ? result2 : null;
-    } finally {
-      view.setBusy(key, !1);
-    }
-  }
-  function guideInfo(view) {
-    return resolveGuide(view.data.settings());
-  }
 
   // src/core/tokens.js
   function estimateTokens(text2) {
@@ -12993,19 +16151,62 @@ ${floor.text}`).join(`
     lineDraftProblems: () => lineDraftProblems,
     onBlur: () => onBlur,
     onInput: () => onInput,
-    openEditReview: () => openEditReview,
+    openEditReview: () => openEditReview3,
     putDraft: () => putDraft,
     refreshOn: () => refreshOn,
     render: () => render,
     rewriteGuardNow: () => rewriteGuardNow,
     showDraft: () => showDraft,
-    showEditReview: () => showEditReview,
+    showEditReview: () => showEditReview3,
     st: () => st,
     staleTaskNotice: () => staleTaskNotice,
     startRewrite: () => startRewrite,
     taskContext: () => taskContext,
     taskStillValid: () => taskStillValid,
     vq: () => vq
+  });
+
+  // src/ui/clue-run.js
+  var clue_run_exports = {};
+  __export(clue_run_exports, {
+    BINDING_EXAMPLE: () => BINDING_EXAMPLE,
+    CLUE_STATUS_BADGE: () => CLUE_STATUS_BADGE,
+    FOCUS_SOURCE: () => FOCUS_SOURCE,
+    LINE_BADGE: () => LINE_BADGE,
+    bindingCard: () => bindingCard,
+    bindingText: () => bindingText,
+    clueActions: () => clueActions,
+    clueLogCard: () => clueLogCard,
+    clueOnChange: () => clueOnChange,
+    clueOnInput: () => clueOnInput,
+    factDialog: () => factDialog,
+    factName: () => factName,
+    factNamesText: () => factNamesText,
+    factRowsHtml: () => factRowsHtml,
+    hereText: () => hereText,
+    keepLabels: () => keepLabels,
+    labelsPendingHtml: () => labelsPendingHtml,
+    lineCard: () => lineCard,
+    lineDisplayName: () => lineDisplayName,
+    lineGroup: () => lineGroup,
+    lineWaitText: () => lineWaitText,
+    mainlineCard: () => mainlineCard,
+    modeCard: () => modeCard,
+    mountFactRows: () => mountFactRows,
+    nodeRow: () => nodeRow,
+    openingScope: () => openingScope,
+    prebuildColumnProblems: () => prebuildColumnProblems,
+    prebuildScope: () => prebuildScope,
+    prebuildScopeValid: () => prebuildScopeValid,
+    prebuildTargetPrint: () => prebuildTargetPrint,
+    prebuildTargetSame: () => prebuildTargetSame,
+    prepareLabels: () => prepareLabels,
+    readableReason: () => readableReason,
+    reasonList: () => reasonList,
+    renderClueRun: () => renderClueRun,
+    stageBlock: () => stageBlock,
+    stayNotice: () => stayNotice,
+    unofferedHtml: () => unofferedHtml
   });
 
   // src/core/fact-labels.js
@@ -13342,145 +16543,64 @@ ${block}`
     return !v || v.leak === null || v.leak === void 0 ? { ok: !1 } : v.leak ? v.label || v.criterion ? { ok: !0, label: v.label || sent.label, criterion: v.criterion || sent.criterion } : { ok: !1 } : { ok: !0, label: sent.label, criterion: sent.criterion };
   }
 
-  // src/ui/trpg-steer.js
-  var result = null, VERDICT_BADGE = { 跟着剧本: "is-ok", 有点偏: "is-warn", 跑偏了: "is-warn" };
-  function nodeName(ns) {
-    return ns.node.name || ns.node.uid;
-  }
-  function sceneHintHtml(c) {
-    if (!c || !KP_UNSET_SOURCES.includes(c.state.focus.source)) return "";
-    let nodes = c.state.nodeStates.filter((ns) => (ns.status === "available" || ns.status === "active") && !ns.disabled && ns.node.uid);
-    return `<p class="pi-hint is-warn">${KP_UNSET_HINT}</p>${nodes.length ? `<div class="pi-row"><select class="pi-sel pi-grow" data-kp-scene>${nodes.map((ns) => `<option value="${esc(ns.node.uid)}">${esc(nodeName(ns))}</option>`).join("")}</select><button type="button" class="pi-btn is-sm" data-act="kp-scene">设为本轮场景</button></div>` : ""}`;
-  }
-  function timelineHintHtml(project, now) {
-    return now == null && parseTimeline(project.setting && project.setting.text).length ? '<p class="pi-hint">没有读到游戏内时间，时间线不会自动推进。</p>' : "";
-  }
-  function steerResultHtml(project) {
-    let r = result && result.projectId === project.id ? result : null;
-    return r ? `<p class="pi-hint">${r.verdict ? `<span class="pi-badge ${VERDICT_BADGE[r.verdict]}">${esc(r.verdict)}</span>` : "没有认出结论，可以再检查一次。"} ${esc(r.plain.join("；"))}${r.spoil.length ? ` <button type="button" class="pi-btn is-sm is-ghost" data-act="kp-steer-spoil">${r.open ? "收起" : "展开（会剧透）"}</button>` : ""}</p>${r.open ? r.spoil.map((t) => `<p class="pi-hint">${esc(t)}</p>`).join("") : ""}${r.steer ? '<p class="pi-hint"><button type="button" class="pi-btn is-sm" data-act="kp-steer-apply">按建议拉回</button></p>' : ""}` : "";
-  }
-  function liveStage(c) {
-    let focus = c.state.nodeStates.find((s) => s.node.uid && s.node.uid === c.state.focus.uid);
-    return focus && c.state.stageStates.get(focus.node.unit.id) || [...c.state.stageStates.values()].find((s) => s.entered.v === "true" && !s.done);
-  }
-  function buildRequest(view, project, c) {
-    return steerMessages(steerContext(project, c));
-  }
-  function steerContext(project, c) {
-    let recent = chatMessages().filter((m) => m && !m.is_system && String(m.mes || "").trim()).slice(-6).map((m) => ({ user: !!m.is_user, text: m.mes })), live2 = liveStage(c), stage = live2 && live2.unit.stage ? stringifyYaml({ [live2.unit.stage.key || live2.unit.id]: live2.unit.stage.data }) : "", block = splitBlocks(project.setting && project.setting.text).find((b) => b.title === KP_BLOCK && !b.cont), facts = chatFactSets({ snap: c.snap, prog: c.prog }).known.map((id) => {
-      let text2 = effectiveFact(id, c.snap, c.prog).text;
-      return `${id}${text2 ? `：${Array.isArray(text2) ? text2.join("、") : text2}` : ""}`;
-    });
-    return { recent, stage, rules: block ? block.text : "", facts };
-  }
-  var steerActions = {
-    "kp-scene"(view, target) {
-      let sel = target.parentElement && target.parentElement.querySelector("[data-kp-scene]");
-      if (!(!sel || !sel.value)) {
-        try {
-          view.runtime.clue.setFocus(sel.value);
-        } catch (error) {
-          toast("error", error && error.message || String(error));
-        }
-        view.renderBody();
-      }
-    },
-    "kp-steer-spoil"(view) {
-      result && (result.open = !result.open), view.renderBody();
-    },
-    async "kp-steer"(view) {
-      let c = view.runtime.clue.compute();
-      if (!c) return;
-      let project = view.project(), messages = buildRequest(view, project, c);
-      try {
-        let reply2 = await runTask(view, "kp-steer", () => ask(view, "outline", messages));
-        if (reply2 == null) return;
-        result = { ...parseSteerReply(reply2), projectId: view.projectId, open: !1 };
-      } catch (error) {
-        toast("error", `对照剧本失败：${error && error.message || error}`);
-      }
-      view.renderBody();
-    },
-    // 这里不直接写进度：由 kpCard 的 saveKp 统一保存，见 trpg-kp-card.js
-    "kp-steer-apply"(view) {
-      if (!result || !result.steer) return;
-      let prog = view.runtime.progress();
-      view.runtime.setProgress(
-        { ...prog, trpgKp: { ...prog.trpgKp || {}, push: { kind: "steer", text: result.steer, floor: aiFloorCount2(chatMessages()) } } },
-        "trpg-kp"
-      ), toast("success", "下一轮会按建议拉回。"), view.renderBody();
-    }
-  };
-
-  // src/ui/trpg-kp-card.js
-  var shown = null, BADGE = { ok: ["is-ok", "顺利进行"], warn: ["is-warn", "小心探索"], loop: ["is-warn", "在打转"], bad: ["is-warn", "卡住了"] }, AI_LEVEL = { 顺利进行: "ok", 在打转: "loop", 卡住了: "bad" };
-  function shownLevel(mine) {
-    return mine.level === "bad" ? "bad" : mine.ai && AI_LEVEL[mine.ai.verdict] || mine.level;
-  }
-  function kpState(view) {
-    return (view.runtime.progress() || {}).trpgKp || {};
-  }
-  function saveKp(view, patch) {
-    let prog = view.runtime.progress();
-    view.runtime.setProgress({ ...prog, trpgKp: { ...prog.trpgKp || {}, ...patch } }, "trpg-kp");
-  }
-  function kpCard(view, project, c, d) {
-    let floors = aiFloorCount2(chatMessages()), kp = kpState(view), confirmed = chatFactSets({ snap: c.snap, prog: c.prog }).known.length;
-    (!kp.pulse || kp.pulse.facts !== confirmed) && Promise.resolve().then(() => {
-      let now = kpState(view).pulse;
-      (!now || now.facts !== confirmed) && saveKp(view, { pulse: { facts: confirmed, floor: floors } });
-    });
-    let stuck = kp.pulse && kp.pulse.facts === confirmed ? floors - kp.pulse.floor : 0, push = kp.push && kp.push.floor === floors ? kp.push : null, mine = shown && shown.projectId === project.id ? shown : null, leaks = d && d.lastAudit ? (d.lastAudit.leaks || []).filter((l) => l.level === "leak").length : 0, pushLabel = push ? push.kind === "steer" ? "按建议拉回" : (KP_LEVELS.find((x) => x.level === push.level) || {}).label : "", busy = view.busy["kp-steer"] || view.busy["kp-health"], thinking = !!view.busy["kp-health"], ai = mine && mine.ai, spoils = mine ? [...ai && ai.spoil || [], ...mine.spoil] : [], advice = ai && ai.advice, bind = project.clue.bindings.time;
-    return `<div class="pi-card"><h3>KP<span class="pi-spacer"></span>
-        <button type="button" class="pi-btn is-sm is-ghost" data-act="kp-health" title="推演凭已经拿到的线索，主线还能不能走通，并可以推一把；只给结论，展开才剧透">卡住了吗</button>
-        ${busy ? '<span class="pi-spin"></span>' : `<button type="button" class="pi-icon-btn" data-act="kp-menu" title="更多" aria-label="更多">${ICONS.more}</button>`}</h3>
-        ${timelineHintHtml(project, readGameClock(c.snap.tables, bind && bind.路径))}${steerResultHtml(project)}
-        ${mine ? `<p class="pi-hint">${thinking ? '<span class="pi-badge">判断中</span>' : `<span class="pi-badge ${BADGE[shownLevel(mine)][0]}">${BADGE[shownLevel(mine)][1]}</span>`} ${esc(
-      ai && ai.plain.length ? ai.plain.join("；") : thinking ? "AI 正在读最近的正文…" : mine.aiError ? `AI 判断失败（${mine.aiError}），下面只是插件推演。` : ai ? "AI 没有给出说明。" : ""
-    )}${spoils.length && !thinking ? ` <button type="button" class="pi-btn is-sm is-ghost" data-act="kp-spoil">${mine.open ? "收起" : "展开（会剧透）"}</button>` : ""}</p><p class="pi-hint">插件推演：${esc(mine.lines.join("；"))}</p>${mine.open && !thinking ? spoils.map((t) => `<p class="pi-hint">${esc(t)}</p>`).join("") : ""}${leaks ? `<p class="pi-hint is-warn">最近一次请求里疑似提前写出了${leaks}处线索</p>` : ""}${advice && advice !== "不用推" && !push ? `<p class="pi-hint">AI 建议：${esc(advice)}</p>` : ""}${mine.fact && !push && !thinking ? `<div class="pi-tools is-c3">${KP_LEVELS.map((x) => `<button type="button" class="pi-btn is-sm${advice === x.label ? " is-primary" : ""}" data-act="kp-push" data-level="${x.level}">${esc(x.label)}</button>`).join("")}</div>` : mine.fact || push ? "" : '<p class="pi-hint">眼下没有能推的线索。</p>'}` : ""}
-        ${push ? `<p class="pi-hint">下一轮：${esc(pushLabel)} <button type="button" class="pi-btn is-sm is-ghost" data-act="kp-cancel">取消</button></p>` : ""}
-        ${stuck >= KP_STUCK_ROUNDS && !push ? `<p class="pi-hint is-warn">已经${stuck}轮没拿到新线索。</p>` : ""}</div>`;
-  }
-  var kpActions = {
-    ...steerActions,
-    async "kp-menu"(view) {
-      let pick = await menuDialog({ title: "KP", items: [{ label: "对照剧本", value: "kp-steer" }] });
-      pick && kpActions[pick](view);
-    },
-    // 先出插件推演（立即），再让 AI 读最近正文判断是不是真卡住了
-    async "kp-health"(view) {
-      if (view.busy["kp-health"]) return;
-      let c = view.runtime.clue.compute();
-      if (!c) return;
-      let project = view.project(), r = trpgHealth({ volumes: c.outline.volumes, state: c.state, snap: c.snap, prog: c.prog, checks: trpgCheckResults(chatMessages()), focus: c.state.focus }), target = kpPushTarget(c.state, c.snap, c.prog), mine = { ...r, fact: target ? target.fact : "", projectId: view.projectId, open: !1, ai: null, aiError: "" };
-      shown = mine;
-      let messages = stuckMessages({ ...steerContext(project, c), pending: pendingDiscoveries(c.state, c.snap, c.prog, r.deadFacts), health: r.lines });
-      try {
-        let reply2 = await runTask(view, "kp-health", () => ask(view, "outline", messages));
-        if (reply2 == null || shown !== mine) return;
-        mine.ai = parseStuckReply(reply2), mine.ai.verdict || (mine.aiError = "没有认出结论");
-      } catch (error) {
-        shown === mine && (mine.aiError = error && error.message || String(error));
-      }
-      view.renderBody();
-    },
-    "kp-spoil"(view) {
-      shown && (shown.open = !shown.open), view.renderBody();
-    },
-    // 推的目标按点击时重新选（体检之后可能已经拿到了那条线索）
-    "kp-push"(view, target) {
-      let c = view.runtime.clue.compute();
-      if (!c) return;
-      let t = kpPushTarget(c.state, c.snap, c.prog);
-      if (!t) return toast("info", "眼下没有能推的线索。"), view.renderBody();
-      saveKp(view, { push: { fact: t.fact, level: Number(target.dataset.level), floor: aiFloorCount2(chatMessages()) } }), view.renderBody();
-    },
-    "kp-cancel"(view) {
-      saveKp(view, { push: null }), view.renderBody();
-    }
-  };
-
   // src/core/long-import.js
+  var long_import_exports = {};
+  __export(long_import_exports, {
+    CHAPTER_HEAD: () => CHAPTER_HEAD,
+    IMPORT_AUTHOR_KEYS: () => IMPORT_AUTHOR_KEYS,
+    IMPORT_INDEX_FORMAT: () => IMPORT_INDEX_FORMAT,
+    IMPORT_LAYER_TEXT: () => IMPORT_LAYER_TEXT,
+    IMPORT_LINES_PER_CALL: () => IMPORT_LINES_PER_CALL,
+    IMPORT_LINE_INDEX: () => IMPORT_LINE_INDEX,
+    IMPORT_NEEDS_EXAMPLE: () => IMPORT_NEEDS_EXAMPLE,
+    IMPORT_NODE_KEYS: () => IMPORT_NODE_KEYS,
+    IMPORT_STAGE_KEYS: () => IMPORT_STAGE_KEYS,
+    LINE_FREE_WORDS: () => LINE_FREE_WORDS,
+    SECRET_SHORT_STOP: () => SECRET_SHORT_STOP,
+    appendComment: () => appendComment,
+    checkImportDraft: () => checkImportDraft,
+    droppedLineRefs: () => droppedLineRefs,
+    fixImportIndexMessages: () => fixImportIndexMessages,
+    importConflictText: () => importConflictText,
+    importDoneText: () => importDoneText,
+    importDraftMessages: () => importDraftMessages,
+    importIndexForPart: () => importIndexForPart,
+    importIndexMessages: () => importIndexMessages,
+    importIndexMissing: () => importIndexMissing,
+    importIndexRetryMessages: () => importIndexRetryMessages,
+    importJobKind: () => importJobKind,
+    importLineBatches: () => importLineBatches,
+    importLineDraftMessages: () => importLineDraftMessages,
+    importLineDuplicates: () => importLineDuplicates,
+    importLineHeadRule: () => importLineHeadRule,
+    importLineIndexMessages: () => importLineIndexMessages,
+    importLineIssues: () => importLineIssues,
+    importLineTable: () => importLineTable,
+    importReachIssues: () => importReachIssues,
+    importSecretNames: () => importSecretNames,
+    importSecretShorts: () => importSecretShorts,
+    importVisibleText: () => importVisibleText,
+    inventedOpenIssue: () => inventedOpenIssue,
+    issueCommentLine: () => issueCommentLine,
+    issueQuestion: () => issueQuestion,
+    keepReasons: () => keepReasons,
+    lineIdsMissing: () => lineIdsMissing,
+    mainLinesText: () => mainLinesText,
+    mergeImportByLine: () => mergeImportByLine,
+    mergeImportIndex: () => mergeImportIndex,
+    mergeImportParts: () => mergeImportParts,
+    mergeLineIdentity: () => mergeLineIdentity,
+    mergeSameIssues: () => mergeSameIssues,
+    parseUnitReply: () => parseUnitReply,
+    projectClueIssues: () => projectClueIssues,
+    reidLines: () => reidLines,
+    reviewReviseMessages: () => reviewReviseMessages,
+    salvageImportIndex: () => salvageImportIndex,
+    sourceExcerpt: () => sourceExcerpt,
+    splitImportAuthorFields: () => splitImportAuthorFields,
+    splitLongText: () => splitLongText,
+    splitUnitReplies: () => splitUnitReplies
+  });
   var CHAPTER_HEAD = /^(?:#{1,4}\s+.+|第[0-9一二三四五六七八九十百零〇两]+[章回节幕部卷].*|Chapter\s+\d+.*|[一二三四五六七八九十]+、.+)$/i;
   function splitLongText(text2, { target = 8e3, overlap = 300 } = {}) {
     let src = String(text2 || "").replace(/\r\n?/g, `
@@ -13498,10 +16618,10 @@ ${block}`
       }
       let at = p.start, n = 1;
       for (; at < p.end; ) {
-        let cut2 = Math.min(p.end, at + target), para = src.lastIndexOf(`
+        let cut3 = Math.min(p.end, at + target), para = src.lastIndexOf(`
 
-`, cut2);
-        cut2 < p.end && para > at + target * 0.5 && (cut2 = para), out.push({ title: `${p.title}（${n++}）`, start: at, end: cut2 }), at = cut2;
+`, cut3);
+        cut3 < p.end && para > at + target * 0.5 && (cut3 = para), out.push({ title: `${p.title}（${n++}）`, start: at, end: cut3 }), at = cut3;
       }
     }
     let merged = [];
@@ -13678,7 +16798,7 @@ ${joinText2(idx.作者资料)}`);
     return out.secretFlag = !0, out;
   }
   var IMPORT_AUTHOR_KEYS = ["原文出处", "来源", "待确认", "补写"];
-  function importDraftMessages({ part, index, prevTail = "", mode: mode2 = "clue", needs = "", actors = "", done = "", kind = "", trpg = !1 }) {
+  function importDraftMessages({ part, index, prevTail = "", mode: mode2 = "clue", needs = "", actors = "", done = "", kind = "" }) {
     let clue = mode2 === "clue", rules = clue ? CLUE_OUTLINE_RULES : OUTLINE_RULES, onlyClue = (x) => clue ? x : "";
     return [
       {
@@ -13736,9 +16856,7 @@ ${joinText2(idx.作者资料)}`);
           clue && (kind === "main" || kind === "side") ? importLineHeadRule(kind, part) : "",
           actors && `角色对应：${actors}`,
           needs && `作者的要求：${needs}`,
-          rules,
-          // 跑团模组导入（core/trpg.js）：只在导入任务带 trpg 时追加
-          clue && trpg ? TRPG_IMPORT_RULES : ""
+          rules
         ].filter(Boolean).join(`
 `)
       },
@@ -14535,11 +17653,6 @@ ${mainLines}`,
     none: "未确定",
     away: "主角不在任何剧情中，仅提供入口"
   };
-  function trpgSeedRows(project, c, factRows, knowRows) {
-    if (!isTrpg(project) || !c) return { factRows, knowRows };
-    let keep = trpgRowFilter(c.compiled, trpgWantFacts(c.compiled, c.state, c.snap, c.prog, project.clue));
-    return { factRows: factRows.filter((f) => keep(f.code)), knowRows: knowRows.filter((k) => keep(k.fact)) };
-  }
   function modeCard(project, inner = !1) {
     let mode2 = project.clue ? project.clue.mode : "outline", body = `<div class="pi-seg">${PLOT_MODES.map((item) => `<button type="button" class="pi-seg-btn${item.value === mode2 ? " is-sel" : ""}" data-act="clue-mode" data-mode="${item.value}">${esc(item.label)}</button>`).join("")}</div>
         <p class="pi-hint">${mode2 === "clue" ? "按主角实际获得的线索逐步开放剧情，进度随数据库填表更新。" : "按阶段顺序推进，每隔若干楼由AI检查当前阶段是否演完。"}</p>`;
@@ -14660,7 +17773,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
   }
   function foldOpts(project, foldChat) {
     let api = acuApi(), storage = api && typeof api.querySql == "function" ? "sqlite" : "native";
-    return !api || !FOLD_AUTO_RELEASED[storage] || isTrpg(project) ? "" : `<div class="pi-row pi-line-opts"><label class="pi-check"><input type="checkbox" data-clue-foldauto${project.clue.foldAuto !== !1 ? " checked" : ""}><span>收起已结束的线</span></label></div><p class="pi-hint">已结束剧情线的表格行移入插件记录并从表格删除，剧情判断不受影响。</p>`;
+    return !api || !FOLD_AUTO_RELEASED[storage] ? "" : `<div class="pi-row pi-line-opts"><label class="pi-check"><input type="checkbox" data-clue-foldauto${project.clue.foldAuto !== !1 ? " checked" : ""}><span>收起已结束的线</span></label></div><p class="pi-hint">已结束剧情线的表格行移入插件记录并从表格删除，剧情判断不受影响。</p>`;
   }
   function withdrawnRows(clue, project) {
     let labels = isPlainObject(project.clue.labels) ? project.clue.labels : {};
@@ -14690,7 +17803,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
       let notReady = new Set(labelsToPrepare(project.outline.volumes, project.clue.labels).filter((x) => !c.snap.facts.has(x.code)).map((x) => x.code)), keep = c.snap.scope ? c.snap.scope.facts : null, pend = c.snap.seedPending || /* @__PURE__ */ new Set(), miss = prebuildPlan(project.outline.volumes).facts.filter((f) => (!keep || keep.has(f.code)) && !c.snap.facts.has(f.code) && !notReady.has(f.code) && !pend.has(f.code));
       miss.length && (newRow = rowBtn(`大纲里有${miss.length}条线索在表格里还没有行。`, "clue-prebuild", "补全表格", "", !0));
     }
-    let staleN = noDb || lack.length ? 0 : staleLabelCount(project, c), staleRow = staleN ? rowBtn(`有${staleN}条线索的口径改了，当前聊天的表格还是旧的。`, "clue-labels-edit", "修改线索") : "", todo = [...lackRow ? [lackRow] : [], ...problemRows, ...newRow ? [newRow] : [], ...labelRow ? [labelRow] : [], ...staleRow ? [staleRow] : [], ...withdrawnRows(clue, project)], notReadyCodes = c.notReady && c.notReady.size && focusNode ? discoveryList(isPlainObject(focusNode.node.item) ? focusNode.node.item : {}).filter((d2) => d2.fact && c.notReady.has(d2.fact)).map((d2) => d2.fact) : [], hint = isTrpg(project) ? sceneHintHtml(c) : "", sceneLine = hint || `<p class="pi-hint">${hereText(c)}本轮场景：${focusNode ? `<b>${esc(focusNode.node.name)}</b>（${esc(FOCUS_SOURCE[focus.source])}）` : esc(FOCUS_SOURCE[focus.source])}${focusNode ? ` <button type="button" class="pi-btn is-sm is-ghost" data-act="clue-leave" data-uid="${esc(focusNode.node.uid)}" title="主角已离开这件事：不再注入这件事的场景和发现，仅提供入口">已离开</button>` : ""}${c.prog.focus ? ` <button type="button" class="pi-btn is-sm is-ghost" data-act="clue-unfocus" title="回到按填表判断本轮场景">${c.prog.focus.startsWith(AWAY_PREFIX) ? "未离开" : "取消手选"}</button>` : ""}</p>`;
+    let staleN = noDb || lack.length ? 0 : staleLabelCount(project, c), staleRow = staleN ? rowBtn(`有${staleN}条线索的口径改了，当前聊天的表格还是旧的。`, "clue-labels-edit", "修改线索") : "", todo = [...lackRow ? [lackRow] : [], ...problemRows, ...newRow ? [newRow] : [], ...labelRow ? [labelRow] : [], ...staleRow ? [staleRow] : [], ...withdrawnRows(clue, project)], notReadyCodes = c.notReady && c.notReady.size && focusNode ? discoveryList(isPlainObject(focusNode.node.item) ? focusNode.node.item : {}).filter((d2) => d2.fact && c.notReady.has(d2.fact)).map((d2) => d2.fact) : [], sceneLine = `<p class="pi-hint">${hereText(c)}本轮场景：${focusNode ? `<b>${esc(focusNode.node.name)}</b>（${esc(FOCUS_SOURCE[focus.source])}）` : esc(FOCUS_SOURCE[focus.source])}${focusNode ? ` <button type="button" class="pi-btn is-sm is-ghost" data-act="clue-leave" data-uid="${esc(focusNode.node.uid)}" title="主角已离开这件事：不再注入这件事的场景和发现，仅提供入口">已离开</button>` : ""}${c.prog.focus ? ` <button type="button" class="pi-btn is-sm is-ghost" data-act="clue-unfocus" title="回到按填表判断本轮场景">${c.prog.focus.startsWith(AWAY_PREFIX) ? "未离开" : "取消手选"}</button>` : ""}</p>`;
     return `${progressHtml("prebuild")}${todo.length ? `<div class="pi-card"><h3>需要处理<span class="pi-badge is-warn">${todo.length}</span></h3><div class="pi-rl-stack">${todo.join("")}</div></div>` : ""}
         ${mainlineCard(c, enabled)}${lineCard(c, project, st72, multi ? clue.foldCheck() : null, view)}
         <div class="pi-card"><h3>本轮场景${paused}<span class="pi-spacer"></span>
@@ -14705,7 +17818,6 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
         <p class="pi-hint">本轮注入${clueEntry && clueEntry.content ? `约${estimateTokens(clueEntry.content)} token` : `内容为空${c.snap.api ? clueEntry && clueEntry.reason ? `（${esc(clueEntry.reason)}）` : "" : "（数据库未连接）"}`}${last ? `；上次实际注入${new Date(last.at).toLocaleTimeString("zh-CN", { hour12: !1 })}，${last.chars}字` : ""}。</p>
         <p class="pi-hint">依据数据库最近一次填好的表格计算${d.lastTableUpdate ? `（表格${new Date(d.lastTableUpdate).toLocaleTimeString("zh-CN", { hour12: !1 })}更新）` : ""}。上一轮填表未完成就发送时，新线索晚一轮生效。</p>
         </div>
-        ${isTrpg(project) ? kpCard(view, project, c, d) : ""}
         <div class="pi-card"><h3>节点<span class="pi-meta">点节点查看条件，「⋯」手动调整</span><span class="pi-spacer"></span>
             <button type="button" class="pi-btn is-sm is-ghost" data-act="rewrite" title="根据已发生的剧情和线索进度，由AI改写未结束的阶段；结果先存为草稿，不直接覆盖">改写后续</button></h3>
         ${nodeGroups(groups, st72) || '<p class="pi-hint">大纲为空。</p>'}</div>
@@ -14935,7 +18047,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
     }
     let on = startedLines(state) || /* @__PURE__ */ new Set();
     for (let s of state.lineStates) s.state === "进行中" && on.add(s.line.id);
-    return rowScope(compiled, on, isTrpg(project) ? null : nodeFrontier(compiled, state, snap0, c.prog, cfg)).facts;
+    return rowScope(compiled, on, nodeFrontier(compiled, state, snap0, c.prog, cfg)).facts;
   }
   function prebuildScope(view) {
     let c = ctx(), chatId2 = c && typeof c.getCurrentChatId == "function" ? String(c.getCurrentChatId() ?? "") : "", clue = view.runtime && view.runtime.clue, iso = clue && typeof clue.opScope == "function" ? clue.opScope().iso : null;
@@ -15438,7 +18550,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
       let liveNow = view.runtime.clue.compute(), again2 = clueTplMismatch(base, liveNow && liveNow.snap.tables || {});
       if (again2.length) return toast("warning", `确认期间当前聊天的表格有变化，未导入：${again2[0]}。请重新点「创建模板」。`);
       let catalogNow = liveNow ? sceneCatalogCell(liveNow.state, liveNow.plan || { recognize: [] }, liveNow.prog) : "", gen = synthesizeClueTemplate(base, {
-        clue: hasFacts ? { scenes: plan.scenes } : { controlRow: ["主线", "", catalogNow], ...trpgSeedRows(project, liveNow, picked, plan.knows), scenes: plan.scenes }
+        clue: hasFacts ? { scenes: plan.scenes } : { controlRow: ["主线", "", catalogNow], factRows: picked, knowRows: plan.knows, scenes: plan.scenes }
       }), res = null, late = !hasFacts && aiFloorCount(chatMessages()) >= START_MIN_AI && view.runtime.clue.canStartFromNow();
       try {
         res = await api.importTemplateFromData(gen.template, { scope: "chat", dataMode: "seed" });
@@ -15890,6 +19002,2645 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
     }).join("");
   }
 
+  // src/trpg/trpg-clue-run.js
+  var trpg_clue_run_exports = {};
+  __export(trpg_clue_run_exports, {
+    BINDING_EXAMPLE: () => BINDING_EXAMPLE2,
+    CLUE_STATUS_BADGE: () => CLUE_STATUS_BADGE2,
+    FOCUS_SOURCE: () => FOCUS_SOURCE2,
+    LINE_BADGE: () => LINE_BADGE2,
+    bindingCard: () => bindingCard2,
+    bindingText: () => bindingText2,
+    clueActions: () => clueActions2,
+    clueLogCard: () => clueLogCard2,
+    clueOnChange: () => clueOnChange2,
+    factDialog: () => factDialog2,
+    factName: () => factName2,
+    factNamesText: () => factNamesText2,
+    factRowsHtml: () => factRowsHtml2,
+    hereText: () => hereText2,
+    keepLabels: () => keepLabels2,
+    labelsPendingHtml: () => labelsPendingHtml2,
+    lineCard: () => lineCard2,
+    lineDisplayName: () => lineDisplayName2,
+    lineWaitText: () => lineWaitText2,
+    modeCard: () => modeCard2,
+    mountFactRows: () => mountFactRows2,
+    nodeRow: () => nodeRow2,
+    prebuildColumnProblems: () => prebuildColumnProblems2,
+    prebuildScope: () => prebuildScope2,
+    prebuildScopeValid: () => prebuildScopeValid2,
+    prebuildTargetPrint: () => prebuildTargetPrint2,
+    prebuildTargetSame: () => prebuildTargetSame2,
+    prepareLabels: () => prepareLabels2,
+    readableReason: () => readableReason2,
+    reasonList: () => reasonList2,
+    renderClueRun: () => renderClueRun2,
+    stageBlock: () => stageBlock2,
+    stayNotice: () => stayNotice2,
+    unofferedHtml: () => unofferedHtml2
+  });
+
+  // src/trpg/trpg-kp-card.js
+  var shown = null, npcImport = null;
+  function npcImportHtml(project) {
+    if (typeof window > "u" || typeof (window.IGS && window.IGS.stats && window.IGS.stats.importNpcCocText) != "function" || !kpSectionText(project.setting && project.setting.text, "NPC与敌人数据")) return "";
+    let mine = npcImport && npcImport.projectId === project.id ? npcImport : null;
+    return `<div class="pi-tools"><button type="button" class="pi-btn is-sm" data-act="kp-npc-igs"${mine && mine.busy ? " disabled" : ""} title="把剧本里的NPC和敌人数据交给IGS，建成调查员档">${mine && mine.busy ? "正在交给IGS…" : "交给IGS建立NPC档"}</button></div>${mine && mine.msg ? `<p class="pi-hint">${esc(mine.msg)}</p>` : ""}`;
+  }
+  var BADGE = { ok: ["is-ok", "顺利进行"], warn: ["is-warn", "小心探索"], loop: ["is-warn", "在打转"], bad: ["is-warn", "卡住了"] }, AI_LEVEL = { 顺利进行: "ok", 在打转: "loop", 卡住了: "bad" };
+  function shownLevel(mine) {
+    return mine.level === "bad" ? "bad" : mine.ai && AI_LEVEL[mine.ai.verdict] || mine.level;
+  }
+  function kpState(view) {
+    return (view.runtime.progress() || {}).trpgKp || {};
+  }
+  function saveKp(view, patch) {
+    let prog = view.runtime.progress();
+    view.runtime.setProgress({ ...prog, trpgKp: { ...prog.trpgKp || {}, ...patch } }, "trpg-kp");
+  }
+  function lastCheckHtml(kp) {
+    let log = Array.isArray(kp.log) ? kp.log : [], last = log[log.length - 1];
+    if (!last) return "";
+    let row2 = (ok, text2, why) => `<p class="pi-hint"><span class="pi-badge ${ok ? "is-ok" : "is-warn"}">${ok ? "通过" : "没通过"}</span> ${esc(text2)}${why ? `：${esc(why)}` : ""}</p>`, items = [...last.facts.map((x) => row2(x.ok, x.label, x.why)), ...last.conds.map((x) => row2(x.ok, x.text, x.why))];
+    return `<details class="pi-fold"><summary><b>上轮检测</b><span>${esc(kpSummary(last))}</span></summary>${items.join("") || '<p class="pi-hint">这一轮没有要判断的线索和条件。</p>'}${last.off && last.offReason ? `<p class="pi-hint is-warn">${esc(last.offReason)}</p>` : ""}</details>`;
+  }
+  function kpCard(view, project, c, d) {
+    let floors = aiFloorCount2(chatMessages()), kp = kpState(view), confirmed = chatFactSets2({ snap: c.snap, prog: c.prog }).known.length;
+    (!kp.pulse || kp.pulse.facts !== confirmed) && Promise.resolve().then(() => {
+      let now = kpState(view).pulse;
+      (!now || now.facts !== confirmed) && saveKp(view, { pulse: { facts: confirmed, floor: floors } });
+    });
+    let stuck = kp.pulse && kp.pulse.facts === confirmed ? floors - kp.pulse.floor : 0, push = kp.push && kp.push.floor === floors ? kp.push : null, mine = shown && shown.projectId === project.id ? shown : null, leaks = d && d.lastAudit ? (d.lastAudit.leaks || []).filter((l) => l.level === "leak").length : 0, pushLabel = push ? push.kind === "steer" ? "按建议拉回" : (KP_LEVELS.find((x) => x.level === push.level) || {}).label : "", busy = view.busy["kp-steer"] || view.busy["kp-health"], thinking = !!view.busy["kp-health"], ai = mine && mine.ai, spoils = mine ? [...ai && ai.spoil || [], ...mine.spoil] : [], advice = ai && ai.advice, bind = project.clue.bindings.time;
+    return `<div class="pi-card"><h3>KP<span class="pi-spacer"></span>
+        <button type="button" class="pi-btn is-sm is-ghost" data-act="kp-health" title="推演凭已经拿到的线索，主线还能不能走通，并可以推一把；只给结论，展开才剧透">卡住了吗</button>
+        ${busy ? '<span class="pi-spin"></span>' : `<button type="button" class="pi-icon-btn" data-act="kp-menu" title="更多" aria-label="更多">${ICONS.more}</button>`}</h3>
+        ${timelineHintHtml(project, readGameClock(c.snap.tables, bind && bind.路径))}${lastCheckHtml(kp)}${steerResultHtml(project)}
+        ${mine ? `<p class="pi-hint">${thinking ? '<span class="pi-badge">判断中</span>' : `<span class="pi-badge ${BADGE[shownLevel(mine)][0]}">${BADGE[shownLevel(mine)][1]}</span>`} ${esc(
+      ai && ai.plain.length ? ai.plain.join("；") : thinking ? "AI 正在读最近的正文…" : mine.aiError ? `AI 判断失败（${mine.aiError}），下面只是插件推演。` : ai ? "AI 没有给出说明。" : ""
+    )}${spoils.length && !thinking ? ` <button type="button" class="pi-btn is-sm is-ghost" data-act="kp-spoil">${mine.open ? "收起" : "展开（会剧透）"}</button>` : ""}</p><p class="pi-hint">插件推演：${esc(mine.lines.join("；"))}</p>${mine.open && !thinking ? spoils.map((t) => `<p class="pi-hint">${esc(t)}</p>`).join("") : ""}${leaks ? `<p class="pi-hint is-warn">最近一次请求里疑似提前写出了${leaks}处线索</p>` : ""}${advice && advice !== "不用推" && !push ? `<p class="pi-hint">AI 建议：${esc(advice)}</p>` : ""}${mine.fact && !push && !thinking ? `<div class="pi-tools is-c3">${KP_LEVELS.map((x) => `<button type="button" class="pi-btn is-sm${advice === x.label ? " is-primary" : ""}" data-act="kp-push" data-level="${x.level}">${esc(x.label)}</button>`).join("")}</div>` : mine.fact || push ? "" : '<p class="pi-hint">眼下没有能推的线索。</p>'}` : ""}
+        ${push ? `<p class="pi-hint">下一轮：${esc(pushLabel)} <button type="button" class="pi-btn is-sm is-ghost" data-act="kp-cancel">取消</button></p>` : ""}
+        ${stuck >= KP_STUCK_ROUNDS && !push ? `<p class="pi-hint is-warn">已经${stuck}轮没拿到新线索。</p>` : ""}${npcImportHtml(project)}</div>`;
+  }
+  var kpActions = {
+    ...steerActions,
+    async "kp-menu"(view) {
+      let pick = await menuDialog({
+        title: "KP",
+        items: [
+          { label: "对照剧本", value: "kp-steer" },
+          { label: "重新检测最新一楼", value: "kp-recheck" },
+          { label: "清空KP记录", value: "kp-clear", danger: !0 }
+        ]
+      });
+      pick && kpActions[pick](view);
+    },
+    async "kp-recheck"(view) {
+      await view.runtime.kp.run({ manual: !0 }) ? view.renderBody() : toast("info", "没有检测：最新一楼不是AI回复，或「跑团每轮自动检测」已关、数据库未就绪。");
+    },
+    async "kp-clear"(view) {
+      if (!await confirmDialog({
+        title: "清空KP记录",
+        body: "KP自动判定的线索会撤销，判过的一句话条件和检测记录会清掉，阶段按剩下的记录重新计算。你手动确认的线索不动；已写进数据库表格的内容不会改，删楼或重roll时表格会跟着退回。",
+        okLabel: "清空",
+        danger: !0
+      })) return;
+      let n = view.runtime.kp.clearKp();
+      toast("success", `已清空，撤销了${n}条KP判定的线索。`), view.renderBody();
+    },
+    // 先出插件推演（立即），再让 AI 读最近正文判断是不是真卡住了
+    async "kp-health"(view) {
+      if (view.busy["kp-health"]) return;
+      let c = view.runtime.clue.compute();
+      if (!c) return;
+      let project = view.project(), r = trpgHealth({ volumes: c.outline.volumes, state: c.state, snap: c.snap, prog: c.prog, checks: trpgCheckResults(chatMessages()), focus: c.state.focus }), target = kpPushTarget(c.state, c.snap, c.prog), mine = { ...r, fact: target ? target.fact : "", projectId: view.projectId, open: !1, ai: null, aiError: "" };
+      shown = mine;
+      let messages = stuckMessages({ ...steerContext(project, c), pending: pendingDiscoveries(c.state, c.snap, c.prog, r.deadFacts), health: r.lines });
+      try {
+        let reply2 = await runTask(view, "kp-health", () => ask(view, "outline", messages));
+        if (reply2 == null || shown !== mine) return;
+        mine.ai = parseStuckReply(reply2), mine.ai.verdict || (mine.aiError = "没有认出结论");
+      } catch (error) {
+        shown === mine && (mine.aiError = error && error.message || String(error));
+      }
+      view.renderBody();
+    },
+    async "kp-npc-igs"(view) {
+      let project = view.project(), fn = window.IGS && window.IGS.stats && window.IGS.stats.importNpcCocText, text2 = kpSectionText(project.setting && project.setting.text, "NPC与敌人数据");
+      if (typeof fn != "function" || !text2 || npcImport && npcImport.busy) return;
+      let mine = npcImport = { projectId: view.projectId, busy: !0, msg: "" };
+      view.renderBody();
+      try {
+        mine.msg = npcImportMessage(await fn(text2));
+      } catch (error) {
+        mine.msg = npcImportMessage({ ok: !1, reason: error && error.message || String(error) });
+      }
+      mine.busy = !1, view.renderBody();
+    },
+    "kp-spoil"(view) {
+      shown && (shown.open = !shown.open), view.renderBody();
+    },
+    // 推的目标按点击时重新选（体检之后可能已经拿到了那条线索）
+    "kp-push"(view, target) {
+      let c = view.runtime.clue.compute();
+      if (!c) return;
+      let t = kpPushTarget(c.state, c.snap, c.prog);
+      if (!t) return toast("info", "眼下没有能推的线索。"), view.renderBody();
+      saveKp(view, { push: { fact: t.fact, level: Number(target.dataset.level), floor: aiFloorCount2(chatMessages()) } }), view.renderBody();
+    },
+    "kp-cancel"(view) {
+      saveKp(view, { push: null }), view.renderBody();
+    }
+  };
+
+  // src/trpg/trpg-long-import.js
+  var trpg_long_import_exports = {};
+  __export(trpg_long_import_exports, {
+    CHAPTER_HEAD: () => CHAPTER_HEAD2,
+    IMPORT_AUTHOR_KEYS: () => IMPORT_AUTHOR_KEYS2,
+    IMPORT_INDEX_FORMAT: () => IMPORT_INDEX_FORMAT2,
+    IMPORT_LAYER_TEXT: () => IMPORT_LAYER_TEXT2,
+    IMPORT_LINES_PER_CALL: () => IMPORT_LINES_PER_CALL2,
+    IMPORT_LINE_INDEX: () => IMPORT_LINE_INDEX2,
+    IMPORT_NEEDS_EXAMPLE: () => IMPORT_NEEDS_EXAMPLE2,
+    IMPORT_NODE_KEYS: () => IMPORT_NODE_KEYS2,
+    IMPORT_STAGE_KEYS: () => IMPORT_STAGE_KEYS2,
+    LINE_FREE_WORDS: () => LINE_FREE_WORDS2,
+    SECRET_SHORT_STOP: () => SECRET_SHORT_STOP2,
+    appendComment: () => appendComment2,
+    checkImportDraft: () => checkImportDraft2,
+    droppedLineRefs: () => droppedLineRefs2,
+    fixImportIndexMessages: () => fixImportIndexMessages2,
+    importConflictText: () => importConflictText2,
+    importDoneText: () => importDoneText2,
+    importDraftMessages: () => importDraftMessages2,
+    importIndexForPart: () => importIndexForPart2,
+    importIndexMessages: () => importIndexMessages2,
+    importIndexMissing: () => importIndexMissing2,
+    importIndexRetryMessages: () => importIndexRetryMessages2,
+    importJobKind: () => importJobKind2,
+    importLineBatches: () => importLineBatches2,
+    importLineDraftMessages: () => importLineDraftMessages2,
+    importLineDuplicates: () => importLineDuplicates2,
+    importLineHeadRule: () => importLineHeadRule2,
+    importLineIndexMessages: () => importLineIndexMessages2,
+    importLineIssues: () => importLineIssues2,
+    importLineTable: () => importLineTable2,
+    importReachIssues: () => importReachIssues2,
+    importSecretNames: () => importSecretNames2,
+    importSecretShorts: () => importSecretShorts2,
+    importVisibleText: () => importVisibleText2,
+    inventedOpenIssue: () => inventedOpenIssue2,
+    issueCommentLine: () => issueCommentLine2,
+    issueQuestion: () => issueQuestion2,
+    keepReasons: () => keepReasons2,
+    lineIdsMissing: () => lineIdsMissing2,
+    mainLinesText: () => mainLinesText2,
+    mergeImportByLine: () => mergeImportByLine2,
+    mergeImportIndex: () => mergeImportIndex2,
+    mergeImportParts: () => mergeImportParts2,
+    mergeLineIdentity: () => mergeLineIdentity2,
+    mergeSameIssues: () => mergeSameIssues2,
+    parseUnitReply: () => parseUnitReply2,
+    projectClueIssues: () => projectClueIssues2,
+    reidLines: () => reidLines2,
+    reviewReviseMessages: () => reviewReviseMessages2,
+    salvageImportIndex: () => salvageImportIndex2,
+    sourceExcerpt: () => sourceExcerpt2,
+    splitImportAuthorFields: () => splitImportAuthorFields2,
+    splitLongText: () => splitLongText2,
+    splitUnitReplies: () => splitUnitReplies2
+  });
+  var CHAPTER_HEAD2 = /^(?:#{1,4}\s+.+|第[0-9一二三四五六七八九十百零〇两]+[章回节幕部卷].*|Chapter\s+\d+.*|[一二三四五六七八九十]+、.+)$/i;
+  function splitLongText2(text2, { target = 8e3, overlap = 300 } = {}) {
+    let src = String(text2 || "").replace(/\r\n?/g, `
+`), lines2 = src.split(`
+`), heads = [];
+    for (let i = 0, pos = 0; i < lines2.length; pos += lines2[i].length + 1, i++)
+      CHAPTER_HEAD2.test(lines2[i].trim()) && heads.push({ pos, title: lines2[i].trim().replace(/^#+\s*/, "") });
+    let parts = [];
+    (!heads.length || heads[0].pos > 0) && parts.push({ title: heads.length ? "开头" : "全文", start: 0, end: heads.length ? heads[0].pos : src.length }), heads.forEach((h, k) => parts.push({ title: h.title, start: h.pos, end: k + 1 < heads.length ? heads[k + 1].pos : src.length })), parts = parts.filter((p) => src.slice(p.start, p.end).trim());
+    let out = [];
+    for (let p of parts) {
+      if (p.end - p.start <= target * 1.4) {
+        out.push(p);
+        continue;
+      }
+      let at = p.start, n = 1;
+      for (; at < p.end; ) {
+        let cut3 = Math.min(p.end, at + target), para = src.lastIndexOf(`
+
+`, cut3);
+        cut3 < p.end && para > at + target * 0.5 && (cut3 = para), out.push({ title: `${p.title}（${n++}）`, start: at, end: cut3 }), at = cut3;
+      }
+    }
+    let merged = [];
+    for (let p of out) {
+      let last = merged[merged.length - 1];
+      last && last.end - last.start + (p.end - p.start) <= target ? (last.end = p.end, last.last = p.title) : merged.push({ ...p, first: p.title, last: p.title });
+    }
+    return merged.forEach((p) => p.title = p.first === p.last ? p.first : `${p.first} … ${p.last}`), merged.map((p, i) => ({
+      i,
+      title: p.title,
+      start: p.start,
+      end: p.end,
+      text: src.slice(Math.max(0, p.start - (i ? overlap : 0)), p.end),
+      lead: i ? Math.min(overlap, p.start) : 0
+    }));
+  }
+  var IMPORT_INDEX_FORMAT2 = [
+    "```yaml",
+    "梗概: 这一段讲了什么（两三句）",
+    "人物:",
+    "  - {名称: 常用称呼, 别名: [只属于这个人的其他称呼], 同一人: 前面索引里已有的名称（只有原文明说是同一个人时才写）, 公开身份: 别人眼里他是谁, 真实身份: 只有作者知道的（没有就省略）, 名字保密: 按上面的判断方法，需要时写 true（不需要就省略）, 首次登场: 本段 / 之前}",
+    "  # 「维修工」「老板」这类很多人都能叫的泛称不要写进别名；同一个人的化名、绰号才写。",
+    "地点:",
+    "  - {名称: …, 说明: 一句话}",
+    "事实:   # 剧情里需要被「查到 / 听到 / 看到」的关键信息",
+    "  - {编号: F_拼音或英文短词, 内容: 一句话, 性质: 真相 / 证词 / 实物 / 传闻 / 推测, 谁说的: 证词和传闻写来源, 玩家怎么能知道: 本段里通过什么行动取得（没写就留空）}",
+    "门槛:   # 原文写的「要先拿到什么，才能做下一步」",
+    "  - {需要: [事实编号…], 才能: 下一步做什么}",
+    "并行:   # 原文明确说可以先后不限的几条线",
+    "  - [线A的简称, 线B的简称]",
+    "作者资料: 原文里只给作者看的部分（幕后真相、人物动机、写作说明、结局分支）的要点",
+    "```"
+  ].join(`
+`);
+  function importIndexMessages2({ part, total, prev = "", needs = "" }) {
+    return [
+      {
+        role: "system",
+        content: [
+          "你在帮作者把一份长剧情材料整理成可以游玩的大纲。这一步只读材料、整理作者索引，不写大纲。",
+          "材料可能是小说正文，也可能是写给作者的剧情方案。方案里的「真相」「人物表」「分支说明」「人物弧线」属于作者资料；「调查如何继续」这类段落是推进条件，不是新事件。",
+          "区分三件事：原书里的真相（作者知道）；角色说的话（证词、传闻，不一定是真的）；玩家通过什么行动才能知道。",
+          "只写材料里有的，不要补写。拿不准的写在「作者资料」里并注明「待确认」。",
+          "「事实」只收**玩家在游戏里通过某个行动能拿到的具体信息或实物**：看到的东西、听到的话、读到的记录、确认的地点。一段材料通常只有几条。",
+          "材料里的写作规则、提醒和限制（如「不能一次检查就解决全部问题」「只说合作不产生成果」「主角会逐渐愿意让别人分担」「结局可以不完全成功」）**不是事实**，写进「作者资料」。",
+          "「名字保密」怎么判断：问自己「故事一开始，叙述里能不能直接用这个名字称呼这个人？」能，就不写；不能、要等剧情揭晓以后才能出现，才写 true。",
+          "  - 要写 true 的，例如：幕后主使的真名、真凶是谁、化名者的本名、整个故事要查出来的那个人。",
+          "  - 不写的，例如：主角和主要同伴的名字（哪怕他有一重不让外人知道的身份）、公开使用的称号、代号、外号。",
+          "  - 两种称呼本身都可以在正文里出现、只是它们指同一个人这件事保密的，把这层对应写进「真实身份」，不标名字保密；某个称呼本身也要等剧情揭晓才能出现的，那个称呼仍按上面的办法标。",
+          `输出格式（只输出这一个代码块）：
+${IMPORT_INDEX_FORMAT2}`
+        ].join(`
+`)
+      },
+      {
+        role: "user",
+        content: [
+          needs && `【作者的要求】
+${needs}`,
+          prev && `【前面几段已经整理出的索引（编号沿用，不要重复建）】
+${prev}`,
+          `【第 ${part.i + 1} / ${total} 段：${part.title}】
+${part.text}`
+        ].filter(Boolean).join(`
+
+`)
+      }
+    ];
+  }
+  function fixImportIndexMessages2(text2, error) {
+    return [
+      {
+        role: "system",
+        content: `修正下面作者索引 YAML 的格式错误，内容一字不改，只改缩进、冒号、引号。含冒号、方括号、尖括号的文字整句加引号；列表里的每一条要么是一句文字，要么是 {键: 值} 对象，不要在文字下面再挂子列表。
+格式：
+${IMPORT_INDEX_FORMAT2}`
+      },
+      { role: "user", content: `【错误】${error}
+
+${text2}` }
+    ];
+  }
+  var INDEX_LIST_KEYS2 = /* @__PURE__ */ new Set(["人物", "地点", "事实", "门槛", "并行", "支线"]);
+  function salvageImportIndex2(text2) {
+    let lines2 = String(text2 || "").replace(/\r\n?/g, `
+`).split(`
+`), secs = [], cur = null;
+    for (let line of lines2) {
+      let m = /^([^\s#\-][^:：]*?)\s*[:：](.*)$/.exec(line);
+      m ? secs.push(cur = { key: m[1].trim(), head: m[2], body: [] }) : cur && cur.body.push(line);
+    }
+    let value = {}, keep = [], lost = 0, dedent = (ls) => {
+      let n = Math.min(...ls.filter((l) => l.trim()).map((l) => /^ */.exec(l)[0].length));
+      return ls.map((l) => l.slice(Number.isFinite(n) ? n : 0));
+    }, plain = (ls) => ls.map((l) => l.trim().replace(/^#.*$/, "")).filter(Boolean).join(`
+`);
+    for (let s of secs) {
+      let src = `${s.key}:${s.head}
+${s.body.join(`
+`)}`;
+      try {
+        let v = parseYaml(src);
+        if (isPlainObject(v)) {
+          value[s.key] = v[s.key];
+          continue;
+        }
+      } catch {
+      }
+      if (!INDEX_LIST_KEYS2.has(s.key)) {
+        keep.push(`${s.key}：${plain([s.head, ...s.body])}`);
+        continue;
+      }
+      let body = dedent(s.body.filter((l) => l.trim() && !/^\s*#/.test(l))), items = [], list = [];
+      for (let l of body) /^- /.test(l) || !items.length ? items.push([l]) : items[items.length - 1].push(l);
+      for (let it of items) {
+        try {
+          let v = parseYaml(it.join(`
+`));
+          if (Array.isArray(v)) {
+            list.push(...v);
+            continue;
+          }
+        } catch {
+        }
+        lost++, keep.push(`${s.key}（格式有误，原样保留）：${plain(it)}`);
+      }
+      value[s.key] = list;
+    }
+    return keep.length && (value.作者资料 = [].concat(value.作者资料 == null ? [] : value.作者资料, keep)), { value: secs.length ? value : null, lost };
+  }
+  function importIndexForPart2(index, partNo) {
+    if (!isPlainObject(index) || !Array.isArray(index.事实)) return index;
+    let here = Number(partNo) + 1;
+    return {
+      ...index,
+      事实: index.事实.map(
+        (f) => !isPlainObject(f) || !Number.isFinite(Number(f.段)) || Math.abs(Number(f.段) - here) <= 1 ? f : Object.fromEntries(["编号", "内容", "性质", "段"].filter((k) => f[k] != null && f[k] !== "").map((k) => [k, f[k]]))
+      )
+    };
+  }
+  function mergeImportIndex2(list) {
+    let out = { 梗概: [], 人物: [], 地点: [], 事实: [], 门槛: [], 并行: [], 作者资料: [], 待确认: [] }, people = /* @__PURE__ */ new Map(), byName = /* @__PURE__ */ new Map(), aliasOwner = /* @__PURE__ */ new Map(), places = /* @__PURE__ */ new Set(), facts = /* @__PURE__ */ new Map();
+    for (let [k, idx] of (list || []).entries()) {
+      if (!isPlainObject(idx)) continue;
+      let joinText2 = (v) => Array.isArray(v) ? v.map((x) => clueText2(typeof x == "string" ? x : JSON.stringify(x))).filter(Boolean).join(`
+`) : clueText2(v);
+      idx.梗概 && out.梗概.push(`第${k + 1}段：${joinText2(idx.梗概)}`);
+      for (let p of Array.isArray(idx.人物) ? idx.人物 : []) {
+        if (!isPlainObject(p) || !p.名称) continue;
+        let name = String(p.名称), aliases = (Array.isArray(p.别名) ? p.别名 : []).map(String), same2 = [].concat(p.同一人 || []).map(String), hit = people.get(name) || [...same2, ...aliases].map((n) => byName.get(n)).find(Boolean);
+        if (hit) {
+          for (let [f, v] of Object.entries(p))
+            f === "名称" || f === "同一人" || (hit[f] == null || hit[f] === "" ? hit[f] = v : f === "别名" && (hit.别名 = [.../* @__PURE__ */ new Set([...hit.别名 || [], ...v || []])]));
+          hit.名称 !== name && (hit.别名 = [.../* @__PURE__ */ new Set([...hit.别名 || [], name])]), people.set(name, hit);
+        } else {
+          let entry = { ...p };
+          delete entry.同一人, out.人物.push(entry), people.set(name, entry), byName.set(name, entry);
+        }
+        for (let a of aliases) {
+          let owner = aliasOwner.get(a), me = people.get(name);
+          owner && owner !== me ? out.待确认.push(`「${owner.名称}」和「${me.名称}」都被称作「${a}」，按两个人分开记录；如果其实是同一个人，请合并`) : aliasOwner.set(a, me);
+        }
+      }
+      for (let l of Array.isArray(idx.地点) ? idx.地点 : [])
+        isPlainObject(l) && l.名称 && !places.has(l.名称) && (places.add(l.名称), out.地点.push(l));
+      for (let f of Array.isArray(idx.事实) ? idx.事实 : []) {
+        if (!isPlainObject(f) || !f.编号) continue;
+        let hit = facts.get(f.编号);
+        hit ? Object.entries(f).forEach(([kk, v]) => (hit[kk] == null || hit[kk] === "") && (hit[kk] = v)) : (facts.set(f.编号, { ...f, 段: k + 1 }), out.事实.push(facts.get(f.编号)));
+      }
+      out.门槛.push(...Array.isArray(idx.门槛) ? idx.门槛 : []), out.并行.push(...Array.isArray(idx.并行) ? idx.并行 : []), idx.作者资料 && out.作者资料.push(`第${k + 1}段：
+${joinText2(idx.作者资料)}`);
+    }
+    return out.secretFlag = !0, out;
+  }
+  var IMPORT_AUTHOR_KEYS2 = ["原文出处", "来源", "待确认", "补写"];
+  function importDraftMessages2({ part, index, prevTail = "", mode: mode2 = "clue", needs = "", actors = "", done = "", kind = "", trpg = !1 }) {
+    let clue = mode2 === "clue", rules = clue ? CLUE_OUTLINE_RULES : OUTLINE_RULES, onlyClue = (x) => clue ? x : "";
+    return [
+      {
+        role: "system",
+        content: [
+          "你在把一段剧情材料转写成可以游玩的大纲。只写这一段材料对应的部分；前面几段已经写过的，不要重复。",
+          "本段材料里**每一个**玩家要经历的剧情段落（包括开头的日常入口）都要写进大纲，按材料里的先后顺序，不能跳过。材料开头的真相、人物表、写作说明属于作者资料，读完后接着写后面的剧情段落，不要因此跳过本段里的前几个阶段。",
+          "同一个调查如果从上一段延续到这一段，接着写在同一个节点里（沿用上一段的节点 id），不要另建。",
+          "【已经写出的阶段和节点】列出的阶段：本段材料是在继续其中某个阶段时，用**完全相同的阶段名**写，只写新增或需要补充的节点（插件会按阶段名和节点 id 合并）；不要为同一段剧情另起一个名字不同的阶段。已经写完的阶段不要重复输出。",
+          "人物称呼、事实编号一律用【作者索引】里的；索引里没有、确实需要新建的，用新编号并在该节点的「待确认」里说明。",
+          "每个节点额外写三个只给作者看的字段（插件会把它们移出正式大纲）：",
+          "  原文出处: 材料里对应的原句或小标题（一句话）",
+          "  待确认: 拿不准的地方（没有就省略）",
+          "  补写: true（只有这个节点不是材料里的、是你为了可玩性加的才写）",
+          clue ? "信息放在哪里（GPT §20.3）：" : "信息放在哪里：节点的名称、地点、事件、偏转都会交给正文，只写玩家此时能经历到的事；幕后真相、真名、还没到揭示时机的答案只写在 <仅作者>…</仅作者> 里。世界动态的「来源」写故事里是谁传出的消息，不写原文出处。",
+          onlyClue(
+            "  · 入口、地点、场景：只写玩家此时就能看到、知道的东西。入口在节点开放时就会给正文，场景在玩家到场时给正文，都不能含调查结果。"
+          ),
+          onlyClue(
+            "  · 发现的「内容」：这个节点经过调查当场就能揭示的结果。玩家到场时它会作为「可能的发现」交给正文（标明尚未发生），所以只写本节点当场可以揭示的，不写之后才该知道的。"
+          ),
+          onlyClue("  · 更远的真相、幕后人物的真名、还没到揭示时机的答案：只写在作者备注的 <仅作者>…</仅作者> 里。"),
+          onlyClue("  · 名称、记录、节点和事实编号也会给作者以外的环节看到，同样不要含幕后真名和答案。"),
+          onlyClue(
+            "  · 原文写了「怎么取得、当时能看见什么、后来能推到哪里、有没有替代途径」的，按这个分层放：例如照片能看见维修标签（场景或发现），内部结构要实物检验才知道（另一条发现，条件是拿到实物）。"
+          ),
+          onlyClue(
+            "取得条件和替代路线以原文为准：原文明确写了的才整理成开放条件、「任一」和「必需: false」；原文没写取得条件的节点，开放条件留空；原文没写替代路线就只写一条，不要为了「多一条路」自己编。下面通用规则里「最好有两条获得途径」是从零写大纲时的建议，导入时不适用。节点能不能开放、几条路是否都走得通，由插件按条件检查，你不用推演。"
+          ),
+          onlyClue(
+            "材料里说「几条线先后不限、任一条完成即可继续」的（比如标题写成「第五阶段 a / 第五阶段 b」），把这几条线的节点放进**同一个阶段**（阶段名写成「阶段5_两条线」这样），各自写「必需: false」，阶段的结束条件用「任一」列出各条线的关键事实。**不要**写成「阶段5a」「阶段5b」两个阶段：阶段是先后进行的，后一个要等前一个结束才开放，两条线就都变成必须的了。"
+          ),
+          onlyClue(
+            "发现只记**玩家通过行动能拿到的具体信息或实物**（看到的东西、听到的话、读到的记录）。材料里的写作规则和提醒（如「看见发号施令的人不等于知道名字」「只说合作不产生成果」）不是发现，写进 AI指令 或作者备注；能放进条件的写进条件。"
+          ),
+          onlyClue(
+            "完成条件、开放条件优先用 {事实: 编号}（证词、传闻说出口记为存疑也算满足）；材料明确要求「被证实」时才用 {核实: 编号}；只有材料明确要求「某个角色知道」时才用 {知情 / 核实: 编号@角色}。"
+          ),
+          onlyClue(
+            "阶段的进入条件只能用**前面阶段**产出的事实；本阶段节点才产出的事实不能写进本阶段的进入条件（否则这个阶段永远进不去）。"
+          ),
+          onlyClue(
+            "材料写了「没有 X 也可以做 Y」「不经过 X 也能到 Y」「Y 不依赖 X」的，Y 的开放条件和它所在阶段的进入条件都**不能**要求 X；前一阶段的结束条件也要允许不走 X（用「任一」把另一条路写进去，或把 X 所在节点写成「必需: false」）。"
+          ),
+          onlyClue(
+            "最稳妥的写法：把 X 和 Y 放进**同一个阶段**，X 写「必需: false」，Y 不写开放条件（例：原文说「可以跳过问话，直接去查记录」，就不要写成先后两个阶段，否则第二阶段要等第一阶段的事实，跳过的路走不通）。只有 X 和 Y 之间确实隔着时间或地点的大转场，才分成两个阶段，这时后一阶段的进入条件要留出不走 X 的路。"
+          ),
+          onlyClue(
+            "「必需」的意思：必需节点没完成，阶段就算满足了结束条件也不会结束。所以材料说某件事「可以不做」「可以跳过」「不经过也能继续」「没有它也行」的，这个节点一定写「必需: false」；只有材料要求必须做到的，才保持必需。"
+          ),
+          onlyClue(
+            "节点的完成条件写成它自己产出的事实（如 {事实: F_mateo_absent}），**不能**写成 {节点: 自己的 id}：「自己完成了才算完成」永远不会成立。"
+          ),
+          "要求正文「不要提某人的名字 / 某个真相」时，AI指令和入口里**不能写出那个名字或真相本身**（写出来就已经告诉正文了）。改成「幕后的人此时没有名字，只称『发号施令的人』」这样的写法；具体名字只放在作者备注的 <仅作者> 里，或者等揭示它的那个发现的「内容」里。",
+          clue && (kind === "main" || kind === "side") ? importLineHeadRule2(kind, part) : "",
+          actors && `角色对应：${actors}`,
+          needs && `作者的要求：${needs}`,
+          rules,
+          // 跑团模组导入（core/trpg.js）：只在导入任务带 trpg 时追加
+          clue && trpg ? TRPG_IMPORT_RULES : ""
+        ].filter(Boolean).join(`
+`)
+      },
+      {
+        role: "user",
+        content: [
+          `【作者索引】
+${index}`,
+          done && `【已经写出的阶段和节点】
+${done}`,
+          prevTail && `【上一段转写的结尾（衔接用）】
+${prevTail}`,
+          `【本段材料：${part.title}】
+${part.text}`
+        ].filter(Boolean).join(`
+
+`)
+      }
+    ];
+  }
+  function importLineHeadRule2(kind, part = null) {
+    let main = kind === "main";
+    return [
+      `这份文档是**一条${main ? "主线" : "支线"}**：整份文档写成一条剧情线（YAML 里的一卷），它的第一个键写「线」（只在第一段写；后面几段沿用同一个顶层键名，不再写「线」）。`,
+      `  线: {类型: ${main ? "主线" : "支线"}, 简介: 一句话（必须写，规则见下）, 入口提示: 一句由头（必须写，规则见下）, 开始时机原文: 文档里写的这条线什么时候、因为什么开始（照抄原句；没写就省略）}`,
+      BRIEF_RULE,
+      ENTRY_HINT_RULE,
+      "  · 不写「编号」，插件会分配。",
+      `  · 文档明确写了开始的前提（如「拿到某某之后」「某条线结束后」），再写「开启条件」（用条件写法）；没写就**不要**写开启条件，作者会在审阅页自己选。${main ? "主线默认排在前一条主线后面，不用为此写条件。" : ""}`,
+      part && part.i > 0 ? "  · 这一段不是第一段：不要再写「线」。" : ""
+    ].filter(Boolean).join(`
+`);
+  }
+  function importJobKind2(job) {
+    let k = job && job.kind;
+    return k === "main" || k === "side" || k === "lines" || k === "outline" || k === "edit" ? k : job && job.mode === "lines" ? "lines" : job && job.mode === "outline" ? "outline" : "legacy";
+  }
+  function reviewReviseMessages2({ units, context = "", secrets = [], tableCatalog = "", mainLines = "", overall = "", talk = "", mode: mode2 = "clue" }) {
+    let fence = "```", clue = mode2 !== "outline";
+    return [
+      {
+        role: "system",
+        content: [
+          overall ? "下面是一条剧情线的全部部分（线头和各阶段），可能还有别的线上带意见的部分。【整体意见】只用于标了「整体意见适用」的部分；其他部分只按它自己的意见改。" : "下面是剧情线里的几个部分（线头或阶段），每个部分带一句作者意见。按意见修改这几个部分。",
+          `输出：每个部分一个 ${fence}yaml 代码块；**每个代码块的前一行必须单独写一行「【单位：编号】」**（编号照抄下面每个部分开头给的，例如「【单位：v1/s5】」），然后才是代码块。${overall ? "只输出真正改动了的部分，没改的不要输出。" : "只输出列出的部分，别的不要输出。"}`,
+          "· 阶段：输出这个阶段（顶层键是阶段名，下面是阶段字段）。线头：输出「线:」下面的字段。",
+          "· 只按意见改，没提到的地方原样保留：节点 id、事实编号、条件不要顺手改。还是同一件事的节点必须沿用原来的 id（哪怕改了名称、入口），新加的事才用新 id、新事实编号。",
+          "· 意见是在问问题或说明情况时（比如「这里就是揭晓真名的地方」「是同一个人，换成称呼」），按它的意思改；拿不准的保持原样。",
+          "· 修条件问题时，按【原文】的意思选改法：比如「补一个产出」和「推迟开放」都能让阶段走通，但剧情含义不同，要看原文怎么写的。原文没写的门槛不要新加，原文写了的门槛不要去掉。",
+          talk ? "· 【讨论记录】是作者和 AI 之前的讨论，只作参考：作者在讨论里明确定下的，按它理解意见；还在商量的不算数。意见和讨论冲突时以意见为准。" : "",
+          "· 意见指出的问题必须改掉，不能原样交回。常见改法：原文写了「任意一路查到足够材料也可以继续」这类替代路线的，把那条路写进结束条件的「任一」，或者把只在某条路上才需要的节点改成「必需: false」；原文写了必须两样都到手的，就保留门槛，在意见里说明原因（输出时把这个阶段原样给出，并在代码块前一行写「保持原样：原因」）。",
+          "· 线头的编号、类型（主线 / 支线）不能改。线头的「简介」「入口提示」是空的，就按下面的规则顺手补上。",
+          clue ? `${BRIEF_RULE}
+${ENTRY_HINT_RULE}` : "",
+          secrets.length ? `· 保密名字（揭示之前正文不能出现）：${secrets.join("、")}。它们只能写在揭示它的那条发现的「内容」或作者备注的 <仅作者> 里；其他字段用身份称呼代替。` : "",
+          clue && tableCatalog && `【当前数据库的表格】
+${tableCatalog}`,
+          clue && mainLines && `【已有的主线】
+${mainLines}`,
+          // 大纲规则第一句「只输出一个代码块」和上面的按部分输出冲突，去掉
+          (clue ? CLUE_OUTLINE_RULES_WITH_LINES : OUTLINE_RULES).split(`
+`).filter((l) => !/^只输出一个 ```yaml 代码块/.test(l)).join(`
+`)
+        ].filter(Boolean).join(`
+`)
+      },
+      {
+        role: "user",
+        content: [
+          overall && `【整体意见】（只对标了「整体意见适用」的部分）
+${overall}`,
+          ...units.map(
+            (u) => [
+              `【单位：${u.key}】${u.label}${overall && u.overall !== !1 ? "（整体意见适用）" : ""}`,
+              u.comment ? `意见：${u.comment}` : overall && u.overall !== !1 ? "意见：（这一部分没有单独的意见，只按整体意见改；不需要改就不要输出）" : "",
+              u.source && `【原文】
+${u.source}`,
+              `${fence}yaml
+${u.yaml}
+${fence}`
+            ].filter(Boolean).join(`
+`)
+          ),
+          context && `【相关的其他部分（只读，不要输出）】
+${context}`,
+          talk && `【讨论记录】（参考）
+${talk}`
+        ].filter(Boolean).join(`
+
+`)
+      }
+    ];
+  }
+  function splitUnitReplies2(text2, units = []) {
+    let out = {}, t = String(text2 || ""), re = /【单位：([^】\s]+)】[^\n]*\n[\s\S]*?```(?:yaml)?\s*\n([\s\S]*?)```/g, m;
+    for (; m = re.exec(t); ) m[1] in out || (out[m[1]] = m[2]);
+    if (!units.length) return out;
+    let blocks = [...t.matchAll(/```(?:yaml)?\s*\n([\s\S]*?)```/g)].map((x) => x[1]).filter((b) => !Object.values(out).includes(b));
+    if (units.length === 1 && !Object.keys(out).length && blocks.length === 1) return { [units[0].key]: blocks[0] };
+    let topOf = (b) => ((/^([^\s:#][^:\n]*):/m.exec(b) || [])[1] || "").trim(), tops = blocks.map(topOf);
+    for (let [i, b] of blocks.entries()) {
+      let top = tops[i], cands = top ? units.filter((u) => u.name === top && !(u.key in out)) : [];
+      cands.length === 1 && units.filter((u) => u.name === top).length === 1 && tops.filter((t2) => t2 === top).length === 1 && (out[cands[0].key] = b);
+    }
+    return out;
+  }
+  function keepReasons2(text2) {
+    let t = String(text2 || ""), out = {};
+    for (let m of t.matchAll(/【单位：([^】\s]+)】/g)) {
+      let p = m.index, prev = t.lastIndexOf("```", p - 1), from = prev < 0 ? 0 : prev + 3, next = t.indexOf("```", p), win = t.slice(from, next < 0 ? t.length : next), r = /保持原样[:：]\s*([^\n]+)/.exec(win);
+      r && !(m[1] in out) && (out[m[1]] = r[1].replace(/【单位：[^】]*】/g, "").trim());
+    }
+    return out;
+  }
+  function parseUnitReply2(key, text2, want, oldNodes = 0) {
+    let v = parseYaml(text2);
+    if (!isPlainObject(v)) throw new Error("格式不对：应该是「名字: 内容」");
+    if (String(key).endsWith("/line"))
+      return { line: isPlainObject(v[VOLUME_LINE_KEY]) ? v[VOLUME_LINE_KEY] : Object.values(v).map((x) => isPlainObject(x) && x[VOLUME_LINE_KEY]).find(isPlainObject) || v };
+    let looks = (x) => isPlainObject(x) && (NODE_FIELDS.some(({ field: field2 }) => field2 in x) || "AI指令" in x || "进入条件" in x || "结束条件" in x), pick = null;
+    if (want && looks(v[want])) pick = [want, v[want]];
+    else
+      for (let [, inner] of Object.entries(v))
+        isPlainObject(inner) && want && looks(inner[want]) && (pick = [want, inner[want]]);
+    if (!pick) {
+      let entries = Object.entries(v).filter(([k, x]) => k !== VOLUME_LINE_KEY && looks(x));
+      entries.length === 1 && (pick = entries[0]);
+    }
+    if (!pick) throw new Error("回复里找不到这个阶段");
+    let nodes = NODE_FIELDS.reduce((n, { field: field2 }) => n + (Array.isArray(pick[1][field2]) ? pick[1][field2].length : 0), 0);
+    if (oldNodes && !nodes) throw new Error("回复里这个阶段一个场景都没有（可能格式给错了），没有采用");
+    return { stage: { key: pick[0], data: nodeMapsToLists(pick[1]) } };
+  }
+  var SOURCE_KEYS2 = /推进条件|调查如何继续|如何继续|走不通|合流|进入条件|结束条件|先后不限|任一|任意一/;
+  function sourceExcerpt2(src, from, to, max = 2400) {
+    let text2 = String(src || "").slice(Math.max(0, from || 0), Math.min(String(src || "").length, to || 0));
+    if (text2.length <= max) return text2;
+    let parts = text2.split(/\n(?=#{2,4}\s)/), head = parts[0], keyed = parts.slice(1).filter((p) => SOURCE_KEYS2.test(p.split(`
+`)[0]) || SOURCE_KEYS2.test(p.slice(0, 200))), out = [], room = max;
+    for (let p of keyed) p.length <= room && (out.push(p), room -= p.length + 1);
+    return [head.slice(0, Math.max(0, Math.min(head.length, room))), ...out].filter(Boolean).join(`
+…
+`);
+  }
+  function mergeSameIssues2(list) {
+    let out = [], groups = /* @__PURE__ */ new Map();
+    for (let x of list || []) {
+      let k = x.same && x.level === "error" ? `${x.same.key}|${x.same.stage}` : "";
+      if (!k) {
+        out.push(x);
+        continue;
+      }
+      groups.has(k) ? groups.get(k).parts.push(x) : (groups.set(k, { ...x, parts: [x] }), out.push(groups.get(k)));
+    }
+    return out.map((x) => {
+      if (!x.parts || x.parts.length < 2) return x.parts ? x.parts[0] : x;
+      let names2 = x.parts.map((y) => y.same.node);
+      return {
+        ...x,
+        id: x.parts.map((y) => y.id).join("+"),
+        plain: `「${x.same.stage}」：下面${names2.length}个节点一直开不了（它们的开放条件要的线索，前面拿不到），这几条路走不通。`,
+        names: names2,
+        fix: "看看它们的开放条件：要的线索是不是写错了，或者前面阶段漏了产出这条线索的地方。",
+        text: x.parts.map((y) => y.text).join(`
+`)
+      };
+    });
+  }
+  function issueCommentLine2(x) {
+    return x.level === "error" ? `${x.plain || x.text}${x.names ? `：${x.names.map((n) => `「${n}」`).join("、")}` : ""}${x.fix ? `（${x.fix}）` : ""}` : x.kind === "secret-short" ? `关于${x.spots && x.spots[0] && `「${x.spots[0].where}」里的` || ""}「${x.name}」：` : x.kind === "secret-reveal" ? `关于揭晓「${x.name}」的地方：` : `关于「${(x.plain || x.text).slice(0, 20)}…」：`;
+  }
+  function appendComment2(comment, line) {
+    let cur = String(comment || ""), add = String(line || "").trim();
+    return !add || cur.split(`
+`).some((l) => l.trim() === add || l.trim().startsWith(add)) ? cur : cur.trim() ? `${cur.replace(/\s+$/, "")}
+${add}` : add;
+  }
+  function issueQuestion2(x) {
+    return x.kind === "secret-reveal" ? { q: `${x.plain.replace(/查到时会揭晓/, "查到时，正文会拿到").replace(/。$/, "这个名字。")}这里就是揭晓真名的地方吗？`, how: "不是的话，在意见里写明在哪里揭晓。" } : x.kind === "secret-short" ? { q: `${x.plain.replace(/。$/, "")}。是同一个人吗？`, how: "" } : { q: x.plain || x.text, how: x.fix || "要改的话，在意见里写明。" };
+  }
+  var IMPORT_STAGE_KEYS2 = [...STAGE_HINT_KEYS, ...CLUE_STAGE_KEYS2], IMPORT_NODE_KEYS2 = ["名称", "地点", "事件", "偏转", "触发", "类型", "来源", "内容", ...CLUE_NODE_KEYS2];
+  function splitImportAuthorFields2(volumes, part = null) {
+    let notes = {};
+    return { volumes: (volumes || []).map((v) => ({
+      ...v,
+      stages: v.stages.map((s) => {
+        if (!isPlainObject(s.data)) return s;
+        let data = Object.fromEntries(Object.entries(s.data).filter(([k]) => IMPORT_STAGE_KEYS2.includes(k)));
+        for (let { field: field2, kind } of NODE_FIELDS)
+          Array.isArray(data[field2]) && (data[field2] = data[field2].map((n) => {
+            if (!isPlainObject(n)) return n;
+            let keep = {}, note = {}, authorKey = (k) => IMPORT_AUTHOR_KEYS2.includes(k) && !(kind === "world" && k === "来源");
+            for (let [k, v2] of Object.entries(n))
+              authorKey(k) ? note[k] = v2 : IMPORT_NODE_KEYS2.includes(k) && (keep[k] = v2);
+            return nodeUid2(n) && (Object.keys(note).length || part) && (notes[nodeUid2(n)] = {
+              ...part ? { 段: part.i + 1, 段标题: part.title, 起: part.start, 止: part.end } : {},
+              ...note
+            }), keep;
+          }));
+        return { ...s, data };
+      })
+    })), notes };
+  }
+  function importSecretNames2(index) {
+    let people = index && Array.isArray(index.人物) ? index.人物 : [];
+    if (people.length && !(index && index.secretFlag) && !people.some((p) => isPlainObject(p) && "名字保密" in p)) return null;
+    let pick = people.filter((p) => isPlainObject(p) && (p.名字保密 === !0 || p.名字保密 === "true" || p.名字保密 === "是"));
+    return [
+      ...new Set(
+        pick.flatMap((p) => [p.名称, ...Array.isArray(p.别名) ? p.别名 : []]).map((n) => String(n || "").trim()).filter((n) => n.length >= 2)
+      )
+    ];
+  }
+  var SECRET_SHORT_STOP2 = ["先生", "小姐", "女士", "老板", "医生", "博士", "队长", "警官", "老师", "师傅"];
+  function importSecretShorts2(index, names2 = importSecretNames2(index)) {
+    if (!names2 || !names2.length) return [];
+    let people = index && Array.isArray(index.人物) ? index.人物.filter(isPlainObject) : [], open = people.filter((p) => !(p.名字保密 === !0 || p.名字保密 === "true" || p.名字保密 === "是")).flatMap((p) => [p.名称, ...Array.isArray(p.别名) ? p.别名 : []]).map((n) => String(n || "").trim()).filter(Boolean), openParts = new Set(open.flatMap((n) => [n, ...n.split(/[·•\s]+/)])), out = /* @__PURE__ */ new Map();
+    for (let full of names2)
+      for (let part of String(full).split(/[·•\s]+/).map((x) => x.trim()))
+        part.length >= 2 && part !== full && !names2.includes(part) && !openParts.has(part) && !SECRET_SHORT_STOP2.includes(part) && !out.has(part) && out.set(part, full);
+    return [...out].map(([short, full]) => ({ short, full }));
+  }
+  function importVisibleText2(volumes, mode2 = "clue") {
+    let out = [], stage = "", stageId = "", put = (layer, where, value, field2 = "") => {
+      let t = clueText2(typeof value == "string" ? value : value == null ? "" : JSON.stringify(value));
+      t && out.push({ layer, where, text: t, stage, stageId, field: field2 });
+    };
+    for (let vol of volumes || [])
+      for (let st9 of vol.stages || []) {
+        let where = stageLabel(st9.key), data = isPlainObject(st9.data) ? st9.data : {};
+        if (stage = st9.key, stageId = st9.id || "", put("body", where, stripAuthorDeep2(String(st9.key || "")), "阶段名"), mode2 !== "clue") {
+          for (let [k, v] of Object.entries(outlineStageData2(data))) put("body", where, v, k);
+          continue;
+        }
+        put("body", where, data.AI指令, "AI指令"), put("body", where, data.时间范围, "时间范围");
+        for (let { field: field2 } of NODE_FIELDS)
+          for (let n of Array.isArray(data[field2]) ? data[field2] : []) {
+            if (!isPlainObject(n)) {
+              put("author", where, n);
+              continue;
+            }
+            let at = `${where}·${clueText2(n.名称) || nodeUid2(n) || "?"}`, id = nodeUid2(n) || clueText2(n.名称) || "?";
+            put("body", at, n.入口, `${id}.入口`), put("body", at, n.地点, `${id}.地点`), put("body", at, n.场景, `${id}.场景`), put("fill", at, nodeUid2(n), `${id}.id`);
+            for (let d of Array.isArray(n.发现) ? n.发现 : n.发现 ? [n.发现] : [])
+              isPlainObject(d) ? (put("reveal", at, d.内容, `${id}.发现[${d.事实 || "?"}].内容`), put("fill", at, d.记录, `${id}.发现[${d.事实 || "?"}].记录`), put("fill", at, d.事实, `${id}.发现[${d.事实 || "?"}].事实`)) : put("reveal", at, d, `${id}.发现`);
+          }
+      }
+    return out;
+  }
+  function importIndexMissing2(idx) {
+    let miss = [];
+    return isPlainObject(idx) || miss.push("整个索引"), isPlainObject(idx) && !(Array.isArray(idx.事实) && idx.事实.some((f) => isPlainObject(f) && f.编号)) && miss.push("事实"), miss;
+  }
+  function importIndexRetryMessages2(base, reply2, missing) {
+    return [
+      ...base,
+      { role: "assistant", content: String(reply2 || "") },
+      {
+        role: "user",
+        content: `上面的索引缺少「${missing.join("、")}」。材料里玩家能通过行动查到、听到、看到的关键信息都要列进「事实」（每条一个编号）。请补上，输出完整的索引（同样只输出这一个代码块）。`
+      }
+    ];
+  }
+  var IMPORT_LAYER_TEXT2 = {
+    body: "正文每楼都可能看到的字段（阶段名、AI指令、入口、地点、场景）",
+    fill: "填表模型看到的字段（编号、记录）",
+    reveal: "到场就交给正文的「可能的发现」"
+  };
+  function checkImportDraft2(volumes, { index = null, secrets = null, mode: mode2 = "clue", shortsSure = [], shortsNot = [] } = {}) {
+    let out = [], clue = mode2 === "clue", compiled = clue ? compileClue2(volumes || []) : { errors: [] };
+    out.push(...compiled.errors.map((t) => ({ level: "error", text: t })));
+    let base = secrets || importSecretNames2(index), names2 = base && [.../* @__PURE__ */ new Set([...base, ...shortsSure])], fullsOf = new Map(shortsSure.map((sh) => [sh, (base || []).filter((f) => f !== sh && f.includes(sh))])), bare = (sh, t) => (fullsOf.get(sh) || []).reduce((acc, f) => acc.split(f).join(""), t), hits = /* @__PURE__ */ new Map();
+    names2 || (names2 = [], out.push({
+      level: "warn",
+      text: "这次导入的作者索引没有标出哪些名字需要保密（旧版本整理的），没有做名字保密检查。请自己看一下阶段名、AI指令、入口、场景里有没有不该出现的名字"
+    }));
+    for (let x of importVisibleText2(volumes, mode2))
+      if (x.layer !== "author")
+        for (let s of names2)
+          s && s.length >= 2 && // 确认过的短名：先去掉包含它的全名再找，只有单独出现才算。同一处写了全名，全名那条已经报过；
+          // 别的地方单独写了短名（比如更早的阶段），照样报（GPT 第六轮 R4）
+          bare(s, x.text).includes(s) && hits.set(`${x.layer}|${s}`, [...hits.get(`${x.layer}|${s}`) || [], x]);
+    for (let [k, all] of hits)
+      for (let w of [...new Set(all.map((x) => x.stageId))].map((id) => all.filter((x) => x.stageId === id))) {
+        let [layer, s] = k.split("|"), list = [...new Set(w.map((x) => x.where))].join("、");
+        layer === "reveal" ? out.push({
+          level: "warn",
+          kind: "secret-reveal",
+          name: s,
+          stageId: w[0].stageId,
+          spots: w.map(spotOf2),
+          text: `保密的名字「${s}」写在「可能的发现」里（${list}）：玩家到场时正文就会拿到它（标明尚未发生）。确认这是这个节点当场就能揭示的；不是的话移到作者备注的 <仅作者> 里`,
+          plain: `${[...new Set(w.map((x) => `「${x.where}」`))].join("、")}查到时会揭晓「${s}」。`,
+          fix: "如果这里就是揭晓这个名字的地方，不用改；如果不是，把名字换成身份称呼，比如「店主」「那名技术员」。"
+        }) : out.push({
+          level: "error",
+          kind: layer === "fill" ? "secret-fill" : "secret-body",
+          name: s,
+          stageId: w[0].stageId,
+          spots: w.map(spotOf2),
+          text: `保密的名字「${s}」出现在${IMPORT_LAYER_TEXT2[layer]}里（${list}）；只能写在揭示它的那个发现的「内容」或作者备注的 <仅作者> 里`,
+          plain: layer === "fill" ? `${placeText2(w)}写了「${s}」：填表的模型会看到这个名字，可能提前把它记进表格。` : `${placeText2(w)}写了「${s}」：正文每一轮都会看到这个名字，玩家还没查到就泄露了。`,
+          fix: `把「${s}」换成不点名的身份称呼，比如「店主」「那名技术员」。名字只留在揭晓它的那条发现的内容里。`
+        });
+      }
+    let shorts = secrets ? [] : importSecretShorts2(index, base).filter((x) => !shortsSure.includes(x.short) && !shortsNot.includes(x.short)), shortHits = /* @__PURE__ */ new Map();
+    for (let x of importVisibleText2(volumes, mode2))
+      if (!(x.layer !== "body" && x.layer !== "fill"))
+        for (let { short, full } of shorts)
+          x.text.includes(short) && !x.text.includes(full) && shortHits.set(short, [...shortHits.get(short) || [], { ...x, full }]);
+    for (let [short, w] of shortHits)
+      out.push({
+        level: "warn",
+        kind: "secret-short",
+        name: short,
+        full: w[0].full,
+        stageId: w[0].stageId,
+        spots: w.map(spotOf2),
+        text: `疑似保密名字「${short}」（「${w[0].full}」的一部分）出现在${[...new Set(w.map((x) => IMPORT_LAYER_TEXT2[x.layer]))].join("、")}里（${[...new Set(w.map((x) => x.where))].join("、")}）`,
+        plain: `${placeText2(w)}出现了「${short}」，它可能就是保密的「${w[0].full}」。`,
+        fix: "是同一个人的话，按保密名字处理，换成称呼；只是碰巧同字，比如别的人物、普通词，就不用改。"
+      });
+    let left = /* @__PURE__ */ new Set();
+    for (let vol of volumes || [])
+      for (let st9 of vol.stages || [])
+        for (let { field: field2, kind } of NODE_FIELDS)
+          if (kind !== "world")
+            for (let n of Array.isArray(st9.data && st9.data[field2]) ? st9.data[field2] : [])
+              isPlainObject(n) && IMPORT_AUTHOR_KEYS2.forEach((k) => k in n && left.add(k));
+    for (let k of left) out.push({ level: "error", text: `正式模组里还留着只给作者看的字段「${k}」` });
+    if (!clue) return out;
+    let units = flattenUnits(volumes || []);
+    for (let k = 1; k < units.length; k++) {
+      let a = /^阶段\s*(\d+)\s*([a-zA-Z])/.exec(units[k - 1].stage.key), b = /^阶段\s*(\d+)\s*([a-zA-Z])/.exec(units[k].stage.key);
+      a && b && a[1] === b[1] && out.push({
+        level: "error",
+        text: `「${stageLabel(units[k - 1].stage.key)}」和「${stageLabel(units[k].stage.key)}」看起来是并行的几条线，却写成了先后两个阶段：后一个要等前一个结束才开放，两条线都变成了必须走的。应合成一个阶段，各条线的节点写「必需: false」，结束条件用「任一」`
+      });
+    }
+    return out.push(...importReachIssues2(volumes || [])), out;
+  }
+  var shortText2 = (t, n = 20) => {
+    let x = String(t || "").trim().replace(/[。；，、.!！]+$/, "");
+    return x.length > n ? `${x.slice(0, n)}…` : x;
+  };
+  function factTexts2(volumes) {
+    let out = /* @__PURE__ */ new Map();
+    for (let u of flattenUnits(volumes || []))
+      for (let n of stageNodes(u.stage.data))
+        for (let d of discoveryList2(isPlainObject(n.item) ? n.item : {})) d.fact && !out.has(d.fact) && out.set(d.fact, d.text);
+    return out;
+  }
+  function placeText2(spots) {
+    let byStage = /* @__PURE__ */ new Map();
+    for (let x of spots) {
+      let f = String(x.field || ""), what = /^(AI指令|阶段名|时间范围)$/.test(f) ? f : FIELD_WORDS2[f.replace(/^[^.]+\./, "").replace(/\[[^\]]*\]/g, "")] || f;
+      byStage.set(x.where, [.../* @__PURE__ */ new Set([...byStage.get(x.where) || [], what])]);
+    }
+    return [...byStage].map(([w, fs]) => `「${w}」的${fs.join("、")}`).join("，");
+  }
+  var FIELD_WORDS2 = { 入口: "入口", 地点: "地点", 场景: "场景", id: "编号", 发现: "发现", "发现.内容": "发现", "发现.记录": "登记标准（记录）", "发现.事实": "事实编号", 主线节点: "剧情节点", 支线事件: "可选事件", 世界动态: "世界动态" };
+  function spotOf2(x) {
+    return { stageId: x.stageId, where: x.where, field: x.field, excerpt: shortText2(x.text, 60) };
+  }
+  function routePlain2(r, facts) {
+    let path = r.nodeNames.map((n) => `「${n}」`).join("、然后"), need = r.needs.map((f) => `「${shortText2(facts.get(f) || f)}」`).join("或");
+    return !r.gets.length && r.at !== "next" ? {
+      plain: `「${r.stage}」：「${r.nodeNames[0]}」一直开不了（它的开放条件要的线索，前面拿不到），这条路走不通。`,
+      fix: "看看它的开放条件：要的线索是不是写错了，或者前面阶段漏了产出这条线索的地方。",
+      // 同一阶段里几个节点都因为这个原因开不了：界面合成一张卡（GPT 界面审阅第 9 条）
+      same: { key: "open-never", stage: r.stage, node: r.nodeNames[0] }
+    } : r.at === "next" ? {
+      plain: `「${r.stage}」：玩家只做${path}的话，这一阶段能结束，但下一阶段进不去${need ? `，下一阶段要${need}` : ""}。`,
+      fix: "让下一阶段的进入条件也认这条路拿到的线索（用「任一」），或者让这条路也能拿到下一阶段要的线索。"
+    } : r.at === "required" ? {
+      plain: `「${r.stage}」：玩家只做${path}的话，还有必须完成的「${r.left.join("、")}」做不了，这一阶段结束不了。`,
+      fix: "看看那个必须完成的节点什么时候开放；如果它其实是可选的，改成「必需: false」。"
+    } : {
+      plain: `「${r.stage}」：玩家只做${path}的话，拿不到${need || "结束这一阶段要的线索"}，这一阶段结束不了。`,
+      fix: "让这个节点也产出能结束本阶段的线索；或者改成做完别的节点之后才开放它，这样它就不算单独的一条路。选哪种看原文的意思。"
+    };
+  }
+  function projectClueIssues2(volumes, { secrets = null, knownFacts = [], claimedFacts = [] } = {}) {
+    let out = [], units = flattenUnits(volumes || []), marks = units.flatMap((u) => [stageLabel(u.stage.key), u.stage.key, ...stageNodes(u.stage.data).map((n) => nodeUid2(n.item)).filter(Boolean)].map((t) => [t, u.stage.id])).sort((a, b) => b[0].length - a[0].length), hint = (text2) => (marks.find(([t]) => t && text2.includes(t)) || [])[1] || "";
+    for (let t of compileClue2(volumes || []).errors) out.push({ level: "error", kind: "compile", text: t, plain: t, stageId: hint(t) });
+    let list = checkClueDraft2(volumes || [], [], { obtainedFacts: knownFacts, claimedFacts }).filter((t) => !/^这些(主线|剧情)节点没有/.test(t));
+    for (let t of list)
+      out.some((x) => x.text === t) || out.push({
+        level: /没有任何节点产出|不存在的节点|不存在的线|会一直开不了|编号和已有的线重复/.test(t) ? "error" : "warn",
+        kind: "struct",
+        text: t,
+        plain: t,
+        stageId: hint(t)
+      });
+    return secrets && secrets.length && out.push(...checkImportDraft2(volumes || [], { secrets, mode: "clue" }).filter((x) => /^secret-/.test(x.kind || ""))), out.push(...importReachIssues2(volumes || [], { knownFacts, claimedFacts })), out;
+  }
+  function importReachIssues2(applied, { only = null, knownFacts = [], claimedFacts = [] } = {}) {
+    let out = [], mine = (x) => !only || only.has(x.stage), facts = factTexts2(applied);
+    for (let r of clueAlternativeRoutes2(applied, { knownFacts, claimedFacts })) {
+      if (!mine(r)) continue;
+      let base = { kind: "route", lineId: r.lineId, volumeId: r.volumeId, stageId: r.stageId, nodeIds: r.nodeIds, at: r.at, nextStageId: r.nextStageId };
+      r.verdict === "blocked" ? out.push({
+        ...base,
+        level: "error",
+        text: `替代途径走不通：${r.stage}·${r.node}单独走完时，${r.why}。常见原因：这条线产出的事实不在阶段结束条件 / 下一阶段进入条件的「任一」里`,
+        ...routePlain2(r, facts)
+      }) : r.verdict === "unknown" && out.push({
+        ...base,
+        level: "warn",
+        text: `替代途径要到运行时才能确认：${r.stage}·${r.node}单独走完时，${r.why}`,
+        plain: `「${r.stage}」：玩家只走${r.nodeNames.map((n) => `「${n}」`).join("、然后")}时能不能继续，要看游戏里表格、时间这些情况。`,
+        fix: "多半不用改；想确定的话，看看这一阶段的结束条件是不是依赖表格或时间。"
+      });
+    }
+    let reach = clueReachability2(applied, { knownFacts, claimedFacts }), all = [...reach.stuckStages, ...reach.stuckNodes].filter(mine), routed = new Set(out.filter((x) => x.kind === "route" && x.level === "error").map((x) => x.stageId)), follow = (x) => /上一阶段尚未结束|阶段未进入/.test(x.why), stuck = all.filter((x) => !follow(x) && !(routed.has(x.stageId) && !x.node && /^结束条件不满足|^必需节点做不完/.test(x.why))), after = all.filter(follow).length;
+    return !stuck.length && all.length && !routed.size && (stuck = all), stuck.length && reach.verdict === "blocked" && out.push({
+      level: "error",
+      kind: "reach",
+      stageIds: [...new Set(stuck.map((x) => x.stageId).filter(Boolean))],
+      plain: `按现在的条件推下去，有地方永远走不到：${stuck.slice(0, 4).map((x) => `「${x.stage}${x.node ? `·${x.nodeName || x.node}` : ""}」`).join("、")}${after ? `，以及后面${after}处因此走不到` : ""}。`,
+      fix: "看看这些地方的进入条件或开放条件：要的线索是不是前面根本拿不到。",
+      text: `按模组推演走不通：${stuck.slice(0, 6).map((x) => `${x.stage}${x.node ? `·${x.node}` : ""}（${x.why}）`).join("；")}`
+    }), stuck.length && reach.verdict === "unknown" && out.push({
+      level: "warn",
+      kind: "reach-unknown",
+      stageIds: [...new Set(stuck.map((x) => x.stageId).filter(Boolean))],
+      plain: `有些地方能不能走到，要看游戏里的时间、谁知道什么或表格里的值：${stuck.slice(0, 4).map((x) => `「${x.stage}」`).join("、")}。`,
+      fix: "多半不用改，游戏里自然会满足；确实卡住时可以在执行页手动开放。",
+      text: `有些地方取决于时间、知情或表格的值：${stuck.slice(0, 4).map((x) => `${x.stage}${x.node ? `·${x.node}` : ""}`).join("、")}`
+    }), out;
+  }
+  function importDoneText2(volumes) {
+    return flattenUnits(volumes || []).map(
+      (u) => `${u.stage.key}：${stageNodes(u.stage.data).map((n) => `${nodeUid2(n.item) || "?"} ${n.name}`).join("、") || "（无节点）"}`
+    ).join(`
+`);
+  }
+  function mergeImportParts2(vols, { rewrite = !1 } = {}) {
+    let stages = [], conflicts = [], seen = /* @__PURE__ */ new Set(), skipped = 0, asList = (x) => Array.isArray(x) ? x : isPlainObject(x) ? [x] : [], same2 = (a, b) => JSON.stringify(a) === JSON.stringify(b), empty = (v) => v == null || v === "" || Array.isArray(v) && !v.length, mergeFields = (into, from, skip, where) => {
+      for (let [k, v] of Object.entries(from))
+        skip.includes(k) || empty(v) || (empty(into[k]) ? into[k] = v : same2(into[k], v) || (rewrite ? skipped++ : conflicts.push({ ...where, field: k, kept: into[k], other: v })));
+    }, mergeNode = (a, b, where) => {
+      let finds = asList(a.发现);
+      for (let d of asList(b.发现)) {
+        let f = isPlainObject(d) ? d.事实 : "", k = f ? finds.findIndex((x) => isPlainObject(x) && x.事实 === f) : finds.findIndex((x) => same2(x, d));
+        k < 0 ? finds.push(d) : isPlainObject(d) && isPlainObject(finds[k]) && mergeFields(finds[k], d, ["事实"], { ...where, field: `发现 ${f}` });
+      }
+      return finds.length && (a.发现 = finds), mergeFields(a, b, ["id", "发现"], where), a;
+    }, idsOf = (st9) => NODE_FIELDS.flatMap(({ field: field2 }) => asList(st9.data && st9.data[field2]).map((n) => isPlainObject(n) ? n.id : "").filter(Boolean)), findNode = (id) => {
+      for (let x of stages)
+        for (let { field: field2 } of NODE_FIELDS) {
+          let n = asList(x.data && x.data[field2]).find((m) => isPlainObject(m) && m.id === id);
+          if (n) return { node: n, stage: x };
+        }
+      return null;
+    }, foldMoved = (st9, own) => {
+      if (!rewrite || !isPlainObject(st9.data)) return st9;
+      let data = { ...st9.data };
+      for (let { field: field2 } of NODE_FIELDS)
+        Array.isArray(data[field2]) && (data[field2] = data[field2].filter((n) => {
+          if (!(isPlainObject(n) && n.id && seen.has(n.id) && !own.has(n.id))) return !0;
+          let at = findNode(n.id);
+          return at ? (mergeNode(at.node, n, { stage: stageLabel(at.stage.key), node: n.id }), skipped++, !1) : !0;
+        }));
+      return { ...st9, data };
+    };
+    for (let v of vols || [])
+      for (let st0 of v.stages || []) {
+        let hit0 = stages.find((x) => x.key === st0.key), st9 = foldMoved(JSON.parse(JSON.stringify(st0)), new Set(hit0 ? idsOf(hit0) : [])), hit = hit0;
+        if (!hit) {
+          let fresh = NODE_FIELDS.some(({ field: field2 }) => asList(st9.data && st9.data[field2]).length > 0);
+          if (rewrite && idsOf(st0).length && !fresh) continue;
+          stages.push(st9), idsOf(st9).forEach((id) => seen.add(id));
+          continue;
+        }
+        let where = { stage: stageLabel(st9.key) }, nodeKeys = NODE_FIELDS.map((f) => f.field);
+        isPlainObject(st9.data) && isPlainObject(hit.data) && mergeFields(hit.data, st9.data, nodeKeys, where);
+        for (let { field: field2 } of NODE_FIELDS)
+          for (let n of asList(st9.data && st9.data[field2])) {
+            let list = Array.isArray(hit.data[field2]) ? hit.data[field2] : hit.data[field2] = asList(hit.data[field2]), k = list.findIndex((x) => isPlainObject(x) && isPlainObject(n) && x.id && x.id === n.id);
+            k >= 0 ? mergeNode(list[k], n, { ...where, node: n.id }) : (list.push(n), isPlainObject(n) && n.id && seen.add(n.id));
+          }
+      }
+    let lineIds = [...new Set((vols || []).map((v) => isPlainObject(v.line) ? String(v.line.编号 || "").trim() : "").filter(Boolean))];
+    lineIds.length > 1 && conflicts.push({ stage: "（整份草稿）", field: "线", kept: lineIds[0], other: lineIds.slice(1).join("、"), lines: lineIds });
+    let first = vols && vols.length ? vols[0] : null, keepLine = (vols || []).map((v) => v.line).find((l) => isPlainObject(l)), out = first ? [{ ...first, ...keepLine ? { line: keepLine } : {}, stages }] : [];
+    return Object.defineProperties(out, { conflicts: { value: conflicts, enumerable: !1 }, skipped: { value: skipped, enumerable: !1 } });
+  }
+  function importConflictText2(c) {
+    if (c.rewrite) return `线${c.line}跨了几段，后面的段把前面已经写过的内容又写了一遍（${c.rewrite}处），以前一段为准，后面只补了新的阶段和场景。需要的话在审阅页对照原文改`;
+    if (c.lines)
+      return `草稿里写了好几条剧情线（${c.lines.join("、")}），长文导入暂时只能合成一条：保留了「${c.lines[0]}」，其余几条的阶段并进了这一条，它们的线编号和开启条件没有保留。要分开成几条线，采用后在模组页让AI另写新的剧情线`;
+    let s = (v) => (typeof v == "string" ? v : JSON.stringify(v)).slice(0, 80);
+    return `${c.stage}${c.node ? `·${c.node}` : ""}的「${c.field}」两段写得不一样：保留了前一段的「${s(c.kept)}」，后一段是「${s(c.other)}」。需要的话在采用后手动改`;
+  }
+  var IMPORT_NEEDS_EXAMPLE2 = "这是我写的剧情方案，开头的真相和人物表只给我自己看，不要放进剧情。调查部分想细一点玩，打斗和赶路带过就行。中间有两条调查线不分先后，走哪条都能继续。原作的反转保留，其他细节可以为了好玩改动。", IMPORT_LINE_INDEX2 = [
+    "支线:   # 这份文档里的每一条支线，按文档顺序。编号从 S01 起，整份文档统一（后面几段沿用前面已经编好的编号）",
+    "  - {编号: S01, 名称: 支线的短标题, 主要人物: [..], 开启条件原文: 文档里写的开启时机或前提（没写就省略）, 关系: 和其他支线的关系原文（如「默认在 8 之后」，没写就省略）, 文档里的序号: 文档自己的编号（如「8」）, 本段有经过: 本段材料里有这条支线的具体经过写 true；只在总览表、目录里提到写 false}"
+  ].join(`
+`);
+  function importLineIndexMessages2(base) {
+    return [
+      {
+        role: "system",
+        content: `${base[0].content.replace(
+          /```yaml\n/,
+          `\`\`\`yaml
+${IMPORT_LINE_INDEX2}
+`
+        )}
+这份文档是好几条各自独立成线的支线，不要合并成一条连续的剧情。先在「支线」里列出本段出现的每一条支线（一条支线被切成两段时，后一段沿用前一段的编号，不要另建）。
+每条支线有没有开启前提，逐条照原文抄进「开启条件原文」「关系」：「各自成线」不等于「没有前提」，原文写了「默认在 8 之后」就照抄；原文明说「独立」也照抄「独立」；原文没写就省略。`
+      },
+      base[1]
+    ];
+  }
+  function mergeLineIdentity2(list) {
+    let here = (l) => !(l.本段有经过 === !1 || l.本段有经过 === "false" || l.本段有经过 === "否"), out = [], byId = /* @__PURE__ */ new Map(), byNo = /* @__PURE__ */ new Map(), notes = [];
+    for (let [k, idx] of (list || []).entries())
+      for (let l of isPlainObject(idx) && Array.isArray(idx.支线) ? idx.支线 : []) {
+        if (!isPlainObject(l) || !l.编号) continue;
+        let id = String(l.编号).trim(), hit = byId.get(id), no = String(l.文档里的序号 ?? "").trim();
+        if (hit) {
+          for (let [kk, v] of Object.entries(l)) (hit[kk] == null || hit[kk] === "") && (hit[kk] = v);
+          here(l) && !hit.parts.includes(k) && hit.parts.push(k);
+          continue;
+        }
+        let entry = { ...l, 编号: id, parts: here(l) ? [k] : [] };
+        out.push(entry), byId.set(id, entry), no && byNo.has(no) && byNo.get(no) !== id ? notes.push(`文档里第${no}条支线被编了两个编号（${byNo.get(no)}、${id}），请确认是不是同一条`) : no && byNo.set(no, id);
+      }
+    for (let l of out)
+      l.parts.length || (l.parts = (list || []).map(
+        (idx, k) => isPlainObject(idx) && Array.isArray(idx.支线) && idx.支线.some((x) => isPlainObject(x) && String(x.编号 || "").trim() === l.编号) ? k : -1
+      ).filter((k) => k >= 0));
+    return { lines: out, notes };
+  }
+  function importLineTable2(lines2) {
+    return (lines2 || []).map(
+      (l) => `- ${l.编号}「${clueText2(l.名称)}」${l.文档里的序号 ? `（文档第 ${l.文档里的序号} 条）` : ""}${l.主要人物 ? ` 人物：${[].concat(l.主要人物).join("、")}` : ""}${l.开启条件原文 ? ` 开启：${clueText2(l.开启条件原文)}` : ""}${l.关系 ? ` 关系：${clueText2(l.关系)}` : ""}`
+    ).join(`
+`);
+  }
+  var IMPORT_LINES_PER_CALL2 = 3;
+  function importLineBatches2(lines2, partNo) {
+    let mine = (lines2 || []).filter((l) => !Array.isArray(l.parts) || l.parts.includes(partNo)).map((l) => l.编号), out = [];
+    for (let i = 0; i < mine.length; i += IMPORT_LINES_PER_CALL2) out.push(mine.slice(i, i + IMPORT_LINES_PER_CALL2));
+    return out;
+  }
+  function importLineDraftMessages2({
+    part,
+    index,
+    lines: lines2,
+    only = [],
+    mainLines = "",
+    tableCatalog = "",
+    prevTail = "",
+    needs = "",
+    done = ""
+  }) {
+    let base = importDraftMessages2({ part, index, prevTail, mode: "clue", needs, done }), sys = `${base[0].content}
+${CLUE_LINE_RULES.join(`
+`)}
+· 上面说的「只引用有节点产出的事实编号」，线的开启条件例外：它里面的事实可以不需要节点产出。
+这份材料是好几条各自独立成线的支线：
+· 本段里的**每一条**支线写成单独的一条剧情线（YAML 里单独一卷），它的第一个键写「线」，类型写「支线」，编号**必须**用【线身份表】里的编号；顶层键写「剧情_编号_标题」。不要把两条支线写进同一卷，也不要写主线。
+· 一条支线从上一段延续过来时（【已经写出的阶段和节点】里已经有它），用同一个编号、同一个卷名，只写新增的阶段或节点；「线」下面只写编号和类型，简介、入口提示、开启条件、原开启条件前面已经写过，不要重写。
+· 每条支线的事实编号、节点 id 带上这条支线的编号（如 F_s03_poster、s03_cinema），免得不同支线撞号。
+· 开启条件和开启时段只照【线身份表】里这条线自己的「开启」「关系」写，每条分开判断，不要照抄同一次写的别的线。三种情况：
+  - 写的是「独立」或什么都没写：不写开启条件，也不写开启时段。邀请、碰面这类由头写成第一个节点的入口，不要编成「收到邀请」的事实条件。
+  - 写的是「默认在 8 之后」：只写 {线: 文档第 8 条对应的编号 == 完成}，不要再加别的事实或门槛。写的是主线某一步之后：写开启时段或 {线: 主线编号 == …}。
+  - 写的是表格和事件都表达不准的经历（「至少与三名队员有单独往来后」）：写「开启方式: 人工」，原话放进「原开启条件」。
+· 篇幅默认每条 1～2 个阶段、每个阶段 1～3 个节点，作者备注只写要点；原文里必要的结果和依赖不要为了篇幅删掉。${only.length ? `
+· 这一次**只写** ${only.join("、")} 这几条（本段里别的支线另外再写），每一条都要写。` : ""}`, mine = (lines2 || []).filter((l) => only.includes(l.编号)), said = (l) => [clueText2(l.开启条件原文), clueText2(l.关系)].filter(Boolean).join("；"), gate = mine.length ? `【这一次要写的线：文档对开启的说法】
+${mine.map((l) => `- ${l.编号}：${said(l) || "（文档没写）"}`).join(`
+`)}
+照这里写开启条件：说法是「独立」或没写的，不写开启条件、不写开启时段，也不要加主线的条件；写了「在 N 之后」的，只等文档第 N 条对应的那条线；别的说法照原意写，写不准就人工。` : "", user = [
+      `【线身份表（整份文档统一的支线编号，只能用这些）】
+${importLineTable2(lines2)}`,
+      mainLines && `【项目里已有的主线（只有文档明确提到主线时才引用）】
+${mainLines}`,
+      tableCatalog,
+      base[1].content,
+      gate
+    ].filter(Boolean).join(`
+
+`);
+    return [
+      { role: "system", content: sys },
+      { role: "user", content: user }
+    ];
+  }
+  function importLineDuplicates2(vols) {
+    let idOf2 = (v) => isPlainObject(v.line) ? String(v.line.编号 || "").trim() : "", units = (vols || []).flatMap(
+      (v) => (v.stages || []).map((s) => {
+        let ns = stageNodes(s.data);
+        return { id: idOf2(v), stage: stageLabel(s.key), uids: ns.map((n) => nodeUid2(n.item)).filter(Boolean), names: ns.map((n) => n.name).join("|"), key: s.key };
+      })
+    ), out = [];
+    for (let i = 0; i < units.length; i++)
+      for (let j = i + 1; j < units.length; j++) {
+        let a = units[i], b = units[j];
+        if (!a.id || !b.id || a.id === b.id) continue;
+        let shared = a.uids.filter((u) => b.uids.includes(u)), sameText = a.key === b.key && a.names && a.names === b.names;
+        (shared.length || sameText) && out.push({
+          a: { id: a.id, stage: a.stage },
+          b: { id: b.id, stage: b.stage },
+          nodes: shared,
+          text: `这段内容同时出现在${a.id}「${a.stage}」和${b.id}「${b.stage}」${shared.length ? `（重复的节点：${shared.slice(0, 4).join("、")}${shared.length > 4 ? "……" : ""}）` : ""}，请核对归属。可能是整理时放错了线，可以重新整理其中一条。`
+        });
+      }
+    return out;
+  }
+  function importLineIssues2(drafts, existing, { index = null, known = [], claimed = [] } = {}) {
+    let out = {}, idOf2 = (v) => isPlainObject(v.line) ? String(v.line.编号 || "").trim() : "", add = (id, x) => (out[id] = out[id] || []).push(x);
+    for (let v of drafts || []) {
+      let id = idOf2(v);
+      if (id)
+        for (let x of checkImportDraft2([v], { index, mode: "clue" }))
+          /没有做名字保密检查/.test(x.text) || x.text.startsWith("按模组推演") || x.text.startsWith("替代途径") || x.text.startsWith("有些地方取决于") || compileClue2([v]).errors.includes(x.text) || add(id, x);
+    }
+    let oldGives = /* @__PURE__ */ new Map();
+    for (let n of compileClue2(existing || []).nodes)
+      for (let d of discoveryList2(isPlainObject(n.item) ? n.item : {}))
+        d.fact && !oldGives.has(d.fact) && oldGives.set(d.fact, { node: n.name, text: d.text });
+    for (let v of drafts || [])
+      for (let n of compileClue2([v]).nodes)
+        for (let d of discoveryList2(isPlainObject(n.item) ? n.item : {})) {
+          let old = d.fact && oldGives.get(d.fact);
+          if (!old || clueText2(old.text) === clueText2(d.text)) continue;
+          let got2 = known.includes(d.fact);
+          add(idOf2(v), {
+            level: got2 ? "error" : "warn",
+            text: `线索编号${d.fact}项目里已经有了（「${old.node}」：${old.text}），这条线的「${n.name}」又用它表示「${d.text}」。${got2 ? "这个聊天里它已经拿到了，采用后这条线会被当成已经查到。" : ""}如果是同一件事的另一条查法可以保留；不是同一件事的话，写意见让AI换一个编号`
+          });
+        }
+    let all = [...existing || [], ...drafts || []], mine = new Set((drafts || []).map(idOf2)), reach = clueReachability2(all, { knownFacts: known, claimedFacts: claimed });
+    for (let id of mine) {
+      let stuck = [...reach.stuckStages, ...reach.stuckNodes].filter((x) => x.line === id);
+      if (!stuck.length) continue;
+      let hard = stuck.filter((x) => !x.unknown), soft = stuck.filter((x) => x.unknown), say = (list) => list.slice(0, 4).map((x) => `${x.stage}${x.node ? `·${x.node}` : ""}（${x.why}）`).join("；");
+      hard = hard.filter((x) => !/线 [A-Za-z]+\d+ (未触发|可开启)/.test(x.why)), hard.length && add(id, {
+        level: "error",
+        text: `这条线走不通：${say(hard)}。常见原因是阶段的进入条件要等本阶段自己才能查到的线索，写意见让AI改`
+      }), !hard.length && soft.length && add(id, { level: "info", text: `有些地方要到玩的时候才知道能不能走通（取决于时间或表格）：${say(soft)}` });
+    }
+    return out;
+  }
+  function lineIdsMissing2(volumes, only) {
+    let got2 = new Set((volumes || []).map((v) => isPlainObject(v.line) ? String(v.line.编号 || "").trim() : ""));
+    return (only || []).filter((id) => !got2.has(id));
+  }
+  function mergeImportByLine2(vols) {
+    let groups = /* @__PURE__ */ new Map(), order = [], conflicts = [];
+    for (let v of vols || []) {
+      let id = isPlainObject(v.line) ? String(v.line.编号 || "").trim() : "", key = id || `?${v.key}`;
+      groups.has(key) || (groups.set(key, []), order.push(key)), groups.get(key).push(v);
+    }
+    let out = [];
+    for (let key of order) {
+      let list = groups.get(key), merged = mergeImportParts2(list, { rewrite: !0 }), line = {}, skippedHead = 0;
+      for (let v of list)
+        if (isPlainObject(v.line))
+          for (let [k, val] of Object.entries(v.line))
+            line[k] == null || line[k] === "" ? line[k] = val : JSON.stringify(line[k]) !== JSON.stringify(val) && skippedHead++;
+      merged.skipped + skippedHead && !key.startsWith("?") && conflicts.push({ line: key, rewrite: merged.skipped + skippedHead }), conflicts.push(...merged.conflicts.filter((c) => !c.lines)), key.startsWith("?") && conflicts.push({ stage: volumeLabel(list[0].key), field: "线", kept: "（没写）", other: "", noLine: !0 }), merged[0] && out.push({ ...merged[0], ...Object.keys(line).length ? { line } : {} });
+    }
+    return Object.defineProperty(out, "conflicts", { value: conflicts, enumerable: !1 });
+  }
+  function reidLines2(drafts, existingVolumes, avoid = [], prior = {}) {
+    let taken = new Set(
+      (existingVolumes || []).map((v) => isPlainObject(v.line) ? String(v.line.编号 || "").trim() : "").filter(Boolean)
+    ), map = {}, refd = new Set(avoid);
+    for (let l of compileClue2(drafts || []).lines || []) for (let id of conditionRefs2(l.open).lines) refd.add(id);
+    let next = (id) => {
+      let m = /^([A-Za-z]+)(\d+)$/.exec(id), p = m ? m[1] : "S", n = m ? Number(m[2]) : 1, w = m ? m[2].length : 2;
+      for (; taken.has(`${p}${String(n).padStart(w, "0")}`) || refd.has(`${p}${String(n).padStart(w, "0")}`); ) n++;
+      return `${p}${String(n).padStart(w, "0")}`;
+    }, own = (drafts || []).map((v) => isPlainObject(v.line) ? String(v.line.编号 || "").trim() : "").filter(Boolean), clash = new Set(own.filter((id) => taken.has(id)));
+    for (let id of own) clash.has(id) || taken.add(id);
+    for (let id of own) clash.has(id) && !map[id] && (map[id] = next(id), taken.add(map[id]));
+    let report = { ...map };
+    for (let [from, to] of Object.entries(prior || {})) !own.includes(from) && from !== to && (map[from] = to);
+    if (!Object.keys(map).length) return [drafts, report];
+    let fix = (value) => typeof value == "string" ? value.replace(/(线\s*[:：]\s*)([A-Za-z]+\d+)/g, (all, head, id) => map[id] ? `${head}${map[id]}` : all) : Array.isArray(value) ? value.map(fix) : isPlainObject(value) ? Object.fromEntries(
+      Object.entries(value).map(([k, v]) => [
+        k,
+        k === "线" && typeof v == "string" ? v.replace(/^\s*([A-Za-z]+\d+)/, (all, id) => map[id] || all) : fix(v)
+      ])
+    ) : value;
+    return [
+      drafts.map((v) => {
+        let line = isPlainObject(v.line) ? fix({ ...v.line }) : v.line, id = line && String(v.line.编号 || "").trim();
+        line && map[id] && (line.编号 = map[id]);
+        let key = map[id] ? v.key.replace(id, map[id]) : v.key;
+        return { ...v, key, ...line ? { line } : {}, stages: v.stages.map((s) => ({ ...s, data: fix(s.data) })) };
+      }),
+      report
+    ];
+  }
+  var LINE_FREE_WORDS2 = /独立|无前提|没有前提|不需要前提|随时/;
+  function inventedOpenIssue2(vol, ident, mains = []) {
+    let line = isPlainObject(vol.line) ? vol.line : {}, id = String(line.编号 || "").trim(), me = (ident || []).find((l) => l.编号 === id), cond = line.开启条件, win = isPlainObject(line.开启时段) && String(line.开启时段.主线 || "").trim() ? line.开启时段 : null, hasCond = !(cond == null || cond === "" || isPlainObject(cond) && !Object.keys(cond).length);
+    if (!me || !hasCond && !win) return null;
+    let rel = clueText2(me.关系), raw = clueText2(me.开启条件原文), text2 = `${rel} ${raw}`.trim(), said = text2 || "没写开启前提", esc2 = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), mentions = (rid) => {
+      let t = (ident || []).find((l) => l.编号 === rid), m = (mains || []).find((l) => l.id === rid), no = t ? String(t.文档里的序号 ?? "").trim() : "";
+      return [rid, no, t && clueText2(t.名称), m && m.name].filter(Boolean).some(
+        (w) => w === no ? new RegExp(`(^|[^0-9])${esc2(w)}(?![0-9])`).test(text2) && !new RegExp(`与\\s*${esc2(w)}\\s*独立`).test(text2) : text2.includes(w)
+      );
+    }, otherIds = (ident || []).filter((l) => l.编号 !== id), refsAny = otherIds.some((l) => mentions(l.编号)) || (mains || []).some((m) => mentions(m.id)), free = !!text2 && LINE_FREE_WORDS2.test(text2) && !refsAny, stance = free ? "free" : text2 ? "stated" : "silent", atoms = [], errs = [], parsed = hasCond ? parseCondition2(cond, errs) : null, walk = (c) => c && (c.kind === "group" ? c.items.forEach(walk) : atoms.push(c));
+    walk(parsed);
+    let lineAtoms = atoms.filter((a) => a.kind === "line"), unbacked = lineAtoms.filter((a) => !mentions(a.line)).map((a) => a.line), others = atoms.filter((a) => a.kind !== "line"), problems2 = [];
+    return unbacked.length && problems2.push(`要等${unbacked.join("、")}，但文档没提到${unbacked.length > 1 ? "它们" : "它"}`), stance === "free" && others.length && problems2.push(`多了${others.map((a) => a.raw || a.kind).join("、")}`), stance !== "free" && lineAtoms.length > unbacked.length && others.length && problems2.push(`除了等线，还多了${others.map((a) => a.raw || a.kind).join("、")}，请核对原文有没有这一项`), stance === "free" && win && problems2.push(`加了开启时段（${String(win.主线).trim()}）`), stance === "stated" && !lineAtoms.length && others.length && problems2.push(`是${others.map((a) => a.raw || a.kind).join("、")}，请核对原文是不是这个意思`), problems2.length ? {
+      text: `${stance === "free" ? `文档里这条是独立的（${said}）` : stance === "stated" ? `文档写的是：${said}` : "文档没写这条的开启前提"}；AI写的开启条件${problems2.join("；")}`,
+      level: stance === "free" || unbacked.length ? "error" : "warn",
+      canDrop: stance === "free"
+    } : stance === "silent" && hasCond && !lineAtoms.length ? { text: "文档没写这条的开启前提，AI写了开启条件，请核对原文", level: "warn", canDrop: !1 } : null;
+  }
+  function droppedLineRefs2(kept, dropped, existingVolumes = []) {
+    let gone = new Set(dropped), out = [], comp = compileClue2([...existingVolumes, ...kept]);
+    for (let l of comp.lines || [])
+      for (let id of conditionRefs2(l.open).lines)
+        gone.has(id) && out.push(
+          `线 ${l.id}「${l.name}」的开启条件要等${id}，但${id}不要了：${l.id}会一直开不了，可以写意见让AI改条件，或者一起不要`
+        );
+    for (let l of comp.lines || []) l.window && gone.has(l.window.main) && out.push(`线 ${l.id} 的开启时段引用了${l.window.main}`);
+    return out;
+  }
+  function mainLinesText2(volumes) {
+    return (compileClue2(volumes || []).lines || []).filter((l) => l.kind === "main").map(
+      (l) => `- ${l.id}「${l.name}」阶段：${l.units.map((u) => splitStageKey(u.stage.key).short || stageLabel(u.stage.key)).join("、")}`
+    ).join(`
+`);
+  }
+
+  // src/trpg/trpg-clue-template.js
+  var CLUE_TPL_MARK_BEGIN2 = "【线索主线附加规则·剧情注入器】", CLUE_TPL_MARK_END2 = "【附加规则结束】", CLUE_TPL_PLACE2 = (depth, order, position = "at_depth_as_system") => ({ position, depth, order });
+  function clueTplExport2(name, extra = {}) {
+    return {
+      enabled: !1,
+      splitByRow: !1,
+      entryName: name,
+      entryType: "constant",
+      keywords: "",
+      preventRecursion: !0,
+      injectionTemplate: "",
+      extraIndexEnabled: !1,
+      extraIndexEntryName: `${name}-索引`,
+      extraIndexColumns: [],
+      extraIndexColumnModes: {},
+      extraIndexInjectionTemplate: "",
+      entryPlacement: CLUE_TPL_PLACE2(2, 1e4),
+      extraIndexPlacement: CLUE_TPL_PLACE2(2, 10010),
+      fixedEntryPlacement: CLUE_TPL_PLACE2(2, 99990),
+      fixedIndexPlacement: CLUE_TPL_PLACE2(2, 99991),
+      ...extra
+    };
+  }
+  var CLUE_TPL_REALTIME2 = { uiSentinel: -1, contextDepth: -1, updateFrequency: 1, batchSize: -1, skipFloors: 0, groupId: 0 }, CLUE_TPL_MANUAL = { ...CLUE_TPL_REALTIME2, updateFrequency: 0 }, CLUE_TPL_EVIDENCE2 = [
+    "【依据规则】只按 AI 回复（正文）里实际发生的事填写。用户消息里出现的计划、提议、打算、「准备去做」「预计会发现」都不算发生。",
+    "    反例：用户消息写「去后屋找账本，会找到被撕掉的那页」，正文写主角翻了几本旧账、什么也没找到就离开了 → 不记录任何发现，状态保持原值。",
+    "    拿不准正文有没有写出某项结果、某个角色有没有得知时，保持原值：宁可晚一批登记，不要提前登记。"
+  ].join(`
+`);
+  function clueControlSheet2() {
+    return {
+      uid: "sheet_ClueCtrl01",
+      name: "线索控制表",
+      sourceData: {
+        note: [
+          "主角眼下正在做哪一段剧情的事。此表有且仅有一行，「标识」固定为「主线」（代表全局的当前剧情活动）。",
+          "- 标识：固定写「主线」，不要修改。",
+          "- 场景目录：由剧情注入器维护，填表时不要修改。列的是现在可以去做的剧情的编号、要做的事和地点；只用于对号，不表示那件事已经发生。",
+          "- 当前场景：以本批最后一楼结束时，主角实际在做的事为准。叙述跟着主角走，这一列记的不是主角在不在场，而是他在不在做某一段剧情的事。只能写「场景目录」里的编号，或者写「无」。",
+          "    · 主角开始做「场景目录」里某一件事：照抄那一件的编号。开始做的那一楼就写，不用等事情有结果。",
+          "    · 别人只是提起、主角没有去做，不算；路过不算。",
+          "      看的是主角在为什么而忙，不是具体动作，也不是站在哪：为了同一个目的换个做法、换个地方继续（边走边接着谈、到隔壁房间找能打开那把锁的钥匙、去别处取查这件事要用的东西），都还是这一段，仍写原来的编号。地点只用来帮助对号（列了几个地点时任何一处都算）。",
+          "    · 这件事已经结束、搁置，或者主角转去做别的事了：写「无」，人还在原地、对面还是同一个人也一样（和同一个人聊起了不相干的事，也算转去做别的）。",
+          "      例：在值夜棚问完话，改成和老韩吃饭闲聊 → 写「无」。离开仓库去车站，路上经过邮局没进去 → 写「无」（旧的那件事已经不做了，邮局也没开始）。",
+          "    · 只是说要走、约好、打算，实际还没动：保持原值。",
+          "    · 看到、记下、指给别人看、路过、远远听见，都不算开始做新的那件事。",
+          "    · 同一楼里做了几件事：以最后实际在做的那件事为准。以本批正文为准，全局表里还没更新的地点不能否定正文里已经发生的转场。",
+          "    · 不得自造编号；「场景目录」里没有的场景不要写。",
+          CLUE_TPL_EVIDENCE2
+        ].join(`
+`),
+        initNode: "已有「主线」行就沿用，不要再插入。只有表里没有任何行时才插入一行：标识=主线，当前场景留空。",
+        deleteNode: "禁止删除。",
+        updateNode: `只更新「当前场景」，不改「场景目录」。例：主角走进裁缝铺开始问话 → 当前场景改为场景目录里裁缝铺对应的编号；主角说「先回家睡觉」并离开 → 当前场景改为「无」。
+SQL示例: UPDATE clue_control SET cur_scene = '<场景编号>' WHERE tag = '主线';`,
+        insertNode: "禁止插入（只有一行）。",
+        ddl: `CREATE TABLE clue_control ( -- 线索控制表
+  row_id INTEGER PRIMARY KEY, -- 行号
+  tag TEXT NOT NULL UNIQUE, -- 标识
+  cur_scene TEXT, -- 当前场景
+  scene_catalog TEXT -- 场景目录
+);`
+      },
+      content: [["row_id", "标识", "当前场景", "场景目录"]],
+      updateConfig: { ...CLUE_TPL_MANUAL },
+      exportConfig: clueTplExport2("线索控制表", { injectIntoWorldbook: !1 }),
+      orderNo: 0
+    };
+  }
+  function clueFactSheet2() {
+    return {
+      uid: "sheet_ClueFact01",
+      name: "关键事实表",
+      sourceData: {
+        note: [
+          "剧情需要追踪的关键发现。每行一条，由卡作者预先建好；填表时只改「状态」「内容」「依据」，不新增、不删除，不改「编号」「标签」「登记口径」。",
+          "- 编号：事实编号，不要修改。",
+          "- 标签：中性的简短名称，不要修改，也不要据此推断答案。",
+          "- 登记口径：正文里出现什么才算取得这一项（不含答案）。不要修改。",
+          "- 状态：只能是 未获得 / 已核实 / 存疑。",
+          "    · 已核实：正文里主角实际取得了这项结果，而且有可靠依据（亲眼看到实物、读到原件、得到明确验证）。",
+          "    · 存疑：正文里确实出现了这项内容，但来源只是某人的说法、传闻或推测，还没有可靠依据。「内容」要写明是谁说的。拿不准正文有没有写出这项内容时不要记为存疑，保持原值。",
+          "    · 未获得：其余情况。到达地点、尝试调查、对方答应提供、中途离开，都仍是未获得。",
+          "- 内容：一句话写出正文里实际出现的内容，只写正文写出来的部分，不补充正文没有的细节。例：只承认拿了钱、没说原因，就只写拿了钱。",
+          "- 依据：写明正文哪一楼、哪个情节。",
+          "怎么找编号：",
+          "    · 首次获得：按各行的「登记口径」判断正文写出的结果对应哪个编号、是否已经取得。附有【线索编号对照】时也可以参考。口径和对照都只用于对号，不代表已经发生。",
+          "    · 维护已有记录：已经是已核实或存疑的行，正文出现新证据推翻或证实它时，可以按这一行已有的「内容」匹配并更新。无法确定是哪一行时保持原值。",
+          "    · 已有记录又出现佐证（不推翻、也不改变状态）：「内容」保持不变；只有带来新信息时，才在「依据」原文后面追加「；后续：<楼层 新情节>」。没有新信息、或同一楼的情节已经追加过，就不改。不要用新情节覆盖第一次取得时的内容和依据。",
+          "      例：之前已核实「第一次签收的回执」，这一楼主角在另一份收据上看到同样的签名 → 内容不变，依据追加「；后续：第<N>楼 另一份收据上的签名相同」。",
+          "    · 正文没写出对应结果时，不要改任何行。",
+          CLUE_TPL_EVIDENCE2
+        ].join(`
+`),
+        initNode: "保留模板里预先建好的行，不要清空、不要新增。",
+        deleteNode: "禁止删除。",
+        updateNode: `只有正文明确写出结果时，才把对应编号的状态改为已核实或存疑，并填写内容和依据。已核实的事实后来被正文推翻时改为存疑，在依据里写明新证据和楼层；存疑的说法后来得到可靠证实时改为已核实。
+SQL示例(首次登记说法): UPDATE clue_facts SET status = '存疑', content = '<谁>说<正文里的原意>', evidence = '第<N>楼 <情节>' WHERE code = '<编号>';
+SQL示例(纯佐证，只追加依据): UPDATE clue_facts SET evidence = evidence || '；后续：第<N>楼 <新情节>' WHERE code = '<编号>';
+SQL示例(原说法被推翻或证实): UPDATE clue_facts SET status = '<已核实或存疑>', evidence = evidence || '；第<N>楼 <新证据>' WHERE code = '<编号>';`,
+        insertNode: "禁止插入。只修改已有行。",
+        ddl: `CREATE TABLE clue_facts ( -- 关键事实表
+  row_id INTEGER PRIMARY KEY, -- 行号
+  code TEXT NOT NULL UNIQUE, -- 编号
+  label TEXT NOT NULL, -- 标签
+  criterion TEXT, -- 登记口径
+  status TEXT NOT NULL DEFAULT '未获得' CHECK(status IN ('未获得', '已核实', '存疑')), -- 状态
+  content TEXT, -- 内容
+  evidence TEXT -- 依据
+);`
+      },
+      content: [["row_id", "编号", "标签", "登记口径", "状态", "内容", "依据"]],
+      updateConfig: { ...CLUE_TPL_MANUAL },
+      // 不导出到正文世界书：已获得的事实由剧情注入器按知情范围投影。
+      exportConfig: clueTplExport2("关键事实表", { injectIntoWorldbook: !1 }),
+      orderNo: 1
+    };
+  }
+  function clueKnowSheet2() {
+    return {
+      uid: "sheet_ClueKnow01",
+      name: "知情表",
+      sourceData: {
+        note: [
+          "关键角色是否知道某条关键事实。每行是「一条事实 × 一个角色」，由卡作者预先建好；填表时只改「获知方式」「可信度」「依据」，不新增、不删除行。",
+          "- 键 / 事实 / 角色：不要修改。主角按模板已有写法（如 user）。",
+          "- 获知方式：只能是 未知 / 亲见 / 被告知 / 听说 / 推测。逐个角色判断：",
+          "    · 亲见：这个角色自己看清了实物或原件内容。",
+          "    · 被告知：有人明确把这件事告诉了这个角色本人，或者展示给他看。",
+          "    · 听说：这个角色听到了转述、传闻。",
+          "    · 推测：这个角色自己提出了猜想或怀疑，手里还没有证据。",
+          "      这个角色亲眼看了实物或原件、再据此得出的判断（如读了单据后判断证词对不上），记为「亲见」，不是推测。推测不配「已核实」。",
+          "    · 未知：其余情况。【在场不等于知道】：只是在场、没听清、别人私下得知时他在附近，都保持原值，除非正文写出他看到或听到了内容。",
+          "- 可信度：只能是 已核实 / 未核实。跟着这个角色手里的证据走：亲见通常是已核实；被告知、听说、推测通常是未核实，除非正文写出他确认了真假。",
+          "- 依据：写明正文哪一楼、哪个情节。",
+          "【先看事实表】某条事实在关键事实表里仍是「未获得」、本次也没有把它登记成已核实或存疑时，它的知情行全部保持原值。",
+          "    知情的对象是关键事实表里那一行的「登记口径」所说的结果，不是标签字面上的东西。",
+          "    例：口径是「在抽屉里找到那封信并读到内容」，正文只写主角看见了上锁的抽屉、没打开 → 事实表保持未获得，知情行也保持未知。",
+          "获知方式只升级、不降级：已经是亲见的，不因旁人又提起改成听说。出现反证时，可以更新可信度和依据，但保留原来是怎么得知的。",
+          "已有记录的「依据」不要覆盖：再次见到或听到时，在原文后面追加「；后续：<新情节>」。",
+          CLUE_TPL_EVIDENCE2
+        ].join(`
+`),
+        initNode: "保留模板里预先建好的行，不要清空、不要新增。",
+        deleteNode: "禁止删除。",
+        updateNode: `只有正文明确写出某个角色看到、被告知、听到、猜到某条事实时，才更新对应行。例：老人当面对主角说看见了人 → 主角那一行改为「被告知 / 未核实」；老板娘当时不在场 → 她那一行保持原值。
+SQL示例: UPDATE clue_knowledge SET way = '被告知', credibility = '未核实', evidence = '第<N>楼 <情节>' WHERE key = '<事实编号>@<角色>';`,
+        insertNode: "禁止插入。只修改已有行。",
+        ddl: `CREATE TABLE clue_knowledge ( -- 知情表
+  row_id INTEGER PRIMARY KEY, -- 行号
+  key TEXT NOT NULL UNIQUE, -- 键
+  fact TEXT NOT NULL, -- 事实
+  actor TEXT NOT NULL, -- 角色
+  way TEXT NOT NULL DEFAULT '未知' CHECK(way IN ('未知', '亲见', '被告知', '听说', '推测')), -- 获知方式
+  credibility TEXT NOT NULL DEFAULT '未核实' CHECK(credibility IN ('已核实', '未核实')), -- 可信度
+  evidence TEXT -- 依据
+);`
+      },
+      content: [["row_id", "键", "事实", "角色", "获知方式", "可信度", "依据"]],
+      updateConfig: { ...CLUE_TPL_MANUAL },
+      exportConfig: clueTplExport2("知情表", { injectIntoWorldbook: !1 }),
+      orderNo: 2
+    };
+  }
+  var CLUE_SCENE_CATALOG_HEAD2 = `
+【场景编号对照】（只用于对号`;
+  function clueSheets2({ factRows = [], knowRows = [], controlRow = null, scenes = [], placeTables = [] } = {}) {
+    let ctrl = clueControlSheet2(), facts = clueFactSheet2(), know = clueKnowSheet2();
+    placeTables.length && (ctrl.sourceData.note += `
+地点名称以${placeTables.map((n) => `《${n}》`).join("、")}里的为准。`), controlRow && ctrl.content.push([null, ...controlRow, "", ""].slice(0, 4));
+    for (let r of factRows) facts.content.push([null, r.code, r.label, r.criterion || "", "未获得", "", ""]);
+    for (let r of knowRows) know.content.push([null, `${r.fact}@${r.actor}`, r.fact, r.actor, "未知", "未核实", ""]);
+    return [ctrl, facts, know];
+  }
+  var GLOBAL_TABLE_NAMES2 = ["全局数据表", "全局表", "全局状态表"], GLOBAL_TIME_COLS2 = ["当前时间", "时间", "当前日期时间", "游戏时间"], GLOBAL_PLACE_COLS2 = ["当前详细地点", "当前位置", "当前地点", "所在地点", "地点"];
+  function findGlobalTable2(sheets) {
+    let list = (sheets || []).filter((s) => s && s.name), head = (s) => clueTplHeader2(s), byName = GLOBAL_TABLE_NAMES2.map((n) => list.find((s) => String(s.name).trim() === n)).find(Boolean), sheet = byName || list.find((s) => /全局/.test(String(s.name)) && GLOBAL_TIME_COLS2.some((c) => head(s).includes(c)));
+    if (!sheet) return null;
+    let h = head(sheet), rows2 = Array.isArray(sheet.content) ? sheet.content.slice(1).filter(Array.isArray) : [], seeds = Array.isArray(sheet.seedRows) ? sheet.seedRows.filter(Array.isArray) : [], first = (rows2[0] || seeds[0] || [])[1];
+    return {
+      sheet,
+      name: String(sheet.name).trim(),
+      // 行标识：第一行第一列的值（默认模板是「全局状态」）；还没有行时用默认的「全局状态」
+      row: String(first ?? "").trim() || "全局状态",
+      time: GLOBAL_TIME_COLS2.find((c) => h.includes(c)) || "",
+      place: GLOBAL_PLACE_COLS2.find((c) => h.includes(c)) || ""
+    };
+  }
+  var CLUE_TPL_DEFAULTS2 = {
+    全局数据表: ["全局状态", "当前详细地点", "当前次要地区", "当前主要地区", "上轮场景时间", "经过的时间", "当前时间"],
+    重要角色表: ["姓名", "性别", "年龄", "一句话介绍", "外貌特征", "穿着打扮", "所在地点", "在场状态", "人际关系", "过往经历", "交互选项"],
+    任务与事件表: ["任务名称", "任务类型", "发布者", "详细描述", "当前进度", "任务时限", "奖励", "惩罚"],
+    选项表: ["选项一", "选项二", "选项三", "选项四"]
+  }, CLUE_TPL_CHAR_COLS2 = [
+    { sql: "plot_identity", label: "剧情身份" },
+    { sql: "current_intent", label: "当前动向" }
+  ], CLUE_TPL_RULES2 = {
+    重要角色表: [
+      "- 建行：本批正文中实际登场，或有人明确提到、且对当前事件有作用的人，才建行。沿用当时可辨认的称呼；姓名还没揭示就用正文里的称呼，以后确认是同一人时更新原行，不另建一行。",
+      "- 背景设定里写了、但正文还没有展示的身份、关系、秘密和未来安排，不写进任何一列。关系和经历只补正文已经展示的部分。",
+      "- 剧情身份：写成「谁在第几楼如何称呼或自述」，如「第3楼自称本地商人」。之后被核实或推翻时，在后面追加证据和楼层，不删原来的说法。",
+      "- 当前动向：分清「说打算去」「已出发」「已到达」。正文没有交代新的动向就保持原值；离开场景后在做什么，正文写了才记。",
+      "- 一句话介绍只写公开特征；交互选项只写主角目前有依据尝试的行动。"
+    ].join(`
+`),
+    任务与事件表: [
+      "- 从本批正文找主角已经接下的委托、已触发的差事，或主角明确立下的目标；当面交谈、书信和已经发生的行动都可以作依据。本批没有，就不新增。",
+      "- 设定里写了、但正文还没有出现的目标、真相和幕后人物，不写进任何一列。主线剧情由剧情注入器按进度提供，不要预写主线任务。",
+      "- 详细描述记已知的要求及其来源；当前进度只写实际完成的步骤。期限、奖励、后果只有正文明确时才填。完成、失败、过期沿用本表原有规则。"
+    ].join(`
+`),
+    选项表: [
+      "- 四个选项写主角基于此刻所见、所闻或已有记忆，下一步可以尝试的行动。保留本表原有的第三人称和四类选项的要求。",
+      "- 允许提问、闲聊、暂时离开和继续日常。写「去档案室查有没有签收记录」这样的尝试，结果留给正文；即使知道某个地点，也不能预写那里一定有某项证据。",
+      "- 不要提出主角在正文里还没听说过的地点、人物或真相。生成选项不会更新任务、事实或人物知情。"
+    ].join(`
+`)
+  }, CLUE_TPL_REPLACE2 = {
+    重要角色表: {
+      initNode: {
+        from: "故事开始时为当前已知的重要角色分别插入条目。",
+        // 数据库默认（spv8.9.2）的整段 initNode：只有和它完全相同时才替换开头那句。
+        whole: `故事开始时为当前已知的重要角色分别插入条目。
+
+【格式约束】
+relation_text 必须写"角色名:关系描述"；同一角色多项描述用英文逗号 , 分隔；不同角色之间用英文分号 ; 分隔。
+
+SQL示例: INSERT INTO important_non_romance (name, gender, age, brief_intro, appearance, outfit_text, location_name, presence_status, relation_text, past_experience, interaction_options) VALUES ('校长', '男', 60, '学院校长', '白发，手持手杖，目光深邃', '深灰立领风衣配黑皮手套', '校长室', '离场', '主角:曾帮其修过自行车,旧识;艾莉丝:监护人', '据说知晓学院的许多秘密，很少露面。', '向他打听失踪案线索');`,
+        to: "故事开始时，只为开场正文里实际登场、或被明确提到且对当前事件有作用的重要角色插入条目；只写正文已经展示的内容。"
+      }
+    },
+    任务与事件表: {
+      initNode: {
+        from: "游戏初始化时，根据剧情与设定添加一条主线剧情。",
+        to: "游戏初始化时，只记录开场正文里主角已经接下的委托或明确立下的目标；没有就不添加。不要根据设定预写主线任务。"
+      }
+    }
+  };
+  function clueTplHeader2(sheet) {
+    return (Array.isArray(sheet && sheet.content) && Array.isArray(sheet.content[0]) ? sheet.content[0] : []).slice(1).map((x) => String(x ?? "").trim());
+  }
+  function clueTplMismatch2(tpl, live2) {
+    let sheets = (o) => Object.entries(o || {}).filter(([k, v]) => k.startsWith("sheet_") && isPlainObject(v) && v.name).map(([, v]) => v), t = sheets(tpl), l = sheets(live2), out = [];
+    if (!l.length) return out;
+    let tn = t.map((s) => String(s.name).trim()), ln = l.map((s) => String(s.name).trim()), dup = (xs) => [...new Set(xs.filter((n, i) => xs.indexOf(n) !== i))];
+    dup(tn).length && out.push(`模板里有重名的表：${dup(tn).join("、")}`), dup(ln).length && out.push(`当前聊天有重名的表：${dup(ln).join("、")}`);
+    let onlyT = tn.filter((n) => !ln.includes(n)), onlyL = ln.filter((n) => !tn.includes(n));
+    onlyT.length && out.push(`模板里有、当前聊天没有：${onlyT.join("、")}（可能读到的是全局模板）`), onlyL.length && out.push(`当前聊天有、模板里没有：${onlyL.join("、")}（导入后这些表会被数据库隐藏）`);
+    for (let s of l) {
+      let m = t.find((x) => String(x.name).trim() === String(s.name).trim());
+      if (!m) continue;
+      let lh = clueTplHeader2(s), th = clueTplHeader2(m), lost = lh.filter((c) => c && !th.includes(c));
+      lost.length && out.push(`「${s.name}」当前聊天里的列「${lost.join("、")}」模板里没有`);
+    }
+    return out;
+  }
+  function stripRuleBlock2(text2) {
+    let s = String(text2 || ""), i = s.indexOf(CLUE_TPL_MARK_BEGIN2);
+    if (i < 0) return s;
+    let j = s.indexOf(CLUE_TPL_MARK_END2, i);
+    return (s.slice(0, i) + (j < 0 ? "" : s.slice(j + CLUE_TPL_MARK_END2.length))).replace(/\n{3,}/g, `
+
+`).replace(/\s+$/, "");
+  }
+  function withRuleBlock2(text2, rules) {
+    let base = stripRuleBlock2(text2);
+    return `${base}${base ? `
+
+` : ""}${CLUE_TPL_MARK_BEGIN2}
+${rules}
+${CLUE_TPL_MARK_END2}`;
+  }
+  function ddlAddColumns2(ddl, cols) {
+    let src = String(ddl || "");
+    if (!src.trim()) return { ok: !1, ddl: src };
+    let close = src.lastIndexOf(")");
+    if (close < 0) return { ok: !1, ddl: src };
+    let body = src.slice(0, close).replace(/\s+$/, ""), tail = src.slice(close), defs = body.slice(body.indexOf("(") + 1).replace(/--[^\n]*/g, "");
+    if (/(?:^|,)\s*(?:(?:CONSTRAINT|UNIQUE|CHECK|FOREIGN\s+KEY)\b|PRIMARY\s+KEY\s*\()/im.test(defs))
+      return { ok: !1, ddl: src, why: "表定义里有表级约束" };
+    let lines2 = body.split(`
+`), last = lines2.length - 1;
+    for (; last >= 0 && !lines2[last].trim(); ) last--;
+    let m = /^(.*?)(\s*--.*)?$/.exec(lines2[last]);
+    lines2[last] = `${m[1].replace(/,\s*$/, "")},${m[2] || ""}`;
+    let added = cols.map((c, i) => `  ${c.sql} TEXT${i < cols.length - 1 ? "," : ""} -- ${c.label}`);
+    return { ok: !0, ddl: `${lines2.slice(0, last + 1).join(`
+`)}
+${added.join(`
+`)}
+${tail}` };
+  }
+  function sheetEntries2(tpl) {
+    return Object.entries(tpl || {}).filter(([k, v]) => k.startsWith("sheet_") && isPlainObject(v));
+  }
+  function synthesizeClueTemplate2(base, { clue = {} } = {}) {
+    let tpl = JSON.parse(JSON.stringify(isPlainObject(base) ? base : {})), changes = [], problems2 = [], created = [], blocked = [];
+    isPlainObject(tpl.mate) || (tpl.mate = { type: "chatSheets", version: 1 });
+    let byName = /* @__PURE__ */ new Map(), dups = /* @__PURE__ */ new Set();
+    for (let [key, sheet] of sheetEntries2(tpl)) {
+      let name = String(sheet.name || "").trim();
+      byName.has(name) ? dups.add(name) : byName.set(name, { key, sheet });
+    }
+    for (let name of dups) byName.delete(name), problems2.push(`有两张以上的表都叫「${name}」，没有改动它们`);
+    let maxOrder = Math.max(
+      -1,
+      ...sheetEntries2(tpl).map(([, s]) => Number(s.orderNo)).filter(Number.isFinite)
+    ), placeTables = sheetEntries2(tpl).map(([, s]) => s).filter((s) => /地点/.test(String(s.name || "")) && /(^|,)(地点名称|名称)(,|$)/.test(clueTplHeader2(s).join(","))).map((s) => String(s.name)), fresh = clueSheets2({ ...clue, placeTables });
+    for (let sheet of fresh) {
+      if (dups.has(sheet.name)) {
+        blocked.push(sheet.name);
+        continue;
+      }
+      let have = byName.get(sheet.name);
+      if (!have) {
+        let key = sheet.uid;
+        for (let n = 2; tpl[key]; n++) key = `${sheet.uid}_${n}`;
+        sheet.uid = key, sheet.orderNo = ++maxOrder, tpl[key] = sheet, created.push(sheet.name);
+        let rows2 = sheet.content.length - 1;
+        changes.push(`新增「${sheet.name}」${rows2 ? `，带${rows2}行预建数据` : ""}`);
+        continue;
+      }
+      let wantHead = clueTplHeader2(sheet), head = clueTplHeader2(have.sheet), missing = wantHead.filter((c) => !head.includes(c));
+      if (sheet.name === "线索控制表" && missing.length === 1 && missing[0] === LINE_CATALOG_COL && head.includes("标识") && head.includes("当前场景")) {
+        let oldDdl = String(have.sheet.sourceData && have.sheet.sourceData.ddl || ""), ddl = oldDdl.trim() ? ddlAddColumns2(oldDdl, [{ sql: "scene_catalog", label: LINE_CATALOG_COL }]) : { ok: !0, ddl: "" };
+        if (!ddl.ok) {
+          problems2.push(
+            `「线索控制表」的DDL ${ddl.why || "无法解析"}，没有加「${LINE_CATALOG_COL}」列；多线的场景目录写不进去，需要的话请在数据库里手动加`
+          );
+          continue;
+        }
+        ddl.ddl && (have.sheet.sourceData = { ...have.sheet.sourceData, ddl: ddl.ddl }), have.sheet.content[0].push(LINE_CATALOG_COL);
+        for (let row2 of have.sheet.content.slice(1)) Array.isArray(row2) && row2.push("");
+        Array.isArray(have.sheet.seedRows) && have.sheet.seedRows.forEach((row2) => Array.isArray(row2) && row2.push("")), changes.push(`「线索控制表」新增列：${LINE_CATALOG_COL}（由插件写入现在可去做的剧情；原有列和行不动）`), missing.length = 0;
+      }
+      if (missing.length) {
+        problems2.push(`已有的「${sheet.name}」缺少列：${missing.join("、")}。没有改动这张表，请检查是否是别的用途的同名表`);
+        continue;
+      }
+      if (sheet.name === "线索控制表") {
+        let note = String(have.sheet.sourceData && have.sheet.sourceData.note || ""), i = note.lastIndexOf(CLUE_SCENE_CATALOG_HEAD2), base0 = i < 0 ? note : note.slice(0, i).replace(/\s+$/, ""), fresh0 = clueControlSheet2().sourceData, oldStart = base0.indexOf("主角眼下正在做哪一段剧情的事。"), oldEnd = base0.indexOf(CLUE_TPL_EVIDENCE2), next = oldStart >= 0 && oldEnd > oldStart ? base0.slice(0, oldStart) + fresh0.note + base0.slice(oldEnd + CLUE_TPL_EVIDENCE2.length) : base0;
+        next !== note && (have.sheet.sourceData = { ...have.sheet.sourceData, note: next, updateNode: fresh0.updateNode }, changes.push(
+          i >= 0 ? "「线索控制表」说明：去掉旧的场景编号对照（改由「场景目录」列提供），更新填表规则" : "「线索控制表」说明：更新填表规则（只写当前场景、不改场景目录）"
+        ));
+      }
+      sameManual(have.sheet.updateConfig) || (have.sheet.updateConfig = { ...have.sheet.updateConfig || {}, ...CLUE_TPL_MANUAL }, changes.push(`「${sheet.name}」改为不自动填表（只由插件写，纯数据记录）`));
+    }
+    let g = findGlobalTable2([...byName.values()].map((x) => x.sheet));
+    return g ? (sameRealtime(g.sheet.updateConfig) || (g.sheet.updateConfig = { ...g.sheet.updateConfig || {}, ...CLUE_TPL_REALTIME2 }, changes.push(`「${g.name}」改为每楼更新（时间、地点每楼都准；填表次数会相应变多）`)), g.time || problems2.push(`「${g.name}」里没找到时间列（${GLOBAL_TIME_COLS2.join("、")}）：时间条件会是未知，可以在表格绑定里把time指向记时间的那一格`)) : problems2.push("没找到记时间、地点的全局表：模组里的时间条件会是未知。可以在表格绑定里把time指向记时间的那一格"), patchDefault("重要角色表", (sheet) => {
+      let head = sheet.content[0], have = clueTplHeader2(sheet), add = CLUE_TPL_CHAR_COLS2.filter((c) => !have.includes(c.label));
+      if (add.length) {
+        let ddl = ddlAddColumns2(sheet.sourceData && sheet.sourceData.ddl, add);
+        if (!ddl.ok)
+          return problems2.push(
+            `「重要角色表」的DDL ${ddl.why || "无法解析"}，没有加列（剧情身份、当前动向）；需要的话请在数据库里手动加`
+          );
+        sheet.sourceData = { ...sheet.sourceData, ddl: ddl.ddl }, head.push(...add.map((c) => c.label));
+        for (let row2 of sheet.content.slice(1)) Array.isArray(row2) && row2.push(...add.map(() => ""));
+        Array.isArray(sheet.seedRows) && sheet.seedRows.forEach((row2) => Array.isArray(row2) && row2.push(...add.map(() => ""))), changes.push(`「重要角色表」新增列：${add.map((c) => c.label).join("、")}（原有列不动）`);
+      }
+    }), patchDefault("任务与事件表"), patchDefault("选项表"), {
+      template: tpl,
+      changes,
+      problems: problems2,
+      created,
+      // 线索三表有重名（R10）：不新建、不自动绑定，调用方应停止。
+      blocked,
+      binding: {
+        facts: [
+          {
+            表: "关键事实表",
+            编号列: "编号",
+            状态列: "状态",
+            已核实值: "已核实",
+            说法值: "存疑",
+            内容列: "内容",
+            来源列: "依据"
+          }
+        ],
+        knowledge: [
+          {
+            表: "知情表",
+            事实列: "事实",
+            角色列: "角色",
+            方式列: "获知方式",
+            可信度列: "可信度",
+            已核实值: "已核实",
+            来源列: "依据",
+            有效值: ["亲见", "被告知", "听说", "推测"]
+          }
+        ],
+        scene: { 路径: "线索控制表/主线/当前场景", 离场值: "无" },
+        time: { 路径: [...g && g.time ? [`${g.name}/${g.row}/${g.time}`] : [], "全局数据表/全局状态/当前时间", "线索控制表/主线/当前时间"].filter((x, i, a) => a.indexOf(x) === i) }
+      }
+    };
+    function sameManual(cfg) {
+      return !!cfg && cfg.updateFrequency === 0 && cfg.uiSentinel === -1;
+    }
+    function sameRealtime(cfg) {
+      return !!cfg && cfg.updateFrequency === 1 && cfg.skipFloors === 0 && cfg.groupId === 0;
+    }
+    function patchDefault(name, extra) {
+      let hit = byName.get(name);
+      if (!hit) return;
+      let sheet = hit.sheet, head = clueTplHeader2(sheet), want = CLUE_TPL_DEFAULTS2[name];
+      if (!want.every((c) => head.includes(c)))
+        return problems2.push(
+          `「${name}」的列和数据库默认不一致（缺${want.filter((c) => !head.includes(c)).join("、")}），没有改它的规则；需要的话请手动加上防剧透要求`
+        );
+      sheet.sourceData = { ...sheet.sourceData || {} }, extra && extra(sheet);
+      for (let [field2, rep] of Object.entries(CLUE_TPL_REPLACE2[name] || {})) {
+        let cur = String(sheet.sourceData[field2] || "");
+        if (cur.includes(rep.to)) continue;
+        let official = rep.whole || rep.from, norm3 = (t) => t.replace(
+          /\r\n?/g,
+          `
+`
+        ).trim();
+        norm3(cur) === norm3(official) ? (sheet.sourceData[field2] = cur.replace(rep.from, rep.to), changes.push(`「${name}」的${field2 === "initNode" ? "初始化" : "新增"}规则：「${rep.from}」改为「${rep.to}」`)) : problems2.push(
+          `「${name}」的${field2 === "initNode" ? "初始化" : "新增"}规则和数据库默认不同，没有替换；请确认它不会按设定预写内容`
+        );
+      }
+      let note = String(sheet.sourceData.note || ""), next = withRuleBlock2(note, CLUE_TPL_RULES2[name]);
+      next !== note && (sheet.sourceData.note = next, changes.push(`「${name}」说明末尾${note.includes(CLUE_TPL_MARK_BEGIN2) ? "更新" : "追加"}一段线索主线附加规则（原规则不动）`));
+    }
+  }
+
+  // src/trpg/trpg-clue-run.js
+  var CLUE_STATUS_BADGE2 = { locked: "", available: "is-accent", active: "is-ok", done: "is-dark" }, FOCUS_SOURCE2 = {
+    manual: "你选的",
+    table: "按填表",
+    auto: "只有这一件可做",
+    stale: "你选的场景已经不能进行",
+    manualDone: "你选的场景已完成，只给入口",
+    none: "还没确定",
+    away: "主角眼下没在任何一段剧情里，只给入口"
+  };
+  function trpgSeedRows(project, c, factRows, knowRows) {
+    if (!isTrpg(project) || !c) return { factRows, knowRows };
+    let keep = trpgRowFilter(c.compiled, trpgWantFacts(c.compiled, c.state, c.snap, c.prog, project.clue));
+    return { factRows: factRows.filter((f) => keep(f.code)), knowRows: knowRows.filter((k) => keep(k.fact)) };
+  }
+  function modeCard2(project, inner = !1) {
+    let mode2 = project.clue ? project.clue.mode : "outline", body = `<div class="pi-seg">${PLOT_MODES2.map((item) => `<button type="button" class="pi-seg-btn${item.value === mode2 ? " is-sel" : ""}" data-act="clue-mode" data-mode="${item.value}">${esc(item.label)}</button>`).join("")}</div>`;
+    return inner ? `<div class="pi-run-sec"><div class="pi-run-sec-hd">推进方式</div>${body}</div>` : `<div class="pi-card"><h3>推进方式</h3>${body}</div>`;
+  }
+  function bindingText2(list) {
+    return stringifyYaml(list).trim();
+  }
+  function bindingCard2(project, st72, tables = null, inner = !1) {
+    let c = project.clue, b = c.bindings, open = st72.bindOpen, summary = [
+      b.facts.length ? "事实表" : "",
+      b.knowledge.length ? "知情表" : "",
+      b.switch ? "主线开关" : "",
+      b.scene ? "当前场景" : "",
+      b.time ? "故事时间" : ""
+    ].filter(Boolean).join("，") || "还没有绑定", path = b.scene && b.scene.路径, hasCatalog = !!(tables && path && catalogKnown(tables, path));
+    return `<div class="${inner ? "pi-run-sec" : "pi-card"}"><${inner ? 'div class="pi-run-sec-hd"' : "h3"}>表格绑定<span class="pi-meta">${esc(summary)}</span><span class="pi-spacer"></span>
+        <button type="button" class="pi-btn is-sm is-ghost" data-act="clue-bind-toggle">${open ? "收起" : "编辑"}</button></${inner ? "div" : "h3"}>
+        ${open ? `<textarea class="pi-ta is-mono is-tall" data-clue-bindings>${esc(bindingText2(b))}</textarea>
+        <div class="pi-tools is-c2 is-end"><button type="button" class="pi-btn is-sm" data-act="clue-bind-example">填入示例</button>
+        <button type="button" class="pi-btn is-primary is-sm" data-act="clue-bind-apply">应用</button></div><p class="pi-status" data-clue-bind-status></p>` : ""}
+        ${hasCatalog ? "" : '<div class="pi-tools is-c1"><button type="button" class="pi-btn is-sm is-wide" data-act="clue-catalog" title="手动贴场景目录：旧聊天的线索表没有「场景目录」列、又不想重新生成模板时用，复制一段对照文字，手动贴进表格说明">场景目录</button></div>'}</div>`;
+  }
+  var BINDING_EXAMPLE2 = `facts:
+  - {表: 关键事实表, 编号列: 编号, 状态列: 状态, 已核实值: 已核实, 说法值: 存疑, 内容列: 内容, 来源列: 依据}
+knowledge:
+  - {表: 知情表, 事实列: 事实, 角色列: 角色, 方式列: 获知方式, 可信度列: 可信度, 已核实值: 已核实, 来源列: 依据, 有效值: [亲见, 被告知, 听说, 推测]}
+scene: {路径: 线索控制表/主线/当前场景, 离场值: 无}
+time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主线/当前时间]}
+`, FACT_NAMES2 = /* @__PURE__ */ new Map();
+  function buildFactNames2(project, c) {
+    let labels = isPlainObject(project.clue.labels) ? project.clue.labels : {}, map = /* @__PURE__ */ new Map();
+    for (let s of c.state.nodeStates)
+      for (let d of discoveryList2(isPlainObject(s.node.item) ? s.node.item : {}))
+        d.fact && !map.has(d.fact) && map.set(d.fact, labels[d.fact] && labels[d.fact].label || (d.text.length > 20 ? `${d.text.slice(0, 20)}…` : d.text));
+    for (let k of Object.keys(labels)) labels[k] && labels[k].label && map.set(k, labels[k].label);
+    return map;
+  }
+  function factName2(code) {
+    return FACT_NAMES2.get(code) || "";
+  }
+  function factNamesText2(codes) {
+    let names2 = codes.map(factName2).filter(Boolean);
+    return names2.length ? `${names2.slice(0, 3).join("、")}${codes.length > 3 ? `等${codes.length}条` : ""}` : `${codes.length}条线索`;
+  }
+  function maskFacts2(text2) {
+    return [...FACT_NAMES2.keys()].sort((a, b) => b.length - a.length).reduce((t, k) => t.split(k).join(`「${FACT_NAMES2.get(k) || "一条线索"}」`), String(text2));
+  }
+  function reasonList2(result2) {
+    return result2 && result2.reasons && result2.reasons.length ? result2.reasons.slice(0, 4).map((r) => `<li>${esc(maskFacts2(r))}</li>`).join("") : "";
+  }
+  function nodeRow2(s, focusUid, open) {
+    let badge = CLUE_STATUS_BADGE2[s.status], flags = [
+      s.node.required ? "" : "可选",
+      s.skipped ? "已跳过" : "",
+      s.disabled ? "暂时停用" : "",
+      s.manualOpen ? "手动开放" : "",
+      s.done.manual ? "手动完成" : ""
+    ].filter(Boolean).join("，"), why = s.status === "locked" ? reasonList2(s.open) : s.status !== "done" ? reasonList2(s.done) : "";
+    return `<div class="pi-clue-node${s.node.uid === focusUid ? " is-focus" : ""}">
+        <div class="pi-clue-hd" data-act="clue-node-open" data-uid="${esc(s.node.uid)}">
+            <span class="pi-badge ${badge}">${esc(NODE_STATUS_LABELS2[s.status])}</span>
+            <span class="pi-clue-name">${esc(s.node.name)}</span>
+            ${flags ? `<span class="pi-meta">${esc(flags)}</span>` : ""}
+            ${s.node.uid ? `<button type="button" class="pi-icon-btn" data-act="clue-node-menu" data-uid="${esc(s.node.uid)}" title="手动调整" aria-label="手动调整">${ICONS.more}</button>` : ""}</div>
+        ${open ? `<ul class="pi-clue-why">${reasonList2(s.open) + reasonList2(s.done)}</ul>` : ""}</div>`;
+  }
+  function stageBlock2(unit, stage, nodes, focusUid, st72, { next = !1, expand = !1 } = {}) {
+    let live2 = stage.entered.v === "true" && !stage.done, key = `st:${unit.id}`, open = live2 || expand || !!st72[key], state = stage.done ? "已结束" : live2 ? "进行中" : next ? "下一个" : "", left = stage.requiredLeft.length && live2 ? `还差${stage.requiredLeft.length}个` : "", endWhy = live2 && !stage.requiredLeft.length && stage.end.v !== "true" ? `结束条件：${stage.end.reasons.join("；")}` : "", enterWhy = !live2 && !stage.done ? stage.entered.reasons.join("；") : "", cls = stage.done ? "done" : live2 ? "active" : next ? "next" : "todo", head = `<span class="pi-tl-name">${esc(stageLabel(unit.stage.key))}</span>${left ? `<span class="pi-tl-state is-left">${left}</span>` : ""}${state ? `<span class="pi-tl-state">${state}</span>` : ""}`;
+    return `<div class="pi-tl-item is-${cls}"><span class="pi-tl-dot"></span><div class="pi-tl-box">
+        ${live2 ? `<div class="pi-tl-hd">${head}</div>` : `<div class="pi-tl-hd is-fold" data-act="run-fold" data-key="${esc(key)}" role="button" aria-expanded="${open}">${head}<span class="pi-tl-state">${open ? "▾" : "▸"}</span></div>`}
+        ${open ? `${[endWhy, enterWhy].filter(Boolean).map((t) => `<p class="pi-hint">${esc(t)}</p>`).join("")}<div class="pi-tl-nodes">${nodes.map((s) => nodeRow2(s, focusUid, st72.nodeOpen === s.node.uid)).join("")}</div>` : ""}</div></div>`;
+  }
+  function lineDisplayName2(l) {
+    let name = String(l.name || "").replace(/·/g, " ");
+    return l.id && (name = name.replace(/^卷[^\s]*\s+/, "")), l.id && !name.startsWith(l.id) ? `${l.id} ${name}` : name;
+  }
+  function lineSummary2(c) {
+    let list = c.state.lineStates || [], on = (k) => list.filter((s) => s.line.kind === k && s.state === "进行中").length, sides = list.filter((s) => s.line.kind === "side").length, limit = c.plan ? c.plan.slots.limit : 1;
+    return `主线${on("main")}条进行中${sides ? `；支线${on("side")} / ${limit}条` : ""}${c.prog.mainPaused ? "；主线已全部暂停" : ""}${c.prog.sidePaused ? "；支线已全部暂停" : ""}`;
+  }
+  function pauseMenu2(c) {
+    let list = c.state.lineStates || [], mains = list.filter((s) => s.line.kind === "main").length, sides = list.filter((s) => s.line.kind === "side").length;
+    return `<details class="pi-line-more pi-pause-menu"><summary class="pi-btn is-sm">暂停 ▾</summary><div class="pi-line-menu">
+        <button type="button" class="pi-btn is-sm is-ghost" data-act="clue-pause" data-value="1" title="去玩日常：所有线索内容都不注入，进度保留">暂停全部剧情</button>
+        ${mains ? `<button type="button" class="pi-btn is-sm is-ghost" data-act="clue-pause-mains" data-value="${c.prog.mainPaused ? "" : "1"}" title="${c.prog.mainPaused ? "主线恢复注入；原来进行中的主线接着演" : "所有主线都不推进、不注入；支线照常"}">${c.prog.mainPaused ? "继续主线" : "只暂停主线"}</button>` : ""}
+        ${sides ? `<button type="button" class="pi-btn is-sm is-ghost" data-act="clue-pause-side" data-value="${c.prog.sidePaused ? "" : "1"}" title="${c.prog.sidePaused ? "支线恢复注入和提示；原来进行中的支线接着演" : "所有支线都不注入、不提示新的；主线照常，进度和名额都保留"}">${c.prog.sidePaused ? "继续支线" : "只暂停支线"}</button>` : ""}</div></details>`;
+  }
+  function lineOpts2(c, project) {
+    if (!(c.state.lineStates || []).filter((s) => s.line.kind === "side").length) return "";
+    let limit = c.plan ? c.plan.slots.limit : 1;
+    return `<div class="pi-row pi-line-opts"><label class="pi-check"><span>同时进行的支线</span><select class="pi-sel is-sm" data-clue-sidelimit>${options(
+      [
+        { value: "1", label: "最多1条" },
+        { value: "2", label: "最多2条" }
+      ],
+      String(limit)
+    )}</select></label>
+          <label class="pi-check"><input type="checkbox" data-clue-linetoast${project.clue.lineToast !== !1 ? " checked" : ""}><span>剧情线自动开始时在顶端提示</span></label></div>`;
+  }
+  function renderClueRun2(view, project, st72) {
+    let { runtime } = view, clue = runtime.clue, c = clue.compute(), d = clue.diagnose();
+    if (!c) return modeCard2(project);
+    FACT_NAMES2 = buildFactNames2(project, c);
+    let lines0 = c.state.lineStates || [], multi0 = lines0.length > 0, problems2 = [...c.snap.problems, ...c.compiled.errors, ...c.state.cycles.map((u) => `节点${u}条件循环引用`)], focus = c.state.focus, focusNode = c.state.nodeStates.find((s) => s.node.uid === focus.uid), entries = runtime.entries(), clueEntry = entries.find((e) => e.slotId === CLUE_SLOT), enabled = c.snap.enabled === !1 ? '<span class="pi-badge is-warn">主线关闭</span>' : "", paused = c.prog.paused ? '<span class="pi-badge is-warn">已暂停</span>' : "", mainLine = multi0 ? lines0.find((x) => x.line.kind === "main" && x.state === "进行中") || lines0.find((x) => x.line.kind === "main") : null, shownUnits = mainLine && c.compiled.units.filter((u) => u.line && u.line.id === mainLine.line.id) || [], tlUnits = shownUnits.length ? shownUnits : c.compiled.units, anyLive = tlUnits.some((u) => {
+      let st9 = c.state.stageStates.get(u.id);
+      return st9.entered.v === "true" && !st9.done;
+    }), nextDone = !1, groups = [];
+    for (let unit of tlUnits) {
+      let stage = c.state.stageStates.get(unit.id), live2 = stage.entered.v === "true" && !stage.done, next = !live2 && !stage.done && !nextDone && (nextDone = !0);
+      groups.push(stageBlock2(unit, stage, c.state.nodeStates.filter((s) => s.node.unit === unit), focus.uid, st72, { next, expand: !anyLive }));
+    }
+    let last = clue.lastInjected(), b0 = project.clue.bindings, unbound = !(b0.facts.length || b0.knowledge.length), setOpen = st72.setOpen !== void 0 ? st72.setOpen : unbound || !c.snap.api, mode0 = (PLOT_MODES2.find((m) => m.value === project.clue.mode) || PLOT_MODES2[0]).label, opN = clueOpCount(runtime), setSummary = [mode0, unbound ? "表格未绑定" : "表格已绑定", `推进速度${(PACES.find((x) => x.value === runtime.progress().pace) || PACES[1]).label}`, ...opN ? [`记录${opN}条`] : []].join("，"), advOpen = !!st72.advOpen, settings = `<div class="pi-card pi-run-set"><h3><button type="button" class="pi-run-fold" data-act="run-set-toggle" aria-expanded="${setOpen}">${setOpen ? "▾" : "▸"}设置与记录</button>${setOpen ? "" : `<span class="pi-meta">${esc(setSummary)}</span>`}</h3>
+        ${setOpen ? `<div class="pi-rl-sec"><div class="pi-run-sec-hd">线索表格</div><div class="pi-tools is-c3"><button type="button" class="pi-btn is-sm" data-act="clue-prebuild" title="按模组补表格行：表已经建好、模组后来又加了线索时用，把缺的行补进关键事实表、知情表；已有的行不动">补全表格…</button><button type="button" class="pi-btn is-sm" data-act="clue-labels-edit" title="修改线索标签：修改关键事实表里已有线索的标签和登记口径">修改线索…</button><button type="button" class="pi-btn is-sm" data-act="clue-gen-template" title="生成线索模板：在当前聊天的表格上加入三张线索表（带上模组要用的行），并调整默认表的规则；先预览，确认后才写入">创建模板</button></div></div>
+        <div class="pi-rl-sec"><div class="pi-run-sec-hd">推进</div><div class="pi-pace"><span class="pi-pace-label">推进速度</span><div class="pi-seg">${PACES.map((pace) => `<button type="button" class="pi-seg-btn${pace.value === runtime.progress().pace ? " is-sel" : ""}" data-act="pace" data-pace="${pace.value}">${pace.label}</button>`).join("")}</div></div>${lineOpts2(c, project)}</div>
+        <div class="pi-rl-sec"><button type="button" class="pi-run-fold" data-act="run-fold" data-key="advOpen" aria-expanded="${advOpen}">${advOpen ? "▾" : "▸"}高级</button>${advOpen ? `${modeCard2(project, !0)}${bindingCard2(project, st72, c.snap.api ? c.snap.tables : null, !0)}` : ""}</div>
+        ${clueLogCard2(runtime, st72)}` : ""}</div>`, labelRow = (c.state.lineStates || []).length ? labelsPendingHtml2(project, c) : "", noDb = !c.snap.api, lack = noDb ? [] : problems2.filter((p) => /^缺少表「/.test(p)), lackRow = lack.length ? `<div class="pi-row is-todo"><p class="pi-hint is-warn">当前聊天还没有线索表（${esc(lack.map((p) => p.replace(/^缺少表/, "")).join("、"))}）。</p><button type="button" class="pi-btn is-sm is-primary" data-act="clue-gen-template">创建模板</button></div>` : "", rowBtn = (text2, act, label, tip = "", remake = !1) => `<div class="pi-row is-todo"><p class="pi-hint is-warn"${tip ? ` title="${esc(tip)}"` : ""}>${esc(text2)}</p><button type="button" class="pi-btn is-sm" data-act="${act}">${label}</button>${remake ? '<button type="button" class="pi-btn is-sm is-ghost" data-act="clue-gen-template" title="表格出了问题时用：按模组重新生成线索模板写入当前聊天，先预览，确认后才写入">重新创建模板</button>' : ""}</div>`, gapHit = !1, problemRows = problems2.filter((p) => !lack.includes(p)).map((p) => {
+      let gap = /^事实表里没有这些编号的行：(.+?)（/.exec(p);
+      return gap ? (gapHit = !0, rowBtn(`关键事实表里还没有这些线索的行：${factNamesText2(gap[1].split("、").filter(Boolean))}。`, "clue-prebuild", "补全表格", gap[1], !0)) : /^表「.*缺少.*列|已核实值|方式列/.test(p) ? rowBtn(p, "run-set-open", "打开表格绑定", "", !0) : `<p class="pi-hint is-warn">${esc(noDb && p === c.snap.problems[0] ? "没有检测到数据库插件（shujuku），当前无法注入。剧情线的进度不受影响，装好并开启数据库插件后接着用。" : p)}</p>`;
+    }), newRow = "";
+    if (!noDb && !lack.length && !gapHit && c.snap.facts instanceof Map) {
+      let notReady = new Set(labelsToPrepare(project.outline.volumes, project.clue.labels).filter((x) => !c.snap.facts.has(x.code)).map((x) => x.code)), miss = prebuildPlan2(project.outline.volumes).facts.filter((f) => !c.snap.facts.has(f.code) && !notReady.has(f.code));
+      miss.length && (newRow = rowBtn(`模组里有${miss.length}条线索在表格里还没有行。`, "clue-prebuild", "补全表格", "", !0));
+    }
+    let todo = [...lackRow ? [lackRow] : [], ...problemRows, ...newRow ? [newRow] : [], ...labelRow ? [labelRow] : []], multi = (c.state.lineStates || []).length > 0, units = c.compiled.units, allDone = units.length > 0 && units.every((u) => (c.state.stageStates.get(u.id) || {}).done), ellip = `<button type="button" class="pi-icon-btn" data-act="run-cur-menu" title="更多" aria-label="更多">${ICONS.more}</button>`, statusRow = `<div class="pi-row pi-rl-status"><b>${multi ? "剧情" : "主线"}</b>${enabled}${c.prog.paused ? '<span class="pi-badge is-warn">已暂停</span>' : allDone && !multi ? '<span class="pi-badge is-ok">已全部完成</span>' : '<span class="pi-badge is-accent">进行中</span>'}<span class="pi-meta pi-grow">${multi && !c.prog.paused ? esc(lineSummary2(c)) : ""}</span>${c.prog.paused ? '<button type="button" class="pi-btn is-sm is-primary" data-act="clue-pause" data-value="">继续剧情</button>' : allDone && !multi ? '<button type="button" class="pi-btn is-sm is-primary" data-act="clue-next">开始下一段主线…</button>' : multi ? pauseMenu2(c) : '<button type="button" class="pi-btn is-sm" data-act="clue-pause" data-value="1" title="去玩日常：所有线索内容都不注入，进度保留">暂停</button>'}${ellip}</div>`, focusLabel = [hereText2(c), focusNode ? esc(focusNode.node.name) : ""].filter(Boolean).join(" · ") || esc(FOCUS_SOURCE2[focus.source]), hint = isTrpg(project) ? sceneHintHtml(c) : "", focusRow = hint ? `<div class="pi-rl-focus is-col">${hint}</div>` : `<div class="pi-rl-focus"><b class="pi-grow">${focusLabel}</b>${focusNode ? `<button type="button" class="pi-btn is-sm" data-act="clue-leave" data-uid="${esc(focusNode.node.uid)}" title="主角已经离开这件事：不再注入它的场景和发现，只给入口">已离开</button>` : ""}${c.prog.focus ? `<button type="button" class="pi-btn is-sm" data-act="clue-unfocus" title="回到按填表判断本轮场景">${c.prog.focus.startsWith(AWAY_PREFIX2) ? "其实没离开" : "换场景"}</button>` : ""}</div>`, cur = `<div class="pi-card pi-rl-cur"><h3>当前</h3>
+        ${progressHtml("prebuild")}${todo.length ? `<div class="pi-rl-stack">${todo.join("")}</div>` : ""}
+        ${statusRow}${focusRow}
+        ${stayNotice2(view, c)}
+        ${unofferedHtml2(c, project)}
+        ${(c.hints || []).map((h) => `<p class="pi-hint is-warn">两表核对：${esc(h)}</p>`).join("")}
+        ${!c.prog.paused && d.plot && d.plot.items.length ? `<p class="pi-hint is-warn">数据库剧情推进预设「${esc(d.plot.preset)}」里启用了召回以外的任务：${esc(d.plot.items.map((x) => `「${x.task}」（输出${x.tags.join("、")}）`).join("、"))}。它们会替角色安排行动，可能和线索剧情抢方向。建议在数据库里先关掉，只留召回（插件不会替你改）。</p>` : ""}
+        <p class="pi-meta pi-rl-foot">${clueEntry && clueEntry.content ? `本轮注入约${estimateTokens(clueEntry.content)} token` : `本轮注入内容为空${clueEntry && clueEntry.reason && c.snap.api ? `（${esc(clueEntry.reason)}）` : ""}`}${last ? ` · 上次注入${new Date(last.at).toLocaleTimeString("zh-CN", { hour12: !1 })}，${last.chars}字` : ""}${d.lastTableUpdate ? ` · 表格${new Date(d.lastTableUpdate).toLocaleTimeString("zh-CN", { hour12: !1 })}更新` : ""}</p></div>`, prog = `<div class="pi-card"><h3>进度<span class="pi-spacer"></span><button type="button" class="pi-icon-btn" data-act="run-prog-menu" title="更多" aria-label="更多">${ICONS.more}</button></h3>
+        ${lineCard2(c, project)}
+        ${groups.length ? `<div class="pi-tl">${groups.join("")}</div>` : '<p class="pi-hint">模组为空。</p>'}</div>`;
+    return `${cur}${isTrpg(project) ? kpCard(view, project, c, d) : ""}${prog}${settings}`;
+  }
+  function clueOpCount(runtime) {
+    return normalizeClueOps2(runtime.progress().clue).ops.length;
+  }
+  function clueLogCard2(runtime, st72) {
+    let prog = runtime.progress(), allOps = normalizeClueOps2(prog.clue).ops, ops = allOps.slice(-12).reverse(), open = !!st72.logOpen, chat = chatMessages();
+    return ops.length ? `<div class="pi-rl-sec"><button type="button" class="pi-run-fold" data-act="run-fold" data-key="logOpen" aria-expanded="${open}">${open ? "▾" : "▸"}操作记录（${allOps.length}）</button>${open ? ops.map((op) => `<p class="pi-hint${anchorValid2(op.at, chat) ? "" : " is-off"}">${new Date(op.time).toLocaleString("zh-CN", { hour12: !1 })}　${esc(runtime.clue.opLabel(op))}${anchorValid2(op.at, chat) ? "" : "（所在楼层已回退，未生效）"}</p>`).join("") : ""}</div>` : "";
+  }
+  function factRowsHtml2(facts, prefix, volumes, stored = {}, { intro = !0 } = {}) {
+    let ctx2 = new Map(
+      factLabelContext(
+        volumes,
+        facts.map((f) => f.code)
+      ).map((x) => [x.code, x])
+    ), row2 = (f, i) => {
+      let c = ctx2.get(f.code) || {}, have = f.now || storedLabel2(stored, f.code, c), where = [c.stage, c.nodeName].filter(Boolean).join("，");
+      return `<div class="pi-prebuild-row" data-fr-row="${i}">
+          <div class="pi-fr-hd"><b>${esc(where || f.code)}</b><span class="pi-meta">${esc(f.code)}</span>${f.orphan || c.orphan ? '<span class="pi-badge is-warn">模组里没有节点产出它</span>' : ""}<span class="pi-badge pi-fr-st${have && have.label ? " is-ok" : ""}" data-fr-st="${i}">${have && have.label ? "已填" : "待填"}</span></div>
+          ${c.answer ? `<p class="pi-fr-answer">这条线索查到的是：${esc(c.answer)}<span class="pi-meta">（只给你看，不会写进表格）</span></p>` : ""}
+          <label class="pi-field"><span>标签：给它起个不透露答案的名字</span><input class="pi-inp" data-${prefix}-label="${i}" value="${esc(have ? have.label : "")}"></label>
+          <label class="pi-field"><span>正文写到哪一步，才算主角拿到了它</span><textarea class="pi-ta" rows="2" data-${prefix}-crit="${i}">${esc(have ? have.criterion : "")}</textarea></label>
+          <div class="pi-fr-warn" data-fr-warn="${i}"></div></div>`;
+    }, n = facts.length, filledN = facts.filter((f) => {
+      let c = ctx2.get(f.code) || {}, have = f.now || storedLabel2(stored, f.code, c);
+      return have && have.label;
+    }).length;
+    return `<div class="pi-fr" data-fr="${prefix}">
+          <div class="pi-fr-start"${intro ? "" : " hidden"}><button type="button" class="pi-btn is-primary is-lg${filledN >= n ? " is-done" : ""}" data-fr-auto>${startFace2(filledN >= n ? "" : filledN ? `开始自动填写 · 还有${n - filledN}条` : `开始自动填写 · 共${n}条`)}</button>
+          ${clearProgress(`fr-${prefix}`), progressHtml(`fr-${prefix}`)}</div>
+          <p class="pi-hint" data-fr-status>${intro ? filledN >= n ? "已经按以前填过的内容填好了。想重新生成某条，先清空它的框再点上面的按钮。" : "AI按模组写好标签和判定说明，你只需要检查标黄的地方。也可以自己填。" : "标黄的地方是插件检查出的问题，照着改框里的字就行。"}</p>
+          <details class="pi-fr-intro"${intro ? "" : " hidden"}><summary>这一步在做什么</summary>
+          <p>每轮正文写完后，数据库的填表模型会对照这里的说明，判断主角有没有拿到某条线索；拿到了，后面的剧情才会开放。</p>
+          <p>所以每条线索要两样东西：一个<b>标签</b>，让填表模型认出是哪一条；一句<b>「写到哪一步才算拿到」</b>。这句写得太宽，主角还没真正查到就会被算作拿到，剧情会提前推进。</p>
+          <p>这两样每一轮都会发给填表模型，所以<b>不能写出答案</b>：写「打开抽屉、读到单据时」，不写单据上写了什么。</p>
+          <p class="is-example">例　标签：抽屉里的单据　｜　写到哪一步：主角打开抽屉、读到单据内容时算拿到；只看到锁着的抽屉不算</p></details>
+          ${facts.map(row2).join("")}</div>`;
+  }
+  var startFace2 = (text2) => text2 ? `${ICONS.spark}<span>${text2}</span>` : `${ICONS.check}<span>已全部填好</span>`;
+  function storedLabel2(stored, code, c) {
+    let have = stored && stored[code];
+    return have && have.label && have.sig === factLabelSig(c && c.code ? c : { code, usedBy: [] }) ? have : null;
+  }
+  function mountFactRows2(view, root, facts, prefix, volumes, { gate = "", keep = !1 } = {}) {
+    let box = root.querySelector(`[data-fr="${prefix}"]`);
+    if (!box) return;
+    let project = view.project(), ids = project && Array.isArray(project.imports) ? project.imports : [], secrets = [], secretsNote = "", ctx2 = new Map(
+      factLabelContext(
+        volumes,
+        facts.map((f) => f.code)
+      ).map((x) => [x.code, x])
+    ), unsure = /* @__PURE__ */ new Map(), field2 = (i, k) => box.querySelector(`[data-${prefix}-${k}="${i}"]`), status = box.querySelector("[data-fr-status]"), secretsReady = Promise.all(
+      ids.map(
+        (id) => view.data.imports.get(id) ? Promise.resolve(view.data.imports.get(id)) : view.data.imports.load(id).catch(() => null)
+      )
+    ).then((jobs) => {
+      let missing = jobs.filter((j) => !j).length;
+      secrets = [.../* @__PURE__ */ new Set([...jobs.filter(Boolean).flatMap((j) => importSecretNames2(j.index) || []), ...projectSecretNames(project) || []])], secretsNote = missing ? `有${missing}份导入记录读不到，这次没有核对其中的保密名字。` : "", secretsNote && (status.textContent = `${status.textContent} ${secretsNote}`), facts.forEach((_, i) => (field2(i, "label").value.trim() || field2(i, "crit").value.trim()) && check(i));
+    }), reviewed = /* @__PURE__ */ new Map(), check = (i) => {
+      let f = facts[i], value = { label: field2(i, "label").value.trim(), criterion: field2(i, "crit").value.trim() }, r = factLabelCheck({ ...value, unsure: unsure.get(f.code) || "" }, ctx2.get(f.code) || {}, { secrets }), out = box.querySelector(`[data-fr-warn="${i}"]`), rv = reviewed.get(f.code), same2 = rv && rv.label === value.label && rv.criterion === value.criterion, warns = [...r.warns], notes = [...r.notes];
+      if (same2 && rv.leak) warns.push(`会透露答案：${rv.what || "标签或口径里写出了查到的内容"}`);
+      else if (!same2) for (let s of r.suspects) warns.push(`${s.where}里有答案的片段「${s.piece}」`);
+      return same2 && rv.fixed && notes.push(`已自动改写，原来的写法会透露答案（${rv.what || "写出了查到的内容"}）`), out.innerHTML = [
+        ...warns.map((x) => `<p class="pi-warn-line">${esc(x)}</p>`),
+        ...notes.map((x) => `<p class="pi-note-line">${esc(x)}</p>`)
+      ].join(""), box.querySelector(`[data-fr-row="${i}"]`).classList.toggle("is-warn", warns.length > 0), rowState(i, warns.length > 0), warns.length;
+    }, rowState = (i, warn) => {
+      let b = box.querySelector(`[data-fr-st="${i}"]`);
+      if (!b) return;
+      let has = !!field2(i, "label").value.trim();
+      b.className = `pi-badge pi-fr-st${has ? warn ? " is-warn" : " is-ok" : ""}`, b.textContent = has ? warn ? "标黄" : "已填" : "待填", sync();
+    }, dlg = root.closest && root.closest(".pi-dialog") || root, mainBtn = gate ? [...dlg.querySelectorAll("[data-dlg]")].find((b) => b.classList.contains("is-primary")) : null, startBtn = box.querySelector("[data-fr-auto]"), running2 = !1, sync = () => {
+      let left = facts.filter((_, i) => !field2(i, "label").value.trim()).length;
+      mainBtn && (mainBtn.disabled = running2 || left > 0, mainBtn.textContent = running2 ? "正在填写…" : left ? `还差${left}条没填` : gate), startBtn && !running2 && (startBtn.classList.remove("is-busy"), startBtn.classList.toggle("is-done", !left), startBtn.innerHTML = startFace2(left ? `开始自动填写 · 还有${left}条` : ""));
+    };
+    sync(), box.addEventListener("input", (event) => {
+      let m = event.target.closest("[data-fr-row]");
+      m && (unsure.delete(facts[Number(m.dataset.frRow)].code), check(Number(m.dataset.frRow)));
+    });
+    async function reviewRows(rows2) {
+      let todo = rows2.filter(({ i }) => field2(i, "label").value.trim() || field2(i, "crit").value.trim());
+      if (!todo.length) return 0;
+      let items = todo.map(({ f, i }) => {
+        let c = ctx2.get(f.code) || {}, label = field2(i, "label").value.trim(), criterion = field2(i, "crit").value.trim();
+        return {
+          code: f.code,
+          label,
+          criterion,
+          answer: [c.answer, ...(c.routes || []).map((r) => r.answer)].filter(Boolean).join("；或者："),
+          entry: c.entry,
+          scene: c.scene,
+          record: [c.record, ...(c.routes || []).map((r) => r.record)].filter(Boolean).join("；或者："),
+          pieces: factLabelCheck({ label, criterion }, c, { secrets }).suspects.map((s) => s.piece)
+        };
+      }), map = parseFactLabelReview(
+        await ask(view, "outline", factLabelReviewMessages(items)),
+        items.map((x) => x.code)
+      ), fixed = 0;
+      for (let [k, { f, i }] of todo.entries()) {
+        let v = map.get(f.code), sent = items[k];
+        !v || v.leak === null || field2(i, "label").value.trim() !== sent.label || field2(i, "crit").value.trim() !== sent.criterion || (v.leak && (v.label || v.criterion) ? (v.label && (field2(i, "label").value = v.label), v.criterion && (field2(i, "crit").value = v.criterion), fixed++, reviewed.set(f.code, {
+          label: field2(i, "label").value.trim(),
+          criterion: field2(i, "crit").value.trim(),
+          leak: !1,
+          fixed: !0,
+          what: v.what
+        })) : reviewed.set(f.code, { label: sent.label, criterion: sent.criterion, leak: v.leak, what: v.what }));
+      }
+      return fixed;
+    }
+    box.querySelector("[data-fr-auto]").addEventListener("click", async (event) => {
+      let btn = event.currentTarget, todo = facts.map((f, i) => ({ f, i })).filter(({ i }) => !field2(i, "label").value.trim() || !field2(i, "crit").value.trim());
+      if (!todo.length) return status.textContent = "都已经填好了。要重新生成，先清空对应的框。";
+      let prog = startProgress(`fr-${prefix}`).step(`第1步：AI写标签（共${todo.length}条）`, 70, 2e4 + todo.length * 4e3);
+      running2 = !0, btn.disabled = !0, btn.classList.add("is-busy"), btn.innerHTML = '<span class="pi-spin"></span><span>正在自动填写</span>', status.textContent = "生成期间可以先往下翻着看，写好后会一起填进框里。", sync();
+      for (let { i } of todo) {
+        let b = box.querySelector(`[data-fr-st="${i}"]`);
+        b && (b.className = "pi-badge pi-fr-st is-accent", b.textContent = "生成中");
+      }
+      try {
+        await secretsReady;
+        let items = todo.map(({ f }) => ctx2.get(f.code) || { code: f.code, usedBy: [], orphan: !0 }), reply2 = await ask(view, "outline", factLabelMessages(items, { secrets }), {
+          onText: (t) => {
+            let got3 = items.filter((x) => t.includes(x.code)).length;
+            prog.real(got3 / items.length * 70, `已写${got3}/${items.length}条`);
+          }
+        }), r = parseFactLabels(
+          reply2,
+          items.map((x) => x.code)
+        );
+        for (let { f, i } of todo) {
+          let got3 = r.items.get(f.code);
+          got3 && (field2(i, "label").value.trim() || (field2(i, "label").value = got3.label), field2(i, "crit").value.trim() || (field2(i, "crit").value = got3.criterion), got3.unsure && unsure.set(f.code, got3.unsure));
+        }
+        todo.forEach(({ i }) => check(i)), prog.step("第2步：检查有没有透露答案", 97, 25e3);
+        let fixed = 0, reviewFailed = "";
+        try {
+          fixed = await reviewRows(todo);
+        } catch (error) {
+          reviewFailed = `检查没完成（${error.message}），下面按字面比对标出了可能透露答案的地方。`;
+        }
+        let warned = facts.reduce((n, _, i) => n + (check(i) ? 1 : 0), 0), got2 = todo.filter(({ i }) => field2(i, "label").value.trim()).length;
+        prog.done(`完成：已填好${got2}/${todo.length}条${warned ? `，${warned}条标黄` : ""}`), keep && got2 && keepLabels2(
+          view,
+          facts.map((f, i) => ({ code: f.code, label: field2(i, "label").value.trim(), criterion: field2(i, "crit").value.trim() }))
+        ), status.textContent = `${secretsNote}${reviewFailed}已填好${todo.length - r.missing.length}条${r.missing.length ? `，${r.missing.length}条没生成（${r.missing.join("、")}），可以再点一次或自己填` : ""}。${fixed ? `${fixed}条原来的写法会透露答案，已经自动改好。` : ""}${warned ? `${warned}条标黄：黄字说明了原因，照着改一下框里的字就行，改完黄色会消失。觉得没问题也可以不改，标黄不会挡住导入。` : "没有发现问题，可以直接确认。"}`;
+      } catch (error) {
+        prog.fail(), status.textContent = `生成失败：${error.message}。可以再试一次，或者自己填。`;
+      } finally {
+        running2 = !1, btn.disabled = !1, facts.forEach((_, i) => rowState(i, box.querySelector(`[data-fr-row="${i}"]`).classList.contains("is-warn"))), sync();
+      }
+    });
+  }
+  function prebuildScope2(view) {
+    let c = ctx(), chatId2 = c && typeof c.getCurrentChatId == "function" ? String(c.getCurrentChatId() ?? "") : "";
+    return {
+      chatId: chatId2,
+      chatLabel: chatId2,
+      projectId: view.projectId,
+      active: view.runtime.activeId(),
+      mode: isClueMode2(view.project()) ? "clue" : "outline"
+    };
+  }
+  function prebuildTargetPrint2(tables, bindings) {
+    let out = {};
+    for (let [b, keyCol, extraCol] of [
+      [(bindings.facts || [])[0], "编号列", "标签"],
+      [(bindings.knowledge || [])[0], "", "键"]
+    ]) {
+      if (!b) continue;
+      let found = findSheet2(tables || {}, b.表);
+      if (found.error) {
+        out[b.表] = null;
+        continue;
+      }
+      let { head, rows: rows2, col } = sheetRows2(found.sheet), ki = col(keyCol ? b[keyCol] : extraCol), xi = col(extraCol);
+      out[b.表] = {
+        key: String(found.sheet.key || ""),
+        head: head.slice(1).map((x) => cellText2(x)).join(","),
+        rows: new Map(rows2.map((r) => [cellText2(r[ki]), cellText2(r[xi])]))
+      };
+    }
+    return out;
+  }
+  function prebuildTargetSame2(before, after) {
+    for (let [name, a] of Object.entries(before)) {
+      let b = after[name];
+      if (!a || !b) {
+        if (a !== b) return !1;
+        continue;
+      }
+      if (a.key !== b.key || a.head !== b.head) return !1;
+      for (let [code, label] of a.rows) if (!b.rows.has(code) || b.rows.get(code) !== label) return !1;
+    }
+    return !0;
+  }
+  function prebuildScopeValid2(view, s) {
+    let now = prebuildScope2(view);
+    return now.chatId === s.chatId && now.projectId === s.projectId && now.active === s.active && now.mode === s.mode;
+  }
+  function prebuildColumnProblems2(tables, bindings, diff) {
+    let out = [], head = (name) => {
+      let f = findSheet2(tables, name);
+      return f.sheet ? sheetRows2(f.sheet).head.map((h) => String(h ?? "").trim()) : null;
+    }, fb = (bindings.facts || [])[0], kb = (bindings.knowledge || [])[0];
+    if (fb && diff.newFacts.length) {
+      let h = head(fb.表);
+      h ? ["标签", "登记口径", fb.编号列, fb.状态列].filter(Boolean).forEach((c2) => h.includes(c2) || out.push(`「${fb.表}」缺少列「${c2}」`)) : out.push(`没有表「${fb.表}」`);
+    }
+    if (kb && diff.newKnows.length) {
+      let h = head(kb.表);
+      h ? ["键", kb.事实列, kb.角色列, kb.方式列, kb.可信度列].filter(Boolean).forEach((c2) => h.includes(c2) || out.push(`「${kb.表}」缺少列「${c2}」`)) : out.push(`没有表「${kb.表}」`);
+    }
+    return out;
+  }
+  var clueActions2 = {
+    async "clue-mode"(view, target) {
+      let mode2 = target.dataset.mode, project = view.project();
+      !project || project.clue && project.clue.mode === mode2 || mode2 === "clue" && !await confirmDialog({
+        title: "切换到线索推进",
+        body: "线索推进按主角实际查到了什么来推进：数据库填表时记下拿到的线索，插件据此开放下一步。不再用AI判断「这一阶段演完了没有」，也不再一次把整个阶段交给正文。",
+        list: [
+          "模组推进的进度会保留，切回来就恢复。",
+          "模组要写「发现」和「完成条件」，节点才会自动完成；没写的只能在执行页手动标记。",
+          "切换后，点下面「表格绑定」里的「创建模板」，给这个聊天加上记录线索的表格。"
+        ],
+        okLabel: "切换"
+      }) || (view.runtime.bumpEpoch(), view.data.updateProject(view.projectId, (p) => ({ ...p, clue: normalizeClue2({ ...p.clue, mode: mode2 }) })), view.runtime.clue.hideLineBar(), view.runtime.clue.invalidate(), mode2 === "clue" && view.runtime.clue.scheduleSync(), view.runtime.refresh(), view.renderBody());
+    },
+    "run-set-open"(view) {
+      let st72 = view.tabState("run");
+      st72.setOpen = !0, st72.advOpen = !0, view.renderBody();
+    },
+    "run-set-toggle"(view, target) {
+      let st72 = view.tabState("run");
+      st72.setOpen = !(target && target.getAttribute("aria-expanded") === "true"), view.renderBody();
+    },
+    // 执行页各处折叠：data-key 是 tabState 里的键
+    "run-fold"(view, target) {
+      let st72 = view.tabState("run"), key = target.dataset.key;
+      st72[key] = !st72[key], view.renderBody();
+    },
+    "clue-bind-toggle"(view) {
+      let st72 = view.tabState("run");
+      st72.bindOpen = !st72.bindOpen, view.renderBody();
+    },
+    "clue-bind-example"(view, target) {
+      let box = target.closest(".pi-card").querySelector("[data-clue-bindings]");
+      box && (box.value = BINDING_EXAMPLE2);
+    },
+    "clue-bind-apply"(view, target) {
+      let card = target.closest(".pi-card"), status = card.querySelector("[data-clue-bind-status]");
+      try {
+        let value = parseYaml(card.querySelector("[data-clue-bindings]").value) || {};
+        if (!isPlainObject(value)) throw new Error("应是switch / facts / knowledge / scene / time的映射");
+        view.data.updateProject(view.projectId, (p) => ({ ...p, clue: normalizeClue2({ ...p.clue, bindings: value }) })), view.runtime.clue.invalidate(), view.tabState("run").bindOpen = !1, view.renderBody();
+      } catch (error) {
+        status.textContent = error.message, status.classList.add("is-err");
+      }
+    },
+    // 重新读表：也安排一次同步（写场景目录、补缺的行），作为「还在准备」的手动重试（GPT 实测前审阅 R5）。
+    "clue-refresh"(view) {
+      view.runtime.clue.invalidate(), view.runtime.clue.scheduleSync(), view.renderBody();
+    },
+    "clue-node-open"(view, target, event) {
+      if (event.target.closest("button")) return;
+      let st72 = view.tabState("run");
+      st72.nodeOpen = st72.nodeOpen === target.dataset.uid ? "" : target.dataset.uid, view.renderBody();
+    },
+    async "clue-line"(view, target) {
+      let v = target.dataset.value, s0 = view.runtime.clue.opScope();
+      if (v === "abandon" || v === "done") {
+        let ls = view.runtime.clue.compute()?.state.lineStates.find((s2) => s2.line.id === target.dataset.id), name = ls ? ls.line.name : target.dataset.id;
+        if (!await confirmDialog({
+          title: v === "abandon" ? `放弃「${name}」？` : `把「${name}」标记完成？`,
+          body: v === "abandon" ? "这条线不再注入、不再提示。想回来，点这条线上的「还原」。" : "不再等表格判断，直接算这条线完成。想回来，点这条线上的「还原」。",
+          okLabel: v === "abandon" ? "放弃" : "标记完成",
+          danger: v === "abandon"
+        }))
+          return;
+      }
+      if (v === "enter" || v === "resume") {
+        let c0 = view.runtime.clue.compute(), me = c0 && c0.state.lineStates.find((x) => x.line.id === target.dataset.id), other = me && me.line.kind === "main" ? mainInProgress(c0.state.lineStates, me.line.id) : null;
+        if (other && !await confirmDialog({
+          title: `换成「${me.line.name}」？`,
+          body: `主线一次只进行一条。「${other.line.name}」会先暂停，进度都保留，之后点它的「继续」就能回来。`,
+          okLabel: "换过去"
+        }))
+          return;
+      }
+      let uid = "", c = target.dataset.value === "enter" ? view.runtime.clue.compute() : null, s = c && c.state.lineStates.find((x) => x.line.id === target.dataset.id);
+      if (s && s.entries.length > 1) {
+        let name = (u) => {
+          let n = c.state.nodeStates.find((x) => x.node.uid === u);
+          return n ? `${n.node.name}${clueText2(isPlainObject(n.node.item) ? n.node.item.入口 : "") ? `：${clueText2(n.node.item.入口)}` : ""}` : u;
+        };
+        if (uid = await menuDialog({ title: "走进的是哪一件事", items: s.entries.map((u) => ({ value: u, label: name(u) })) }), !uid)
+          return;
+      }
+      view.runtime.clue.lineAct(target.dataset.id, target.dataset.value, uid, s0), view.renderBody();
+    },
+    "clue-pause"(view, target) {
+      let on = !!target.dataset.value;
+      view.runtime.clue.setPaused(on), toast("success", on ? "剧情已暂停：之后的回复不再注入线索内容。" : "剧情已继续。"), view.renderBody();
+    },
+    async "clue-line-manual"(view, target) {
+      let id = target.dataset.id, name = (view.runtime.clue.compute()?.state.lineStates.find((s) => s.line.id === id) || { line: { name: id } }).line.name;
+      await confirmDialog({
+        title: `「${name}」改成手动开始`,
+        body: "不再自动判断开启条件，原来的要求留着给你看。之后想玩这条线时，在这里点「进入」。改的是模组，所有聊天都一样。",
+        okLabel: "改成手动开始"
+      }) && (view.runtime.clue.lineToManual(id) ? toast("success", `「${name}」已改成手动开始。`) : toast("info", "这条线已经是人工开启了。"), view.renderBody());
+    },
+    "clue-tiers"(view, target) {
+      let tiers = JSON.parse(target.dataset.tiers || "[]");
+      view.runtime.clue.confirmTiers(tiers) ? toast("success", `档位顺序已确认：${tiers.join(" < ")}`) : toast("info", "没有要确认的条件。"), view.renderBody();
+    },
+    async "clue-labels"(view) {
+      await prepareLabels2(view);
+    },
+    "clue-pause-mains"(view, target) {
+      let on = !!target.dataset.value;
+      view.runtime.clue.setPaused(on, "mains"), toast("success", on ? "主线已全部暂停：支线照常。" : "主线已继续。"), view.renderBody();
+    },
+    "clue-pause-side"(view, target) {
+      let on = !!target.dataset.value;
+      view.runtime.clue.setPaused(on, "side"), toast("success", on ? "支线已全部暂停：主线照常。" : "支线已继续。"), view.renderBody();
+    },
+    "clue-line-move"(view, target) {
+      view.runtime.clue.moveLine(target.dataset.id, Number(target.dataset.dir)), view.renderBody();
+    },
+    // 开始下一段主线：去大纲页写新一卷；写好后回到这里补预建行、更新场景编号对照。
+    async "clue-next"(view) {
+      await confirmDialog({
+        title: "开始下一段主线",
+        body: "下一段主线写成一条新的剧情线，放在现有模组后面。前面的主线结束后，它的第一阶段会自动开始。",
+        list: [
+          "1. 到模组页用「AI写新剧情线」或自己写一条（会附上已用过的编号，避免撞号）",
+          "2. 回到执行页，在「表格绑定」里点「按模组补表格行…」，给新事实建行",
+          "3. 旧聊天先点一次「创建模板」，让新剧情线的场景能被认出来",
+          "写新剧情线期间想先玩日常，可以先暂停剧情"
+        ],
+        okLabel: "去写新剧情线"
+      }) && view.switchTab && view.switchTab("outline");
+    },
+    "clue-unfocus"(view) {
+      view.runtime.clue.setFocus(""), view.renderBody();
+    },
+    // 改线索标签（用户 2026-11-17）：导入后发现口径写宽了，在这里改。读关键事实表里现在的标签和口径，改完写回表格。
+    // 写表（GPT 第六轮 R1 / R2）：
+    // · 作用域连同数据隔离一起核对（clue.opScope），弹窗期间或写入途中换了聊天、项目、推进方式、隔离就停；
+    // · 一条线索的标签和口径用官方 updateRow 一次写入；每条写之前按编号重新找行号，写完按编号回读核对；
+    // · 只有回读对上的条目才存进项目（下次新聊天建表、导出项目用它）；没写进去的保留输入，下次打开直接带出来重试。
+    async "clue-labels-edit"(view) {
+      let c = view.runtime.clue.compute(), project = view.project(), api = acuApi2(), fb = project && (project.clue.bindings.facts || [])[0];
+      if (!c || !c.snap.api || !api || typeof api.updateRow != "function" && typeof api.updateCell != "function")
+        return toast("warning", "没有检测到数据库插件，改不了表格里的标签。");
+      if (!fb) return toast("warning", "还没有绑定事实表。");
+      let found = findSheet2(c.snap.tables || {}, fb.表);
+      if (found.error) return toast("warning", `当前聊天没有「${fb.表}」。`);
+      let { col, rows: rows2 } = sheetRows2(found.sheet), ci = { code: col(fb.编号列), label: col("标签"), crit: col("登记口径") }, seedOnly = !found.sheet.content.slice(1).some(Array.isArray) && rows2.length > 0;
+      if (ci.code < 0 || ci.label < 0 || ci.crit < 0) return toast("warning", `「${fb.表}」缺少编号、标签或登记口径列，改不了。`);
+      let scope = prebuildScope2(view), s0 = view.runtime.clue.opScope(), dkey = draftKey2(scope, s0.iso, fb.表), labelCtx = new Map(factLabelContext(project.outline.volumes, rows2.map((r) => cellText2(r[ci.code]))).map((x) => [x.code, x])), inPlan = new Set(prebuildPlan2(project.outline.volumes).facts.map((f) => f.code)), drafts = labelDrafts2.get(dkey) || {}, facts = rows2.map((r) => ({ code: cellText2(r[ci.code]), table: { label: cellText2(r[ci.label]), criterion: cellText2(r[ci.crit]) } })).filter((f) => f.code && inPlan.has(f.code)).map((f) => {
+        let stored = storedLabel2(project.clue.labels, f.code, labelCtx.get(f.code)), fromProject = !drafts[f.code] && stored && (stored.label !== f.table.label || stored.criterion !== f.table.criterion) ? { label: stored.label, criterion: stored.criterion } : null, pend = drafts[f.code] || fromProject;
+        return { ...f, now: pend || f.table, retry: !!drafts[f.code], newer: !!fromProject, draft: pend || null };
+      });
+      if (!facts.length) return toast("info", "表格里还没有这个项目的线索行。先用「创建模板」或「补全表格」建好。");
+      let retry = facts.filter((f) => f.retry).length, newer = facts.filter((f) => f.newer).length, picked = await openDialog({
+        title: "修改线索标签",
+        html: `<p class="pi-hint">改的是当前聊天「${esc(fb.表)}」里的标签和登记口径。改宽了，主角还没查到就可能被算作拿到。</p>${seedOnly ? '<p class="pi-hint is-warn">这个聊天还没填过表，表格里现在是模板的初始行。改动先存进项目；聊一轮、数据库第一次填表后，再打开这里点保存，写进表格。</p>' : ""}${retry ? `<p class="pi-hint is-warn">上次有${retry}条没写进表格，下面是你当时填的内容，点保存再试一次。</p>` : ""}${newer && !seedOnly ? `<p class="pi-hint is-warn">有${newer}条和项目里存的不一样，下面填的是项目里的版本，点保存写进这个聊天的表格。</p>` : ""}${factRowsHtml2(facts, "le", project.outline.volumes, {}, { intro: !1 })}`,
+        onMount: (root) => mountFactRows2(view, root, facts, "le", project.outline.volumes),
+        actions: [
+          { label: "取消", value: null },
+          {
+            label: "保存",
+            primary: !0,
+            value: (root) => facts.map((f, i) => ({
+              code: f.code,
+              label: root.querySelector(`[data-le-label="${i}"]`).value.trim(),
+              criterion: root.querySelector(`[data-le-crit="${i}"]`).value.trim(),
+              table: f.table,
+              draft: f.draft
+            }))
+          }
+        ]
+      });
+      if (!picked) return;
+      let empty = picked.filter((f) => !f.label);
+      if (empty.length) return toast("warning", `标签不能为空：${empty.map((f) => f.code).join("、")}`);
+      let live2 = () => prebuildScopeValid2(view, scope) && view.runtime.clue.opScope().iso === s0.iso, pid = project.id, changed = picked.filter((f) => f.label !== f.table.label || f.criterion !== f.table.criterion), synced = picked.filter((f) => !changed.includes(f) && f.draft && f.draft.label === f.label && f.draft.criterion === f.criterion);
+      if (!live2()) return toast("warning", "确认期间切换了聊天、项目、推进方式或数据隔离，没有写入。请回到原聊天重新操作。");
+      if (seedOnly && changed.length)
+        return keepLabels2(view, changed, pid), labelDrafts2.set(dkey, { ...labelDrafts2.get(dkey) || {}, ...Object.fromEntries(changed.map((f) => [f.code, { label: f.label, criterion: f.criterion }])) }), view.renderBody(), toast("info", `已存进项目${changed.length}条。这个聊天还没填过表，表格要等第一次填表后再写：到时打开「修改线索」点保存。`);
+      if (synced.length && keepLabels2(view, synced, pid), dropLabelDrafts2(dkey, picked.filter((f) => !changed.includes(f)).map((f) => f.code)), !changed.length) return toast(synced.length ? "success" : "info", synced.length ? `表格里已经是新的值，已同步${synced.length}条到项目。` : "没有改动。");
+      let done = [], failed = [], unsure = [], stopped = !1, tableNow = () => {
+        let now = view.runtime.clue.compute(), sh = findSheet2(now && now.snap.tables || {}, fb.表);
+        if (sh.error) return null;
+        let r = sheetRows2(sh.sheet);
+        return { sheet: sh.sheet, col: r.col };
+      }, rowOf = (t, code) => t ? t.sheet.content.findIndex((r, k) => k > 0 && cellText2(r[t.col(fb.编号列)]) === code) : -1, readBack = (code) => {
+        view.runtime.clue.invalidate();
+        let t = tableNow(), at = rowOf(t, code);
+        return at < 1 ? null : { label: cellText2(t.sheet.content[at][t.col("标签")]), criterion: cellText2(t.sheet.content[at][t.col("登记口径")]) };
+      };
+      for (let f of changed) {
+        if (!live2()) {
+          stopped = !0;
+          break;
+        }
+        view.runtime.clue.invalidate();
+        let t = tableNow(), at = rowOf(t, f.code);
+        if (at < 1 || t.col("标签") < 0 || t.col("登记口径") < 0) {
+          failed.push(f);
+          continue;
+        }
+        let data = { 标签: f.label, 登记口径: f.criterion };
+        if (typeof api.updateRow == "function") await Promise.resolve(api.updateRow(fb.表, at, data)).catch(() => !1);
+        else
+          for (let [k, v] of Object.entries(data)) {
+            if (!live2()) break;
+            view.runtime.clue.invalidate();
+            let t2 = tableNow(), at2 = rowOf(t2, f.code);
+            if (at2 < 1) break;
+            await Promise.resolve(api.updateCell({ tableName: fb.表, rowIndex: at2, colIdentifier: k, value: v, skipNotify: !0 })).catch(() => !1);
+          }
+        if (!live2()) {
+          stopped = !0, unsure.push(f);
+          break;
+        }
+        let back = readBack(f.code);
+        back && back.label === f.label && back.criterion === f.criterion ? done.push(f) : failed.push(f);
+      }
+      let saved = done.length ? keepLabels2(view, done, pid) : !0;
+      dropLabelDrafts2(dkey, done.map((f) => f.code));
+      let notWritten = [...failed, ...changed.filter((f) => !done.includes(f) && !failed.includes(f) && !unsure.includes(f))], left = [...notWritten, ...unsure];
+      left.length && labelDrafts2.set(dkey, { ...labelDrafts2.get(dkey) || {}, ...Object.fromEntries(left.map((f) => [f.code, { label: f.label, criterion: f.criterion }])) }), view.runtime.clue.invalidate(), view.renderBody();
+      let parts = [
+        `已改${done.length}条`,
+        notWritten.length ? `${notWritten.length}条没写进表格：${notWritten.map((f) => f.code).join("、")}` : "",
+        unsure.length ? `${unsure.map((f) => f.code).join("、")}写入途中切换了聊天、项目或数据隔离，结果待核实` : "",
+        saved ? "" : "原项目已经不在了，没有存进项目"
+      ].filter(Boolean);
+      !left.length && saved ? toast("success", `已改${done.length}条线索的标签和口径。`) : toast(
+        stopped || !saved ? "warning" : "error",
+        `${parts.join("；")}。${left.length ? "你填的内容已保留，回到原聊天再打开「修改线索」，点保存重试。" : ""}`
+      );
+    },
+    // 按大纲补表格行：预览 → 作者逐条确认标签和登记口径 → 通过官方 insertRow 只插入缺的行（已有行不动，不覆盖已演进度）。
+    // W1：点击时记下聊天 / 项目 / 模式，确认后按当前表重新算缺哪些行，每插入一行前核对一次，变了就停下并说明已写入哪些。
+    // 登记口径不直接拿「记录」预填（GPT §14.2-3，记录常含答案）：作者自己写，或点「自动填写」由模型参考记录写出不含答案的版本，插件再检查。
+    async "clue-prebuild"(view) {
+      let c = view.runtime.clue.compute(), project = view.project(), api = acuApi2();
+      if (!c || !c.snap.api || !api || typeof api.insertRow != "function")
+        return toast("warning", "没有检测到数据库插件，无法补表格行。");
+      let scope = prebuildScope2(view), plan = prebuildPlan2(project.outline.volumes), diff = prebuildDiff2(plan, c.snap, project.clue.bindings), targetPrint = prebuildTargetPrint2(c.snap.tables, project.clue.bindings);
+      if (!diff.factTable) return toast("warning", "还没有绑定事实表。");
+      let colErr = prebuildColumnProblems2(c.snap.tables, project.clue.bindings, diff);
+      if (colErr.length) return toast("error", `表格结构和配套模板不一致，没有写入：${colErr.join("；")}`);
+      if (!diff.newFacts.length && !diff.newKnows.length)
+        return toast(
+          "info",
+          `表格行已经齐全（已有${diff.kept.length}个事实）。${diff.stale.length ? `表里有模组已不再使用的编号：${diff.stale.join("、")}，不会自动删除。` : ""}`
+        );
+      let html = `<div class="pi-fr-intro"><p>模组里新增了线索，但<b>当前聊天</b>的线索表里还没有它们。这一步把缺的补上，已有的行一律不动，不影响已经玩到的进度。</p></div>
+          ${diff.stale.length ? `<p class="pi-hint is-warn">表里有模组已不再使用的编号：${esc(diff.stale.join("、"))}（不会删除）</p>` : ""}
+          <details class="pi-fr-more"><summary class="pi-hint">写入细节</summary>
+          <p class="pi-hint">目标聊天：${esc(scope.chatLabel || "当前聊天")}</p>
+          ${diff.newKnows.length && diff.knowTable ? `<p class="pi-hint">「${esc(diff.knowTable)}」新增${diff.newKnows.length}行：${esc(diff.newKnows.map((k) => k.key).join("、"))}</p>` : ""}
+          ${diff.kept.length ? `<p class="pi-hint">已有、不改动：${esc(diff.kept.join("、"))}</p>` : ""}
+          <p class="pi-hint">确认时会再核对一次，表格在这期间变了就不写入。补完以后如果对线索表重新「手动填表」，补的行可能被清掉，请检查一次。</p></details>
+          ${diff.newFacts.length ? `<h4 class="pi-fr-title">要补的线索：${diff.newFacts.length}条</h4>${factRowsHtml2(diff.newFacts, "pb", project.outline.volumes, project.clue.labels)}` : ""}`, picked = await openDialog({
+        title: "按模组补表格行",
+        html,
+        onMount: (root) => mountFactRows2(view, root, diff.newFacts, "pb", project.outline.volumes, { gate: "写入当前聊天", keep: !0 }),
+        actions: [
+          { label: "取消", value: null },
+          {
+            label: "写入当前聊天",
+            primary: !0,
+            value: (root) => diff.newFacts.map((f, i) => ({
+              ...f,
+              label: root.querySelector(`[data-pb-label="${i}"]`).value.trim(),
+              criterion: root.querySelector(`[data-pb-crit="${i}"]`).value.trim()
+            }))
+          }
+        ]
+      });
+      if (!picked) return;
+      let empty = picked.filter((f) => !f.label);
+      if (empty.length) return toast("warning", `请给这些事实填上中性标签：${empty.map((f) => f.code).join("、")}`);
+      if (keepLabels2(view, picked), !prebuildScopeValid2(view, scope))
+        return toast("warning", "确认期间切换了聊天、项目或推进方式，没有写入。请回到原聊天重新操作。");
+      let now = view.runtime.clue.compute(), fresh = prebuildDiff2(plan, now.snap, project.clue.bindings), labels = new Map(picked.map((f) => [f.code, f])), previewKnows = new Set(diff.newKnows.map((k) => k.key)), vanished = diff.kept.filter((code) => !(now.snap.facts && now.snap.facts.has(code)));
+      if (vanished.length)
+        return toast("warning", `确认期间表格变了（预览时已有的${vanished.join("、")}现在不见了），没有写入。请重新点一次。`);
+      if (!prebuildTargetSame2(targetPrint, prebuildTargetPrint2(now.snap.tables, project.clue.bindings)))
+        return toast("warning", "确认期间表格变了（可能刚填过表），没有写入。请重新打开「补全表格」，按现在的表格再确认一次。");
+      let want = fresh.newFacts.map((f) => f.code).filter((code) => labels.has(code)), knowsToWrite = fresh.newKnows.filter((k) => previewKnows.has(k.key)), fb = project.clue.bindings.facts[0], kb = project.clue.bindings.knowledge[0], done = [], failed = [], factOk = new Set(now.snap.facts ? now.snap.facts.keys() : []), stopped = "", total = want.length + (kb ? knowsToWrite.length : 0), prog = startProgress("prebuild").step("正在写入线索行", 100, 1e9), tick = (name) => prog.real(total ? (done.length + failed.length) / total * 100 : 100, `${done.length + failed.length}/${total}${name ? `　刚写完${name}` : ""}${failed.length ? `，失败${failed.length}` : ""}`);
+      tick(""), view.renderBody();
+      for (let code of want) {
+        if (!prebuildScopeValid2(view, scope)) {
+          stopped = "写入过程中切换了聊天";
+          break;
+        }
+        let f = labels.get(code), data = { [fb.编号列]: code, 标签: f.label, 登记口径: f.criterion };
+        fb.状态列 && (data[fb.状态列] = "未获得"), await api.insertRow({ tableName: fb.表, data, skipNotify: !0 }).catch(() => -1) >= 0 ? (done.push(code), factOk.add(code)) : failed.push(code), tick(code);
+      }
+      if (kb && !stopped)
+        for (let k of knowsToWrite) {
+          if (!factOk.has(k.fact)) continue;
+          if (!prebuildScopeValid2(view, scope)) {
+            stopped = "写入过程中切换了聊天";
+            break;
+          }
+          let data = { 键: k.key, [kb.事实列]: k.fact, [kb.角色列]: k.actor };
+          kb.方式列 && (data[kb.方式列] = Array.isArray(kb.未知值) ? kb.未知值[0] : kb.未知值 || "未知"), kb.可信度列 && (data[kb.可信度列] = "未核实"), await api.insertRow({ tableName: kb.表, data, skipNotify: !0 }).catch(() => -1) >= 0 ? done.push(k.key) : failed.push(k.key), tick(k.key);
+        }
+      prog.done(`写入完成：${done.length}/${total}${failed.length ? `，失败${failed.length}` : ""}${stopped ? `（${stopped}，已停下）` : ""}`), setTimeout(() => prog.clear(), 8e3), view.runtime.clue.invalidate(), view.renderBody();
+      let msg = `已写入${done.length}行${done.length ? `（${done.slice(0, 8).join("、")}${done.length > 8 ? "……" : ""}）` : ""}`;
+      stopped ? toast("warning", `${msg}。${stopped}，后面的行没有写；回到原聊天再点一次，会只补剩下的。`) : failed.length ? toast(
+        "error",
+        `${msg}；${failed.length}行失败：${failed.slice(0, 6).join("、")}。当前聊天至少要有一楼AI回复，数据库才能保存表格；失败事实的知情行也没有写。`
+      ) : toast("success", `${msg}。`);
+    },
+    // 场景编号对照：只有编号、入口、地点（和正文看到的入口同级）；作者粘贴进线索控制表的说明（官方填表只展开目标表，放在控制表自己的说明里才看得到）。
+    // 生成线索模板（GPT §17.2）：读当前聊天的真实模板 → 和运行表交叉核对 → 合成 → 预览 → 明确用 seed 导入当前聊天
+    // → 重新读表核对 → 成功才写绑定。已有线索表时不在模板里追加行（官方 seed 不会落进非空表），新事实用「补全表格」。
+    async "clue-gen-template"(view) {
+      let api = acuApi2(), project = view.project(), c = view.runtime.clue.compute();
+      if (!api || typeof api.getTableTemplate != "function" || typeof api.importTemplateFromData != "function")
+        return toast("warning", "没有检测到数据库的模板接口（需要官方SP·数据库8.9以上），无法生成。");
+      if (!cardKey()) return toast("warning", "请先打开要使用的聊天。");
+      let scope = prebuildScope2(view), base = null;
+      try {
+        base = api.getTableTemplate({ scope: "chat" });
+      } catch {
+      }
+      if (!isPlainObject(base) || !Object.keys(base).some((k) => k.startsWith("sheet_")))
+        return toast("warning", "读不到当前聊天的表格模板，没有生成。请先在数据库里确认这个聊天有表格。");
+      let live2 = c && c.snap.tables || {}, tplNames = Object.values(base).filter((x) => x && x.name).map((x) => x.name), mismatch = clueTplMismatch2(base, live2);
+      if (mismatch.length)
+        return openDialog({
+          title: "没有生成线索模板",
+          html: `<p class="pi-hint">读到的模板和当前聊天正在用的表格对不上。直接导入可能新增或隐藏表格，所以没有生成：</p><ul>${mismatch.map((x) => `<li>${esc(x)}</li>`).join("")}</ul><p class="pi-hint">可以先在数据库里把这个聊天的模板和表格对齐（比如重新读表、确认用的是这个聊天的模板），再来生成。</p>`,
+          actions: [{ label: "关闭", value: !0, primary: !0 }]
+        });
+      let plan = prebuildPlan2(project.outline.volumes), hasFacts = tplNames.includes("关键事实表"), preview = synthesizeClueTemplate2(base, { clue: { scenes: plan.scenes } });
+      if (preview.blocked.length)
+        return toast(
+          "warning",
+          `模板里有不止一张「${preview.blocked.join("」「")}」，无法确定该用哪一张。没有生成；请先在数据库里删掉或改名多余的表。`
+        );
+      let html = `<div class="pi-fr-intro"><p>给<b>当前这个聊天</b>的数据库加上线索推进要用的三张表，用来记录主角查到了什么、谁知道了什么、现在在哪个场景。</p>
+          <p>原有的表和数据都会保留，不会删除任何东西，也不影响别的聊天。</p></div>
+          ${preview.problems.length ? `<p class="pi-hint is-warn"><b>需要你注意：</b></p><ul>${preview.problems.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
+          <details class="pi-fr-more"><summary class="pi-hint">具体会改哪些地方（${preview.changes.length}处）</summary><p class="pi-hint">目标聊天：${esc(scope.chatLabel || "当前聊天")}</p><ul>${preview.changes.map((x) => `<li>${esc(x)}</li>`).join("") || "<li>没有需要改动的地方</li>"}</ul></details>
+          ${hasFacts ? '<p class="pi-hint">这个聊天已经有关键事实表，不在模板里追加行。写入后如果模组里有表里还没有的线索，会接着打开「补全表格」补上。</p>' : plan.facts.length ? `<h4 class="pi-fr-title">这份模组里有${plan.facts.length}条要追踪的线索</h4>${factRowsHtml2(plan.facts, "gt", project.outline.volumes, project.clue.labels)}` : '<p class="pi-hint">模组里还没有线索编号，线索表先建成空表。</p>'}`, picked = await openDialog({
+        title: "生成线索模板",
+        html,
+        onMount: (root) => hasFacts || mountFactRows2(view, root, plan.facts, "gt", project.outline.volumes, { gate: "写入当前聊天", keep: !0 }),
+        actions: [
+          { label: "取消", value: null },
+          {
+            label: "写入当前聊天",
+            primary: !0,
+            value: (root) => plan.facts.map((f, i) => {
+              let l = root.querySelector(`[data-gt-label="${i}"]`), k = root.querySelector(`[data-gt-crit="${i}"]`);
+              return { code: f.code, label: l ? l.value.trim() : "", criterion: k ? k.value.trim() : "" };
+            })
+          }
+        ]
+      });
+      if (!picked) return;
+      if (!hasFacts) {
+        let empty = picked.filter((f) => !f.label);
+        if (empty.length) return toast("warning", `请给这些事实填上中性标签：${empty.map((f) => f.code).join("、")}`);
+      }
+      if (!prebuildScopeValid2(view, scope))
+        return toast("warning", "确认期间切换了聊天、项目或推进方式，没有导入。请回到原聊天重新操作。");
+      let again = null;
+      try {
+        again = api.getTableTemplate({ scope: "chat" });
+      } catch {
+      }
+      if (JSON.stringify(again) !== JSON.stringify(base))
+        return toast("warning", "确认期间这个聊天的表格模板变了，没有导入。请重新点「创建模板」。");
+      view.runtime.clue.invalidate();
+      let liveNow = view.runtime.clue.compute(), again2 = clueTplMismatch2(base, liveNow && liveNow.snap.tables || {});
+      if (again2.length) return toast("warning", `确认期间当前聊天的表格变了，没有导入：${again2[0]}。请重新点「创建模板」。`);
+      let catalogNow = liveNow ? sceneCatalogCell(liveNow.state, liveNow.plan || { recognize: [] }, liveNow.prog) : "", gen = synthesizeClueTemplate2(base, {
+        clue: hasFacts ? { scenes: plan.scenes } : { controlRow: ["主线", "", catalogNow], ...trpgSeedRows(project, liveNow, picked, plan.knows), scenes: plan.scenes }
+      }), res = null;
+      try {
+        res = await api.importTemplateFromData(gen.template, { scope: "chat", dataMode: "seed" });
+      } catch (error) {
+        res = { success: !1, message: error && error.message || String(error) };
+      }
+      if (!res || !res.success)
+        return toast("error", `导入失败，表格和绑定都没有改动：${res && (res.message || res.error) || "数据库没有返回结果"}`);
+      if (!prebuildScopeValid2(view, scope))
+        return toast(
+          "warning",
+          "模板已经导入，但导入期间切换了聊天，没有写插件绑定。请回到原聊天，在「表格绑定」里点「填入示例 → 应用」。"
+        );
+      view.data.updateProject(view.projectId, (p) => ({
+        ...p,
+        clue: normalizeClue2({ ...p.clue, bindings: { ...p.clue.bindings, ...gen.binding, switch: null } })
+      })), hasFacts || keepLabels2(view, picked), view.runtime.clue.invalidate();
+      let after = view.runtime.clue.compute(), names2 = new Set(
+        Object.values(after && after.snap.tables || {}).filter((x) => x && x.name).map((x) => x.name)
+      ), lost = ["线索控制表", "关键事实表", "知情表"].filter((n) => !names2.has(n)), afterTables = after && after.snap.tables || {}, gone = res.runtimeReady === !1 ? [] : Object.values(liveNow && liveNow.snap.tables || {}).filter((s) => s && s.name).flatMap((s) => {
+        let now = Object.values(afterTables).find((x) => x && x.name === s.name);
+        if (!now) return [`表「${s.name}」`];
+        let have = clueTplHeader2(now);
+        return clueTplHeader2(s).filter((h) => h && !have.includes(h)).map((h) => `「${s.name}」的列「${h}」`);
+      });
+      if (view.renderBody(), gone.length)
+        return toast(
+          "error",
+          `模板已经导入，但原来的这些表格内容现在读不到了：${gone.slice(0, 6).join("、")}。请到数据库的模板 / 数据管理里检查（可能被隐藏了），不要重复导入。`
+        );
+      if (res.runtimeReady === !1 ? toast("warning", "模板已经保存，但数据库提示表格还没就绪。请先点「重新读表」，不要重复导入。") : lost.length ? toast(
+        "warning",
+        `模板已经导入，但现在读表还看不到：${lost.join("、")}。请点「重新读表」，或等一楼自动填表后再看；不要重复导入。`
+      ) : toast(
+        "success",
+        `已导入。${gen.changes.length}处改动${gen.problems.length ? `，${gen.problems.length}处需要注意（见预览）` : ""}。插件绑定已更新。`
+      ), hasFacts && res.runtimeReady !== !1 && !lost.length && after) {
+        let p2 = view.project(), d2 = prebuildDiff2(prebuildPlan2(p2.outline.volumes), after.snap, p2.clue.bindings);
+        d2.factTable && (d2.newFacts.length || d2.newKnows.length) && await clueActions2["clue-prebuild"](view);
+      }
+    },
+    async "clue-catalog"(view) {
+      let plan = prebuildPlan2(view.project().outline.volumes), text2 = plan.scenes.length ? [
+        "【场景编号对照】（只用于对号；不表示已经开放或已经发生）",
+        ...plan.scenes.map((s) => `- ${s.uid}：${[s.entry, s.place && `地点：${s.place}`].filter(Boolean).join("；")}`)
+      ].join(`
+`) : "";
+      if (!text2) return toast("info", "模组里没有带入口的节点。");
+      await openDialog({
+        title: "场景编号对照",
+        html: `<p class="pi-hint">复制下面的文字，粘贴到数据库「线索控制表」说明（note）的末尾。只包含入口和地点，不含发现。长主线建议只放当前几个阶段的节点。</p><textarea class="pi-ta is-mono is-tall" readonly>${esc(text2)}</textarea>`,
+        actions: [{ label: "关闭", value: !0, primary: !0 }]
+      });
+    },
+    "clue-fact-keep"(view, target) {
+      view.runtime.clue.act({ kind: "fact", target: target.dataset.id, value: "confirmed", note: "玩家保留" }), view.renderBody();
+    },
+    // 手机上没有悬停说明：第一次作废先确认一句（之后同一次打开不再问）。
+    // 票据在点按钮时就取：确认框开着时切了聊天、项目或模式，确认后什么都不做（GPT 实测返修审阅 R1）。
+    async "clue-fact-void"(view, target) {
+      let s0 = view.runtime.clue.opScope(), id = target.dataset.id;
+      if (!voidAsked2 && !await confirmDialog({
+        title: "当作没发生？",
+        body: "插件按没拿到算，相关表格改回未获得；之后可以重新查。已经写出的正文不会删除。",
+        okLabel: "作废"
+      }))
+        return;
+      voidAsked2 = !0;
+      let r = await view.runtime.clue.voidFact(id, s0);
+      view.renderBody(), !r || !r.done ? toast("info", r && r.why || "这次作废没有执行") : r.table === "ok" ? toast("success", "已作废，表格也改回了未获得。") : toast(
+        "warning",
+        `已作废，插件按没拿到算；但${r.table === "partial" ? "表格只改了一部分" : "表格没改"}：${r.why || "原因不明"}`
+      );
+    },
+    "clue-fact-restore"(view, target) {
+      let eff = view.runtime.clue.restoreFact(target.dataset.id);
+      view.renderBody(), toast(
+        "info",
+        eff && eff.confirmed ? "已解除作废：表格里记的是已获得，按已获得算。" : "已解除作废：表格里现在没记它，按没拿到算。作废时清掉的记录不会改回去。"
+      );
+    },
+    "clue-leave"(view, target) {
+      view.runtime.clue.leaveScene(target.dataset.uid), toast("info", "已记下主角离开了这件事：不再注入它的场景，只给入口。"), view.renderBody();
+    },
+    async "clue-node-menu"(view, target) {
+      let clue = view.runtime.clue, c = clue.compute(), uid = target.dataset.uid, s = c && c.state.nodeStates.find((x) => x.node.uid === uid);
+      if (!s) return;
+      let over = c.prog.overrides[uid] || {}, items = [
+        ...s.status === "available" && c.state.focus.uid !== uid ? [{ label: "设为本轮场景", value: "focus" }] : [],
+        ...c.state.focus.uid === uid ? [{ label: "主角已离开（只给入口）", value: "leave" }] : [],
+        ...s.status === "locked" && !s.manualOpen ? [{ label: "手动开放（不算拿到线索）", value: "open:force" }] : [],
+        ...over.open ? [{ label: over.open === "force" ? "取消手动开放" : "取消停用", value: "open:" }] : [{ label: "暂时停用这个节点", value: "open:block" }],
+        ...s.status !== "done" ? [{ label: "手动标记完成", value: "done:force" }] : over.done !== "force" ? [{ label: "算作没完成（不管表格）", value: "done:undo" }] : [],
+        ...over.done ? [{ label: "完成与否改回按表格判断", value: "done:" }] : [],
+        ...s.node.required ? [{ label: over.skip ? "取消跳过" : "跳过（不挡这一阶段，也不算完成）", value: over.skip ? "skip:" : "skip:true" }] : [],
+        { label: "手动确认或作废一条线索…", value: "fact" }
+      ], pick = await menuDialog({ title: s.node.name, items });
+      if (!pick) return;
+      if (pick === "focus") return clue.setFocus(uid), view.renderBody();
+      if (pick === "leave") return clue.leaveScene(uid), view.renderBody();
+      if (pick === "fact") return factDialog2(view, s);
+      let [kind, value] = pick.split(":"), note = kind === "open" && value === "force" || kind === "done" && value === "force" ? await promptDialog({ title: "记录原因（可空）", label: "为什么手动处理" }) : "";
+      note !== null && (clue.act({ kind, target: uid, value: value === "true" ? !0 : value, note }), view.renderBody());
+    }
+  };
+  async function factDialog2(view, s) {
+    let refs = nodeFactRefs2(s.node), id = await promptDialog({
+      title: "线索编号",
+      label: refs.length ? `这个节点用到的线索：${refs.join("、")}` : "填线索编号（模组「发现」里的「事实」）",
+      value: refs[0] || ""
+    });
+    if (!id || !id.trim()) return;
+    let pick = await menuDialog({
+      title: `线索${id.trim()}`,
+      items: [
+        { label: "手动确认拿到了（表格没记上时用）", value: "confirmed" },
+        { label: "当作没拿到（只改插件判断，不改表格）", value: "revoked" },
+        { label: "改回按表格判断", value: "" }
+      ]
+    });
+    if (pick === null) return;
+    let note = await promptDialog({ title: "记录原因", label: "依据 / 来源（建议填写）" });
+    note !== null && (view.runtime.clue.act({ kind: "fact", target: id.trim(), value: pick, note }), view.renderBody());
+  }
+  function clueOnChange2(view, target) {
+    return target.dataset.clueSidelimit !== void 0 ? (view.data.updateProject(view.projectId, (p) => ({ ...p, clue: normalizeClue2({ ...p.clue, sideLimit: Number(target.value) }) })), view.runtime.clue.invalidate("line-limit"), view.runtime.clue.scheduleSync(), view.renderBody(), !0) : target.dataset.clueLinetoast !== void 0 ? (view.data.updateProject(view.projectId, (p) => ({ ...p, clue: normalizeClue2({ ...p.clue, lineToast: target.checked }) })), view.renderBody(), !0) : !1;
+  }
+  var LINE_BADGE2 = { 未触发: "", 可开启: "is-warn", 进行中: "is-ok", 暂停: "is-warn", 完成: "is-ok", 放弃: "" };
+  function readableReason2(text2, c, labels) {
+    let names2 = /* @__PURE__ */ new Map();
+    for (let n of c.compiled.nodes) {
+      n.uid && names2.set(n.uid, `「${n.name}」`);
+      for (let d of discoveryList2(isPlainObject(n.item) ? n.item : {}))
+        d.fact && !names2.has(d.fact) && names2.set(
+          d.fact,
+          `「${labels[d.fact] && labels[d.fact].label || (d.text.length > 20 ? `${d.text.slice(0, 20)}…` : d.text)}」`
+        );
+    }
+    for (let l of c.compiled.lines || []) names2.set(l.id, `「${l.name}」`);
+    for (let [code, v] of Object.entries(labels)) names2.has(code) || names2.set(code, `「${v.label}」`);
+    return String(text2).replace(/尚无记录/g, "还没发生").replace(/\b(?:线 |节点 )?([A-Za-z][\w-]*)\b/g, (all, id) => names2.has(id) ? names2.get(id) : all);
+  }
+  function lineWaitText2(s, c, labels = {}) {
+    let l = s.line, plan = c.plan;
+    if (s.missed) return s.window.reasons.join("；");
+    if (s.state === "未触发")
+      return `等：${[...s.cond.v === "true" ? [] : s.cond.reasons, ...s.window && s.window.v !== "true" ? s.window.reasons : []].map((r) => readableReason2(r, c, labels)).join("；") || "开启条件"}`;
+    if (s.state === "可开启")
+      return l.kind === "main" ? c.prog.mainPaused ? "主线已全部暂停。" : l.mode === "manual" ? "手动开始：点「进入」开始，正在进行的主线会先暂停。" : s.waitMain ? `${s.waitMain}，轮到它时自动开始。` : "" : plan && plan.unsynced && s.entries.length && s.entries.every((u) => plan.unsynced.includes(u)) ? "还在准备，下一轮开始提示。" : l.mode === "manual" ? "手动开始：不主动提示，点「进入」开始。" : c.prog.sidePaused ? "支线已全部暂停。" : plan && plan.slots.full ? "同时进行的支线已满，正文暂时不提它；主角自己走进去时，顶端会出现「切换」。" : plan && plan.offer && plan.offer.line === l.id ? "正文会在空闲时提起入口，主角走进去就开始。" : s.entries.length ? "排在后面，轮到它时正文会提起入口；主角自己走进去也会开始。" : "第一个阶段还没有能开始的场景。";
+    if (s.state !== "进行中") return "";
+    let away = c.away && c.away[l.id];
+    return away && c.state.focus.uid && c.state.nodeStates.some((n) => n.node.uid === c.state.focus.uid && n.node.unit.line && n.node.unit.line.id === l.id) && (away = null), away ? `已离开${away.rounds}轮${away.place ? `，上次在${away.place}` : ""}` : s.why;
+  }
+  function lineCard2(c, project) {
+    let list = c.state.lineStates || [];
+    if (!list.length) return "";
+    let sides = list.filter((s) => s.line.kind === "side"), mains = list.filter((s) => s.line.kind === "main"), limit = c.plan ? c.plan.slots.limit : 1, used = c.plan ? c.plan.slots.used.length : 0, row2 = (s) => {
+      let l = s.line, wait = lineWaitText2(s, c, isPlainObject(project.clue.labels) ? project.clue.labels : {}), btn = (v, label, cls = "", tip = "") => `<button type="button" class="pi-btn is-sm${cls}" data-act="clue-line" data-id="${esc(l.id)}" data-value="${v}"${tip ? ` title="${esc(tip)}"` : ""}>${label}</button>`, canEnter = !s.started && !s.manual.state && s.eligible && (l.kind === "main" ? !c.prog.mainPaused : !s.waitMain), inQueue = l.kind === "side" && l.mode !== "manual" && s.state === "可开启" && s.entries.length && c.plan && !c.plan.slots.full && !c.prog.sidePaused, undo = s.manual.evidence && s.manual.evidence !== "manual" && !s.manual.evidence.startsWith("auto@") && s.state === "进行中" ? btn("deny", "取消开启", " is-ghost", "插件认错了：这条线回到可开启，同一次依据不再自动开启") : s.manual.started || s.manual.state ? btn("", "还原", " is-ghost", "把你在这条线上点过的进入 / 暂停 / 完成 / 放弃还原，回到按条件自动判断") : "", checks = !s.started && !s.manual.state && l.mode !== "manual" ? tableCondChecks2(l.open, c.snap.tables || {}) : [], stuck = checks.filter((x) => x.stuck), fix = stuck.length ? `<p class="pi-hint is-warn">开启条件读不出来：${esc(stuck.flatMap((x) => x.notes).join("；"))}。这样它会一直开不了。 <button type="button" class="pi-btn is-sm" data-act="clue-line-manual" data-id="${esc(l.id)}" title="开启条件挪到「原开启条件」里留着看，不再自动判断；执行页出现「进入」按钮，玩家想玩时点它">改成手动开始</button></p>` : "", orig = l.origCond ? `<p class="pi-hint">原来的开启要求（自己判断什么时候点「进入」）：${esc(l.origCond)}</p>` : "", tierBtns = checks.filter((x) => x.tierPending).map(
+        (x) => `<p class="pi-hint is-warn">档位顺序是AI推断的：${esc(x.tierPending.join(" < "))}。确认前这个条件一直是未知。 <button type="button" class="pi-btn is-sm" data-act="clue-tiers" data-tiers="${esc(JSON.stringify(x.tierPending))}" title="模组里用同样档位的条件都算确认">从低到高没错</button> <button type="button" class="pi-btn is-sm is-ghost" data-act="clue-line-manual" data-id="${esc(l.id)}">改成手动开始</button></p>`
+      ).join(""), group = l.kind === "side" ? sides : mains, k = group.indexOf(s), arrows = group.length > 1 ? `<button type="button" class="pi-btn is-sm is-ghost" data-act="clue-line-move" data-id="${esc(l.id)}" data-dir="-1"${k <= 0 ? " disabled" : ""}>往前排</button><button type="button" class="pi-btn is-sm is-ghost" data-act="clue-line-move" data-id="${esc(l.id)}" data-dir="1"${k >= group.length - 1 ? " disabled" : ""}>往后排</button>` : "", title2 = String(l.name || "").replace(/·/g, " ").replace(/^卷[^\s]*\s+/, "").replace(l.id ? new RegExp(`^${l.id}\\s*`) : /^$/, "") || lineDisplayName2(l), main0 = canEnter ? btn("enter", "进入", " is-primary", l.mode === "manual" ? "想玩这条线了：现在开始" : "主角已经开始做这件事了（填表没认出来时用），或者你现在就想开始") : s.state === "暂停" ? btn("resume", "继续", " is-primary") : "", g1 = [...canEnter || s.state === "进行中" ? [btn("pause", "暂停", " is-ghost")] : []].join("") + arrows, g2 = [
+        ...s.state === "进行中" ? [btn("done", "标记完成", " is-ghost")] : [],
+        ...canEnter && inQueue ? [btn("skip", "跳过", " is-ghost")] : [],
+        ...s.state === "进行中" || s.state === "暂停" ? [btn("abandon", "放弃", " is-ghost is-danger")] : []
+      ].join(""), groups3 = [g1, g2, undo].filter(Boolean), more = groups3.length ? `<details class="pi-line-more"><summary class="pi-icon-btn" title="更多">${ICONS.more}</summary><div class="pi-line-menu">${groups3.map((g) => `<div class="pi-line-menu-g">${g}</div>`).join("")}</div></details>` : "";
+      return `<div class="pi-line-row"><div class="pi-line-head"><b class="pi-line-name" title="${esc(l.id)}">${esc(title2)}</b><span class="pi-kind pi-rl-kind">${l.kind === "main" ? "主线" : "支线"}</span><span class="pi-badge ${s.missed ? "" : LINE_BADGE2[s.state] || ""}">${esc(s.missed ? "已错过" : s.state)}</span>${l.kind === "side" && c.prog.sidePaused && s.state === "进行中" ? '<span class="pi-meta">全部支线已暂停</span>' : ""}<div class="pi-line-acts">${main0}${more}</div></div>
+          ${l.brief ? `<p class="pi-hint">${esc(l.brief)}</p>` : ""}${wait && /^已离开/.test(wait) ? `<p class="pi-hint">${esc(wait)}</p>` : ""}${orig}${fix}${tierBtns}</div>`;
+    };
+    return `<div class="pi-rl-lines">${list.map(row2).join("")}</div>`;
+  }
+  function hereText2(c) {
+    let g = findGlobalTable2(Object.values(c.snap.tables || {})), cell = g && g.place ? readCell2(c.snap.tables || {}, `${g.name}/${g.row}/${g.place}`) : { state: "unknown" }, here = cell.state === "ok" ? cellText2(cell.value) : "", focus = c.state.nodeStates.find((s) => s.node.uid && s.node.uid === c.state.focus.uid), place = focus ? clueText2(isPlainObject(focus.node.item) ? focus.node.item.地点 : "") : "";
+    return esc(here || place);
+  }
+  function stayNotice2(view, c) {
+    let info = view.runtime.clue.stayInfo(), st9 = info && info.key ? stayState2(view.runtime.progress().stays, chatMessages(), info) : null;
+    return st9 && st9.idle >= 7 ? `<p class="pi-hint is-warn">这一场很久没有新的发现了（连续${st9.idle}条回复）。想换个地方，可以让主角离开，或者点「离开这个调查」；想先玩日常，可以暂停剧情。也可能只是填表漏记了，可以对照正文看看。</p>` : "";
+  }
+  function keepLabels2(view, picked, pid = view.projectId) {
+    let p = pid ? view.data.project(pid) : null;
+    if (!p) return !1;
+    let ctx2 = new Map(
+      factLabelContext(
+        p.outline.volumes,
+        picked.map((f) => f.code)
+      ).map((x) => [x.code, x])
+    ), add = {};
+    for (let f of picked)
+      f.label && (add[f.code] = { label: f.label, criterion: f.criterion || "", sig: factLabelSig(ctx2.get(f.code) || { usedBy: [] }) });
+    return Object.keys(add).length && view.data.updateProject(p.id, (cur) => ({
+      ...cur,
+      clue: normalizeClue2({ ...cur.clue, labels: { ...cur.clue.labels || {}, ...add } })
+    })), !0;
+  }
+  var labelDrafts2 = /* @__PURE__ */ new Map(), draftKey2 = (scope, iso, table) => JSON.stringify([scope.projectId, scope.chatId, iso, table]);
+  function dropLabelDrafts2(key, codes) {
+    let d = { ...labelDrafts2.get(key) || {} };
+    for (let code of codes) delete d[code];
+    Object.keys(d).length ? labelDrafts2.set(key, d) : labelDrafts2.delete(key);
+  }
+  var labelJob2 = null, voidAsked2 = !1;
+  async function prepareLabels2(view, { quiet = !1 } = {}) {
+    let project = view.project();
+    if (!project || !isClueMode2(project) || labelJob2) return labelJob2 || { done: 0, missing: [] };
+    let pid = project.id, todo = labelsToPrepare(project.outline.volumes, project.clue.labels);
+    return todo.length ? (labelJob2 = (async () => {
+      try {
+        let ids = Array.isArray(project.imports) ? project.imports : [], jobs = await Promise.all(
+          ids.map(
+            (id) => view.data.imports.get(id) ? Promise.resolve(view.data.imports.get(id)) : view.data.imports.load(id).catch(() => null)
+          )
+        ), secrets = [...new Set(jobs.filter(Boolean).flatMap((j) => importSecretNames2(j.index) || []))], items = todo.map((x) => x.ctx), r = parseFactLabels(
+          await ask(view, "outline", factLabelMessages(items, { secrets })),
+          todo.map((x) => x.code)
+        ), got2 = /* @__PURE__ */ new Map();
+        for (let x of todo) {
+          let v = r.items.get(x.code);
+          v && v.label && got2.set(x.code, { label: v.label, criterion: v.criterion, sig: x.sig });
+        }
+        try {
+          let rv = [...got2].map(([code, v]) => {
+            let c = todo.find((x) => x.code === code).ctx;
+            return {
+              code,
+              label: v.label,
+              criterion: v.criterion,
+              answer: [c.answer, ...(c.routes || []).map((q) => q.answer)].filter(Boolean).join("；或者："),
+              entry: c.entry,
+              scene: c.scene,
+              record: [c.record, ...(c.routes || []).map((q) => q.record)].filter(Boolean).join("；或者："),
+              pieces: factLabelCheck({ label: v.label, criterion: v.criterion }, c, { secrets }).suspects.map(
+                (s) => s.piece
+              )
+            };
+          }), map = rv.length ? parseFactLabelReview(
+            await ask(view, "outline", factLabelReviewMessages(rv)),
+            rv.map((x) => x.code)
+          ) : /* @__PURE__ */ new Map();
+          for (let [code, v] of map)
+            v && v.leak && got2.has(code) && got2.set(code, {
+              ...got2.get(code),
+              label: v.label || got2.get(code).label,
+              criterion: v.criterion || got2.get(code).criterion
+            });
+        } catch {
+        }
+        view.data.project(pid) && view.data.updateProject(pid, (p) => ({
+          ...p,
+          clue: normalizeClue2({ ...p.clue, labels: { ...p.clue.labels || {}, ...Object.fromEntries(got2) } })
+        }));
+        let missing = todo.filter((x) => !got2.has(x.code)).map((x) => x.code);
+        return quiet || (missing.length ? toast(
+          "warning",
+          `线索标签准备好了${got2.size}条，${missing.length}条没生成（${missing.slice(0, 5).join("、")}）。可以到执行页重试。`
+        ) : toast("success", `已为${got2.size}条线索准备好标签。`)), view.runtime.clue.scheduleSync(), { done: got2.size, missing };
+      } catch (error) {
+        return quiet || toast("warning", `线索标签没准备好：${error.message}。模组已经采用；可以到执行页重试。`), { done: 0, missing: todo.map((x) => x.code), error: error.message };
+      } finally {
+        labelJob2 = null, view.renderBody && view.renderBody();
+      }
+    })(), labelJob2) : { done: 0, missing: [] };
+  }
+  function labelsPendingHtml2(project, c) {
+    let have = c && c.snap.facts || /* @__PURE__ */ new Map(), todo = labelsToPrepare(project.outline.volumes, project.clue.labels).filter((x) => !have.has(x.code));
+    return todo.length ? `<div class="pi-row is-todo pi-labels-todo"><p class="pi-hint is-warn" title="${esc(todo.map((x) => x.code).join("、"))}">${todo.length}条线索的标签还没准备好。</p><button type="button" class="pi-btn is-sm" data-act="clue-labels">${labelJob2 ? "正在准备…" : "现在准备"}</button></div>` : "";
+  }
+  function unofferedHtml2(c, project) {
+    return (c.unoffered || []).map((x) => {
+      let labels = project && isPlainObject(project.clue.labels) ? project.clue.labels : {}, text2 = labels[x.id] && labels[x.id].label || clueText2(x.text) || factName2(x.id) || "一条线索", short = text2.length > 40 ? `${text2.slice(0, 40)}…` : text2;
+      return x.revoked ? `<p class="pi-hint pi-unoffered">已作废（按没拿到算）：<span title="${esc(`${x.id} ${text2}`)}">${esc(short)}</span> <button type="button" class="pi-btn is-sm is-ghost" data-act="clue-fact-restore" data-id="${esc(x.id)}" title="解除作废，重新按表格判断；不会还原被清掉的记录">解除作废</button></p>` : `<p class="pi-hint is-warn pi-unoffered">⚠ 正文可能自己编了：<span title="${esc(`${x.id} ${text2}`)}">${esc(short)}</span> <button type="button" class="pi-btn is-sm is-ghost" data-act="clue-fact-keep" data-id="${esc(x.id)}" title="保留：就当发生了，剧情照常走">保留</button><button type="button" class="pi-btn is-sm is-ghost" data-act="clue-fact-void" data-id="${esc(x.id)}" title="作废：当作没发生，之后可以重新查">作废</button></p>`;
+    }).join("");
+  }
+
   // src/core/review-draft.js
   var clone3 = (x) => x === void 0 ? x : JSON.parse(JSON.stringify(x)), stableText = (x) => x == null ? "null" : Array.isArray(x) ? `[${x.map(stableText).join(",")}]` : typeof x == "object" ? `{${Object.keys(x).filter((k) => x[k] !== void 0).sort().map((k) => `${JSON.stringify(k)}:${stableText(x[k])}`).join(",")}}` : JSON.stringify(x), same = (a, b) => stableText(a) === stableText(b);
   function createReviewSession({ source, projectId, jobId = "", volumes }) {
@@ -16158,43 +21909,54 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
     return review.draft.filter((v) => !drop.has(v.id) && !adoptedIds.has((review.lineIds || {})[v.id] || String((v.line || {}).编号 || "")));
   }
 
-  // src/ui/trpg-review.js
-  var WHOLE_MAX = 3e4;
-  function trpgReviewButton(view, job) {
-    if (!job || !job.trpg) return "";
-    let busy = view.busy[`trpg-check:${job.id}`];
-    return `<div class="pi-tools is-c1"><button type="button" class="pi-btn is-sm" data-act="rv-ai-check"${busy ? " disabled" : ""}>${busy ? '<span class="pi-spin"></span>AI检查中' : "AI检查（对照模组原文）"}</button></div>`;
-  }
-  function trpgReviewActions({ current, saveReview: saveReview2, reviewUnits: reviewUnits2, lineLocked: lineLocked2 }) {
-    return {
-      async "rv-ai-check"(view) {
-        let c = current(view);
-        if (!c || !c.job.trpg) return;
-        let key = `trpg-check:${c.job.id}`;
-        if (!view.busy[key]) {
-          view.busy[key] = !0, view.renderBody();
-          try {
-            let project = view.project(), review = c.review, notes = review.notes || {}, units = reviewUnits2(project, review).filter((u) => u.kind !== "line" && !lineLocked2(review, u.volumeId, project)), src = String(await view.data.imports.source(c.jobId).catch(() => "") || ""), whole = src.length <= WHOLE_MAX ? src : "", list = units.map((u) => {
-              let v = unitValue(review.draft, u.key), n = v && v.data ? stageNodes(v.data).map((x) => notes[nodeUid(x.item)]).find((x) => x && x.起 != null) : null;
-              return { key: u.key, label: v ? stageLabel(v.key) : u.key, yaml: v ? stringifyYaml({ [v.key]: v.data }) : "", source: !whole && n && src ? sourceExcerpt(src, n.起, n.止) : "" };
-            });
-            if (!list.length) return toast("info", "没有可以检查的阶段。");
-            let found = parseReviewReply(await ask(view, "outline", trpgReviewMessages({ units: list, whole })), list.length), pages = Object.keys(found).length, lines2 = Object.values(found).flat().length;
-            if (!lines2) return toast("success", "AI检查没有发现问题。");
-            await saveReview2(view, c.jobId, (r) => {
-              let comments = { ...r.comments };
-              for (let [i, items] of Object.entries(found)) for (let x of items) comments[list[i].key] = appendComment(comments[list[i].key], `${AI_CHECK_TAG}${x}`);
-              return { ...r, comments };
-            }), toast("info", `AI检查找到${lines2}个问题（${pages}页），已加入各页意见。看过、删掉不同意的，再点「按意见修改」。`);
-          } catch (error) {
-            toast("error", `AI检查失败：${error && error.message || error}`);
-          } finally {
-            view.busy[key] = !1, view.renderBody();
-          }
-        }
-      }
-    };
-  }
+  // src/ui/long-import.js
+  var long_import_exports2 = {};
+  __export(long_import_exports2, {
+    IMPORT_PART_CHARS: () => IMPORT_PART_CHARS,
+    adoptedLinesOf: () => adoptedLinesOf,
+    importActions: () => importActions,
+    importAdoptIssues: () => importAdoptIssues,
+    importCandidate: () => importCandidate,
+    importFailedParts: () => importFailedParts,
+    importJobIds: () => importJobIds,
+    importJobOf: () => importJobOf,
+    importLiveText: () => importLiveText,
+    lineBatchState: () => lineBatchState,
+    openEditReview: () => openEditReview,
+    projectAdopted: () => projectAdopted,
+    redraftLine: () => redraftLine,
+    renderImport: () => renderImport,
+    runImportJob: () => runImportJob,
+    runLineDrafts: () => runLineDrafts,
+    showEditReview: () => showEditReview,
+    sti: () => sti,
+    stopImport: () => stopImport,
+    syncEditSession: () => syncEditSession
+  });
+
+  // src/ui/import-review.js
+  var import_review_exports = {};
+  __export(import_review_exports, {
+    adoptPlan: () => adoptPlan,
+    changedLines: () => changedLines,
+    lineLevelIssues: () => lineLevelIssues,
+    lineLocked: () => lineLocked,
+    lineTitle: () => lineTitle,
+    putUnit: () => putUnit,
+    renderAdopted: () => renderAdopted,
+    renderReview: () => renderReview,
+    reviewActions: () => reviewActions,
+    reviewIsClue: () => reviewIsClue,
+    reviewIssues: () => reviewIssues,
+    reviewOf: () => reviewOf,
+    reviewOnInput: () => reviewOnInput,
+    reviewShorts: () => reviewShorts,
+    reviewUnits: () => reviewUnits,
+    saveReview: () => saveReview,
+    sendableNotes: () => sendableNotes,
+    simpleTableCond: () => simpleTableCond,
+    unitTitle: () => unitTitle
+  });
 
   // src/ui/review-lines.js
   function reviewCheck(view, items, opts = {}) {
@@ -16470,7 +22232,6 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
         ${locked ? `${comment.trim() ? `<div class="pi-field"><span>意见（未发送，只读）</span><textarea class="pi-ta" rows="3" readonly>${esc(comment)}</textarea></div>` : ""}<details><summary class="pi-hint">YAML</summary><pre class="pi-pre is-full">${esc(yamlText)}</pre></details>` : `<label class="pi-field"><span>意见</span><textarea class="pi-ta" rows="3" data-rv-comment="${esc(u.key)}" placeholder="对这一页的修改意见">${esc(comment)}</textarea></label>
         <details${review.yamlOpen === u.key ? " open" : ""}><summary class="pi-hint">编辑YAML</summary><textarea class="pi-ta is-mono pi-rv-yaml" data-rv-yaml="${esc(u.key)}">${esc(yamlText)}</textarea>
           <div class="pi-tools is-c1"><button type="button" class="pi-btn is-sm" data-act="rv-yaml-save" data-unit="${esc(u.key)}">保存并检查</button></div><p class="pi-status" data-rv-yaml-status></p></details>`}
-        ${locked ? "" : trpgReviewButton(view, job)}
         ${locked || busy ? "" : `<div class="pi-row pi-rv-extra"><button type="button" class="pi-btn is-sm is-ghost" data-act="rv-preview" title="对整条线的意见、是否附带讨论记录；也能一次看全各页意见">整体意见${String(review.overall || "").trim() ? "（已写）" : ""}…</button></div>`}
         <div class="pi-rv-foot">${busy ? progressHtml(`rv-${view.projectId}`) : ""}<button type="button" class="pi-btn${pending ? " is-primary" : ""}" data-act="rv-send"${busy ? " disabled" : ""}>${busy ? '<span class="pi-spin"></span>修改中' : sendLabel(pending)}</button>${synced ? '<button type="button" class="pi-btn" data-act="import-adopt" disabled>已与大纲一致</button>' : `<button type="button" class="pi-btn${pending ? "" : " is-primary"}" data-act="import-adopt">${saveLabel(review, dirtyIds)}</button>`}</div></div>`;
   }
@@ -16504,7 +22265,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
     let l = { ...line };
     return delete l.表格条件草稿, simpleTableCond(l.开启条件) ? l.开始方式表格 = !0 : delete l.开始方式表格, complexCond(l.开启条件) && delete l.保留条件, l;
   }
-  function reviewActions({ jobOf, crumbBack, redraftLine: redraftLine2, openSaved = null }) {
+  function reviewActions({ jobOf, crumbBack, redraftLine: redraftLine3, openSaved = null }) {
     let current = (view) => {
       let jobId = view.tabState("import")[view.projectId]?.jobId, job = jobOf(view, jobId);
       return job && job.review ? { jobId, job, review: job.review } : null;
@@ -16637,7 +22398,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
         let c = current(view);
         if (!c) return;
         let id = target.dataset.line, res = null;
-        if (await runTask(view, `review:${view.projectId}`, async () => res = await redraftLine2(view, c.jobId, id)).catch((error) => toast("error", `重新整理中断：${error.message}`)), res && res.ok) {
+        if (await runTask(view, `review:${view.projectId}`, async () => res = await redraftLine3(view, c.jobId, id)).catch((error) => toast("error", `重新整理中断：${error.message}`)), res && res.ok) {
           let r = view.data.imports.get(c.jobId).review, vid = Object.keys(r.lineIds || {}).find((k) => r.lineIds[k] === id), i = reviewUnits(view.project(), r).findIndex((u) => u.volumeId === vid);
           i >= 0 && await saveReview(view, c.jobId, (x) => ({ ...x, at: i }));
         }
@@ -16733,7 +22494,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
         crumbBack(view, c && c.review && c.review.adoptedId);
       }
     };
-    return Object.assign(actions12, trpgReviewActions({ current, saveReview, reviewUnits, lineLocked })), actions12;
+    return actions12;
   }
   async function reviseUnits(view, jobId, c, index, jobOf, opts = {}) {
     let review = c.review, units = reviewUnits(view.project(), review), overall = String(opts.overall || "").trim(), commented = sendableNotes(view.project(), review), overallVol = overall ? opts.overallVol || units[0] && units[0].volumeId : "", want = overall ? [.../* @__PURE__ */ new Set([...units.filter((u) => u.volumeId === overallVol).map((u) => u.key), ...commented])] : commented;
@@ -16913,206 +22674,6 @@ ${yamlOf(k)}`).join(`
     return !1;
   }
 
-  // src/core/doc-pdf.js
-  var CJK = "\\u3000-\\u303f\\u3400-\\u9fff\\uf900-\\ufaff\\uff00-\\uffef\\u2018-\\u201f\\u2026\\u2014", CJK_SPACE = new RegExp(`([${CJK}])[ \\u00a0]+(?=[${CJK}])`, "g"), BULLET = /^(?:[\uE000-\uF8FF•●▪◆■□◇○·]|-\s)\s*/, SENT_END = /[。！？!?…」』”）)：:]$/, DOT_LEADER = /[.·…．]{6,}/, HEAD_END = /[。！？!?…，,；;]$/, LIST_HEAD = /^(?:\d{1,2}[:：]\d{2}|\d{1,3}[.、．)）]|[（(]\d{1,3}[)）]|第[0-9一二三四五六七八九十百]+[章节条幕])/;
-  function isCjk(ch) {
-    return !!ch && new RegExp(`[${CJK}]`).test(ch);
-  }
-  function makeLine(items) {
-    let solid = items.filter((it) => it.h > 0 && it.str.trim()), text2 = "";
-    for (let it of items) text2 += it.str;
-    if (text2 = text2.replace(/\s+/g, " ").trim(), !text2 || !solid.length) return null;
-    let x = Math.min(...solid.map((it) => it.x)), right = Math.max(...solid.map((it) => it.x + it.w)), h = Math.max(...solid.map((it) => it.h)), font = solid.reduce((a, b) => b.str.length > a.str.length ? b : a).font;
-    return { text: text2, x, right, y: solid[0].y, h, font, items: solid };
-  }
-  function streamLines(items) {
-    let lines2 = [], cur = [], curY = null, flush = () => {
-      let line = cur.length ? makeLine(cur) : null;
-      line && lines2.push(line), cur = [], curY = null;
-    };
-    for (let it of items || [])
-      it.h > 0 && it.str.trim() && (curY !== null && Math.abs(it.y - curY) > it.h * 0.5 && flush(), curY === null && (curY = it.y)), cur.push(it), it.eol && flush();
-    return flush(), lines2;
-  }
-  function orderLooksBroken(lines2, width = 0) {
-    if (lines2.length < 6) return !1;
-    let jumps = 0, switches = 0;
-    for (let i = 1; i < lines2.length; i++)
-      lines2[i].y - lines2[i - 1].y > lines2[i].h * 2 && jumps++, width && Math.abs(lines2[i].x - lines2[i - 1].x) > width * 0.3 && switches++;
-    return jumps > Math.max(3, lines2.length * 0.12) || switches > Math.max(4, lines2.length * 0.3);
-  }
-  function coordLines(items, width) {
-    let rows2 = [];
-    for (let it of items || []) {
-      if (!(it.h > 0 && it.str.trim())) continue;
-      let row2 = rows2.find((r) => Math.abs(r.y - it.y) < it.h * 0.5);
-      row2 || rows2.push(row2 = { y: it.y, items: [] }), row2.items.push(it);
-    }
-    let mid = width / 2, pieces = [];
-    for (let row2 of rows2) {
-      row2.items.sort((a, b) => a.x - b.x);
-      let left = [], right = [], full = [];
-      for (let it of row2.items)
-        it.x < mid - 10 && it.x + it.w > mid + 10 ? full.push(it) : it.x + it.w / 2 < mid ? left.push(it) : right.push(it);
-      full.length ? pieces.push({ y: row2.y, col: "full", items: [...left, ...full, ...right].sort((a, b) => a.x - b.x) }) : (left.length && pieces.push({ y: row2.y, col: "L", items: left }), right.length && pieces.push({ y: row2.y, col: "R", items: right }));
-    }
-    pieces.sort((a, b) => b.y - a.y);
-    let out = [], band = [], flushBand = () => {
-      for (let col of ["L", "R"]) for (let p of band) p.col === col && out.push(p);
-      band = [];
-    };
-    for (let p of pieces) p.col === "full" ? (flushBand(), out.push(p)) : band.push(p);
-    return flushBand(), out.map((p) => makeLine(p.items)).filter(Boolean);
-  }
-  function norm(text2) {
-    return text2.replace(/\d+/g, "#").replace(/\s+/g, "");
-  }
-  function marginKeys(pages) {
-    let count = /* @__PURE__ */ new Map();
-    for (let p of pages)
-      for (let line of new Set(p.lines.filter((l) => inMargin(l, p)).map((l) => norm(l.text))))
-        count.set(line, (count.get(line) || 0) + 1);
-    return new Set([...count].filter(([, n]) => n >= 3).map(([k]) => k));
-  }
-  function inMargin(line, page) {
-    return line.y > page.height * 0.92 || line.y < page.height * 0.08;
-  }
-  function mode(values) {
-    let c = /* @__PURE__ */ new Map();
-    for (let [v, n] of values) c.set(v, (c.get(v) || 0) + n);
-    let best = null, bn = -1;
-    for (let [v, n] of c) n > bn && (best = v, bn = n);
-    return best;
-  }
-  function leadWidth(text2, h) {
-    let m = /^[（(“"《【「『][^）)”"》】」』]{0,20}[）)”"》】」』]/.exec(text2) || /^[A-Za-z0-9/.%+\-]+/.exec(text2), chunk = m ? m[0] : text2.slice(0, 1), w = 0;
-    for (let ch of chunk) w += isCjk(ch) ? h : h * 0.55;
-    return w;
-  }
-  function joinText(a, b) {
-    if (!a) return b;
-    let last = a[a.length - 1], first = b[0];
-    return /[A-Za-z]-$/.test(a) && /^[a-z]/.test(b) ? a.slice(0, -1) + b : isCjk(last) || isCjk(first) ? a + b : `${a} ${b}`;
-  }
-  function cleanText2(text2) {
-    return text2.replace(CJK_SPACE, "$1").replace(CJK_SPACE, "$1").replace(/([a-z])([.?!])(?=[A-Z])/g, "$1$2 ").replace(/[ \t]+/g, " ").trim();
-  }
-  function pdfPagesToText(input2, { keepToc = !1 } = {}) {
-    let warnings = [], pages = (input2 || []).map((p, i) => {
-      let lines2 = streamLines(p.items);
-      return orderLooksBroken(lines2, p.width) && (lines2 = coordLines(p.items, p.width)), { no: i + 1, width: p.width, height: p.height, lines: lines2 };
-    }), empty = pages.filter((p) => !p.lines.length).map((p) => p.no);
-    empty.length && warnings.push(`第${empty.join("、")}页没有文字层（可能是图片或扫描页），没有转出文字。`);
-    let toc = pages.filter((p) => p.lines.filter((l) => DOT_LEADER.test(l.text)).length >= 3);
-    keepToc || toc.forEach((p) => p.lines = []);
-    let margins = marginKeys(pages);
-    for (let p of pages)
-      p.lines = p.lines.filter((l) => !(inMargin(l, p) && (margins.has(norm(l.text)) || /^[-—\s]*\d{1,3}[-—\s]*$/.test(l.text))) && !/^[.·…．\s]+$/.test(l.text));
-    let all = pages.flatMap((p) => p.lines.map((l) => ({ ...l, page: p })));
-    if (all.forEach((l, i) => l.i = i), !all.length) return { text: "", warnings, pages: pages.length, chars: 0 };
-    let body = mode(all.map((l) => [Math.round(l.h), l.text.length])), bodyFont = mode(all.filter((l) => Math.round(l.h) === body).map((l) => [l.font, l.text.length])), pageRight = (l) => Math.max(...l.page.lines.filter((o) => Math.abs(o.x - l.x) < l.h * 1.5).map((o) => o.right)), lineGap = mode(
-      all.slice(1).map((l, i) => {
-        let prev2 = all[i];
-        return [prev2.page === l.page && prev2.y > l.y ? Math.round(prev2.y - l.y) : 0, 1];
-      }).filter(([g]) => g > 0)
-    ) || body * 1.6, kindOf = (l) => {
-      let t = l.text;
-      return Math.round(l.h) >= body * 1.3 && t.length <= 30 ? "h1" : BULLET.test(t) ? "bullet" : /^\d{1,2}$/.test(t) ? "index" : l.font !== bodyFont && Math.round(l.h) >= body * 0.95 && t.length <= 24 && !HEAD_END.test(t) ? "h2" : "text";
-    }, blocks = [], cur = null, pendingIndex = "", prev = null, open = (kind, text3, line) => {
-      cur = { kind, x: line.x, text: pendingIndex && kind !== "h1" ? `${pendingIndex}. ${text3}` : text3 }, pendingIndex = "", blocks.push(cur);
-    };
-    for (let l of all) {
-      let kind = kindOf(l);
-      if (kind === "index") {
-        pendingIndex = l.text;
-        continue;
-      }
-      let breakHere = !cur || kind !== "text" || cur.kind === "h1" || cur.kind === "h2";
-      if (!breakHere && prev) {
-        let samePage = prev.page === l.page, below = samePage && prev.y > l.y, room = pageRight(prev) - prev.right, rightAligned = (a, b) => a && b && a.page === b.page && a.y > b.y && Math.abs(a.x - b.x) < b.h * 1.5 && Math.abs(a.right - b.right) < b.h * 0.6 && a.right - a.x > b.h * 3.5 && b.right - b.x > b.h * 3.5, justified = rightAligned(prev, l) || rightAligned(all[prev.i - 1], prev), short = room > prev.h * 1.5, deliberate = room > prev.h * 1.5 + leadWidth(l.text, l.h) && !justified, ragged = below && !justified && pageRight(prev) - prev.right > prev.h * 3 && pageRight(l) - l.right > l.h * 3 && Math.abs(prev.right - l.right) > l.h * 1.5;
-        (Math.round(prev.h) !== Math.round(l.h) || below && Math.abs(prev.x - l.x) < l.h * 3 && prev.y - l.y > lineGap * 1.5 || short && SENT_END.test(prev.text) || short && LIST_HEAD.test(l.text) || (deliberate || ragged) && !/[，、,；;]$/.test(prev.text)) && (breakHere = !0);
-      }
-      !breakHere && cur.kind === "bullet" && prev && prev.page === l.page && !(l.x > cur.x + l.h * 0.5) && (breakHere = !0), breakHere ? open(kind, kind === "bullet" ? l.text.replace(BULLET, "") : l.text, l) : cur.text = joinText(cur.text, l.text), prev = l;
-    }
-    let text2 = blocks.map((b) => {
-      let t = cleanText2(b.text);
-      return b.kind === "h1" ? `# ${t}` : b.kind === "h2" ? `## ${t}` : b.kind === "bullet" ? `- ${t}` : t;
-    }).filter((t) => t.replace(/^[#-]+\s*/, "")).join(`
-
-`);
-    return toc.length && !keepToc && warnings.push(`第${toc.map((p) => p.no).join("、")}页像是目录，已略过。`), { text: text2, warnings, pages: pages.length, chars: text2.replace(/\s/g, "").length };
-  }
-
-  // src/host/pdf-load.js
-  var PDFJS_VERSION = "4.10.38", BASES = [
-    `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/legacy/build/`,
-    `https://unpkg.com/pdfjs-dist@${PDFJS_VERSION}/legacy/build/`
-  ], loading = null, importUrl = (url) => import(
-    /* @vite-ignore */
-    url
-  );
-  function loadPdfJs() {
-    return loading || (loading = (async () => {
-      let errors = [];
-      for (let base of BASES)
-        try {
-          let lib2 = await importUrl(`${base}pdf.min.mjs`);
-          return lib2.GlobalWorkerOptions.workerSrc = `${base}pdf.worker.min.mjs`, { lib: lib2, base: base.replace(/legacy\/build\/$/, "") };
-        } catch (error) {
-          errors.push(error && error.message ? error.message : String(error));
-        }
-      throw new Error(`PDF组件下载失败（${errors[errors.length - 1] || "网络不通"}）`);
-    })(), loading.catch(() => loading = null), loading);
-  }
-  function isPdfFile(file) {
-    return !!file && (/\.pdf$/i.test(file.name || "") || file.type === "application/pdf");
-  }
-  async function pdfFileToText(file, { onProgress = () => {
-  }, load = loadPdfJs } = {}) {
-    let { lib: lib2, base } = await load(), data = new Uint8Array(await file.arrayBuffer()), doc = await lib2.getDocument({ data, cMapUrl: `${base}cmaps/`, cMapPacked: !0, standardFontDataUrl: `${base}standard_fonts/`, verbosity: 0 }).promise, pages = [];
-    try {
-      for (let n = 1; n <= doc.numPages; n++) {
-        onProgress(n, doc.numPages);
-        let page = await doc.getPage(n), vp = page.getViewport({ scale: 1 }), content = await page.getTextContent();
-        pages.push({
-          width: vp.width,
-          height: vp.height,
-          items: (content.items || []).filter((it) => typeof it.str == "string").map((it) => ({ str: it.str, x: it.transform[4], y: it.transform[5], w: it.width, h: it.height, font: it.fontName, eol: !!it.hasEOL }))
-        }), page.cleanup && page.cleanup();
-      }
-    } finally {
-      doc.destroy && doc.destroy();
-    }
-    return pdfPagesToText(pages);
-  }
-
-  // src/ui/trpg-kp.js
-  var running = /* @__PURE__ */ new Set();
-  async function runKpRules(view, projectId, text2) {
-    if (running.has(projectId)) return toast("info", "KP规则还在整理中。");
-    running.add(projectId);
-    try {
-      let parts = splitLongText(text2, { target: 12e3, overlap: 200 }), pieces = [];
-      for (let part of parts) {
-        let reply2 = String(await ask(view, "setting", kpRulesMessages({ part, total: parts.length })) || "").trim();
-        reply2 && pieces.push(reply2);
-      }
-      if (!pieces.length) return toast("warning", "KP规则没有整理出内容，可以到设定页手动补。");
-      let merged = pieces.length > 1 ? String(await ask(view, "setting", kpMergeMessages(pieces)) || "").trim() || pieces.join(`
-
-`) : pieces[0], block = kpBlockText(merged);
-      if (!block) return toast("warning", "KP规则没有整理出内容，可以到设定页手动补。");
-      view.data.updateProject(projectId, (p) => {
-        let old = p.setting && p.setting.text || "";
-        return { ...p, setting: { ...p.setting, text: old.trim() ? mergeBlocks(old, block, [KP_BLOCK]) : block } };
-      }), toast("success", "KP规则已整理进设定（「KP规则」分块）。");
-    } catch (error) {
-      toast("error", `KP规则整理失败：${error && error.message || error}`);
-    } finally {
-      running.delete(projectId);
-    }
-  }
-
   // src/ui/long-import.js
   var IMPORT_PART_CHARS = 8e3, liveImport = /* @__PURE__ */ new Map(), liveSeq = 0;
   function importLiveText(jobId) {
@@ -17251,8 +22812,7 @@ ${yamlOf(k)}`).join(`
           mode: cur.mode,
           needs: cur.needs,
           done,
-          kind: importJobKind(cur),
-          trpg: !!cur.trpg
+          kind: importJobKind(cur)
         })
       ), r = parseOutlineReply(reply2);
       r.ok && r.volumes.length || (r = parseOutlineReply(await askLive(view, jobId, `第${p.i + 1}段`, fixYamlMessages(r.yaml, r.error || "没有读到任何阶段", cur.mode))));
@@ -17324,7 +22884,7 @@ ${yamlOf(k)}`).join(`
         }).finally(() => (s.loadingList = !1, view.renderBody())), '<div class="pi-empty"><span class="pi-spin"></span> 正在读取导入记录…</div>';
       let list = ids.map((id) => view.data.imports.get(id)).filter(Boolean), lost = (s.unreadable || []).filter((id) => ids.includes(id)), clue0 = s.mode ? s.mode === "clue" : isClueMode(project), kind0 = clue0 ? s.kind || "main" : "outline";
       return `${crumbs(0)}<div class="pi-card"><h3>导入长文<span class="pi-spacer"></span><button type="button" class="pi-btn is-sm is-ghost" data-act="import-close">回到大纲</button></h3>
-        <label class="pi-field"><span>原文</span><textarea class="pi-ta pi-imp-text" data-imp-text placeholder="粘贴剧情方案，或选择txt / md${isTrpg(project) ? " / pdf" : ""}文件">${esc(s.text || "")}</textarea></label>
+        <label class="pi-field"><span>原文</span><textarea class="pi-ta pi-imp-text" data-imp-text placeholder="粘贴剧情方案，或选择txt / md文件">${esc(s.text || "")}</textarea></label>
         <div class="pi-row pi-imp-file"><button type="button" class="pi-btn is-sm" data-act="import-pick-file">选择文件…</button></div>
         ${s.file ? `<div class="pi-imp-chip"><span class="pi-imp-chip-name">${esc(s.file.name)}</span><span class="pi-imp-chip-sub">${s.file.chars >= 1e4 ? `${(s.file.chars / 1e4).toFixed(1)}万字` : `${s.file.chars}字`}</span></div>` : ""}
         <label class="pi-field"><span>推进方式</span><select class="pi-sel" data-imp-modesel>${options(
@@ -17335,7 +22895,6 @@ ${yamlOf(k)}`).join(`
         clue0 ? "clue" : "outline"
       )}</select><span class="pi-hint">${clue0 ? "按查到的线索推进剧情。" : "按时间顺序一段段推进，整份文档整理成一卷。"}${clue0 === isClueMode(project) ? "" : "与项目当前的推进方式不同；保存后需到执行页切换推进方式才会生效。"}</span></label>
         ${clue0 ? `<div class="pi-field"><span>文档内容</span><div class="pi-imp-kind">${IMPORT_KINDS.map((k) => `<button type="button" class="pi-imp-kind-btn${kind0 === k.value ? " is-sel" : ""}" data-act="import-kind" data-kind="${k.value}"><b>${k.label}</b><span>${k.note}</span></button>`).join("")}</div></div>` : ""}
-        ${clue0 && kind0 !== "lines" && isTrpg(project) ? `<label class="pi-check"><input type="checkbox" data-imp-trpg${s.trpg ?? !0 ? " checked" : ""}><span>跑团模组（CoC 7版）：带上检定，另外整理KP规则</span></label>` : ""}
         ${clue0 && !currentTables() ? '<p class="pi-hint is-warn">当前聊天无法读取数据库表格。依赖表格的开启条件会先按手动开始整理；也可在有表格的聊天中导入。</p>' : ""}
         <label class="pi-field"><span>要求（可空）</span><textarea class="pi-ta" rows="3" data-imp-needs placeholder="${esc(kind0 === "side" ? IMPORT_NEEDS_SIDE : kind0 === "lines" ? IMPORT_NEEDS_LINES : IMPORT_NEEDS_EXAMPLE)}">${esc(s.needs || "")}</textarea></label>
         <input type="hidden" data-imp-mode value="${clue0 ? kind0 === "lines" ? "lines" : "clue" : "outline"}"><input type="hidden" data-imp-kind value="${kind0}">
@@ -17396,8 +22955,6 @@ ${yamlOf(k)}`).join(`
   function keepStartInputs(view, target) {
     let card = target.closest(".pi-card"), s = sti(view);
     card && (s.text = card.querySelector("[data-imp-text]").value, s.needs = card.querySelector("[data-imp-needs]").value);
-    let trpgBox = card && card.querySelector("[data-imp-trpg]");
-    trpgBox && (s.trpg = trpgBox.checked);
   }
   var importActions = {
     ...rvActions,
@@ -17422,29 +22979,16 @@ ${yamlOf(k)}`).join(`
       sti(view).jobId = "", view.renderBody();
     },
     async "import-pick-file"(view, target) {
-      let files = await pickFiles({ accept: isTrpg(view.project()) ? ".txt,.md,.markdown,.pdf,text/plain,application/pdf" : ".txt,.md,.markdown,text/plain", multiple: !1 });
+      let files = await pickFiles({ accept: ".txt,.md,.markdown,text/plain", multiple: !1 });
       if (!files || !files.length) return;
-      let box = target.closest(".pi-card").querySelector("[data-imp-text]"), text2;
-      if (isPdfFile(files[0])) {
-        let btn = target;
-        try {
-          btn.disabled = !0, btn.textContent = "正在读取PDF…";
-          let r = await pdfFileToText(files[0], { onProgress: (n, total) => btn.textContent = `正在读取第${n}/${total}页…` });
-          if (!r.text.trim()) return toast("warning", `没有读到文字。${r.warnings.join("")}扫描版PDF需要先做文字识别。`);
-          text2 = r.text, r.warnings.length && toast("info", r.warnings.join(""));
-        } catch (error) {
-          return toast("error", `PDF读取失败：${error && error.message || error}`);
-        } finally {
-          btn.disabled = !1, btn.textContent = "选择文件…";
-        }
-      } else text2 = await files[0].text();
+      let box = target.closest(".pi-card").querySelector("[data-imp-text]"), text2 = await files[0].text();
       box && (box.value = text2), keepStartInputs(view, target), sti(view).file = { name: files[0].name, chars: text2.replace(/\s/g, "").length }, view.renderBody();
     },
     async "import-start"(view, target) {
       let card = target.closest(".pi-card"), text2 = card.querySelector("[data-imp-text]").value, needs = card.querySelector("[data-imp-needs]").value.trim(), mode2 = card.querySelector("[data-imp-mode]").value, kindBox = card.querySelector("[data-imp-kind]"), kind = mode2 === "outline" ? "outline" : mode2 === "lines" ? "lines" : kindBox && ["main", "side"].includes(kindBox.value) ? kindBox.value : "main", projectId = view.projectId;
       if (!text2.trim()) return toast("warning", "请先粘贴原文或选择文件。");
-      let trpgBox = card.querySelector("[data-imp-trpg]"), trpg = !!(trpgBox && trpgBox.checked && mode2 === "clue"), job = await view.data.imports.create({ projectId, text: text2, mode: mode2, needs, kind, trpg });
-      if (sti(view).trpg = void 0, trpg && (view.data.updateProject(projectId, (p) => ({ ...p, trpg: { ...p.trpg || {}, on: !0, rule: "coc7" } })), runKpRules(view, projectId, text2)), sti(view).text = "", sti(view).needs = "", sti(view).file = null, view.data.updateProject(projectId, (p) => ({ ...p, imports: [...importJobIds(p), job.id] })), view.projectId !== projectId)
+      let job = await view.data.imports.create({ projectId, text: text2, mode: mode2, needs, kind });
+      if (sti(view).text = "", sti(view).needs = "", sti(view).file = null, view.data.updateProject(projectId, (p) => ({ ...p, imports: [...importJobIds(p), job.id] })), view.projectId !== projectId)
         return toast("info", "导入任务已创建，归属原项目。");
       sti(view).jobId = job.id, view.renderBody(), importActions["import-run"](view);
     },
@@ -17888,6 +23432,1790 @@ ${r2.yaml}`,
     }), touched ? { ok: !1, why: "等待期间这条线被修改，未替换（修改和意见都保留），需要时请重试" } : { ok: !0 };
   }
 
+  // src/trpg/trpg-long-import-ui.js
+  var trpg_long_import_ui_exports = {};
+  __export(trpg_long_import_ui_exports, {
+    IMPORT_PART_CHARS: () => IMPORT_PART_CHARS2,
+    adoptedLinesOf: () => adoptedLinesOf2,
+    importActions: () => importActions2,
+    importAdoptIssues: () => importAdoptIssues2,
+    importCandidate: () => importCandidate2,
+    importFailedParts: () => importFailedParts2,
+    importJobIds: () => importJobIds2,
+    importJobOf: () => importJobOf2,
+    importLiveText: () => importLiveText2,
+    lineBatchState: () => lineBatchState2,
+    openEditReview: () => openEditReview2,
+    projectAdopted: () => projectAdopted2,
+    redraftLine: () => redraftLine2,
+    renderImport: () => renderImport2,
+    runImportJob: () => runImportJob2,
+    runLineDrafts: () => runLineDrafts2,
+    showEditReview: () => showEditReview2,
+    sti: () => sti2,
+    stopImport: () => stopImport2,
+    syncEditSession: () => syncEditSession2
+  });
+
+  // src/trpg/trpg-import-review.js
+  var trpg_import_review_exports = {};
+  __export(trpg_import_review_exports, {
+    adoptPlan: () => adoptPlan2,
+    changedLines: () => changedLines2,
+    lineLevelIssues: () => lineLevelIssues2,
+    lineLocked: () => lineLocked2,
+    lineTitle: () => lineTitle2,
+    putUnit: () => putUnit2,
+    renderAdopted: () => renderAdopted2,
+    renderReview: () => renderReview2,
+    reviewActions: () => reviewActions2,
+    reviewIsClue: () => reviewIsClue2,
+    reviewIssues: () => reviewIssues2,
+    reviewOf: () => reviewOf2,
+    reviewOnInput: () => reviewOnInput2,
+    reviewShorts: () => reviewShorts2,
+    reviewUnits: () => reviewUnits2,
+    saveReview: () => saveReview2,
+    sendableNotes: () => sendableNotes2,
+    simpleTableCond: () => simpleTableCond2,
+    unitTitle: () => unitTitle2
+  });
+
+  // src/trpg/trpg-review.js
+  var WHOLE_MAX = 3e4;
+  function trpgReviewButton(view, job) {
+    if (!job || !job.trpg) return "";
+    let busy = view.busy[`trpg-check:${job.id}`];
+    return `<div class="pi-tools is-c1"><button type="button" class="pi-btn is-sm" data-act="rv-ai-check"${busy ? " disabled" : ""}>${busy ? '<span class="pi-spin"></span>AI检查中' : "AI检查（对照模组原文）"}</button></div>`;
+  }
+  function trpgReviewActions({ current, saveReview: saveReview3, reviewUnits: reviewUnits3, lineLocked: lineLocked3 }) {
+    return {
+      async "rv-ai-check"(view) {
+        let c = current(view);
+        if (!c || !c.job.trpg) return;
+        let key = `trpg-check:${c.job.id}`;
+        if (!view.busy[key]) {
+          view.busy[key] = !0, view.renderBody();
+          try {
+            let project = view.project(), review = c.review, notes = review.notes || {}, units = reviewUnits3(project, review).filter((u) => u.kind !== "line" && !lineLocked3(review, u.volumeId, project)), src = String(await view.data.imports.source(c.jobId).catch(() => "") || ""), whole = src.length <= WHOLE_MAX ? src : "", list = units.map((u) => {
+              let v = unitValue(review.draft, u.key), n = v && v.data ? stageNodes(v.data).map((x) => notes[nodeUid2(x.item)]).find((x) => x && x.起 != null) : null;
+              return { key: u.key, label: v ? stageLabel(v.key) : u.key, yaml: v ? stringifyYaml({ [v.key]: v.data }) : "", source: !whole && n && src ? sourceExcerpt2(src, n.起, n.止) : "" };
+            });
+            if (!list.length) return toast("info", "没有可以检查的阶段。");
+            let found = parseReviewReply(await ask(view, "outline", trpgReviewMessages({ units: list, whole })), list.length), pages = Object.keys(found).length, lines2 = Object.values(found).flat().length;
+            if (!lines2) return toast("success", "AI检查没有发现问题。");
+            await saveReview3(view, c.jobId, (r) => {
+              let comments = { ...r.comments };
+              for (let [i, items] of Object.entries(found)) for (let x of items) comments[list[i].key] = appendComment2(comments[list[i].key], `${AI_CHECK_TAG}${x}`);
+              return { ...r, comments };
+            }), toast("info", `AI检查找到${lines2}个问题（${pages}页），已加入各页意见。看过、删掉不同意的，再点「按意见修改」。`);
+          } catch (error) {
+            toast("error", `AI检查失败：${error && error.message || error}`);
+          } finally {
+            view.busy[key] = !1, view.renderBody();
+          }
+        }
+      }
+    };
+  }
+
+  // src/trpg/trpg-review-lines.js
+  function reviewCheck2(view, items, opts = {}) {
+    let project = view.project(), rs = opts || {}, tables = currentTables(), kept = items.filter((x) => !x.dropped), base = rs.src === "import" ? project.outline.volumes : project.outline.volumes.filter((v) => !isPlainObject(v.line) || !kept.some((x) => x.vol.id === v.id)), all = [...base, ...kept.map((x) => x.vol)], comp = compileClue2(all), dropped = items.filter((x) => x.dropped).map((x) => x.id), depends = droppedLineRefs2(
+      kept.map((x) => x.vol),
+      dropped,
+      base
+    ), draftIssues = checkClueDraft2(
+      kept.map((x) => x.vol),
+      base
+    ).filter((t) => /^线 [A-Za-z]+\d+ 要等的/.test(t)), job0 = rs.src === "import" ? importJobOf2(view, rs.jobId) : null, more = {};
+    if (job0) {
+      let c = view.runtime.activeId() === view.projectId ? view.runtime.clue.compute() : null, { known, claimed } = chatFactSets2(c), localOk = (job0.localIndex || []).filter((y) => isPlainObject(y) && !y.error), adoptedIds = new Set(kept.filter((y) => adoptedLineOf2(project, rs.jobId, y.id)).map((y) => y.id));
+      more = importLineIssues2(
+        kept.filter((y) => !adoptedIds.has(y.id)).map((y) => y.vol),
+        base,
+        { index: localOk.length ? mergeImportIndex2(localOk) : job0.index, known, claimed }
+      );
+    }
+    let out = {}, dups = rs.src === "import" ? importLineDuplicates2(kept.map((y) => y.vol)) : [];
+    for (let x of items) {
+      let issues = [], line = comp.lines.find((l) => l.id === x.id), mine = (t) => t.includes(`线 ${x.id}`) || t.includes(`卷「${volumeLabel(x.vol.key)}」`) || x.vol.stages.some((s) => t.includes(stageLabel(s.key)));
+      if (x.dropped) out[x.id] = { issues: [], conds: [], line };
+      else {
+        comp.errors.filter(mine).forEach((t) => issues.push({ level: "error", text: t })), depends.filter((t) => t.startsWith(`线 ${x.id}`)).forEach((t) => issues.push({ level: "error", text: t })), draftIssues.filter((t) => t.startsWith(`线 ${x.id} `)).forEach((t) => issues.push({ level: "error", text: t, fix: "drop-open" }));
+        let conds = tables && line ? tableCondChecks2(line.open, tables, "开启条件") : [];
+        conds.filter((c) => c.level !== "ok").forEach(
+          (c) => issues.push({
+            level: c.stuck ? "error" : "warn",
+            text: `${c.raw}：${c.notes.join("；")}`,
+            ...c.tierPending ? { fix: "tiers", tiers: c.tierPending } : {}
+          })
+        ), line && line.mode === "manual" && line.origCond && issues.push({ level: "info", text: `人工开启。原来的要求：${line.origCond}` }), rs.src === "import" && dups.filter((d) => d.a.id === x.id || d.b.id === x.id).forEach((d) => issues.push({ level: "error", text: d.text, fix: "redraft", lines: [d.a.id, d.b.id] }));
+        let empty = x.vol.stages.filter((s) => !stageNodes(s.data).length).map((s) => stageLabel(s.key));
+        empty.length && issues.push({
+          level: "error",
+          text: `这些阶段没有读到任何场景（节点）：${empty.join("、")}。可能是AI把场景写在了不认识的字段下，写意见让AI重写这一条`
+        });
+        let job = rs.src === "import" ? importJobOf2(view, rs.jobId) : null, inv = job && job.lineIdent ? inventedOpenIssue2(
+          x.vol,
+          job.lineIdent.lines,
+          comp.lines.filter((l) => l.kind === "main")
+        ) : null;
+        inv && issues.push({ level: inv.level, text: inv.text, ...inv.canDrop ? { fix: "drop-open" } : {} }), (more[x.id] || []).forEach((i) => issues.push(i)), out[x.id] = { issues, conds, line };
+      }
+    }
+    return out;
+  }
+  var OP_WORD2 = { "==": "是", "!=": "不是", ">=": "≥", "<=": "≤", ">": ">", "<": "<", 包含: "里有", 不包含: "里没有" };
+  function condWords2(c, names2 = {}) {
+    if (!c) return "";
+    let fact = (id) => names2.facts && names2.facts[id] ? `「${names2.facts[id]}」` : id, node = (id) => names2.nodes && names2.nodes[id] ? `「${names2.nodes[id]}」` : id, line = (id) => names2.lines && names2.lines[id] ? `「${names2.lines[id]}」` : `线${id}`;
+    if (c.kind === "group")
+      return c.items.map((x) => condWords2(x, names2)).filter(Boolean).join(c.mode === "any" ? "，或者" : "，并且");
+    if (c.kind === "cell") {
+      let [t, row2, col] = String(c.path).split("/").map((x) => x.trim());
+      return `（${t}）${row2}的${col}${c.pick ? `里「${c.pick}」那一项` : ""} ${OP_WORD2[c.op] || c.op} ${c.value}${c.tiers ? `（${c.tiers.join(" < ")}）` : ""}`;
+    }
+    return c.kind === "line" ? `${line(c.line)} ${c.state === "开过" ? c.op === "==" ? "开始过" : "还没开始过" : c.state === "开着" ? c.op === "==" ? "正在进行" : "不在进行中" : `${c.op === "==" ? "是" : "不是"}「${c.state}」`}` : c.kind === "fact" ? `正文里发生了${fact(c.fact)}` : c.kind === "count" ? `${c.table}里${c.column} ${OP_WORD2[c.op] || c.op} ${c.value}的${c.cmp}${c.n}行` : c.kind === "know" ? `${c.actor === "user" ? "主角" : c.actor}知道${fact(c.fact)}` : c.kind === "node" ? `场景${node(c.node)}完成` : c.raw || "";
+  }
+  function condNames2(volumes) {
+    let comp = compileClue2(volumes || []), facts = {}, nodes = {}, lines2 = {};
+    for (let n of comp.nodes) {
+      n.uid && (nodes[n.uid] = n.name);
+      for (let d of discoveryList2(isPlainObject(n.item) ? n.item : {}))
+        d.fact && !facts[d.fact] && d.text && (facts[d.fact] = d.text.length > 24 ? `${d.text.slice(0, 24)}…` : d.text);
+    }
+    for (let l of comp.lines || []) lines2[l.id] = l.name;
+    return { facts, nodes, lines: lines2 };
+  }
+  function lineReviewFromJob2(job) {
+    let good = Object.keys(job.drafts || {}).sort((a, b) => a - b).flatMap(
+      (k) => (job.drafts[k] && !job.drafts[k].error ? job.drafts[k].list || [job.drafts[k]] : []).filter((d) => d && !d.error).flatMap((d) => d.volumes || [])
+    ), merged = mergeImportByLine2(good), vols = splitImportAuthorFields2(merged).volumes.filter((v) => isPlainObject(v.line)), items = {}, order = [];
+    for (let v of vols) {
+      let id = String(v.line.编号 || "").trim();
+      !id || items[id] || (items[id] = { vol: v, comment: "", lastComment: "", changed: [], dropped: !1 }, order.push(id));
+    }
+    return {
+      items,
+      order,
+      conflicts: merged.conflicts.map(importConflictText2),
+      loose: merged.filter((v) => !isPlainObject(v.line)).length
+    };
+  }
+  function adoptedLineOf2(project, jobId, id) {
+    let volId = project && project.importLineMap && project.importLineMap[`${jobId}:${id}`], vol = volId && project.outline.volumes.find((v) => v.id === volId);
+    return vol && isPlainObject(vol.line) ? { id: String(vol.line.编号 || "").trim(), name: volumeName(vol.key), volId } : null;
+  }
+
+  // src/trpg/trpg-import-review.js
+  function reviewOf2(job, candidate) {
+    if (job.review && Array.isArray(job.review.draft)) return job.review;
+    let headOf = (l) => isPlainObject(l) && String(l.类型 || "").trim() === "主线" && (l.开启条件 == null || l.开启条件 === "") && !l.开启方式 && l.接上一条 == null ? { ...l, 接上一条: !0 } : l, vols = candidate.volumes.map((v) => ({ ...v, ...isPlainObject(v.line) ? { line: headOf(v.line) } : {}, id: v.id || makeId("v"), stages: v.stages.map((s) => ({ ...s, id: s.id || makeId("s") })) }));
+    return { ...createReviewSession({ source: "import", projectId: job.projectId, jobId: job.id, volumes: vols }), at: 0, notes: candidate.notes || {}, mode: job.mode === "outline" ? "outline" : "clue" };
+  }
+  function reviewIsClue2(project, review) {
+    return review && (review.mode === "clue" || review.mode === "outline") ? review.mode === "clue" : review && review.source && review.source !== "import" ? isClueMode2(project) : isClueMode2(project) || !!(review && review.draft.some((v) => isPlainObject(v.line)));
+  }
+  function reviewUnits2(project, review) {
+    let clue = reviewIsClue2(project, review);
+    return sessionUnits(review).filter((u) => u.kind === "stage" || clue && isPlainObject(review.draft.find((v) => v.id === u.volumeId).line));
+  }
+  function lineLocked2(review, volumeId, project = null) {
+    return review.lines ? !!((review.adoptedLines || {})[volumeId] || (review.dropped || []).includes(volumeId)) : !!(project && review.source && review.source !== "import" && !project.outline.volumes.some((v) => v.id === volumeId));
+  }
+  function sendableNotes2(project, review) {
+    return reviewUnits2(project, review).filter((u) => !lineLocked2(review, u.volumeId, project) && String((review.comments || {})[u.key] || "").trim()).map((u) => u.key);
+  }
+  function unitTitle2(review, key) {
+    let vol = review.draft.find((v) => v.id === key.split("/")[0]), own = key.endsWith("/line") ? "线（开头信息）" : stageLabel((unitValue(review.draft, key) || { key: "" }).key);
+    return vol && review.draft.length > 1 ? `${lineTitle2(vol)} / ${key.endsWith("/line") ? "线信息" : own}` : own;
+  }
+  function reviewIssues2(view, review, index) {
+    let project = view.project(), clue = reviewIsClue2(project, review), draft = review.draft.map((v, i) => isPlainObject(v.line) && !String(v.line.编号 || "").trim() ? { ...v, line: { ...v.line, 编号: `新${i + 1}` } } : v), mine = new Set(draft.flatMap((v) => v.stages.map((s) => stageLabel(s.key)))), others = project.outline.volumes.filter((v) => !draft.some((d) => d.id === v.id)), known0 = compileClue2(others), exists = new Set([...known0.nodes.map((n) => n.uid), ...known0.lines.map((l) => l.id)].filter(Boolean)), secrets = review.source && review.source !== "import" ? projectSecretNames(project) || [] : null, shorts = reviewShorts2(project, review), runSecrets = clue && !isClueMode2(project) ? checkImportDraft2(draft, { index, secrets, mode: "outline", ...shorts }).filter((x) => /^secret-/.test(x.kind || "")) : [], own0 = checkImportDraft2(draft, { index, secrets, mode: clue ? "clue" : "outline", ...shorts }), own = [...own0, ...runSecrets.filter((x) => !own0.some((y) => y.kind === x.kind && y.name === x.name && y.stageId === x.stageId))].filter(
+      (x) => !/^(route|reach|reach-unknown)$/.test(x.kind || "") && !/按模组推演|替代途径/.test(x.text) && !((/引用了不存在的(?:节点|线)「([^」]+)」/.exec(x.text) || [])[1] && exists.has(/引用了不存在的(?:节点|线)「([^」]+)」/.exec(x.text)[1]))
+    ), c = view.runtime.activeId() === view.projectId && isClueMode2(project) ? view.runtime.clue.compute() : null, { known, claimed } = chatFactSets2(c), reach = clue ? importReachIssues2([...others, ...draft], { only: mine, knownFacts: known, claimedFacts: claimed }) : [], all = [...own, ...reach], dismissed = new Set(review.dismissed || []), by = {}, stageOf = new Map(draft.flatMap((v) => v.stages.map((s) => [s.id, unitKey(v.id, s.id)]))), firstStage = draft[0] && draft[0].stages[0] ? unitKey(draft[0].id, draft[0].stages[0].id) : "";
+    for (let x of all) {
+      let key = x.stageId && stageOf.get(x.stageId) || x.stageIds && x.stageIds.map((id2) => stageOf.get(id2)).find(Boolean) || firstStage, id = `${x.kind || "x"}|${x.name || ""}|${x.stageId || ""}|${(x.nodeIds || []).join(",")}`;
+      dismissed.has(id) || (by[key] = [...by[key] || [], { ...x, id }]);
+    }
+    for (let k of Object.keys(by)) by[k] = mergeSameIssues2(by[k]);
+    return by;
+  }
+  function reviewShorts2(project, review) {
+    let own = (k) => Array.isArray(review && review[k]) ? review[k] : [], lists = review && review.source && review.source !== "import" ? Object.values(project && project.secretNames || {}) : [], from = (k) => lists.flatMap((x) => x[k] || []);
+    return { shortsSure: [.../* @__PURE__ */ new Set([...own("shortsSure"), ...from("confirmed")])], shortsNot: [.../* @__PURE__ */ new Set([...own("shortsNot"), ...from("denied")])] };
+  }
+  var cut2 = (t, n = 26) => String(t || "").length > n ? `${String(t).slice(0, n)}…` : String(t || "");
+  function nodeLine3(n, clue = !0) {
+    let item = isPlainObject(n.item) ? n.item : {};
+    if (!clue) {
+      let place = clueText2(item.地点), what = clueText2(item.事件 || item.内容 || item.场景), trig = n.kind === "side" && item.触发 ? `触发：${cut2(clueText2(item.触发), 16)}` : "";
+      return `<div class="pi-rv-node"><b>${esc(n.name)}</b><span>${esc([trig, place, cut2(what, 40)].filter(Boolean).join("，") || "—")}</span></div>`;
+    }
+    let gets = discoveryList2(item).map((d) => cut2(d.text.replace(/[。；;]+$/, ""), 20)), req = item.必需 === !1 || item.必需 === "false" || n.kind === "side" ? "可选" : "必需";
+    return `<div class="pi-rv-node"><b>${esc(n.name)}</b><span><i class="pi-rv-tag">${req}</i>${gets.length ? `获得：${esc(gets.join("、"))}` : ""}</span></div>`;
+  }
+  var FULL_CLUE2 = [["入口", "入口"], ["地点", "地点"], ["场景", "场景"], ["开放条件", "开放"], ["提前条件", "提前"], ["完成条件", "完成"]], FULL_OUTLINE2 = [["触发", "触发"], ["地点", "地点"], ["事件", "事件"], ["偏转", "偏转"], ["场景", "场景"]];
+  function nodeFull2(n, clue, names2) {
+    let item = isPlainObject(n.item) ? n.item : {}, val = (k, v) => /条件$/.test(k) && v && typeof v == "object" ? condWords2(parseCondition2(v, []), names2) || clueText2(JSON.stringify(v)) : clueText2(v), rows2 = (clue ? FULL_CLUE2 : FULL_OUTLINE2).filter(([k]) => item[k] != null && item[k] !== "").map(([k, label]) => [label, val(k, item[k])]), gets = clue ? discoveryList2(item).map((d) => d.text.replace(/[。；;]+$/, "")) : [], req = clue ? item.必需 === !1 || item.必需 === "false" || n.kind === "side" ? "可选" : "必需" : n.kind === "side" ? "支线" : "", note = clueText2(item.作者备注 || "");
+    return gets.length && rows2.splice(rows2.findIndex(([l]) => l === "完成") < 0 ? rows2.length : rows2.findIndex(([l]) => l === "完成"), 0, ["获得", `${gets.join("；")}。`]), `<div class="pi-rv-full"><b>${esc(n.name)}</b>${req ? `<i class="pi-rv-tag">${req}</i>` : ""}<dl>${rows2.map(([l, v]) => `<dt>${l}</dt><dd>${esc(v)}</dd>`).join("")}</dl>${note ? `<div class="pi-rv-auth">作者备注（正文看不到）：${esc(note)}</div>` : ""}</div>`;
+  }
+  function issueCard2(x, unit, filled) {
+    if (x.level === "error")
+      return `<div class="pi-rv-issue"><p>${esc(x.plain || x.text)}</p>${x.names ? `<ul class="pi-rv-names">${x.names.map((n) => `<li>${esc(n)}</li>`).join("")}</ul>` : ""}${x.fix ? `<span class="pi-rv-fix"><b>建议：</b>${esc(x.fix)}</span>` : ""}
+            <div class="pi-row">${filled ? '<span class="pi-badge is-ok">已加入意见</span>' : `<button type="button" class="pi-btn is-sm" data-act="rv-fill" data-unit="${esc(unit)}" data-issue="${esc(x.id)}">加入意见</button>`}
+            <details><summary class="pi-hint">详情</summary><p class="pi-hint pi-rv-tech">${esc(x.text)}</p></details></div></div>`;
+    let { q, how } = issueQuestion2(x), acts = x.kind === "secret-short" ? `<button type="button" class="pi-btn is-sm" data-act="rv-short" data-name="${esc(x.name)}" data-v="yes">是同一人</button><button type="button" class="pi-btn is-sm is-ghost" data-act="rv-short" data-name="${esc(x.name)}" data-v="no">不是</button>` : `<button type="button" class="pi-btn is-sm" data-act="rv-dismiss" data-issue="${esc(x.id)}">${x.kind === "secret-reveal" ? "是，收起" : "没问题，收起"}</button>${filled ? '<span class="pi-badge is-ok">已加入意见</span>' : `<button type="button" class="pi-btn is-sm is-ghost" data-act="rv-fill" data-unit="${esc(unit)}" data-issue="${esc(x.id)}">加入意见</button>`}`;
+    return `<div class="pi-rv-issue is-ask"><p>${esc(q)}</p>${how ? `<span class="pi-rv-fix">${esc(how)}</span>` : ""}
+        <div class="pi-row">${acts}</div></div>`;
+  }
+  function whenText2(line, volumes) {
+    if (!isPlainObject(line)) return "";
+    let errs = [], open = line.开启条件 != null && line.开启条件 !== "" ? parseCondition2(line.开启条件, errs) : null, names2 = condNames2(volumes), manual = String(line.开启方式 || "").trim() === "人工", after = line.接上一条 === !0 || line.接上一条 === "是";
+    return [manual ? "手动开始" : "", after ? "前一条主线结束后" : "", open && !errs.length ? condWords2(open, names2) : open ? String(line.开启条件) : ""].filter(Boolean).join("，并且") || (String(line.类型 || "").trim() === "主线" ? "" : "随时可以开始（遇到入口时）");
+  }
+  var WHEN2 = [
+    { v: "after", label: "前一条主线结束后", main: !0 },
+    { v: "any", label: "随时可以开始" },
+    { v: "manual", label: "手动开始" },
+    { v: "table", label: "按表格条件" },
+    { v: "keep", label: "保留现有条件" }
+  ], TABLE_OPS2 = [
+    { v: "==", label: "等于" },
+    { v: "!=", label: "不等于" },
+    { v: ">=", label: "≥" },
+    { v: ">", label: ">" },
+    { v: "<=", label: "≤" },
+    { v: "<", label: "<" },
+    { v: "包含", label: "包含" },
+    { v: "不包含", label: "不包含" }
+  ];
+  function simpleTableCond2(cond) {
+    let raw = isPlainObject(cond) && Object.keys(cond).length === 1 && typeof cond.表 == "string" ? cond.表 : null, m = raw && splitCompare2(raw, /^\s*([^/]+)\/([^/]+)\/(.+?)\s*(==|!=|>=|<=|不包含|包含|>|<)\s*(.*)$/);
+    return m ? { table: m[1].trim(), row: m[2].trim(), col: m[3].trim(), op: m[4], value: m[5].trim() } : null;
+  }
+  var complexCond2 = (c) => c != null && c !== "" && !simpleTableCond2(c), tableCondOf2 = (t) => ({ 表: `${t.table}/${t.row}/${t.col} ${t.op} ${t.value}` });
+  function whenPick2(line) {
+    return isPlainObject(line) ? String(line.开启方式 || "").trim() === "人工" ? "manual" : line.接上一条 === !0 || line.接上一条 === "是" ? "after" : line.开启条件 != null && line.开启条件 !== "" ? simpleTableCond2(line.开启条件) || line.开始方式表格 ? "table" : "keep" : line.开始方式表格 ? "table" : line.开始时机已选 ? "any" : "" : "";
+  }
+  function lineTitle2(v) {
+    let name = volumeName(v.key), id = isPlainObject(v.line) ? String(v.line.编号 || "").trim() : "";
+    return id && !name.startsWith(id) ? `${id} ${name}` : name;
+  }
+  function changedLines2(project, review) {
+    return editedVolumes(review).filter((v) => {
+      let live2 = project.outline.volumes.find((x) => x.id === v.id);
+      return !live2 || draftDiffers([live2], [v]);
+    }).map((v) => v.id);
+  }
+  function lineIssueCard2(x, volId) {
+    let btn = x.fix === "redraft" ? x.lines.map((id) => `<button type="button" class="pi-btn is-sm" data-act="rv-redraft" data-line="${esc(id)}">重新整理${esc(id)}</button>`).join("") : x.fix === "drop-open" ? `<button type="button" class="pi-btn is-sm" data-act="rv-drop-open" data-vol="${esc(volId)}" title="删掉整条开启条件和开启时段（不是只删多出来的那一项）">去掉开启条件和时段</button>` : x.fix === "tiers" ? `<button type="button" class="pi-btn is-sm" data-act="rv-tiers" data-vol="${esc(volId)}" data-tiers="${esc(JSON.stringify(x.tiers))}">顺序对，确认</button>` : "";
+    return `<div class="pi-rv-issue${x.level === "error" ? "" : " is-ask"}"><p>${esc(x.text)}</p>${btn ? `<div class="pi-row">${btn}</div>` : ""}</div>`;
+  }
+  function tableForm2(vol, locked = !1) {
+    let l = vol.line || {}, t = (isPlainObject(l.表格条件草稿) ? { op: ">=", ...l.表格条件草稿 } : null) || simpleTableCond2(l.开启条件) || { table: "", row: "", col: "", op: ">=", value: "" }, tables = currentTables(), sheets = tables ? sheetList2(tables) : [], attr = (k) => `data-rv-vol="${esc(vol.id)}" data-rv-tbl="${k}"${locked ? " disabled" : ""}`, opt = (list, val) => list.map((o) => `<option value="${esc(o.v)}"${o.v === val ? " selected" : ""}>${esc(o.label)}</option>`).join(""), pickOf = (list, val, ph) => opt([{ v: "", label: ph }, ...val && !list.includes(val) ? [val] : [], ...list].map((x) => typeof x == "string" ? { v: x, label: x } : x), val), sheet = sheets.find((x) => x.name === t.table), sr = sheet ? sheetRows2(sheet) : null, cols = sr ? sr.head.slice(1).map((c) => String(c ?? "").trim()).filter(Boolean) : [], rows2 = sr ? sr.rows.map((r) => String(r[1] ?? "").trim()).filter(Boolean) : [], field2 = (k, list, ph) => tables ? `<select class="pi-sel is-sm" ${attr(k)}>${pickOf(list, t[k], ph)}</select>` : `<input class="pi-inp is-sm" ${attr(k)} value="${esc(t[k])}" placeholder="${ph}">`, status = "", badge = "", tierFix = null;
+    if (t.table && t.row && t.col)
+      if (!tables) status = "读不到当前的表格（数据库没打开或这张卡没绑表格），保存后到执行页核对。";
+      else {
+        let errs = [], c = t.value !== "" ? parseCondition2(tableCondOf2(t), errs) : null, r = !errs.length && c ? cellCondCheck2(c, tables) : null, v = r && r.now ? evalAtom2(c, { tables }).v : "", num3 = [">=", "<=", ">", "<"].includes(t.op) ? tierNumberInNote2(sheet ? sheet.note : "", t.value) : null;
+        num3 != null && (tierFix = { vol: vol.id, value: String(num3) }), status = t.value === "" ? "填上比较的值。" : r ? `${r.now ? `现在：${r.now}` : "现在：表里还没有这一格的值"}${num3 != null ? `。表格说明里「${t.value}」是${num3}，比大小请填数字` : r.notes.length ? `。${r.notes[0]}` : ""}` : errs.join("；"), badge = v === "true" ? '<span class="pi-badge is-ok">已满足</span>' : v === "false" ? '<span class="pi-badge is-warn">未满足</span>' : "";
+      }
+    return `<div class="pi-rv-tbl">
+      ${field2("table", sheets.map((x) => x.name), "选择表")}
+      <div class="pi-row pi-rv-tbl-row">${field2("row", rows2, "选择行")}${field2("col", cols, "选择列")}</div>
+      <div class="pi-row pi-rv-tbl-row is-cmp"><select class="pi-sel is-sm" ${attr("op")}>${opt(TABLE_OPS2, t.op)}</select><input class="pi-inp is-sm" ${attr("value")} value="${esc(t.value)}" placeholder="值，如2或 熟悉"></div>
+      ${isPlainObject(l.表格条件草稿) ? '<p class="pi-hint is-warn">条件还没填完，保存前要补全。</p>' : ""}${status ? `<p class="pi-hint pi-rv-tbl-now">${esc(status)}${badge}</p>` : '<p class="pi-hint">选好表、行、列，填比较的值。</p>'}${tierFix && !locked ? `<div class="pi-row"><button type="button" class="pi-btn is-sm" data-act="rv-tbl-num" data-vol="${esc(tierFix.vol)}" data-value="${esc(tierFix.value)}">改成${esc(tierFix.value)}</button></div>` : ""}
+    </div>`;
+  }
+  function windowField2(project, vol, locked = !1) {
+    let l = vol.line || {}, mains = compileClue2(project.outline.volumes).lines.filter((m) => m.kind === "main");
+    if (!mains.length) return "";
+    let win = isPlainObject(l.开启时段) ? l.开启时段 : {}, cur = mains.find((m) => m.id === String(win.主线 || "").trim()), opt = (list, val) => list.map((o) => `<option value="${esc(o.value)}"${o.value === val ? " selected" : ""}>${esc(o.label)}</option>`).join(""), stages = (m) => [{ value: "", label: "不限" }, ...m.units.map((u) => ({ value: splitStageKey(u.stage.key).short || stageLabel(u.stage.key), label: stageLabel(u.stage.key) }))];
+    return `<div class="pi-field"><span>时段</span><div class="pi-row pi-rv-win${locked ? " is-locked" : ""}"><select class="pi-sel is-sm" data-rv-vol="${esc(vol.id)}" data-rv-win="主线"${locked ? " disabled" : ""}>${opt([{ value: "", label: "不限" }, ...mains.map((m) => ({ value: m.id, label: lineTitle2(m.volume) }))], cur ? cur.id : "")}</select>
+      ${cur ? `从 <select class="pi-sel is-sm" data-rv-vol="${esc(vol.id)}" data-rv-win="从">${opt(stages(cur), String(win.从 || ""))}</select> 到 <select class="pi-sel is-sm" data-rv-vol="${esc(vol.id)}" data-rv-win="到">${opt(stages(cur), String(win.到 || ""))}</select>` : ""}</div></div>`;
+  }
+  function lineLevelIssues2(view, job, review) {
+    if (!review.lines) return {};
+    let ids = review.lineIds || {}, drop = new Set(review.dropped || []), project = view.project(), adoptedSet = new Set(Object.keys(review.adoptedLines || {})), items = review.draft.map((v) => ({ id: ids[v.id] || String((v.line || {}).编号 || ""), vol: v, dropped: drop.has(v.id) })), checks = reviewCheck2(view, items, { src: "import", jobId: job.id }), out = {};
+    for (let x of items)
+      x.dropped || adoptedSet.has(x.vol.id) || !checks[x.id] || (out[x.vol.id] = checks[x.id].issues.filter((i) => !/编号「[^」]+」和别的线重复/.test(i.text)));
+    return out;
+  }
+  function stateLine2(review, dirtyIds, dirty) {
+    return (review.source !== "import" || review.reopened) && review.draft.length > 1 ? `本项目${review.draft.length}条线，${dirtyIds.length ? `${dirtyIds.length}条待保存` : "和模组一致"}` : review.lines ? `导入的支线${review.draft.length}条，${saveCount2(review)}条待保存` : dirty ? "草稿已保存，未应用到模组" : "和模组一致";
+  }
+  function saveCount2(review, dirtyIds = []) {
+    return review.lines ? review.draft.filter((v) => !lineLocked2(review, v.id)).length : (review.source !== "import" || review.reopened) && review.draft.length > 1 ? dirtyIds.length : 0;
+  }
+  function saveLabel2(review, dirtyIds) {
+    let n = saveCount2(review, dirtyIds);
+    return n ? `保存到模组（${n}条线）` : "保存到模组";
+  }
+  var sendLabel2 = (n) => n ? `发送意见（${n}页）` : "发送意见";
+  function renderReview2(view, job, review, index, crumb, notes = []) {
+    let units = reviewUnits2(view.project(), review), issues = reviewIssues2(view, review, index), changed = new Set(draftChanges(review.base, review.draft).map((c) => c.key)), at = Math.max(0, Math.min(units.length - 1, review.at || 0)), u = units[at], vol = review.draft.find((v) => v.id === u.volumeId), busy = view.busy[`review:${view.projectId}`], errCount = Object.values(issues).flat().filter((x) => x.level === "error").length, askCount = Object.values(issues).flat().filter((x) => x.level !== "error").length, pending = sendableNotes2(view.project(), review).length, last = (review.lastChanges || {})[u.key], mineUnits = units.map((x, i) => ({ ...x, i })).filter((x) => x.volumeId === u.volumeId), lineFirst = mineUnits[0] && mineUnits[0].kind === "line", dot = (x, n) => {
+      let i = x.i, has = (issues[x.key] || []).some((y) => y.level === "error");
+      return `<button type="button" class="pi-rv-dot${(i === at ? " is-cur" : has ? " is-err" : changed.has(x.key) && review.revised ? " is-chg" : "") + (String((review.comments || {})[x.key] || "").trim() ? " is-note" : "")}" data-act="rv-go" data-i="${i}">${x.kind === "line" ? "线信息" : esc(stageLabel(unitValue(review.draft, x.key).key))}</button>`;
+    }, vols = review.draft, vi = vols.findIndex((v) => v.id === vol.id), dropSet = new Set(review.dropped || []), isDrop = dropSet.has(vol.id), adoptedHere = review.lines && (review.adoptedLines || {})[vol.id], goneHere = !review.lines && lineLocked2(review, vol.id, view.project()), locked = lineLocked2(review, vol.id, view.project()), ro = locked ? " disabled" : "", lineIssues = review.lines ? lineLevelIssues2(view, job, review)[vol.id] || [] : [], firstOf = (v) => units.findIndex((x) => x.volumeId === v.id), picker = vols.length > 1 ? `<div class="pi-rv-line"><button type="button" class="pi-rv-arr" data-act="rv-go" data-i="${vi > 0 ? firstOf(vols[vi - 1]) : at}"${vi > 0 ? "" : " disabled"} title="上一条">‹</button><button type="button" class="pi-rv-lname" data-act="rv-lines" title="选择其他线"><b${isDrop ? ' class="is-drop"' : ""}>${esc(lineTitle2(vol))}</b><span>${vi + 1} / ${vols.length}${isDrop ? "，不导入" : adoptedHere ? "，已保存" : ""}</span></button><button type="button" class="pi-rv-arr" data-act="rv-go" data-i="${vi < vols.length - 1 ? firstOf(vols[vi + 1]) : at}"${vi < vols.length - 1 ? "" : " disabled"} title="下一条">›</button></div>` : "", comment = (review.comments || {})[u.key] || "", mine = issues[u.key] || [], filled = (x) => comment.includes(issueCommentLine2(x).trim()), isEdit = review.source === "proposal", dirtyIds = changedLines2(view.project(), review), dirty = !(isEdit || review.reopened) || dirtyIds.length > 0, full = !!review.fullOpen, clueOn = reviewIsClue2(view.project(), review), fillAll = '<button type="button" class="pi-rv-fillall" data-act="rv-fill-all">全部加入意见</button>', synced = !dirty && (isEdit || review.reopened), stateText = stateLine2(review, dirtyIds, dirty), head = `<h3>${isEdit ? "审阅修改" : "审阅"}${vols.length > 1 ? review.lines ? "：导入的支线" : "" : `：${esc(volumeName(vol.key))}`}<span class="pi-rv-end">${errCount ? `<button type="button" class="pi-badge is-warn pi-rv-issues" data-act="rv-first-issue" title="跳到有问题的页">问题${errCount} ›</button>` : review.revised ? '<span class="pi-badge is-ok">检查通过</span>' : ""}</span></h3><div class="pi-rv-state${dirty ? " is-draft" : ""}">${stateText}</div>${picker}`, nav = `<div class="pi-rv-nav"><div class="pi-rv-dots">${mineUnits.map(dot).join("")}</div></div>`, body = "";
+    if (u.kind === "line") {
+      let l = vol.line, main = String(l.类型 || "").trim() === "主线", pick = whenPick2(l), raw = clueText2(l.开始时机原文);
+      body = `<div class="pi-rv-title"><b>线</b><span class="pi-badge is-accent">${main ? "主线" : "支线"}${l.编号 ? ` ${esc(l.编号)}` : ""}</span>${review.lines && !adoptedHere ? `<button type="button" class="pi-icon-btn pi-rv-end" data-act="rv-line-menu" data-vol="${esc(vol.id)}" title="更多">${ICONS.more}</button>` : ""}</div>
+          ${isDrop ? '<p class="pi-hint is-warn">这条本次不导入，保存时不会加进模组。可以在右上角「更多」里撤回。</p>' : ""}
+          ${adoptedHere ? `<div class="pi-rv-locked"><p class="pi-hint">这条已经保存到模组（${esc(adoptedHere)}），这里只读。</p><button type="button" class="pi-btn is-sm" data-act="rv-edit-saved" data-vol="${esc(vol.id)}">到模组审阅修改</button></div>` : ""}
+          ${goneHere ? '<p class="pi-hint is-warn">这条线在模组里已经删掉了。这里的草稿和意见只读，不会写回模组。</p>' : ""}
+          ${lineIssues.length ? `<div class="pi-rv-sec">问题（${lineIssues.length}）${errCount + askCount && !locked ? fillAll : ""}</div>${lineIssues.map((x) => lineIssueCard2(x, vol.id)).join("")}` : ""}
+          <label class="pi-field"><span>简介</span><input class="pi-inp pi-rv-inp" data-rv-vol="${esc(vol.id)}" data-rv-line="简介" value="${esc(clueText2(l.简介))}"${ro}><span class="pi-hint">供作者识别这条线，在执行页显示。</span></label>
+          <label class="pi-field"><span>剧情入口</span><input class="pi-inp pi-rv-inp" data-rv-vol="${esc(vol.id)}" data-rv-line="入口提示" value="${esc(clueText2(l.入口提示))}" placeholder="例：叶莲娜发来消息，说烘焙铺有人需要帮忙"${ro}><span class="pi-hint">可开启时给正文的由头，不代表事情已经发生。</span></label>
+          <div class="pi-field"><span>开始条件</span>
+            ${pick || review.source !== "import" ? `<div class="pi-rv-when">${esc(whenText2(l, review.draft) || "无额外条件")}${raw ? `<br><span class="pi-hint">原文：「${esc(raw)}」</span>` : ""}</div>` : `<div class="pi-rv-when is-warn">文档未写开始条件，请选择。${raw ? `<br><span class="pi-hint">原文：「${esc(raw)}」</span>` : ""}</div>`}
+            <div class="pi-rv-opts">${WHEN2.filter((w) => (w.v !== "after" || main) && (w.v !== "keep" || complexCond2(l.开启条件) || complexCond2(l.保留条件))).map((w) => `<label class="pi-check"><input type="radio" name="rv-when" data-rv-vol="${esc(vol.id)}" data-rv-when="${w.v}"${pick === w.v ? " checked" : ""}${ro}><span>${w.label}</span></label>`).join("")}</div>${pick === "table" ? tableForm2(vol, locked) : ""}</div>
+          ${review.lines && !main ? windowField2(view.project(), vol, locked) : ""}`;
+    } else {
+      let s = unitValue(review.draft, u.key), nodes = stageNodes(s.data).filter((n) => n.kind !== "world"), errs = mine.filter((x) => x.level === "error"), asks = mine.filter((x) => x.level !== "error"), answered = (review.dismissed || []).length + (review.shortsSure || []).length + (review.shortsNot || []).length, main = nodes.filter((n) => n.kind === "main"), side = nodes.filter((n) => n.kind !== "main"), time2 = !clueOn && clueText2(s.data && s.data.时间范围);
+      body = `<div class="pi-rv-title"><b>${esc(stageLabel(s.key))}</b><span class="pi-meta">${time2 ? `时间：${esc(cut2(time2, 20))}` : `${nodes.length}个场景`}</span>${changed.has(u.key) && review.revised ? '<span class="pi-badge is-accent">已修改</span>' : ""}${nodes.length ? `<button type="button" class="pi-btn is-sm is-ghost pi-rv-fulltg pi-rv-end" data-act="rv-full">${full ? "收起完整内容" : "展开完整内容"}</button>` : ""}</div>
+          ${(() => {
+        let names2 = condNames2([...view.project().outline.volumes, ...review.draft]), one = (n) => full ? nodeFull2(n, clueOn, names2) : nodeLine3(n, clueOn);
+        return clueOn ? nodes.map(one).join("") : main.map(one).join("") + (side.length ? `<div class="pi-rv-sec">支线</div>${side.map(one).join("")}` : "");
+      })()}
+          ${nodes.length ? "" : '<p class="pi-hint is-warn">本阶段没有读到节点。</p>'}
+          ${last && last.length ? `<div class="pi-rv-sec">本次修改</div>${last.map((t) => `<div class="pi-rv-chg">${esc(t)}</div>`).join("")}` : ""}
+          ${errs.length ? `<div class="pi-rv-sec">问题（${errs.length}）${fillAll}</div>${errs.map((x) => issueCard2(x, u.key, filled(x))).join("")}` : ""}
+          ${asks.length ? `<div class="pi-rv-sec">待确认（${asks.length}）${errs.length ? "" : fillAll}</div>${asks.map((x) => issueCard2(x, u.key, filled(x))).join("")}` : ""}
+          ${answered ? `<div class="pi-row pi-rv-answered"><span class="pi-hint">已确认${answered}项</span><button type="button" class="pi-btn is-sm is-ghost" data-act="rv-undismiss">撤回</button></div>` : ""}`;
+    }
+    let yamlText = u.kind === "line" ? stringifyYaml({ [VOLUME_LINE_KEY]: vol.line }) : stringifyYaml({ [unitValue(review.draft, u.key).key]: unitValue(review.draft, u.key).data }), canUndo = review.history && review.history.length, topNotes = notes.length ? `<details class="pi-rv-notes"><summary class="pi-hint">整理时的提示（${notes.length}）</summary>${notes.map((t) => `<p class="pi-hint">${esc(t)}</p>`).join("")}</details>` : "", doneKeys = Object.entries(review.lastChanges || {}).filter(([k, v]) => changed.has(k) && !(Array.isArray(v) && v.length === 1 && /^(未修改|保持原样)/.test(v[0]))).map(([k]) => k), doneBar = !busy && !locked && review.revised && dirty && !synced && doneKeys.length && !pending ? `<div class="pi-rv-done"><span>✓ AI改好了${doneKeys.length}页：${doneKeys.slice(0, 6).map((k) => {
+      let i = units.findIndex((x) => x.key === k);
+      return i < 0 ? "" : `<button type="button" class="pi-btn is-sm is-ghost" data-act="rv-go" data-i="${i}">${esc(unitTitle2(review, k))}</button>`;
+    }).join("")}${doneKeys.length > 6 ? "…" : ""}</span><button type="button" class="pi-btn is-sm is-primary" data-act="import-adopt">${saveLabel2(review, dirtyIds)}</button></div>` : "";
+    return `${crumb}<div class="pi-card pi-rv${isDrop ? " is-drop" : ""}">${head}${doneBar}${topNotes}${nav}${body}
+        ${canUndo ? `<div class="pi-row pi-rv-undo"><button type="button" class="pi-btn is-sm is-ghost" data-act="rv-undo">撤销上次修改</button><span class="pi-hint">（${esc(review.history[review.history.length - 1].label)}）</span></div>` : ""}
+        ${locked ? `${comment.trim() ? `<div class="pi-field"><span>意见（未发送，只读）</span><textarea class="pi-ta" rows="3" readonly>${esc(comment)}</textarea></div>` : ""}<details><summary class="pi-hint">YAML</summary><pre class="pi-pre is-full">${esc(yamlText)}</pre></details>` : `<label class="pi-field"><span>意见</span><textarea class="pi-ta" rows="3" data-rv-comment="${esc(u.key)}" placeholder="对这一页的修改意见">${esc(comment)}</textarea></label>
+        <details${review.yamlOpen === u.key ? " open" : ""}><summary class="pi-hint">编辑YAML</summary><textarea class="pi-ta is-mono pi-rv-yaml" data-rv-yaml="${esc(u.key)}">${esc(yamlText)}</textarea>
+          <div class="pi-tools is-c1"><button type="button" class="pi-btn is-sm" data-act="rv-yaml-save" data-unit="${esc(u.key)}">保存并检查</button></div><p class="pi-status" data-rv-yaml-status></p></details>`}
+        ${locked ? "" : trpgReviewButton(view, job)}
+        ${locked || busy ? "" : `<div class="pi-row pi-rv-extra"><button type="button" class="pi-btn is-sm is-ghost" data-act="rv-preview" title="对整条线的意见、是否附带讨论记录；也能一次看全各页意见">整体意见${String(review.overall || "").trim() ? "（已写）" : ""}…</button></div>`}
+        <div class="pi-rv-foot">${busy ? progressHtml(`rv-${view.projectId}`) : ""}<button type="button" class="pi-btn${pending ? " is-primary" : ""}" data-act="rv-send"${busy ? " disabled" : ""}>${busy ? '<span class="pi-spin"></span>修改中' : sendLabel2(pending)}</button>${synced ? '<button type="button" class="pi-btn" data-act="import-adopt" disabled>已与模组一致</button>' : `<button type="button" class="pi-btn${pending ? "" : " is-primary"}" data-act="import-adopt">${saveLabel2(review, dirtyIds)}</button>`}</div></div>`;
+  }
+  function renderAdopted2(view, job, review, crumb) {
+    let vol = review.draft[0], project = view.project(), live2 = project.outline.volumes.find((v) => v.id === (review.adoptedId || vol.id)), l = live2 && isPlainObject(live2.line) ? live2.line : null, when = l ? whenText2(l, project.outline.volumes) : "", unsent = Object.values(review.comments || {}).filter((t) => String(t || "").trim()).length, unsentNote = unsent ? `<p class="pi-hint">还有${unsent}页意见没发送，点「继续修改」可以接着看和发送。</p>` : "";
+    return review.source === "proposal" ? `${crumb}<div class="pi-card pi-rv"><h3>审阅修改：${esc(volumeName(vol.key))}<span class="pi-spacer"></span></h3>
+        <div class="pi-rv-ok">✓ 已保存到模组：${esc(l && l.编号 ? `${l.编号} ` : "")}${esc(volumeName((live2 || vol).key))}</div>${unsentNote}
+        <div class="pi-tools is-c2 is-end"><button type="button" class="pi-btn" data-act="rv-reopen">继续修改</button><button type="button" class="pi-btn is-primary" data-act="rv-to-outline">查看模组</button></div></div>` : `${crumb}<div class="pi-card pi-rv"><h3>审阅：${esc(volumeName(vol.key))}<span class="pi-spacer"></span></h3>
+        <div class="pi-rv-ok">✓ 已保存到模组：${esc(l && l.编号 ? `${l.编号} ` : "")}${esc(volumeName((live2 || vol).key))}（${(live2 || vol).stages.length}个阶段）</div>
+        ${when ? `<p class="pi-hint">开始时机：${esc(when)}。</p>` : ""}${unsentNote}
+        <div class="pi-tools is-c2 is-end"><button type="button" class="pi-btn" data-act="rv-reopen">继续修改</button><button type="button" class="pi-btn is-primary" data-act="rv-to-outline">查看模组</button></div></div>`;
+  }
+  async function saveReview2(view, jobId, fn) {
+    await view.data.imports.update(jobId, (j) => ({ ...j, review: fn(j.review) }));
+  }
+  function unitYamlParse2(key, text2, want = "") {
+    return parseUnitReply2(key, text2, want);
+  }
+  var LINE_EDITABLE2 = ["简介", "入口提示", "开启条件", "开启方式", "开启时段", "接上一条", "开始时机原文", "开始时机已选"];
+  function putUnit2(volumes, key, parsed) {
+    let [vid, sid] = key.split("/");
+    if (sid !== "line") return putStage(volumes, vid, sid, parsed.stage);
+    let before = volumes.find((v) => v.id === vid), incoming = isPlainObject(parsed.line) ? parsed.line : {}, orig = "原开启条件" in incoming && incoming.原开启条件 != null && String(incoming.原开启条件).trim() !== "" ? incoming.原开启条件 : null;
+    return putLine(volumes, vid, incoming, LINE_EDITABLE2).map(
+      (v) => v.id === vid ? { ...v, line: settleWhen2(before && before.line, orig == null ? v.line : { ...v.line, 原开启条件: orig }) } : v
+    );
+  }
+  var WHEN_KEYS2 = ["开启条件", "开启方式", "接上一条"];
+  function settleWhen2(old, line) {
+    if (!isPlainObject(line) || WHEN_KEYS2.every((k) => stableText((old || {})[k]) === stableText(line[k]))) return line;
+    let l = { ...line };
+    return delete l.表格条件草稿, simpleTableCond2(l.开启条件) ? l.开始方式表格 = !0 : delete l.开始方式表格, complexCond2(l.开启条件) && delete l.保留条件, l;
+  }
+  function reviewActions2({ jobOf, crumbBack, redraftLine: redraftLine3, openSaved = null }) {
+    let current = (view) => {
+      let jobId = view.tabState("import")[view.projectId]?.jobId, job = jobOf(view, jobId);
+      return job && job.review ? { jobId, job, review: job.review } : null;
+    }, indexOf = (job) => {
+      let ok = (job.localIndex || []).filter((x) => isPlainObject(x) && !x.error);
+      return ok.length ? mergeImportIndex2(ok) : job.index;
+    }, curLine = (view, review) => {
+      let units = reviewUnits2(view.project(), review), vol = review.draft.find((v) => v.id === (units[Math.max(0, Math.min(units.length - 1, review.at || 0))] || units[0]).volumeId);
+      return { vol, locked: !vol || lineLocked2(review, vol.id, view.project()) };
+    }, sendRevise = async (view, c2, opts) => {
+      let projectId = view.projectId, key = `rv-${projectId}`, n = sendableNotes2(view.project(), c2.review).length, prog = startProgress(key).step(`AI正在按${n ? `${n}页意见` : "整体意见"}修改`, 92, 4e4 + n * 15e3), ok = !0;
+      await runTask(
+        view,
+        `review:${projectId}`,
+        () => reviseUnits2(view, c2.jobId, c2, indexOf(c2.job), jobOf, { ...opts, onText: (t) => prog.real(0, `已收到${t.length}字`) })
+      ).catch((e) => (ok = !1, toast("error", `修改中断：${e.message}。意见保留，可重试。`))), ok ? prog.done("改好了") : prog.fail(), clearProgress(key), view.renderBody();
+    }, actions12 = {
+      // 发送意见（用户 2026-11-23）：直接发，不再先弹预览框；整体意见、附带讨论记录在「整体意见…」里设
+      async "rv-send"(view) {
+        let box0 = hostDocument().querySelector(".pi-rv [data-rv-comment]");
+        box0 && await reviewOnInput2(view, box0, jobOf, { blur: !0 });
+        let c = current(view);
+        if (!c) return;
+        let review = c.review, { vol, locked } = curLine(view, review), overall = locked ? "" : String(review.overall || "").trim();
+        if (!sendableNotes2(view.project(), review).length && !overall)
+          return toast("info", "各页还没有意见。在页下面的「意见」框里写，写完点「发送意见」一次发给AI。");
+        let chat = review.noTalk ? null : await view.data.loadChat(view.projectId).catch(() => null), talk = chat && (chat.summary || (chat.messages || []).length) ? transcript(chat.summary, chat.messages, 8e3) : "";
+        await sendRevise(view, c, { overall, overallVol: vol && vol.id, talk });
+      },
+      async "rv-go"(view, target) {
+        let c = current(view);
+        c && (await saveReview2(view, c.jobId, (r) => ({ ...r, at: Number(target.dataset.i) || 0 })), view.renderBody());
+      },
+      async "rv-fill"(view, target) {
+        let c = current(view);
+        if (!c) return;
+        let key = target.dataset.unit, x = (reviewIssues2(view, c.review, indexOf(c.job))[key] || []).find((y) => y.id === target.dataset.issue);
+        x && (await saveReview2(view, c.jobId, (r) => ({ ...r, comments: { ...r.comments, [key]: appendComment2(r.comments[key], issueCommentLine2(x)) } })), view.renderBody());
+        let box = [...hostDocument().querySelectorAll("[data-rv-comment]")].find((b) => b.dataset.rvComment === key);
+        box && x && x.level !== "error" && (box.focus(), box.setSelectionRange(box.value.length, box.value.length));
+      },
+      // 疑似短名：是同一人 → 当保密名字（下一次检查报成要改的问题）；不是 → 不再提示。都可以在「已确认」里撤回。
+      async "rv-short"(view, target) {
+        let c = current(view);
+        if (!c) return;
+        let name = target.dataset.name, yes = target.dataset.v === "yes";
+        await saveReview2(view, c.jobId, (r) => ({
+          ...r,
+          shortsSure: yes ? [.../* @__PURE__ */ new Set([...r.shortsSure || [], name])] : (r.shortsSure || []).filter((n) => n !== name),
+          shortsNot: yes ? (r.shortsNot || []).filter((n) => n !== name) : [.../* @__PURE__ */ new Set([...r.shortsNot || [], name])]
+        })), view.renderBody(), yes && toast("info", `「${name}」按保密名字检查，出现的地方会列进问题，可以一键加入意见。`);
+      },
+      // 待确认收起（用户 2026-11-17）：记在这份审阅里，「已确认」里可以撤回
+      async "rv-dismiss"(view, target) {
+        let c = current(view);
+        c && (await saveReview2(view, c.jobId, (r) => ({ ...r, dismissed: [.../* @__PURE__ */ new Set([...r.dismissed || [], target.dataset.issue])] })), view.renderBody());
+      },
+      async "rv-undismiss"(view) {
+        let c = current(view);
+        c && (await saveReview2(view, c.jobId, (r) => ({ ...r, dismissed: [], shortsSure: [], shortsNot: [] })), view.renderBody());
+      },
+      // 表格条件的档位名换成说明里的数字（只改值，表、行、列、比较方式不动）
+      async "rv-tbl-num"(view, target) {
+        let c = current(view);
+        if (!c) return;
+        let vid = target.dataset.vol, value = target.dataset.value;
+        await saveReview2(
+          view,
+          c.jobId,
+          (r) => editDraft(
+            r,
+            "改表格条件",
+            (d) => d.map((v) => {
+              if (v.id !== vid) return v;
+              let line = { ...v.line || {} }, t = isPlainObject(line.表格条件草稿) ? { op: ">=", ...line.表格条件草稿 } : simpleTableCond2(line.开启条件);
+              return t ? (t = { ...t, value }, t.table && t.row && t.col ? (line.开启条件 = tableCondOf2(t), delete line.表格条件草稿) : line.表格条件草稿 = t, { ...v, line }) : v;
+            })
+          )
+        ), view.renderBody();
+      },
+      // 标题上的「问题 N」：跳到下一个有问题的页（从当前页往后找，到底再从头）
+      async "rv-first-issue"(view) {
+        let c = current(view);
+        if (!c) return;
+        let units = reviewUnits2(view.project(), c.review), issues = reviewIssues2(view, c.review, indexOf(c.job)), at = c.review.at || 0, bad = units.map((u, i) => (issues[u.key] || []).some((x) => x.level === "error") ? i : -1).filter((i) => i >= 0), next = bad.find((i) => i > at) ?? bad[0];
+        next != null && (await saveReview2(view, c.jobId, (r) => ({ ...r, at: next })), view.renderBody());
+      },
+      async "rv-fill-all"(view) {
+        let c = current(view);
+        if (!c) return;
+        let all = reviewIssues2(view, c.review, indexOf(c.job));
+        await saveReview2(view, c.jobId, (r) => {
+          let comments = { ...r.comments };
+          for (let [key, list] of Object.entries(all)) for (let x of list) x.level === "error" && !lineLocked2(r, key.split("/")[0], view.project()) && (comments[key] = appendComment2(comments[key], issueCommentLine2(x)));
+          return { ...r, comments };
+        }), view.renderBody(), toast("info", "各页的问题已加入意见。待确认的问题需要在意见里填写回答。");
+      },
+      // 点线名：列出所有线和状态（问题几个、有意见、已修改），选一条跳过去
+      async "rv-lines"(view) {
+        let c = current(view);
+        if (!c) return;
+        let review = c.review, project = view.project(), units = reviewUnits2(project, review), issues = reviewIssues2(view, review, indexOf(c.job)), dirty = new Set(changedLines2(project, review)), edit = review.source && review.source !== "import", mark = (v) => {
+          let keys = units.filter((u) => u.volumeId === v.id).map((u) => u.key), errs = keys.reduce((n, k) => n + (issues[k] || []).filter((x) => x.level === "error").length, 0), notes = keys.filter((k) => String((review.comments || {})[k] || "").trim()).length;
+          return [errs ? `问题${errs}` : "", notes ? `意见${notes}页` : "", edit && dirty.has(v.id) ? "已修改" : ""].filter(Boolean).join("，");
+        }, pick = await menuDialog({
+          title: reviewIsClue2(project, review) ? "选择剧情线" : "选择卷",
+          items: review.draft.map((v) => ({ value: v.id, label: `${lineTitle2(v)}　${v.stages.length}个阶段${mark(v) ? `（${mark(v)}）` : ""}` }))
+        });
+        if (!pick) return;
+        let i = units.findIndex((u) => u.volumeId === pick);
+        i >= 0 && (await saveReview2(view, c.jobId, (r) => ({ ...r, at: i })), view.renderBody());
+      },
+      // 「好几条支线」导入：线页右上角「更多」——本次不导入 / 撤回、重新整理这一条
+      async "rv-line-menu"(view, target) {
+        let c = current(view);
+        if (!c) return;
+        let vid = target.dataset.vol, review = c.review, id = (review.lineIds || {})[vid], dropped = (review.dropped || []).includes(vid), pick = await menuDialog({
+          title: id || "这条线",
+          items: [
+            { value: "redraft", label: "重新整理这一条" },
+            dropped ? { value: "undrop", label: "撤回：这条要导入" } : { value: "drop", label: "本次不导入这一条", danger: !0 }
+          ]
+        });
+        if (pick) {
+          if (pick === "redraft") return actions12["rv-redraft"](view, { dataset: { line: id } });
+          await saveReview2(view, c.jobId, (r) => ({ ...r, dropped: pick === "drop" ? [.../* @__PURE__ */ new Set([...r.dropped || [], vid])] : (r.dropped || []).filter((x) => x !== vid) })), view.renderBody();
+        }
+      },
+      async "rv-redraft"(view, target) {
+        let c = current(view);
+        if (!c) return;
+        let id = target.dataset.line, res = null;
+        if (await runTask(view, `review:${view.projectId}`, async () => res = await redraftLine3(view, c.jobId, id)).catch((error) => toast("error", `重新整理中断：${error.message}`)), res && res.ok) {
+          let r = view.data.imports.get(c.jobId).review, vid = Object.keys(r.lineIds || {}).find((k) => r.lineIds[k] === id), i = reviewUnits2(view.project(), r).findIndex((u) => u.volumeId === vid);
+          i >= 0 && await saveReview2(view, c.jobId, (x) => ({ ...x, at: i }));
+        }
+        res && toast(res.ok ? "success" : "warning", res.ok ? `已重新整理${id}，原来的内容可以在线页下面展开对照。` : `没有重新整理${id}：${res.why}。`), view.renderBody();
+      },
+      async "rv-drop-open"(view, target) {
+        let c = current(view), vid = target.dataset.vol;
+        c && (await saveReview2(view, c.jobId, (r) => editDraft(r, "去掉开启条件和时段", (d) => d.map((v) => v.id === vid ? { ...v, line: Object.fromEntries(Object.entries(v.line || {}).filter(([k]) => k !== "开启条件" && k !== "开启时段")) } : v))), view.renderBody());
+      },
+      async "rv-tiers"(view, target) {
+        let c = current(view), vid = target.dataset.vol, tiers = JSON.parse(target.dataset.tiers || "[]");
+        c && (await saveReview2(view, c.jobId, (r) => editDraft(r, `确认档位顺序${tiers.join(" < ")}`, (d) => d.map((v) => v.id === vid ? confirmTierOrder2([v], tiers)[0] : v))), view.renderBody());
+      },
+      // 已保存的线：到大纲的审阅修改里接着改（打开项目的审阅修改，定位到这条线）
+      async "rv-edit-saved"(view, target) {
+        let c = current(view);
+        if (!c) return;
+        let id = (c.review.adoptedLines || {})[target.dataset.vol], live2 = id && view.project().outline.volumes.find((v) => isPlainObject(v.line) && String(v.line.编号 || "").trim() === id);
+        if (!live2) return toast("warning", "模组里找不到这条线了（可能删掉了或改了编号）。");
+        openSaved && await openSaved(view, live2.id);
+      },
+      async "rv-full"(view) {
+        let c = current(view);
+        c && (await saveReview2(view, c.jobId, (r) => ({ ...r, fullOpen: !r.fullOpen })), view.renderBody());
+      },
+      async "rv-undo"(view) {
+        let c = current(view);
+        c && (await saveReview2(view, c.jobId, (r) => ({ ...undoDraft(r), lastChanges: {} })), view.renderBody());
+      },
+      async "rv-yaml-save"(view, target) {
+        let c = current(view);
+        if (!c) return;
+        if (lineLocked2(c.review, String(target.dataset.unit || "").split("/")[0], view.project())) return toast("info", "这条线只读。");
+        let key = target.dataset.unit, box = target.closest("details").querySelector("[data-rv-yaml]"), status = target.closest("details").querySelector("[data-rv-yaml-status]"), parsed;
+        try {
+          parsed = unitYamlParse2(key, box.value);
+        } catch (error) {
+          return status.textContent = `没有保存：${error.message}`, status.classList.add("is-err");
+        }
+        await saveReview2(view, c.jobId, (r) => ({ ...editDraft(r, "直接改YAML", (d) => putUnit2(d, key, parsed)), yamlOpen: key })), view.renderBody();
+      },
+      // 预览意见（用户 2026-11-16）：各页意见汇总可改，加整体意见、附带讨论记录，一次发送。
+      async "rv-preview"(view) {
+        let box0 = hostDocument().querySelector(".pi-rv [data-rv-comment]");
+        box0 && await reviewOnInput2(view, box0, jobOf, { blur: !0 });
+        let c = current(view);
+        if (!c) return;
+        let review = c.review, units = reviewUnits2(view.project(), review), labelOf = (key) => unitTitle2(review, key), sendKeys = new Set(sendableNotes2(view.project(), review)), list = units.filter((u) => sendKeys.has(u.key)), curVol = review.draft.find((v) => v.id === (units[Math.max(0, Math.min(units.length - 1, review.at || 0))] || units[0]).volumeId), curLocked = !curVol || lineLocked2(review, curVol.id, view.project()), chat = await view.data.loadChat(view.projectId).catch(() => null), hasTalk = !!(chat && (chat.summary || (chat.messages || []).length)), stages = curVol ? curVol.stages.length : 0, curName = curVol ? review.draft.length > 1 ? lineTitle2(curVol) : reviewIsClue2(view.project(), review) ? "这条线" : "这一卷" : "", html = `<p class="pi-hint">以下意见会一次发给AI，改完先进草稿。可在此修改；点标题返回对应页。</p>
+                ${list.map((u) => `<div class="pi-rv-q"><button type="button" class="pi-rv-q-go" data-dlg-value="go:${esc(u.key)}">${esc(labelOf(u.key))} ›</button><textarea class="pi-ta" rows="2" data-rv-q="${esc(u.key)}">${esc(review.comments[u.key])}</textarea></div>`).join("") || '<p class="pi-hint">各页还没有意见。</p>'}
+                ${curLocked ? "" : `<label class="pi-field"><span>对${esc(curName)}的整体意见（可选）</span><textarea class="pi-ta" rows="2" data-rv-overall placeholder="例：人名统一；入口语气更轻松">${esc(review.overall || "")}</textarea></label>
+                <p class="pi-hint">整体意见只改${esc(curName)}，会发送它的全部内容（${stages}个阶段），请求较长。别的线请在对应页写意见。</p>`}
+                ${hasTalk ? `<label class="pi-check"><input type="checkbox" data-rv-talk${review.noTalk ? "" : " checked"}><span>附带讨论记录</span></label>` : ""}`, read = (root) => ({
+          comments: Object.fromEntries([...root.querySelectorAll("[data-rv-q]")].map((b) => [b.dataset.rvQ, b.value])),
+          overall: root.querySelector("[data-rv-overall]") ? root.querySelector("[data-rv-overall]").value : "",
+          talk: hasTalk ? root.querySelector("[data-rv-talk]").checked : !1
+        }), typed = null, pick = await openDialog({
+          title: "整体意见",
+          html,
+          // 点标题回到那一页之前，先记下框里改过的内容（GPT 第二轮 N6）
+          onMount: (root) => root.addEventListener("click", (e) => e.target.closest("[data-dlg-value]") && (typed = read(root)), !0),
+          actions: [
+            { label: "存下，先不发", value: (root) => ({ ...read(root), act: "back" }) },
+            { label: "发送", primary: !0, value: (root) => ({ ...read(root), act: "send" }) }
+          ]
+        });
+        if (!pick) return;
+        let goKey = typeof pick == "string" && pick.startsWith("go:") ? pick.slice(3) : "";
+        if (goKey) {
+          let i = units.findIndex((u) => u.key === goKey);
+          return await saveReview2(view, c.jobId, (r) => ({ ...r, ...typed ? { comments: { ...r.comments, ...typed.comments }, overall: typed.overall, noTalk: hasTalk && !typed.talk } : {}, at: i < 0 ? r.at : i })), view.renderBody();
+        }
+        if (await saveReview2(view, c.jobId, (r) => ({ ...r, comments: { ...r.comments, ...pick.comments }, overall: pick.overall, noTalk: hasTalk && !pick.talk })), pick.act !== "send") return view.renderBody();
+        let c2 = current(view);
+        if (!sendableNotes2(view.project(), c2.review).length && !String(pick.overall || "").trim()) return toast("info", "没有要发送的意见。");
+        let talk = pick.talk && chat ? transcript(chat.summary, chat.messages, 8e3) : "";
+        await sendRevise(view, c2, { overall: curLocked ? "" : pick.overall, overallVol: curVol && curVol.id, talk });
+      },
+      async "rv-reopen"(view) {
+        let c = current(view);
+        if (!c) return;
+        let project = view.project(), live2 = project.outline.volumes.find((v) => v.id === c.review.adoptedId);
+        if (!live2) return toast("warning", "模组里找不到这条线了（可能删掉了）。");
+        let edit = c.review.source === "proposal", carry = Object.fromEntries(
+          Object.entries(c.review.comments || {}).filter(([, t]) => String(t || "").trim()).map(([k, t]) => {
+            let sid = k.split("/")[1];
+            return [sid === "line" || live2.stages.some((s) => s.id === sid) ? `${live2.id}/${sid}` : "", t];
+          }).filter(([k]) => k)
+        );
+        await saveReview2(view, c.jobId, () => ({ ...createReviewSession({ source: edit ? "proposal" : "project", projectId: project.id, jobId: c.jobId, volumes: [live2] }), comments: carry, at: 0, reopened: !0, adoptedId: live2.id, mode: isClueMode2(project) ? "clue" : "outline", ...edit ? { liveAt: JSON.stringify(live2) } : {} })), view.renderBody();
+      },
+      "rv-to-outline"(view) {
+        let c = current(view);
+        crumbBack(view, c && c.review && c.review.adoptedId);
+      }
+    };
+    return Object.assign(actions12, trpgReviewActions({ current, saveReview: saveReview2, reviewUnits: reviewUnits2, lineLocked: lineLocked2 })), actions12;
+  }
+  async function reviseUnits2(view, jobId, c, index, jobOf, opts = {}) {
+    let review = c.review, units = reviewUnits2(view.project(), review), overall = String(opts.overall || "").trim(), commented = sendableNotes2(view.project(), review), overallVol = overall ? opts.overallVol || units[0] && units[0].volumeId : "", want = overall ? [.../* @__PURE__ */ new Set([...units.filter((u) => u.volumeId === overallVol).map((u) => u.key), ...commented])] : commented;
+    if (!want.length) return;
+    let project = view.project(), clue = reviewIsClue2(project, review), secrets = [.../* @__PURE__ */ new Set([...(review.source && review.source !== "import" ? projectSecretNames(project) : importSecretNames2(index)) || [], ...reviewShorts2(project, review).shortsSure])], notes = review.notes || {}, src = await view.data.imports.source(jobId).catch(() => ""), sourceOf = (key) => {
+      let v = unitValue(review.draft, key);
+      if (!v || !v.data) return "";
+      let n = stageNodes(v.data).map((x) => notes[nodeUid2(x.item)]).find((x) => x && x.起 != null);
+      return n && src ? sourceExcerpt2(src, n.起, n.止) : "";
+    }, background = project.outline.volumes.filter((v) => !review.draft.some((d) => d.id === v.id)), all = [...background, ...review.draft], yamlOf = (key) => {
+      let v = unitValue(all, key);
+      return key.endsWith("/line") ? stringifyYaml({ [VOLUME_LINE_KEY]: v }) : stringifyYaml({ [v.key]: v.data });
+    }, labelOf = (key) => {
+      let mine = review.draft.some((v) => v.id === key.split("/")[0]), vol = all.find((v) => v.id === key.split("/")[0]), own = key.endsWith("/line") ? "线（开头信息）" : stageLabel(unitValue(all, key).key);
+      return mine ? review.draft.length > 1 ? unitTitle2(review, key) : own : `${volumeLabel(vol.key)} ${key.endsWith("/line") ? "线头" : own}`;
+    }, tables = clue ? currentTables() : null, ctx2 = groupContext(all, want), ctxText = ctx2.units.filter((k) => !want.includes(k)).map((k) => `【${labelOf(k)}】
+${yamlOf(k)}`).join(`
+`), snap2 = Object.fromEntries(want.map((k) => [k, JSON.stringify(unitValue(review.draft, k))])), sentComments = Object.fromEntries(commented.map((k) => [k, String((review.comments || {})[k] || "")])), reply2 = await ask(
+      view,
+      "outline",
+      reviewReviseMessages2({
+        units: want.map((k) => ({ key: k, label: labelOf(k), yaml: yamlOf(k), comment: (review.comments || {})[k] || "", source: commented.includes(k) ? sourceOf(k) : "", overall: !overall || k.split("/")[0] === overallVol })),
+        context: ctxText,
+        secrets,
+        tableCatalog: tables ? tableCatalogText(tables) : "",
+        mainLines: clue ? mainLinesText2(project.outline.volumes) : "",
+        overall,
+        talk: opts.talk || "",
+        mode: clue ? "clue" : "outline"
+      }),
+      { onText: opts.onText }
+    );
+    if (view.projectId !== project.id || !jobOf(view, jobId)) return;
+    let parts = splitUnitReplies2(reply2, want.map((k) => ({ key: k, name: k.endsWith("/line") ? VOLUME_LINE_KEY : unitValue(review.draft, k).key }))), reasons = keepReasons2(reply2), parsed = {}, bad = [];
+    for (let k of want)
+      if (k in parts)
+        try {
+          let old = unitValue(review.draft, k), p = parseUnitReply2(k, parts[k], k.endsWith("/line") ? VOLUME_LINE_KEY : old.key, old && old.data ? stageNodes(old.data).length : 0);
+          p.stage && (p.stage = splitImportAuthorFields2([{ id: "x", key: "x", stages: [{ id: "y", ...p.stage }] }]).volumes[0].stages[0]), parsed[k] = p;
+        } catch {
+          bad.push(k);
+        }
+    if (overall && !Object.keys(parsed).length) {
+      let why = Object.keys(reasons).length ? `AI说明保持原样：${Object.entries(reasons).map(([k, r]) => `「${want.includes(k) ? labelOf(k) : k}」${r}`).join("；")}` : bad.length ? "回复格式无法读取" : "回复里没有修改内容";
+      return toast("warning", `没有读到修改结果（${why}）。意见保留，可重试。`);
+    }
+    let need = overall ? [.../* @__PURE__ */ new Set([...commented, ...Object.keys(parsed), ...bad])] : want, groups = relatedGroups(review.draft, need), cur = view.data.imports.get(jobId).review, curBackground = view.project().outline.volumes.filter((v) => !cur.draft.some((d) => d.id === v.id)), okKeys = [], failed = [], outside = [];
+    for (let g of groups) {
+      let verdict = groupVerdict(g, parsed, snap2, cur.draft);
+      if (!verdict.ok) {
+        failed.push({ g, why: verdict.missing.length ? `未返回「${verdict.missing.map(labelOf).join("、")}」` : `「${verdict.touched.map(labelOf).join("、")}」在修改期间被改过` });
+        continue;
+      }
+      let after = g.reduce((acc, k) => putUnit2(acc, k, parsed[k]), cur.draft), breaks = refBreaks(cur.draft, after, g, curBackground), inner = breaks.filter((x) => cur.draft.some((v) => v.id === x.key.split("/")[0])), missing = newMissingRefs(cur.draft, after, g, curBackground);
+      if (missing.length) {
+        failed.push({ g, why: `「${missing.map((x) => labelOf(x.key)).join("、")}」新写的条件用到了找不到的${[...new Set(missing.flatMap((x) => x.refs))].join("、")}` });
+        continue;
+      }
+      if (inner.length) {
+        failed.push({ g, why: `「${g.map(labelOf).join("、")}」改掉了「${inner.map((x) => labelOf(x.key)).join("、")}」还在用的${[...new Set(inner.flatMap((x) => x.refs))].join("、")}，需要一起改` });
+        continue;
+      }
+      outside.push(...breaks), okKeys.push(...g);
+    }
+    let same2 = [], newer = [], changedKeys = [];
+    okKeys.length && await saveReview2(view, jobId, (r) => {
+      let before = r.draft, next = editDraft(r, overall ? "按意见修改（含整体意见）" : `按意见修改：${okKeys.map(labelOf).join("、")}`, (d) => okKeys.reduce((acc, k) => putUnit2(acc, k, parsed[k]), d)), ch = Object.fromEntries(draftChanges(before, next.draft).map((x) => [x.key, x.changes])), differs = (k) => JSON.stringify(unitValue(before, k)) !== JSON.stringify(unitValue(next.draft, k)), comments = { ...next.comments };
+      for (let k of okKeys)
+        differs(k) ? (changedKeys.push(k), String(comments[k] || "") === (sentComments[k] || "") ? comments[k] = "" : newer.push(k)) : commented.includes(k) && same2.push(k);
+      return {
+        ...next,
+        comments,
+        revised: !0,
+        lastChanges: {
+          ...r.lastChanges || {},
+          ...Object.fromEntries(
+            okKeys.filter((k) => differs(k) || commented.includes(k)).map((k) => [k, differs(k) ? ch[k] || ["内容改了"] : [reasons[k] ? `保持原样：${reasons[k]}` : "未修改，意见保留"]])
+          )
+        }
+      };
+    }), same2.length && failed.push({ g: same2, why: same2.map((k) => reasons[k] ? `「${labelOf(k)}」保持原样：${reasons[k]}` : `「${labelOf(k)}」原样返回`).join("；") }), overall && !failed.length && await saveReview2(view, jobId, (r) => ({ ...r, overall: "" }));
+    let tail = [
+      failed.length ? `${failed.map((f) => f.why).join("；")}，相关意见保留。可写得更具体后重试` : "",
+      newer.length ? `「${newer.map(labelOf).join("、")}」有新写的意见，还没发送` : "",
+      outside.length ? `别的线还在用改掉的内容：${outside.map((x) => `「${labelOf(x.key)}」用${x.refs.join("、")}`).join("；")}，需要另外修改那条线` : ""
+    ].filter(Boolean);
+    toast(
+      failed.length || outside.length ? "warning" : "success",
+      `已修改${changedKeys.length}页${changedKeys.length ? `：${changedKeys.map(labelOf).join("、")}` : ""}${tail.length ? `。${tail.join("。")}` : ""}。`
+    );
+  }
+  function adoptPlan2(view, job, review) {
+    let project = view.project(), kind = importJobKind2(job), vols = stripReviewMarks(review.draft);
+    if (kind === "main" || kind === "side") {
+      let prefix = kind === "main" ? "M" : "S", taken = new Set(compileClue2(project.outline.volumes).lines.map((l) => l.id));
+      vols = vols.map((v) => {
+        if (!isPlainObject(v.line) || v.line.编号) return v;
+        let n = 1;
+        for (; taken.has(`${prefix}${kind === "side" ? String(n).padStart(2, "0") : n}`); ) n++;
+        let id = `${prefix}${kind === "side" ? String(n).padStart(2, "0") : n}`;
+        return taken.add(id), { ...v, line: { 编号: id, ...v.line } };
+      }), vols = vols.map((v) => {
+        let id = isPlainObject(v.line) ? String(v.line.编号 || "").trim() : "", m = /^剧情_卷[^_]*_(.+)$/.exec(String(v.key || ""));
+        return id && m ? { ...v, key: `剧情_${id}_${m[1]}` } : v;
+      });
+      let [byLine] = reidLines2(vols, project.outline.volumes, [], {});
+      vols = byLine;
+    }
+    let [reid, renamed] = reidConflicts2(vols, project.outline.volumes), keys = new Set(project.outline.volumes.map((v) => v.key));
+    return { vols: reid.map((v) => keys.has(v.key) ? { ...v, key: `${v.key}_导入${Date.now().toString(36).slice(-3)}` } : v), renamed };
+  }
+  async function reviewOnInput2(view, target, jobOf, { blur = !1 } = {}) {
+    let jobId = view.tabState("import")[view.projectId]?.jobId, job = jobOf(view, jobId);
+    if (!job || !job.review) return !1;
+    let vid0 = target.dataset.rvVol || (target.dataset.rvComment || target.dataset.rvYaml || "").split("/")[0];
+    if (vid0 && lineLocked2(job.review, vid0, view.project()) && (target.dataset.rvComment !== void 0 || target.dataset.rvLine !== void 0 || target.dataset.rvTbl !== void 0 || target.dataset.rvWin !== void 0 || target.dataset.rvWhen !== void 0)) return !0;
+    if (target.dataset.rvComment !== void 0) {
+      if (!blur) return !0;
+      let key = target.dataset.rvComment, text2 = target.value;
+      if ((job.review.comments || {})[key] === text2) return !0;
+      await saveReview2(view, jobId, (r) => ({ ...r, comments: { ...r.comments, [key]: text2 } }));
+      let n = Object.values(view.data.imports.get(jobId).review.comments).filter((c) => String(c || "").trim()).length, card = target.closest(".pi-rv"), b = card && card.querySelector('[data-act="rv-send"]'), dot = card && card.querySelector(".pi-rv-dot.is-cur");
+      return b && !view.busy[`review:${view.projectId}`] && (b.textContent = sendLabel2(n), b.classList.toggle("is-primary", n > 0)), dot && dot.classList.toggle("is-note", !!String(text2).trim()), !0;
+    }
+    if (target.dataset.rvLine !== void 0) {
+      if (!blur) return !0;
+      let k = target.dataset.rvLine, val = target.value.trim(), vid = target.dataset.rvVol || job.review.draft[0].id, vol = job.review.draft.find((v) => v.id === vid);
+      if (!vol || clueText2(vol.line && vol.line[k]) === val) return !0;
+      await saveReview2(view, jobId, (r) => editDraft(r, `改${k}`, (d) => putLine(d, vid, { [k]: val }, [k])));
+      let card = target.closest(".pi-rv"), r1 = view.data.imports.get(jobId).review, ids = changedLines2(view.project(), r1), edit = r1.source && r1.source !== "import", stEl = card && card.querySelector(".pi-rv-state"), save3 = card && card.querySelector('[data-act="import-adopt"]');
+      if (stEl && edit && (stEl.classList.toggle("is-draft", ids.length > 0), stEl.textContent = stateLine2(r1, ids, ids.length > 0)), save3 && edit) {
+        let hasNotes = !!card.querySelector('[data-act="rv-send"].is-primary');
+        save3.disabled = !ids.length, save3.textContent = ids.length ? saveLabel2(r1, ids) : "已与模组一致", save3.classList.toggle("is-primary", ids.length > 0 && !hasNotes);
+      }
+      return !0;
+    }
+    if (target.dataset.rvTbl !== void 0) {
+      if (target.tagName === "INPUT" && !blur) return !0;
+      let card = target.closest(".pi-rv"), vid = target.dataset.rvVol, get = (k) => String(card && card.querySelector(`[data-rv-tbl="${k}"]`)?.value || "").trim(), t = { table: get("table"), row: get("row"), col: get("col"), op: get("op") || ">=", value: get("value") };
+      target.dataset.rvTbl === "table" && (t.row = "", t.col = "");
+      let full = t.table && t.row && t.col && t.value !== "";
+      return await saveReview2(
+        view,
+        jobId,
+        (r) => editDraft(
+          r,
+          "改表格条件",
+          (d) => d.map((v) => {
+            if (v.id !== vid) return v;
+            let line = { ...v.line || {}, 开始方式表格: !0, 开始时机已选: !0 };
+            return full ? (line.开启条件 = tableCondOf2(t), delete line.表格条件草稿) : line.表格条件草稿 = t, { ...v, line };
+          })
+        )
+      ), view.renderBody(), !0;
+    }
+    if (target.dataset.rvWin !== void 0) {
+      let card = target.closest(".pi-rv"), vid = target.dataset.rvVol, get = (k) => card && card.querySelector(`[data-rv-win="${k}"]`)?.value || "", main = get("主线"), win = main ? { 主线: main, ...get("从") && target.dataset.rvWin !== "主线" ? { 从: get("从") } : {}, ...get("到") && target.dataset.rvWin !== "主线" ? { 到: get("到") } : {} } : "";
+      return await saveReview2(
+        view,
+        jobId,
+        (r) => editDraft(r, "改开启时段", (d) => d.map((v) => v.id !== vid ? v : { ...v, line: win ? { ...v.line, 开启时段: win } : Object.fromEntries(Object.entries(v.line || {}).filter(([k]) => k !== "开启时段")) }))
+      ), view.renderBody(), !0;
+    }
+    if (target.dataset.rvWhen !== void 0) {
+      let v = target.dataset.rvWhen, vid = target.dataset.rvVol || job.review.draft[0].id, base0 = (job.review.base || []).find((x) => x.id === vid);
+      await saveReview2(
+        view,
+        jobId,
+        (r) => editDraft(r, "选开始时机", (d) => {
+          let cur = d.find((x) => x.id === vid), l = { ...cur && cur.line || {} };
+          return complexCond2(l.开启条件) && (l.保留条件 = l.开启条件), v === "keep" && l.保留条件 != null && (l.开启条件 = l.保留条件, delete l.保留条件), delete l.接上一条, delete l.开启方式, delete l.开始方式表格, delete l.表格条件草稿, v !== "keep" && v !== "table" && delete l.开启条件, v === "table" && (l.开始方式表格 = !0, simpleTableCond2(l.开启条件) || delete l.开启条件), v === "after" && (l.接上一条 = !0), v === "manual" && (l.开启方式 = "人工"), l.开始时机已选 = !0, d.map((x) => x.id === vid ? { ...x, line: l } : x);
+        })
+      );
+      let now = view.data.imports.get(jobId).review.draft.find((x) => x.id === vid);
+      return v === "keep" && !complexCond2(now && now.line && now.line.开启条件) && base0 && base0.line && complexCond2(base0.line.开启条件) && await saveReview2(view, jobId, (r) => ({ ...r, draft: r.draft.map((x) => x.id === vid ? { ...x, line: { ...x.line, 开启条件: base0.line.开启条件 } } : x) })), view.renderBody(), !0;
+    }
+    return !1;
+  }
+
+  // src/trpg/trpg-import-store.js
+  function adoptKey2(jobId, partNo, stageKey) {
+    return `${jobId}:${partNo}:${stageKey}`;
+  }
+
+  // src/core/doc-pdf.js
+  var CJK = "\\u3000-\\u303f\\u3400-\\u9fff\\uf900-\\ufaff\\uff00-\\uffef\\u2018-\\u201f\\u2026\\u2014", CJK_SPACE = new RegExp(`([${CJK}])[ \\u00a0]+(?=[${CJK}])`, "g"), BULLET = /^(?:[\uE000-\uF8FF•●▪◆■□◇○·]|-\s)\s*/, SENT_END = /[。！？!?…」』”）)：:]$/, DOT_LEADER = /[.·…．]{6,}/, HEAD_END = /[。！？!?…，,；;]$/, LIST_HEAD = /^(?:\d{1,2}[:：]\d{2}|\d{1,3}[.、．)）]|[（(]\d{1,3}[)）]|第[0-9一二三四五六七八九十百]+[章节条幕])/;
+  function isCjk(ch) {
+    return !!ch && new RegExp(`[${CJK}]`).test(ch);
+  }
+  function makeLine(items) {
+    let solid = items.filter((it) => it.h > 0 && it.str.trim()), text2 = "";
+    for (let it of items) text2 += it.str;
+    if (text2 = text2.replace(/\s+/g, " ").trim(), !text2 || !solid.length) return null;
+    let x = Math.min(...solid.map((it) => it.x)), right = Math.max(...solid.map((it) => it.x + it.w)), h = Math.max(...solid.map((it) => it.h)), font = solid.reduce((a, b) => b.str.length > a.str.length ? b : a).font;
+    return { text: text2, x, right, y: solid[0].y, h, font, items: solid };
+  }
+  function streamLines(items) {
+    let lines2 = [], cur = [], curY = null, flush = () => {
+      let line = cur.length ? makeLine(cur) : null;
+      line && lines2.push(line), cur = [], curY = null;
+    };
+    for (let it of items || [])
+      it.h > 0 && it.str.trim() && (curY !== null && Math.abs(it.y - curY) > it.h * 0.5 && flush(), curY === null && (curY = it.y)), cur.push(it), it.eol && flush();
+    return flush(), lines2;
+  }
+  function orderLooksBroken(lines2, width = 0) {
+    if (lines2.length < 6) return !1;
+    let jumps = 0, switches = 0;
+    for (let i = 1; i < lines2.length; i++)
+      lines2[i].y - lines2[i - 1].y > lines2[i].h * 2 && jumps++, width && Math.abs(lines2[i].x - lines2[i - 1].x) > width * 0.3 && switches++;
+    return jumps > Math.max(3, lines2.length * 0.12) || switches > Math.max(4, lines2.length * 0.3);
+  }
+  function coordLines(items, width) {
+    let rows2 = [];
+    for (let it of items || []) {
+      if (!(it.h > 0 && it.str.trim())) continue;
+      let row2 = rows2.find((r) => Math.abs(r.y - it.y) < it.h * 0.5);
+      row2 || rows2.push(row2 = { y: it.y, items: [] }), row2.items.push(it);
+    }
+    let mid = width / 2, pieces = [];
+    for (let row2 of rows2) {
+      row2.items.sort((a, b) => a.x - b.x);
+      let left = [], right = [], full = [];
+      for (let it of row2.items)
+        it.x < mid - 10 && it.x + it.w > mid + 10 ? full.push(it) : it.x + it.w / 2 < mid ? left.push(it) : right.push(it);
+      full.length ? pieces.push({ y: row2.y, col: "full", items: [...left, ...full, ...right].sort((a, b) => a.x - b.x) }) : (left.length && pieces.push({ y: row2.y, col: "L", items: left }), right.length && pieces.push({ y: row2.y, col: "R", items: right }));
+    }
+    pieces.sort((a, b) => b.y - a.y);
+    let out = [], band = [], flushBand = () => {
+      for (let col of ["L", "R"]) for (let p of band) p.col === col && out.push(p);
+      band = [];
+    };
+    for (let p of pieces) p.col === "full" ? (flushBand(), out.push(p)) : band.push(p);
+    return flushBand(), out.map((p) => makeLine(p.items)).filter(Boolean);
+  }
+  function norm(text2) {
+    return text2.replace(/\d+/g, "#").replace(/\s+/g, "");
+  }
+  function marginKeys(pages) {
+    let count = /* @__PURE__ */ new Map();
+    for (let p of pages)
+      for (let line of new Set(p.lines.filter((l) => inMargin(l, p)).map((l) => norm(l.text))))
+        count.set(line, (count.get(line) || 0) + 1);
+    return new Set([...count].filter(([, n]) => n >= 3).map(([k]) => k));
+  }
+  function inMargin(line, page) {
+    return line.y > page.height * 0.92 || line.y < page.height * 0.08;
+  }
+  function mode(values) {
+    let c = /* @__PURE__ */ new Map();
+    for (let [v, n] of values) c.set(v, (c.get(v) || 0) + n);
+    let best = null, bn = -1;
+    for (let [v, n] of c) n > bn && (best = v, bn = n);
+    return best;
+  }
+  function leadWidth(text2, h) {
+    let m = /^[（(“"《【「『][^）)”"》】」』]{0,20}[）)”"》】」』]/.exec(text2) || /^[A-Za-z0-9/.%+\-]+/.exec(text2), chunk = m ? m[0] : text2.slice(0, 1), w = 0;
+    for (let ch of chunk) w += isCjk(ch) ? h : h * 0.55;
+    return w;
+  }
+  function joinText(a, b) {
+    if (!a) return b;
+    let last = a[a.length - 1], first = b[0];
+    return /[A-Za-z]-$/.test(a) && /^[a-z]/.test(b) ? a.slice(0, -1) + b : isCjk(last) || isCjk(first) ? a + b : `${a} ${b}`;
+  }
+  function cleanText2(text2) {
+    return text2.replace(CJK_SPACE, "$1").replace(CJK_SPACE, "$1").replace(/([a-z])([.?!])(?=[A-Z])/g, "$1$2 ").replace(/[ \t]+/g, " ").trim();
+  }
+  function pdfPagesToText(input2, { keepToc = !1 } = {}) {
+    let warnings = [], pages = (input2 || []).map((p, i) => {
+      let lines2 = streamLines(p.items);
+      return orderLooksBroken(lines2, p.width) && (lines2 = coordLines(p.items, p.width)), { no: i + 1, width: p.width, height: p.height, lines: lines2 };
+    }), empty = pages.filter((p) => !p.lines.length).map((p) => p.no);
+    empty.length && warnings.push(`第${empty.join("、")}页没有文字层（可能是图片或扫描页），没有转出文字。`);
+    let toc = pages.filter((p) => p.lines.filter((l) => DOT_LEADER.test(l.text)).length >= 3);
+    keepToc || toc.forEach((p) => p.lines = []);
+    let margins = marginKeys(pages);
+    for (let p of pages)
+      p.lines = p.lines.filter((l) => !(inMargin(l, p) && (margins.has(norm(l.text)) || /^[-—\s]*\d{1,3}[-—\s]*$/.test(l.text))) && !/^[.·…．\s]+$/.test(l.text));
+    let all = pages.flatMap((p) => p.lines.map((l) => ({ ...l, page: p })));
+    if (all.forEach((l, i) => l.i = i), !all.length) return { text: "", warnings, pages: pages.length, chars: 0 };
+    let body = mode(all.map((l) => [Math.round(l.h), l.text.length])), bodyFont = mode(all.filter((l) => Math.round(l.h) === body).map((l) => [l.font, l.text.length])), pageRight = (l) => Math.max(...l.page.lines.filter((o) => Math.abs(o.x - l.x) < l.h * 1.5).map((o) => o.right)), lineGap = mode(
+      all.slice(1).map((l, i) => {
+        let prev2 = all[i];
+        return [prev2.page === l.page && prev2.y > l.y ? Math.round(prev2.y - l.y) : 0, 1];
+      }).filter(([g]) => g > 0)
+    ) || body * 1.6, kindOf = (l) => {
+      let t = l.text;
+      return Math.round(l.h) >= body * 1.3 && t.length <= 30 ? "h1" : BULLET.test(t) ? "bullet" : /^\d{1,2}$/.test(t) ? "index" : l.font !== bodyFont && Math.round(l.h) >= body * 0.95 && t.length <= 24 && !HEAD_END.test(t) ? "h2" : "text";
+    }, blocks = [], cur = null, pendingIndex = "", prev = null, open = (kind, text3, line) => {
+      cur = { kind, x: line.x, text: pendingIndex && kind !== "h1" ? `${pendingIndex}. ${text3}` : text3 }, pendingIndex = "", blocks.push(cur);
+    };
+    for (let l of all) {
+      let kind = kindOf(l);
+      if (kind === "index") {
+        pendingIndex = l.text;
+        continue;
+      }
+      let breakHere = !cur || kind !== "text" || cur.kind === "h1" || cur.kind === "h2";
+      if (!breakHere && prev) {
+        let samePage = prev.page === l.page, below = samePage && prev.y > l.y, room = pageRight(prev) - prev.right, rightAligned = (a, b) => a && b && a.page === b.page && a.y > b.y && Math.abs(a.x - b.x) < b.h * 1.5 && Math.abs(a.right - b.right) < b.h * 0.6 && a.right - a.x > b.h * 3.5 && b.right - b.x > b.h * 3.5, justified = rightAligned(prev, l) || rightAligned(all[prev.i - 1], prev), short = room > prev.h * 1.5, deliberate = room > prev.h * 1.5 + leadWidth(l.text, l.h) && !justified, ragged = below && !justified && pageRight(prev) - prev.right > prev.h * 3 && pageRight(l) - l.right > l.h * 3 && Math.abs(prev.right - l.right) > l.h * 1.5;
+        (Math.round(prev.h) !== Math.round(l.h) || below && Math.abs(prev.x - l.x) < l.h * 3 && prev.y - l.y > lineGap * 1.5 || short && SENT_END.test(prev.text) || short && LIST_HEAD.test(l.text) || (deliberate || ragged) && !/[，、,；;]$/.test(prev.text)) && (breakHere = !0);
+      }
+      !breakHere && cur.kind === "bullet" && prev && prev.page === l.page && !(l.x > cur.x + l.h * 0.5) && (breakHere = !0), breakHere ? open(kind, kind === "bullet" ? l.text.replace(BULLET, "") : l.text, l) : cur.text = joinText(cur.text, l.text), prev = l;
+    }
+    let text2 = blocks.map((b) => {
+      let t = cleanText2(b.text);
+      return b.kind === "h1" ? `# ${t}` : b.kind === "h2" ? `## ${t}` : b.kind === "bullet" ? `- ${t}` : t;
+    }).filter((t) => t.replace(/^[#-]+\s*/, "")).join(`
+
+`);
+    return toc.length && !keepToc && warnings.push(`第${toc.map((p) => p.no).join("、")}页像是目录，已略过。`), { text: text2, warnings, pages: pages.length, chars: text2.replace(/\s/g, "").length };
+  }
+
+  // src/host/pdf-load.js
+  var PDFJS_VERSION = "4.10.38", BASES = [
+    `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/legacy/build/`,
+    `https://unpkg.com/pdfjs-dist@${PDFJS_VERSION}/legacy/build/`
+  ], loading = null, importUrl = (url) => import(
+    /* @vite-ignore */
+    url
+  );
+  function loadPdfJs() {
+    return loading || (loading = (async () => {
+      let errors = [];
+      for (let base of BASES)
+        try {
+          let lib2 = await importUrl(`${base}pdf.min.mjs`);
+          return lib2.GlobalWorkerOptions.workerSrc = `${base}pdf.worker.min.mjs`, { lib: lib2, base: base.replace(/legacy\/build\/$/, "") };
+        } catch (error) {
+          errors.push(error && error.message ? error.message : String(error));
+        }
+      throw new Error(`PDF组件下载失败（${errors[errors.length - 1] || "网络不通"}）`);
+    })(), loading.catch(() => loading = null), loading);
+  }
+  function isPdfFile(file) {
+    return !!file && (/\.pdf$/i.test(file.name || "") || file.type === "application/pdf");
+  }
+  async function pdfFileToText(file, { onProgress = () => {
+  }, load = loadPdfJs } = {}) {
+    let { lib: lib2, base } = await load(), data = new Uint8Array(await file.arrayBuffer()), doc = await lib2.getDocument({ data, cMapUrl: `${base}cmaps/`, cMapPacked: !0, standardFontDataUrl: `${base}standard_fonts/`, verbosity: 0 }).promise, pages = [];
+    try {
+      for (let n = 1; n <= doc.numPages; n++) {
+        onProgress(n, doc.numPages);
+        let page = await doc.getPage(n), vp = page.getViewport({ scale: 1 }), content = await page.getTextContent();
+        pages.push({
+          width: vp.width,
+          height: vp.height,
+          items: (content.items || []).filter((it) => typeof it.str == "string").map((it) => ({ str: it.str, x: it.transform[4], y: it.transform[5], w: it.width, h: it.height, font: it.fontName, eol: !!it.hasEOL }))
+        }), page.cleanup && page.cleanup();
+      }
+    } finally {
+      doc.destroy && doc.destroy();
+    }
+    return pdfPagesToText(pages);
+  }
+
+  // src/trpg/trpg-kp-rules.js
+  var running = /* @__PURE__ */ new Set();
+  async function runKpRules(view, projectId, text2) {
+    if (running.has(projectId)) return toast("info", "KP规则还在整理中。");
+    running.add(projectId);
+    try {
+      let parts = splitLongText2(text2, { target: 12e3, overlap: 200 }), pieces = [];
+      for (let part of parts) {
+        let reply2 = String(await ask(view, "setting", kpRulesMessages({ part, total: parts.length })) || "").trim();
+        reply2 && pieces.push(reply2);
+      }
+      if (!pieces.length) return toast("warning", "KP规则没有整理出内容，可以到设定页手动补。");
+      let merged = pieces.length > 1 ? String(await ask(view, "setting", kpMergeMessages(pieces)) || "").trim() || pieces.join(`
+
+`) : pieces[0], block = kpBlockText(merged);
+      if (!block) return toast("warning", "KP规则没有整理出内容，可以到设定页手动补。");
+      view.data.updateProject(projectId, (p) => {
+        let old = p.setting && p.setting.text || "";
+        return { ...p, setting: { ...p.setting, text: old.trim() ? mergeBlocks(old, block, [KP_BLOCK]) : block } };
+      }), toast("success", "KP规则已整理进设定（「KP规则」分块）。");
+    } catch (error) {
+      toast("error", `KP规则整理失败：${error && error.message || error}`);
+    } finally {
+      running.delete(projectId);
+    }
+  }
+
+  // src/trpg/trpg-long-import-ui.js
+  var IMPORT_PART_CHARS2 = 8e3, liveImport2 = /* @__PURE__ */ new Map(), liveSeq2 = 0;
+  function importLiveText2(jobId) {
+    let m = liveImport2.get(jobId);
+    return m && m.size ? `正在生成：${[...m.values()].map((x) => `${x.label}${x.chars ? `${x.chars}字` : ""}`).join("，")}` : "";
+  }
+  function paintLive2(jobId) {
+    let text2 = importLiveText2(jobId);
+    hostDocument().querySelectorAll("[data-imp-live]").forEach((el2) => el2.dataset.impLive === jobId && (el2.textContent = text2));
+  }
+  var importStops2 = /* @__PURE__ */ new Map();
+  function stopImport2(jobId) {
+    let ctl = importStops2.get(jobId);
+    return ctl && ctl.abort(), !!ctl;
+  }
+  async function askLive2(view, jobId, label, messages) {
+    let m = liveImport2.get(jobId) || (liveImport2.set(jobId, /* @__PURE__ */ new Map()), liveImport2.get(jobId)), key = ++liveSeq2, last = 0, ctl = importStops2.get(jobId);
+    if (ctl && ctl.signal.aborted) {
+      let error = new Error("已停止");
+      throw error.name = "AbortError", error;
+    }
+    m.set(key, { label, chars: 0 }), paintLive2(jobId);
+    try {
+      return await ask(view, "outline", messages, {
+        signal: ctl ? ctl.signal : void 0,
+        onText: (t) => {
+          m.set(key, { label, chars: t.length });
+          let now = Date.now();
+          now - last > 400 && (last = now, paintLive2(jobId));
+        }
+      });
+    } finally {
+      m.delete(key), m.size || liveImport2.delete(jobId), paintLive2(jobId);
+    }
+  }
+  var sti2 = (view) => {
+    let all = view.tabState("import"), id = view.projectId || "";
+    return all[id] || (all[id] = {}), all[id];
+  };
+  function importJobIds2(project) {
+    return project && Array.isArray(project.imports) ? project.imports : [];
+  }
+  function importJobOf2(view, jobId) {
+    let job = jobId ? view.data.imports.get(jobId) : null;
+    return job && job.projectId === view.projectId && importJobIds2(view.project()).includes(jobId) ? job : null;
+  }
+  function projectAdopted2(project) {
+    return new Set(project && Array.isArray(project.importAdopted) ? project.importAdopted : []);
+  }
+  async function runImportJob2(view, jobId) {
+    let ctl = new AbortController();
+    importStops2.set(jobId, ctl);
+    try {
+      return await runImportJobInner2(view, jobId, ctl.signal);
+    } finally {
+      if (importStops2.get(jobId) === ctl && importStops2.delete(jobId), ctl.signal.aborted) {
+        let error = new Error("已停止");
+        throw error.name = "AbortError", error;
+      }
+    }
+  }
+  async function runImportJobInner2(view, jobId, signal) {
+    let store = view.data.imports, job = await store.load(jobId), text2 = await store.source(jobId), task = { projectId: view.projectId };
+    if (!job) throw new Error("找不到这个导入任务");
+    if (job.projectId !== task.projectId) throw new Error("这个导入任务不属于当前项目");
+    let still = () => !signal.aborted && view.projectId === task.projectId && store.get(jobId), parts = job.parts && job.parts.length ? job.parts : splitLongText2(text2, { target: IMPORT_PART_CHARS2 }).map(({ text: _t, ...p }) => p);
+    job.parts && job.parts.length || await store.update(jobId, (j) => ({ ...j, parts, step: "index" }));
+    let partText = (p) => text2.slice(Math.max(0, p.start - p.lead), p.end), ok = (x) => isPlainObject(x) && !x.error, local = [...store.get(jobId).localIndex || []], lines2 = job.mode === "lines", okList = () => local.map((x) => ok(x) ? x : {}), read = (t) => {
+      let v = parseYaml(extractYaml(t));
+      if (!isPlainObject(v)) throw new Error("没有读到索引内容");
+      return v;
+    }, indexMsgs = (p) => {
+      let prevIdx = local.some(ok) ? {
+        ...mergeImportIndex2(okList()),
+        ...lines2 ? { 支线: mergeLineIdentity2(okList()).lines.map(({ parts: _p, ...l }) => l) } : {}
+      } : null, base = importIndexMessages2({ part: { ...p, text: partText(p) }, total: parts.length, prev: prevIdx ? stringifyYaml(prevIdx) : "", needs: job.needs });
+      return lines2 ? importLineIndexMessages2(base) : base;
+    }, sent = /* @__PURE__ */ new Map(), readPart = async (p) => {
+      if (!still() || ok(local[p.i])) return;
+      let msgs = indexMsgs(p), reply2 = await askLive2(view, jobId, `第${p.i + 1}段`, msgs), parsed = null;
+      try {
+        parsed = read(reply2);
+      } catch (error) {
+        let raw = extractYaml(reply2), saved = salvageImportIndex2(raw), good = saved.value && Object.keys(saved.value).length ? saved.value : null;
+        if (good && !saved.lost) parsed = good;
+        else
+          try {
+            parsed = read(await askLive2(view, jobId, `第${p.i + 1}段`, fixImportIndexMessages2(raw, error.message)));
+          } catch (error2) {
+            parsed = good || { error: `第${p.i + 1}段的索引读不出来：${error2.message}` };
+          }
+      }
+      still() && (ok(parsed) && sent.set(p.i, { msgs, reply: reply2 }), local[p.i] = parsed, await store.update(jobId, (j) => ({ ...j, localIndex: local, step: "index" })), view.renderBody());
+    }, todo = parts.filter((p) => !ok(local[p.i]));
+    if (todo.length && !local.some(ok) && await readPart(todo.shift()), !still() || (await runPool2(todo.map((p) => () => readPart(p)), IMPORT_CONCURRENCY2, still), !still())) return;
+    if (!mergeImportIndex2(okList()).事实.length) {
+      let retry = async (p) => {
+        if (!still() || !sent.has(p.i) || !ok(local[p.i]) || !importIndexMissing2(local[p.i]).length) return;
+        let miss = importIndexMissing2(local[p.i]), was = sent.get(p.i);
+        try {
+          let again = read(await askLive2(view, jobId, `第${p.i + 1}段`, importIndexRetryMessages2(was.msgs, was.reply, miss)));
+          if (!(importIndexMissing2(again).length < miss.length)) return;
+          local[p.i] = again, await store.update(jobId, (j) => ({ ...j, localIndex: local, step: "index" })), view.renderBody();
+        } catch {
+        }
+      };
+      if (await runPool2(parts.map((p) => () => retry(p)), IMPORT_CONCURRENCY2, still), !still()) return;
+    }
+    let index = mergeImportIndex2(okList());
+    if (await store.update(jobId, (j) => ({ ...j, index, step: "draft" })), job.mode === "lines")
+      return runLineDrafts2(
+        view,
+        jobId,
+        parts,
+        partText,
+        local.map((x) => ok(x) ? x : {}),
+        index,
+        still
+      );
+    for (let p of parts) {
+      if (!still()) return;
+      let cur = store.get(jobId);
+      if (cur.drafts[p.i] && !cur.drafts[p.i].error) continue;
+      let good = Object.values(cur.drafts).filter((d) => !d.error), done = importDoneText2(mergeImportParts2(good.flatMap((d) => d.volumes || []))), prevTail = p.i && cur.drafts[p.i - 1] && !cur.drafts[p.i - 1].error ? String(cur.drafts[p.i - 1].yaml || "").split(
+        `
+`
+      ).slice(-25).join(`
+`) : "", reply2 = await askLive2(
+        view,
+        jobId,
+        `第${p.i + 1}段`,
+        importDraftMessages2({
+          part: { ...p, text: partText(p) },
+          index: stringifyYaml(importIndexForPart2(index, p.i)),
+          prevTail,
+          mode: cur.mode,
+          needs: cur.needs,
+          done,
+          kind: importJobKind2(cur),
+          trpg: !!cur.trpg
+        })
+      ), r = parseOutlineReply(reply2);
+      r.ok && r.volumes.length || (r = parseOutlineReply(await askLive2(view, jobId, `第${p.i + 1}段`, fixYamlMessages(r.yaml, r.error || "没有读到任何阶段", cur.mode))));
+      let entry = r.ok && r.volumes.length ? { yaml: r.yaml, volumes: r.volumes, notes: splitImportAuthorFields2(r.volumes, p).notes } : { error: r.error || "没有读到任何阶段", yaml: r.yaml };
+      await store.update(jobId, (j) => ({ ...j, drafts: { ...j.drafts, [p.i]: entry } })), view.renderBody();
+    }
+    let fin = store.get(jobId), failed = importFailedParts2(fin);
+    await store.update(jobId, (j) => ({ ...j, step: failed.length ? "draft" : "review" })), view.renderBody();
+  }
+  function lineBatchState2(job, p) {
+    let ident = job.lineIdent && Array.isArray(job.lineIdent.lines) ? job.lineIdent.lines : null, list = job.drafts && job.drafts[p.i] && job.drafts[p.i].list || [], want = ident ? importLineBatches2(ident, p.i).length : list.length, ok = Array.from({ length: want }, (_, g) => list[g] && !list[g].error).filter(Boolean).length;
+    return { want, ok, left: want - ok, bad: list.find((x) => x && x.error) || null };
+  }
+  function importFailedParts2(job) {
+    let parts = job.parts || [], local = job.localIndex || [], drafts = job.drafts || {}, lines2 = job.mode === "lines";
+    return parts.map((p) => {
+      let b = lines2 && drafts[p.i] && !drafts[p.i].error ? lineBatchState2(job, p) : null, why = local[p.i] && local[p.i].error ? local[p.i].error : drafts[p.i] && drafts[p.i].error ? `第${p.i + 1}段转写失败：${drafts[p.i].error}` : b && b.bad ? `第${p.i + 1}段的${b.bad.only.join("、")}转写失败：${b.bad.error}` : b && b.left ? `第${p.i + 1}段有${b.left}批未完成，其他结果已保存` : drafts[p.i] ? "" : `第${p.i + 1}段还没整理`;
+      return why ? { i: p.i, title: p.title, why } : null;
+    }).filter(Boolean);
+  }
+  function importCandidate2(job) {
+    let good = Object.keys(job.drafts || {}).sort((a, b) => a - b).map((k) => job.drafts[k]).filter((d) => d && !d.error), merged = mergeImportParts2(good.flatMap((d) => d.volumes || [])), vols = splitImportAuthorFields2(merged).volumes, notes = Object.assign({}, ...good.map((d) => d.notes || {})), localOk = (job.localIndex || []).filter((x) => isPlainObject(x) && !x.error), index = localOk.length ? mergeImportIndex2(localOk) : job.index, issues = checkImportDraft2(vols, { index, mode: job.mode === "clue" ? "clue" : "outline" });
+    return issues.push(...(merged.conflicts || []).map((c) => ({ level: "warn", text: importConflictText2(c) }))), { volumes: vols, notes, issues, index };
+  }
+  function importAdoptIssues2(view, vol, take, index) {
+    let project = view.project(), clue = isClueMode2(project), issues = [], basis = "", names2 = new Set(take.map((st9) => stageLabel(st9.key))), added = [{ ...vol, stages: take }], applied = [...project.outline.volumes, ...added];
+    if (issues.push(...checkImportDraft2(added, { index, mode: clue ? "clue" : "outline" }).filter((x) => !/按模组推演|替代途径/.test(x.text))), !clue) return { issues, basis };
+    let c = view.runtime.activeId() === view.projectId ? view.runtime.clue.compute() : null, { known, claimed } = chatFactSets2(c);
+    return basis = c ? `按当前聊天的进度判断（已确认${known.length}个事实${claimed.length ? `，另有${claimed.length}个已出现的说法` : ""}）。` : "这个项目没有在当前聊天启用，按模组本身判断（不计任何聊天的进度）。", issues.push(...importReachIssues2(applied, { only: names2, knownFacts: known, claimedFacts: claimed })), issues.push(
+      ...checkClueDraft2(added, project.outline.volumes, { isObtained: (id) => known.includes(id) }).filter((x) => /^事实编号 /.test(x)).map((text2) => ({ level: "warn", text: text2 }))
+    ), { issues, basis };
+  }
+  var IMPORT_KINDS2 = [
+    { value: "main", label: "一条主线", note: "一段完整的主线剧情" },
+    { value: "side", label: "一条支线", note: "一段独立的支线剧情" },
+    { value: "lines", label: "多条支线", note: "多段支线剧情，逐条整理" }
+  ], KIND_WORD2 = { main: "一条主线", side: "一条支线", lines: "多条支线", outline: "按阶段推进", legacy: "线索推进", edit: "审阅修改" }, IMPORT_NEEDS_SIDE2 = "这是一条支线。写清它什么时候能开始、由什么引出（比如「主线进行到当铺之后，罗莎打电话来」）；开头的人物表只给我自己看。", IMPORT_NEEDS_LINES2 = "文档里每条支线用「## 1标题」「## 2标题」分开；每条写清什么时候能开始。开头的总说明只给我自己看。";
+  function unsavedImports2(view, project) {
+    return importJobIds2(project).map((id) => view.data.imports.get(id)).filter((j) => !j || importJobKind2(j) === "edit" || j.step !== "review" || !j.review ? !1 : j.mode === "lines" && j.review.lines ? linesLeft2(project, j) > 0 : !j.review.adoptedId && !projectAdopted2(project).has(adoptKey2(j.id, "review", 0)));
+  }
+  function linesLeft2(project, j) {
+    let saved = adoptedLinesOf2(project, j, j.review), drop = new Set(j.review.dropped || []);
+    return j.review.draft.filter((v) => !saved[v.id] && !drop.has(v.id)).length;
+  }
+  function pendingImportNote2(view, project) {
+    let list = unsavedImports2(view, project);
+    return list.length ? `<div class="pi-rv-pending">${list.map((j) => {
+      let n = j.mode === "lines" && j.review && j.review.lines ? linesLeft2(project, j) : 0;
+      return `<p class="pi-hint">还有${n ? `${n}条支线` : `一条${KIND_WORD2[importJobKind2(j)].replace(/^一条/, "")}`}未保存到模组。<button type="button" class="pi-rv-fillall pi-rv-pending-btn" data-act="import-open" data-id="${esc(j.id)}">打开审阅</button></p>`;
+    }).join("")}</div>` : "";
+  }
+  function jobState2(j) {
+    return importJobKind2(j) === "edit" ? j.review && j.review.savedAt ? "保存过" : "待审阅" : j.step !== "review" ? "整理中" : j.review && j.review.adoptedId && !j.review.reopened ? "已采用" : "待审阅";
+  }
+  function crumbs2(at) {
+    return `<div class="pi-imp-crumb">${[
+      { label: "模组", act: "import-close" },
+      { label: "导入", act: "import-back" },
+      { label: "审阅", act: "" }
+    ].slice(0, Math.max(at + 1, 2)).map((x, i) => i === at || !x.act ? `<b>${x.label}</b>` : `<button type="button" class="pi-imp-crumb-a" data-act="${x.act}">${x.label}</button>`).join("<span>›</span>")}</div>`;
+  }
+  function renderImport2(view) {
+    let s = sti2(view), project = view.project(), ids = importJobIds2(project), busy = view.busy[`import:${view.projectId}`];
+    if (s.jobId && !importJobOf2(view, s.jobId) && view.data.imports.get(s.jobId) && (s.jobId = ""), !s.jobId) {
+      let missing = ids.filter((id) => !view.data.imports.get(id) && !(s.unreadable || []).includes(id));
+      if (missing.length && !s.loadingList)
+        return s.loadingList = !0, Promise.all(missing.map((id) => view.data.imports.load(id).catch(() => null))).then((got2) => {
+          s.unreadable = [.../* @__PURE__ */ new Set([...s.unreadable || [], ...missing.filter((_, k) => !got2[k])])];
+        }).finally(() => (s.loadingList = !1, view.renderBody())), '<div class="pi-empty"><span class="pi-spin"></span> 正在读取导入记录…</div>';
+      let list = ids.map((id) => view.data.imports.get(id)).filter(Boolean), lost = (s.unreadable || []).filter((id) => ids.includes(id)), clue0 = s.mode ? s.mode === "clue" : isClueMode2(project), kind0 = clue0 ? s.kind || "main" : "outline";
+      return `${crumbs2(0)}<div class="pi-card"><h3>导入长文<span class="pi-spacer"></span><button type="button" class="pi-btn is-sm is-ghost" data-act="import-close">回到模组</button></h3>
+        <label class="pi-field"><span>原文</span><textarea class="pi-ta pi-imp-text" data-imp-text placeholder="粘贴剧情方案，或选择txt / md${isTrpg(project) ? " / pdf" : ""}文件">${esc(s.text || "")}</textarea></label>
+        <div class="pi-row pi-imp-file"><button type="button" class="pi-btn is-sm" data-act="import-pick-file">选择文件…</button></div>
+        ${s.file ? `<div class="pi-imp-chip"><span class="pi-imp-chip-name">${esc(s.file.name)}</span><span class="pi-imp-chip-sub">${s.file.chars >= 1e4 ? `${(s.file.chars / 1e4).toFixed(1)}万字` : `${s.file.chars}字`}</span></div>` : ""}
+        <label class="pi-field"><span>推进方式</span><select class="pi-sel" data-imp-modesel>${options(
+        [
+          { value: "clue", label: "线索推进" },
+          { value: "outline", label: "按阶段推进" }
+        ],
+        clue0 ? "clue" : "outline"
+      )}</select><span class="pi-hint">${clue0 ? "按查到的线索推进剧情。" : "按时间顺序一段段推进，整份文档整理成一卷。"}${clue0 === isClueMode2(project) ? "" : "和项目现在的推进方式不同。保存后到执行页切换推进方式，剧情才会按这种方式推进。"}</span></label>
+        ${clue0 ? `<div class="pi-field"><span>文档内容</span><div class="pi-imp-kind">${IMPORT_KINDS2.map((k) => `<button type="button" class="pi-imp-kind-btn${kind0 === k.value ? " is-sel" : ""}" data-act="import-kind" data-kind="${k.value}"><b>${k.label}</b><span>${k.note}</span></button>`).join("")}</div></div>` : ""}
+        ${clue0 && kind0 !== "lines" && isTrpg(project) ? `<label class="pi-check"><input type="checkbox" data-imp-trpg${s.trpg ?? !0 ? " checked" : ""}><span>跑团模组（CoC 7版）：带上检定，另外整理KP规则</span></label>` : ""}
+        ${clue0 && !currentTables() ? '<p class="pi-hint is-warn">当前聊天读不到数据库表格。依赖表格的开始条件会先按手动开始整理；也可以到有表格的聊天里导入。</p>' : ""}
+        <label class="pi-field"><span>要求（可空）</span><textarea class="pi-ta" rows="3" data-imp-needs placeholder="${esc(kind0 === "side" ? IMPORT_NEEDS_SIDE2 : kind0 === "lines" ? IMPORT_NEEDS_LINES2 : IMPORT_NEEDS_EXAMPLE2)}">${esc(s.needs || "")}</textarea></label>
+        <input type="hidden" data-imp-mode value="${clue0 ? kind0 === "lines" ? "lines" : "clue" : "outline"}"><input type="hidden" data-imp-kind value="${kind0}">
+        <div class="pi-tools is-end is-c1"><button type="button" class="pi-btn is-primary" data-act="import-start">开始整理</button></div></div>
+        ${list.length || lost.length ? `<div class="pi-card"><h3>之前的导入</h3>${list.map((j) => `<div class="pi-set-row"><span>${esc(new Date(j.createdAt).toLocaleString("zh-CN", { hour12: !1 }))}，${j.chars}字，${KIND_WORD2[importJobKind2(j)]}，${jobState2(j)}</span><span class="pi-spacer"></span><button type="button" class="pi-btn is-sm" data-act="import-open" data-id="${esc(j.id)}">打开</button><button type="button" class="pi-btn is-sm is-ghost is-danger" data-act="import-drop" data-id="${esc(j.id)}">删除</button></div>`).join("")}${lost.map((id) => `<div class="pi-set-row"><span class="is-warn">读不到这条导入记录的文件</span><span class="pi-spacer"></span><button type="button" class="pi-btn is-sm is-ghost is-danger" data-act="import-drop" data-id="${esc(id)}">移除</button></div>`).join("")}</div>` : ""}`;
+    }
+    let job = importJobOf2(view, s.jobId);
+    if (!job)
+      return s.loadingJob || (s.loadingJob = !0, view.data.imports.load(s.jobId).catch(() => null).then((j) => {
+        j && j.projectId === view.projectId || (s.jobId = "", toast("warning", "读不到这个导入任务。"));
+      }).finally(() => (s.loadingJob = !1, view.renderBody()))), '<div class="pi-empty"><span class="pi-spin"></span> 正在读取导入任务…</div>';
+    if (importJobKind2(job) === "edit")
+      return job.review ? renderReview2(view, job, job.review, null, '<div class="pi-imp-crumb"><button type="button" class="pi-imp-crumb-a" data-act="import-close">模组</button><span>›</span><b>审阅修改</b><button type="button" class="pi-imp-crumb-a pi-imp-crumb-end" data-act="edit-back-discuss">返回讨论</button></div>' + pendingImportNote2(view, project)) : '<div class="pi-empty">这次修改的内容读不出来。</div>';
+    let parts = job.parts || [], indexed = (job.localIndex || []).filter((x) => isPlainObject(x) && !x.error).length, lines2 = job.mode === "lines", whole = (p) => job.drafts && job.drafts[p.i] && !job.drafts[p.i].error && (!lines2 || !lineBatchState2(job, p).left), drafted = parts.filter(whole).length, total = parts.length, failed = importFailedParts2(job).filter((f) => !/还没整理/.test(f.why) && !(busy && /批未完成/.test(f.why))), doing = busy && lines2 && parts.find((p) => !whole(p) && job.drafts && job.drafts[p.i]), bs = doing ? lineBatchState2(job, doing) : null, progress = `<p class="pi-hint">共${total || "?"}段，已读${indexed}段，已整理${drafted}段${job.step === "review" ? "，已完成" : ""}</p>${bs ? `<p class="pi-hint">正在整理第${doing.i + 1}段，已完成${bs.ok} / ${bs.want}批。</p>` : ""}${busy ? `<p class="pi-hint" data-imp-live="${esc(job.id)}">${esc(importLiveText2(job.id))}</p>` : ""}${failed.map((f) => `<p class="pi-hint is-warn">${esc(f.why)}</p>`).join("")}`;
+    if (job.step !== "review")
+      return `${crumbs2(1)}<div class="pi-card"><h3>导入长文<span class="pi-spacer"></span><button type="button" class="pi-btn is-sm is-ghost" data-act="import-close">回到模组</button></h3>${progress}
+        <div class="pi-tools is-end">${busy ? '<button type="button" class="pi-btn is-sm is-danger" data-act="import-stop">停止</button>' : ""}<button type="button" class="pi-btn is-primary is-sm" data-act="import-run"${busy ? " disabled" : ""}>${busy ? '<span class="pi-spin"></span>整理中' : failed.length ? "重试失败的段" : drafted || indexed ? "继续" : "开始"}</button></div></div>`;
+    if (job.mode === "lines") {
+      if (!job.review || !job.review.lines) {
+        let lr = job.lineReview || lineReviewFromJob2(job);
+        return view.data.imports.update(job.id, (j) => j.review && j.review.lines ? j : { ...j, review: linesSessionOf({ ...j, lineReview: j.lineReview || lr }) }).then(() => view.renderBody()), '<div class="pi-empty"><span class="pi-spin"></span> 正在准备审阅…</div>';
+      }
+      let notes = [...job.review.conflicts || [], ...job.lineIdent && job.lineIdent.notes || []], had = job.review.adoptedLines || {}, now = adoptedLinesOf2(view.project(), job, job.review);
+      return Object.keys(now).length !== Object.keys(had).length ? (view.data.imports.update(job.id, (j) => ({ ...j, review: { ...j.review, adoptedLines: adoptedLinesOf2(view.project(), j, j.review) } })).then(() => view.renderBody()), '<div class="pi-empty"><span class="pi-spin"></span> 正在准备审阅…</div>') : renderReview2(view, job, job.review, importCandidate2(job).index, crumbs2(2), notes);
+    }
+    if (importJobKind2(job) !== "outline") {
+      let cand0 = importCandidate2(job);
+      return job.review ? job.review.adoptedId && !job.review.reopened ? renderAdopted2(view, job, job.review, crumbs2(2)) : renderReview2(view, job, job.review, cand0.index, crumbs2(2)) : (view.data.imports.update(job.id, (j) => j.review ? j : { ...j, review: reviewOf2(j, cand0) }).then(() => view.renderBody()), '<div class="pi-empty"><span class="pi-spin"></span> 正在准备审阅…</div>');
+    }
+    let cand = importCandidate2(job), adopted = projectAdopted2(project), stages = cand.volumes[0] ? cand.volumes[0].stages : [], errs = cand.issues.filter((x) => x.level === "error"), warns = cand.issues.filter((x) => x.level !== "error"), pending = cand.index && cand.index.待确认 || [];
+    return `<div class="pi-card"><h3>审阅导入结果<span class="pi-spacer"></span><button type="button" class="pi-btn is-sm is-ghost" data-act="import-back">返回</button></h3>${progress}
+        ${errs.length ? `<p class="pi-hint is-warn"><b>需要处理（${errs.length}）</b></p>${errs.map((x) => `<p class="pi-hint is-warn">${esc(x.text)}</p>`).join("")}` : '<p class="pi-hint">整份草稿的检查：没有发现必须处理的问题。采用时会按项目现有模组和勾选的阶段再查一次。</p>'}
+        ${warns.map((x) => `<p class="pi-hint">${esc(x.text)}</p>`).join("")}
+        ${pending.length ? `<p class="pi-hint"><b>请确认</b></p>${pending.map((x) => `<p class="pi-hint">${esc(x)}</p>`).join("")}` : ""}
+        ${stages.map((st9) => {
+      let key = adoptKey2(job.id, 0, st9.key), nodes = stageNodes(st9.data), done = adopted.has(key);
+      return `<div class="pi-imp-stage"><div class="pi-set-row"><b>${esc(stageLabel(st9.key))}</b><span class="pi-hint">　${nodes.length}个节点</span><span class="pi-spacer"></span>${done ? '<span class="pi-badge is-ok">已采用</span>' : `<label class="pi-check"><input type="checkbox" data-imp-pick="${esc(st9.key)}" checked><span>采用</span></label>`}</div>
+            ${nodes.map((n) => {
+        let note = cand.notes[nodeUid2(n.item)] || {};
+        return `<p class="pi-hint">${esc(n.name)}${note.段 ? `<span class="pi-meta">　第${note.段}段</span>` : ""}${note.待确认 ? `<br><span class="is-warn">待确认：${esc(note.待确认)}</span>` : ""}</p>`;
+      }).join("")}
+            <details><summary class="pi-hint">YAML</summary><pre class="pi-pre is-full">${esc(stringifyYaml({ [st9.key]: st9.data }))}</pre></details></div>`;
+    }).join("")}
+        <div class="pi-tools is-end"><button type="button" class="pi-btn is-primary is-sm" data-act="import-adopt">把勾选的阶段追加为新卷</button></div>
+        ${cand.index ? `<details><summary class="pi-hint">作者索引（只给作者看）</summary><pre class="pi-pre is-full">${esc(stringifyYaml(Object.fromEntries(Object.entries(cand.index).filter(([k]) => k !== "secretFlag"))))}</pre></details>` : ""}</div>`;
+  }
+  var rvActions2 = reviewActions2({
+    jobOf: (view, jobId) => importJobOf2(view, jobId),
+    redraftLine: (...a) => redraftLine2(...a),
+    openSaved: async (view, volId) => {
+      let jobId = await openEditReview2(view, volId, {}, { note: "剧情线" });
+      showEditReview2(view, jobId), view.renderBody();
+    },
+    crumbBack: (view, volId) => {
+      st(view).importing = "", sti2(view).jobId = "", volId && (st(view).sel = volId), view.renderBody();
+    }
+  });
+  function keepStartInputs2(view, target) {
+    let card = target.closest(".pi-card"), s = sti2(view);
+    card && (s.text = card.querySelector("[data-imp-text]").value, s.needs = card.querySelector("[data-imp-needs]").value);
+    let trpgBox = card && card.querySelector("[data-imp-trpg]");
+    trpgBox && (s.trpg = trpgBox.checked);
+  }
+  var importActions2 = {
+    ...rvActions2,
+    "import-kind"(view, target) {
+      keepStartInputs2(view, target), sti2(view).kind = target.dataset.kind, view.renderBody();
+    },
+    "import-mode"(view, target, value) {
+      keepStartInputs2(view, target);
+      let s = sti2(view), clue = s.mode ? s.mode === "clue" : isClueMode2(view.project());
+      s.mode = value === "clue" || value === "outline" ? value : clue ? "outline" : "clue", view.renderBody();
+    },
+    "import-open-panel"(view) {
+      st(view).importing = view.projectId, sti2(view).jobId = "", view.renderBody();
+    },
+    "import-close"(view) {
+      st(view).importing = "", sti2(view).jobId = "", view.renderBody();
+    },
+    "edit-back-discuss"(view) {
+      st(view).importing = "", sti2(view).jobId = "", view.go("discuss");
+    },
+    "import-back"(view) {
+      sti2(view).jobId = "", view.renderBody();
+    },
+    async "import-pick-file"(view, target) {
+      let files = await pickFiles({ accept: isTrpg(view.project()) ? ".txt,.md,.markdown,.pdf,text/plain,application/pdf" : ".txt,.md,.markdown,text/plain", multiple: !1 });
+      if (!files || !files.length) return;
+      let box = target.closest(".pi-card").querySelector("[data-imp-text]"), text2;
+      if (isPdfFile(files[0])) {
+        let btn = target;
+        try {
+          btn.disabled = !0, btn.textContent = "正在读取PDF…";
+          let r = await pdfFileToText(files[0], { onProgress: (n, total) => btn.textContent = `正在读取第${n}/${total}页…` });
+          if (!r.text.trim()) return toast("warning", `没有读到文字。${r.warnings.join("")}扫描版PDF需要先做文字识别。`);
+          text2 = r.text, r.warnings.length && toast("info", r.warnings.join(""));
+        } catch (error) {
+          return toast("error", `PDF读取失败：${error && error.message || error}`);
+        } finally {
+          btn.disabled = !1, btn.textContent = "选择文件…";
+        }
+      } else text2 = await files[0].text();
+      box && (box.value = text2), keepStartInputs2(view, target), sti2(view).file = { name: files[0].name, chars: text2.replace(/\s/g, "").length }, view.renderBody();
+    },
+    async "import-start"(view, target) {
+      let card = target.closest(".pi-card"), text2 = card.querySelector("[data-imp-text]").value, needs = card.querySelector("[data-imp-needs]").value.trim(), mode2 = card.querySelector("[data-imp-mode]").value, kindBox = card.querySelector("[data-imp-kind]"), kind = mode2 === "outline" ? "outline" : mode2 === "lines" ? "lines" : kindBox && ["main", "side"].includes(kindBox.value) ? kindBox.value : "main", projectId = view.projectId;
+      if (!text2.trim()) return toast("warning", "先粘贴原文，或选择一个文件。");
+      let trpgBox = card.querySelector("[data-imp-trpg]"), trpg = !!(trpgBox && trpgBox.checked && mode2 === "clue"), job = await view.data.imports.create({ projectId, text: text2, mode: mode2, needs, kind, trpg });
+      if (sti2(view).trpg = void 0, trpg && (view.data.updateProject(projectId, (p) => ({ ...p, trpg: { ...p.trpg || {}, on: !0, rule: "coc7" } })), runKpRules(view, projectId, text2)), sti2(view).text = "", sti2(view).needs = "", sti2(view).file = null, view.data.updateProject(projectId, (p) => ({ ...p, imports: [...importJobIds2(p), job.id] })), view.projectId !== projectId)
+        return toast("info", "导入任务已建好，记在原来的项目里。");
+      sti2(view).jobId = job.id, view.renderBody(), importActions2["import-run"](view);
+    },
+    async "import-open"(view, target) {
+      let id = target.dataset.id, projectId = view.projectId, job = await view.data.imports.load(id).catch(() => null);
+      if (view.projectId === projectId) {
+        if (!job || job.projectId !== projectId || !importJobIds2(view.project()).includes(id))
+          return toast("warning", "这个导入任务不属于当前项目。");
+        sti2(view).jobId = id, view.renderBody();
+      }
+    },
+    async "import-drop"(view, target) {
+      if (!await confirmDialog({
+        title: "删除导入任务",
+        body: "删除这次导入的原文和整理结果。已经采用进模组的内容不受影响。",
+        okLabel: "删除",
+        danger: !0
+      }))
+        return;
+      let id = target.dataset.id, projectId = view.projectId;
+      importJobIds2(view.project()).includes(id) && (await view.data.imports.drop(id), view.data.updateProject(projectId, (p) => ({ ...p, imports: importJobIds2(p).filter((x) => x !== id) })), view.renderBody());
+    },
+    async "import-run"(view) {
+      let jobId = sti2(view).jobId;
+      !jobId || !importJobOf2(view, jobId) || (await runTask(view, `import:${view.projectId}`, () => runImportJob2(view, jobId)).catch(
+        (error) => error && error.name === "AbortError" ? toast("info", "已停止整理。已完成的段已保存，点「继续」接着做。") : toast("error", `整理中断：${error.message}。已完成的部分已保存，点「继续」接着做。`)
+      ), view.renderBody());
+    },
+    "import-stop"(view) {
+      let jobId = sti2(view).jobId;
+      jobId && stopImport2(jobId) ? view.renderBody() : toast("info", "没有正在进行的整理。");
+    },
+    // 采用：勾选的阶段合成一卷追加到大纲（R3）。
+    //   1. 先按项目现有大纲 + 勾选阶段重算检查（R4），有问题先确认；
+    //   2. 大纲和「已采用」标识在同一次项目写入里完成（标识以项目为准）；写入前校验失败（如节点编号重复）就什么都不写，可以重试；
+    //   3. 之后把标识同步进任务文件（只是显示用；失败了也不影响，项目里的记录才算数）。
+    // 每一步异步等待之后都核对：还是同一个项目、任务属于它（R2）。
+    async "import-adopt"(view, target) {
+      let store = view.data.imports, jobId = sti2(view).jobId, projectId = view.projectId, job = importJobOf2(view, jobId);
+      if (!job) return toast("warning", "这个导入任务不属于当前项目。");
+      if (job.mode === "lines") return adoptLinesReview2(view, jobId);
+      if (importJobKind2(job) !== "outline") return adoptReview2(view, jobId);
+      let same2 = () => view.projectId === projectId && importJobOf2(view, jobId), picked = new Set(
+        [...target.closest(".pi-card").querySelectorAll("[data-imp-pick]")].filter((x) => x.checked).map((x) => x.dataset.impPick)
+      ), adopted = projectAdopted2(view.project()), cand = importCandidate2(job), vol = cand.volumes[0], take = vol ? vol.stages.filter((st22) => picked.has(st22.key) && !adopted.has(adoptKey2(job.id, 0, st22.key))) : [];
+      if (!take.length) return toast("info", "没有新勾选的阶段（已采用的不会重复写入）。");
+      let { issues, basis } = importAdoptIssues2(view, vol, take, cand.index), errs = issues.filter((x) => x.level === "error"), warns = issues.filter((x) => x.level !== "error");
+      if ((errs.length || warns.length) && !await confirmDialog({
+        title: errs.length ? "勾选的阶段有问题" : "请确认",
+        body: `${basis}追加${take.length}个阶段后检查到：`,
+        list: [...errs, ...warns].map((x) => x.text).slice(0, 10),
+        okLabel: "仍然追加",
+        danger: !!errs.length
+      }))
+        return;
+      if (!same2()) return toast("warning", "确认期间切换了项目，没有追加。");
+      let keys = take.map((st22) => adoptKey2(job.id, 0, st22.key)), project = view.project();
+      if (keys.some((k) => projectAdopted2(project).has(k))) return toast("info", "这些阶段刚刚已经追加过了。"), view.renderBody();
+      let incoming = [{ ...vol, id: makeId("v"), stages: take.map((st22) => ({ ...st22, id: makeId("s") })) }], fresh;
+      try {
+        let [reid, renamed] = reidConflicts2(incoming, project.outline.volumes), existing = new Set(project.outline.volumes.map((v) => v.key));
+        fresh = reid.map((v) => existing.has(v.key) ? { ...v, key: `${v.key}_导入${Date.now().toString(36).slice(-3)}` } : v), renamed.length && toast(
+          "warning",
+          `有${renamed.length}个节点ID与现有节点重复，已换成新ID：${renamed.slice(0, 5).join("、")}${renamed.length > 5 ? "……" : ""}。`
+        );
+      } catch (error) {
+        return toast("error", `没有追加：${error.message}`);
+      }
+      view.data.updateProject(projectId, (p) => ({
+        ...p,
+        // 先记大纲历史（GPT 代码审阅：按阶段推进的追加也要能撤回）
+        outline: { ...p.outline, volumes: [...p.outline.volumes, ...fresh], history: pushOutlineHistory(p.outline.history, p.outline.volumes, "导入追加阶段") },
+        importAdopted: [...projectAdopted2(p), ...keys]
+      })), st(view).sel = fresh[0] && fresh[0].id, view.runtime.refresh && view.runtime.refresh(), toast("success", `已追加${take.length}个阶段。`), view.renderBody(), afterAdopt(view), await store.update(jobId, (j) => ({ ...j, adopted: [.../* @__PURE__ */ new Set([...j.adopted || [], ...keys])] })).catch(() => {
+      });
+    }
+  };
+  function adoptedLinesOf2(project, job, review) {
+    let out = { ...review && review.adoptedLines || {} }, ids = review && review.lineIds || {}, adopted = projectAdopted2(project);
+    for (let v of review && review.draft || []) {
+      if (out[v.id]) continue;
+      let id = ids[v.id] || String((v.line || {}).编号 || "").trim(), hit = id && adoptedLineOf2(project, job.id, id);
+      hit ? out[v.id] = hit.id || id : id && adopted.has(adoptKey2(job.id, "line", id)) && (out[v.id] = id);
+    }
+    return out;
+  }
+  async function blockHalfTable2(view, jobId, review, vols) {
+    let half = incompleteTableLines(vols);
+    if (!half.length) return !1;
+    let i = reviewUnits2(view.project(), review).findIndex((u) => u.volumeId === half[0].id && u.kind === "line");
+    return i >= 0 && await view.data.imports.update(jobId, (j) => ({ ...j, review: { ...j.review, at: i } })), view.renderBody(), toast("warning", `${half.map(lineTitle2).join("、")}的表格条件还没填完（表、行、列、值都要有），没有保存。也可以改选别的开始方式。`), !0;
+  }
+  async function adoptLinesReview2(view, jobId) {
+    let projectId = view.projectId, job = importJobOf2(view, jobId), review = job && job.review;
+    if (!review || !review.lines) return;
+    let pending = sendableNotes2(view.project(), review).length;
+    if (pending) {
+      let pick = await choiceDialog({
+        title: "还有意见没发送",
+        body: `有${pending}页意见还没用于修改草稿。保存后意见仍会保留。`,
+        choices: [
+          { label: "取消", value: null },
+          { label: "保存到模组，暂不发送意见", value: "save" },
+          { label: "先发送意见", value: "send", primary: !0 }
+        ]
+      });
+      if (pick === "send") return rvActions2["rv-send"](view);
+      if (pick !== "save") return;
+      if (view.projectId !== projectId || !importJobOf2(view, jobId)) return toast("warning", "确认期间切换了项目，没有保存。");
+    }
+    let project = view.project(), ids = review.lineIds || {}, idOf2 = (v) => ids[v.id] || String((v.line || {}).编号 || "").trim(), adopted = projectAdopted2(project), done = new Set(review.draft.filter((v) => adopted.has(adoptKey2(jobId, "line", idOf2(v))) || adoptedLineOf2(project, jobId, idOf2(v))).map(idOf2)), take = linesToAdopt(review, done);
+    if (!take.length) return toast("info", "没有要保存的线（不导入的、已经保存过的不会再写）。");
+    if (await blockHalfTable2(view, jobId, review, take)) return;
+    let localOk = (job.localIndex || []).filter((x) => isPlainObject(x) && !x.error), index = localOk.length ? mergeImportIndex2(localOk) : job.index || null, lineIssues = lineLevelIssues2(view, job, review), pageIssues = reviewIssues2(view, review, index), errs = take.flatMap((v) => [
+      ...(lineIssues[v.id] || []).filter((x) => x.level === "error").map((x) => `${idOf2(v)}：${x.text}`),
+      ...Object.entries(pageIssues).filter(([k]) => k.split("/")[0] === v.id).flatMap(([, list]) => list.filter((x) => x.level === "error").map((x) => `${idOf2(v)}：${x.plain || x.text}`))
+    ]);
+    if (errs.length && !await confirmDialog({
+      title: `保存${take.length}条支线到模组`,
+      body: errs.length ? `还有${errs.length}处问题，有问题的线可能一直开始不了。保存后也可以在模组页「审阅修改…」里再改：` : `要保存：${take.map(idOf2).join("、")}。`,
+      list: errs.slice(0, 10),
+      okLabel: errs.length ? "仍然保存" : "保存",
+      danger: !!errs.length
+    }))
+      return;
+    if (view.projectId !== projectId || !importJobOf2(view, jobId)) return toast("warning", "确认期间切换了项目，没有保存。");
+    project = view.project();
+    let fresh, lineMap, map, renamed;
+    try {
+      let prior = Object.fromEntries(
+        review.draft.map((v) => [idOf2(v), adoptedLineOf2(project, jobId, idOf2(v))]).filter(([, l]) => l).map(([id, l]) => [id, l.id])
+      ), vols = take.map((v) => ({ ...v, line: { ...v.line || {}, 编号: idOf2(v) } })), byLine;
+      [byLine, map] = reidLines2(vols, project.outline.volumes, review.draft.map(idOf2), prior);
+      let reid;
+      [reid, renamed] = reidConflicts2(
+        byLine.map((v) => ({ ...v, id: makeId("v"), stages: v.stages.map((st0) => ({ ...st0, id: makeId("s") })) })),
+        project.outline.volumes
+      );
+      let keys2 = new Set(project.outline.volumes.map((v) => v.key));
+      fresh = stripReviewMarks(reid.map((v) => keys2.has(v.key) ? { ...v, key: `${v.key}_导入${Date.now().toString(36).slice(-3)}` } : v)), lineMap = Object.fromEntries(take.map((v, i) => [`${jobId}:${idOf2(v)}`, fresh[i].id]));
+    } catch (error) {
+      return toast("error", `没有保存：${error.message}`);
+    }
+    let keys = take.map((v) => adoptKey2(jobId, "line", idOf2(v))), prep = prepareCommit(project, fresh, { label: "导入采用" }), secrets = importSecretNames2(index), written = !1;
+    if (view.data.updateProject(projectId, (p) => {
+      let w = commitOutline(p, prep);
+      if (!w.ok) return p;
+      written = !0;
+      let sec = withShortAnswers2(
+        secrets && secrets.length ? { ...p.secretNames || {}, ...Object.fromEntries(fresh.map((v) => [v.id, { names: secrets, confirmed: [], denied: [] }])) } : p.secretNames,
+        fresh.map((v) => v.id),
+        review
+      );
+      return { ...p, outline: w.outline, importAdopted: [...projectAdopted2(p), ...keys], importLineMap: { ...p.importLineMap || {}, ...lineMap }, ...sec ? { secretNames: sec } : {} };
+    }), !written) return toast("warning", "确认期间模组又被改过了，没有写入。请再点一次「保存到模组」。");
+    Object.keys(map).length && toast("warning", `有${Object.keys(map).length}条支线的编号和已有的线重复，已换成：${Object.entries(map).map(([a, b]) => `${a}→${b}`).join("、")}（本批内部的引用一起改了）。`), renamed.length && toast("warning", `有${renamed.length}个节点ID与现有节点重复，已换成新ID。`);
+    let saved = Object.fromEntries(take.map((v, i) => [v.id, String((fresh[i].line || {}).编号 || idOf2(v))]));
+    await view.data.imports.update(jobId, (j) => ({
+      ...j,
+      review: {
+        ...j.review,
+        adoptedLines: { ...j.review.adoptedLines || {}, ...saved }
+      },
+      adopted: [.../* @__PURE__ */ new Set([...j.adopted || [], ...keys])]
+    })).catch(() => {
+    }), view.runtime.refresh && view.runtime.refresh(), toast("success", `已保存${take.length}条支线到模组。`), view.renderBody(), afterAdopt(view);
+  }
+  function withShortAnswers2(sec, ids, review) {
+    let sure = review && review.shortsSure || [], not = review && review.shortsNot || [];
+    if (!sure.length && !not.length) return sec;
+    let out = { ...sec || {} };
+    for (let id of ids) {
+      let cur = out[id] || { names: [], confirmed: [], denied: [] };
+      out[id] = {
+        ...cur,
+        confirmed: [.../* @__PURE__ */ new Set([...(cur.confirmed || []).filter((n) => !not.includes(n)), ...sure])],
+        denied: [.../* @__PURE__ */ new Set([...(cur.denied || []).filter((n) => !sure.includes(n)), ...not])]
+      };
+    }
+    return out;
+  }
+  async function adoptReview2(view, jobId) {
+    let projectId = view.projectId, job = importJobOf2(view, jobId), review = job && job.review;
+    if (!review) return;
+    let isEdit = importJobKind2(job) === "edit", line0 = review.draft[0] && review.draft[0].line;
+    if (await blockHalfTable2(view, jobId, review, isEdit || review.reopened ? editedVolumes(review) : review.draft)) return;
+    if (!isEdit && isPlainObject(line0) && !line0.编号 && !line0.开启条件 && !line0.开始时机已选 && !line0.开启方式 && !line0.接上一条)
+      return await view.data.imports.update(jobId, (j) => ({ ...j, review: { ...j.review, at: 0 } })), view.renderBody(), toast("warning", "先在第1页选这条线什么时候开始。");
+    let pending = Object.values(review.comments || {}).filter((c) => String(c || "").trim()).length, localOk = (job.localIndex || []).filter((x) => isPlainObject(x) && !x.error), index = localOk.length ? mergeImportIndex2(localOk) : job.index || null, all = Object.values(reviewIssues2(view, review, index)).flat(), errs = all.filter((x) => x.level === "error"), asks = all.filter((x) => x.level !== "error"), lines2 = [
+      errs.length ? `还有${errs.length}个问题没解决：${errs.slice(0, 3).map((x) => x.plain || x.text).join("；")}` : "",
+      asks.length ? `另有${asks.length}个问题你没回答，按原样保留。` : ""
+    ].filter(Boolean);
+    if (pending) {
+      let pick = await choiceDialog({
+        title: "还有意见没发送",
+        body: `有${pending}页意见还没用于修改草稿。保存后意见仍会保留。`,
+        choices: [
+          { label: "取消", value: null },
+          { label: "保存到模组，暂不发送意见", value: "save" },
+          { label: "先发送意见", value: "send", primary: !0 }
+        ]
+      });
+      if (pick === "send") return rvActions2["rv-send"](view);
+      if (pick !== "save") return;
+      if (view.projectId !== projectId || !importJobOf2(view, jobId)) return toast("warning", "确认期间切换了项目，没有保存。");
+    }
+    let project = view.project(), reopen = isEdit ? review.draft.some((v) => project.outline.volumes.some((x) => x.id === v.id)) : !!(review.reopened && review.adoptedId && project.outline.volumes.some((v) => v.id === review.adoptedId)), draft = review.draft, renamed = [], savedIds = [];
+    if (isEdit && !reopen) return toast("warning", "模组里找不到这些线了（可能删掉了），没有保存。");
+    if (reopen) {
+      let live2 = (id) => project.outline.volumes.find((v) => v.id === id), mine = editedVolumes(review), gone = mine.filter((v) => !live2(v.id)).map(lineTitle2);
+      if (draft = mine.filter((v) => live2(v.id) && draftDiffers([live2(v.id)], [v])), gone.length && toast("warning", `${gone.join("、")}在模组里已经删掉了，这些线的修改没有保存。`), !draft.length) return toast("info", "和模组里现在的一样，没有要保存的。");
+      let elsewhere = draft.flatMap((v) => {
+        let opened = (review.base || []).find((x) => x.id === v.id), now = live2(v.id);
+        return opened && now && draftDiffers([opened], [now]) ? draftChanges([opened], [now]).flatMap((c) => c.changes).map((t) => draft.length > 1 || review.draft.length > 1 ? `${lineTitle2(v)}：${t}` : t) : [];
+      });
+      if (elsewhere.length) {
+        if (!await confirmDialog({
+          title: "模组里已有新改动",
+          body: "打开审阅以后，模组里这些内容又被改过。保存草稿会覆盖下面这些改动（模组历史里可以找回）。草稿和意见都还在，可以先取消，核对后再保存。",
+          list: elsewhere.slice(0, 12),
+          okLabel: "仍然保存草稿",
+          danger: !0
+        }))
+          return;
+        if (view.projectId !== projectId || !importJobOf2(view, jobId)) return toast("warning", "确认期间切换了项目，没有保存。");
+        project = view.project();
+      }
+      savedIds = draft.map((v) => v.id);
+    } else {
+      if (projectAdopted2(project).has(adoptKey2(jobId, "review", 0)) || review.adoptedId) return toast("info", "这条线已经保存到模组了。"), view.renderBody();
+      try {
+        let plan = adoptPlan2(view, job, review);
+        draft = plan.vols, renamed = plan.renamed;
+      } catch (error) {
+        return toast("error", `没有采用：${error.message}`);
+      }
+    }
+    let label = isEdit ? "审阅修改" : reopen ? "重新审阅保存" : "导入采用", prepare = () => {
+      let p = view.project(), c = reopen && view.runtime.activeId() === projectId && isClueMode2(p) ? view.runtime.clue.compute() : null;
+      return prepareCommit(p, draft, { clue: c ? { snap: c.snap, prog: c.prog, config: normalizeClue2(p.clue) } : null, label });
+    }, effects = (pr) => [...pr.guard ? [...pr.guard.diffs, ...pr.guard.notes] : [], ...pr.restored.length ? [`已经完成的节点会保留：${pr.restored.join("、")}（完成条件不变）`] : []], prep = prepare(), shown2 = effects(prep), stamp0 = reopen ? targetStamp(view.project(), savedIds) : "";
+    if (reopen && (errs.length || prep.guard && prep.guard.diffs.length)) {
+      let titleOf = (key) => lineTitle2(draft.find((v) => v.id === key.split("/")[0]) || { key: "" }), changes = prep.changes.flatMap((c) => draft.length > 1 ? c.changes.map((t) => `${titleOf(c.key)}：${t}`) : c.changes);
+      if (!await confirmDialog({
+        title: "保存到模组",
+        body: [`改动如下${shown2.length ? "；按这个聊天的进度：" : "。"}`, ...lines2].join(`
+`),
+        list: [...changes.slice(0, 12), ...shown2],
+        okLabel: "保存",
+        danger: !!errs.length || !!(prep.guard && prep.guard.diffs.length)
+      }))
+        return;
+    } else if (!reopen && errs.length && !await confirmDialog({ title: `保存「${volumeLabelOf2(review)}」到模组`, body: lines2.join(`
+`), okLabel: "仍然保存", danger: !!errs.length })) return;
+    if (view.projectId !== projectId || !importJobOf2(view, jobId)) return toast("warning", "确认期间切换了项目，没有保存。");
+    if (reopen && targetStamp(view.project(), savedIds) !== stamp0) return toast("warning", "确认期间模组里这些线又被改过（或删掉了），没有保存。草稿和意见都还在，请再点一次核对。");
+    let again = prepare();
+    if (JSON.stringify(effects(again)) !== JSON.stringify(shown2)) return toast("warning", "确认期间剧情进度变了，对进度的影响和刚才显示的不同，没有保存。请再点一次核对。");
+    prep = again;
+    let secretNames = isEdit ? null : importSecretNames2(index), written = null;
+    if (view.data.updateProject(projectId, (p) => {
+      let w = commitOutline(p, prep);
+      if (!w.ok) return p;
+      written = w;
+      let keys = reopen || isEdit ? [] : [adoptKey2(jobId, "review", 0), ...draft[0].stages.map((st0) => adoptKey2(jobId, 0, st0.key))], sec = withShortAnswers2(
+        secretNames && secretNames.length ? { ...p.secretNames || {}, [draft[0].id]: { names: secretNames, confirmed: [], denied: [] } } : p.secretNames,
+        draft.map((v) => v.id),
+        review
+      );
+      return { ...p, outline: w.outline, importAdopted: [...projectAdopted2(p), ...keys], ...sec ? { secretNames: sec } : {} };
+    }), !written) return toast("warning", "确认期间模组又被改过了，没有写入。请再点一次「保存到模组」。");
+    if (prep.restored.length && toast("info", `已保留已经完成的节点：${prep.restored.join("、")}（完成条件不变）。`), renamed.length && toast("warning", `有${renamed.length}个节点ID与现有节点重复，已换成新ID。`), isEdit) {
+      let byId = new Map(prep.volumes.filter((v) => savedIds.includes(v.id)).map((v) => [v.id, v]));
+      return await view.data.imports.update(jobId, (j) => ({
+        ...j,
+        review: {
+          ...j.review,
+          draft: j.review.draft.map((v) => byId.get(v.id) || v),
+          base: j.review.base.map((v) => byId.get(v.id) || v),
+          history: [],
+          lastChanges: {},
+          revised: !1,
+          savedAt: Date.now()
+        }
+      })).catch(() => {
+      }), view.runtime.refresh && view.runtime.refresh(), toast("success", `已保存到模组${byId.size > 1 ? `（${byId.size}条）` : ""}。`), view.renderBody(), afterAdopt(view);
+    }
+    let saved = prep.volumes.find((v) => v.id === draft[0].id) || draft[0];
+    await view.data.imports.update(jobId, (j) => ({
+      ...j,
+      review: { ...j.review, draft: [saved], base: [saved], adoptedId: saved.id, reopened: !1, history: [], lastChanges: {}, revised: !1 },
+      adopted: [.../* @__PURE__ */ new Set([...j.adopted || [], adoptKey2(jobId, "review", 0)])]
+    })).catch(() => {
+    }), view.runtime.refresh && view.runtime.refresh(), toast("success", reopen ? "已保存到模组。" : `已保存到模组：${volumeLabelOf2(review)}。`), view.renderBody(), afterAdopt(view);
+  }
+  function syncEditSession2(project, review) {
+    let live2 = project.outline.volumes, base = review.base || [], edited = (v) => {
+      let b = base.find((x) => x.id === v.id);
+      return !b || draftDiffers([b], [v]);
+    }, noted = (v) => Object.entries(review.comments || {}).some(([k, t]) => k.split("/")[0] === v.id && String(t || "").trim()), draft = [], nextBase = [], synced = /* @__PURE__ */ new Set();
+    for (let lv of live2) {
+      let d = review.draft.find((v) => v.id === lv.id);
+      d && edited(d) ? (draft.push(d), nextBase.push(base.find((x) => x.id === lv.id) || lv)) : (draft.push(lv), nextBase.push(lv), synced.add(lv.id));
+    }
+    for (let d of review.draft) !live2.some((v) => v.id === d.id) && (edited(d) || noted(d)) && (draft.push(d), nextBase.push(base.find((x) => x.id === d.id) || d));
+    let history = (review.history || []).map((h) => ({ ...h, draft: draft.map((v) => synced.has(v.id) ? v : (h.draft || []).find((x) => x.id === v.id) || v) }));
+    return { ...review, draft, base: nextBase, history };
+  }
+  async function openEditReview2(view, volumeId, parts = {}, { note = "" } = {}) {
+    let project = view.project();
+    if (!project.outline.volumes.find((v) => v.id === volumeId)) throw new Error("模组里找不到这条线了（可能删掉了）");
+    await Promise.all(importJobIds2(project).filter((id) => !view.data.imports.get(id)).map((id) => view.data.imports.load(id).catch(() => null)));
+    let mode2 = isClueMode2(project) ? "clue" : "outline", unitsOf = (draft2) => sessionUnits({ draft: draft2 }).filter((u) => u.kind === "stage" || mode2 === "clue" && isPlainObject(draft2.find((v) => v.id === u.volumeId).line)), keys = Object.keys(parts), open = importJobIds2(project).map((id) => view.data.imports.get(id)).find((j) => j && importJobKind2(j) === "edit" && j.review && Array.isArray(j.review.draft));
+    if (open)
+      return await view.data.imports.update(open.id, (j) => {
+        let r = { ...syncEditSession2(project, j.review), mode: mode2 };
+        keys.length && (r = editDraft(r, "讨论里AI给的修改", (d) => keys.reduce((acc, k) => putUnit2(acc, k, parts[k]), d)));
+        let units2 = unitsOf(r.draft), at2 = keys.length ? units2.findIndex((u) => keys.includes(u.key)) : units2.findIndex((u) => u.volumeId === volumeId);
+        return { ...j, review: { ...r, at: Math.max(0, at2) } };
+      }), open.id;
+    let session = createReviewSession({ source: "proposal", projectId: project.id, volumes: project.outline.volumes }), draft = keys.reduce((acc, k) => putUnit2(acc, k, parts[k]), session.draft), units = unitsOf(draft), at = keys.length ? units.findIndex((u) => keys.includes(u.key)) : units.findIndex((u) => u.volumeId === volumeId), ch = Object.fromEntries(draftChanges(session.base, draft).map((x) => [x.key, x.changes])), job = await view.data.imports.create({ projectId: project.id, text: note, mode: mode2, needs: "", kind: "edit" });
+    return await view.data.imports.update(job.id, (j) => ({
+      ...j,
+      step: "review",
+      review: { ...session, mode: mode2, draft, at: Math.max(0, at), revised: keys.length > 0, lastChanges: ch, history: keys.length ? [{ label: "讨论里AI给的修改", at: Date.now(), draft: session.base }] : [] }
+    })), view.data.updateProject(project.id, (p) => ({ ...p, imports: [...importJobIds2(p), job.id] })), job.id;
+  }
+  function showEditReview2(view, jobId) {
+    st(view).importing = view.projectId, sti2(view).jobId = jobId;
+  }
+  function volumeLabelOf2(review) {
+    let v = review.draft[0];
+    return v ? String(v.key || "").replace(/^剧情_/, "").replace(/^卷[^_]*_/, "") : "";
+  }
+  var IMPORT_CONCURRENCY2 = 3;
+  async function runPool2(tasks, limit, still = () => !0) {
+    let next = 0, first = null, worker = async () => {
+      for (; next < tasks.length && still(); ) {
+        let k = next++;
+        try {
+          await tasks[k]();
+        } catch (error) {
+          first || (first = error);
+        }
+      }
+    };
+    if (await Promise.all(Array.from({ length: Math.min(limit, tasks.length) }, worker)), first) throw first;
+  }
+  async function runLineDrafts2(view, jobId, parts, partText, local, index, still) {
+    let store = view.data.imports, ident = mergeLineIdentity2(local), tables = currentTables(), catalog = tables ? tableCatalogText(tables) : "", mains = mainLinesText2(view.project().outline.volumes);
+    await store.update(jobId, (j) => ({ ...j, lineIdent: ident }));
+    for (let p of parts) {
+      let groups = importLineBatches2(ident.lines, p.i);
+      if (await runPool2(
+        (groups.length ? groups : []).map((only, g) => () => draftBatch(p, g, only)),
+        IMPORT_CONCURRENCY2,
+        still
+      ), !still()) return;
+      groups.length || store.get(jobId).drafts[p.i] || await store.update(jobId, (j) => ({ ...j, drafts: { ...j.drafts, [p.i]: { list: [] } } }));
+    }
+    async function draftBatch(p, g, only) {
+      if (!still()) return;
+      let cur = store.get(jobId), slot = cur.drafts[p.i] && cur.drafts[p.i].list || [];
+      if (slot[g] && !slot[g].error) return;
+      let done = importDoneText2(
+        mergeImportByLine2(
+          Object.values(cur.drafts).flatMap((d) => (d.list || []).filter((x) => x && !x.error).flatMap((x) => x.volumes || []))
+        )
+      ), draft = (ids) => askLive2(
+        view,
+        jobId,
+        `第${p.i + 1}段第${g + 1}批`,
+        importLineDraftMessages2({
+          part: { ...p, text: partText(p) },
+          index: stringifyYaml(importIndexForPart2(index, p.i)),
+          lines: ident.lines,
+          only: ids,
+          mainLines: mains,
+          tableCatalog: catalog,
+          needs: cur.needs,
+          done
+        })
+      ), r = parseOutlineReply(await draft(only));
+      r.ok && r.volumes.length || (r = parseOutlineReply(await askLive2(view, jobId, `第${p.i + 1}段第${g + 1}批`, fixYamlMessages(r.yaml, r.error || "没有读到任何剧情线（YAML 顶层的卷）", "clue"))));
+      let lost = r.ok ? lineIdsMissing2(r.volumes, only) : [];
+      if (lost.length && still()) {
+        let r2 = parseOutlineReply(await draft(lost));
+        r2.ok && (r = {
+          ...r,
+          yaml: `${r.yaml}
+${r2.yaml}`,
+          volumes: [...r.volumes, ...r2.volumes]
+        }), lost = lineIdsMissing2(r.volumes, only);
+      }
+      let entry = r.ok && r.volumes.length && !lost.length ? { only, yaml: r.yaml, volumes: r.volumes, notes: splitImportAuthorFields2(r.volumes, p).notes } : { only, error: lost.length ? `AI没写${lost.join("、")}` : r.error || "没有读到任何剧情线", yaml: r.yaml };
+      await store.update(jobId, (j) => {
+        let list = [...j.drafts[p.i] && j.drafts[p.i].list || []];
+        return list[g] = entry, { ...j, drafts: { ...j.drafts, [p.i]: { list } } };
+      }), view.renderBody();
+    }
+    let fin = store.get(jobId);
+    if (importFailedParts2(fin).length) return void await store.update(jobId, (j) => ({ ...j, step: "draft" }));
+    let lr = fin.lineReview || lineReviewFromJob2(fin);
+    await store.update(jobId, (j) => ({ ...j, step: "review", review: j.review && j.review.lines ? j.review : linesSessionOf({ ...j, lineReview: lr }) })), view.renderBody();
+  }
+  async function redraftLine2(view, jobId, lineId) {
+    let store = view.data.imports, job = importJobOf2(view, jobId), r0 = job && job.review && job.review.lines ? job.review : null, vid0 = r0 ? Object.keys(r0.lineIds || {}).find((k) => r0.lineIds[k] === lineId) : "";
+    if (!vid0) return { ok: !1, why: "找不到这条线" };
+    let text2 = await store.source(jobId), ident = job.lineIdent || mergeLineIdentity2((job.localIndex || []).filter((x) => isPlainObject(x) && !x.error)), me = (ident.lines || []).find((l) => l.编号 === lineId), parts = (job.parts || []).filter((p) => !me || !Array.isArray(me.parts) || me.parts.includes(p.i)), partText = (p) => text2.slice(Math.max(0, p.start - p.lead), p.end), others = r0.draft.filter((v) => v.id !== vid0), tables = currentTables(), got2 = [], snapVol = JSON.stringify(r0.draft.find((v) => v.id === vid0) || null);
+    for (let p of parts) {
+      let r = parseOutlineReply(
+        await ask(
+          view,
+          "outline",
+          importLineDraftMessages2({
+            part: { ...p, text: partText(p) },
+            index: stringifyYaml(job.index || {}),
+            lines: ident.lines,
+            only: [lineId],
+            mainLines: mainLinesText2(view.project().outline.volumes),
+            tableCatalog: tables ? tableCatalogText(tables) : "",
+            needs: job.needs,
+            // 别的线已经写好的内容：告诉 AI 这些属于别的线，不要再写进这一条
+            done: importDoneText2([...others, ...got2])
+          })
+        )
+      );
+      r.ok || (r = parseOutlineReply(await ask(view, "outline", fixYamlMessages(r.yaml, r.error || "格式错误", "clue")))), r.ok && got2.push(...r.volumes.filter((v) => isPlainObject(v.line) && String(v.line.编号 || "").trim() === lineId));
+    }
+    if (!importJobOf2(view, jobId)) return { ok: !1, why: "确认期间切换了项目" };
+    if (!got2.length) return { ok: !1, why: "AI没有写出这条线" };
+    let merged = splitImportAuthorFields2(mergeImportByLine2(got2)).volumes.find((v) => isPlainObject(v.line));
+    if (!merged) return { ok: !1, why: "AI没有写出这条线" };
+    let touched = !1;
+    return await store.update(jobId, (j) => {
+      let r = j.review && j.review.lines ? j.review : null, volId = vid0, cur = r && r.draft.find((v) => v.id === volId);
+      if (!cur) return j;
+      if (JSON.stringify(cur) !== snapVol) return touched = !0, j;
+      let type0 = String((cur && cur.line || {}).类型 || "").trim(), vol = { ...merged, id: volId, line: { ...merged.line, 编号: lineId, ...type0 ? { 类型: type0 } : {} }, stages: matchStages(cur.stages, merged.stages).stages }, next = editDraft(r, `重新整理${lineId}`, (d) => d.map((v) => v.id === volId ? vol : v));
+      return { ...j, review: { ...next, prev: { ...r.prev || {}, [volId]: cur } } };
+    }), touched ? { ok: !1, why: "等待期间这条线被改过，没有替换（你的修改和意见都还在），需要的话再点一次" } : { ok: !0 };
+  }
+
   // src/ui/wb-import.js
   async function pickWorldbookEntries(title2 = "从世界书导入") {
     let books = boundBookNames();
@@ -18038,7 +25366,7 @@ ${r2.yaml}`,
   };
 
   // src/ui/tab-outline.js
-  var NODE_KEYS = {
+  var importActions3 = routeActions(importActions, importActions2), renderImport3 = (view) => (viewIsTrpg(view) ? trpg_long_import_ui_exports : long_import_exports2).renderImport(view), importJobOf3 = (view, jobId) => (viewIsTrpg(view) ? trpg_long_import_ui_exports : long_import_exports2).importJobOf(view, jobId), reviewOnInput3 = (view, ...args) => (viewIsTrpg(view) ? trpg_import_review_exports : import_review_exports).reviewOnInput(view, ...args), prepareLabels3 = (view, ...args) => (viewIsTrpg(view) ? trpg_clue_run_exports : clue_run_exports).prepareLabels(view, ...args), projectClueIssues3 = (project, ...args) => (isTrpg(project) ? trpg_long_import_exports : long_import_exports).projectClueIssues(...args), openEditReview3 = (view, ...args) => (viewIsTrpg(view) ? trpg_long_import_ui_exports : long_import_exports2).openEditReview(view, ...args), showEditReview3 = (view, ...args) => (viewIsTrpg(view) ? trpg_long_import_ui_exports : long_import_exports2).showEditReview(view, ...args), rulesOf = (project) => isTrpg(project) ? trpg_clue_rules_exports : clue_rules_exports, compileClue3 = (project, ...args) => rulesOf(project).compileClue(...args), parseCondition3 = (project, ...args) => rulesOf(project).parseCondition(...args), NODE_KEYS = {
     main: ["名称", "地点", "事件", "偏转"],
     side: ["名称", "地点", "事件", "触发", "偏转"],
     world: ["类型", "来源", "内容"]
@@ -18086,21 +25414,21 @@ ${r2.yaml}`,
     if (hit !== void 0) return hit;
     let n = 0;
     try {
-      n = isClueMode(project) ? projectClueIssues(project.outline.volumes, { secrets: projectSecretNames(project) }).filter((x) => x.level === "error").length : 0;
+      n = isClueMode(project) ? projectClueIssues3(project, project.outline.volumes, { secrets: projectSecretNames(project) }).filter((x) => x.level === "error").length : 0;
     } catch {
     }
     return checkCache.set(key, n), n;
   }
   function checkHtml(view, project) {
-    let clue = isClueMode(project), current = clue && view.runtime.activeId() === view.projectId ? view.runtime.clue.compute() : null, { known, claimed } = chatFactSets(current), base = outlineIssues(project.outline.volumes).filter((x) => !clue || x.kind !== "no-time"), more = clue ? projectClueIssues(project.outline.volumes, { secrets: projectSecretNames(project), knownFacts: known, claimedFacts: claimed }) : [], errs = more.filter((x) => x.level === "error"), asks = more.filter((x) => x.level !== "error"), total = base.length + more.length, idOf2 = (x) => x.stageId || x.stageIds && x.stageIds[0] || x.volumeId || "", row2 = (x) => {
+    let clue = isClueMode(project), current = clue && view.runtime.activeId() === view.projectId ? view.runtime.clue.compute() : null, { known, claimed } = chatFactSets(current), base = outlineIssues(project.outline.volumes).filter((x) => !clue || x.kind !== "no-time"), more = clue ? projectClueIssues3(project, project.outline.volumes, { secrets: projectSecretNames(project), knownFacts: known, claimedFacts: claimed }) : [], errs = more.filter((x) => x.level === "error"), asks = more.filter((x) => x.level !== "error"), total = base.length + more.length, idOf2 = (x) => x.stageId || x.stageIds && x.stageIds[0] || x.volumeId || "", row2 = (x) => {
       let id = idOf2(x), body = `<span class="pi-pname">${esc(x.plain || x.text)}</span>${x.fix ? `<span class="pi-hint pi-check-fix">建议：${esc(x.fix)}</span>` : ""}`;
       return id ? `<button type="button" class="pi-titem is-issue pi-check-item" data-act="issue-go" data-id="${esc(id)}">${body}</button>` : `<div class="pi-titem is-issue pi-check-item">${body}</div>`;
     };
-    return total ? `<div class="pi-card"><h3>大纲检查<span class="pi-meta">${total}项</span></h3>
+    return total ? `<div class="pi-card"><h3>${outlineWord(project)}检查<span class="pi-meta">${total}项</span></h3>
         ${clue ? '<p class="pi-hint">点击一条跳转到对应阶段。需要AI修改时，点「审阅修改」并在这条线的页上写意见。</p>' : ""}
         ${errs.length ? `<div class="pi-rv-sec">要处理的问题（${errs.length}）</div>${errs.map(row2).join("")}` : ""}
         ${base.length ? `${clue ? `<div class="pi-rv-sec">格式（${base.length}）</div>` : ""}${base.map(row2).join("")}` : ""}
-        ${asks.length ? `<details><summary class="pi-hint">另有${asks.length}项需确认</summary>${asks.map(row2).join("")}</details>` : ""}</div>` : `<div class="pi-card"><h3>大纲检查</h3><p class="pi-hint">没有发现问题。${clue ? "（已检查：能否推进、线索能否获得、替代途径。）" : ""}</p></div>`;
+        ${asks.length ? `<details><summary class="pi-hint">另有${asks.length}项需确认</summary>${asks.map(row2).join("")}</details>` : ""}</div>` : `<div class="pi-card"><h3>${outlineWord(project)}检查</h3><p class="pi-hint">没有发现问题。${clue ? "（已检查：能否推进、线索能否获得、替代途径。）" : ""}</p></div>`;
   }
   function overviewHtml(view, project) {
     let { runtime } = view, units = flattenUnits(project.outline.volumes), states = runtime.activeId() === project.id ? unitStates(units, runtime.progress()) : {};
@@ -18163,7 +25491,7 @@ ${r2.yaml}`,
     return `${pairKeys.length ? `<div class="pi-pair2"><label class="pi-field"><span class="pi-namehd">名称${pill}</span>${input2("名称")}</label><label class="pi-field"><span>地点</span>${input2("地点", "可写多个")}</label></div>` : ""}
         ${rest.map((key) => `<label class="pi-field"><span>${esc(key)}</span>${LONG_KEYS.has(key) ? area(key) : input2(key)}</label>`).join("")}`;
   }
-  function nodeEditor(stage, meta2, clueOn = !1) {
+  function nodeEditor(stage, meta2, clueOn = !1, project = null) {
     let list = Array.isArray(stage.data[meta2.field]) ? stage.data[meta2.field] : [], items = list.map((item, index) => {
       let value = item && typeof item == "object" ? item : { 内容: String(item ?? "") }, play = PLAY_KEYS[meta2.kind] || [], keys = [.../* @__PURE__ */ new Set([...NODE_KEYS[meta2.kind], ...Object.keys(value)])].filter(
         (key) => !play.includes(key) && key !== "id" && !CLUE_TEXT_KEYS.includes(key) && !CLUE_YAML_KEYS.includes(key)
@@ -18171,7 +25499,7 @@ ${r2.yaml}`,
       return `<div class="pi-node"><div class="pi-node-hd"><span class="pi-badge">${esc(nodeWord(meta2))} ${index + 1}</span><span class="pi-grow"></span>
             <button type="button" class="pi-icon-btn" data-act="node-menu" data-field="${esc(meta2.field)}" data-i="${index}" data-last="${index < list.length - 1 ? "" : "1"}" title="更多">${ICONS.more}</button></div>
             ${nodeBasics(meta2, index, value, keys, clueOn)}
-            ${playEditor(meta2, value, index)}${clueOn ? clueNodeFields(meta2, index, value) : ""}</div>`;
+            ${playEditor(meta2, value, index)}${clueOn ? clueNodeFields(meta2, index, value, project) : ""}</div>`;
     }).join("");
     return `<div class="pi-card"><h3>${esc(nodeWord(meta2))}<span class="pi-spacer"></span><button type="button" class="pi-btn is-sm" data-act="node-add" data-field="${esc(meta2.field)}" data-kind="${meta2.kind}">添加</button></h3>
         ${items || '<p class="pi-hint">无</p>'}</div>`;
@@ -18180,21 +25508,21 @@ ${r2.yaml}`,
     let count = (meta2) => Array.isArray(stage.data[meta2.field]) ? stage.data[meta2.field].length : 0;
     return `<div class="pi-seg pi-node-seg">${NODE_FIELDS.map((meta2) => `<button type="button" class="pi-seg-btn${meta2.kind === kind ? " is-sel" : ""}" data-act="node-kind" data-kind="${meta2.kind}">${esc(nodeWord(meta2))} ${count(meta2)}</button>`).join("")}</div>`;
   }
-  function condBrief(v) {
+  function condBrief(v, project = null) {
     if (v == null || v === "") return "";
-    let errs = [], c = parseCondition(v, errs);
-    return errs.length ? String(typeof v == "string" ? v : JSON.stringify(v)).slice(0, 40) : condWordsShort(c);
+    let errs = [], c = parseCondition3(project, v, errs);
+    return errs.length ? String(typeof v == "string" ? v : JSON.stringify(v)).slice(0, 40) : condWordsShort(c, project);
   }
-  function condWordsShort(c) {
-    let r = conditionRefs(c);
-    return [...r.facts].map((f) => `拿到${f}`).concat([...r.nodes].map((n) => `${n}完成`), [...r.lines].map((l) => `${l}完成`)).slice(0, 3).join("、") || "已填写";
+  function condWordsShort(c, project = null) {
+    let rl = rulesOf(project), r = rl.conditionRefs(c), says = rl.sayAtoms ? rl.sayAtoms(c).map((t) => t.length > 14 ? `${t.slice(0, 14)}…` : t) : [];
+    return [...r.facts].map((f) => `拿到${f}`).concat([...r.nodes].map((n) => `${n}完成`), [...r.lines].map((l) => `${l}完成`), says).slice(0, 3).join("、") || "已填写";
   }
-  function stageCondFold(stage) {
-    let keys = ["进入条件", "结束条件"], has = keys.filter((k) => stage.data[k] != null && stage.data[k] !== ""), brief = has.length ? has.map((k) => `${k.slice(0, 2)}：${condBrief(stage.data[k])}`).join("；") : "都未填写", yamlOf = (k) => stage.data[k] == null ? "" : typeof stage.data[k] == "string" ? stage.data[k] : stringifyYaml(stage.data[k]).trim();
+  function stageCondFold(stage, project = null) {
+    let keys = ["进入条件", "结束条件"], has = keys.filter((k) => stage.data[k] != null && stage.data[k] !== ""), brief = has.length ? has.map((k) => `${k.slice(0, 2)}：${condBrief(stage.data[k], project)}`).join("；") : "都未填写", yamlOf = (k) => stage.data[k] == null ? "" : typeof stage.data[k] == "string" ? stage.data[k] : stringifyYaml(stage.data[k]).trim();
     return `<details class="pi-fold"${has.length ? " open" : ""}><summary><b>进入 / 结束条件</b><span>${esc(brief)}</span></summary>
         ${keys.map((key) => `<label class="pi-field"><span>${key}</span><textarea class="pi-ta is-mono pi-ta-auto" rows="2" data-stage-yaml="${key}">${esc(yamlOf(key))}</textarea></label>`).join("")}<p class="pi-status" data-stage-yaml-status></p></details>`;
   }
-  function stageEditor(volume, stage, raw, kind, clueOn = !1) {
+  function stageEditor(volume, stage, raw, kind, clueOn = !1, project = null) {
     let known = /* @__PURE__ */ new Set([
       "时间范围",
       "AI指令",
@@ -18212,12 +25540,13 @@ ${r2.yaml}`,
       changeLines(stage.data).join(`
 `)
     )}</textarea></label>
-        ${clueOn ? stageCondFold(stage) : ""}
+        ${clueOn ? stageCondFold(stage, project) : ""}
 ${extra.length ? `<p class="pi-hint">另有字段：${esc(extra.join("、"))}（在YAML原文里编辑）</p>` : ""}</div>
         ${nodeTabs(stage, kind, clueOn)}${nodeEditor(
       stage,
       NODE_FIELDS.find((meta2) => meta2.kind === kind),
-      clueOn
+      clueOn,
+      project
     )}`;
   }
   function volumeEditor(volume, project = null) {
@@ -18274,11 +25603,11 @@ ${extra.length ? `<p class="pi-hint">另有字段：${esc(extra.join("、"))}（
     s.draft && s.draft.projectId && s.draft.projectId !== view.projectId && (parkedDrafts.set(s.draft.projectId, s.draft), s.draft = null), !s.draft && parkedDrafts.has(view.projectId) && (s.draft = parkedDrafts.get(view.projectId), parkedDrafts.delete(view.projectId));
   }
   function render(view) {
-    if (st(view).importing === view.projectId) return renderImport(view);
+    if (st(view).importing === view.projectId) return renderImport3(view);
     let project = view.project(), s = st(view);
     syncDraft(view, s);
-    let { volume, stage } = findSel(project, s.sel), busy = view.busy.outline, kind = NODE_FIELDS.some((meta2) => meta2.kind === s.nodeKind) ? s.nodeKind : NODE_FIELDS[0].kind, editor2 = stage ? stageEditor(volume, stage, s.raw, kind, isClueMode(project)) : volume ? volumeEditor(volume, project) : `<div class="pi-card"><p class="pi-hint">从左边选${vq(project, "一卷", "一条剧情线")}或一个阶段编辑。</p></div>`, writing = s.multi && s.multi.projectId === view.projectId, hasVols = project.outline.volumes.length > 0, dirtyN = hasVols ? editDraftCount(view, project) : 0, errN = hasVols ? checkErrorCount(view, project) : 0;
-    return `<div class="pi-card"><h3>大纲<span class="pi-spacer"></span><button type="button" class="pi-icon-btn" data-act="outline-menu" title="更多">${ICONS.more}</button></h3>
+    let { volume, stage } = findSel(project, s.sel), busy = view.busy.outline, kind = NODE_FIELDS.some((meta2) => meta2.kind === s.nodeKind) ? s.nodeKind : NODE_FIELDS[0].kind, editor2 = stage ? stageEditor(volume, stage, s.raw, kind, isClueMode(project), project) : volume ? volumeEditor(volume, project) : `<div class="pi-card"><p class="pi-hint">从左边选${vq(project, "一卷", "一条剧情线")}或一个阶段编辑。</p></div>`, writing = s.multi && s.multi.projectId === view.projectId, hasVols = project.outline.volumes.length > 0, dirtyN = hasVols ? editDraftCount(view, project) : 0, errN = hasVols ? checkErrorCount(view, project) : 0;
+    return `<div class="pi-card"><h3>${outlineWord(project)}<span class="pi-spacer"></span><button type="button" class="pi-icon-btn" data-act="outline-menu" title="更多">${ICONS.more}</button></h3>
         ${writing ? `<button type="button" class="pi-btn is-primary pi-ol-write" data-act="multi-stop"><span class="pi-spin"></span>写作中${s.multi.k}/${s.multi.n}，点击停止</button>` : `<button type="button" class="pi-btn is-primary pi-ol-write" data-act="ai-volume"${busy ? " disabled" : ""}>${busy ? '<span class="pi-spin"></span>写作中' : vq(project, `AI写第${project.outline.volumes.length + 1}卷`, "AI写新剧情线")}</button>`}
         <div class="pi-ol-tools"><button type="button" class="pi-btn is-sm" data-act="review-open"${hasVols ? "" : " disabled"} title="逐页查看${vq(view, "各卷", "各条线")}，在对应页写意见后一次发给AI，确认后保存到大纲">审阅修改${dirtyN ? `<span class="pi-badge is-warn">${dirtyN}</span>` : ""}</button>
             <button type="button" class="pi-btn is-sm" data-act="import-open-panel">导入长文</button>
@@ -18372,7 +25701,7 @@ ${extra.length ? `<p class="pi-hint">另有字段：${esc(extra.join("、"))}（
           draft.volumes.flatMap((v) => v.stages)
         ).volumes);
       }
-      let replacedIds = new Set(replaced.map((u) => u.id)), base = project.outline.volumes.map((v) => ({ ...v, stages: v.stages.filter((s) => !replacedIds.has(s.id)) })), keepIds = compileClue(replaced.map((u) => ({ ...u.volume, stages: [u.stage] }))).nodes.map((n) => n.uid).filter(Boolean), current = view.runtime.activeId() === view.projectId ? view.runtime.clue.compute() : null, { known: obtained, claimed } = chatFactSets(current), tables = currentTables();
+      let replacedIds = new Set(replaced.map((u) => u.id)), base = project.outline.volumes.map((v) => ({ ...v, stages: v.stages.filter((s) => !replacedIds.has(s.id)) })), keepIds = compileClue3(project, replaced.map((u) => ({ ...u.volume, stages: [u.stage] }))).nodes.map((n) => n.uid).filter(Boolean), current = view.runtime.activeId() === view.projectId ? view.runtime.clue.compute() : null, { known: obtained, claimed } = chatFactSets(current), tables = currentTables();
       if (draft.clue = !0, draft.issues = checkClueDraft(draft.volumes, base, {
         keepIds,
         isObtained: (id) => obtained.includes(id),
@@ -18659,13 +25988,13 @@ ${extra.length ? `<p class="pi-hint">另有字段：${esc(extra.join("、"))}（
   }
   var actions = {
     ...genActions,
-    ...importActions,
+    ...importActions3,
     // 大纲页顶部「审阅修改」打开所有线（从选中的线或第一条开始）；选中一条线时的按钮只打开这一条。
     async "review-open"(view, target) {
       let project = view.project();
       if (!project.outline.volumes.length) return toast("info", "大纲里还没有内容。");
-      let pick = target && target.dataset.id || findSel(project, st(view).sel).volume?.id || project.outline.volumes[0].id, jobId = await openEditReview(view, pick, {}, { note: isClueMode(project) ? "剧情线" : "卷" });
-      showEditReview(view, jobId), view.renderBody();
+      let pick = target && target.dataset.id || findSel(project, st(view).sel).volume?.id || project.outline.volumes[0].id, jobId = await openEditReview3(view, pick, {}, { note: isClueMode(project) ? "剧情线" : "卷" });
+      showEditReview3(view, jobId), view.renderBody();
     },
     // 必需 / 可选标签：点击切换。主线节点默认必需，可选写 必需: false；支线事件默认可选
     "node-req"(view, target) {
@@ -18860,7 +26189,7 @@ ${extra.length ? `<p class="pi-hint">另有字段：${esc(extra.join("、"))}（
     },
     async "outline-menu"(view) {
       let pick = await menuDialog({
-        title: "大纲",
+        title: outlineWord(view.project()),
         items: [
           { label: st(view).overview ? "收起总览" : "总览", value: "overview-toggle" },
           { label: `${st(view).history ? "收起历史" : "历史"}（${view.project().outline.history.length}）`, value: "history" },
@@ -19183,7 +26512,7 @@ ${yaml}
       let ids = [draft.stageId, ...draft.nextId ? [draft.nextId] : []], old = volume.stages.filter((stage) => ids.includes(stage.id));
       if (isClueMode(project) && view.runtime.activeId() === view.projectId) {
         let current = view.runtime.clue.compute(), preview = replaceStages(project.outline.volumes, volume.id, ids, incoming), guard = historyGuard(project.outline.volumes, preview.volumes, current.snap.cond || current.snap, current.prog, project.clue, {
-          scope: new Set(compileClue([{ ...volume, stages: old }]).nodes.map((n) => n.uid))
+          scope: new Set(compileClue3(project, [{ ...volume, stages: old }]).nodes.map((n) => n.uid))
         });
         incoming = restoreHistory([{ ...volume, stages: incoming }], guard).flatMap((v) => v.stages);
       }
@@ -19228,8 +26557,8 @@ ${yaml}
     item && (item.textContent = label);
   }
   function onInput(view, target) {
-    if (target.matches("[data-rv-when],[data-rv-win],select[data-rv-tbl]")) return void reviewOnInput(view, target, importJobOf);
-    if (target.matches("[data-imp-modesel]")) return void importActions["import-mode"](view, target, target.value);
+    if (target.matches("[data-rv-when],[data-rv-win],select[data-rv-tbl]")) return void reviewOnInput3(view, target, importJobOf3);
+    if (target.matches("[data-imp-modesel]")) return void importActions3["import-mode"](view, target, target.value);
     let { stage, volume } = findSel(view.project(), st(view).sel);
     if (target.dataset.aiRequest !== void 0) {
       st(view).request = target.value;
@@ -19280,7 +26609,7 @@ ${yaml}
     }
   }
   function onBlur(view, target) {
-    if (target.matches("[data-rv-comment],[data-rv-line],input[data-rv-tbl]")) return reviewOnInput(view, target, importJobOf, { blur: !0 });
+    if (target.matches("[data-rv-comment],[data-rv-line],input[data-rv-tbl]")) return reviewOnInput3(view, target, importJobOf3, { blur: !0 });
     if (target.dataset.nodeYaml !== void 0 || target.dataset.stageYaml !== void 0) return applyYamlField(view, target);
     target.dataset.nodeField && ["名称", "类型", "内容"].includes(target.dataset.k) && syncNodeName(view, target.dataset.nodeField, Number(target.dataset.i)), target.matches("[data-stage-key],[data-vol-key],[data-stage-field],[data-stage-list],[data-node-field]") && view.runtime.refresh();
   }
@@ -19312,8 +26641,8 @@ ${yaml}
     projectId === view.projectId ? st(view).draft = draft ? { ...draft, projectId } : null : draft ? parkedDrafts.set(projectId, { ...draft, projectId }) : parkedDrafts.delete(projectId);
   }
   var CLUE_TEXT_KEYS = ["入口", "场景", "作者备注"], CLUE_YAML_KEYS = ["必需", "开放条件", "提前条件", "完成条件", "发现", "相关事实"];
-  function clueNodeFields(meta2, index, value) {
-    let yamlOf = (v) => v == null || v === "" ? "" : typeof v == "string" ? v : stringifyYaml(v).trim(), has = (k) => value[k] !== void 0 && value[k] !== null && value[k] !== "", text2 = (key, hint = "") => `<label class="pi-field"><span>${esc(key)}</span><textarea class="pi-ta pi-ta-auto" rows="2" data-node-field="${esc(meta2.field)}" data-i="${index}" data-k="${esc(key)}"${hint ? ` placeholder="${esc(hint)}"` : ""}>${esc(value[key] ?? "")}</textarea></label>`, yaml = (key) => `<label class="pi-field"><span>${esc(key)}</span><textarea class="pi-ta is-mono pi-ta-auto" rows="2" data-node-yaml="${esc(meta2.field)}" data-i="${index}" data-k="${esc(key)}" placeholder="${esc(CLUE_PLACEHOLDER[key] || "")}">${esc(yamlOf(value[key]))}</textarea></label>`, gets = discoveryList(value).map((d) => d.fact).filter(Boolean), condSum = [has("完成条件") ? `完成：${condBrief(value.完成条件)}` : "", gets.length ? `获得${gets.join("、")}` : ""].filter(Boolean).join("；") || "都未填写", moreKeys = ["事件", "偏转", "触发", "作者备注", "开放条件", "提前条件", "相关事实"].filter((k) => k in value || ["作者备注", "开放条件", "提前条件", "相关事实"].includes(k)), moreHas = moreKeys.filter(has), moreSum = moreHas.length ? `已填写：${moreHas.join("、")}` : "都未填写", moreField = (k) => CLUE_YAML_KEYS.includes(k) ? yaml(k) : k === "作者备注" ? text2(k, "只给作者看，不注入") : `<label class="pi-field"><span>${esc(k)}</span><textarea class="pi-ta pi-ta-auto" rows="2" data-node-field="${esc(meta2.field)}" data-i="${index}" data-k="${esc(k)}">${esc(value[k] ?? "")}</textarea></label>`;
+  function clueNodeFields(meta2, index, value, project = null) {
+    let yamlOf = (v) => v == null || v === "" ? "" : typeof v == "string" ? v : stringifyYaml(v).trim(), has = (k) => value[k] !== void 0 && value[k] !== null && value[k] !== "", text2 = (key, hint = "") => `<label class="pi-field"><span>${esc(key)}</span><textarea class="pi-ta pi-ta-auto" rows="2" data-node-field="${esc(meta2.field)}" data-i="${index}" data-k="${esc(key)}"${hint ? ` placeholder="${esc(hint)}"` : ""}>${esc(value[key] ?? "")}</textarea></label>`, yaml = (key) => `<label class="pi-field"><span>${esc(key)}</span><textarea class="pi-ta is-mono pi-ta-auto" rows="2" data-node-yaml="${esc(meta2.field)}" data-i="${index}" data-k="${esc(key)}" placeholder="${esc(CLUE_PLACEHOLDER[key] || "")}">${esc(yamlOf(value[key]))}</textarea></label>`, gets = discoveryList(value).map((d) => d.fact).filter(Boolean), condSum = [has("完成条件") ? `完成：${condBrief(value.完成条件, project)}` : "", gets.length ? `获得${gets.join("、")}` : ""].filter(Boolean).join("；") || "都未填写", moreKeys = ["事件", "偏转", "触发", "作者备注", "开放条件", "提前条件", "相关事实"].filter((k) => k in value || ["作者备注", "开放条件", "提前条件", "相关事实"].includes(k)), moreHas = moreKeys.filter(has), moreSum = moreHas.length ? `已填写：${moreHas.join("、")}` : "都未填写", moreField = (k) => CLUE_YAML_KEYS.includes(k) ? yaml(k) : k === "作者备注" ? text2(k, "只给作者看，不注入") : `<label class="pi-field"><span>${esc(k)}</span><textarea class="pi-ta pi-ta-auto" rows="2" data-node-field="${esc(meta2.field)}" data-i="${index}" data-k="${esc(k)}">${esc(value[k] ?? "")}</textarea></label>`;
     return `${text2("入口", "开放后提示正文可前往")}${text2("场景", "成为焦点时注入")}
         <details class="pi-fold"${has("完成条件") || gets.length ? " open" : ""}><summary><b>线索条件</b><span>${esc(condSum)}</span></summary>${yaml("完成条件")}${yaml("发现")}</details>
         <details class="pi-fold"${moreHas.length ? " open" : ""}><summary><b>更多</b><span>${esc(moreSum)}</span></summary>${moreKeys.map(moreField).join("")}<p class="pi-hint">ID ${esc(value.id || "保存后自动补")}</p></details>
@@ -19383,7 +26712,8 @@ ${f.text}`
     let project = view.project();
     if (!flattenUnits(project.outline.volumes).find((item) => item.id === draft.fromUnitId) || !isClueMode(project) || view.runtime.activeId() !== view.projectId) return null;
     let c = view.runtime.clue.compute(), units = flattenUnits(project.outline.volumes), from = units.findIndex((u) => u.id === draft.fromUnitId), restIds = new Set(
-      compileClue(
+      compileClue3(
+        project,
         units.slice(from).filter((u) => !draft.volumeId || u.volume.id === draft.volumeId).map((u) => ({ ...u.volume, stages: [u.stage] }))
       ).nodes.map((n) => n.uid).filter(Boolean)
     ), next = draftApplied(project.outline.volumes, draft);
@@ -19405,7 +26735,7 @@ ${f.text}`
     try {
       value = text2 === "" ? void 0 : parseYaml(text2);
       let errs = [];
-      if (["开放条件", "提前条件", "完成条件", "进入条件", "结束条件"].includes(key) && parseCondition(value, errs), errs.length) throw new Error(errs.join("；"));
+      if (["开放条件", "提前条件", "完成条件", "进入条件", "结束条件"].includes(key) && parseCondition3(view.project(), value, errs), errs.length) throw new Error(errs.join("；"));
       status && (status.textContent = "", status.classList.remove("is-err"));
     } catch (error) {
       status && (status.textContent = `${key}：${error.message}`, status.classList.add("is-err"));
@@ -19430,7 +26760,7 @@ ${f.text}`
   }
   function afterAdopt(view) {
     let p = view.project();
-    p && isClueMode(p) && compileClue(p.outline.volumes).lines.length && prepareLabels(view);
+    p && isClueMode(p) && compileClue3(p, p.outline.volumes).lines.length && prepareLabels3(view);
   }
 
   // src/ui/tab-setting.js
@@ -19492,7 +26822,7 @@ ${f.text}`
   function render2(view) {
     let project = view.project(), s = st2(view), text2 = project.setting.text, blocks = splitBlocks(text2).filter((block) => block.title !== "开头"), mute2 = new Set(project.setting.mute), muted = blocks.some((block) => mute2.has(block.key)), busy = view.busy.setting, hasOutline = project.outline.volumes.some((volume) => volume.stages.length), chip = (block) => `<span class="pi-chip pi-block-chip${mute2.has(block.key) ? " is-mute" : ""}"><button type="button" data-act="jump" data-key="${esc(block.key)}" title="跳到这一块">${esc(block.title)}</button><button type="button" class="pi-block-eye" data-act="block-mute" data-key="${esc(block.key)}" title="${mute2.has(block.key) ? "已设为不注入，点击恢复注入" : "注入正文，点击设为不注入"}">${mute2.has(block.key) ? ICONS.eyeOff : ICONS.eye}</button><button type="button" class="pi-block-del" data-act="block-del" data-key="${esc(block.key)}" title="删除整个分块">${ICONS.close}</button></span>`;
     return `${s.draft ? draftHtml2(view, project, s.draft) : ""}
-        <div class="pi-card"><h3>设定${checkBadge(project.setting.check)}<span class="pi-spacer"></span><button type="button" class="pi-btn is-primary is-sm" data-act="setting-save">保存</button></h3>
+        <div class="pi-card"><h3>${settingWord(project)}${checkBadge(project.setting.check)}<span class="pi-spacer"></span><button type="button" class="pi-btn is-primary is-sm" data-act="setting-save">保存</button></h3>
         <div class="pi-tools is-c4">
             <button type="button" class="pi-btn is-sm is-primary" data-act="from-talk"${busy ? " disabled" : ""}>${busy ? '<span class="pi-spin"></span>整理中' : "AI整理"}</button>
             <button type="button" class="pi-btn is-sm" data-act="sync-outline"${busy || !hasOutline || !text2.trim() ? " disabled" : ""}>按大纲校对</button>
@@ -19729,12 +27059,12 @@ ${parsed.body}` : parsed.body;
     let chat = view.data.chat(view.projectId);
     if (!chat)
       return view.data.loadChat(view.projectId).then(() => view.renderBody()).catch((error) => toast("error", `读取讨论记录失败：${error.message}`)), '<div class="pi-empty"><span class="pi-spin"></span> 正在读取讨论记录…</div>';
-    let busy = view.busy[`discuss:${view.projectId}`], refs = chat.refs, folded = chat.messages.filter((msg) => msg.folded).length, live2 = chat.messages.filter((msg) => !msg.folded), clueWord = isClueMode(view.project()), lastAiMsg = [...live2].reverse().find((msg) => msg.role !== "user"), unanswered = live2.length && live2[live2.length - 1].role === "user" ? live2[live2.length - 1] : null, wb = wbSummary(view, chat.refs, () => view.renderBody()), canProgress = !!progressText(view), persona = view.data.settings().persona.trim(), olLabel = outlineChipLabel(view, view.project(), refs), refsOn = [refs.setting && "设定", refs.outline && olLabel, refs.progress && canProgress && "剧情进度", refs.floors && `正文${refs.floors}楼`, wb && wb.count && `世界书${wb.count}条`].filter(Boolean), open = !!st3(view).refsOpen, chips = `<div class="pi-dc-bar"><button type="button" class="pi-dc-refs" data-act="refs-toggle" aria-expanded="${open}">参考 <i>${refsOn.length}</i><small>${esc(refsOn.join("、") || "无")}</small><span class="pi-dc-caret${open ? " is-open" : ""}">${ICONS.chevDown}</span></button>
+    let busy = view.busy[`discuss:${view.projectId}`], refs = chat.refs, folded = chat.messages.filter((msg) => msg.folded).length, live2 = chat.messages.filter((msg) => !msg.folded), clueWord = isClueMode(view.project()), lastAiMsg = [...live2].reverse().find((msg) => msg.role !== "user"), unanswered = live2.length && live2[live2.length - 1].role === "user" ? live2[live2.length - 1] : null, wb = wbSummary(view, chat.refs, () => view.renderBody()), canProgress = !!progressText(view), persona = view.data.settings().persona.trim(), trpgView = viewIsTrpg(view), olLabel = trpgView ? outlineWord(view.project()) : outlineChipLabel(view, view.project(), refs), refsOn = [refs.setting && settingWord(view.project()), refs.outline && olLabel, refs.progress && canProgress && "剧情进度", refs.floors && `正文${refs.floors}楼`, wb && wb.count && `世界书${wb.count}条`].filter(Boolean), open = !!st3(view).refsOpen, chips = `<div class="pi-dc-bar"><button type="button" class="pi-dc-refs" data-act="refs-toggle" aria-expanded="${open}">参考 <i>${refsOn.length}</i><small>${esc(refsOn.join("、") || "无")}</small><span class="pi-dc-caret${open ? " is-open" : ""}">${ICONS.chevDown}</span></button>
         <button type="button" class="pi-dc-act" data-act="review-pick" title="选一条${clueWord ? "剧情线" : "卷"}，逐页查看各阶段，在对应页填写意见后统一发送">${ICONS.pencil}<span>审阅修改</span></button></div>
         ${open ? `<div class="pi-dc-refs-open">
         <button type="button" class="pi-chip${persona ? " is-on" : ""}" data-act="persona" title="${esc(persona || "指定AI讨论时的说话人格")}">人格${persona ? "" : "：未设置"}</button>
-        <button type="button" class="pi-chip${refs.setting ? " is-on" : ""}" data-act="ref" data-ref="setting">设定</button>
-        <button type="button" class="pi-chip${refs.outline ? " is-on" : ""}" data-act="ref-outline">${esc(olLabel)}</button>
+        <button type="button" class="pi-chip${refs.setting ? " is-on" : ""}" data-act="ref" data-ref="setting">${settingWord(view.project())}</button>
+        ${trpgView ? `<button type="button" class="pi-chip${refs.outline ? " is-on" : ""}" data-act="ref" data-ref="outline">${esc(olLabel)}</button>` : `<button type="button" class="pi-chip${refs.outline ? " is-on" : ""}" data-act="ref-outline">${esc(olLabel)}</button>`}
         <button type="button" class="pi-chip${refs.progress && canProgress ? " is-on" : ""}" data-act="ref" data-ref="progress"${canProgress ? "" : ' disabled title="本项目不是当前聊天启用的项目"'}>剧情进度</button>
         <button type="button" class="pi-chip${refs.floors ? " is-on" : ""}" data-act="ref-floors">正文${refs.floors}楼</button>
         <button type="button" class="pi-chip${wb && wb.count ? " is-on" : ""}" data-act="ref-wb">世界书${wb ? `${wb.count}条` : "…"}</button></div>` : ""}`, messages = live2.map((msg) => {
@@ -19935,8 +27265,8 @@ ${parsed.body}` : parsed.body;
         items: project.outline.volumes.map((v) => ({ value: v.id, label: `${name(v)}　${v.stages.length}个阶段` }))
       });
       if (!id || view.projectId !== project.id) return;
-      let jobId = await openEditReview(view, id, {}, { note: clue ? "剧情线" : "卷" });
-      showEditReview(view, jobId), view.go("outline");
+      let jobId = await openEditReview3(view, id, {}, { note: clue ? "剧情线" : "卷" });
+      showEditReview3(view, jobId), view.go("outline");
     },
     "use-yaml"(view, target) {
       let msg = view.data.chat(view.projectId).messages.find((item) => item.id === target.dataset.id);
@@ -20028,7 +27358,7 @@ ${parsed.body}` : parsed.body;
     return last ? last.type === "if" ? last.inline : last.text.slice(last.text.lastIndexOf(`
 `) + 1).trim() !== "" : !1;
   }
-  function parseEntry2(content) {
+  function parseEntry3(content) {
     let source = String(content || ""), root = { children: [] }, stack = [root], issues = [], last = 0, open = 0, push = (node) => stack[stack.length - 1].children.push(node), pushText = (text2) => {
       text2 && push({ type: "text", text: text2 });
     };
@@ -20106,7 +27436,7 @@ ${parsed.body}` : parsed.body;
     }
     return range;
   }
-  var rangeKey = (range) => `${range.min ?? ""}~${range.max ?? ""}`, rangeName = (range) => range.min === void 0 ? `≤${range.max}` : range.max === void 0 ? `≥${range.min}` : range.min === range.max ? `${range.min}` : `${range.min}–${range.max}`, stateLine2 = (text2) => {
+  var rangeKey = (range) => `${range.min ?? ""}~${range.max ?? ""}`, rangeName = (range) => range.min === void 0 ? `≤${range.max}` : range.max === void 0 ? `≥${range.min}` : range.min === range.max ? `${range.min}` : `${range.min}–${range.max}`, stateLine3 = (text2) => {
     let match = /^[ \t]*状态[：:][ \t]*(.+)$/m.exec(String(text2));
     return match ? match[1].trim() : "";
   }, join = (a, b) => [a, b].filter((item) => String(item).trim()).join(`
@@ -20120,7 +27450,7 @@ ${parsed.body}` : parsed.body;
     return out;
   }
   function buildPlan(entries, { overrides = {}, picks = {} } = {}) {
-    let parsed = entries.map((entry) => ({ entry, key: `${entry.book}\0${entry.key}`, tree: parseEntry2(entry.content) })), blocked = /* @__PURE__ */ new Set(), issues = [], report = (entry, level, text2) => {
+    let parsed = entries.map((entry) => ({ entry, key: `${entry.book}\0${entry.key}`, tree: parseEntry3(entry.content) })), blocked = /* @__PURE__ */ new Set(), issues = [], report = (entry, level, text2) => {
       issues.push({ book: entry.book, key: entry.key, title: entry.title, level, text: text2 }), level === "error" && blocked.add(`${entry.book}\0${entry.key}`);
     };
     for (let item of parsed) for (let issue of item.tree.issues) report(item.entry, issue.level, issue.text);
@@ -20204,7 +27534,7 @@ ${suffix.trim()}` : body;
       if (line.kind === "num")
         out.push({ ...base, mode: "fame", fame: { source: "fame", dim: "好感", bar: line.name, partner: "" }, stages: numericStages([...line.stages.values()]) });
       else {
-        let stages = [...line.stages.values()].map((item) => ({ ...newStage(item.value), cond: stateLine2(item.text), text: item.text }));
+        let stages = [...line.stages.values()].map((item) => ({ ...newStage(item.value), cond: stateLine3(item.text), text: item.text }));
         out.push({ ...base, mode: "check", fame: { source: "fame", dim: "好感", bar: "", partner: "" }, stages });
       }
     }
@@ -20571,6 +27901,7 @@ ${suffix.trim()}` : body;
     onInput: () => onInput4,
     render: () => render5
   });
+  var clueActions3 = routeActions(clueActions, clueActions2), renderClueRun3 = (view, project, st9) => (isTrpg(project) ? trpg_clue_run_exports : clue_run_exports).renderClueRun(view, project, st9), modeCard3 = (project) => (isTrpg(project) ? trpg_clue_run_exports : clue_run_exports).modeCard(project), clueOnChange3 = (view, target) => (viewIsTrpg(view) ? trpg_clue_run_exports : clue_run_exports).clueOnChange(view, target), clueOnInput2 = (view, target) => viewIsTrpg(view) ? void 0 : clueOnInput(view, target), lineDisplayName3 = lineDisplayName;
   function toggleNode(view, unitId, nodeId, checked) {
     let unit = view.runtime.units().find((item) => item.id === unitId), node = unit && stageNodes(unit.stage.data).find((item) => item.id === nodeId), next = setNodeChecked(view.runtime.progress(), unitId, nodeId, checked, node ? node.name : ""), hook = checked && viewLive(view).hooks.find((item) => item.key === `${unitId}:${nodeId}`);
     hook && hook.steps.length && hook.step >= hook.steps.length && (next = patchLive(next, hook, { step: hook.steps.length - 1 })), view.runtime.setProgress(next);
@@ -20592,11 +27923,11 @@ ${suffix.trim()}` : body;
             <input type="checkbox" title="启用" data-slot="${esc(entry.slotId)}" data-slot-field="enabled"${entry.enabled ? " checked" : ""}>
         </div>${body}</div>`;
   }
-  var nodeRow2 = (unitId, node, off, from = "", mark = "") => `<div class="pi-node-row${off ? " is-off" : ""}"${from ? ` title="来自${esc(from)}"` : ""}>
+  var nodeRow3 = (unitId, node, off, from = "", mark = "") => `<div class="pi-node-row${off ? " is-off" : ""}"${from ? ` title="来自${esc(from)}"` : ""}>
         <span class="pi-node-name"><span class="pi-badge pi-kind is-${esc(node.kind)}">${esc(nodeWord(node))}</span> <span class="pi-node-txt">${esc(node.name)}</span></span>${mark || `<button type="button" class="pi-meta pi-meta-btn" data-act="node-toggle" data-node="${esc(node.id)}" data-unit="${esc(unitId)}">${off ? "已演" : "未演"}</button>`}</div>`;
   function hookRow(hook) {
     let chain = hook.steps.length && (hook.status === "active" || hook.status === "queue"), mark = hook.status === "done" ? "已演" : chain ? `第${hook.step + 1}/${hook.steps.length}步${hook.status === "queue" ? "，排队" : ""}` : { wait: "待触发", active: "已激活", queue: "排队" }[hook.status], markHtml = mark ? `<button type="button" class="pi-meta pi-meta-btn${hook.status === "active" ? " is-dot" : ""}" data-act="hook-menu" data-key="${esc(hook.key)}">${esc(mark)}</button>` : "";
-    return nodeRow2(
+    return nodeRow3(
       hook.unit.id,
       hook.node,
       hook.status === "done",
@@ -20627,8 +27958,8 @@ ${suffix.trim()}` : body;
   }
   function nodeList2(unit, progress, carried, live2, sw, expiredOpen) {
     let off = new Set(offNodes(progress, unit)), nodes = stageNodes(unit.stage.data).filter((node) => !isThreadNode(node)), alive = (hook) => hook.status !== "expired", own = live2.hooks.filter((hook) => !hook.carried && alive(hook)), later = live2.hooks.filter((hook) => hook.carried && alive(hook)), expired = live2.hooks.filter((hook) => !alive(hook)), closed = [...sw.sideOn ? [] : ["可选事件"], ...sw.worldOn ? [] : ["世界动态"]];
-    return !nodes.length && !carried.length && !live2.hooks.length && !live2.clocks.length && !closed.length ? "" : `<div class="pi-tl-nodes">${nodes.map((node) => nodeRow2(unit.id, node, off.has(node.id))).join("")}${own.map(hookRow).join("")}
-        ${carried.length || later.length ? `<p class="pi-hint">延续自前面阶段</p>${carried.map((item) => nodeRow2(item.unit.id, item.node, item.off, stageLabel(item.unit.stage.key))).join("")}${later.map(hookRow).join("")}` : ""}
+    return !nodes.length && !carried.length && !live2.hooks.length && !live2.clocks.length && !closed.length ? "" : `<div class="pi-tl-nodes">${nodes.map((node) => nodeRow3(unit.id, node, off.has(node.id))).join("")}${own.map(hookRow).join("")}
+        ${carried.length || later.length ? `<p class="pi-hint">延续自前面阶段</p>${carried.map((item) => nodeRow3(item.unit.id, item.node, item.off, stageLabel(item.unit.stage.key))).join("")}${later.map(hookRow).join("")}` : ""}
         ${expiredRows(expired, expiredOpen)}${worldRow(live2)}${closed.map((label) => `<p class="pi-hint">${label}已关闭</p>`).join("")}</div>`;
   }
   function timeline(units, states, progress, carried, live2, sw, expiredOpen) {
@@ -20677,9 +28008,9 @@ ${suffix.trim()}` : body;
   function render5(view) {
     let { data, runtime } = view, project = view.project(), st9 = view.tabState("run"), notActive = activateCard(view, project);
     if (notActive) return notActive;
-    if (isClueMode(project)) return renderClueRun(view, project, st9);
+    if (isClueMode(project)) return renderClueRun3(view, project, st9);
     let progress = runtime.progress(), entries = runtime.entries(), sw = threadSwitches(project), units = maskUnits(flattenUnits(project.outline.volumes), sw), ov = runtime.olInfo ? runtime.olInfo() : null, states = ov ? ov.states : unitStates(units, progress), tlUnits = ov ? units.filter((u) => ov.own.has(u.id)) : units, seqBack = !ov && progress.lineFlow === "seq" && project.outline.volumes.some((v) => v.line && typeof v.line == "object"), total = entries.filter((entry) => entry.enabled).reduce((sum, entry) => sum + estimateTokens(entry.content), 0), settings = data.settings(), checking = runtime.isChecking(), book = runtime.injectMode() === "virtual" ? "" : '<span class="pi-badge is-warn">专用世界书</span>', gap = settings.checkEvery - (runtime.floorCount() - checkBase(progress));
-    return `${modeCard(project)}<div class="pi-card"><h3>注入条目${book}<span class="pi-meta">≈${total} token</span><span class="pi-spacer"></span>
+    return `${modeCard3(project)}<div class="pi-card"><h3>注入条目${book}<span class="pi-meta">≈${total} token</span><span class="pi-spacer"></span>
             <button type="button" class="pi-btn is-sm is-ghost" data-act="preview">预览</button></h3>
         ${entries.filter((entry) => entry.kind !== "persona").length ? entries.filter((entry) => entry.kind !== "persona").map((entry) => entryRow(entry, st9.open === entry.slotId)).join("") : '<p class="pi-hint">设定和大纲为空，无可注入内容。</p>'}
         </div>
@@ -20714,7 +28045,7 @@ ${suffix.trim()}` : body;
         ...s.state === "暂停" ? [btn(id, "abandon", "放弃", " is-ghost is-danger")] : [],
         ...s.state === "未触发" ? [btn(id, "start", "直接开始")] : []
       ].join(""), undo = s.ever || ["完成", "放弃", "暂停"].includes(s.state) ? btn(id, "", "还原") : "", groups = [g1, undo].filter(Boolean), more = groups.length ? `<details class="pi-line-more"><summary class="pi-icon-btn" title="更多">${ICONS.more}</summary><div class="pi-line-menu">${groups.map((g) => `<div class="pi-line-menu-g">${g}</div>`).join("")}</div></details>` : "", note = olStageNote(s), why = ["可开启", "未触发"].includes(s.state) && !s.auto && s.why ? s.why : "";
-      return `<div class="pi-line-row" data-line-row="${esc(id)}"><div class="pi-line-head"><b class="pi-line-name">${esc(lineDisplayName(s.line))}</b><div class="pi-line-acts">${main0}${more}</div></div>
+      return `<div class="pi-line-row" data-line-row="${esc(id)}"><div class="pi-line-head"><b class="pi-line-name">${esc(lineDisplayName3(s.line))}</b><div class="pi-line-acts">${main0}${more}</div></div>
           <div class="pi-line-tags"><span class="pi-badge ${s.missed ? "" : OL_BADGE[s.state] || ""}">${esc(s.missed ? "已错过" : OL_LABEL[s.state] || s.state)}</span>${note ? `<span class="pi-meta">${esc(note)}</span>` : ""}</div>
           ${s.line.brief ? `<p class="pi-hint">${esc(s.line.brief)}</p>` : ""}${why ? `<p class="pi-hint">${esc(why)}</p>` : ""}</div>`;
     }, empty = { now: "没有正在演的剧情线。", idle: "暂无未进行的剧情线。", end: "暂无已结束的剧情线。" };
@@ -20741,10 +28072,10 @@ ${suffix.trim()}` : body;
     async "ol-line"(view, target) {
       let ov = view.runtime.olInfo(), id = target.dataset.id, v = target.dataset.value, s = ov && ov.ls.find((x) => x.line.id === id);
       if (!s) return;
-      let name = lineDisplayName(s.line);
+      let name = lineDisplayName3(s.line);
       if ((v === "start" || v === "resume") && ov.cur && ov.cur.line.id !== id) {
         let k = ov.cur.line.units.findIndex((u) => u.id === ov.cur.at);
-        if (!await confirmDialog({ title: `开始${name}`, body: `同一时间只演一条线。${lineDisplayName(ov.cur.line)}会暂停${k >= 0 ? `在第${k + 1}段` : ""}，阶段和已演节点都保留，之后点「继续」回来。`, okLabel: "开始" }))
+        if (!await confirmDialog({ title: `开始${name}`, body: `同一时间只演一条线。${lineDisplayName3(ov.cur.line)}会暂停${k >= 0 ? `在第${k + 1}段` : ""}，阶段和已演节点都保留，之后点「继续」回来。`, okLabel: "开始" }))
           return;
       }
       (v === "done" || v === "abandon") && !await confirmDialog({ title: `${v === "done" ? "标记完成" : "放弃"} ${name}`, body: v === "done" ? "这条线算完成，没演到的阶段不算发生。" : "这条线算放弃，之后不再提示。", okLabel: v === "done" ? "标记完成" : "放弃", danger: v === "abandon" }) || (view.runtime.olAct(id, v), view.renderBody());
@@ -20757,7 +28088,7 @@ ${suffix.trim()}` : body;
         okLabel: seq ? "按顺序" : "按线"
       }) && (view.runtime.olSetFlow(seq ? "seq" : ""), view.renderBody());
     },
-    ...clueActions,
+    ...clueActions3,
     ...kpActions,
     activate: (view) => view.runtime.switchProject(view.projectId, "chat"),
     "activate-card": (view) => view.runtime.switchProject(view.projectId, "card"),
@@ -20877,10 +28208,10 @@ ${suffix.trim()}` : body;
     }
   };
   function onInput4(view, target) {
-    clueOnInput(view, target);
+    clueOnInput2(view, target);
   }
   function onChange3(view, target) {
-    if (clueOnChange(view, target)) return;
+    if (clueOnChange3(view, target)) return;
     let { runtime } = view;
     if (target.dataset.param) {
       let value = Math.round(Number(target.value));
@@ -21164,7 +28495,8 @@ ${suffix.trim()}` : body;
         ${advOpen ? `${guideCard(view, s)}
         <div class="pi-card"><h3>实验功能</h3>
         <label class="pi-check"><input type="checkbox" data-set="trpgLab"${s.trpgLab ? " checked" : ""}><span>跑团模式（新建项目时可选）</span></label>
-        ${s.trpgLab ? `<label class="pi-field"><span>检定写法</span><select class="pi-sel" data-set="trpgCheck">${options(CHECK_MODES, s.trpgCheck === "anke" ? "anke" : "text")}</select></label>` : ""}</div>` : ""}
+        ${s.trpgLab ? `<label class="pi-check"><input type="checkbox" data-set="trpgAutoCheck"${s.trpgAutoCheck !== !1 ? " checked" : ""}><span>跑团每轮自动检测</span></label>
+        <label class="pi-field"><span>检定写法</span><select class="pi-sel" data-set="trpgCheck">${options(CHECK_MODES, s.trpgCheck === "anke" ? "anke" : "text")}</select></label>` : ""}</div>` : ""}
         <div class="pi-tools is-c1"><button type="button" class="pi-btn is-sm is-ghost" data-act="tour-reset" title="先播放总览，之后第一次打开插件时也会再播一次">重新播放教程</button></div>`;
   }
   var NUMERIC = /* @__PURE__ */ new Set(["checkEvery", "checkFloors", "hookCap"]);
@@ -22209,7 +29541,7 @@ ${suffix.trim()}` : body;
     ].map(([k, v]) => `<tr><th>${esc(k)}</th><td>${v}</td></tr>`).join("")}</tbody></table>
         ${d.problems.length ? d.problems.map((p) => `<p class="pi-hint is-warn">${esc(p)}</p>`).join("") : ""}
         ${sizeHtml(d.size)}
-        ${foldHtml(view.runtime.clue.foldCheck())}
+        ${viewIsTrpg(view) ? "" : foldHtml(view.runtime.clue.foldCheck())}
         ${auditHtml(d.lastAudit)}
         ${last ? `<p class="pi-hint">上次实际注入（${time(last.at)}）${last.facts.length ? `，涉及事实${esc(last.facts.join("、"))}` : ""}：</p><pre class="pi-pre">${esc(last.content || `（空：${last.reason}）`)}</pre>` : '<p class="pi-hint">本次打开后暂无注入记录。</p>'}
         ${d.events.length ? `<pre class="pi-pre">${esc(
@@ -22264,7 +29596,7 @@ ${suffix.trim()}` : body;
     { key: "persona", label: "人设", mod: tab_persona_exports },
     { key: "outline", label: "大纲", mod: tab_outline_exports },
     { key: "run", label: "执行", mod: tab_run_exports }
-  ], INFINITE_TABS = { outline: { label: "世界库", mod: tab_worlds_exports }, run: { mod: tab_infinite_run_exports } }, PAGES = {
+  ], INFINITE_TABS = { outline: { label: "世界库", mod: tab_worlds_exports }, run: { mod: tab_infinite_run_exports } }, TRPG_TABS = { setting: { label: "公共设定" }, outline: { label: "模组" }, persona: { hidden: !0 } }, PAGES = {
     books: { label: "世界书管理", icon: "book", mod: page_books_exports },
     data: { label: "数据管理", icon: "box", mod: page_data_exports },
     diag: { label: "诊断", icon: "pulse", mod: page_diag_exports },
@@ -22320,9 +29652,12 @@ ${suffix.trim()}` : body;
       return view.state[key] || (view.state[key] = {}), view.state[key];
     }
     view.tabState = tabState;
-    let isInfinite = () => !!(view.project() && view.project().mode === "infinite"), tabOf = (tab) => ({ ...tab, ...isInfinite() ? INFINITE_TABS[tab.key] : null });
+    let isInfinite = () => !!(view.project() && view.project().mode === "infinite"), tabOf = (tab) => ({ ...tab, ...isInfinite() ? INFINITE_TABS[tab.key] : isTrpg(view.project()) ? TRPG_TABS[tab.key] : null }), tabKey = () => {
+      let tab = TABS.find((item) => item.key === view.tab);
+      return tab && tabOf(tab).hidden ? "run" : view.tab;
+    };
     function current() {
-      return view.page ? PAGES[view.page].mod : tabOf(TABS.find((tab) => tab.key === view.tab) || TABS.find((tab) => tab.key === "run")).mod;
+      return view.page ? PAGES[view.page].mod : tabOf(TABS.find((tab) => tab.key === tabKey()) || TABS.find((tab) => tab.key === "run")).mod;
     }
     function sideHtml() {
       let index = data.index(), activeId = runtime.activeId(), list = groupProjects(index.projects).map((group) => {
@@ -22354,8 +29689,8 @@ ${suffix.trim()}` : body;
       }
     }
     function topHtml() {
-      let project = view.project(), title2 = view.page ? PAGES[view.page].label : project ? project.name : "剧情注入器", tabs = view.page || !project ? "" : `<div class="pi-tabs">${TABS.map(tabOf).map(
-        (tab) => `<button type="button" class="pi-tab${tab.key === view.tab ? " is-sel" : ""}" data-act="tab" data-tab="${tab.key}">${tab.label}</button>`
+      let project = view.project(), title2 = view.page ? PAGES[view.page].label : project ? project.name : "剧情注入器", tabs = view.page || !project ? "" : `<div class="pi-tabs">${TABS.map(tabOf).filter((tab) => !tab.hidden).map(
+        (tab) => `<button type="button" class="pi-tab${tab.key === tabKey() ? " is-sel" : ""}" data-act="tab" data-tab="${tab.key}">${tab.label}</button>`
       ).join("")}</div>`, rename = !view.page && project ? `<button type="button" class="pi-icon-btn" data-act="rename" title="编辑项目名称">${ICONS.pencil}</button>` : "";
       return `<div class="pi-top-lead"><button type="button" class="pi-icon-btn pi-menu" data-act="drawer" title="项目列表">${ICONS.menu}</button>
                 <span class="pi-top-title">${esc(title2)}</span>${rename}</div>${tabs}
@@ -22538,7 +29873,7 @@ ${suffix.trim()}` : body;
         summary.lines ? `${summary.lines}条剧情线` : "",
         summary.labels ? `${summary.labels}条标签` : "",
         summary.personas ? `${summary.personas}条人设` : "",
-        summary.setting ? "设定" : ""
+        summary.setting ? isTrpg(project) ? "公共设定" : "设定" : ""
       ].filter(Boolean), missing = summary.clue ? missingBoundTables(project, currentTables()) : [];
       if (await openDialog({
         // 版式：灰色小标题、大号项目名、一排小标签、细线下一句提示
@@ -22692,7 +30027,7 @@ ${suffix.trim()}` : body;
         event.target === root && (root.dataset.down = "1");
       }), root.addEventListener("mouseup", (event) => {
         event.target === root && root.dataset.down && close(), delete root.dataset.down;
-      }), doc.addEventListener("keydown", onKey, !0), doc.body.appendChild(root), view.restored = !1, data.isReady() ? restore() : render12(), maybeAutoTour());
+      }), doc.addEventListener("keydown", onKey, !0), layerParent(doc).appendChild(root), view.restored = !1, data.isReady() ? restore() : render12(), maybeAutoTour());
     }
     function close() {
       tour.stop(!1), root && (current().unmount?.(view), doc.removeEventListener("keydown", onKey, !0), root.remove(), root = null, data.flush().catch(() => {
@@ -22714,7 +30049,7 @@ ${suffix.trim()}` : body;
   function createNotices() {
     let doc = hostDocument(), view = hostWindow(), box = null, timers = /* @__PURE__ */ new Map();
     function container() {
-      return (!box || !box.isConnected) && (box = el('<div class="pi-root pi-notices"></div>'), doc.body.appendChild(box)), box;
+      return (!box || !box.isConnected) && (box = el('<div class="pi-root pi-notices"></div>'), layerParent(doc).appendChild(box)), box;
     }
     function hide(id) {
       view.clearTimeout(timers.get(id)), timers.delete(id), box?.querySelector(`[data-notice="${id}"]`)?.remove();
@@ -22747,7 +30082,7 @@ ${suffix.trim()}` : body;
       let top = doc.querySelector("#top-bar, #top-settings-holder"), offset = top ? Math.max(0, Math.round(top.getBoundingClientRect().bottom)) : 0;
       bar = el(
         `<div class="pi-root pi-topbar" role="status" style="top:calc(${offset}px + env(safe-area-inset-top, 0px))"><span class="pi-topbar-dot"></span><div class="pi-topbar-body"><span class="pi-topbar-text" title="${esc(text2)}">${esc(text2)}</span>${tag ? `<span class="pi-topbar-tag">${esc(tag)}</span>` : ""}</div><div class="pi-topbar-acts">${action ? `<button type="button" class="pi-btn is-sm pi-topbar-act">${esc(action)}</button>` : ""}<button type="button" class="pi-btn is-sm is-primary pi-topbar-ok">确认</button></div></div>`
-      ), doc.body.appendChild(bar);
+      ), layerParent(doc).appendChild(bar);
       let armed = 0, btn = bar.querySelector(".pi-topbar-act"), y0 = null, self = bar;
       bar.querySelector(".pi-topbar-ok").addEventListener("click", () => bar === self && hideBar()), btn && btn.addEventListener("click", () => {
         if (confirm && !armed) {
@@ -22784,7 +30119,7 @@ ${suffix.trim()}` : body;
   }
 
   // src/index.js
-  var VERSION = "0.3.14", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.4.0", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")

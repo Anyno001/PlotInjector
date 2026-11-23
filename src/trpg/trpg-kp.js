@@ -1,9 +1,11 @@
 // 跑团模式的「KP」：体检、「我卡住了」推一把、察觉卡关。纯逻辑，不碰界面和宿主。
-import { discoveryList, clueReachability, chatFactSets } from './clue-project.js';
-import { effectiveFact, conditionRefs } from './clue-rules.js';
+import { discoveryList, clueReachability, chatFactSets } from './trpg-clue-project.js';
+import { effectiveFact, conditionRefs } from './trpg-clue-rules.js';
 import { checkRule, GOT_ANYWAY } from './trpg.js';
-import { isPlainObject } from './outline.js';
+import { isPlainObject } from '../core/outline.js';
 import { timelineStep } from './trpg-timeline.js';
+import { splitBlocks } from '../core/setting.js';
+import { KP_BLOCK } from './trpg.js';
 
 export const KP_LEVELS = [
     { level: 1, label: '给点暗示' },
@@ -333,4 +335,40 @@ export function parseSteerReply(text) {
     out.steer = steer.join('\n').trim();
     none(out.steer) && (out.steer = '');
     return out;
+}
+
+// ---------- 把「NPC与敌人数据」交给 IGS 建档（只在装了 IGS 时才会用到） ----------
+
+// 设定文字 → KP规则里某个小标题下的正文（去掉每行开头的「- 」）；没有就返回空串
+export function kpSectionText(settingText, section) {
+    let block = splitBlocks(settingText).find((b) => b.title === KP_BLOCK && !b.cont),
+        out = [],
+        inSection = !1;
+    if (!block) return '';
+    for (let line of block.text.split('\n')) {
+        let head = /^\s*【([^】]+)】\s*$/.exec(line);
+        if (head) {
+            inSection = head[1].trim() === section;
+            continue;
+        }
+        inSection && line.trim() && out.push(line.replace(/^\s*-\s*/, '').trimEnd());
+    }
+    return out.join('\n');
+}
+
+// IGS 返回的原因码 → 中文（没收录的原样显示）
+const NPC_FAIL = { ruleset: 'IGS的数值规则不是CoC第七版。', 'no-model': 'IGS没有配置可用的模型。', empty: '没有可交给IGS的文字。', 'stats-inactive': '本聊天没有启用IGS的数值系统。', busy: 'IGS正在处理另一项调查员档任务，请稍后再试。', unavailable: 'IGS暂时无法处理。', 'stats-runtime-missing': 'IGS的数值系统尚未就绪。' },
+    NPC_SKIP = { 'no-numbers': '没有数值', missing: '没有收到', name: '名字不合规' };
+
+// IGS 返回的结果 → 一两句给人看的话
+export function npcImportMessage(r) {
+    if (!r || !r.ok) {
+        let why = r && r.reason;
+        return NPC_FAIL[why] || `失败：${why || '没有收到结果'}`;
+    }
+    let made = r.created || [],
+        skipped = r.skipped || [],
+        parts = [made.length ? `已建立${made.length}个NPC档：${made.join('、')}` : '没有建立新的NPC档'];
+    skipped.length && parts.push(`跳过：${skipped.map((x) => `${x.name}（${NPC_SKIP[x.reason] || x.reason}）`).join('、')}`);
+    return parts.join('。') + '。';
 }

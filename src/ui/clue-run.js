@@ -38,10 +38,6 @@ import { PLOT_MODES, isClueMode, normalizeClue } from '../core/clue-model.js';
 
 import { stringifyYaml, parseYaml } from '../core/yaml.js';
 import { acuApi } from '../app/clue-runtime.js';
-import { isTrpg } from '../core/trpg.js';
-import { kpCard } from './trpg-kp-card.js';
-import { sceneHintHtml } from './trpg-steer.js';
-import { trpgWantFacts, trpgRowFilter } from '../core/trpg-rows.js';
 import { NODE_STATUS_LABELS, AWAY_PREFIX, compileClue, computeClueState } from '../core/clue-rules.js';
 import { ICONS, foldIcon } from './styles.js';
 import { stageLabel, isPlainObject, lineShowName } from '../core/outline.js';
@@ -73,13 +69,6 @@ export const FOCUS_SOURCE = {
 };
 
 // inner：放在「运行设置」里时不单独成卡
-// 跑团项目：模板的初始行只放眼前要用的线索（core/trpg-rows.js），其余标签照样存进项目，推进时自动补行。普通项目原样全给。
-function trpgSeedRows(project, c, factRows, knowRows) {
-    if (!isTrpg(project) || !c) return { factRows, knowRows };
-    let keep = trpgRowFilter(c.compiled, trpgWantFacts(c.compiled, c.state, c.snap, c.prog, project.clue));
-    return { factRows: factRows.filter((f) => keep(f.code)), knowRows: knowRows.filter((k) => keep(k.fact)) };
-}
-
 export function modeCard(project, inner = !1) {
     let mode = project.clue ? project.clue.mode : 'outline',
         body = `<div class="pi-seg">${PLOT_MODES.map((item) => `<button type="button" class="pi-seg-btn${item.value === mode ? ' is-sel' : ''}" data-act="clue-mode" data-mode="${item.value}">${esc(item.label)}</button>`).join('')}</div>
@@ -261,11 +250,11 @@ function lineOpts(c, project) {
     )}</select></label>
           <label class="pi-check"><input type="checkbox" data-clue-linetoast${project.clue.lineToast !== !1 ? ' checked' : ''}><span>剧情线变化时在顶端提示（自动开始、支线已满、收起）</span></label></div>`;
 }
-// 收起已结束的线：存储模式放行后才显示开关（方案 三.7、三.9）；只给线索模式，跑团不显示
+// 收起已结束的线：存储模式放行后才显示开关（方案 三.7、三.9）
 function foldOpts(project, foldChat) {
     let api = acuApi(),
         storage = api && typeof api.querySql == 'function' ? 'sqlite' : 'native';
-    if (!api || !FOLD_AUTO_RELEASED[storage] || isTrpg(project)) return '';
+    if (!api || !FOLD_AUTO_RELEASED[storage]) return '';
     return `<div class="pi-row pi-line-opts"><label class="pi-check"><input type="checkbox" data-clue-foldauto${project.clue.foldAuto !== !1 ? ' checked' : ''}><span>收起已结束的线</span></label></div><p class="pi-hint">已结束剧情线的表格行移入插件记录并从表格删除，剧情判断不受影响。</p>`;
 }
 // 「提前登记已撤回」（线索建行与登记方案 二.3）：节点前提还没成立就被登记的线索，表格已改回未获得（原生存储只在插件里不算）。
@@ -354,10 +343,7 @@ export function renderClueRun(view, project, st7) {
                       .filter((d2) => d2.fact && c.notReady.has(d2.fact))
                       .map((d2) => d2.fact)
                 : [],
-        hint = isTrpg(project) ? sceneHintHtml(c) : '',
-        sceneLine = hint
-            ? hint
-            : `<p class="pi-hint">${hereText(c)}本轮场景：${focusNode ? `<b>${esc(focusNode.node.name)}</b>（${esc(FOCUS_SOURCE[focus.source])}）` : esc(FOCUS_SOURCE[focus.source])}${focusNode ? ` <button type="button" class="pi-btn is-sm is-ghost" data-act="clue-leave" data-uid="${esc(focusNode.node.uid)}" title="主角已离开这件事：不再注入这件事的场景和发现，仅提供入口">已离开</button>` : ''}${c.prog.focus ? ` <button type="button" class="pi-btn is-sm is-ghost" data-act="clue-unfocus" title="回到按填表判断本轮场景">${c.prog.focus.startsWith(AWAY_PREFIX) ? '未离开' : '取消手选'}</button>` : ''}</p>`;
+        sceneLine = `<p class="pi-hint">${hereText(c)}本轮场景：${focusNode ? `<b>${esc(focusNode.node.name)}</b>（${esc(FOCUS_SOURCE[focus.source])}）` : esc(FOCUS_SOURCE[focus.source])}${focusNode ? ` <button type="button" class="pi-btn is-sm is-ghost" data-act="clue-leave" data-uid="${esc(focusNode.node.uid)}" title="主角已离开这件事：不再注入这件事的场景和发现，仅提供入口">已离开</button>` : ''}${c.prog.focus ? ` <button type="button" class="pi-btn is-sm is-ghost" data-act="clue-unfocus" title="回到按填表判断本轮场景">${c.prog.focus.startsWith(AWAY_PREFIX) ? '未离开' : '取消手选'}</button>` : ''}</p>`;
     return `${progressHtml('prebuild')}${todo.length ? `<div class="pi-card"><h3>需要处理<span class="pi-badge is-warn">${todo.length}</span></h3><div class="pi-rl-stack">${todo.join('')}</div></div>` : ''}
         ${mainlineCard(c, enabled)}${lineCard(c, project, st7, multi ? clue.foldCheck() : null, view)}
         <div class="pi-card"><h3>本轮场景${paused}<span class="pi-spacer"></span>
@@ -372,7 +358,6 @@ export function renderClueRun(view, project, st7) {
         <p class="pi-hint">本轮注入${clueEntry && clueEntry.content ? `约${estimateTokens(clueEntry.content)} token` : `内容为空${!c.snap.api ? '（数据库未连接）' : clueEntry && clueEntry.reason ? `（${esc(clueEntry.reason)}）` : ''}`}${last ? `；上次实际注入${new Date(last.at).toLocaleTimeString('zh-CN', { hour12: !1 })}，${last.chars}字` : ''}。</p>
         <p class="pi-hint">依据数据库最近一次填好的表格计算${d.lastTableUpdate ? `（表格${new Date(d.lastTableUpdate).toLocaleTimeString('zh-CN', { hour12: !1 })}更新）` : ''}。上一轮填表未完成就发送时，新线索晚一轮生效。</p>
         </div>
-        ${isTrpg(project) ? kpCard(view, project, c, d) : ''}
         <div class="pi-card"><h3>节点<span class="pi-meta">点节点查看条件，「⋯」手动调整</span><span class="pi-spacer"></span>
             <button type="button" class="pi-btn is-sm is-ghost" data-act="rewrite" title="根据已发生的剧情和线索进度，由AI改写未结束的阶段；结果先存为草稿，不直接覆盖">改写后续</button></h3>
         ${nodeGroups(groups, st7) || '<p class="pi-hint">大纲为空。</p>'}</div>
@@ -747,7 +732,7 @@ export function openingScope(project, c, pending = null) {
     }
     let on = startedLines(state) || new Set();
     for (let s of state.lineStates) s.state === '进行中' && on.add(s.line.id);
-    return rowScope(compiled, on, isTrpg(project) ? null : nodeFrontier(compiled, state, snap0, c.prog, cfg)).facts;
+    return rowScope(compiled, on, nodeFrontier(compiled, state, snap0, c.prog, cfg)).facts;
 }
 
 // 写表前后核对的作用域：聊天、项目、推进方式、数据库数据隔离（切换隔离会写到另一份表）。
@@ -1482,7 +1467,7 @@ export const clueActions = {
             gen = synthesizeClueTemplate(base, {
                 clue: hasFacts
                     ? { scenes: plan.scenes }
-                    : { controlRow: ['主线', '', catalogNow], ...trpgSeedRows(project, liveNow, picked, plan.knows), scenes: plan.scenes },
+                    : { controlRow: ['主线', '', catalogNow], factRows: picked, knowRows: plan.knows, scenes: plan.scenes },
             }),
             res = null,
             // 已经聊了一阵的聊天：导入后让线索表从当前楼层开始记，否则数据库会先从第 1 楼逐批补填

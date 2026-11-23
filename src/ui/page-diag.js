@@ -1,4 +1,5 @@
 import { FOLD_AUTO_RELEASED } from '../core/fold.js';
+import { viewIsTrpg } from '../trpg/trpg-route.js';
 import { resolveLlm } from '../core/store.js';
 import { cardName, ctx, hostDocument, hostWindow, toast } from '../host/st.js';
 import { esc } from './dom.js';
@@ -207,7 +208,7 @@ export function clueDiagCard(view) {
         .join('')}</tbody></table>
         ${d.problems.length ? d.problems.map((p) => `<p class="pi-hint is-warn">${esc(p)}</p>`).join('') : ''}
         ${sizeHtml(d.size)}
-        ${foldHtml(view.runtime.clue.foldCheck())}
+        ${viewIsTrpg(view) ? '' : foldHtml(view.runtime.clue.foldCheck())}
         ${auditHtml(d.lastAudit)}
         ${last ? `<p class="pi-hint">上次实际注入（${time(last.at)}）${last.facts.length ? `，涉及事实${esc(last.facts.join('、'))}` : ''}：</p><pre class="pi-pre">${esc(last.content || `（空：${last.reason}）`)}</pre>` : '<p class="pi-hint">本次打开后暂无注入记录。</p>'}
         ${

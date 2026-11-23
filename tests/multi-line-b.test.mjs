@@ -641,7 +641,7 @@ test('line card: side pause is labelled 暂停全部支线 and running side line
   }
   inst.runtime.clue.act({ kind: 'focus', target: '', value: '' });
   inst.open(); await new Promise((r) => setTimeout(r, 20));
-  const doc = host.w.document, view = async () => { doc.querySelector('[data-act="tab"][data-tab="run"]').click(); await new Promise((r) => setTimeout(r, 30)); return doc.body.textContent; };
+  const doc = host.w.document, view = async () => { doc.querySelector('[data-act="tab"][data-tab="run"]').click(); await new Promise((r) => setTimeout(r, 30)); return doc.documentElement.textContent; };
   let text = await view();
   // 第三批：只暂停支线在「剧情」卡的「暂停」菜单里；单条线的暂停在这条线的「⋯」里
   assert.ok(doc.querySelector('.pi-pause-menu [data-act="clue-pause-side"][data-value="1"]'), '只暂停支线 in the pause menu');

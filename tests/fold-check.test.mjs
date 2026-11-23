@@ -225,14 +225,18 @@ test('a main line that starts and finishes in the same fill keeps its start (the
 });
 
 // 收起只给线索模式：跑团项目没有收起检查，执行页不出「收起」按钮（用户 2026-11-23）
-test('TRPG projects get no fold check and no fold buttons', async () => {
+// 跑团项目从 v0.3.16 起走 src/trpg 自己的运行时和执行页：线索模式的收起不进跑团，执行页、诊断页都不出收起，也不报错
+test('TRPG projects get no fold check and no fold buttons (TRPG runs its own code)', async () => {
   const { host, inst, pid } = await setup();
   await inst.runtime.clue.syncLines();
   assert.ok(inst.runtime.clue.foldCheck(), 'clue mode: fold check available');
   inst.data.updateProject(pid, (x) => ({ ...x, trpg: { ...(x.trpg || {}), on: true } }));
   inst.runtime.clue.invalidate();
-  assert.equal(inst.runtime.clue.foldCheck(), null, 'TRPG: no fold check');
   inst.open(); await tick();
+  host.w.document.querySelector('[data-act="drawer"]') && host.w.document.querySelector('[data-act="drawer"]').click(); await tick();
+  host.w.document.querySelector('[data-act="page"][data-page="diag"]').click(); await tick();
+  assert.ok(!/收起已结束的线/.test(host.w.document.documentElement.textContent), 'diagnostics: no fold section for TRPG');
+  host.w.document.querySelector('[data-act="tab"][data-tab="run"]') || (host.w.document.querySelector('[data-act="project"][data-id="' + pid + '"]').click(), await tick());
   host.w.document.querySelector('[data-act="tab"][data-tab="run"]').click(); await tick();
   assert.equal(host.w.document.querySelector('[data-act="clue-fold"]'), null, 'no 收起 / 恢复 buttons');
   const t = host.w.document.querySelector('[data-act="run-set-toggle"][aria-expanded="false"]'); t && (t.click(), await tick());

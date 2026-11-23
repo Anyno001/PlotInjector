@@ -1,9 +1,9 @@
 // 跑团模组导入时，在后台把模组原文整理成设定里的「KP规则:」分块（core/trpg.js）。
 // 和线索大纲的导入任务并行、互不等待；结果合并进项目设定（只换 KP规则 这一块，其他分块不动）。
-import { splitLongText } from '../core/long-import.js';
+import { splitLongText } from './trpg-long-import.js';
 import { mergeBlocks } from '../core/setting.js';
-import { kpRulesMessages, kpMergeMessages, kpBlockText, KP_BLOCK } from '../core/trpg.js';
-import { ask } from './ai.js';
+import { kpRulesMessages, kpMergeMessages, kpBlockText, KP_BLOCK } from './trpg.js';
+import { ask } from '../ui/ai.js';
 import { toast } from '../host/st.js';
 
 const running = new Set();

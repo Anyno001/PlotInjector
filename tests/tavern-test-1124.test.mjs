@@ -233,3 +233,18 @@ test('R1: a single-line project shows the fold notes, the 开启 entry and 收�
   assert.ok(card().querySelector('[data-act="clue-fold-log"]'), '收起记录 reachable');
   await inst.destroy();
 });
+
+// 时间条件只比钟点（跑团 v0.3.17 的修法搬到线索模式）：表格时间带年月日时，年份不再被当成小时
+test('time conditions compare the clock only, even when the table time has a date', () => {
+  const t = { sheet_g: { name: '全局数据表', content: [[null, '标识', '当前时间'], [1, '全局', '2026年10月31日 17:30']] } };
+  const env = { facts: new Map(), knowledge: [], tables: t, nodeDone: () => false, timePath: '全局数据表/全局/当前时间' };
+  const ev = (v) => C.evalCondition(C.parseCondition(v), env).v;
+  assert.equal(ev('时间 >= 17:00'), 'true');
+  assert.equal(ev('时间 >= 19:30'), 'false', 'used to be true: 2026 was read as the hour');
+  assert.equal(ev('时间 < 18:00'), 'true');
+  t.sheet_g.content[1][2] = '傍晚7点半';
+  assert.equal(ev('时间 >= 19:30'), 'true', 'clock words like 傍晚7点半');
+  t.sheet_g.content[1][2] = '第二天';
+  assert.equal(ev('时间 >= 19:30'), 'unknown', 'no clock in the cell');
+  assert.equal(C.clockOf('2026年10月31日 17:30'), 1050);
+});

@@ -149,10 +149,10 @@ test('import page: when no database tables are readable, a note says table-based
   const { inst, doc, click, host } = await LI.boot([]);
   try {
     await click('[data-act="import-open-panel"]');
-    assert.doesNotMatch(doc.body.textContent, /当前聊天读不到数据库表格/, 'tables readable → no note');
+    assert.doesNotMatch(doc.documentElement.textContent, /当前聊天读不到数据库表格/, 'tables readable → no note');
     host.w.AutoCardUpdaterAPI && (host.w.AutoCardUpdaterAPI.exportTableAsJson = () => { throw new Error('no db'); });
     inst.__view.renderBody(); await tick();
-    assert.match(doc.body.textContent, /当前聊天无法读取数据库表格。依赖表格的开启条件会先按手动开始整理/);
+    assert.match(doc.documentElement.textContent, /当前聊天无法读取数据库表格。依赖表格的开启条件会先按手动开始整理/);
   } finally { await inst.destroy(); }
 });
 

@@ -47,7 +47,7 @@ test('long import: paste → run → review → adopt appends one volume; author
   await click('[data-act="import-start"]');
   for (let i = 0; i < 40 && !doc.querySelector('[data-act="import-adopt"]'); i++) await tick();
   assert.ok(doc.querySelector('[data-act="import-adopt"]'), 'review shown');
-  assert.ok(doc.body.textContent.includes('节点1'));
+  assert.ok(doc.documentElement.textContent.includes('节点1'));
   await click('[data-act="import-adopt"]');
   let vols = inst.data.project(pid).outline.volumes;
   assert.equal(vols.length, 1);
@@ -55,7 +55,7 @@ test('long import: paste → run → review → adopt appends one volume; author
   assert.ok(nodes.length >= 1);
   assert.ok(nodes.every((n) => !('来源' in n)), 'author-only 来源 not in the outline');
   // 采用后审阅页换成「已保存到大纲」（导入审阅总方案 E），没有第二个采用按钮；强行再触发一次采用也不写第二份
-  assert.match(doc.body.textContent, /已保存到大纲/);
+  assert.match(doc.documentElement.textContent, /已保存到大纲/);
   assert.ok(!doc.querySelector('[data-act="import-adopt"]'), 'no adopt button after adopting');
   const fake = doc.createElement('div'); fake.className = 'pi-card'; doc.querySelector('.pi-body').append(fake); // 点击要落在插件里才会被处理
   const btn = doc.createElement('button'); btn.dataset.act = 'import-adopt'; fake.append(btn); btn.click(); await tick();
@@ -109,7 +109,7 @@ test('long import: adopt, reload the plugin (state read back from files), adopt 
   await click2('[data-act="import-open-panel"]');
   for (let i = 0; i < 20 && !doc2.querySelector(`[data-act="import-open"][data-id="${jobId}"]`); i++) await tick();
   await click2(`[data-act="import-open"][data-id="${jobId}"]`);
-  assert.match(doc2.body.textContent, /已保存到大纲/);
+  assert.match(doc2.documentElement.textContent, /已保存到大纲/);
   const fake = doc2.createElement('div'); fake.className = 'pi-card'; doc2.querySelector('.pi-body').append(fake); // 点击要落在插件里才会被处理
   const btn = doc2.createElement('button'); btn.dataset.act = 'import-adopt'; fake.append(btn); btn.click(); await tick();
   assert.equal(inst2.data.project(pid).outline.volumes.length, 1, 'no second copy after reload');
@@ -126,7 +126,7 @@ test('long import: a sentinel secret in the source reaches the author index, nev
   doc.querySelector('[data-imp-text]').value = `## 第一章\n账房。\n作者说明：${SENT}`;
   await click('[data-act="import-start"]');
   for (let i = 0; i < 40 && !doc.querySelector('[data-act="import-adopt"]'); i++) await tick();
-  assert.match(doc.body.textContent, new RegExp(SENT), 'author can see it in the index');
+  assert.match(doc.documentElement.textContent, new RegExp(SENT), 'author can see it in the index');
   await click('[data-act="import-adopt"]');
   inst.data.updateProject(pid, (x) => ({ ...x, clue: { mode: 'clue', bindings: { facts: [], knowledge: [] } } }));
   inst.runtime.clue.invalidate();

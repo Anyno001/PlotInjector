@@ -8,6 +8,29 @@ import { nodeUid, DEFAULT_CLUE } from './clue-model.js';
 
 export const COND_MAX_DEPTH = 2;
 
+// 时间条件只比钟点（evalAtom 用）：表格里的时间值 → 当天分钟数，取最后一个钟点；读不到返回 null
+const CLOCK_PERIOD = '凌晨|清晨|早上|早晨|上午|中午|下午|傍晚|晚上|夜里|夜晚|深夜';
+const CLOCK_RE = new RegExp(`(${CLOCK_PERIOD})?\\s*(\\d{1,2})(?:[:：](\\d{2})|点(半|(\\d{1,2})分?)?|时)`, 'g');
+export function clockOf(value) {
+    let text = (Array.isArray(value) ? value.join(' ') : value == null ? '' : String(value)).trim(),
+        last = null;
+    for (let [, period, h, hm, half, dm] of text.matchAll(CLOCK_RE)) {
+        let hh = Number(h),
+            mm = Number(hm != null ? hm : half === '半' ? 30 : dm || 0) || 0;
+        if (hh > 24 || mm > 59) continue;
+        if (/下午|傍晚|晚上|夜里|夜晚/.test(period || '') && hh < 12) hh += 12;
+        else if (period === '深夜' && hh >= 6 && hh < 12) hh += 12;
+        else if (period === '凌晨' && hh === 12) hh = 0;
+        last = (hh % 24) * 60 + mm;
+    }
+    return last;
+}
+function clockText(minutes) {
+    let t = ((minutes % 1440) + 1440) % 1440;
+    return `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+}
+
+
 export const ATOM_KEYS = ['事实', '知情', '核实', '节点', '表', '时间', '线'];
 
 export const TRI = { t: 'true', f: 'false', u: 'unknown' };
@@ -227,6 +250,15 @@ export function evalAtom(atom, env) {
             }
             if (atom.tiers && !['==', '!='].includes(atom.op) && !tierOrderKnown(atom, env.tables))
                 return { v: TRI.u, why: `${label}：档位顺序「${atom.tiers.join(' < ')}」还没确认，确认前不比大小` };
+            // 「时间 >= 19:30」只比钟点：表格时间常带年月日（2026年10月31日 17:30），整串逐个数字比会把 2026 当成小时（跑团 v0.3.17 同样的修法）
+            if (atom.kind === 'time' && /^\d{1,2}[:：]\d{2}$/.test(String(atom.value).trim()) && !['包含', '不包含'].includes(atom.op)) {
+                let now = clockOf(value),
+                    want = clockOf(atom.value);
+                if (now == null) return { v: TRI.u, why: `时间「${cellText(value)}」里读不出钟点` };
+                let d = now - want,
+                    hit = { '>=': d >= 0, '>': d > 0, '<=': d <= 0, '<': d < 0, '==': d === 0, '!=': d !== 0 }[atom.op];
+                return { v: hit ? TRI.t : TRI.f, why: `时间 ${clockText(now)}${hit ? '已到' : '未到'} ${clockText(want)}` };
+            }
             let ok =
                 atom.op === '包含' || atom.op === '不包含'
                     ? cellText(value).includes(atom.value) === (atom.op === '包含')

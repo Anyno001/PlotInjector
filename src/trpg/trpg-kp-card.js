@@ -1,16 +1,26 @@
 // 跑团模式执行页的「KP」卡：卡住了吗（体检+推一把）、对照剧本、察觉卡关。逻辑在 core/trpg-kp.js。
-import { esc, menuDialog } from './dom.js';
-import { ICONS } from './styles.js';
+import { confirmDialog, esc, menuDialog } from '../ui/dom.js';
+import { ICONS } from '../ui/styles.js';
 import { chatMessages, toast } from '../host/st.js';
-import { chatFactSets } from '../core/clue-project.js';
-import { trpgCheckResults } from '../core/trpg.js';
+import { chatFactSets } from './trpg-clue-project.js';
+import { trpgCheckResults } from './trpg.js';
 import { steerActions, timelineHintHtml, steerResultHtml, steerContext } from './trpg-steer.js';
-import { readGameClock } from '../core/trpg-timeline.js';
-import { trpgHealth, kpPushTarget, aiFloorCount, KP_LEVELS, KP_STUCK_ROUNDS, stuckMessages, parseStuckReply, pendingDiscoveries } from '../core/trpg-kp.js';
-import { ask, runTask } from './ai.js';
+import { readGameClock } from './trpg-timeline.js';
+import { trpgHealth, kpPushTarget, aiFloorCount, KP_LEVELS, KP_STUCK_ROUNDS, kpSectionText, npcImportMessage, stuckMessages, parseStuckReply, pendingDiscoveries } from './trpg-kp.js';
+import { ask, runTask } from '../ui/ai.js';
+import { kpSummary } from './trpg-kp-check.js';
 
 // 体检结果只留在内存里，换项目就丢
 let shown = null;
+// 交给 IGS 建 NPC 档：进行中 / 结果文字（只在内存，按项目记）
+let npcImport = null;
+
+function npcImportHtml(project) {
+    if (typeof window === 'undefined' || typeof (window.IGS && window.IGS.stats && window.IGS.stats.importNpcCocText) !== 'function') return '';
+    if (!kpSectionText(project.setting && project.setting.text, 'NPC与敌人数据')) return '';
+    let mine = npcImport && npcImport.projectId === project.id ? npcImport : null;
+    return `<div class="pi-tools"><button type="button" class="pi-btn is-sm" data-act="kp-npc-igs"${mine && mine.busy ? ' disabled' : ''} title="把剧本里的NPC和敌人数据交给IGS，建成调查员档">${mine && mine.busy ? '正在交给IGS…' : '交给IGS建立NPC档'}</button></div>${mine && mine.msg ? `<p class="pi-hint">${esc(mine.msg)}</p>` : ''}`;
+}
 
 const BADGE = { ok: ['is-ok', '顺利进行'], warn: ['is-warn', '小心探索'], loop: ['is-warn', '在打转'], bad: ['is-warn', '卡住了'] };
 const AI_LEVEL = { 顺利进行: 'ok', 在打转: 'loop', 卡住了: 'bad' };
@@ -28,6 +38,18 @@ function kpState(view) {
 function saveKp(view, patch) {
     let prog = view.runtime.progress();
     view.runtime.setProgress({ ...prog, trpgKp: { ...(prog.trpgKp || {}), ...patch } }, 'trpg-kp');
+}
+
+// 上轮检测：一句话概览，点开看每条线索和条件的通过情况与理由
+function lastCheckHtml(kp) {
+    let log = Array.isArray(kp.log) ? kp.log : [],
+        last = log[log.length - 1];
+    if (!last) return '';
+    let row = (ok, text, why) => `<p class="pi-hint"><span class="pi-badge ${ok ? 'is-ok' : 'is-warn'}">${ok ? '通过' : '没通过'}</span> ${esc(text)}${why ? `：${esc(why)}` : ''}</p>`,
+        items = [...last.facts.map((x) => row(x.ok, x.label, x.why)), ...last.conds.map((x) => row(x.ok, x.text, x.why))];
+    return `<details class="pi-fold"><summary><b>上轮检测</b><span>${esc(kpSummary(last))}</span></summary>${items.join('') || '<p class="pi-hint">这一轮没有要判断的线索和条件。</p>'}${
+        last.off && last.offReason ? `<p class="pi-hint is-warn">${esc(last.offReason)}</p>` : ''
+    }</details>`;
 }
 
 export function kpCard(view, project, c, d) {
@@ -54,7 +76,7 @@ export function kpCard(view, project, c, d) {
     return `<div class="pi-card"><h3>KP<span class="pi-spacer"></span>
         <button type="button" class="pi-btn is-sm is-ghost" data-act="kp-health" title="推演凭已经拿到的线索，主线还能不能走通，并可以推一把；只给结论，展开才剧透">卡住了吗</button>
         ${busy ? '<span class="pi-spin"></span>' : `<button type="button" class="pi-icon-btn" data-act="kp-menu" title="更多" aria-label="更多">${ICONS.more}</button>`}</h3>
-        ${timelineHintHtml(project, readGameClock(c.snap.tables, bind && bind.路径))}${steerResultHtml(project)}
+        ${timelineHintHtml(project, readGameClock(c.snap.tables, bind && bind.路径))}${lastCheckHtml(kp)}${steerResultHtml(project)}
         ${
             mine
                 ? `<p class="pi-hint">${thinking ? '<span class="pi-badge">判断中</span>' : `<span class="pi-badge ${BADGE[shownLevel(mine)][0]}">${BADGE[shownLevel(mine)][1]}</span>`} ${esc(
@@ -75,14 +97,37 @@ export function kpCard(view, project, c, d) {
             stuck >= KP_STUCK_ROUNDS && !push
                 ? `<p class="pi-hint is-warn">已经${stuck}轮没拿到新线索。</p>`
                 : ''
-        }</div>`;
+        }${npcImportHtml(project)}</div>`;
 }
 
 export const kpActions = {
     ...steerActions,
     async 'kp-menu'(view) {
-        let pick = await menuDialog({ title: 'KP', items: [{ label: '对照剧本', value: 'kp-steer' }] });
+        let pick = await menuDialog({
+            title: 'KP',
+            items: [
+                { label: '对照剧本', value: 'kp-steer' },
+                { label: '重新检测最新一楼', value: 'kp-recheck' },
+                { label: '清空KP记录', value: 'kp-clear', danger: !0 },
+            ],
+        });
         pick && kpActions[pick](view);
+    },
+    async 'kp-recheck'(view) {
+        let r = await view.runtime.kp.run({ manual: !0 });
+        r ? view.renderBody() : toast('info', '没有检测：最新一楼不是AI回复，或「跑团每轮自动检测」已关、数据库未就绪。');
+    },
+    async 'kp-clear'(view) {
+        let ok = await confirmDialog({
+            title: '清空KP记录',
+            body: 'KP自动判定的线索会撤销，判过的一句话条件和检测记录会清掉，阶段按剩下的记录重新计算。你手动确认的线索不动；已写进数据库表格的内容不会改，删楼或重roll时表格会跟着退回。',
+            okLabel: '清空',
+            danger: !0,
+        });
+        if (!ok) return;
+        let n = view.runtime.kp.clearKp();
+        toast('success', `已清空，撤销了${n}条KP判定的线索。`);
+        view.renderBody();
     },
     // 先出插件推演（立即），再让 AI 读最近正文判断是不是真卡住了
     async 'kp-health'(view) {
@@ -103,6 +148,21 @@ export const kpActions = {
         } catch (error) {
             shown === mine && (mine.aiError = (error && error.message) || String(error));
         }
+        view.renderBody();
+    },
+    async 'kp-npc-igs'(view) {
+        let project = view.project(),
+            fn = window.IGS && window.IGS.stats && window.IGS.stats.importNpcCocText,
+            text = kpSectionText(project.setting && project.setting.text, 'NPC与敌人数据');
+        if (typeof fn !== 'function' || !text || (npcImport && npcImport.busy)) return;
+        let mine = (npcImport = { projectId: view.projectId, busy: !0, msg: '' });
+        view.renderBody();
+        try {
+            mine.msg = npcImportMessage(await fn(text));
+        } catch (error) {
+            mine.msg = npcImportMessage({ ok: !1, reason: (error && error.message) || String(error) });
+        }
+        mine.busy = !1;
         view.renderBody();
     },
     'kp-spoil'(view) {

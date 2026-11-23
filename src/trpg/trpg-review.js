@@ -1,12 +1,12 @@
 // 跑团模组导入的审阅页「AI 检查」（core/trpg.js）。只有带 trpg 的导入任务才显示按钮；
 // 查出来的问题追加进各页「意见」，后面照旧由作者点「按意见修改」。
-import { trpgReviewMessages, parseReviewReply, AI_CHECK_TAG } from '../core/trpg.js';
-import { appendComment, sourceExcerpt } from '../core/long-import.js';
+import { trpgReviewMessages, parseReviewReply, AI_CHECK_TAG } from './trpg.js';
+import { appendComment, sourceExcerpt } from './trpg-long-import.js';
 import { unitValue } from '../core/review-draft.js';
 import { stageLabel, stageNodes } from '../core/outline.js';
-import { nodeUid } from '../core/clue-model.js';
+import { nodeUid } from './trpg-clue-model.js';
 import { stringifyYaml } from '../core/yaml.js';
-import { ask } from './ai.js';
+import { ask } from '../ui/ai.js';
 import { toast } from '../host/st.js';
 
 const WHOLE_MAX = 3e4;

@@ -1,7 +1,7 @@
 // 跑团模式的模组时间线：从设定里的「KP规则:」读出带钟点的事件，按游戏内时间推进，到点提醒正文。纯逻辑。
-import { splitBlocks } from './setting.js';
+import { splitBlocks } from '../core/setting.js';
 import { KP_BLOCK } from './trpg.js';
-import { readCell } from './clue-tables.js';
+import { readCell } from './trpg-clue-tables.js';
 
 const PERIOD = '凌晨|清晨|早上|早晨|上午|中午|下午|傍晚|晚上|夜里|夜晚|深夜';
 const CLOCK_SRC = `(${PERIOD})?\\s*(\\d{1,2})(?:[:：](\\d{2})|点(半|(\\d{1,2})分?)?|时)`;

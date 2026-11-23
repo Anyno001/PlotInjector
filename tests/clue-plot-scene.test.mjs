@@ -118,12 +118,11 @@ test('native mode: no copy, nothing switched', async () => {
 });
 
 // 推进预设只给线索模式：跑团项目不复制、不切换，推进里的场景判断也不用（用户 2026-11-23）
+// 跑团项目走 src/trpg 自己的运行时：线索模式的推进预设复制和场景判断不调用（runtime.js 的 clueOnly）
 test('TRPG projects: no copy, nothing switched, the plot scene line is ignored', async () => {
   const { inst, api, send } = await setup({ trpg: true });
   assert.equal(api.plotBinding, '时间召回');
   assert.equal(api.plotImports, 0);
-  await inst.runtime.clue.syncPlotPreset({ force: true });
-  assert.equal(api.plotImports, 0, 'forced sync does nothing either');
   const text = await send('我去n_b处找罗莎', '<recall>x</recall>\n<pi_scene>n_b</pi_scene>');
   assert.ok(!/用户这一轮刚到这里/.test(text), 'no early arrival from the plot judgement');
   assert.equal(api.plotBinding, '时间召回', 'still not switched after a message');

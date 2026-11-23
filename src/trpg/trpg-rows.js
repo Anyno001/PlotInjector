@@ -3,9 +3,9 @@
 // 这里只挑「眼前要用的」：已经开放/进行中/完成的节点产出的事实（第 0 层），再假设这批都拿到，
 // 用线索模式自己的推演看哪些节点会因此开放，把它们的产出加进来（往前推 depth 层）。
 // 只在跑团项目调用；普通线索项目不经过这里。已经建了的行不删，由调用方只拿来筛「要不要补」。
-import { computeClueState, conditionRefs } from './clue-rules.js';
-import { discoveryList } from './clue-project.js';
-import { isPlainObject } from './outline.js';
+import { computeClueState, conditionRefs } from './trpg-clue-rules.js';
+import { discoveryList } from './trpg-clue-project.js';
+import { isPlainObject } from '../core/outline.js';
 
 export const TRPG_ROW_DEPTH = 1;
 export const TRPG_ROW_CAP = 30;
