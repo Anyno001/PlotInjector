@@ -1,4 +1,4 @@
-// PlotInjector v0.3.13
+// PlotInjector v0.3.14
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -5295,6 +5295,30 @@ ${facts.length ? facts.map((f) => `- ${f}`).join(`
     }
     return out.plain = out.plain.filter((t) => !none(t)), out.spoil = out.spoil.filter((t) => !none(t)), out.steer = steer.join(`
 `).trim(), none(out.steer) && (out.steer = ""), out;
+  }
+  function kpSectionText(settingText, section2) {
+    let block = splitBlocks(settingText).find((b) => b.title === KP_BLOCK && !b.cont), out = [], inSection = !1;
+    if (!block) return "";
+    for (let line of block.text.split(`
+`)) {
+      let head = /^\s*【([^】]+)】\s*$/.exec(line);
+      if (head) {
+        inSection = head[1].trim() === section2;
+        continue;
+      }
+      inSection && line.trim() && out.push(line.replace(/^\s*-\s*/, "").trimEnd());
+    }
+    return out.join(`
+`);
+  }
+  var NPC_FAIL = { ruleset: "IGS的数值规则不是CoC第七版。", "no-model": "IGS没有配置可用的模型。", empty: "没有可交给IGS的文字。", "stats-inactive": "本聊天没有启用IGS的数值系统。", busy: "IGS正在处理另一项调查员档任务，请稍后再试。", unavailable: "IGS暂时无法处理。", "stats-runtime-missing": "IGS的数值系统尚未就绪。" }, NPC_SKIP = { "no-numbers": "没有数值", missing: "没有收到", name: "名字不合规" };
+  function npcImportMessage(r) {
+    if (!r || !r.ok) {
+      let why = r && r.reason;
+      return NPC_FAIL[why] || `失败：${why || "没有收到结果"}`;
+    }
+    let made = r.created || [], skipped = r.skipped || [], parts = [made.length ? `已建立${made.length}个NPC档：${made.join("、")}` : "没有建立新的NPC档"];
+    return skipped.length && parts.push(`跳过：${skipped.map((x) => `${x.name}（${NPC_SKIP[x.reason] || x.reason}）`).join("、")}`), parts.join("。") + "。";
   }
 
   // src/core/trpg-rows.js
@@ -11413,7 +11437,13 @@ ${block}`
   };
 
   // src/ui/trpg-kp-card.js
-  var shown = null, BADGE = { ok: ["is-ok", "顺利进行"], warn: ["is-warn", "小心探索"], loop: ["is-warn", "在打转"], bad: ["is-warn", "卡住了"] }, AI_LEVEL = { 顺利进行: "ok", 在打转: "loop", 卡住了: "bad" };
+  var shown = null, npcImport = null;
+  function npcImportHtml(project) {
+    if (typeof window > "u" || typeof (window.IGS && window.IGS.stats && window.IGS.stats.importNpcCocText) != "function" || !kpSectionText(project.setting && project.setting.text, "NPC与敌人数据")) return "";
+    let mine = npcImport && npcImport.projectId === project.id ? npcImport : null;
+    return `<div class="pi-tools"><button type="button" class="pi-btn is-sm" data-act="kp-npc-igs"${mine && mine.busy ? " disabled" : ""} title="把剧本里的NPC和敌人数据交给IGS，建成调查员档">${mine && mine.busy ? "正在交给IGS…" : "交给IGS建立NPC档"}</button></div>${mine && mine.msg ? `<p class="pi-hint">${esc(mine.msg)}</p>` : ""}`;
+  }
+  var BADGE = { ok: ["is-ok", "顺利进行"], warn: ["is-warn", "小心探索"], loop: ["is-warn", "在打转"], bad: ["is-warn", "卡住了"] }, AI_LEVEL = { 顺利进行: "ok", 在打转: "loop", 卡住了: "bad" };
   function shownLevel(mine) {
     return mine.level === "bad" ? "bad" : mine.ai && AI_LEVEL[mine.ai.verdict] || mine.level;
   }
@@ -11439,7 +11469,7 @@ ${block}`
       ai && ai.plain.length ? ai.plain.join("；") : thinking ? "AI 正在读最近的正文…" : mine.aiError ? `AI 判断失败（${mine.aiError}），下面只是插件推演。` : ai ? "AI 没有给出说明。" : ""
     )}${spoils.length && !thinking ? ` <button type="button" class="pi-btn is-sm is-ghost" data-act="kp-spoil">${mine.open ? "收起" : "展开（会剧透）"}</button>` : ""}</p><p class="pi-hint">插件推演：${esc(mine.lines.join("；"))}</p>${mine.open && !thinking ? spoils.map((t) => `<p class="pi-hint">${esc(t)}</p>`).join("") : ""}${leaks ? `<p class="pi-hint is-warn">最近一次请求里疑似提前写出了${leaks}处线索</p>` : ""}${advice && advice !== "不用推" && !push ? `<p class="pi-hint">AI 建议：${esc(advice)}</p>` : ""}${mine.fact && !push && !thinking ? `<div class="pi-tools is-c3">${KP_LEVELS.map((x) => `<button type="button" class="pi-btn is-sm${advice === x.label ? " is-primary" : ""}" data-act="kp-push" data-level="${x.level}">${esc(x.label)}</button>`).join("")}</div>` : mine.fact || push ? "" : '<p class="pi-hint">眼下没有能推的线索。</p>'}` : ""}
         ${push ? `<p class="pi-hint">下一轮：${esc(pushLabel)} <button type="button" class="pi-btn is-sm is-ghost" data-act="kp-cancel">取消</button></p>` : ""}
-        ${stuck >= KP_STUCK_ROUNDS && !push ? `<p class="pi-hint is-warn">已经${stuck}轮没拿到新线索。</p>` : ""}</div>`;
+        ${stuck >= KP_STUCK_ROUNDS && !push ? `<p class="pi-hint is-warn">已经${stuck}轮没拿到新线索。</p>` : ""}${npcImportHtml(project)}</div>`;
   }
   var kpActions = {
     ...steerActions,
@@ -11463,6 +11493,18 @@ ${block}`
         shown === mine && (mine.aiError = error && error.message || String(error));
       }
       view.renderBody();
+    },
+    async "kp-npc-igs"(view) {
+      let project = view.project(), fn = window.IGS && window.IGS.stats && window.IGS.stats.importNpcCocText, text2 = kpSectionText(project.setting && project.setting.text, "NPC与敌人数据");
+      if (typeof fn != "function" || !text2 || npcImport && npcImport.busy) return;
+      let mine = npcImport = { projectId: view.projectId, busy: !0, msg: "" };
+      view.renderBody();
+      try {
+        mine.msg = npcImportMessage(await fn(text2));
+      } catch (error) {
+        mine.msg = npcImportMessage({ ok: !1, reason: error && error.message || String(error) });
+      }
+      mine.busy = !1, view.renderBody();
     },
     "kp-spoil"(view) {
       shown && (shown.open = !shown.open), view.renderBody();
@@ -20245,7 +20287,7 @@ ${suffix.trim()}` : body;
   }
 
   // src/index.js
-  var VERSION = "0.3.13", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.3.14", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")

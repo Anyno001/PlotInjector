@@ -55,3 +55,13 @@ test('kp: 推一把只在楼数对得上时并进投影，揭示时登记候选'
   out = K.kpInject(base(), { ...args, floors: 3 });
   assert.equal(out.content, '');
 });
+
+test('kp: 取NPC小节正文，IGS 结果转成人话', () => {
+  const text = 'KP规则:\n（说明）\n【时间线】\n- 8点 开门\n【NPC与敌人数据】\n- 老张 STR 50 HP 10\n- 食尸鬼 HP 12\n【结局条件】\n- 逃出去';
+  assert.equal(K.kpSectionText(text, 'NPC与敌人数据'), '老张 STR 50 HP 10\n食尸鬼 HP 12');
+  assert.equal(K.kpSectionText(text, '预设调查员'), '');
+  assert.equal(K.npcImportMessage({ ok: !0, created: ['老张', '食尸鬼'], skipped: [{ name: '路人', reason: '没有数值' }] }), '已建立2个NPC档：老张、食尸鬼。跳过：路人（没有数值）。');
+  assert.equal(K.npcImportMessage({ ok: !1, reason: 'ruleset' }), 'IGS的数值规则不是CoC第七版。');
+  assert.equal(K.npcImportMessage({ ok: !1, reason: 'no-model' }), 'IGS没有配置可用的模型。');
+  assert.equal(K.npcImportMessage({ ok: !1, reason: '超时' }), '失败：超时');
+});

@@ -6,11 +6,20 @@ import { chatFactSets } from '../core/clue-project.js';
 import { trpgCheckResults } from '../core/trpg.js';
 import { steerActions, timelineHintHtml, steerResultHtml, steerContext } from './trpg-steer.js';
 import { readGameClock } from '../core/trpg-timeline.js';
-import { trpgHealth, kpPushTarget, aiFloorCount, KP_LEVELS, KP_STUCK_ROUNDS, stuckMessages, parseStuckReply, pendingDiscoveries } from '../core/trpg-kp.js';
+import { trpgHealth, kpPushTarget, aiFloorCount, KP_LEVELS, KP_STUCK_ROUNDS, kpSectionText, npcImportMessage, stuckMessages, parseStuckReply, pendingDiscoveries } from '../core/trpg-kp.js';
 import { ask, runTask } from './ai.js';
 
 // 体检结果只留在内存里，换项目就丢
 let shown = null;
+// 交给 IGS 建 NPC 档：进行中 / 结果文字（只在内存，按项目记）
+let npcImport = null;
+
+function npcImportHtml(project) {
+    if (typeof window === 'undefined' || typeof (window.IGS && window.IGS.stats && window.IGS.stats.importNpcCocText) !== 'function') return '';
+    if (!kpSectionText(project.setting && project.setting.text, 'NPC与敌人数据')) return '';
+    let mine = npcImport && npcImport.projectId === project.id ? npcImport : null;
+    return `<div class="pi-tools"><button type="button" class="pi-btn is-sm" data-act="kp-npc-igs"${mine && mine.busy ? ' disabled' : ''} title="把剧本里的NPC和敌人数据交给IGS，建成调查员档">${mine && mine.busy ? '正在交给IGS…' : '交给IGS建立NPC档'}</button></div>${mine && mine.msg ? `<p class="pi-hint">${esc(mine.msg)}</p>` : ''}`;
+}
 
 const BADGE = { ok: ['is-ok', '顺利进行'], warn: ['is-warn', '小心探索'], loop: ['is-warn', '在打转'], bad: ['is-warn', '卡住了'] };
 const AI_LEVEL = { 顺利进行: 'ok', 在打转: 'loop', 卡住了: 'bad' };
@@ -75,7 +84,7 @@ export function kpCard(view, project, c, d) {
             stuck >= KP_STUCK_ROUNDS && !push
                 ? `<p class="pi-hint is-warn">已经${stuck}轮没拿到新线索。</p>`
                 : ''
-        }</div>`;
+        }${npcImportHtml(project)}</div>`;
 }
 
 export const kpActions = {
@@ -103,6 +112,21 @@ export const kpActions = {
         } catch (error) {
             shown === mine && (mine.aiError = (error && error.message) || String(error));
         }
+        view.renderBody();
+    },
+    async 'kp-npc-igs'(view) {
+        let project = view.project(),
+            fn = window.IGS && window.IGS.stats && window.IGS.stats.importNpcCocText,
+            text = kpSectionText(project.setting && project.setting.text, 'NPC与敌人数据');
+        if (typeof fn !== 'function' || !text || (npcImport && npcImport.busy)) return;
+        let mine = (npcImport = { projectId: view.projectId, busy: !0, msg: '' });
+        view.renderBody();
+        try {
+            mine.msg = npcImportMessage(await fn(text));
+        } catch (error) {
+            mine.msg = npcImportMessage({ ok: !1, reason: (error && error.message) || String(error) });
+        }
+        mine.busy = !1;
         view.renderBody();
     },
     'kp-spoil'(view) {
