@@ -180,30 +180,51 @@ export function mergeSlices(existing, incoming) {
 
 // ---------------- 挂靠到节点 ----------------
 
-// 没挂靠的、或挂的节点已经不在了的，按名字和内容重新找节点：地点称呼对上节点名 +3，说话人在节点文字里 +2，
-// 原文和节点文字有 4 字以上公共片段 +1，总分 ≥2 才挂。返回新数组，已经挂对的不动。
+// 一条切片对一个节点的得分：地点称呼对上节点名 +3，说话人在节点文字里 +2，原文和节点文字有 4 字以上公共片段 +1
+function scoreSlice(s, name, hay) {
+    let wk = sayKey(s.where),
+        sk = sayKey(s.who),
+        nk = sayKey(name),
+        score = 0;
+    wk && nk && (wk.includes(nk) || nk.includes(wk)) && (score += 3);
+    sk.length >= 2 && hay.includes(sk) && (score += 2);
+    sharesRun(s.text || s.hint, hay, 4) && (score += 1);
+    return score;
+}
+const hayOf = (name, item) => sayKey(`${name}${JSON.stringify(item || {})}`);
+
+// 没挂靠的、或挂的节点已经不在了的，按名字和内容重新找节点，总分 ≥2 才挂。返回新数组，已经挂对的不动。
 export function attachSlices(slices, volumes) {
     let nodes = clueNodes(volumes).filter((n) => n.uid),
         live = new Set(nodes.map((n) => n.uid)),
-        hays = new Map(nodes.map((n) => [n.uid, sayKey(`${n.name}${JSON.stringify(n.item || {})}`)]));
+        hays = new Map(nodes.map((n) => [n.uid, hayOf(n.name, n.item)]));
     return normalizeSlices(slices).map((s) => {
         if (s.node && live.has(s.node)) return s;
-        let wk = sayKey(s.where),
-            sk = sayKey(s.who),
-            body = s.text || s.hint,
-            best = null,
+        let best = null,
             top = 1;
         for (let n of nodes) {
-            let nk = sayKey(n.name),
-                hay = hays.get(n.uid),
-                score = 0;
-            wk && nk && (wk.includes(nk) || nk.includes(wk)) && (score += 3);
-            sk.length >= 2 && hay.includes(sk) && (score += 2);
-            sharesRun(body, hay, 4) && (score += 1);
+            let score = scoreSlice(s, n.name, hays.get(n.uid));
             score > top && ((top = score), (best = n));
         }
         return best ? { ...s, node: best.uid, stage: best.unit.id } : { ...s, node: '', stage: '' };
     });
+}
+
+// 审阅页用：导入还没入库、草稿节点没有正式编号，只按名字和内容看每条切片对应这批节点里的哪一个。
+// nodes = [{ key, name, item }]；返回 Map(key → 切片[])，得分不够的不放进去
+export function matchSlices(slices, nodes) {
+    let out = new Map(),
+        hays = nodes.map((n) => hayOf(n.name, n.item));
+    for (let s of slices || []) {
+        let best = -1,
+            top = 1;
+        nodes.forEach((n, i) => {
+            let score = scoreSlice(s, n.name, hays[i]);
+            score > top && ((top = score), (best = i));
+        });
+        best >= 0 && out.set(nodes[best].key, [...(out.get(nodes[best].key) || []), s]);
+    }
+    return out;
 }
 
 // ---------------- 防泄露 ----------------

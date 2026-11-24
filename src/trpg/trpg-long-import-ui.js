@@ -140,40 +140,53 @@ export function syncSlices(view) {
     view.data.updateProject(view.projectId, (p) => (p.trpg ? { ...p, trpg: { ...p.trpg, slices: merged } } : p));
 }
 
-async function runSlices(view, jobId, parts, partText, still) {
+async function runSlices(view, jobId, parts, partText, still, onStep = () => {}) {
     let store = view.data.imports,
+        out = { failed: 0, error: '' },
         cut = async (p) => {
-            if (!still() || (store.get(jobId).slicesByPart || {})[p.i]) return;
+            if (!still()) return;
+            if ((store.get(jobId).slicesByPart || {})[p.i]) return onStep();
             try {
                 let items = parseSliceReply(await askLive(view, jobId, `第${p.i + 1}段切片`, sliceMessages({ part: p, text: partText(p), total: parts.length }))),
                     got = verifySlices(items, partText(p), p.i);
                 still() && (await store.update(jobId, (j) => ({ ...j, slicesByPart: { ...(j.slicesByPart || {}), [p.i]: got } })));
-            } catch {}
+            } catch (error) {
+                ((out.failed += 1), (out.error ||= (error && error.message) || String(error)));
+            }
+            onStep();
         };
     await runPool(parts.map((p) => () => cut(p)), IMPORT_CONCURRENCY, still);
+    return out;
 }
 
-// 已经导入、审阅过的跑团模组补切片：任务和原文还在才能补（入库后任务不会自动删，用户手动删了就没有原文了）。
-// 返回 { jobs: 读了几份原文, gone: 找不到原文的任务数, slices: 补完后项目里的切片数 }
-export async function backfillSlices(view) {
+// 已经导入、审阅过的跑团模组补全原文切片：任务和原文还在才能补（入库后任务不会自动删，用户手动删了就没有原文了）。
+// onProgress({ done, total })：每段完成时调一次。
+// 返回 { jobs, gone, slices, added, failed, error, total }
+export async function backfillSlices(view, { onProgress = () => {} } = {}) {
     let store = view.data.imports,
         pid = view.projectId,
         still = () => view.projectId === pid,
-        jobs = 0,
-        gone = 0;
+        todo = [],
+        gone = 0,
+        before = ((view.project().trpg || {}).slices || []).length;
     for (let id of importJobIds(view.project())) {
         let job = await store.load(id);
         if (!job || !job.trpg || !job.parts || !job.parts.length) continue;
         let text = await store.source(id);
-        if (!text) {
-            gone += 1;
-            continue;
-        }
-        jobs += 1;
-        await runSlices(view, id, job.parts, (p) => text.slice(Math.max(0, p.start - p.lead), p.end), still);
+        text ? todo.push({ id, job, text }) : (gone += 1);
+    }
+    let total = todo.reduce((n, x) => n + x.job.parts.length, 0),
+        done = 0,
+        failed = 0,
+        error = '';
+    onProgress({ done, total });
+    for (let { id, job, text } of todo) {
+        let r = await runSlices(view, id, job.parts, (p) => text.slice(Math.max(0, p.start - p.lead), p.end), still, () => onProgress({ done: ++done, total }));
+        ((failed += r.failed), (error ||= r.error));
     }
     still() && syncSlices(view);
-    return { jobs, gone, slices: ((view.project().trpg || {}).slices || []).length };
+    let slices = ((view.project().trpg || {}).slices || []).length;
+    return { jobs: todo.length, gone, slices, added: slices - before, failed, error, total };
 }
 
 export async function runImportJob(view, jobId) {

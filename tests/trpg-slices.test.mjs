@@ -84,3 +84,16 @@ test('AI 核对挂靠：只采纳清单里的节点，清单外的当作都不�
     assert.deepEqual(out.map((x) => [x.id, x.from, x.to]), [['b', 'n1', 'n2'], ['d', 'n2', '']]);
     assert.ok(JSON.stringify(S.alignMessages({ slices: [{ id: 'a', kind: 'line', who: '老周', text: '那口井三十年前就封了' }], nodes: [{ uid: 'n1', name: '茶馆', stage: '阶段一', entry: '' }] })).includes('节点清单'));
 });
+
+test('审阅页：按名字和内容看切片对应本阶段哪个场景，得分不够的不放进去', () => {
+    let nodes = [{ key: 'm0', name: '茶馆', item: { 入口: '老周在茶馆里擦桌子' } }, { key: 'm1', name: '阁楼', item: { 场景: '积灰的阁楼' } }],
+        hit = S.matchSlices(
+            [
+                { id: 'a', kind: 'line', who: '老周', where: '茶馆', text: '那口井三十年前就封了你们最好别问' },
+                { id: 'b', kind: 'scene', where: '阁楼', text: '阁楼里积着厚厚的灰窗边挂着一只停摆的铜钟' },
+                { id: 'c', kind: 'scene', where: '地下室', text: '潮湿的墙壁上长满了青苔' },
+            ],
+            nodes,
+        );
+    assert.deepEqual([...hit].map(([k, v]) => [k, v.map((x) => x.id)]), [['m0', ['a']], ['m1', ['b']]]);
+});

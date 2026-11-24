@@ -1,4 +1,4 @@
-// PlotInjector v0.4.11
+// PlotInjector v0.4.12
 (() => {
   var __defProp = Object.defineProperty;
   var __getOwnPropNames = Object.getOwnPropertyNames;
@@ -4584,17 +4584,32 @@ ${text2}` }
     }
     return out;
   }
+  function scoreSlice(s, name, hay) {
+    let wk = sayKey(s.where), sk = sayKey(s.who), nk = sayKey(name), score = 0;
+    return wk && nk && (wk.includes(nk) || nk.includes(wk)) && (score += 3), sk.length >= 2 && hay.includes(sk) && (score += 2), sharesRun(s.text || s.hint, hay, 4) && (score += 1), score;
+  }
   function attachSlices(slices, volumes) {
-    let nodes = clueNodes2(volumes).filter((n) => n.uid), live2 = new Set(nodes.map((n) => n.uid)), hays = new Map(nodes.map((n) => [n.uid, sayKey(`${n.name}${JSON.stringify(n.item || {})}`)]));
+    let nodes = clueNodes2(volumes).filter((n) => n.uid), live2 = new Set(nodes.map((n) => n.uid)), hays = new Map(nodes.map((n) => [n.uid, hayOf(n.name, n.item)]));
     return normalizeSlices(slices).map((s) => {
       if (s.node && live2.has(s.node)) return s;
-      let wk = sayKey(s.where), sk = sayKey(s.who), body = s.text || s.hint, best = null, top = 1;
+      let best = null, top = 1;
       for (let n of nodes) {
-        let nk = sayKey(n.name), hay = hays.get(n.uid), score = 0;
-        wk && nk && (wk.includes(nk) || nk.includes(wk)) && (score += 3), sk.length >= 2 && hay.includes(sk) && (score += 2), sharesRun(body, hay, 4) && (score += 1), score > top && (top = score, best = n);
+        let score = scoreSlice(s, n.name, hays.get(n.uid));
+        score > top && (top = score, best = n);
       }
       return best ? { ...s, node: best.uid, stage: best.unit.id } : { ...s, node: "", stage: "" };
     });
+  }
+  function matchSlices(slices, nodes) {
+    let out = /* @__PURE__ */ new Map(), hays = nodes.map((n) => hayOf(n.name, n.item));
+    for (let s of slices || []) {
+      let best = -1, top = 1;
+      nodes.forEach((n, i) => {
+        let score = scoreSlice(s, n.name, hays[i]);
+        score > top && (top = score, best = i);
+      }), best >= 0 && out.set(nodes[best].key, [...out.get(nodes[best].key) || [], s]);
+    }
+    return out;
   }
   function heldSlices(slices, secretTexts) {
     let set = /* @__PURE__ */ new Set();
@@ -4724,7 +4739,7 @@ ${slices.map((s) => `- ${s.id}（${SLICE_KINDS[s.kind]}${s.who ? `，${s.who}` :
     }
     return out;
   }
-  var SLICE_KINDS, SLICE_TEXT_MAX, SLICE_HINT_MAX, SLICE_PER_PART, SLICE_STORE_MAX, MIN_KEY, SEED_ROUNDS, SCENE_ROUNDS, PICK_MAX, PICK_CHARS, LINE_MAX, isCjkEnd, textOf, sameText, FOOT, ORDER, ALIGN_BATCH, short, init_trpg_slices = __esm({
+  var SLICE_KINDS, SLICE_TEXT_MAX, SLICE_HINT_MAX, SLICE_PER_PART, SLICE_STORE_MAX, MIN_KEY, SEED_ROUNDS, SCENE_ROUNDS, PICK_MAX, PICK_CHARS, LINE_MAX, isCjkEnd, textOf, sameText, hayOf, FOOT, ORDER, ALIGN_BATCH, short, init_trpg_slices = __esm({
     "src/trpg/trpg-slices.js"() {
       init_outline();
       init_trpg_clue_rules();
@@ -4735,6 +4750,7 @@ ${slices.map((s) => `- ${s.id}（${SLICE_KINDS[s.kind]}${s.who ? `，${s.who}` :
         let x = sayKey(a), y = sayKey(b);
         return !!x && !!y && (x.includes(y) || y.includes(x));
       };
+      hayOf = (name, item) => sayKey(`${name}${JSON.stringify(item || {})}`);
       FOOT = {
         line: "NPC 口吻参考（可以化用原句，不要照抄成固定台词，不添加新信息）：",
         scene: "场景描写参考（可以改写，保留关键物件和气氛）：",
@@ -22967,6 +22983,14 @@ ${r2.yaml}`,
     let n = saveCount2(review, dirtyIds);
     return n ? `保存到模组（${n}条线）` : "保存到模组";
   }
+  function sliceBlock(job, nodes) {
+    let slices = Object.values(job && job.slicesByPart || {}).flat();
+    if (!slices.length || !nodes.length) return "";
+    let hit = matchSlices(slices, nodes.map((n) => ({ key: n.id, name: n.name, item: n.item }))), rows2 = nodes.filter((n) => hit.has(n.id)), total = rows2.reduce((c, n) => c + hit.get(n.id).length, 0);
+    return total ? `<details class="pi-fold"><summary><b>模组原文</b><span>本阶段对应${total}条，共${slices.length}条</span></summary>${rows2.map(
+      (n) => `<div class="pi-rv-sec">${esc(n.name)}</div>${hit.get(n.id).map((x) => `<p class="pi-hint"><span class="pi-badge">${esc(SLICE_KINDS[x.kind])}</span> ${esc(x.who ? `${x.who}：` : "")}${esc(x.kind === "seed" || x.kind === "taboo" ? `${x.hint}（原文：${x.text}）` : x.text)}</p>`).join("")}`
+    ).join("")}<p class="pi-hint">只读。保存到模组后，可在模组页「⋯」→「原文切片…」里调整。</p></details>` : `<p class="pi-hint">导入时留下了${slices.length}条模组原文，这一阶段没有对应的。</p>`;
+  }
   function renderReview2(view, job, review, index, crumb, notes = []) {
     let units = reviewUnits2(view.project(), review), issues = reviewIssues2(view, review, index), changed = new Set(draftChanges(review.base, review.draft).map((c) => c.key)), at = Math.max(0, Math.min(units.length - 1, review.at || 0)), u = units[at], vol = review.draft.find((v) => v.id === u.volumeId), busy = view.busy[`review:${view.projectId}`], errCount = Object.values(issues).flat().filter((x) => x.level === "error").length, askCount = Object.values(issues).flat().filter((x) => x.level !== "error").length, pending = sendableNotes2(view.project(), review).length, last = (review.lastChanges || {})[u.key], mineUnits = units.map((x, i) => ({ ...x, i })).filter((x) => x.volumeId === u.volumeId), lineFirst = mineUnits[0] && mineUnits[0].kind === "line", dot = (x, n) => {
       let i = x.i, has = (issues[x.key] || []).some((y) => y.level === "error");
@@ -22993,6 +23017,7 @@ ${r2.yaml}`,
         return clueOn ? nodes.map(one).join("") : main.map(one).join("") + (side.length ? `<div class="pi-rv-sec">支线</div>${side.map(one).join("")}` : "");
       })()}
           ${nodes.length ? "" : '<p class="pi-hint is-warn">本阶段没有读到节点。</p>'}
+          ${sliceBlock(job, nodes)}
           ${last && last.length ? `<div class="pi-rv-sec">本次修改</div>${last.map((t) => `<div class="pi-rv-chg">${esc(t)}</div>`).join("")}` : ""}
           ${errs.length ? `<div class="pi-rv-sec">问题（${errs.length}）${fillAll}</div>${errs.map((x) => issueCard2(x, u.key, filled(x))).join("")}` : ""}
           ${asks.length ? `<div class="pi-rv-sec">待确认（${asks.length}）${errs.length ? "" : fillAll}</div>${asks.map((x) => issueCard2(x, u.key, filled(x))).join("")}` : ""}
@@ -23472,6 +23497,7 @@ ${yamlOf(k)}`).join(`
       init_tab_outline();
       init_store();
       init_trpg_review_lines();
+      init_trpg_slices();
       init_styles();
       cut2 = (t, n = 26) => String(t || "").length > n ? `${String(t).slice(0, n)}…` : String(t || "");
       FULL_CLUE2 = [["入口", "入口"], ["地点", "地点"], ["场景", "场景"], ["开放条件", "开放"], ["提前条件", "提前"], ["完成条件", "完成"]], FULL_OUTLINE2 = [["触发", "触发"], ["地点", "地点"], ["事件", "事件"], ["偏转", "偏转"], ["场景", "场景"]];
@@ -23804,30 +23830,40 @@ ${yamlOf(k)}`).join(`
     let cur = project.trpg.slices || [], merged = attachSlices(mergeSlices(cur, incoming), project.outline.volumes);
     JSON.stringify(merged) !== JSON.stringify(cur) && view.data.updateProject(view.projectId, (p) => p.trpg ? { ...p, trpg: { ...p.trpg, slices: merged } } : p);
   }
-  async function runSlices(view, jobId, parts, partText, still) {
-    let store = view.data.imports, cut3 = async (p) => {
-      if (!(!still() || (store.get(jobId).slicesByPart || {})[p.i]))
+  async function runSlices(view, jobId, parts, partText, still, onStep = () => {
+  }) {
+    let store = view.data.imports, out = { failed: 0, error: "" }, cut3 = async (p) => {
+      if (still()) {
+        if ((store.get(jobId).slicesByPart || {})[p.i]) return onStep();
         try {
           let items = parseSliceReply(await askLive2(view, jobId, `第${p.i + 1}段切片`, sliceMessages({ part: p, text: partText(p), total: parts.length }))), got2 = verifySlices(items, partText(p), p.i);
           still() && await store.update(jobId, (j) => ({ ...j, slicesByPart: { ...j.slicesByPart || {}, [p.i]: got2 } }));
-        } catch {
+        } catch (error) {
+          out.failed += 1, out.error ||= error && error.message || String(error);
         }
+        onStep();
+      }
     };
-    await runPool2(parts.map((p) => () => cut3(p)), IMPORT_CONCURRENCY2, still);
+    return await runPool2(parts.map((p) => () => cut3(p)), IMPORT_CONCURRENCY2, still), out;
   }
-  async function backfillSlices(view) {
-    let store = view.data.imports, pid = view.projectId, still = () => view.projectId === pid, jobs = 0, gone = 0;
+  async function backfillSlices(view, { onProgress = () => {
+  } } = {}) {
+    let store = view.data.imports, pid = view.projectId, still = () => view.projectId === pid, todo = [], gone = 0, before = ((view.project().trpg || {}).slices || []).length;
     for (let id of importJobIds2(view.project())) {
       let job = await store.load(id);
       if (!job || !job.trpg || !job.parts || !job.parts.length) continue;
       let text2 = await store.source(id);
-      if (!text2) {
-        gone += 1;
-        continue;
-      }
-      jobs += 1, await runSlices(view, id, job.parts, (p) => text2.slice(Math.max(0, p.start - p.lead), p.end), still);
+      text2 ? todo.push({ id, job, text: text2 }) : gone += 1;
     }
-    return still() && syncSlices(view), { jobs, gone, slices: ((view.project().trpg || {}).slices || []).length };
+    let total = todo.reduce((n, x) => n + x.job.parts.length, 0), done = 0, failed = 0, error = "";
+    onProgress({ done, total });
+    for (let { id, job, text: text2 } of todo) {
+      let r = await runSlices(view, id, job.parts, (p) => text2.slice(Math.max(0, p.start - p.lead), p.end), still, () => onProgress({ done: ++done, total }));
+      failed += r.failed, error ||= r.error;
+    }
+    still() && syncSlices(view);
+    let slices = ((view.project().trpg || {}).slices || []).length;
+    return { jobs: todo.length, gone, slices, added: slices - before, failed, error, total };
   }
   async function runImportJob2(view, jobId) {
     let ctl = new AbortController();
@@ -24591,7 +24627,7 @@ ${r2.yaml}`,
     view.data.updateProject(view.projectId, (p) => p.trpg ? { ...p, trpg: { ...p.trpg, ...fn(p.trpg) } } : p);
   }
   function listHtml(project) {
-    let nodes = clueNodes2(project.outline.volumes).filter((n) => n.uid), name = (uid) => (nodes.find((n) => n.uid === uid) || {}).name || "", opt = (cur) => `<option value="">未挂靠</option>${nodes.map((n) => `<option value="${esc(n.uid)}"${n.uid === cur ? " selected" : ""}>${esc(n.name)}</option>`).join("")}`, row2 = (s) => `<div class="pi-sl-row" data-sl="${esc(s.id)}"><label class="pi-check"><input type="checkbox" data-sl-on${s.off ? "" : " checked"}><span>${esc(s.who ? `${s.who}：` : "")}${esc(s.kind === "seed" || s.kind === "taboo" ? `${s.hint}（原文：${s.text}）` : s.text)}</span></label>
+    let nodes = clueNodes2(project.outline.volumes).filter((n) => n.uid), name = (uid) => (nodes.find((n) => n.uid === uid) || {}).name || "", opt = (cur) => `<option value="">未指定场景</option>${nodes.map((n) => `<option value="${esc(n.uid)}"${n.uid === cur ? " selected" : ""}>${esc(n.name)}</option>`).join("")}`, row2 = (s) => `<div class="pi-sl-row" data-sl="${esc(s.id)}"><label class="pi-check"><input type="checkbox" data-sl-on${s.off ? "" : " checked"}><span>${esc(s.who ? `${s.who}：` : "")}${esc(s.kind === "seed" || s.kind === "taboo" ? `${s.hint}（原文：${s.text}）` : s.text)}</span></label>
             <select class="pi-inp" data-sl-node>${opt(s.node)}</select></div>`;
     return Object.entries(SLICE_KINDS).map(([kind, label]) => {
       let list = slicesOf(project).filter((s) => s.kind === kind);
@@ -24603,7 +24639,7 @@ ${r2.yaml}`,
     if (!slicesOf(project).length) return toast("info", "还没有切片。可以先「补全原文」。");
     let got2 = await openDialog({
       title: "原文切片",
-      html: `<p class="pi-hint">取消勾选的不再注入。切片挂在哪个节点，只有那个节点进行中才会给出。原文不能改。</p>${listHtml(project)}`,
+      html: `<p class="pi-hint">取消勾选的不再注入。每条切片只在它所属的场景进行时才会给出。原文不能改。</p>${listHtml(project)}`,
       actions: [
         { label: "取消", value: null },
         {
@@ -24624,7 +24660,7 @@ ${r2.yaml}`,
   }
   async function alignCheck(view) {
     let project = view.project(), list = slicesOf(project).filter((s) => !s.off), nodes = alignNodes(project.outline.volumes, (key) => splitStageKey(key).short);
-    if (!list.length || !nodes.length) return toast("info", list.length ? "模组里还没有可挂靠的节点。" : "还没有切片。");
+    if (!list.length || !nodes.length) return toast("info", list.length ? "模组里还没有可选的场景。" : "还没有切片。");
     let items = [];
     try {
       await runTask(view, "kp-slices", async () => {
@@ -24638,10 +24674,10 @@ ${r2.yaml}`,
       return toast("error", `核对失败：${error.message}`);
     }
     let changes = alignChanges(list, items, nodes);
-    if (!changes.length) return toast("success", `已核对${list.length}条切片，挂靠都对得上。`);
-    let nameOf = (uid) => (nodes.find((n) => n.uid === uid) || {}).name || "未挂靠", byId = new Map(list.map((s) => [s.id, s])), got2 = await openDialog({
+    if (!changes.length) return toast("success", `已核对${list.length}条切片，所属场景都对得上。`);
+    let nameOf = (uid) => (nodes.find((n) => n.uid === uid) || {}).name || "未指定场景", byId = new Map(list.map((s) => [s.id, s])), got2 = await openDialog({
       title: `核对结果：${changes.length}条建议调整`,
-      html: `<p class="pi-hint">已核对${list.length}条，下面这些 AI 认为挂的节点不对。勾选的会改，不勾的保持不变。</p>${changes.map((c) => {
+      html: `<p class="pi-hint">已核对${list.length}条，下面这些 AI 认为所属场景不对。勾选的会改，不勾的保持不变。</p>${changes.map((c) => {
         let s = byId.get(c.id);
         return `<label class="pi-check"><input type="checkbox" data-al="${esc(c.id)}" checked><span>${esc(SLICE_KINDS[s.kind])}：${esc((s.who ? `${s.who}：` : "") + (s.kind === "seed" || s.kind === "taboo" ? s.hint : s.text).slice(0, 40))}<br>${esc(nameOf(c.from))} → ${esc(nameOf(c.to))}${c.why ? `（${esc(c.why)}）` : ""}</span></label>`;
       }).join("")}`,
@@ -24652,7 +24688,17 @@ ${r2.yaml}`,
     });
     if (!got2 || !got2.length) return;
     let pick = new Map(changes.filter((c) => got2.includes(c.id)).map((c) => [c.id, c.to])), stageOf = (uid) => (clueNodes2(project.outline.volumes).find((n) => n.uid === uid) || { unit: { id: "" } }).unit.id;
-    save2(view, (t) => ({ slices: (t.slices || []).map((s) => pick.has(s.id) ? { ...s, node: pick.get(s.id), stage: pick.get(s.id) ? stageOf(pick.get(s.id)) : "" } : s) })), toast("success", `已调整${pick.size}条挂靠。`), view.renderBody();
+    save2(view, (t) => ({ slices: (t.slices || []).map((s) => pick.has(s.id) ? { ...s, node: pick.get(s.id), stage: pick.get(s.id) ? stageOf(pick.get(s.id)) : "" } : s) })), toast("success", `已调整${pick.size}条的所属场景。`), view.renderBody();
+  }
+  function progressDialog(title2) {
+    let root = null;
+    return openDialog({ title: title2, html: '<p class="pi-hint" data-pg>准备中…</p>', actions: [{ label: "后台继续", value: !0 }], onMount: (r) => root = r }), {
+      set: (t) => {
+        let e = root && root.querySelector("[data-pg]");
+        e && (e.textContent = t);
+      },
+      close: () => root && root.remove()
+    };
   }
   var slicesOf, sliceActions, init_trpg_slice_ui = __esm({
     "src/trpg/trpg-slice-ui.js"() {
@@ -24666,13 +24712,13 @@ ${r2.yaml}`,
       sliceActions = {
         async "kp-slices"(view) {
           let project = view.project(), list = slicesOf(project), off = !!(project.trpg && project.trpg.sliceOff), loose2 = list.filter((s) => !s.node).length, pick = await menuDialog({
-            title: "原文切片",
+            title: `原文切片：共${list.length}条${loose2 ? `，${loose2}条未指定场景` : ""}`,
             items: [
-              { label: off ? "使用原文切片：关（点这里打开）" : "使用原文切片：开（点这里关闭）", value: "toggle" },
-              { label: `查看和调整切片（共${list.length}条${loose2 ? `，${loose2}条未挂靠` : ""}）`, value: "list" },
-              { label: "补全原文（读导入过的模组原文）", value: "fill" },
-              { label: "重新挂靠未挂靠的", value: "attach" },
-              { label: "让 AI 核对挂靠是否对准模组", value: "align" }
+              { label: off ? "打开原文切片" : "关闭原文切片", value: "toggle" },
+              { label: "查看和调整切片", value: "list" },
+              { label: "补全原文", value: "fill" },
+              { label: "给未指定场景的切片自动找场景", value: "attach" },
+              { label: "让 AI 核对所属场景", value: "align" }
             ]
           });
           if (pick === "toggle")
@@ -24680,13 +24726,13 @@ ${r2.yaml}`,
           else if (pick === "list") await showList(view);
           else if (pick === "attach") {
             let fixed = attachSlices(list, project.outline.volumes);
-            save2(view, () => ({ slices: fixed })), toast("success", `已重新挂靠，还有${fixed.filter((s) => !s.node).length}条没找到对应节点。`);
+            save2(view, () => ({ slices: fixed })), toast("success", `已重新匹配，还有${fixed.filter((s) => !s.node).length}条没找到对应的场景。`);
           } else if (pick === "align") await alignCheck(view);
           else if (pick === "fill") {
-            toast("info", "正在读取模组原文并补全，可能要一会儿…");
-            let r = await Promise.resolve().then(() => (init_trpg_long_import_ui(), trpg_long_import_ui_exports)).then((m) => m.backfillSlices(view)).catch((e) => ({ error: e.message }));
-            if (view.renderBody(), r.error) return toast("error", `补全原文失败：${r.error}`);
-            toast(r.jobs ? "success" : "warning", r.jobs ? `已读取${r.jobs}份模组原文，现在共有${r.slices}条切片。` : `没有找到可用的模组原文${r.gone ? "（导入任务的原文已被删除）" : "。只有用 PDF 导入过的跑团模组才能补全"}。`), r.jobs && r.slices && await alignCheck(view);
+            let pg = progressDialog("补全原文"), r = await Promise.resolve().then(() => (init_trpg_long_import_ui(), trpg_long_import_ui_exports)).then((m) => m.backfillSlices(view, { onProgress: ({ done, total }) => pg.set(total ? `正在读取模组原文并切片：${done}/${total}段` : "正在查找导入过的模组原文…") })).catch((e) => ({ error: e.message, failed: 1, total: 0, jobs: 0 }));
+            if (pg.close(), view.renderBody(), !r.jobs) return toast("warning", r.error ? `补全原文失败：${r.error}` : `没有找到可用的模组原文${r.gone ? "（导入任务的原文已被删除）" : "。只有用 PDF 导入过的跑团模组才能补全"}。`);
+            let msg = `读了${r.jobs}份原文共${r.total}段：现有${r.slices}条切片，新增${r.added}条${r.failed ? `；有${r.failed}段失败（${r.error}），可以再点一次补全，已完成的不会重做` : r.added ? "" : "（这些原文之前已经切过了）"}。`;
+            toast(r.failed || !r.added ? "warning" : "success", msg), r.slices && await alignCheck(view);
           }
         }
       };
@@ -32562,7 +32608,7 @@ ${suffix.trim()}` : body;
   }
 
   // src/index.js
-  var VERSION = "0.4.11", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.4.12", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")

@@ -58,6 +58,7 @@ import { toast, hostDocument } from '../host/st.js';
 import { currentTables } from '../ui/tab-outline.js';
 import { projectSecretNames } from '../core/store.js';
 import { condWords, condNames, reviewCheck } from './trpg-review-lines.js';
+import { matchSlices, SLICE_KINDS } from './trpg-slices.js';
 import { ICONS } from '../ui/styles.js';
 
 // ---------------- 会话（存在导入任务里：job.review）----------------
@@ -367,6 +368,25 @@ function saveLabel(review, dirtyIds) {
 }
 // 发送意见按钮（用户 2026-11-16：按钮要写明会发送）。点了先弹预览框，可改意见、加整体意见。
 const sendLabel = (n) => (n ? `发送意见（${n}页）` : '发送意见');
+// 这一阶段各场景对应了哪些模组原文（只读）：导入时从 PDF 里原样留下的台词、描写、伏笔，保存到模组后在注入时按场景给出
+function sliceBlock(job, nodes) {
+    let slices = Object.values((job && job.slicesByPart) || {}).flat();
+    if (!slices.length || !nodes.length) return '';
+    let hit = matchSlices(slices, nodes.map((n) => ({ key: n.id, name: n.name, item: n.item }))),
+        rows = nodes.filter((n) => hit.has(n.id)),
+        total = rows.reduce((c, n) => c + hit.get(n.id).length, 0);
+    if (!total) return `<p class="pi-hint">导入时留下了${slices.length}条模组原文，这一阶段没有对应的。</p>`;
+    return `<details class="pi-fold"><summary><b>模组原文</b><span>本阶段对应${total}条，共${slices.length}条</span></summary>${rows
+        .map(
+            (n) =>
+                `<div class="pi-rv-sec">${esc(n.name)}</div>${hit
+                    .get(n.id)
+                    .map((x) => `<p class="pi-hint"><span class="pi-badge">${esc(SLICE_KINDS[x.kind])}</span> ${esc(x.who ? `${x.who}：` : '')}${esc(x.kind === 'seed' || x.kind === 'taboo' ? `${x.hint}（原文：${x.text}）` : x.text)}</p>`)
+                    .join('')}`,
+        )
+        .join('')}<p class="pi-hint">只读。保存到模组后，可在模组页「⋯」→「原文切片…」里调整。</p></details>`;
+}
+
 export function renderReview(view, job, review, index, crumb, notes = []) {
     let units = reviewUnits(view.project(), review),
         issues = reviewIssues(view, review, index),
@@ -455,6 +475,7 @@ export function renderReview(view, job, review, index, crumb, notes = []) {
               return clueOn ? nodes.map(one).join('') : main.map(one).join('') + (side.length ? `<div class="pi-rv-sec">支线</div>${side.map(one).join('')}` : '');
           })()}
           ${nodes.length ? '' : '<p class="pi-hint is-warn">本阶段没有读到节点。</p>'}
+          ${sliceBlock(job, nodes)}
           ${last && last.length ? `<div class="pi-rv-sec">本次修改</div>${last.map((t) => `<div class="pi-rv-chg">${esc(t)}</div>`).join('')}` : ''}
           ${errs.length ? `<div class="pi-rv-sec">问题（${errs.length}）${fillAll}</div>${errs.map((x) => issueCard(x, u.key, filled(x))).join('')}` : ''}
           ${asks.length ? `<div class="pi-rv-sec">待确认（${asks.length}）${errs.length ? '' : fillAll}</div>${asks.map((x) => issueCard(x, u.key, filled(x))).join('')}` : ''}
