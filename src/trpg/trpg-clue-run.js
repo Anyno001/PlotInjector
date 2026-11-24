@@ -20,9 +20,7 @@ import { PLOT_MODES, isClueMode, normalizeClue } from './trpg-clue-model.js';
 import { stringifyYaml, parseYaml } from '../core/yaml.js';
 import { acuApi } from './trpg-clue-runtime.js';
 import { isTrpg } from './trpg.js';
-import { kpCard } from './trpg-kp-card.js';
-import { checkCard } from './trpg-check-card.js';
-import { sceneHintHtml } from './trpg-steer.js';
+import { kpCard } from './trpg-kp-card.js';import { sceneHintHtml } from './trpg-steer.js';
 import { trpgWantFacts, trpgRowFilter } from './trpg-rows.js';
 import { NODE_STATUS_LABELS, AWAY_PREFIX } from './trpg-clue-rules.js';
 import { ICONS } from '../ui/styles.js';
@@ -321,7 +319,7 @@ export function renderClueRun(view, project, st7) {
         prog = `<div class="pi-card"><h3>进度<span class="pi-spacer"></span><button type="button" class="pi-icon-btn" data-act="run-prog-menu" title="更多" aria-label="更多">${ICONS.more}</button></h3>
         ${lineCard(c, project)}
         ${groups.length ? `<div class="pi-tl">${groups.join('')}</div>` : '<p class="pi-hint">模组为空。</p>'}</div>`;
-    return `${cur}${isTrpg(project) ? checkCard(view, project, c) + kpCard(view, project, c, d) : ''}${prog}${settings}`;
+    return `${cur}${isTrpg(project) ? kpCard(view, project, c, d) : ''}${prog}${settings}`;
 }
 
 // 操作记录条数（设置与记录里的一行）

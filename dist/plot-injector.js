@@ -1,4 +1,4 @@
-// PlotInjector v0.4.3
+// PlotInjector v0.4.4
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -11358,6 +11358,8 @@ label.pi-wb-row{cursor:pointer}
 .pi-req{border:0;cursor:pointer;font:inherit;font-size:11px;line-height:18px;padding:0 9px;border-radius:10px;background:var(--pi-fill2);color:var(--pi-txt2)}
 .pi-req.is-on{background:var(--pi-accent-soft);color:var(--pi-accent)}
 .pi-ta-auto{min-height:58px;resize:vertical;overflow-y:auto}
+.pi-ck{margin:0 0 8px}
+.pi-ck-hd{font-size:12px;color:var(--pi-txt2);margin:0 0 6px}
 .pi-ck-row{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 8px;padding:7px 10px;margin:0 0 6px;border-radius:10px;background:var(--pi-fill)}
 .pi-ck-what{font-size:13px;color:var(--pi-txt);display:inline-flex;gap:6px;align-items:baseline}
 .pi-ck .pi-ck-meta{flex:1 1 auto;min-width:0;text-align:left;white-space:normal}
@@ -19445,6 +19447,28 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
     unofferedHtml: () => unofferedHtml2
   });
 
+  // src/trpg/trpg-check-card.js
+  var STATUS = {
+    wait: ["", "等正文出检定"],
+    roll: ["is-accent", "等你掷骰"],
+    ok: ["is-ok", "成功"],
+    fail: ["is-warn", "失败"],
+    got: ["is-ok", "已拿到"]
+  }, CLUE = { confirmed: "线索已确认", offered: "已交给正文", pending: "线索还没确认" };
+  function rowHtml(r) {
+    let [cls, text2] = STATUS[r.status], meta2 = [r.node, r.roll].filter(Boolean), tail = [];
+    return r.status === "fail" && tail.push(r.kp ? `补救检定${r.kp.ok ? "成功" : "失败"}` : r.anyway ? "失败也能拿到线索" : "这次没拿到线索"), r.clue && tail.push(CLUE[r.clue]), `<div class="pi-ck-row"><span class="pi-badge ${cls}">${text2}</span><span class="pi-ck-what">${esc(r.what)}${r.hidden ? '<span class="pi-meta">暗骰</span>' : ""}</span><span class="pi-meta pi-ck-meta">${esc(meta2.join(" · "))}</span>${r.label || tail.length ? `<span class="pi-meta pi-ck-tail">${esc([r.label ? `「${r.label}」` : "", ...tail].filter(Boolean).join("，"))}</span>` : ""}</div>`;
+  }
+  function checkSection(project, c) {
+    let checks = trpgCheckResults(chatMessages()), labels = isPlainObject(project.clue.labels) ? project.clue.labels : {}, board = trpgCheckBoard({ state: c.state, snap: c.snap, prog: c.prog, checks, labels });
+    if (!board.rows.length && !board.problems.length) return "";
+    let live2 = board.rows.filter((r) => !r.done), done = board.rows.filter((r) => r.done);
+    return `<div class="pi-ck"><div class="pi-ck-hd">判定</div>
+        ${board.problems.map((p) => `<p class="pi-hint is-warn">${esc(problemText(p))}</p>`).join("")}
+        ${live2.map(rowHtml).join("") || (board.rows.length ? '<p class="pi-hint">眼下没有等着的判定。</p>' : "")}
+        ${done.length ? `<details class="pi-fold"><summary><b>已完成（${done.length}）</b></summary>${done.map(rowHtml).join("")}</details>` : ""}</div>`;
+  }
+
   // src/trpg/trpg-kp-card.js
   var shown = null, npcImport = null;
   function npcImportHtml(project) {
@@ -19479,7 +19503,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
     return `<div class="pi-card"><h3>KP<span class="pi-spacer"></span>
         <button type="button" class="pi-btn is-sm is-ghost" data-act="kp-health" title="推演凭已经拿到的线索，主线还能不能走通，并可以推一把；只给结论，展开才剧透">卡住了吗</button>
         ${busy ? '<span class="pi-spin"></span>' : `<button type="button" class="pi-icon-btn" data-act="kp-menu" title="更多" aria-label="更多">${ICONS.more}</button>`}</h3>
-        ${timelineHintHtml(project, readGameClock(c.snap.tables, bind && bind.路径))}${lastCheckHtml(kp)}${steerResultHtml(project)}
+        ${checkSection(project, c)}${timelineHintHtml(project, readGameClock(c.snap.tables, bind && bind.路径))}${lastCheckHtml(kp)}${steerResultHtml(project)}
         ${mine ? `<p class="pi-hint">${thinking ? '<span class="pi-badge">判断中</span>' : `<span class="pi-badge ${BADGE[shownLevel(mine)][0]}">${BADGE[shownLevel(mine)][1]}</span>`} ${esc(
       ai && ai.plain.length ? ai.plain.join("；") : thinking ? "AI 正在读最近的正文…" : mine.aiError ? `AI 判断失败（${mine.aiError}），下面只是插件推演。` : ai ? "AI 没有给出说明。" : ""
     )}${spoils.length && !thinking ? ` <button type="button" class="pi-btn is-sm is-ghost" data-act="kp-spoil">${mine.open ? "收起" : "展开（会剧透）"}</button>` : ""}</p><p class="pi-hint">插件推演：${esc(mine.lines.join("；"))}</p>${mine.open && !thinking ? spoils.map((t) => `<p class="pi-hint">${esc(t)}</p>`).join("") : ""}${leaks ? `<p class="pi-hint is-warn">最近一次请求里疑似提前写出了${leaks}处线索</p>` : ""}${advice && advice !== "不用推" && !push ? `<p class="pi-hint">AI 建议：${esc(advice)}</p>` : ""}${mine.fact && !push && !thinking ? `<div class="pi-tools is-c3">${KP_LEVELS.map((x) => `<button type="button" class="pi-btn is-sm${advice === x.label ? " is-primary" : ""}" data-act="kp-push" data-level="${x.level}">${esc(x.label)}</button>`).join("")}</div>` : mine.fact || push ? "" : '<p class="pi-hint">眼下没有能推的线索。</p>'}` : ""}
@@ -19597,28 +19621,6 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
       saveKp(view, { push: null }), view.renderBody();
     }
   };
-
-  // src/trpg/trpg-check-card.js
-  var STATUS = {
-    wait: ["", "等正文出检定"],
-    roll: ["is-accent", "等你掷骰"],
-    ok: ["is-ok", "成功"],
-    fail: ["is-warn", "失败"],
-    got: ["is-ok", "已拿到"]
-  }, CLUE = { confirmed: "线索已确认", offered: "已交给正文", pending: "线索还没确认" };
-  function rowHtml(r) {
-    let [cls, text2] = STATUS[r.status], meta2 = [r.node, r.roll].filter(Boolean), tail = [];
-    return r.status === "fail" && tail.push(r.kp ? `补救检定${r.kp.ok ? "成功" : "失败"}` : r.anyway ? "失败也能拿到线索" : "这次没拿到线索"), r.clue && tail.push(CLUE[r.clue]), `<div class="pi-ck-row"><span class="pi-badge ${cls}">${text2}</span><span class="pi-ck-what">${esc(r.what)}${r.hidden ? '<span class="pi-meta">暗骰</span>' : ""}</span><span class="pi-meta pi-ck-meta">${esc(meta2.join(" · "))}</span>${r.label || tail.length ? `<span class="pi-meta pi-ck-tail">${esc([r.label ? `「${r.label}」` : "", ...tail].filter(Boolean).join("，"))}</span>` : ""}</div>`;
-  }
-  function checkCard(view, project, c) {
-    let checks = trpgCheckResults(chatMessages()), labels = isPlainObject(project.clue.labels) ? project.clue.labels : {}, board = trpgCheckBoard({ state: c.state, snap: c.snap, prog: c.prog, checks, labels });
-    if (!board.rows.length && !board.problems.length) return "";
-    let live2 = board.rows.filter((r) => !r.done), done = board.rows.filter((r) => r.done);
-    return `<div class="pi-card pi-ck"><h3>判定</h3>
-        ${board.problems.map((p) => `<p class="pi-hint is-warn">${esc(problemText(p))}</p>`).join("")}
-        ${live2.map(rowHtml).join("") || (board.rows.length ? '<p class="pi-hint">眼下没有等着的判定。</p>' : "")}
-        ${done.length ? `<details class="pi-fold"><summary><b>已完成（${done.length}）</b></summary>${done.map(rowHtml).join("")}</details>` : ""}</div>`;
-  }
 
   // src/trpg/trpg-long-import.js
   var trpg_long_import_exports = {};
@@ -21245,7 +21247,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
         <p class="pi-meta pi-rl-foot">${clueEntry && clueEntry.content ? `本轮注入约${estimateTokens(clueEntry.content)} token` : `本轮注入内容为空${clueEntry && clueEntry.reason && c.snap.api ? `（${esc(clueEntry.reason)}）` : ""}`}${last ? ` · 上次注入${new Date(last.at).toLocaleTimeString("zh-CN", { hour12: !1 })}，${last.chars}字` : ""}${d.lastTableUpdate ? ` · 表格${new Date(d.lastTableUpdate).toLocaleTimeString("zh-CN", { hour12: !1 })}更新` : ""}</p></div>`, prog = `<div class="pi-card"><h3>进度<span class="pi-spacer"></span><button type="button" class="pi-icon-btn" data-act="run-prog-menu" title="更多" aria-label="更多">${ICONS.more}</button></h3>
         ${lineCard2(c, project)}
         ${groups.length ? `<div class="pi-tl">${groups.join("")}</div>` : '<p class="pi-hint">模组为空。</p>'}</div>`;
-    return `${cur}${isTrpg(project) ? checkCard(view, project, c) + kpCard(view, project, c, d) : ""}${prog}${settings}`;
+    return `${cur}${isTrpg(project) ? kpCard(view, project, c, d) : ""}${prog}${settings}`;
   }
   function clueOpCount(runtime) {
     return normalizeClueOps2(runtime.progress().clue).ops.length;
@@ -30643,7 +30645,7 @@ ${suffix.trim()}` : body;
   }
 
   // src/index.js
-  var VERSION = "0.4.3", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.4.4", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")

@@ -10,6 +10,7 @@ import { trpgHealth, kpPushTarget, aiFloorCount, KP_LEVELS, KP_STUCK_ROUNDS, kpS
 import { ask, runTask } from '../ui/ai.js';
 import { kpSummary, kpOffText, RECHECK_FLOORS, RECHECK_MAX, AUTO_VERIFY_STEPS } from './trpg-kp-check.js';
 import { confirmRecheck } from './trpg-kp-verify-ui.js';
+import { checkSection } from './trpg-check-card.js';
 
 // 体检结果只留在内存里，换项目就丢
 let shown = null;
@@ -79,7 +80,7 @@ export function kpCard(view, project, c, d) {
     return `<div class="pi-card"><h3>KP<span class="pi-spacer"></span>
         <button type="button" class="pi-btn is-sm is-ghost" data-act="kp-health" title="推演凭已经拿到的线索，主线还能不能走通，并可以推一把；只给结论，展开才剧透">卡住了吗</button>
         ${busy ? '<span class="pi-spin"></span>' : `<button type="button" class="pi-icon-btn" data-act="kp-menu" title="更多" aria-label="更多">${ICONS.more}</button>`}</h3>
-        ${timelineHintHtml(project, readGameClock(c.snap.tables, bind && bind.路径))}${lastCheckHtml(kp)}${steerResultHtml(project)}
+        ${checkSection(project, c)}${timelineHintHtml(project, readGameClock(c.snap.tables, bind && bind.路径))}${lastCheckHtml(kp)}${steerResultHtml(project)}
         ${
             mine
                 ? `<p class="pi-hint">${thinking ? '<span class="pi-badge">判断中</span>' : `<span class="pi-badge ${BADGE[shownLevel(mine)][0]}">${BADGE[shownLevel(mine)][1]}</span>`} ${esc(

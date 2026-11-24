@@ -25,14 +25,15 @@ function rowHtml(r) {
     }</div>`;
 }
 
-export function checkCard(view, project, c) {
+// 放在 KP 卡里的一段（用户 2026-11-24：判定和 KP 融在一起）
+export function checkSection(project, c) {
     let checks = trpgCheckResults(chatMessages()),
         labels = isPlainObject(project.clue.labels) ? project.clue.labels : {},
         board = trpgCheckBoard({ state: c.state, snap: c.snap, prog: c.prog, checks, labels });
     if (!board.rows.length && !board.problems.length) return '';
     let live = board.rows.filter((r) => !r.done),
         done = board.rows.filter((r) => r.done);
-    return `<div class="pi-card pi-ck"><h3>判定</h3>
+    return `<div class="pi-ck"><div class="pi-ck-hd">判定</div>
         ${board.problems.map((p) => `<p class="pi-hint is-warn">${esc(problemText(p))}</p>`).join('')}
         ${live.map(rowHtml).join('') || (board.rows.length ? '<p class="pi-hint">眼下没有等着的判定。</p>' : '')}
         ${done.length ? `<details class="pi-fold"><summary><b>已完成（${done.length}）</b></summary>${done.map(rowHtml).join('')}</details>` : ''}</div>`;
