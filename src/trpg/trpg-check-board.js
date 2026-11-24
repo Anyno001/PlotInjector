@@ -1,0 +1,114 @@
+// 执行页「判定」卡的纯计算（用户 2026-11-24：判定在后台是通的，界面上看不见）。界面在 trpg-check-card.js。
+// 全部从聊天记录机械地算（trpgCheckResults），不发 AI 请求；「已确认」沿用 KP 每轮检测的结果（effectiveFact）。
+// 不剧透：没成功的判定不给线索标签；暗骰不给骰点；界面不出现线索编号、节点编号。
+import { discoveryList } from './trpg-clue-project.js';
+import { effectiveFact } from './trpg-clue-rules.js';
+import { GOT_ANYWAY } from './trpg.js';
+import { kpFactLabel } from './trpg-kp-check.js';
+import { isPlainObject } from '../core/outline.js';
+
+const OPEN = ['available', 'active', 'done'];
+
+// 「侦查（困难）」；多技能写「侦查/聆听」
+export function checkWhat(skill, level) {
+    return `${skill}${level && level !== '普通' ? `（${level}）` : ''}`;
+}
+
+function rollText(r, hidden) {
+    if (hidden) return '已掷';
+    return r.die != null ? `1D100=${r.die}${r.value ? `/${r.value}` : ''}` : r.tier;
+}
+
+// 一行的状态：wait 等正文出检定 / roll 等你掷骰 / ok 成功 / fail 失败
+// clue：线索进度 confirmed 已确认 / offered 已交给正文 / pending 还没确认 / ''（还轮不到）
+export function trpgCheckBoard({ state, snap, prog, checks, labels = {} }) {
+    let rows = [],
+        requests = (checks && checks.requests) || [],
+        offered = new Set(Array.isArray(prog && prog.clueOffered) ? prog.clueOffered : []),
+        known = new Set();
+    for (let ns of state.nodeStates || []) {
+        let item = isPlainObject(ns.node.item) ? ns.node.item : {};
+        for (let d of discoveryList(item)) {
+            if (!d.check || !d.fact) continue;
+            known.add(d.fact);
+            let r = checks ? checks[d.fact] : null,
+                kp = checks ? checks[`${d.fact}-KP`] : null,
+                asked = requests.some((q) => q.code === d.fact),
+                got = effectiveFact(d.fact, snap, prog).confirmed;
+            // 节点还没开放、也没有任何检定痕迹的不列（列出来就是剧透）
+            if (!OPEN.includes(ns.status) && !r && !asked && !got) continue;
+            let status = r ? (r.ok ? 'ok' : 'fail') : asked ? 'roll' : got ? 'got' : 'wait',
+                anyway = !!(d.check.fail && GOT_ANYWAY.test(d.check.fail)),
+                rescued = !!(kp && kp.ok),
+                reveal = status === 'ok' || (status === 'fail' && (anyway || rescued)),
+                clue = got ? 'confirmed' : reveal ? (offered.has(d.fact) ? 'offered' : 'pending') : '',
+                skill = r ? r.skill : d.check.skills.join('/'),
+                level = r ? r.level : d.check.level;
+            rows.push({
+                fact: d.fact,
+                node: ns.node.name || '',
+                what: checkWhat(skill, level),
+                hidden: !!d.check.hidden,
+                status,
+                roll: r ? rollText(r, d.check.hidden) : '',
+                anyway,
+                kp: kp ? { ok: kp.ok, roll: rollText(kp, d.check.hidden) } : null,
+                // 标签只在拿到线索之后给
+                label: got || status === 'ok' || rescued ? kpFactLabel(labels, d.fact, d.text) : '',
+                clue,
+                done: got && status !== 'wait' && status !== 'roll',
+            });
+        }
+    }
+    return { rows, problems: checkProblems(checks, known) };
+}
+
+// 理智检定（编号 SAN）不对应发现；补救检定是「编号-KP」
+export function isKnownCode(code, known) {
+    return /^SAN$/i.test(code) || known.has(String(code).replace(/-KP$/, ''));
+}
+
+// 只提示用户最后一条消息里的问题，加上最新一条正文里对不上模组的检定编号
+export function checkProblems(checks, known) {
+    if (!checks) return [];
+    let last = checks.lastUser ?? -1,
+        out = (checks.problems || []).filter((p) => p.at === last),
+        lastAi = Math.max(-1, ...(checks.requests || []).map((q) => q.at));
+    known &&
+        (checks.requests || [])
+            .filter((q) => q.at === lastAi && !isKnownCode(q.code, known))
+            .forEach((q) => out.push({ at: q.at, kind: 'badcode', skill: q.skill, code: q.code }));
+    return out;
+}
+
+export function problemText(p) {
+    switch (p.kind) {
+        case 'unparsed':
+            return '没认出骰点，掷骰请写成1D100=23';
+        case 'novalue':
+            return `${p.skill || '这项技能'}缺技能值，请写23/60，或在IGS调查员档补上`;
+        case 'badcode':
+            return '正文里的检定编号对不上模组';
+        case 'dup':
+            return `${p.skill || '这项'}已经掷过，以第一次为准`;
+        case 'noreq':
+            return '掷了骰，但前面没有等着掷的检定，这次没有算';
+        default:
+            return '';
+    }
+}
+
+// 掷完弹的小卡：{ title, body, fail, canRescue }。hidden = 暗骰（不报骰点、不报成败）
+export function rollNoticeText(r, { hidden = !1, rescue = !1, anyway = !1 } = {}) {
+    let what = `${rescue ? '补救检定 ' : ''}${checkWhat(r.skill, r.level)}`;
+    if (hidden) return { title: '判定', body: `${what}：已掷（暗骰），结果看正文`, fail: !1, canRescue: !1 };
+    let roll = r.die != null ? `${r.die}${r.value ? `/${r.value}` : ''}` : '',
+        head = `${what}${roll ? ` ${roll}` : ''}`;
+    if (r.ok) return { title: '判定成功', body: `${head}：${r.tier && r.tier !== '成功' ? r.tier : '成功'}，线索会交给正文`, fail: !1, canRescue: !1 };
+    return {
+        title: '判定失败',
+        body: `${head}：${r.tier === '大失败' ? '大失败' : '失败'}${anyway ? '，失败了也能拿到这条线索' : ''}`,
+        fail: !0,
+        canRescue: !rescue && !anyway,
+    };
+}

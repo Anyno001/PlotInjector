@@ -105,3 +105,32 @@ test('项目文件：跑团标记随完整项目导出、导入；普通项目�
 
 
 
+
+test('判定卡：状态、没认出的骰点、对不上的编号', async () => {
+    let B = await import('../src/trpg/trpg-check-board.js'),
+        chat = [
+            { is_user: false, mes: '【检定】我：侦查（困难）#F01' },
+            { is_user: true, mes: '1d100 23' },
+            { is_user: true, mes: '1D100=23/60' },
+            { is_user: false, mes: '【检定】我：聆听 #F99' },
+        ],
+        checks = T.trpgCheckResults(chat);
+    assert.deepEqual(Object.keys(checks), ['F01']);
+    assert.deepEqual(checks.problems.map((p) => [p.at, p.kind]), [[1, 'unparsed']]);
+    let state = { nodeStates: [{ status: 'available', node: { name: '厕所', item: { 发现: [{ 事实: 'F01', 内容: '墙上有字', 判定: { 技能: '侦查', 难度: '困难' } }, { 事实: 'F02', 内容: '门后有人', 判定: '聆听' }] } } }] },
+        board = B.trpgCheckBoard({ state, snap: { facts: new Map() }, prog: {}, checks });
+    assert.deepEqual(board.rows.map((r) => [r.status, !!r.label]), [['ok', true], ['wait', false]]);
+    assert.deepEqual(board.problems.map((p) => p.kind), ['badcode']);
+});
+
+test('机械判定：IGS 安科 ROLL 那一行照用 IGS 判的成败', () => {
+    let chat = [
+            { is_user: false, mes: '[igs-anke:检定|翻不翻|楼主|侦查|50|困难|F01]' },
+            { is_user: true, mes: '【检定】楼主 侦查：1D100=40，困难线35，困难成功 #F01' },
+        ],
+        r = T.trpgCheckResults(chat).F01;
+    assert.equal(r.ok, true);
+    assert.equal(r.die, 40);
+    chat[1].mes = '【检定】楼主 侦查：1D100=40，困难线30，成功（没达到难度） #F01';
+    assert.equal(T.trpgCheckResults(chat).F01.ok, false);
+});

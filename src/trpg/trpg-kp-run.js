@@ -8,8 +8,10 @@ import { isPlainObject } from '../core/outline.js';
 import { effectiveFact } from './trpg-clue-rules.js';
 import { findSheet, sheetRows, cellText, SELF_KEYS } from './trpg-clue-tables.js';
 import { acuApi } from './trpg-clue-runtime.js';
-import { trpgCheckResults } from './trpg.js';
-import { aiFloorCount, KP_LEVELS, kpPushTarget } from './trpg-kp.js';
+import { trpgCheckResults, GOT_ANYWAY } from './trpg.js';
+import { aiFloorCount, KP_LEVELS, kpPushTarget, kpFind } from './trpg-kp.js';
+import { discoveryList } from './trpg-clue-project.js';
+import { checkProblems, problemText, rollNoticeText, isKnownCode } from './trpg-check-board.js';
 import { steerContext } from './trpg-steer.js';
 import { confirmRecheck, recheckHits } from './trpg-kp-verify-ui.js';
 import {
@@ -392,6 +394,58 @@ export function createKpRunner(deps) {
         deps.clue.invalidate('kp-clear');
         return ids.length;
     }
-    const api = { run, recheck, applyRecheck, clearKp, autoVerifyEvery, setAutoVerify, reset: () => ((again = false), (lastKey = '')) };
+    // 掷完弹小卡（用户 2026-11-24）：用户最后一条消息里刚掷的判定、没认出的骰点，各弹一次。
+    // 同一楼同一编号只弹一次，记在 progress.trpgKp.rollSeen（键带楼层的发送时间，删楼后重发能再弹）
+    function rollNotice() {
+        let project = deps.getProject();
+        if (!project) return;
+        let chat = chatMessages(),
+            checks = trpgCheckResults(chat),
+            at = checks.lastUser,
+            msg = chat[at];
+        if (!msg) return;
+        let c = deps.clue.compute(),
+            known = new Set(),
+            seen = Array.isArray(kpOf().rollSeen) ? kpOf().rollSeen : [],
+            stamp = `${at}:${msg.send_date ?? ''}`,
+            fresh = [];
+        if (c) for (let ns of c.state.nodeStates) for (let d of discoveryList(isPlainObject(ns.node.item) ? ns.node.item : {})) d.fact && known.add(d.fact);
+        for (let [code, r] of Object.entries(checks)) r.fresh && !seen.includes(`${stamp}:${code}`) && fresh.push([code, r]);
+        let probs = checkProblems(checks, c ? known : null).filter((p) => p.at === at && !seen.includes(`${stamp}:!${p.kind}`));
+        // 掷的是编号对不上模组的检定：不报成败（报了成功也没有线索可给），只说编号不对
+        if (c) {
+            let bad = fresh.filter(([code]) => !isKnownCode(code, known));
+            bad.length && !probs.some((p) => p.kind === 'badcode') && probs.push({ at, kind: 'badcode', skill: bad[0][1].skill, code: bad[0][0] });
+            fresh = fresh.filter(([code]) => isKnownCode(code, known) && !/^SAN$/i.test(code));
+        }
+        if (!fresh.length && !probs.length) return;
+        saveKp({ rollSeen: [...seen, ...Object.keys(checks).filter((code) => checks[code].fresh).map((code) => `${stamp}:${code}`), ...probs.map((p) => `${stamp}:!${p.kind}`)].slice(-40) });
+        if (probs.length && !fresh.length)
+            return notice.show({ id: 'kp-roll', title: '判定没算上', body: probs.map(problemText).join('；'), actions: [{ label: '知道了', run: () => {} }] });
+        let parts = fresh.map(([code, r]) => {
+                let rescue = /-KP$/.test(code),
+                    base = code.replace(/-KP$/, ''),
+                    hit = c && kpFind(c.state, base),
+                    check = hit && hit.discovery.check;
+                return { base, ...rollNoticeText(r, { hidden: !!(check && check.hidden), rescue, anyway: !!(check && check.fail && GOT_ANYWAY.test(check.fail)) }) };
+            }),
+            rescueOf = parts.find((p) => p.canRescue && !(c && effectiveFact(p.base, c.snap, c.prog).confirmed)),
+            body = [...parts.map((p) => p.body), ...probs.map(problemText)].join('；'),
+            actions = [];
+        rescueOf &&
+            actions.push({
+                label: '补救检定',
+                primary: !0,
+                run: () => {
+                    // 正文还没回来时点的：推一把要对准下一轮（AI 楼数会多一楼）
+                    let now = chatMessages(),
+                        tail = now[now.length - 1];
+                    saveKp({ push: { fact: rescueOf.base, level: 2, floor: aiFloorCount(now) + (tail && tail.is_user ? 1 : 0) } });
+                },
+            });
+        actions.push({ label: '知道了', run: () => {} });
+        notice.show({ id: 'kp-roll', title: parts.length === 1 ? parts[0].title : '判定结果', body, actions, ...(rescueOf ? {} : { timeout: 8e3 }) });
+    }
+    const api = { run, recheck, applyRecheck, clearKp, autoVerifyEvery, setAutoVerify, rollNotice, reset: () => ((again = false), (lastKey = '')) };
     return api;
 }

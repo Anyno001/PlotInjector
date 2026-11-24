@@ -263,30 +263,64 @@ export function cocJudge(die, value, level = '普通') {
 }
 
 // messages = 酒馆聊天数组；返回 { 编号: { ok, tier, die, value, level, skill, at } }
+// 用户消息像是在掷骰（用来判断「没认出骰点」要不要提示，普通回复不提示）
+const LOOKS_ROLL = /[dD]\s*100|🎲|掷|骰|roll/i;
+// IGS forum-anke-play.js ankeFillLine 的 coc 行：1D100=23，技能60 ／ 1D100=23，困难线30，困难成功（没达到难度）
+const IGS_ROLL = /1D100=(\d{1,3})，(?:技能(\d{1,3})|(?:困难|极难)线(\d{1,3}))，(大成功|极难成功|困难成功|成功|大失败|失败)(（没达到难度）)?/;
+const STRICT_ROLL = /[dD]\s*100\s*[=＝:：]?\s*\d{1,3}|🎲\s*\d{1,3}|(?:掷出|骰出|出目)\D{0,3}\d{1,3}/;
+
+// 返回值另带两个不可枚举字段（遍历结果的老代码不受影响）：
+//   problems：[{ at, kind, skill, code }]，kind = noreq（掷了骰但没有等着掷的检定）/ unparsed（没认出骰点）/ novalue（缺技能值）/ dup（这项已经掷过）
+//   requests：[{ at, code, skill, level }]，正文里出现过的检定请求
 export function trpgCheckResults(messages) {
     let open = [],
-        out = {};
+        out = {},
+        problems = [],
+        requests = [],
+        dupes = [];
     (messages || []).forEach((msg, at) => {
         if (!msg || msg.is_system) return;
         let text = String(msg.mes || '');
         if (!msg.is_user) {
-            for (let r of parseCheckRequests(text)) out[r.code] || open.some((o) => o.code === r.code) || open.push(r);
+            dupes = [];
+            for (let r of parseCheckRequests(text)) {
+                requests.push({ at, code: r.code, skill: r.skill, level: r.level });
+                out[r.code] ? dupes.push(r) : open.some((o) => o.code === r.code) || open.push(r);
+            }
             return;
         }
         let named = CODE.exec(text),
             req = (named && open.find((o) => o.code === named[1])) || open[open.length - 1];
-        if (!req) return;
+        if (!req) {
+            let again = (named && out[named[1]] && { code: named[1], skill: out[named[1]].skill }) || dupes[dupes.length - 1];
+            again && (named || STRICT_ROLL.test(text))
+                ? problems.push({ at, kind: 'dup', skill: again.skill, code: again.code })
+                : STRICT_ROLL.test(text) && problems.push({ at, kind: 'noreq', skill: '', code: named ? named[1] : '' });
+            return;
+        }
+        // IGS 论坛安科点 ROLL 填的那一行：成败 IGS 已经按调查员档判好，照用（两边技能值可能不同）
+        let igs = IGS_ROLL.exec(text);
+        if (igs) {
+            let need = igs[3] ? Number(igs[3]) : null,
+                value = igs[2] ? Number(igs[2]) : null;
+            out[req.code] = { tier: igs[4], ok: /成功/.test(igs[4]) && !igs[5], die: Number(igs[1]), need, value, level: req.level, skill: req.skill, at };
+            open = open.filter((o) => o !== req);
+            return;
+        }
         let roll = parseRoll(text, req.skill);
-        if (!roll) return;
+        if (!roll) return (LOOKS_ROLL.test(text) && problems.push({ at, kind: 'unparsed', skill: req.skill, code: req.code }), void 0);
         let value = roll.value || req.value || igsSkillValue(req.skill),
             res = roll.die != null && value ? { ...cocJudge(roll.die, value, req.level), die: roll.die } : roll.word ? { tier: roll.word, ok: !/失败/.test(roll.word), die: null } : null;
-        if (!res) return;
+        if (!res) return (problems.push({ at, kind: 'novalue', skill: req.skill, code: req.code }), void 0);
         ((out[req.code] = { ...res, value, level: req.level, skill: req.skill, at }), (open = open.filter((o) => o !== req)));
     });
     // fresh：用户最新一条消息里刚掷的（这一轮正文要接着写的）
     let last = -1;
     (messages || []).forEach((m, i) => m && m.is_user && !m.is_system && (last = i));
     for (let r of Object.values(out)) r.fresh = r.at === last;
+    Object.defineProperty(out, 'problems', { value: problems, enumerable: !1 });
+    Object.defineProperty(out, 'requests', { value: requests, enumerable: !1 });
+    Object.defineProperty(out, 'lastUser', { value: last, enumerable: !1 });
     return out;
 }
 

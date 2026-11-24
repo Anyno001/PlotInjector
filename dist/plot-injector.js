@@ -1,4 +1,4 @@
-// PlotInjector v0.4.2
+// PlotInjector v0.4.3
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -2708,26 +2708,40 @@ ${u.yaml}`].filter(Boolean).join(`
     let fumble = die >= 100 || value < 50 && die >= 96, tier = die <= 5 ? "大成功" : fumble ? "大失败" : die <= Math.floor(value / 5) ? "极难成功" : die <= Math.floor(value / 2) ? "困难成功" : die <= value ? "成功" : "失败", need = level === "极难" ? Math.floor(value / 5) : level === "困难" ? Math.floor(value / 2) : value;
     return { tier, ok: die <= 5 || !fumble && die <= need, need };
   }
+  var LOOKS_ROLL = /[dD]\s*100|🎲|掷|骰|roll/i, IGS_ROLL = /1D100=(\d{1,3})，(?:技能(\d{1,3})|(?:困难|极难)线(\d{1,3}))，(大成功|极难成功|困难成功|成功|大失败|失败)(（没达到难度）)?/, STRICT_ROLL = /[dD]\s*100\s*[=＝:：]?\s*\d{1,3}|🎲\s*\d{1,3}|(?:掷出|骰出|出目)\D{0,3}\d{1,3}/;
   function trpgCheckResults(messages) {
-    let open = [], out = {};
+    let open = [], out = {}, problems2 = [], requests = [], dupes = [];
     (messages || []).forEach((msg, at) => {
       if (!msg || msg.is_system) return;
       let text2 = String(msg.mes || "");
       if (!msg.is_user) {
-        for (let r of parseCheckRequests(text2)) out[r.code] || open.some((o) => o.code === r.code) || open.push(r);
+        dupes = [];
+        for (let r of parseCheckRequests(text2))
+          requests.push({ at, code: r.code, skill: r.skill, level: r.level }), out[r.code] ? dupes.push(r) : open.some((o) => o.code === r.code) || open.push(r);
         return;
       }
       let named = CODE.exec(text2), req = named && open.find((o) => o.code === named[1]) || open[open.length - 1];
-      if (!req) return;
+      if (!req) {
+        let again = named && out[named[1]] && { code: named[1], skill: out[named[1]].skill } || dupes[dupes.length - 1];
+        again && (named || STRICT_ROLL.test(text2)) ? problems2.push({ at, kind: "dup", skill: again.skill, code: again.code }) : STRICT_ROLL.test(text2) && problems2.push({ at, kind: "noreq", skill: "", code: named ? named[1] : "" });
+        return;
+      }
+      let igs = IGS_ROLL.exec(text2);
+      if (igs) {
+        let need = igs[3] ? Number(igs[3]) : null, value2 = igs[2] ? Number(igs[2]) : null;
+        out[req.code] = { tier: igs[4], ok: /成功/.test(igs[4]) && !igs[5], die: Number(igs[1]), need, value: value2, level: req.level, skill: req.skill, at }, open = open.filter((o) => o !== req);
+        return;
+      }
       let roll = parseRoll(text2, req.skill);
-      if (!roll) return;
+      if (!roll) return LOOKS_ROLL.test(text2) && problems2.push({ at, kind: "unparsed", skill: req.skill, code: req.code }), void 0;
       let value = roll.value || req.value || igsSkillValue(req.skill), res = roll.die != null && value ? { ...cocJudge(roll.die, value, req.level), die: roll.die } : roll.word ? { tier: roll.word, ok: !/失败/.test(roll.word), die: null } : null;
-      res && (out[req.code] = { ...res, value, level: req.level, skill: req.skill, at }, open = open.filter((o) => o !== req));
+      if (!res) return problems2.push({ at, kind: "novalue", skill: req.skill, code: req.code }), void 0;
+      out[req.code] = { ...res, value, level: req.level, skill: req.skill, at }, open = open.filter((o) => o !== req);
     });
     let last = -1;
     (messages || []).forEach((m, i) => m && m.is_user && !m.is_system && (last = i));
     for (let r of Object.values(out)) r.fresh = r.at === last;
-    return out;
+    return Object.defineProperty(out, "problems", { value: problems2, enumerable: !1 }), Object.defineProperty(out, "requests", { value: requests, enumerable: !1 }), Object.defineProperty(out, "lastUser", { value: last, enumerable: !1 }), out;
   }
   var GOT_ANYWAY = /仍然?(?:能)?(?:得到|拿到|发现|找到)|也能(?:得到|拿到|发现|找到)|还是(?:得到|拿到|发现|找到)/;
   function checkLine(d, checks) {
@@ -11344,6 +11358,10 @@ label.pi-wb-row{cursor:pointer}
 .pi-req{border:0;cursor:pointer;font:inherit;font-size:11px;line-height:18px;padding:0 9px;border-radius:10px;background:var(--pi-fill2);color:var(--pi-txt2)}
 .pi-req.is-on{background:var(--pi-accent-soft);color:var(--pi-accent)}
 .pi-ta-auto{min-height:58px;resize:vertical;overflow-y:auto}
+.pi-ck-row{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 8px;padding:7px 10px;margin:0 0 6px;border-radius:10px;background:var(--pi-fill)}
+.pi-ck-what{font-size:13px;color:var(--pi-txt);display:inline-flex;gap:6px;align-items:baseline}
+.pi-ck .pi-ck-meta{flex:1 1 auto;min-width:0;text-align:left;white-space:normal}
+.pi-ck .pi-ck-tail{flex:1 1 100%;text-align:left;white-space:normal}
 .pi-fold{margin:2px 0 10px}
 .pi-fold>summary{list-style:none;cursor:pointer;display:flex;align-items:baseline;gap:8px;font-size:13px;color:var(--pi-txt2);padding:4px 0}
 .pi-fold>summary::-webkit-details-marker{display:none}
@@ -11777,6 +11795,498 @@ label.pi-wb-row{cursor:pointer}
         resolve([]), input2.remove();
       }), doc.body.appendChild(input2), input2.click();
     });
+  }
+
+  // src/core/check.js
+  function cleanFloorText(text2, limit = 3e3) {
+    let out = String(text2 || "");
+    return out = out.replace(/<(think|thinking|reasoning|status|statusbar|状态栏|details)\b[^>]*>[\s\S]*?<\/\1>/gi, ""), out = out.replace(/```[\s\S]*?```/g, ""), out = out.replace(/<\s*剧情推进\s*\/?\s*>/g, ""), out = out.replace(/<[^>\n]{1,80}>/g, ""), out = out.replace(/\n{3,}/g, `
+
+`).trim(), out.length > limit ? out.slice(-limit) : out;
+  }
+  function threadRules(threads) {
+    if (!threads) return null;
+    let clocks = Array.isArray(threads.clocks) ? threads.clocks : [], keys = [], rules = [];
+    if (clocks.length && (keys.push('"clocks":[{"name":"进度钟名称","tick":推进格数,"happened":true或false}]'), rules.push(
+      `clocks 对照剧情索引里的【世界进度钟】（${clocks.map((clock) => `${clock.name} ${clock.filled}/${clock.total}`).join("、")}）：正文里有推动这件事的进展就填正数，每次最多 2 格；玩家出手阻止、使局势缓和就填负数；没有变化就省略。只有正文已经写出这件事发生时，happened 才填 true。`
+    )), threads.hooks && (keys.push('"hooks":["支线名"]'), rules.push(
+      "hooks 填【支线钩子】里标为「待触发」、出现条件已在正文中满足的支线名。支线已经在正文里演出时，把支线名填进 done；支线链只在当前这一步演出时填。"
+    )), threads.newThread) {
+      keys.push('"newThread":{"name":"线名","summary":"一句话概括"}'), rules.push(
+        "玩家在正文里主动开了一条大纲和剧情索引里都没有的线（例如接下新的委托、追查新的线索、发展新的关系）时填 newThread，没有就填 null。"
+      );
+      let ignored = Array.isArray(threads.ignored) ? threads.ignored.slice(-10) : [];
+      ignored.length && rules.push(`以下线已被忽略，不要再填进 newThread：${ignored.join("、")}。`);
+    }
+    return clocks.length && threads.readTo > 0 && rules.push("标有「已读」的楼层上次检测已经读过，clocks 只按之后的新楼层推进；没有新楼层时省略 clocks 的推进。"), keys.length ? { keys, rules, hooks: !!threads.hooks, readTo: clocks.length && Number(threads.readTo) || 0 } : null;
+  }
+  var PERSONA_KEY = '"personas":[{"line":"线名","to":"下一阶段名","floor":依据所在楼号,"reason":"一句话依据"}]', PERSONA_RULE = "personas 对照【人设阶段】：只填正文里已经写出、满足该线「进入条件」的线；to 只能填该线的下一阶段名，不能跳段、不能退回；floor 填依据所在的楼号，reason 写一句依据。没有满足的就填空数组。";
+  function personaLines(items) {
+    return items.map(
+      (item) => `- ${item.group ? `${item.group}·` : ""}${item.name}：当前「${item.from}」；下一阶段「${item.to}」，进入条件：${item.cond || "（未写，按阶段名判断）"}`
+    ).join(`
+`);
+  }
+  var FACT_KEY = '"facts":[{"id":"编号","floor":写出这件事的楼号}]', FACT_RULE = "facts 对照【待确认的事】：只有正文已经明确写出这件事发生了才填，id 原样照抄，floor 填写出它的楼号。只是提到、计划、猜测、角色以为的都不算。没有就填空数组。";
+  function factLines(items) {
+    return items.map((item) => `- ${item.id}：${item.text}`).join(`
+`);
+  }
+  var EMPTY_NAMES = /^(?:无|没有|暂无|空|none|null|nil|n\/a|na|undefined|-|—|无新线|没有新线|没有新的线)$/i, isEmptyName = (name) => EMPTY_NAMES.test(
+    String(name).trim().replace(/[。．.！!？?；;，,、\s]+$/, "").trim()
+  );
+  function buildCheckMessages(unit, index, floors, threads = null, personas2 = null, facts = null) {
+    let extra = threadRules(threads), pItems = Array.isArray(personas2) ? personas2 : [], fItems = Array.isArray(facts) ? facts : [], format = '{"done":["节点名"],"stageDone":true或false,"offTrack":true或false,"offReason":"偏离说明，没有就留空","reason":"一句话"}', system = [
+      "你是剧情进度核对员。根据最近的正文，对照剧情索引判断进度。",
+      "只认正文里已经写出的事件，计划、预告、角色设想不算发生。",
+      "若剧情走了某个节点的「偏转」分支，在 reason 里写明是哪个节点、怎么偏的。",
+      "另外判断剧情是否严重偏离大纲：正文的走向已经和【当前】【下一段】冲突，照原计划写下去会接不上（例如关键人物已死、关键事件已不可能发生、地点或立场彻底改变）。普通的细节出入、走了偏转分支都不算严重偏离。",
+      `只输出一个 JSON 对象，不加说明：${extra || pItems.length || fItems.length ? `${format.slice(0, -1)}${[...extra ? extra.keys : [], ...pItems.length ? [PERSONA_KEY] : [], ...fItems.length ? [FACT_KEY] : []].map((key) => `,${key}`).join("")}}` : format}`,
+      `done 只填${extra && extra.hooks ? "【当前】或【支线钩子】" : "【当前】"}里出现过的节点名，原样照抄；stageDone 表示当前段所有主线节点都已发生、剧情已进入下一段。`,
+      ...extra ? extra.rules : [],
+      ...pItems.length ? [PERSONA_RULE] : [],
+      ...fItems.length ? [FACT_RULE] : []
+    ].join(`
+`), readTo = extra ? extra.readTo : 0, user = [
+      `【剧情索引】
+${index}`,
+      ...pItems.length ? ["", `【人设阶段】
+${personaLines(pItems)}`] : [],
+      ...fItems.length ? ["", `【待确认的事】
+${factLines(fItems)}`] : [],
+      "",
+      "【最近正文】",
+      ...floors.map((floor) => `【第 ${floor.index} 楼${readTo > 0 && floor.index < readTo ? "·已读" : ""}】
+${floor.text}`)
+    ].join(`
+`);
+    return [
+      { role: "system", content: system },
+      { role: "user", content: user }
+    ];
+  }
+  function buildPersonaCheckMessages(items, floors, facts = []) {
+    let fItems = Array.isArray(facts) ? facts : [], system = [
+      items.length ? "你是人设阶段核对员。根据最近的正文，判断下列人设线是否已经进入下一阶段。" : "你是剧情核对员。根据最近的正文，判断下列事情是否已经在正文中发生。",
+      ...items.length && fItems.length ? ["同时判断【待确认的事】是否已经发生。"] : [],
+      "只认正文里已经写出的事件，计划、预告、角色设想不算发生。",
+      `只输出一个 JSON 对象，不加说明：{${[...items.length ? [PERSONA_KEY] : [], ...fItems.length ? [FACT_KEY] : []].join(",")}}`,
+      ...items.length ? [PERSONA_RULE] : [],
+      ...fItems.length ? [FACT_RULE] : []
+    ].join(`
+`), user = [
+      ...items.length ? [`【人设阶段】
+${personaLines(items)}`] : [],
+      ...fItems.length ? [`${items.length ? `
+` : ""}【待确认的事】
+${factLines(fItems)}`] : [],
+      "",
+      "【最近正文】",
+      ...floors.map((floor) => `【第 ${floor.index} 楼】
+${floor.text}`)
+    ].join(`
+`);
+    return [
+      { role: "system", content: system },
+      { role: "user", content: user }
+    ];
+  }
+  function parseCheckReply(text2) {
+    let raw = String(text2 || ""), start = raw.indexOf("{"), end = raw.lastIndexOf("}");
+    if (start < 0 || end <= start) throw new Error("检测结果不是 JSON");
+    let value;
+    try {
+      value = JSON.parse(raw.slice(start, end + 1));
+    } catch {
+      throw new Error("检测结果 JSON 无法解析");
+    }
+    let done = Array.isArray(value.done) ? value.done.map((item) => String(item).trim()).filter(Boolean) : [], flag2 = (item) => item === !0 || item === "true";
+    return {
+      done,
+      stageDone: flag2(value.stageDone),
+      offTrack: flag2(value.offTrack),
+      offReason: String(value.offReason || "").trim(),
+      reason: String(value.reason || "").trim(),
+      clocks: parseClocks(value.clocks, flag2),
+      hooks: names(value.hooks),
+      newThread: parseThread(value.newThread),
+      ...Array.isArray(value.personas) ? { personas: parsePersonaMoves(value.personas) } : {},
+      ...Array.isArray(value.facts) ? { facts: parseFactHits(value.facts) } : {}
+    };
+  }
+  var CLOCK_TICK_MAX = 2, names = (list) => Array.isArray(list) ? list.map((item) => String(item ?? "").trim()).filter(Boolean) : [];
+  function parseClocks(raw, flag2) {
+    return (Array.isArray(raw) ? raw : raw && typeof raw == "object" ? Object.entries(raw).map(([name, item]) => item && typeof item == "object" ? { name, ...item } : { name, tick: item }) : []).filter((item) => item && typeof item == "object").map((item) => {
+      let tick = Math.round(Number(item.tick ?? item.advance ?? item.推进));
+      return {
+        name: String(item.name ?? item.名称 ?? "").trim(),
+        tick: Number.isFinite(tick) ? Math.min(CLOCK_TICK_MAX, tick) : 0,
+        happened: flag2(item.happened ?? item.发生)
+      };
+    }).filter((item) => item.name);
+  }
+  function parseFactHits(raw) {
+    return (Array.isArray(raw) ? raw : []).map((item) => typeof item == "string" ? { id: item } : item).filter((item) => item && typeof item == "object").map((item) => ({ id: String(item.id ?? item.编号 ?? "").trim(), floor: Math.round(Number(item.floor ?? item.楼)) || 0 })).filter((item) => item.id);
+  }
+  function parsePersonaMoves(raw) {
+    return (Array.isArray(raw) ? raw : []).filter((item) => item && typeof item == "object").map((item) => ({
+      line: String(item.line ?? item.线 ?? "").trim(),
+      to: String(item.to ?? item.到 ?? "").trim(),
+      floor: Math.round(Number(item.floor ?? item.楼)) || 0,
+      reason: String(item.reason ?? item.依据 ?? "").trim()
+    })).filter((item) => item.line && item.to);
+  }
+  function parseThread(raw) {
+    if (!raw) return null;
+    let item = typeof raw == "string" ? { name: raw } : raw;
+    if (typeof item != "object") return null;
+    let name = String(item.name ?? item.名称 ?? "").trim().slice(0, 40);
+    return name && !isEmptyName(name) ? {
+      name,
+      summary: String(item.summary ?? item.概括 ?? "").trim().slice(0, 200)
+    } : null;
+  }
+  function buildClueCheckMessages(material, floors, personas2 = []) {
+    let system = [
+      "你是剧情核对员。根据最近的正文，判断下面这个场景里列出的发现是否已经在正文中实际发生。",
+      "只认正文里已经写出的事件：到了地点不等于找到证据，答应提供不等于已经拿到，计划和猜测都不算。",
+      `只输出一个 JSON 对象，不加说明：{"done":["已发生的发现原文"],"stageDone":true或false,"offTrack":false,"offReason":"","reason":"一句话说明依据"${personas2.length ? `,${PERSONA_KEY}` : ""}}`,
+      "done 只能照抄下面【可能的发现】里的条目；stageDone 表示这个场景已经结束。",
+      ...personas2.length ? [PERSONA_RULE] : []
+    ].join(`
+`), user = ["【场景】", material, ...personas2.length ? [`【人设阶段】
+${personaLines(personas2)}`] : [], "", "【最近正文】", ...floors.map((floor) => `【第 ${floor.index} 楼】
+${floor.text}`)].join(`
+`);
+    return [
+      { role: "system", content: system },
+      { role: "user", content: user }
+    ];
+  }
+
+  // src/trpg/trpg-kp-check.js
+  var KP_LOG_MAX = 20, KP_NOTE = "KP判定", QUOTE_MIN = 4, KP_OFF_KINDS = {
+    stray: "正文离开了当前场景，去做了模组外的事",
+    invent: "正文里出现了模组里没有的人物、地点或线索",
+    skip: "正文跳过了本该进行的内容",
+    reveal: "正文提前说破了后面才该揭晓的内容"
+  }, KP_OFF_GENERIC = "正文走向和当前阶段的内容对不上", kpOffText = (kind) => KP_OFF_KINDS[kind] || KP_OFF_GENERIC, kpAutoOn = (settings) => !settings || settings.trpgAutoCheck !== !1;
+  function recentTwo(messages, limit = 4e3) {
+    let out = [];
+    for (let i = (messages || []).length - 1; i >= 0 && out.length < 2; i -= 1) {
+      let m = messages[i];
+      if (!m || m.is_system) continue;
+      let text2 = cleanFloorText(m.mes, limit);
+      text2 && out.unshift({ user: !!m.is_user, text: text2 });
+    }
+    return out;
+  }
+  function kpCandidates({ prog, chat, floor, state, snap: snap2, effective, checks }) {
+    let msg = chat && chat[floor];
+    if (!msg || msg.is_user) return [];
+    let entry = (Array.isArray(prog && prog.clueCandidates) ? prog.clueCandidates : []).find(
+      (x) => x.i === floor && x.swipe === (Number(msg.swipe_id) || 0) && String(x.stamp ?? "") === String(msg.send_date ?? "")
+    ), out = [], seen = /* @__PURE__ */ new Set();
+    for (let c of entry && entry.candidates || []) {
+      if (!c || !c.fact || seen.has(c.fact)) continue;
+      let hit = kpFind(state, c.fact);
+      if (!hit || effective(c.fact, snap2).confirmed) continue;
+      let d = hit.discovery, gate = d.check ? checkLine(d, checks) : null;
+      gate && !gate.reveal || (seen.add(c.fact), out.push({ fact: c.fact, text: d.text, record: c.record || d.record || "" }));
+    }
+    return out;
+  }
+  function kpPendingSays({ compiled, state, conds }) {
+    let done = new Set(Object.keys(conds || {}).map(sayKey)), out = [], add = (cond) => sayAtoms(cond).forEach((t) => !done.has(sayKey(t)) && !out.includes(t) && out.push(t)), units = compiled.units || [];
+    for (let [i, unit] of units.entries()) {
+      let st9 = state.stageStates.get(unit.id);
+      if (!st9 || st9.entered.v !== "true" || st9.done) continue;
+      add(unit.clue.end);
+      let next = units[i + 1];
+      next && next.clue && next.clue.hasEnter && add(next.clue.enter);
+      for (let ns of state.nodeStates)
+        ns.node.unit !== unit || ns.skipped || ns.disabled || (ns.status === "locked" && add(ns.node.open), (ns.status === "available" || ns.status === "active") && add(ns.node.done));
+    }
+    return out;
+  }
+  function kpScenes(state) {
+    return state.nodeStates.filter((ns) => (ns.status === "available" || ns.status === "active") && !ns.disabled && ns.node.uid).map((ns) => ({ uid: ns.node.uid, name: ns.node.name || ns.node.uid, entry: String(ns.node.item && ns.node.item.入口 || "") }));
+  }
+  function kpCheckMessages({ recent, candidates, says, scenes, stage, rules, labelOf = (id) => id }) {
+    return [
+      {
+        role: "system",
+        content: [
+          "你是跑团模组的 KP 助手。读最近的正文，判断下面列出的条目有没有真的发生。只判断，不续写。",
+          "规则：",
+          "1. 只判断列出来的条目，不要判断别的，也不要补充没列出来的。",
+          "2. pass 为 true 时，quote 必须是从正文里原样抄下来的一句话作为证据；抄不出原句，就判 false。",
+          "3. 线索的「记录」是判断标准，不要放宽。正文只是暗示、猜测、路过、还没真正到手的，判 false。",
+          "4. 条件按字面判断，正文里已经发生、已经成立才算。",
+          "5. scene：这一轮故事主要发生的场景，填「场景」列表里的编号；不确定就留空。",
+          "6. offTrack：正文明显偏离了当前阶段的模组内容才算 true；玩家做了计划外的小事不算。偏离时 offKind 必须从四种里选一种：stray（离开了当前场景，去做模组外的事）、invent（编了模组里没有的重要人物、地点、线索）、skip（跳过了该进行的内容）、reveal（提前说破了后面的真相）。offReason 用玩家看得到的话写，不写具体真相；pullBack 是给正文的一小段拉回建议。offReason 和 pullBack 只能引用最近正文里已经写出来的内容，不提作者视角里玩家还没拿到的东西。没偏离时 offKind、offReason、pullBack 留空。",
+          "严格输出一个 JSON，不要写别的：",
+          '{"facts":[{"id":"编号","pass":true,"quote":"正文原句","why":"一句话"}],"conds":[{"text":"条件原文","pass":true,"quote":"正文原句"}],"scene":"节点编号或空","offTrack":false,"offKind":"","offReason":"","pullBack":""}',
+          "没有要判断的线索或条件时，facts、conds 写空数组。"
+        ].join(`
+`)
+      },
+      {
+        role: "user",
+        content: [
+          `【最近正文】
+${recent.map((m) => `${m.user ? "玩家" : "正文"}：${m.text}`).join(`
+
+`) || "（没有）"}`,
+          candidates.length ? `【要判断的线索】
+${candidates.map((c) => `- id ${c.fact}（${labelOf(c.fact)}）：${c.text}${c.record ? `
+  记录标准：${c.record}` : ""}`).join(`
+`)}` : `【要判断的线索】
+（没有）`,
+          says.length ? `【要判断的条件】
+${says.map((t) => `- ${t}`).join(`
+`)}` : `【要判断的条件】
+（没有）`,
+          scenes.length ? `【场景】
+${scenes.map((s) => `- ${s.uid}：${s.name}${s.entry ? `（${s.entry}）` : ""}`).join(`
+`)}` : "",
+          `【当前阶段的模组内容（作者视角）】
+${stage || "（没有进行中的阶段）"}`,
+          rules && `【KP规则】
+${rules}`
+        ].filter(Boolean).join(`
+
+`)
+      }
+    ];
+  }
+  var flag = (v) => v === !0 || v === "true", str2 = (v) => String(v ?? "").trim(), offKindOf = (v) => Object.hasOwn(KP_OFF_KINDS, str2(v)) ? str2(v) : "";
+  function parseKpReply(text2) {
+    let raw = String(text2 || ""), a = raw.indexOf("{"), b = raw.lastIndexOf("}");
+    if (a < 0 || b <= a) throw new Error("检测结果不是 JSON");
+    let v;
+    try {
+      v = JSON.parse(raw.slice(a, b + 1));
+    } catch {
+      throw new Error("检测结果 JSON 无法解析");
+    }
+    let list = (x) => Array.isArray(x) ? x.filter((i) => i && typeof i == "object") : [];
+    return {
+      facts: list(v.facts).map((x) => ({ id: str2(x.id), pass: flag(x.pass), quote: str2(x.quote), why: str2(x.why) })),
+      conds: list(v.conds).map((x) => ({ text: str2(x.text), pass: flag(x.pass), quote: str2(x.quote), why: str2(x.why) })),
+      scene: str2(v.scene),
+      offTrack: flag(v.offTrack),
+      offKind: offKindOf(v.offKind),
+      offReason: str2(v.offReason),
+      pullBack: str2(v.pullBack)
+    };
+  }
+  function quoteIn(quote, hay) {
+    let q = sayKey(quote);
+    return q.length >= QUOTE_MIN && sayKey(hay).includes(q);
+  }
+  function verifyKp(parsed, { candidates, says, scenes, recent }) {
+    let all = recent.map((m) => m.text).join(`
+`), ai = recent.filter((m) => !m.user).map((m) => m.text).join(`
+`), facts = [];
+    for (let c of candidates) {
+      let r = parsed.facts.find((x) => x.id === c.fact);
+      if (!r) {
+        facts.push({ id: c.fact, ok: !1, why: "", note: "检测没有给出结论", quote: "" });
+        continue;
+      }
+      let ok = r.pass && quoteIn(r.quote, ai);
+      facts.push({ id: c.fact, ok, why: r.why, quote: r.quote, note: ok ? "" : r.pass ? "给出的原句在正文里找不到" : "正文里没有拿到" });
+    }
+    let conds = [];
+    for (let text2 of says) {
+      let r = parsed.conds.find((x) => sayKey(x.text) === sayKey(text2));
+      if (!r) {
+        conds.push({ text: text2, ok: !1, why: "", note: "检测没有给出结论", quote: "" });
+        continue;
+      }
+      let ok = r.pass && quoteIn(r.quote, all);
+      conds.push({ text: text2, ok, why: r.why, quote: r.quote, note: ok ? "" : r.pass ? "给出的原句在正文里找不到" : "还没成立" });
+    }
+    let scene = scenes.find((s) => s.uid === parsed.scene);
+    return {
+      facts,
+      conds,
+      scene: scene ? scene.uid : "",
+      sceneName: scene ? scene.name : "",
+      offTrack: parsed.offTrack,
+      offKind: parsed.offKind,
+      offReason: parsed.offReason,
+      pullBack: parsed.pullBack
+    };
+  }
+  var RECHECK_FLOORS = [10, 20, 30], RECHECK_MAX = 60, AUTO_VERIFY_STEPS = [5, 10, 20], RECHECK_FACT_MAX = 40;
+  function recentFloors(messages, n, limit = 4e3, total = 3e4) {
+    let out = [], sum = 0;
+    for (let i = (messages || []).length - 1; i >= 0 && out.length < n; i -= 1) {
+      let m = messages[i];
+      if (!m || m.is_system) continue;
+      let text2 = cleanFloorText(m.mes, limit);
+      if (text2) {
+        if (out.length && sum + text2.length > total) break;
+        sum += text2.length, out.unshift({ user: !!m.is_user, text: text2, floor: i });
+      }
+    }
+    return out;
+  }
+  function kpRecheckCandidates({ compiled, state, snap: snap2, effective, checks }) {
+    let out = [], seen = /* @__PURE__ */ new Set();
+    for (let unit of compiled.units || []) {
+      let st9 = state.stageStates.get(unit.id);
+      if (!(!st9 || st9.entered.v !== "true" || st9.done)) {
+        for (let ns of state.nodeStates)
+          if (!(ns.node.unit !== unit || ns.skipped || ns.disabled || ns.status === "done"))
+            for (let d of discoveryList2(isPlainObject(ns.node.item) ? ns.node.item : {})) {
+              if (!d.fact || seen.has(d.fact) || effective(d.fact, snap2).confirmed) continue;
+              let gate = d.check ? checkLine(d, checks) : null;
+              gate && !gate.reveal || (seen.add(d.fact), out.push({ fact: d.fact, text: d.text, record: d.record || "", stage: unit.stage ? stageLabel(unit.stage.key) : "", node: ns.node.name || ns.node.uid || "" }));
+            }
+      }
+    }
+    return out.slice(0, RECHECK_FACT_MAX);
+  }
+  function kpRecheckMessages({ recent, candidates, says, stage, rules, labelOf = (id) => id }) {
+    return [
+      {
+        role: "system",
+        content: [
+          "你是跑团模组的 KP 助手。玩家觉得阶段推进卡住了，请回头读下面这几楼正文，逐条判断列出的线索和条件是不是已经在这段正文里发生过。只判断，不续写。",
+          "规则：",
+          "1. 只判断列出来的条目，不要判断别的，也不要补充没列出来的。",
+          "2. pass 为 true 时，quote 必须是从正文里原样抄下来的一句话作为证据；抄不出原句，就判 false。",
+          "3. 线索的「记录」是判断标准，不要放宽。正文只是暗示、猜测、路过、还没真正到手的，判 false。",
+          "4. 条件按字面判断，正文里已经发生、已经成立才算。",
+          "严格输出一个 JSON，不要写别的：",
+          '{"facts":[{"id":"编号","pass":true,"quote":"正文原句","why":"一句话"}],"conds":[{"text":"条件原文","pass":true,"quote":"正文原句"}]}',
+          "没有要判断的线索或条件时，facts、conds 写空数组。"
+        ].join(`
+`)
+      },
+      {
+        role: "user",
+        content: [
+          `【正文（第${recent.length ? recent[0].floor : 0}–${recent.length ? recent[recent.length - 1].floor : 0}楼）】
+${recent.map((m) => `[第${m.floor}楼] ${m.user ? "玩家" : "正文"}：${m.text}`).join(`
+
+`) || "（没有）"}`,
+          candidates.length ? `【要判断的线索】
+${candidates.map((c) => `- id ${c.fact}（${labelOf(c.fact)}，${c.stage}·${c.node}）：${c.text}${c.record ? `
+  记录标准：${c.record}` : ""}`).join(`
+`)}` : `【要判断的线索】
+（没有）`,
+          says.length ? `【要判断的条件】
+${says.map((t) => `- ${t}`).join(`
+`)}` : `【要判断的条件】
+（没有）`,
+          `【进行中阶段的模组内容（作者视角）】
+${stage || "（没有）"}`,
+          rules && `【KP规则】
+${rules}`
+        ].filter(Boolean).join(`
+
+`)
+      }
+    ];
+  }
+  function kpFactLabel(labels, id, text2) {
+    return labels && labels[id] && labels[id].label || (String(text2 || "").length > 12 ? `${String(text2).slice(0, 12)}…` : String(text2 || "") || "一条线索");
+  }
+  function kpLogEntry({ floor, at = Date.now(), result: result2, labelOf, scenes, off }) {
+    return {
+      at,
+      floor,
+      facts: result2.facts.map((x) => ({ label: labelOf(x.id), ok: x.ok, why: x.ok ? x.why : x.note || x.why, quote: x.ok ? x.quote : "" })),
+      conds: result2.conds.map((x) => ({ text: x.text, ok: x.ok, why: x.ok ? x.why : x.note || x.why, quote: x.ok ? x.quote : "" })),
+      scene: result2.sceneName || "",
+      off: !!off,
+      offKind: result2.offTrack && result2.offKind || "",
+      offReason: result2.offTrack ? result2.offReason : ""
+    };
+  }
+  function pushLog(log, entry) {
+    return [...Array.isArray(log) ? log : [], entry].slice(-KP_LOG_MAX);
+  }
+  function kpSummary(entry) {
+    if (!entry) return "";
+    let got2 = entry.facts.filter((x) => x.ok).length;
+    return entry.recheck != null ? `重新核实第${entry.recheck}–${entry.floor}楼 · 拿到${got2}条线索 · ${entry.conds.filter((x) => x.ok).length}个条件成立` : `拿到${got2}条线索 · ${entry.scene ? `场景${entry.scene}` : "场景没变"} · ${entry.off ? "偏离了模组" : "未偏离"}`;
+  }
+
+  // src/trpg/trpg-check-board.js
+  var OPEN = ["available", "active", "done"];
+  function checkWhat(skill, level) {
+    return `${skill}${level && level !== "普通" ? `（${level}）` : ""}`;
+  }
+  function rollText(r, hidden) {
+    return hidden ? "已掷" : r.die != null ? `1D100=${r.die}${r.value ? `/${r.value}` : ""}` : r.tier;
+  }
+  function trpgCheckBoard({ state, snap: snap2, prog, checks, labels = {} }) {
+    let rows2 = [], requests = checks && checks.requests || [], offered = new Set(Array.isArray(prog && prog.clueOffered) ? prog.clueOffered : []), known = /* @__PURE__ */ new Set();
+    for (let ns of state.nodeStates || []) {
+      let item = isPlainObject(ns.node.item) ? ns.node.item : {};
+      for (let d of discoveryList2(item)) {
+        if (!d.check || !d.fact) continue;
+        known.add(d.fact);
+        let r = checks ? checks[d.fact] : null, kp = checks ? checks[`${d.fact}-KP`] : null, asked = requests.some((q) => q.code === d.fact), got2 = effectiveFact2(d.fact, snap2, prog).confirmed;
+        if (!OPEN.includes(ns.status) && !r && !asked && !got2) continue;
+        let status = r ? r.ok ? "ok" : "fail" : asked ? "roll" : got2 ? "got" : "wait", anyway = !!(d.check.fail && GOT_ANYWAY.test(d.check.fail)), rescued = !!(kp && kp.ok), reveal = status === "ok" || status === "fail" && (anyway || rescued), clue = got2 ? "confirmed" : reveal ? offered.has(d.fact) ? "offered" : "pending" : "", skill = r ? r.skill : d.check.skills.join("/"), level = r ? r.level : d.check.level;
+        rows2.push({
+          fact: d.fact,
+          node: ns.node.name || "",
+          what: checkWhat(skill, level),
+          hidden: !!d.check.hidden,
+          status,
+          roll: r ? rollText(r, d.check.hidden) : "",
+          anyway,
+          kp: kp ? { ok: kp.ok, roll: rollText(kp, d.check.hidden) } : null,
+          // 标签只在拿到线索之后给
+          label: got2 || status === "ok" || rescued ? kpFactLabel(labels, d.fact, d.text) : "",
+          clue,
+          done: got2 && status !== "wait" && status !== "roll"
+        });
+      }
+    }
+    return { rows: rows2, problems: checkProblems(checks, known) };
+  }
+  function isKnownCode(code, known) {
+    return /^SAN$/i.test(code) || known.has(String(code).replace(/-KP$/, ""));
+  }
+  function checkProblems(checks, known) {
+    if (!checks) return [];
+    let last = checks.lastUser ?? -1, out = (checks.problems || []).filter((p) => p.at === last), lastAi = Math.max(-1, ...(checks.requests || []).map((q) => q.at));
+    return known && (checks.requests || []).filter((q) => q.at === lastAi && !isKnownCode(q.code, known)).forEach((q) => out.push({ at: q.at, kind: "badcode", skill: q.skill, code: q.code })), out;
+  }
+  function problemText(p) {
+    switch (p.kind) {
+      case "unparsed":
+        return "没认出骰点，掷骰请写成1D100=23";
+      case "novalue":
+        return `${p.skill || "这项技能"}缺技能值，请写23/60，或在IGS调查员档补上`;
+      case "badcode":
+        return "正文里的检定编号对不上模组";
+      case "dup":
+        return `${p.skill || "这项"}已经掷过，以第一次为准`;
+      case "noreq":
+        return "掷了骰，但前面没有等着掷的检定，这次没有算";
+      default:
+        return "";
+    }
+  }
+  function rollNoticeText(r, { hidden = !1, rescue = !1, anyway = !1 } = {}) {
+    let what = `${rescue ? "补救检定 " : ""}${checkWhat(r.skill, r.level)}`;
+    if (hidden) return { title: "判定", body: `${what}：已掷（暗骰），结果看正文`, fail: !1, canRescue: !1 };
+    let roll = r.die != null ? `${r.die}${r.value ? `/${r.value}` : ""}` : "", head = `${what}${roll ? ` ${roll}` : ""}`;
+    return r.ok ? { title: "判定成功", body: `${head}：${r.tier && r.tier !== "成功" ? r.tier : "成功"}，线索会交给正文`, fail: !1, canRescue: !1 } : {
+      title: "判定失败",
+      body: `${head}：${r.tier === "大失败" ? "大失败" : "失败"}${anyway ? "，失败了也能拿到这条线索" : ""}`,
+      fail: !0,
+      canRescue: !rescue && !anyway
+    };
   }
 
   // src/core/guide.js
@@ -13258,426 +13768,6 @@ ${list.join(`
     return done ? (toast("success", `已写入${done.facts}条线索、${done.conds}个条件。${stageNote(compute, before)}`), !0) : (toast("info", "聊天或项目已切换，没有写入。"), !1);
   }
 
-  // src/core/check.js
-  function cleanFloorText(text2, limit = 3e3) {
-    let out = String(text2 || "");
-    return out = out.replace(/<(think|thinking|reasoning|status|statusbar|状态栏|details)\b[^>]*>[\s\S]*?<\/\1>/gi, ""), out = out.replace(/```[\s\S]*?```/g, ""), out = out.replace(/<\s*剧情推进\s*\/?\s*>/g, ""), out = out.replace(/<[^>\n]{1,80}>/g, ""), out = out.replace(/\n{3,}/g, `
-
-`).trim(), out.length > limit ? out.slice(-limit) : out;
-  }
-  function threadRules(threads) {
-    if (!threads) return null;
-    let clocks = Array.isArray(threads.clocks) ? threads.clocks : [], keys = [], rules = [];
-    if (clocks.length && (keys.push('"clocks":[{"name":"进度钟名称","tick":推进格数,"happened":true或false}]'), rules.push(
-      `clocks 对照剧情索引里的【世界进度钟】（${clocks.map((clock) => `${clock.name} ${clock.filled}/${clock.total}`).join("、")}）：正文里有推动这件事的进展就填正数，每次最多 2 格；玩家出手阻止、使局势缓和就填负数；没有变化就省略。只有正文已经写出这件事发生时，happened 才填 true。`
-    )), threads.hooks && (keys.push('"hooks":["支线名"]'), rules.push(
-      "hooks 填【支线钩子】里标为「待触发」、出现条件已在正文中满足的支线名。支线已经在正文里演出时，把支线名填进 done；支线链只在当前这一步演出时填。"
-    )), threads.newThread) {
-      keys.push('"newThread":{"name":"线名","summary":"一句话概括"}'), rules.push(
-        "玩家在正文里主动开了一条大纲和剧情索引里都没有的线（例如接下新的委托、追查新的线索、发展新的关系）时填 newThread，没有就填 null。"
-      );
-      let ignored = Array.isArray(threads.ignored) ? threads.ignored.slice(-10) : [];
-      ignored.length && rules.push(`以下线已被忽略，不要再填进 newThread：${ignored.join("、")}。`);
-    }
-    return clocks.length && threads.readTo > 0 && rules.push("标有「已读」的楼层上次检测已经读过，clocks 只按之后的新楼层推进；没有新楼层时省略 clocks 的推进。"), keys.length ? { keys, rules, hooks: !!threads.hooks, readTo: clocks.length && Number(threads.readTo) || 0 } : null;
-  }
-  var PERSONA_KEY = '"personas":[{"line":"线名","to":"下一阶段名","floor":依据所在楼号,"reason":"一句话依据"}]', PERSONA_RULE = "personas 对照【人设阶段】：只填正文里已经写出、满足该线「进入条件」的线；to 只能填该线的下一阶段名，不能跳段、不能退回；floor 填依据所在的楼号，reason 写一句依据。没有满足的就填空数组。";
-  function personaLines(items) {
-    return items.map(
-      (item) => `- ${item.group ? `${item.group}·` : ""}${item.name}：当前「${item.from}」；下一阶段「${item.to}」，进入条件：${item.cond || "（未写，按阶段名判断）"}`
-    ).join(`
-`);
-  }
-  var FACT_KEY = '"facts":[{"id":"编号","floor":写出这件事的楼号}]', FACT_RULE = "facts 对照【待确认的事】：只有正文已经明确写出这件事发生了才填，id 原样照抄，floor 填写出它的楼号。只是提到、计划、猜测、角色以为的都不算。没有就填空数组。";
-  function factLines(items) {
-    return items.map((item) => `- ${item.id}：${item.text}`).join(`
-`);
-  }
-  var EMPTY_NAMES = /^(?:无|没有|暂无|空|none|null|nil|n\/a|na|undefined|-|—|无新线|没有新线|没有新的线)$/i, isEmptyName = (name) => EMPTY_NAMES.test(
-    String(name).trim().replace(/[。．.！!？?；;，,、\s]+$/, "").trim()
-  );
-  function buildCheckMessages(unit, index, floors, threads = null, personas2 = null, facts = null) {
-    let extra = threadRules(threads), pItems = Array.isArray(personas2) ? personas2 : [], fItems = Array.isArray(facts) ? facts : [], format = '{"done":["节点名"],"stageDone":true或false,"offTrack":true或false,"offReason":"偏离说明，没有就留空","reason":"一句话"}', system = [
-      "你是剧情进度核对员。根据最近的正文，对照剧情索引判断进度。",
-      "只认正文里已经写出的事件，计划、预告、角色设想不算发生。",
-      "若剧情走了某个节点的「偏转」分支，在 reason 里写明是哪个节点、怎么偏的。",
-      "另外判断剧情是否严重偏离大纲：正文的走向已经和【当前】【下一段】冲突，照原计划写下去会接不上（例如关键人物已死、关键事件已不可能发生、地点或立场彻底改变）。普通的细节出入、走了偏转分支都不算严重偏离。",
-      `只输出一个 JSON 对象，不加说明：${extra || pItems.length || fItems.length ? `${format.slice(0, -1)}${[...extra ? extra.keys : [], ...pItems.length ? [PERSONA_KEY] : [], ...fItems.length ? [FACT_KEY] : []].map((key) => `,${key}`).join("")}}` : format}`,
-      `done 只填${extra && extra.hooks ? "【当前】或【支线钩子】" : "【当前】"}里出现过的节点名，原样照抄；stageDone 表示当前段所有主线节点都已发生、剧情已进入下一段。`,
-      ...extra ? extra.rules : [],
-      ...pItems.length ? [PERSONA_RULE] : [],
-      ...fItems.length ? [FACT_RULE] : []
-    ].join(`
-`), readTo = extra ? extra.readTo : 0, user = [
-      `【剧情索引】
-${index}`,
-      ...pItems.length ? ["", `【人设阶段】
-${personaLines(pItems)}`] : [],
-      ...fItems.length ? ["", `【待确认的事】
-${factLines(fItems)}`] : [],
-      "",
-      "【最近正文】",
-      ...floors.map((floor) => `【第 ${floor.index} 楼${readTo > 0 && floor.index < readTo ? "·已读" : ""}】
-${floor.text}`)
-    ].join(`
-`);
-    return [
-      { role: "system", content: system },
-      { role: "user", content: user }
-    ];
-  }
-  function buildPersonaCheckMessages(items, floors, facts = []) {
-    let fItems = Array.isArray(facts) ? facts : [], system = [
-      items.length ? "你是人设阶段核对员。根据最近的正文，判断下列人设线是否已经进入下一阶段。" : "你是剧情核对员。根据最近的正文，判断下列事情是否已经在正文中发生。",
-      ...items.length && fItems.length ? ["同时判断【待确认的事】是否已经发生。"] : [],
-      "只认正文里已经写出的事件，计划、预告、角色设想不算发生。",
-      `只输出一个 JSON 对象，不加说明：{${[...items.length ? [PERSONA_KEY] : [], ...fItems.length ? [FACT_KEY] : []].join(",")}}`,
-      ...items.length ? [PERSONA_RULE] : [],
-      ...fItems.length ? [FACT_RULE] : []
-    ].join(`
-`), user = [
-      ...items.length ? [`【人设阶段】
-${personaLines(items)}`] : [],
-      ...fItems.length ? [`${items.length ? `
-` : ""}【待确认的事】
-${factLines(fItems)}`] : [],
-      "",
-      "【最近正文】",
-      ...floors.map((floor) => `【第 ${floor.index} 楼】
-${floor.text}`)
-    ].join(`
-`);
-    return [
-      { role: "system", content: system },
-      { role: "user", content: user }
-    ];
-  }
-  function parseCheckReply(text2) {
-    let raw = String(text2 || ""), start = raw.indexOf("{"), end = raw.lastIndexOf("}");
-    if (start < 0 || end <= start) throw new Error("检测结果不是 JSON");
-    let value;
-    try {
-      value = JSON.parse(raw.slice(start, end + 1));
-    } catch {
-      throw new Error("检测结果 JSON 无法解析");
-    }
-    let done = Array.isArray(value.done) ? value.done.map((item) => String(item).trim()).filter(Boolean) : [], flag2 = (item) => item === !0 || item === "true";
-    return {
-      done,
-      stageDone: flag2(value.stageDone),
-      offTrack: flag2(value.offTrack),
-      offReason: String(value.offReason || "").trim(),
-      reason: String(value.reason || "").trim(),
-      clocks: parseClocks(value.clocks, flag2),
-      hooks: names(value.hooks),
-      newThread: parseThread(value.newThread),
-      ...Array.isArray(value.personas) ? { personas: parsePersonaMoves(value.personas) } : {},
-      ...Array.isArray(value.facts) ? { facts: parseFactHits(value.facts) } : {}
-    };
-  }
-  var CLOCK_TICK_MAX = 2, names = (list) => Array.isArray(list) ? list.map((item) => String(item ?? "").trim()).filter(Boolean) : [];
-  function parseClocks(raw, flag2) {
-    return (Array.isArray(raw) ? raw : raw && typeof raw == "object" ? Object.entries(raw).map(([name, item]) => item && typeof item == "object" ? { name, ...item } : { name, tick: item }) : []).filter((item) => item && typeof item == "object").map((item) => {
-      let tick = Math.round(Number(item.tick ?? item.advance ?? item.推进));
-      return {
-        name: String(item.name ?? item.名称 ?? "").trim(),
-        tick: Number.isFinite(tick) ? Math.min(CLOCK_TICK_MAX, tick) : 0,
-        happened: flag2(item.happened ?? item.发生)
-      };
-    }).filter((item) => item.name);
-  }
-  function parseFactHits(raw) {
-    return (Array.isArray(raw) ? raw : []).map((item) => typeof item == "string" ? { id: item } : item).filter((item) => item && typeof item == "object").map((item) => ({ id: String(item.id ?? item.编号 ?? "").trim(), floor: Math.round(Number(item.floor ?? item.楼)) || 0 })).filter((item) => item.id);
-  }
-  function parsePersonaMoves(raw) {
-    return (Array.isArray(raw) ? raw : []).filter((item) => item && typeof item == "object").map((item) => ({
-      line: String(item.line ?? item.线 ?? "").trim(),
-      to: String(item.to ?? item.到 ?? "").trim(),
-      floor: Math.round(Number(item.floor ?? item.楼)) || 0,
-      reason: String(item.reason ?? item.依据 ?? "").trim()
-    })).filter((item) => item.line && item.to);
-  }
-  function parseThread(raw) {
-    if (!raw) return null;
-    let item = typeof raw == "string" ? { name: raw } : raw;
-    if (typeof item != "object") return null;
-    let name = String(item.name ?? item.名称 ?? "").trim().slice(0, 40);
-    return name && !isEmptyName(name) ? {
-      name,
-      summary: String(item.summary ?? item.概括 ?? "").trim().slice(0, 200)
-    } : null;
-  }
-  function buildClueCheckMessages(material, floors, personas2 = []) {
-    let system = [
-      "你是剧情核对员。根据最近的正文，判断下面这个场景里列出的发现是否已经在正文中实际发生。",
-      "只认正文里已经写出的事件：到了地点不等于找到证据，答应提供不等于已经拿到，计划和猜测都不算。",
-      `只输出一个 JSON 对象，不加说明：{"done":["已发生的发现原文"],"stageDone":true或false,"offTrack":false,"offReason":"","reason":"一句话说明依据"${personas2.length ? `,${PERSONA_KEY}` : ""}}`,
-      "done 只能照抄下面【可能的发现】里的条目；stageDone 表示这个场景已经结束。",
-      ...personas2.length ? [PERSONA_RULE] : []
-    ].join(`
-`), user = ["【场景】", material, ...personas2.length ? [`【人设阶段】
-${personaLines(personas2)}`] : [], "", "【最近正文】", ...floors.map((floor) => `【第 ${floor.index} 楼】
-${floor.text}`)].join(`
-`);
-    return [
-      { role: "system", content: system },
-      { role: "user", content: user }
-    ];
-  }
-
-  // src/trpg/trpg-kp-check.js
-  var KP_LOG_MAX = 20, KP_NOTE = "KP判定", QUOTE_MIN = 4, KP_OFF_KINDS = {
-    stray: "正文离开了当前场景，去做了模组外的事",
-    invent: "正文里出现了模组里没有的人物、地点或线索",
-    skip: "正文跳过了本该进行的内容",
-    reveal: "正文提前说破了后面才该揭晓的内容"
-  }, KP_OFF_GENERIC = "正文走向和当前阶段的内容对不上", kpOffText = (kind) => KP_OFF_KINDS[kind] || KP_OFF_GENERIC, kpAutoOn = (settings) => !settings || settings.trpgAutoCheck !== !1;
-  function recentTwo(messages, limit = 4e3) {
-    let out = [];
-    for (let i = (messages || []).length - 1; i >= 0 && out.length < 2; i -= 1) {
-      let m = messages[i];
-      if (!m || m.is_system) continue;
-      let text2 = cleanFloorText(m.mes, limit);
-      text2 && out.unshift({ user: !!m.is_user, text: text2 });
-    }
-    return out;
-  }
-  function kpCandidates({ prog, chat, floor, state, snap: snap2, effective, checks }) {
-    let msg = chat && chat[floor];
-    if (!msg || msg.is_user) return [];
-    let entry = (Array.isArray(prog && prog.clueCandidates) ? prog.clueCandidates : []).find(
-      (x) => x.i === floor && x.swipe === (Number(msg.swipe_id) || 0) && String(x.stamp ?? "") === String(msg.send_date ?? "")
-    ), out = [], seen = /* @__PURE__ */ new Set();
-    for (let c of entry && entry.candidates || []) {
-      if (!c || !c.fact || seen.has(c.fact)) continue;
-      let hit = kpFind(state, c.fact);
-      if (!hit || effective(c.fact, snap2).confirmed) continue;
-      let d = hit.discovery, gate = d.check ? checkLine(d, checks) : null;
-      gate && !gate.reveal || (seen.add(c.fact), out.push({ fact: c.fact, text: d.text, record: c.record || d.record || "" }));
-    }
-    return out;
-  }
-  function kpPendingSays({ compiled, state, conds }) {
-    let done = new Set(Object.keys(conds || {}).map(sayKey)), out = [], add = (cond) => sayAtoms(cond).forEach((t) => !done.has(sayKey(t)) && !out.includes(t) && out.push(t)), units = compiled.units || [];
-    for (let [i, unit] of units.entries()) {
-      let st9 = state.stageStates.get(unit.id);
-      if (!st9 || st9.entered.v !== "true" || st9.done) continue;
-      add(unit.clue.end);
-      let next = units[i + 1];
-      next && next.clue && next.clue.hasEnter && add(next.clue.enter);
-      for (let ns of state.nodeStates)
-        ns.node.unit !== unit || ns.skipped || ns.disabled || (ns.status === "locked" && add(ns.node.open), (ns.status === "available" || ns.status === "active") && add(ns.node.done));
-    }
-    return out;
-  }
-  function kpScenes(state) {
-    return state.nodeStates.filter((ns) => (ns.status === "available" || ns.status === "active") && !ns.disabled && ns.node.uid).map((ns) => ({ uid: ns.node.uid, name: ns.node.name || ns.node.uid, entry: String(ns.node.item && ns.node.item.入口 || "") }));
-  }
-  function kpCheckMessages({ recent, candidates, says, scenes, stage, rules, labelOf = (id) => id }) {
-    return [
-      {
-        role: "system",
-        content: [
-          "你是跑团模组的 KP 助手。读最近的正文，判断下面列出的条目有没有真的发生。只判断，不续写。",
-          "规则：",
-          "1. 只判断列出来的条目，不要判断别的，也不要补充没列出来的。",
-          "2. pass 为 true 时，quote 必须是从正文里原样抄下来的一句话作为证据；抄不出原句，就判 false。",
-          "3. 线索的「记录」是判断标准，不要放宽。正文只是暗示、猜测、路过、还没真正到手的，判 false。",
-          "4. 条件按字面判断，正文里已经发生、已经成立才算。",
-          "5. scene：这一轮故事主要发生的场景，填「场景」列表里的编号；不确定就留空。",
-          "6. offTrack：正文明显偏离了当前阶段的模组内容才算 true；玩家做了计划外的小事不算。偏离时 offKind 必须从四种里选一种：stray（离开了当前场景，去做模组外的事）、invent（编了模组里没有的重要人物、地点、线索）、skip（跳过了该进行的内容）、reveal（提前说破了后面的真相）。offReason 用玩家看得到的话写，不写具体真相；pullBack 是给正文的一小段拉回建议。offReason 和 pullBack 只能引用最近正文里已经写出来的内容，不提作者视角里玩家还没拿到的东西。没偏离时 offKind、offReason、pullBack 留空。",
-          "严格输出一个 JSON，不要写别的：",
-          '{"facts":[{"id":"编号","pass":true,"quote":"正文原句","why":"一句话"}],"conds":[{"text":"条件原文","pass":true,"quote":"正文原句"}],"scene":"节点编号或空","offTrack":false,"offKind":"","offReason":"","pullBack":""}',
-          "没有要判断的线索或条件时，facts、conds 写空数组。"
-        ].join(`
-`)
-      },
-      {
-        role: "user",
-        content: [
-          `【最近正文】
-${recent.map((m) => `${m.user ? "玩家" : "正文"}：${m.text}`).join(`
-
-`) || "（没有）"}`,
-          candidates.length ? `【要判断的线索】
-${candidates.map((c) => `- id ${c.fact}（${labelOf(c.fact)}）：${c.text}${c.record ? `
-  记录标准：${c.record}` : ""}`).join(`
-`)}` : `【要判断的线索】
-（没有）`,
-          says.length ? `【要判断的条件】
-${says.map((t) => `- ${t}`).join(`
-`)}` : `【要判断的条件】
-（没有）`,
-          scenes.length ? `【场景】
-${scenes.map((s) => `- ${s.uid}：${s.name}${s.entry ? `（${s.entry}）` : ""}`).join(`
-`)}` : "",
-          `【当前阶段的模组内容（作者视角）】
-${stage || "（没有进行中的阶段）"}`,
-          rules && `【KP规则】
-${rules}`
-        ].filter(Boolean).join(`
-
-`)
-      }
-    ];
-  }
-  var flag = (v) => v === !0 || v === "true", str2 = (v) => String(v ?? "").trim(), offKindOf = (v) => Object.hasOwn(KP_OFF_KINDS, str2(v)) ? str2(v) : "";
-  function parseKpReply(text2) {
-    let raw = String(text2 || ""), a = raw.indexOf("{"), b = raw.lastIndexOf("}");
-    if (a < 0 || b <= a) throw new Error("检测结果不是 JSON");
-    let v;
-    try {
-      v = JSON.parse(raw.slice(a, b + 1));
-    } catch {
-      throw new Error("检测结果 JSON 无法解析");
-    }
-    let list = (x) => Array.isArray(x) ? x.filter((i) => i && typeof i == "object") : [];
-    return {
-      facts: list(v.facts).map((x) => ({ id: str2(x.id), pass: flag(x.pass), quote: str2(x.quote), why: str2(x.why) })),
-      conds: list(v.conds).map((x) => ({ text: str2(x.text), pass: flag(x.pass), quote: str2(x.quote), why: str2(x.why) })),
-      scene: str2(v.scene),
-      offTrack: flag(v.offTrack),
-      offKind: offKindOf(v.offKind),
-      offReason: str2(v.offReason),
-      pullBack: str2(v.pullBack)
-    };
-  }
-  function quoteIn(quote, hay) {
-    let q = sayKey(quote);
-    return q.length >= QUOTE_MIN && sayKey(hay).includes(q);
-  }
-  function verifyKp(parsed, { candidates, says, scenes, recent }) {
-    let all = recent.map((m) => m.text).join(`
-`), ai = recent.filter((m) => !m.user).map((m) => m.text).join(`
-`), facts = [];
-    for (let c of candidates) {
-      let r = parsed.facts.find((x) => x.id === c.fact);
-      if (!r) {
-        facts.push({ id: c.fact, ok: !1, why: "", note: "检测没有给出结论", quote: "" });
-        continue;
-      }
-      let ok = r.pass && quoteIn(r.quote, ai);
-      facts.push({ id: c.fact, ok, why: r.why, quote: r.quote, note: ok ? "" : r.pass ? "给出的原句在正文里找不到" : "正文里没有拿到" });
-    }
-    let conds = [];
-    for (let text2 of says) {
-      let r = parsed.conds.find((x) => sayKey(x.text) === sayKey(text2));
-      if (!r) {
-        conds.push({ text: text2, ok: !1, why: "", note: "检测没有给出结论", quote: "" });
-        continue;
-      }
-      let ok = r.pass && quoteIn(r.quote, all);
-      conds.push({ text: text2, ok, why: r.why, quote: r.quote, note: ok ? "" : r.pass ? "给出的原句在正文里找不到" : "还没成立" });
-    }
-    let scene = scenes.find((s) => s.uid === parsed.scene);
-    return {
-      facts,
-      conds,
-      scene: scene ? scene.uid : "",
-      sceneName: scene ? scene.name : "",
-      offTrack: parsed.offTrack,
-      offKind: parsed.offKind,
-      offReason: parsed.offReason,
-      pullBack: parsed.pullBack
-    };
-  }
-  var RECHECK_FLOORS = [10, 20, 30], RECHECK_MAX = 60, AUTO_VERIFY_STEPS = [5, 10, 20], RECHECK_FACT_MAX = 40;
-  function recentFloors(messages, n, limit = 4e3, total = 3e4) {
-    let out = [], sum = 0;
-    for (let i = (messages || []).length - 1; i >= 0 && out.length < n; i -= 1) {
-      let m = messages[i];
-      if (!m || m.is_system) continue;
-      let text2 = cleanFloorText(m.mes, limit);
-      if (text2) {
-        if (out.length && sum + text2.length > total) break;
-        sum += text2.length, out.unshift({ user: !!m.is_user, text: text2, floor: i });
-      }
-    }
-    return out;
-  }
-  function kpRecheckCandidates({ compiled, state, snap: snap2, effective, checks }) {
-    let out = [], seen = /* @__PURE__ */ new Set();
-    for (let unit of compiled.units || []) {
-      let st9 = state.stageStates.get(unit.id);
-      if (!(!st9 || st9.entered.v !== "true" || st9.done)) {
-        for (let ns of state.nodeStates)
-          if (!(ns.node.unit !== unit || ns.skipped || ns.disabled || ns.status === "done"))
-            for (let d of discoveryList2(isPlainObject(ns.node.item) ? ns.node.item : {})) {
-              if (!d.fact || seen.has(d.fact) || effective(d.fact, snap2).confirmed) continue;
-              let gate = d.check ? checkLine(d, checks) : null;
-              gate && !gate.reveal || (seen.add(d.fact), out.push({ fact: d.fact, text: d.text, record: d.record || "", stage: unit.stage ? stageLabel(unit.stage.key) : "", node: ns.node.name || ns.node.uid || "" }));
-            }
-      }
-    }
-    return out.slice(0, RECHECK_FACT_MAX);
-  }
-  function kpRecheckMessages({ recent, candidates, says, stage, rules, labelOf = (id) => id }) {
-    return [
-      {
-        role: "system",
-        content: [
-          "你是跑团模组的 KP 助手。玩家觉得阶段推进卡住了，请回头读下面这几楼正文，逐条判断列出的线索和条件是不是已经在这段正文里发生过。只判断，不续写。",
-          "规则：",
-          "1. 只判断列出来的条目，不要判断别的，也不要补充没列出来的。",
-          "2. pass 为 true 时，quote 必须是从正文里原样抄下来的一句话作为证据；抄不出原句，就判 false。",
-          "3. 线索的「记录」是判断标准，不要放宽。正文只是暗示、猜测、路过、还没真正到手的，判 false。",
-          "4. 条件按字面判断，正文里已经发生、已经成立才算。",
-          "严格输出一个 JSON，不要写别的：",
-          '{"facts":[{"id":"编号","pass":true,"quote":"正文原句","why":"一句话"}],"conds":[{"text":"条件原文","pass":true,"quote":"正文原句"}]}',
-          "没有要判断的线索或条件时，facts、conds 写空数组。"
-        ].join(`
-`)
-      },
-      {
-        role: "user",
-        content: [
-          `【正文（第${recent.length ? recent[0].floor : 0}–${recent.length ? recent[recent.length - 1].floor : 0}楼）】
-${recent.map((m) => `[第${m.floor}楼] ${m.user ? "玩家" : "正文"}：${m.text}`).join(`
-
-`) || "（没有）"}`,
-          candidates.length ? `【要判断的线索】
-${candidates.map((c) => `- id ${c.fact}（${labelOf(c.fact)}，${c.stage}·${c.node}）：${c.text}${c.record ? `
-  记录标准：${c.record}` : ""}`).join(`
-`)}` : `【要判断的线索】
-（没有）`,
-          says.length ? `【要判断的条件】
-${says.map((t) => `- ${t}`).join(`
-`)}` : `【要判断的条件】
-（没有）`,
-          `【进行中阶段的模组内容（作者视角）】
-${stage || "（没有）"}`,
-          rules && `【KP规则】
-${rules}`
-        ].filter(Boolean).join(`
-
-`)
-      }
-    ];
-  }
-  function kpFactLabel(labels, id, text2) {
-    return labels && labels[id] && labels[id].label || (String(text2 || "").length > 12 ? `${String(text2).slice(0, 12)}…` : String(text2 || "") || "一条线索");
-  }
-  function kpLogEntry({ floor, at = Date.now(), result: result2, labelOf, scenes, off }) {
-    return {
-      at,
-      floor,
-      facts: result2.facts.map((x) => ({ label: labelOf(x.id), ok: x.ok, why: x.ok ? x.why : x.note || x.why, quote: x.ok ? x.quote : "" })),
-      conds: result2.conds.map((x) => ({ text: x.text, ok: x.ok, why: x.ok ? x.why : x.note || x.why, quote: x.ok ? x.quote : "" })),
-      scene: result2.sceneName || "",
-      off: !!off,
-      offKind: result2.offTrack && result2.offKind || "",
-      offReason: result2.offTrack ? result2.offReason : ""
-    };
-  }
-  function pushLog(log, entry) {
-    return [...Array.isArray(log) ? log : [], entry].slice(-KP_LOG_MAX);
-  }
-  function kpSummary(entry) {
-    if (!entry) return "";
-    let got2 = entry.facts.filter((x) => x.ok).length;
-    return entry.recheck != null ? `重新核实第${entry.recheck}–${entry.floor}楼 · 拿到${got2}条线索 · ${entry.conds.filter((x) => x.ok).length}个条件成立` : `拿到${got2}条线索 · ${entry.scene ? `场景${entry.scene}` : "场景没变"} · ${entry.off ? "偏离了模组" : "未偏离"}`;
-  }
-
   // src/trpg/trpg-kp-run.js
   var CHECK_RETRIES = 3, RETRY_GAP_MS = 2e3;
   function createKpRunner(deps) {
@@ -13918,7 +14008,37 @@ ${rules}`
       for (let id of ids) deps.clue.act({ kind: "fact", target: id, value: "", note: "清空KP记录" });
       return saveKp2({ conds: {}, log: [], offMuted: "" }), lastKey = "", deps.clue.invalidate("kp-clear"), ids.length;
     }
-    let api = { run, recheck, applyRecheck, clearKp, autoVerifyEvery, setAutoVerify, reset: () => (again = !1, lastKey = "") };
+    function rollNotice() {
+      if (!deps.getProject()) return;
+      let chat = chatMessages(), checks = trpgCheckResults(chat), at = checks.lastUser, msg = chat[at];
+      if (!msg) return;
+      let c = deps.clue.compute(), known = /* @__PURE__ */ new Set(), seen = Array.isArray(kpOf().rollSeen) ? kpOf().rollSeen : [], stamp = `${at}:${msg.send_date ?? ""}`, fresh = [];
+      if (c) for (let ns of c.state.nodeStates) for (let d of discoveryList2(isPlainObject(ns.node.item) ? ns.node.item : {})) d.fact && known.add(d.fact);
+      for (let [code, r] of Object.entries(checks)) r.fresh && !seen.includes(`${stamp}:${code}`) && fresh.push([code, r]);
+      let probs = checkProblems(checks, c ? known : null).filter((p) => p.at === at && !seen.includes(`${stamp}:!${p.kind}`));
+      if (c) {
+        let bad = fresh.filter(([code]) => !isKnownCode(code, known));
+        bad.length && !probs.some((p) => p.kind === "badcode") && probs.push({ at, kind: "badcode", skill: bad[0][1].skill, code: bad[0][0] }), fresh = fresh.filter(([code]) => isKnownCode(code, known) && !/^SAN$/i.test(code));
+      }
+      if (!fresh.length && !probs.length) return;
+      if (saveKp2({ rollSeen: [...seen, ...Object.keys(checks).filter((code) => checks[code].fresh).map((code) => `${stamp}:${code}`), ...probs.map((p) => `${stamp}:!${p.kind}`)].slice(-40) }), probs.length && !fresh.length)
+        return notice.show({ id: "kp-roll", title: "判定没算上", body: probs.map(problemText).join("；"), actions: [{ label: "知道了", run: () => {
+        } }] });
+      let parts = fresh.map(([code, r]) => {
+        let rescue = /-KP$/.test(code), base = code.replace(/-KP$/, ""), hit = c && kpFind(c.state, base), check = hit && hit.discovery.check;
+        return { base, ...rollNoticeText(r, { hidden: !!(check && check.hidden), rescue, anyway: !!(check && check.fail && GOT_ANYWAY.test(check.fail)) }) };
+      }), rescueOf = parts.find((p) => p.canRescue && !(c && effectiveFact2(p.base, c.snap, c.prog).confirmed)), body = [...parts.map((p) => p.body), ...probs.map(problemText)].join("；"), actions12 = [];
+      rescueOf && actions12.push({
+        label: "补救检定",
+        primary: !0,
+        run: () => {
+          let now = chatMessages(), tail = now[now.length - 1];
+          saveKp2({ push: { fact: rescueOf.base, level: 2, floor: aiFloorCount2(now) + (tail && tail.is_user ? 1 : 0) } });
+        }
+      }), actions12.push({ label: "知道了", run: () => {
+      } }), notice.show({ id: "kp-roll", title: parts.length === 1 ? parts[0].title : "判定结果", body, actions: actions12, ...rescueOf ? {} : { timeout: 8e3 } });
+    }
+    let api = { run, recheck, applyRecheck, clearKp, autoVerifyEvery, setAutoVerify, rollNotice, reset: () => (again = !1, lastKey = "") };
     return api;
   }
 
@@ -14657,6 +14777,11 @@ ${horrorGuide}` : "",
           payload.chatLore.push(...virtualEntries({ recordClue: !0 }));
         } catch (error) {
           console.error("[剧情注入器] 注入失败", error);
+        }
+        try {
+          generating && isTrpg(activeProject()) && kpRunner.rollNotice();
+        } catch (error) {
+          log(`判定小卡出错：${error.message}`);
         }
       }
     }
@@ -19473,6 +19598,28 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
     }
   };
 
+  // src/trpg/trpg-check-card.js
+  var STATUS = {
+    wait: ["", "等正文出检定"],
+    roll: ["is-accent", "等你掷骰"],
+    ok: ["is-ok", "成功"],
+    fail: ["is-warn", "失败"],
+    got: ["is-ok", "已拿到"]
+  }, CLUE = { confirmed: "线索已确认", offered: "已交给正文", pending: "线索还没确认" };
+  function rowHtml(r) {
+    let [cls, text2] = STATUS[r.status], meta2 = [r.node, r.roll].filter(Boolean), tail = [];
+    return r.status === "fail" && tail.push(r.kp ? `补救检定${r.kp.ok ? "成功" : "失败"}` : r.anyway ? "失败也能拿到线索" : "这次没拿到线索"), r.clue && tail.push(CLUE[r.clue]), `<div class="pi-ck-row"><span class="pi-badge ${cls}">${text2}</span><span class="pi-ck-what">${esc(r.what)}${r.hidden ? '<span class="pi-meta">暗骰</span>' : ""}</span><span class="pi-meta pi-ck-meta">${esc(meta2.join(" · "))}</span>${r.label || tail.length ? `<span class="pi-meta pi-ck-tail">${esc([r.label ? `「${r.label}」` : "", ...tail].filter(Boolean).join("，"))}</span>` : ""}</div>`;
+  }
+  function checkCard(view, project, c) {
+    let checks = trpgCheckResults(chatMessages()), labels = isPlainObject(project.clue.labels) ? project.clue.labels : {}, board = trpgCheckBoard({ state: c.state, snap: c.snap, prog: c.prog, checks, labels });
+    if (!board.rows.length && !board.problems.length) return "";
+    let live2 = board.rows.filter((r) => !r.done), done = board.rows.filter((r) => r.done);
+    return `<div class="pi-card pi-ck"><h3>判定</h3>
+        ${board.problems.map((p) => `<p class="pi-hint is-warn">${esc(problemText(p))}</p>`).join("")}
+        ${live2.map(rowHtml).join("") || (board.rows.length ? '<p class="pi-hint">眼下没有等着的判定。</p>' : "")}
+        ${done.length ? `<details class="pi-fold"><summary><b>已完成（${done.length}）</b></summary>${done.map(rowHtml).join("")}</details>` : ""}</div>`;
+  }
+
   // src/trpg/trpg-long-import.js
   var trpg_long_import_exports = {};
   __export(trpg_long_import_exports, {
@@ -21098,7 +21245,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
         <p class="pi-meta pi-rl-foot">${clueEntry && clueEntry.content ? `本轮注入约${estimateTokens(clueEntry.content)} token` : `本轮注入内容为空${clueEntry && clueEntry.reason && c.snap.api ? `（${esc(clueEntry.reason)}）` : ""}`}${last ? ` · 上次注入${new Date(last.at).toLocaleTimeString("zh-CN", { hour12: !1 })}，${last.chars}字` : ""}${d.lastTableUpdate ? ` · 表格${new Date(d.lastTableUpdate).toLocaleTimeString("zh-CN", { hour12: !1 })}更新` : ""}</p></div>`, prog = `<div class="pi-card"><h3>进度<span class="pi-spacer"></span><button type="button" class="pi-icon-btn" data-act="run-prog-menu" title="更多" aria-label="更多">${ICONS.more}</button></h3>
         ${lineCard2(c, project)}
         ${groups.length ? `<div class="pi-tl">${groups.join("")}</div>` : '<p class="pi-hint">模组为空。</p>'}</div>`;
-    return `${cur}${isTrpg(project) ? kpCard(view, project, c, d) : ""}${prog}${settings}`;
+    return `${cur}${isTrpg(project) ? checkCard(view, project, c) + kpCard(view, project, c, d) : ""}${prog}${settings}`;
   }
   function clueOpCount(runtime) {
     return normalizeClueOps2(runtime.progress().clue).ops.length;
@@ -30496,7 +30643,7 @@ ${suffix.trim()}` : body;
   }
 
   // src/index.js
-  var VERSION = "0.4.2", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.4.3", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")
