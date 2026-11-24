@@ -35,6 +35,7 @@ import * as trpgImport from '../trpg/trpg-long-import-ui.js';
 import * as trpgReview from '../trpg/trpg-import-review.js';
 import * as trpgLong from '../trpg/trpg-long-import.js';
 import { isTrpg } from '../trpg/trpg.js';
+import { sliceActions } from '../trpg/trpg-slice-ui.js';
 import { planLines, prepareReplace, commitReplace } from '../trpg/trpg-replace.js';
 import { routeActions, viewIsTrpg, outlineWord } from '../trpg/trpg-route.js';
 import { importJobKind } from '../core/long-import.js';
@@ -1091,6 +1092,8 @@ async function writeVolumes(view, n, request, onConfirmed = null) {
 export const actions = {
     ...genActions,
     ...importActions,
+    // 跑团模组的原文切片：开关、调整、补全原文（逻辑在 trpg/trpg-slice-ui.js）
+    'kp-slices': (view) => sliceActions['kp-slices'](view),
     // 大纲页顶部「审阅修改」打开所有线（从选中的线或第一条开始）；选中一条线时的按钮只打开这一条。
     async 'review-open'(view, target) {
         const project = view.project();
@@ -1361,6 +1364,7 @@ export const actions = {
                     ? [
                           { label: '替换当前模组（选文件）', value: 'replace-file' },
                           { label: '替换当前模组（粘贴）', value: 'replace-paste' },
+                          { label: '原文切片…', value: 'kp-slices' },
                       ]
                     : []),
                 { label: '从世界书导入', value: 'import-wb' },

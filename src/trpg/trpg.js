@@ -5,6 +5,7 @@
 //   · 从模组原文整理「KP规则:」设定分块
 // 线索模式项目没有 trpg、发现没有「判定」，下面这些函数都原样返回空，输出与原来逐字一致。
 import { isPlainObject } from '../core/outline.js';
+import { normalizeSlices } from './trpg-slices.js';
 
 export const TRPG_RULES = [{ value: 'coc7', label: 'CoC 7 版' }];
 
@@ -12,7 +13,14 @@ export const KP_BLOCK = 'KP规则';
 
 export function normalizeTrpg(value) {
     if (!isPlainObject(value)) return null;
-    return { on: value.on !== !1, rule: TRPG_RULES.some((r) => r.value === value.rule) ? value.rule : 'coc7' };
+    let slices = normalizeSlices(value.slices);
+    // slices：模组原文切片（trpg-slices.js）；sliceOff：用户关掉了「使用原文切片」。没有就不带这两个键，老项目不变。
+    return {
+        on: value.on !== !1,
+        rule: TRPG_RULES.some((r) => r.value === value.rule) ? value.rule : 'coc7',
+        ...(slices.length ? { slices } : {}),
+        ...(value.sliceOff === !0 ? { sliceOff: !0 } : {}),
+    };
 }
 
 export function isTrpg(project) {

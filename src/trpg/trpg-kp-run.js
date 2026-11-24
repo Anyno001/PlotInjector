@@ -13,6 +13,7 @@ import { aiFloorCount, KP_LEVELS, kpPushTarget, kpFind } from './trpg-kp.js';
 import { discoveryList } from './trpg-clue-project.js';
 import { checkProblems, problemText, rollNoticeText, isKnownCode } from './trpg-check-board.js';
 import { steerContext } from './trpg-steer.js';
+import { seedCandidates, plantedSeeds } from './trpg-slices.js';
 import { confirmRecheck, recheckHits } from './trpg-kp-verify-ui.js';
 import {
     KP_NOTE,
@@ -79,7 +80,10 @@ export function createKpRunner(deps) {
                 labels = isPlainObject(project.clue.labels) ? project.clue.labels : {},
                 labelOf = (id) => kpFactLabel(labels, id, (candidates.find((x) => x.fact === id) || {}).text),
                 ctx = steerContext(project, c),
-                messages = kpCheckMessages({ recent, candidates, says, scenes, stage: ctx.stage, rules: ctx.rules, labelOf });
+                sl = project.trpg && !project.trpg.sliceOff && project.trpg.slices ? project.trpg.slices : [],
+                // 伏笔随同一次检测一起判，不另发请求
+                seeds = sl.length ? seedCandidates({ prog: deps.getProgress(), chat, floor: at, slices: sl, planted: plantedSeeds(kpOf().seeds, chat) }) : [],
+                messages = kpCheckMessages({ recent, candidates, says, scenes, stage: ctx.stage, rules: ctx.rules, labelOf, seeds });
             log(`跑团检测：第 ${at} 楼，${candidates.length} 条线索、${says.length} 个条件`);
             let parsed = null;
             for (let attempt = 0; ; attempt += 1)
@@ -98,7 +102,7 @@ export function createKpRunner(deps) {
             if (!now || now.send_date !== msg.send_date || (Number(now.swipe_id) || 0) !== (Number(msg.swipe_id) || 0))
                 return (log('跑团检测返回时这一楼已经变了，结果丢弃'), null);
             notice.hide('checkfail');
-            let result = verifyKp(parsed, { candidates, says, scenes, recent }),
+            let result = verifyKp(parsed, { candidates, says, scenes, recent, seeds }),
                 prog0 = c.prog.factOverrides || {};
             // 通过的线索：已有人工记录（或 KP 之前判过）的不覆盖
             let recorded = [];
@@ -125,10 +129,13 @@ export function createKpRunner(deps) {
                 muted = !!stage && kp.offMuted === stage,
                 conds = { ...(kp.conds || {}) };
             for (let x of result.conds) x.ok && (conds[x.text] = { floor: at, quote: x.quote });
+            // 埋下的伏笔：记楼层、swipe、发送时间，重 roll 或删楼后读取时对不上就当没埋
+            let seedsDone = { ...(kp.seeds || {}) };
+            for (let x of result.seeds || []) x.ok && (seedsDone[x.id] = { floor: at, swipe: Number(msg.swipe_id) || 0, stamp: String(msg.send_date ?? ''), quote: x.quote });
             // 判断以上面的进度记录为准；表格只是镜像，写不进去只记日志
             let tables = await mirrorTables(recorded, project, t, iso0);
             if (!deps.ticketValid(t)) return (log('跑团检测写表后聊天或项目已切换，不再保存日志'), null);
-            saveKp({ conds, log: pushLog(kp.log, { ...kpLogEntry({ floor: at, result, labelOf, off: result.offTrack, checkOf: (id) => !!(kpFind(c.state, id) || {}).discovery?.check, failed: kpFailedChecks({ state: c.state, snap: c.snap, effective: (id, snap) => effectiveFact(id, snap, c.prog), checks }) }), ...(tables.length ? { tables } : {}) }) });
+            saveKp({ conds, ...(result.seeds ? { seeds: seedsDone } : {}), log: pushLog(kp.log, { ...kpLogEntry({ floor: at, result, labelOf, off: result.offTrack, checkOf: (id) => !!(kpFind(c.state, id) || {}).discovery?.check, failed: kpFailedChecks({ state: c.state, snap: c.snap, effective: (id, snap) => effectiveFact(id, snap, c.prog), checks }) }), ...(tables.length ? { tables } : {}) }) });
             deps.clue.invalidate('kp-check');
             result.offTrack && !muted && offerOffTrack({ result, stage });
             log(`跑团检测完成：拿到 ${result.facts.filter((x) => x.ok).length} 条线索，${result.conds.filter((x) => x.ok).length} 个条件成立${result.offTrack ? '，偏离模组' : ''}`);

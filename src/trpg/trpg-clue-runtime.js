@@ -61,6 +61,7 @@ import { isClueMode, withNodeIds } from './trpg-clue-model.js';
 import { isPlainObject } from '../core/outline.js';
 
 import { requestToText, auditRequest } from './trpg-clue-audit.js';
+import { sliceContext } from './trpg-slices.js';
 
 export const CLUE_LOG_MAX = 40;
 
@@ -784,6 +785,7 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
                 push: prog && prog.trpgKp && prog.trpgKp.push,
                 floors: aiFloors(),
                 timeline: trpgTimeline(prog),
+                slices: sliceContext({ project: project(), state: c.state, snap: c.snap, prog, clueProg: c.prog, chat: chatMessages() }),
             }));
         return {
             ...out,
@@ -838,7 +840,7 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
         pendingCandidates =
             out.used &&
             (out.content || lineOnly) &&
-            ((out.used.candidates || []).length || (out.used.scenes || []).length || (out.used.recognize && out.used.recognize.length))
+            ((out.used.candidates || []).length || (out.used.scenes || []).length || (out.used.recognize && out.used.recognize.length) || (out.used.slices || []).length)
                 ? makePending(lineOnly ? { ...out.used, candidates: [], scenes: [] } : out.used)
                 : null;
     }
@@ -853,6 +855,7 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
             candidates: (used.candidates || []).map((c) => ({ fact: c.fact, record: c.record || '' })),
             scenes: (used.scenes || []).map((s) => ({ uid: s.uid, entry: s.entry || '', place: s.place || '', focus: !!s.focus })),
             lines: used.recognize ? { recognize: used.recognize, offer: used.offer || '' } : null,
+            slices: (used.slices || []).slice(),
             ticket: round ? round.ticket : ticket(),
         };
     }
@@ -876,6 +879,7 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
             focus: pc.focus,
             candidates: pc.candidates,
             scenes: pc.scenes,
+            ...(pc.slices && pc.slices.length ? { slices: pc.slices } : {}),
         }),
             setProgress({ ...prog, clueCandidates: list.slice(-CANDIDATE_KEEP), clueOffered: [...offered] }, 'clue-candidates'));
     }

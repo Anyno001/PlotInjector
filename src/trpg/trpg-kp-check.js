@@ -7,6 +7,7 @@ import { sayAtoms, sayKey } from './trpg-clue-rules.js';
 import { kpFind } from './trpg-kp.js';
 import { discoveryList } from './trpg-clue-project.js';
 import { isPlainObject, stageLabel } from '../core/outline.js';
+import { verifySeeds } from './trpg-slices.js';
 
 export const KP_LOG_MAX = 20;
 // 写进线索操作的备注：用来在 factOverrides 里认出「这条是 KP 判的」
@@ -87,7 +88,11 @@ export function kpScenes(state) {
         .map((ns) => ({ uid: ns.node.uid, name: ns.node.name || ns.node.uid, entry: String((ns.node.item && ns.node.item.入口) || '') }));
 }
 
-export function kpCheckMessages({ recent, candidates, says, scenes, stage, rules, labelOf = (id) => id }) {
+export function kpCheckMessages({ recent, candidates, says, scenes, stage, rules, labelOf = (id) => id, seeds = [] }) {
+    // 有伏笔要判时才多一条规则和一节；没有时提示词与原来逐字一致
+    let seedRule = seeds.length
+        ? '7. seeds：「要判断的伏笔」只有正文里真的写出来了才算 pass（不必揭晓、不必解释，写到那个细节就行），quote 同样必须原样抄正文；没写到就判 false。'
+        : '';
     return [
         {
             role: 'system',
@@ -100,10 +105,15 @@ export function kpCheckMessages({ recent, candidates, says, scenes, stage, rules
                 '4. 条件按字面判断，正文里已经发生、已经成立才算。',
                 '5. scene：这一轮故事主要发生的场景，填「场景」列表里的编号；不确定就留空。',
                 '6. offTrack：正文明显偏离了当前阶段的模组内容才算 true；玩家做了计划外的小事不算。偏离时 offKind 必须从四种里选一种：stray（离开了当前场景，去做模组外的事）、invent（编了模组里没有的重要人物、地点、线索）、skip（跳过了该进行的内容）、reveal（提前说破了后面的真相）。offReason 用玩家看得到的话写，不写具体真相；pullBack 是给正文的一小段拉回建议。offReason 和 pullBack 只能引用最近正文里已经写出来的内容，不提作者视角里玩家还没拿到的东西。没偏离时 offKind、offReason、pullBack 留空。',
+                seedRule,
                 '严格输出一个 JSON，不要写别的：',
-                '{"facts":[{"id":"编号","pass":true,"quote":"正文原句","why":"一句话"}],"conds":[{"text":"条件原文","pass":true,"quote":"正文原句"}],"scene":"节点编号或空","offTrack":false,"offKind":"","offReason":"","pullBack":""}',
+                seeds.length
+                    ? '{"facts":[{"id":"编号","pass":true,"quote":"正文原句","why":"一句话"}],"conds":[{"text":"条件原文","pass":true,"quote":"正文原句"}],"seeds":[{"id":"伏笔编号","pass":true,"quote":"正文原句"}],"scene":"节点编号或空","offTrack":false,"offKind":"","offReason":"","pullBack":""}'
+                    : '{"facts":[{"id":"编号","pass":true,"quote":"正文原句","why":"一句话"}],"conds":[{"text":"条件原文","pass":true,"quote":"正文原句"}],"scene":"节点编号或空","offTrack":false,"offKind":"","offReason":"","pullBack":""}',
                 '没有要判断的线索或条件时，facts、conds 写空数组。',
-            ].join('\n'),
+            ]
+                .filter(Boolean)
+                .join('\n'),
         },
         {
             role: 'user',
@@ -113,6 +123,7 @@ export function kpCheckMessages({ recent, candidates, says, scenes, stage, rules
                     ? `【要判断的线索】\n${candidates.map((c) => `- id ${c.fact}（${labelOf(c.fact)}）：${c.text}${c.record ? `\n  记录标准：${c.record}` : ''}`).join('\n')}`
                     : '【要判断的线索】\n（没有）',
                 says.length ? `【要判断的条件】\n${says.map((t) => `- ${t}`).join('\n')}` : '【要判断的条件】\n（没有）',
+                seeds.length ? `【要判断的伏笔】\n${seeds.map((s) => `- id ${s.id}：${s.hint}`).join('\n')}` : '',
                 scenes.length ? `【场景】\n${scenes.map((s) => `- ${s.uid}：${s.name}${s.entry ? `（${s.entry}）` : ''}`).join('\n')}` : '',
                 `【当前阶段的模组内容（作者视角）】\n${stage || '（没有进行中的阶段）'}`,
                 rules && `【KP规则】\n${rules}`,
@@ -143,6 +154,7 @@ export function parseKpReply(text) {
     return {
         facts: list(v.facts).map((x) => ({ id: str(x.id), pass: flag(x.pass), quote: str(x.quote), why: str(x.why) })),
         conds: list(v.conds).map((x) => ({ text: str(x.text), pass: flag(x.pass), quote: str(x.quote), why: str(x.why) })),
+        seeds: list(v.seeds).map((x) => ({ id: str(x.id), pass: flag(x.pass), quote: str(x.quote) })),
         scene: str(v.scene),
         offTrack: flag(v.offTrack),
         offKind: offKindOf(v.offKind),
@@ -158,7 +170,7 @@ export function quoteIn(quote, hay) {
 }
 
 // parsed = parseKpReply 的结果；返回核对后的结果，每条带 ok（最终算不算通过）和 note（没通过的原因）
-export function verifyKp(parsed, { candidates, says, scenes, recent }) {
+export function verifyKp(parsed, { candidates, says, scenes, recent, seeds = [] }) {
     let all = recent.map((m) => m.text).join('\n'),
         ai = recent.filter((m) => !m.user).map((m) => m.text).join('\n'),
         facts = [];
@@ -186,6 +198,8 @@ export function verifyKp(parsed, { candidates, says, scenes, recent }) {
     return {
         facts,
         conds,
+        // 伏笔：引用必须在 AI 正文里，并且和这条伏笔的提示或原文有公共片段（只在有伏笔要判时才有这个键）
+        ...(seeds.length ? { seeds: verifySeeds(parsed.seeds, seeds, ai) } : {}),
         scene: scene ? scene.uid : '',
         sceneName: scene ? scene.name : '',
         offTrack: parsed.offTrack,

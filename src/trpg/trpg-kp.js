@@ -6,6 +6,7 @@ import { isPlainObject } from '../core/outline.js';
 import { timelineStep } from './trpg-timeline.js';
 import { splitBlocks } from '../core/setting.js';
 import { KP_BLOCK } from './trpg.js';
+import { pickSlices, sliceLines } from './trpg-slices.js';
 
 export const KP_LEVELS = [
     { level: 1, label: '给点暗示' },
@@ -166,7 +167,7 @@ function entryList(state) {
 
 // 钩子用：把 KP 的文字并进投影。out = buildClueProjection 的返回；返回新的 out
 // 推一把、拉回、时间线到点、主持口径都从这里进；timeline = { events, now, clock, onClock }
-export function kpInject(out, { state, snap, prog, checks, settings, push, floors, timeline }) {
+export function kpInject(out, { state, snap, prog, checks, settings, push, floors, timeline, slices }) {
     let lines = [],
         seen = /* @__PURE__ */ new Set(),
         add = (p) => {
@@ -185,12 +186,16 @@ export function kpInject(out, { state, snap, prog, checks, settings, push, floor
         let step = timelineStep({ events: timeline.events || [], now: timeline.now, clock: timeline.clock, floors });
         (lines.push(...step.lines), step.next && timeline.onClock && timeline.onClock(step.next));
     }
+    // 模组原文切片（trpg-slices.js）：给口吻、场景描写、伏笔提示；没有切片时 slices 为空，下面几行都不加
+    let picked = slices ? pickSlices(slices.list, slices) : [],
+        sliceText = sliceLines(picked);
+    picked.length && (out = { ...out, used: { ...(out.used || {}), slices: picked.map((x) => x.id) } });
     let entries = entryList(state),
         host = !!(out.content || entries.length);
-    if (!lines.length && !host) return out;
+    if (!lines.length && !sliceText.length && !host) return out;
     let tag = String(settings.tagName || '剧情参考').trim() || '剧情参考',
         close = `</${tag}>`,
-        body = [...(lines.length ? ['KP 的安排（只管这一轮）：', ...lines] : []), ...(host ? [KP_HOST_RULE] : [])].join('\n');
+        body = [...(lines.length ? ['KP 的安排（只管这一轮）：', ...lines] : []), ...sliceText, ...(host ? [KP_HOST_RULE] : [])].join('\n');
     if (!out.content) {
         let list = entries.length ? `目前可以去做的事：\n${entries.map((t) => `- ${t}`).join('\n')}\n` : '';
         return { ...out, content: `<${tag}>\n${list}${body}\n${close}` };
