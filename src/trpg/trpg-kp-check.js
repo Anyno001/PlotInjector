@@ -5,11 +5,23 @@ import { cleanFloorText } from '../core/check.js';
 import { checkLine } from './trpg.js';
 import { sayAtoms, sayKey } from './trpg-clue-rules.js';
 import { kpFind } from './trpg-kp.js';
+import { discoveryList } from './trpg-clue-project.js';
+import { isPlainObject, stageLabel } from '../core/outline.js';
 
 export const KP_LOG_MAX = 20;
 // 写进线索操作的备注：用来在 factOverrides 里认出「这条是 KP 判的」
 export const KP_NOTE = 'KP判定';
 const QUOTE_MIN = 4;
+
+// 偏离类型 → 给玩家看的固定说法（不写具体真相）；没有类型（含旧日志）用通用说法
+export const KP_OFF_KINDS = {
+    stray: '正文离开了当前场景，去做了模组外的事',
+    invent: '正文里出现了模组里没有的人物、地点或线索',
+    skip: '正文跳过了本该进行的内容',
+    reveal: '正文提前说破了后面才该揭晓的内容',
+};
+export const KP_OFF_GENERIC = '正文走向和当前阶段的内容对不上';
+export const kpOffText = (kind) => KP_OFF_KINDS[kind] || KP_OFF_GENERIC;
 
 export const kpAutoOn = (settings) => !settings || settings.trpgAutoCheck !== !1;
 
@@ -87,9 +99,9 @@ export function kpCheckMessages({ recent, candidates, says, scenes, stage, rules
                 '3. 线索的「记录」是判断标准，不要放宽。正文只是暗示、猜测、路过、还没真正到手的，判 false。',
                 '4. 条件按字面判断，正文里已经发生、已经成立才算。',
                 '5. scene：这一轮故事主要发生的场景，填「场景」列表里的编号；不确定就留空。',
-                '6. offTrack：正文明显偏离了当前阶段的模组内容（编了模组里没有的重要人物、地点、线索，跳过了该进行的内容，提前揭示了后面的真相）才算 true；玩家做了计划外的小事不算。offReason 用玩家看得到的话写，不写具体真相；pullBack 是给正文的一小段拉回建议，同样不写玩家不该知道的真相。没偏离时 offReason、pullBack 留空。',
+                '6. offTrack：正文明显偏离了当前阶段的模组内容才算 true；玩家做了计划外的小事不算。偏离时 offKind 必须从四种里选一种：stray（离开了当前场景，去做模组外的事）、invent（编了模组里没有的重要人物、地点、线索）、skip（跳过了该进行的内容）、reveal（提前说破了后面的真相）。offReason 用玩家看得到的话写，不写具体真相；pullBack 是给正文的一小段拉回建议。offReason 和 pullBack 只能引用最近正文里已经写出来的内容，不提作者视角里玩家还没拿到的东西。没偏离时 offKind、offReason、pullBack 留空。',
                 '严格输出一个 JSON，不要写别的：',
-                '{"facts":[{"id":"编号","pass":true,"quote":"正文原句","why":"一句话"}],"conds":[{"text":"条件原文","pass":true,"quote":"正文原句"}],"scene":"节点编号或空","offTrack":false,"offReason":"","pullBack":""}',
+                '{"facts":[{"id":"编号","pass":true,"quote":"正文原句","why":"一句话"}],"conds":[{"text":"条件原文","pass":true,"quote":"正文原句"}],"scene":"节点编号或空","offTrack":false,"offKind":"","offReason":"","pullBack":""}',
                 '没有要判断的线索或条件时，facts、conds 写空数组。',
             ].join('\n'),
         },
@@ -113,8 +125,9 @@ export function kpCheckMessages({ recent, candidates, says, scenes, stage, rules
 
 const flag = (v) => v === !0 || v === 'true';
 const str = (v) => String(v ?? '').trim();
+const offKindOf = (v) => (Object.hasOwn(KP_OFF_KINDS, str(v)) ? str(v) : '');
 
-// 回复 → { facts, conds, scene, offTrack, offReason, pullBack }；不是 JSON 就抛错（调用方会重试）
+// 回复 → { facts, conds, scene, offTrack, offKind, offReason, pullBack }；不是 JSON 就抛错（调用方会重试）
 export function parseKpReply(text) {
     let raw = String(text || ''),
         a = raw.indexOf('{'),
@@ -132,6 +145,7 @@ export function parseKpReply(text) {
         conds: list(v.conds).map((x) => ({ text: str(x.text), pass: flag(x.pass), quote: str(x.quote), why: str(x.why) })),
         scene: str(v.scene),
         offTrack: flag(v.offTrack),
+        offKind: offKindOf(v.offKind),
         offReason: str(v.offReason),
         pullBack: str(v.pullBack),
     };
@@ -175,9 +189,87 @@ export function verifyKp(parsed, { candidates, says, scenes, recent }) {
         scene: scene ? scene.uid : '',
         sceneName: scene ? scene.name : '',
         offTrack: parsed.offTrack,
+        offKind: parsed.offKind,
         offReason: parsed.offReason,
         pullBack: parsed.pullBack,
     };
+}
+
+// ---------------- 重新核实阶段（用户 2026-11-24） ----------------
+// 每轮只核对最新一楼、只核对给出去的几条，漏判一次阶段就卡住。这里让 KP 回头读最近 N 楼，
+// 把进行中阶段里还没完成的节点的线索、没成立的一句话条件重新判一遍；结果先给用户勾选确认才写入。
+export const RECHECK_FLOORS = [10, 20, 30];
+export const RECHECK_MAX = 60;
+const RECHECK_FACT_MAX = 40;
+
+// 最近 n 楼（玩家和正文都算）：[{ user, text, floor }]；从后往前取，总字数超了就停
+export function recentFloors(messages, n, limit = 4000, total = 3e4) {
+    let out = [],
+        sum = 0;
+    for (let i = (messages || []).length - 1; i >= 0 && out.length < n; i -= 1) {
+        let m = messages[i];
+        if (!m || m.is_system) continue;
+        let text = cleanFloorText(m.mes, limit);
+        if (!text) continue;
+        if (out.length && sum + text.length > total) break;
+        sum += text.length;
+        out.unshift({ user: !!m.is_user, text, floor: i });
+    }
+    return out;
+}
+
+// 进行中阶段里没完成的节点给出的线索（还没确认的；带判定的要先掷成功）：[{ fact, text, record, stage, node }]
+export function kpRecheckCandidates({ compiled, state, snap, effective, checks }) {
+    let out = [],
+        seen = new Set();
+    for (let unit of compiled.units || []) {
+        let st = state.stageStates.get(unit.id);
+        if (!st || st.entered.v !== 'true' || st.done) continue;
+        for (let ns of state.nodeStates) {
+            if (ns.node.unit !== unit || ns.skipped || ns.disabled || ns.status === 'done') continue;
+            for (let d of discoveryList(isPlainObject(ns.node.item) ? ns.node.item : {})) {
+                if (!d.fact || seen.has(d.fact) || effective(d.fact, snap).confirmed) continue;
+                let gate = d.check ? checkLine(d, checks) : null;
+                if (gate && !gate.reveal) continue;
+                seen.add(d.fact);
+                out.push({ fact: d.fact, text: d.text, record: d.record || '', stage: unit.stage ? stageLabel(unit.stage.key) : '', node: ns.node.name || ns.node.uid || '' });
+            }
+        }
+    }
+    return out.slice(0, RECHECK_FACT_MAX);
+}
+
+export function kpRecheckMessages({ recent, candidates, says, stage, rules, labelOf = (id) => id }) {
+    return [
+        {
+            role: 'system',
+            content: [
+                '你是跑团模组的 KP 助手。玩家觉得阶段推进卡住了，请回头读下面这几楼正文，逐条判断列出的线索和条件是不是已经在这段正文里发生过。只判断，不续写。',
+                '规则：',
+                '1. 只判断列出来的条目，不要判断别的，也不要补充没列出来的。',
+                '2. pass 为 true 时，quote 必须是从正文里原样抄下来的一句话作为证据；抄不出原句，就判 false。',
+                '3. 线索的「记录」是判断标准，不要放宽。正文只是暗示、猜测、路过、还没真正到手的，判 false。',
+                '4. 条件按字面判断，正文里已经发生、已经成立才算。',
+                '严格输出一个 JSON，不要写别的：',
+                '{"facts":[{"id":"编号","pass":true,"quote":"正文原句","why":"一句话"}],"conds":[{"text":"条件原文","pass":true,"quote":"正文原句"}]}',
+                '没有要判断的线索或条件时，facts、conds 写空数组。',
+            ].join('\n'),
+        },
+        {
+            role: 'user',
+            content: [
+                `【正文（第${recent.length ? recent[0].floor : 0}–${recent.length ? recent[recent.length - 1].floor : 0}楼）】\n${recent.map((m) => `[第${m.floor}楼] ${m.user ? '玩家' : '正文'}：${m.text}`).join('\n\n') || '（没有）'}`,
+                candidates.length
+                    ? `【要判断的线索】\n${candidates.map((c) => `- id ${c.fact}（${labelOf(c.fact)}，${c.stage}·${c.node}）：${c.text}${c.record ? `\n  记录标准：${c.record}` : ''}`).join('\n')}`
+                    : '【要判断的线索】\n（没有）',
+                says.length ? `【要判断的条件】\n${says.map((t) => `- ${t}`).join('\n')}` : '【要判断的条件】\n（没有）',
+                `【进行中阶段的模组内容（作者视角）】\n${stage || '（没有）'}`,
+                rules && `【KP规则】\n${rules}`,
+            ]
+                .filter(Boolean)
+                .join('\n\n'),
+        },
+    ];
 }
 
 // 线索用标签，没有标签就用内容的前 12 个字，不露编号
@@ -195,6 +287,7 @@ export function kpLogEntry({ floor, at = Date.now(), result, labelOf, scenes, of
         conds: result.conds.map((x) => ({ text: x.text, ok: x.ok, why: x.ok ? x.why : x.note || x.why, quote: x.ok ? x.quote : '' })),
         scene: result.sceneName || '',
         off: !!off,
+        offKind: result.offTrack ? result.offKind || '' : '',
         offReason: result.offTrack ? result.offReason : '',
     };
 }
@@ -207,5 +300,6 @@ export function pushLog(log, entry) {
 export function kpSummary(entry) {
     if (!entry) return '';
     let got = entry.facts.filter((x) => x.ok).length;
+    if (entry.recheck != null) return `重新核实第${entry.recheck}–${entry.floor}楼 · 拿到${got}条线索 · ${entry.conds.filter((x) => x.ok).length}个条件成立`;
     return `拿到${got}条线索 · ${entry.scene ? `场景${entry.scene}` : '场景没变'} · ${entry.off ? '偏离了模组' : '未偏离'}`;
 }

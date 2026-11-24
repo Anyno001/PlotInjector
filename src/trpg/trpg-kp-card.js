@@ -1,5 +1,6 @@
 // 跑团模式执行页的「KP」卡：卡住了吗（体检+推一把）、对照剧本、察觉卡关。逻辑在 core/trpg-kp.js。
-import { confirmDialog, esc, menuDialog } from '../ui/dom.js';
+import { confirmDialog, esc, menuDialog, openDialog, promptDialog } from '../ui/dom.js';
+import { stageLabel } from '../core/outline.js';
 import { ICONS } from '../ui/styles.js';
 import { chatMessages, toast } from '../host/st.js';
 import { chatFactSets } from './trpg-clue-project.js';
@@ -8,7 +9,7 @@ import { steerActions, timelineHintHtml, steerResultHtml, steerContext } from '.
 import { readGameClock } from './trpg-timeline.js';
 import { trpgHealth, kpPushTarget, aiFloorCount, KP_LEVELS, KP_STUCK_ROUNDS, kpSectionText, npcImportMessage, stuckMessages, parseStuckReply, pendingDiscoveries } from './trpg-kp.js';
 import { ask, runTask } from '../ui/ai.js';
-import { kpSummary } from './trpg-kp-check.js';
+import { kpSummary, kpOffText, RECHECK_FLOORS, RECHECK_MAX } from './trpg-kp-check.js';
 
 // 体检结果只留在内存里，换项目就丢
 let shown = null;
@@ -48,7 +49,9 @@ function lastCheckHtml(kp) {
     let row = (ok, text, why) => `<p class="pi-hint"><span class="pi-badge ${ok ? 'is-ok' : 'is-warn'}">${ok ? '通过' : '没通过'}</span> ${esc(text)}${why ? `：${esc(why)}` : ''}</p>`,
         items = [...last.facts.map((x) => row(x.ok, x.label, x.why)), ...last.conds.map((x) => row(x.ok, x.text, x.why))];
     return `<details class="pi-fold"><summary><b>上轮检测</b><span>${esc(kpSummary(last))}</span></summary>${items.join('') || '<p class="pi-hint">这一轮没有要判断的线索和条件。</p>'}${
-        last.off && last.offReason ? `<p class="pi-hint is-warn">${esc(last.offReason)}</p>` : ''
+        last.off
+            ? `<p class="pi-hint is-warn">${esc(kpOffText(last.offKind))}</p>${last.offReason ? `<details class="pi-fold"><summary>查看原因（可能剧透）</summary><p class="pi-hint">${esc(last.offReason)}</p></details>` : ''}`
+            : ''
     }</details>`;
 }
 
@@ -67,7 +70,7 @@ export function kpCard(view, project, c, d) {
         mine = shown && shown.projectId === project.id ? shown : null,
         leaks = d && d.lastAudit ? (d.lastAudit.leaks || []).filter((l) => l.level === 'leak').length : 0,
         pushLabel = push ? (push.kind === 'steer' ? '按建议拉回' : (KP_LEVELS.find((x) => x.level === push.level) || {}).label) : '',
-        busy = view.busy['kp-steer'] || view.busy['kp-health'],
+        busy = view.busy['kp-steer'] || view.busy['kp-health'] || view.busy['kp-verify'],
         thinking = !!view.busy['kp-health'],
         ai = mine && mine.ai,
         spoils = mine ? [...((ai && ai.spoil) || []), ...mine.spoil] : [],
@@ -100,6 +103,25 @@ export function kpCard(view, project, c, d) {
         }${npcImportHtml(project)}</div>`;
 }
 
+// 重新核实前后对比阶段：哪些阶段这次结束了，哪些还卡着、还差哪几个必需节点
+function stageDoneSet(view) {
+    let c = view.runtime.clue.compute();
+    return new Set(c ? [...c.state.stageStates].filter(([, s]) => s.done).map(([id]) => id) : []);
+}
+function stageNote(view, before) {
+    let c = view.runtime.clue.compute();
+    if (!c) return '';
+    let ended = [],
+        stuck = [];
+    for (let [id, s] of c.state.stageStates) {
+        let name = s.unit && s.unit.stage ? stageLabel(s.unit.stage.key) : id;
+        if (s.done && !before.has(id)) ended.push(name);
+        else if (!s.done && s.entered.v === 'true')
+            stuck.push(s.requiredLeft.length ? `${name}还差${s.requiredLeft.map((n) => `「${n.name || n.uid}」`).join('')}` : `${name}结束条件还没满足`);
+    }
+    return [ended.length ? `${ended.join('、')}已结束。` : '', stuck.length ? `${stuck.join('；')}（可在节点「⋯」里手动标完成）。` : ''].join('');
+}
+
 export const kpActions = {
     ...steerActions,
     async 'kp-menu'(view) {
@@ -108,6 +130,7 @@ export const kpActions = {
             items: [
                 { label: '对照剧本', value: 'kp-steer' },
                 { label: '重新检测最新一楼', value: 'kp-recheck' },
+                { label: '重新核实阶段', value: 'kp-verify' },
                 { label: '清空KP记录', value: 'kp-clear', danger: !0 },
             ],
         });
@@ -116,6 +139,60 @@ export const kpActions = {
     async 'kp-recheck'(view) {
         let r = await view.runtime.kp.run({ manual: !0 });
         r ? view.renderBody() : toast('info', '没有检测：最新一楼不是AI回复，或「跑团每轮自动检测」已关、数据库未就绪。');
+    },
+    // 重新核实阶段（用户 2026-11-24）：选楼层范围 → KP 读这几楼重判进行中阶段的线索和条件 → 列给用户勾选确认才写入
+    async 'kp-verify'(view) {
+        if (view.busy['kp-verify']) return;
+        let pick = await menuDialog({
+            title: '重新核实阶段：读最近几楼',
+            items: [...RECHECK_FLOORS.map((n) => ({ label: `最近${n}楼`, value: String(n) })), { label: '自己填楼数', value: 'custom' }],
+        });
+        if (!pick) return;
+        if (pick === 'custom') {
+            let typed = await promptDialog({ title: '重新核实阶段', label: `读最近几楼（1–${RECHECK_MAX}）`, value: '15' });
+            if (typed == null) return;
+            pick = String(typed).trim();
+        }
+        let floors = Math.round(Number(pick));
+        if (!(floors >= 1)) return toast('info', '楼数要填一个正整数。');
+        floors = Math.min(floors, RECHECK_MAX);
+        let before = stageDoneSet(view),
+            r = await runTask(view, 'kp-verify', () => view.runtime.kp.recheck({ floors })).catch((e) => ({ error: `请求失败：${e.message}` }));
+        if (!r) return;
+        if (r.error) return toast('info', `没法核实：${r.error}。`);
+        if (r.empty) return toast('info', '进行中的阶段没有待核实的线索和条件。');
+        let okFacts = r.result.facts.filter((f) => f.ok),
+            okConds = r.result.conds.filter((x) => x.ok),
+            miss = [...r.result.facts.filter((f) => !f.ok).map((f) => r.labelOf(f.id)), ...r.result.conds.filter((x) => !x.ok).map((x) => x.text)],
+            quote = (q) => (q ? `<p class="pi-hint">「${esc(q)}」</p>` : ''),
+            html = `<p class="pi-hint">读了第${r.from}–${r.to}楼。勾选的会写进进度和线索表格。</p>
+            ${okFacts.map((f) => `<label class="pi-check"><input type="checkbox" data-kv-f="${esc(f.id)}" checked><span>线索：${esc(r.labelOf(f.id))}</span></label>${quote(f.quote)}`).join('')}
+            ${okConds.map((x, i) => `<label class="pi-check"><input type="checkbox" data-kv-c="${i}" checked><span>条件成立：${esc(x.text)}</span></label>${quote(x.quote)}`).join('')}
+            ${okFacts.length || okConds.length ? '' : '<p class="pi-hint">这几楼里没找到新拿到的线索或成立的条件。</p>'}
+            ${miss.length ? `<details class="pi-fold"><summary>没找到的（${miss.length}，可能剧透）</summary>${miss.map((t) => `<p class="pi-hint">${esc(t)}</p>`).join('')}</details>` : ''}`,
+            sel = await openDialog({
+                title: '重新核实阶段',
+                html,
+                actions:
+                    okFacts.length || okConds.length
+                        ? [
+                              { label: '取消', value: null },
+                              {
+                                  label: '写入勾选的',
+                                  primary: !0,
+                                  value: (root) => ({
+                                      facts: [...root.querySelectorAll('[data-kv-f]:checked')].map((b) => b.dataset.kvF),
+                                      conds: [...root.querySelectorAll('[data-kv-c]:checked')].map((b) => okConds[Number(b.dataset.kvC)].text),
+                                  }),
+                              },
+                          ]
+                        : [{ label: '关闭', value: null }],
+            });
+        if (!sel || (!sel.facts.length && !sel.conds.length)) return;
+        let done = await view.runtime.kp.applyRecheck(r, sel);
+        if (!done) return toast('info', '聊天或项目已切换，没有写入。');
+        view.renderBody();
+        toast('success', `已写入${done.facts}条线索、${done.conds}个条件。${stageNote(view, before)}`);
     },
     async 'kp-clear'(view) {
         let ok = await confirmDialog({

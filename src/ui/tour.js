@@ -180,9 +180,9 @@ export const TOUR_STEPS = {
             side: 'top',
         },
         {
-            target: '[data-act=rv-preview]',
+            target: '[data-act=rv-send]',
             title: '发送意见',
-            body: '汇总各页意见，可再修改，也可写不限于某一页的整体意见；确认后一次发给AI。改完的内容先进草稿，可撤销。',
+            body: '点发送后先列出各页意见（可再修改），下面可写整体意见；确认后一次发给AI。改完的内容先进草稿，可撤销。',
             side: 'top',
         },
         {

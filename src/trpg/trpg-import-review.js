@@ -473,7 +473,6 @@ export function renderReview(view, job, review, index, crumb, notes = []) {
           <div class="pi-tools is-c1"><button type="button" class="pi-btn is-sm" data-act="rv-yaml-save" data-unit="${esc(u.key)}">保存并检查</button></div><p class="pi-status" data-rv-yaml-status></p></details>`
          }
         ${locked ? '' : trpgReviewButton(view, job)}
-        ${locked || busy ? '' : `<div class="pi-row pi-rv-extra"><button type="button" class="pi-btn is-sm is-ghost" data-act="rv-preview" title="对整条线的意见、是否附带讨论记录；也能一次看全各页意见">整体意见${String(review.overall || '').trim() ? '（已写）' : ''}…</button></div>`}
         <div class="pi-rv-foot">${busy ? progressHtml(`rv-${view.projectId}`) : ''}<button type="button" class="pi-btn${pending ? ' is-primary' : ''}" data-act="rv-send"${busy ? ' disabled' : ''}>${busy ? '<span class="pi-spin"></span>修改中' : sendLabel(pending)}</button>${
             synced
                 ? '<button type="button" class="pi-btn" data-act="import-adopt" disabled>已与模组一致</button>'
@@ -544,12 +543,6 @@ export function reviewActions({ jobOf, crumbBack, redraftLine, openSaved = null 
             let ok = (job.localIndex || []).filter((x) => isPlainObject(x) && !x.error);
             return ok.length ? mergeImportIndex(ok) : job.index;
         },
-        // 当前这条线（整体意见只改它）
-        curLine = (view, review) => {
-            let units = reviewUnits(view.project(), review),
-                vol = review.draft.find((v) => v.id === (units[Math.max(0, Math.min(units.length - 1, review.at || 0))] || units[0]).volumeId);
-            return { vol, locked: !vol || lineLocked(review, vol.id, view.project()) };
-        },
         // 发给AI并显示进度（用户 2026-11-23：发送后只有按钮上一个小转圈，不知道走到哪了）
         sendRevise = async (view, c2, opts) => {
             let projectId = view.projectId,
@@ -565,21 +558,6 @@ export function reviewActions({ jobOf, crumbBack, redraftLine, openSaved = null 
             view.renderBody();
         };
     let actions = {
-        // 发送意见（用户 2026-11-23）：直接发，不再先弹预览框；整体意见、附带讨论记录在「整体意见…」里设
-        async 'rv-send'(view) {
-            let box0 = hostDocument().querySelector('.pi-rv [data-rv-comment]');
-            box0 && (await reviewOnInput(view, box0, jobOf, { blur: !0 }));
-            let c = current(view);
-            if (!c) return;
-            let review = c.review,
-                { vol, locked } = curLine(view, review),
-                overall = locked ? '' : String(review.overall || '').trim();
-            if (!sendableNotes(view.project(), review).length && !overall)
-                return toast('info', '各页还没有意见。在页下面的「意见」框里写，写完点「发送意见」一次发给AI。');
-            let chat = review.noTalk ? null : await view.data.loadChat(view.projectId).catch(() => null),
-                talk = chat && (chat.summary || (chat.messages || []).length) ? transcript(chat.summary, chat.messages, 8e3) : '';
-            await sendRevise(view, c, { overall, overallVol: vol && vol.id, talk });
-        },
         async 'rv-go'(view, target) {
             let c = current(view);
             c && (await saveReview(view, c.jobId, (r) => ({ ...r, at: Number(target.dataset.i) || 0 })), view.renderBody());
@@ -763,8 +741,8 @@ export function reviewActions({ jobOf, crumbBack, redraftLine, openSaved = null 
             await saveReview(view, c.jobId, (r) => ({ ...editDraft(r, '直接改YAML', (d) => putUnit(d, key, parsed)), yamlOpen: key }));
             view.renderBody();
         },
-        // 预览意见（用户 2026-11-16）：各页意见汇总可改，加整体意见、附带讨论记录，一次发送。
-        async 'rv-preview'(view) {
+        // 发送（用户 2026-11-24）：整体意见并进发送。没写页意见只弹整体意见框；写了就先列各页意见（可改、点标题回到那页），下面是整体意见。
+        async 'rv-send'(view) {
             let box0 = hostDocument().querySelector('.pi-rv [data-rv-comment]');
             box0 && (await reviewOnInput(view, box0, jobOf, { blur: !0 }));
             let c = current(view);
@@ -779,10 +757,11 @@ export function reviewActions({ jobOf, crumbBack, redraftLine, openSaved = null 
                 curLocked = !curVol || lineLocked(review, curVol.id, view.project()),
                 chat = await view.data.loadChat(view.projectId).catch(() => null),
                 hasTalk = !!(chat && (chat.summary || (chat.messages || []).length)),
+                overallBox = !curLocked,
                 stages = curVol ? curVol.stages.length : 0,
                 curName = curVol ? (review.draft.length > 1 ? lineTitle(curVol) : reviewIsClue(view.project(), review) ? '这条线' : '这一卷') : '',
-                html = `<p class="pi-hint">以下意见会一次发给AI，改完先进草稿。可在此修改；点标题返回对应页。</p>
-                ${list.map((u) => `<div class="pi-rv-q"><button type="button" class="pi-rv-q-go" data-dlg-value="go:${esc(u.key)}">${esc(labelOf(u.key))} ›</button><textarea class="pi-ta" rows="2" data-rv-q="${esc(u.key)}">${esc(review.comments[u.key])}</textarea></div>`).join('') || '<p class="pi-hint">各页还没有意见。</p>'}
+                html = `${list.length ? `<div class="pi-rv-sec">各页意见（${list.length}）</div><p class="pi-hint">可在此修改；点标题返回对应页。改完先进草稿。</p>
+                ${list.map((u) => `<div class="pi-rv-q"><button type="button" class="pi-rv-q-go" data-dlg-value="go:${esc(u.key)}">${esc(labelOf(u.key))} ›</button><textarea class="pi-ta" rows="2" data-rv-q="${esc(u.key)}">${esc(review.comments[u.key])}</textarea></div>`).join('')}` : ''}
                 ${
                      curLocked
                          ? ''
@@ -796,8 +775,10 @@ export function reviewActions({ jobOf, crumbBack, redraftLine, openSaved = null 
                     talk: hasTalk ? root.querySelector('[data-rv-talk]').checked : !1,
                 }),
                 typed = null,
-                pick = await openDialog({
-                    title: '整体意见',
+                pick = !list.length && !overallBox
+                    ? (toast('info', '各页还没有意见。在页下面的「意见」框里写，写完点「发送意见」一次发给AI。'), null)
+                    : await openDialog({
+                    title: list.length ? '发送意见' : '整体意见',
                     html,
                     // 点标题回到那一页之前，先记下框里改过的内容（GPT 第二轮 N6）
                     onMount: (root) => root.addEventListener('click', (e) => e.target.closest('[data-dlg-value]') && (typed = read(root)), !0),

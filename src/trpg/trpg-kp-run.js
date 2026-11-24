@@ -3,7 +3,7 @@
 import { chatMessages } from '../host/st.js';
 import { requestLlm } from '../host/llm.js';
 import { resolveLlm } from '../core/store.js';
-import { menuDialog, promptDialog } from '../ui/dom.js';
+import { menuDialog, promptDialog, openDialog, esc } from '../ui/dom.js';
 import { isPlainObject } from '../core/outline.js';
 import { effectiveFact } from './trpg-clue-rules.js';
 import { findSheet, sheetRows, cellText, SELF_KEYS } from './trpg-clue-tables.js';
@@ -24,6 +24,10 @@ import {
     kpFactLabel,
     kpLogEntry,
     pushLog,
+    kpOffText,
+    recentFloors,
+    kpRecheckCandidates,
+    kpRecheckMessages,
 } from './trpg-kp-check.js';
 
 const CHECK_RETRIES = 3;
@@ -214,17 +218,26 @@ export function createKpRunner(deps) {
 
     // 偏离提醒：写法照大纲模式的偏离提醒
     function offerOffTrack({ result, stage }) {
-        let actions = [];
-        result.pullBack &&
+        let actions = [],
+            steer = (text) => (saveKp({ push: { kind: 'steer', text, floor: aiFloorCount(chatMessages()) } }), notice.hide('kp-offtrack'));
+        if (result.pullBack) {
+            actions.push({ label: '按建议拉回', primary: !0, run: () => steer(result.pullBack) });
+            // 预览里可能带剧透，所以单独放一个按钮；取消就把提示卡放回去
             actions.push({
-                label: '按建议拉回',
-                primary: !0,
-                // 先给玩家看 KP 打算怎么拉回、可以改；取消就把提示卡放回去
+                label: '先看再改（可能剧透）',
                 run: async () => {
                     let text = await promptDialog({ title: '按建议拉回', label: '下一轮正文会这样把剧情引回来，可以修改', value: result.pullBack, multiline: !0 });
                     if (text == null || !String(text).trim()) return offerOffTrack({ result, stage });
-                    saveKp({ push: { kind: 'steer', text: String(text).trim(), floor: aiFloorCount(chatMessages()) } });
-                    notice.hide('kp-offtrack');
+                    steer(String(text).trim());
+                },
+            });
+        }
+        result.offReason &&
+            actions.push({
+                label: '查看原因（可能剧透）',
+                run: async () => {
+                    await openDialog({ title: '偏离原因', html: `<p class="pi-hint">${esc(result.offReason)}</p>` });
+                    offerOffTrack({ result, stage });
                 },
             });
         actions.push({
@@ -239,7 +252,87 @@ export function createKpRunner(deps) {
         });
         actions.push({ label: '这次不管', run: () => notice.hide('kp-offtrack') });
         stage && actions.push({ label: '本阶段不再提醒', run: () => (saveKp({ offMuted: stage }), notice.hide('kp-offtrack')) });
-        notice.show({ id: 'kp-offtrack', title: '剧情偏离模组', body: result.offReason || '正文走向和当前阶段的内容对不上。', actions });
+        notice.show({ id: 'kp-offtrack', title: '剧情偏离模组', body: kpOffText(result.offKind), actions });
+    }
+
+    // 重新核实阶段（用户 2026-11-24）：读最近 floors 楼，重判进行中阶段没完成的线索和条件。
+    // 只判断不写入，返回 { result, labelOf, from, to, t, iso0 } 交给界面让用户勾选；不能核实时返回 { error } 或 { empty: true }
+    async function recheck({ floors = 10 } = {}) {
+        let project = deps.getProject();
+        if (!project) return { error: '没有启用的跑团项目' };
+        if (running) return { error: '上一次检测还没结束，稍后再试' };
+        let c = deps.clue.compute();
+        if (!c || !c.snap.api) return { error: '数据库还没就绪' };
+        let chat = chatMessages(),
+            recent = recentFloors(chat, floors);
+        if (!recent.length) return { error: '聊天里还没有正文' };
+        let candidates = kpRecheckCandidates({ compiled: c.compiled, state: c.state, snap: c.snap, effective: (id, snap) => effectiveFact(id, snap, c.prog), checks: trpgCheckResults(chat) }),
+            says = kpPendingSays({ compiled: c.compiled, state: c.state, conds: c.prog.trpgConds });
+        if (!candidates.length && !says.length) return { empty: true };
+        let labels = isPlainObject(project.clue.labels) ? project.clue.labels : {},
+            labelOf = (id) => kpFactLabel(labels, id, (candidates.find((x) => x.fact === id) || {}).text),
+            ctx = steerContext(project, c),
+            messages = kpRecheckMessages({ recent, candidates, says, stage: ctx.stage, rules: ctx.rules, labelOf }),
+            t = deps.ticket(),
+            iso0 = deps.clue.opScope().iso;
+        running = true;
+        log(`重新核实阶段：第 ${recent[0].floor}–${recent[recent.length - 1].floor} 楼，${candidates.length} 条线索、${says.length} 个条件`);
+        try {
+            let parsed = null;
+            for (let attempt = 0; ; attempt += 1)
+                try {
+                    if (!deps.ticketValid(t)) return null;
+                    parsed = parseKpReply(await requestLlm(messages, resolveLlm(data.settings(), 'check'), { timeoutMs: 18e4 }));
+                    break;
+                } catch (error) {
+                    if (!deps.ticketValid(t) || attempt >= CHECK_RETRIES) throw error;
+                    (log(`重新核实请求失败：${error.message}，${RETRY_GAP_MS / 1e3} 秒后第 ${attempt + 1} 次重试`),
+                        await new Promise((resolve) => deps.setTimeout(resolve, RETRY_GAP_MS)));
+                }
+            if (!deps.ticketValid(t)) return null;
+            let result = verifyKp(parsed, { candidates, says, scenes: [], recent });
+            return { result, candidates, labelOf, from: recent[0].floor, to: recent[recent.length - 1].floor, t, iso0 };
+        } finally {
+            running = false;
+            again && ((again = false), deps.setTimeout(() => run({ floor: -1 }), 0));
+        }
+    }
+
+    // 写入用户勾选的核实结果：pick = { facts: [编号], conds: [条件原文] }。已有人工记录的线索不覆盖
+    async function applyRecheck(r, pick) {
+        if (!r || !deps.ticketValid(r.t)) return null;
+        let c = deps.clue.compute(),
+            prog0 = (c && c.prog.factOverrides) || {},
+            facts = new Set(pick.facts || []),
+            condSet = new Set(pick.conds || []),
+            recorded = [];
+        for (let f of r.result.facts) {
+            if (!f.ok || !facts.has(f.id) || prog0[f.id]) continue;
+            try {
+                let text = (r.candidates.find((x) => x.fact === f.id) || {}).text || '';
+                deps.clue.act({ kind: 'fact', target: f.id, value: 'confirmed', text, note: KP_NOTE });
+                recorded.push({ id: f.id, text, label: r.labelOf(f.id) });
+            } catch (error) {
+                log(`重新核实：记录线索失败：${error.message}`);
+            }
+        }
+        let kp = kpOf(),
+            conds = { ...(kp.conds || {}) },
+            nConds = 0;
+        for (let x of r.result.conds) x.ok && condSet.has(x.text) && ((conds[x.text] = { floor: r.to, quote: x.quote }), (nConds += 1));
+        let tables = await mirrorTables(recorded, deps.getProject(), r.t, r.iso0);
+        if (!deps.ticketValid(r.t)) return null;
+        // 日志里只把真正写入的算通过
+        let applied = {
+            ...r.result,
+            sceneName: '',
+            facts: r.result.facts.map((f) => (f.ok && !facts.has(f.id) ? { ...f, ok: !1, note: '没选写入' } : f)),
+            conds: r.result.conds.map((x) => (x.ok && !condSet.has(x.text) ? { ...x, ok: !1, note: '没选写入' } : x)),
+        };
+        saveKp({ conds, log: pushLog(kp.log, { ...kpLogEntry({ floor: r.to, result: applied, labelOf: r.labelOf, off: !1 }), recheck: r.from, ...(tables.length ? { tables } : {}) }) });
+        deps.clue.invalidate('kp-recheck');
+        log(`重新核实写入：${recorded.length} 条线索、${nConds} 个条件`);
+        return { facts: recorded.length, conds: nConds };
     }
 
     // 清空本聊天的 KP 记录：撤销 KP 判的线索（人工确认的不动）、清掉一句话条件、检测日志和「本阶段不再提醒」。表格里已写回的不动（删楼或重 roll 会跟着退回）。
@@ -254,5 +347,5 @@ export function createKpRunner(deps) {
         deps.clue.invalidate('kp-clear');
         return ids.length;
     }
-    return { run, clearKp, reset: () => ((again = false), (lastKey = '')) };
+    return { run, recheck, applyRecheck, clearKp, reset:() => ((again = false), (lastKey = '')) };
 }
