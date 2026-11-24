@@ -17,6 +17,7 @@ import { conditionRefs, parseCondition, compileClue } from './trpg-clue-rules.js
 
 import { CLUE_STAGE_KEYS, CLUE_NODE_KEYS, nodeUid, stripAuthorDeep, outlineStageData } from './trpg-clue-model.js';
 import { TRPG_IMPORT_RULES } from './trpg.js';
+import { importFlowIssues } from './trpg-import-check.js';
 
 export const CHAPTER_HEAD =
     /^(?:#{1,4}\s+.+|第[0-9一二三四五六七八九十百零〇两]+[章回节幕部卷].*|Chapter\s+\d+.*|[一二三四五六七八九十]+、.+)$/i;
@@ -898,11 +899,16 @@ export function importReachIssues(applied, { only = null, knownFacts = [], claim
                   level: 'warn',
                   text: `替代途径要到运行时才能确认：${r.stage}·${r.node}单独走完时，${r.why}`,
                   plain: `「${r.stage}」：玩家只走${r.nodeNames.map((n) => `「${n}」`).join('、然后')}时能不能继续，要看游戏里表格、时间这些情况。`,
-                  fix: '多半不用改；想确定的话，看看这一阶段的结束条件是不是依赖表格或时间。',
+                  fix: '这条路能不能继续取决于表格里的值或谁知道什么；看看这一阶段的结束条件引用的格子是不是会有值。',
               });
     }
-    let reach = clueReachability(applied, { knownFacts, claimedFacts }),
-        all = [...reach.stuckStages, ...reach.stuckNodes].filter(mine),
+    // 推演第一遍：钟点和「情况」都当作还没到（玩家走得慢，线索都拿到了）。只靠「到点就放行」才走得通的地方不报：
+    // 钟点已到时就不再卡住的，交给第二遍（被跳过的阶段拿不到发现，在 importFlowIssues 里）。
+    let late = clueReachability(applied, { knownFacts, claimedFacts, clock: 'reached' }),
+        stuckLate = new Set([...late.stuckStages.map((x) => `s${x.stageId}`), ...late.stuckNodes.map((x) => `n${x.node}`)]),
+        clocky = (x) => !stuckLate.has(x.node ? `n${x.node}` : `s${x.stageId}`),
+        reach = clueReachability(applied, { knownFacts, claimedFacts, clock: 'early' }),
+        all = [...reach.stuckStages, ...reach.stuckNodes].filter(mine).filter((x) => !clocky(x)),
         routed = new Set(out.filter((x) => x.kind === 'route' && x.level === 'error').map((x) => x.stageId)),
         follow = (x) => /上一阶段尚未结束|阶段未进入/.test(x.why),
         stuck = all.filter((x) => !follow(x) && !(routed.has(x.stageId) && !x.node && /^结束条件不满足|^必需节点做不完/.test(x.why))),
@@ -930,16 +936,18 @@ export function importReachIssues(applied, { only = null, knownFacts = [], claim
             level: 'warn',
             kind: 'reach-unknown',
             stageIds: [...new Set(stuck.map((x) => x.stageId).filter(Boolean))],
-            plain: `有些地方能不能走到，要看游戏里的时间、谁知道什么或表格里的值：${stuck
+            plain: `有些地方能不能走到，要看游戏里谁知道什么或表格里的值，导入时判断不了：${stuck
                 .slice(0, 4)
                 .map((x) => `「${x.stage}」`)
                 .join('、')}。`,
-            fix: '多半不用改，游戏里自然会满足；确实卡住时可以在执行页手动开放。',
-            text: `有些地方取决于时间、知情或表格的值：${stuck
+            fix: '看看这些地方的条件引用的表格格子、知情记录是不是真的会出现；确实卡住时可以在执行页手动开放。',
+            text: `有些地方取决于知情或表格的值：${stuck
                 .slice(0, 4)
                 .map((x) => `${x.stage}${x.node ? `·${x.node}` : ''}`)
                 .join('、')}`,
         });
+    // 推演第二遍：阶段衔接、跨阶段卡死（带一键修）
+    out.push(...importFlowIssues(applied).filter(mine));
     return out;
 }
 

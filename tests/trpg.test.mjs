@@ -134,3 +134,20 @@ test('机械判定：IGS 安科 ROLL 那一行照用 IGS 判的成败', () => {
     chat[1].mes = '【检定】楼主 侦查：1D100=40，困难线30，成功（没达到难度） #F01';
     assert.equal(T.trpgCheckResults(chat).F01.ok, false);
 });
+
+test('导入检查：阶段衔接、跨阶段卡死能报出，一键修后不再报', async () => {
+    let K = await import('../src/trpg/trpg-import-check.js'),
+        L = await import('../src/trpg/trpg-long-import.js'),
+        node = (id, name, extra) => ({ id, 名称: name, 入口: '入口', 地点: ['地点'], 场景: '场景', ...extra }),
+        data = (a, b) => [
+            { key: '阶段1 开场', data: { 结束条件: { 任一: ['时间 >= 18:00', { 事实: 'F_a' }] }, 主线节点: [node('n1', '入住', { 发现: [{ 事实: 'F_a', 内容: '甲', 记录: '甲' }], 完成条件: { 事实: 'F_a' } })] } },
+            { key: '阶段2 中段', data: { 进入条件: { 任一: ['时间 >= 18:00', { 事实: 'F_a' }] }, 结束条件: { 事实: 'F_b' }, 主线节点: [node('n2', '深入', { 发现: [{ 事实: 'F_b', 内容: '乙', 记录: '乙' }], 完成条件: { 事实: 'F_b' } })] } },
+            { key: '阶段3 收尾', data: { 进入条件: { 任一: ['时间 >= 21:00', { 事实: 'F_b' }] }, 主线节点: [node('n3', '收尾', { 开放条件: { 事实: 'F_b' }, 发现: [{ 事实: 'F_c', 内容: '丙', 记录: '丙' }], 完成条件: { 事实: 'F_c' } })] } },
+        ].map((s, i) => ({ ...s, id: `s${i}` })),
+        vols = [{ id: 'v1', key: '卷', stages: data() }],
+        kinds = () => L.importReachIssues(vols).filter((x) => /^(gap|skip-stuck)$/.test(x.kind));
+    assert.deepEqual(kinds().map((x) => x.kind).sort(), ['gap', 'gap', 'skip-stuck']);
+    for (let i = 0; i < 6 && kinds().length; i++) K.applyImportFix(vols, kinds().find((x) => x.quick).quick.q);
+    assert.deepEqual(kinds(), []);
+    assert.equal(K.guessClock('晚上七点半'), '19:30');
+});

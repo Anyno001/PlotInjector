@@ -295,7 +295,7 @@ export function trpgCheckResults(messages) {
             let again = (named && out[named[1]] && { code: named[1], skill: out[named[1]].skill }) || dupes[dupes.length - 1];
             again && (named || STRICT_ROLL.test(text))
                 ? problems.push({ at, kind: 'dup', skill: again.skill, code: again.code })
-                : STRICT_ROLL.test(text) && problems.push({ at, kind: 'noreq', skill: '', code: named ? named[1] : '' });
+                : STRICT_ROLL.test(text) && !(IGS_ROLL.test(text) && !named) && problems.push({ at, kind: 'noreq', skill: '', code: named ? named[1] : '' });
             return;
         }
         // IGS 论坛安科点 ROLL 填的那一行：成败 IGS 已经按调查员档判好，照用（两边技能值可能不同）

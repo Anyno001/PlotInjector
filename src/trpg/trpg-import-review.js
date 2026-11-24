@@ -49,6 +49,7 @@ import { compileClue, parseCondition, confirmTierOrder, evalAtom, splitCompare }
 import { sheetList, sheetRows, tierNumberInNote } from './trpg-clue-tables.js';
 import { chatFactSets, discoveryList, clueText, cellCondCheck } from './trpg-clue-project.js';
 import { reidLines, mainLinesText } from './trpg-long-import.js';
+import { importCondIssues, applyImportFix } from './trpg-import-check.js';
 import { esc, openDialog, menuDialog } from '../ui/dom.js';
 import { transcript } from '../core/prompts.js';
 import { ask, runTask } from '../ui/ai.js';
@@ -120,12 +121,20 @@ export function reviewIssues(view, review, index) {
         runSecrets = clue && !isClueMode(project) ? checkImportDraft(draft, { index, secrets, mode: 'outline', ...shorts }).filter((x) => /^secret-/.test(x.kind || '')) : [],
         own0 = checkImportDraft(draft, { index, secrets, mode: clue ? 'clue' : 'outline', ...shorts }),
         own = [...own0, ...runSecrets.filter((x) => !own0.some((y) => y.kind === x.kind && y.name === x.name && y.stageId === x.stageId))].filter(
-            (x) => !/^(route|reach|reach-unknown)$/.test(x.kind || '') && !/按模组推演|替代途径/.test(x.text) && !((/引用了不存在的(?:节点|线)「([^」]+)」/.exec(x.text) || [])[1] && exists.has(/引用了不存在的(?:节点|线)「([^」]+)」/.exec(x.text)[1])),
+            (x) => !/^(route|reach|reach-unknown|gap|skip-stuck)$/.test(x.kind || '') && !/按模组推演|替代途径/.test(x.text) && !((/引用了不存在的(?:节点|线)「([^」]+)」/.exec(x.text) || [])[1] && exists.has(/引用了不存在的(?:节点|线)「([^」]+)」/.exec(x.text)[1])),
         ),
         c = view.runtime.activeId() === view.projectId && isClueMode(project) ? view.runtime.clue.compute() : null,
         { known, claimed } = chatFactSets(c),
         reach = clue ? importReachIssues([...others, ...draft], { only: mine, knownFacts: known, claimedFacts: claimed }) : [],
-        all = [...own, ...reach],
+        // 条件检查（线索不存在、时间写法、成环、必需节点只靠判定）：只报这次草稿里的阶段
+        cond = clue
+            ? importCondIssues([...others, ...draft], {
+                  only: new Set(draft.flatMap((v) => v.stages.map((s) => s.id))),
+                  labels: project.clue && project.clue.labels,
+                  timeBound: !!(project.clue && project.clue.bindings && project.clue.bindings.time && project.clue.bindings.time.路径),
+              })
+            : [],
+        all = [...own, ...reach, ...cond],
         dismissed = new Set(review.dismissed || []),
         by = {},
         stageOf = new Map(draft.flatMap((v) => v.stages.map((s) => [s.id, unitKey(v.id, s.id)]))),
@@ -176,10 +185,15 @@ function nodeFull(n, clue, names) {
     gets.length && rows.splice(rows.findIndex(([l]) => l === '完成') < 0 ? rows.length : rows.findIndex(([l]) => l === '完成'), 0, ['获得', `${gets.join('；')}。`]);
     return `<div class="pi-rv-full"><b>${esc(n.name)}</b>${req ? `<i class="pi-rv-tag">${req}</i>` : ''}<dl>${rows.map(([l, v]) => `<dt>${l}</dt><dd>${esc(v)}</dd>`).join('')}</dl>${note ? `<div class="pi-rv-auth">作者备注（正文看不到）：${esc(note)}</div>` : ''}</div>`;
 }
+// 一键修的按钮：一个文字按钮 + 其余修法收进「⋯」（quick / alts 见 trpg-import-check.js）
+function fixButtons(x, unit) {
+    let at = `data-unit="${esc(unit)}" data-issue="${esc(x.id)}"`;
+    return `${x.quick ? `<button type="button" class="pi-btn is-sm" data-act="rv-quick" ${at} data-pick="-1">${esc(x.quick.label)}</button>` : ''}${x.action ? `<button type="button" class="pi-btn is-sm" data-act="${esc(x.action.act)}">${esc(x.action.label)}</button>` : ''}${x.alts && x.alts.length ? `<button type="button" class="pi-icon-btn" data-act="rv-quick-more" ${at} title="其他修法" aria-label="其他修法">${ICONS.more}</button>` : ''}`;
+}
 function issueCard(x, unit, filled) {
     if (x.level === 'error')
         return `<div class="pi-rv-issue"><p>${esc(x.plain || x.text)}</p>${x.names ? `<ul class="pi-rv-names">${x.names.map((n) => `<li>${esc(n)}</li>`).join('')}</ul>` : ''}${x.fix ? `<span class="pi-rv-fix"><b>建议：</b>${esc(x.fix)}</span>` : ''}
-            <div class="pi-row">${filled ? '<span class="pi-badge is-ok">已加入意见</span>' : `<button type="button" class="pi-btn is-sm" data-act="rv-fill" data-unit="${esc(unit)}" data-issue="${esc(x.id)}">加入意见</button>`}
+            <div class="pi-row">${fixButtons(x, unit)}${filled ? '<span class="pi-badge is-ok">已加入意见</span>' : `<button type="button" class="pi-btn is-sm${x.quick ? ' is-ghost' : ''}" data-act="rv-fill" data-unit="${esc(unit)}" data-issue="${esc(x.id)}">加入意见</button>`}
             <details><summary class="pi-hint">详情</summary><p class="pi-hint pi-rv-tech">${esc(x.text)}</p></details></div></div>`;
     let { q, how } = issueQuestion(x),
         // 是不是同一个人：两个按钮直接回答（用户 2026-11-17）。揭晓的地方：确认后收起；不是的话写意见。
@@ -188,7 +202,7 @@ function issueCard(x, unit, filled) {
                 ? `<button type="button" class="pi-btn is-sm" data-act="rv-short" data-name="${esc(x.name)}" data-v="yes">是同一人</button><button type="button" class="pi-btn is-sm is-ghost" data-act="rv-short" data-name="${esc(x.name)}" data-v="no">不是</button>`
                 : `<button type="button" class="pi-btn is-sm" data-act="rv-dismiss" data-issue="${esc(x.id)}">${x.kind === 'secret-reveal' ? '是，收起' : '没问题，收起'}</button>${filled ? '<span class="pi-badge is-ok">已加入意见</span>' : `<button type="button" class="pi-btn is-sm is-ghost" data-act="rv-fill" data-unit="${esc(unit)}" data-issue="${esc(x.id)}">加入意见</button>`}`;
     return `<div class="pi-rv-issue is-ask"><p>${esc(q)}</p>${how ? `<span class="pi-rv-fix">${esc(how)}</span>` : ''}
-        <div class="pi-row">${acts}</div></div>`;
+        <div class="pi-row">${fixButtons(x, unit)}${acts}</div></div>`;
 }
 function whenText(line, volumes) {
     if (!isPlainObject(line)) return '';
@@ -570,6 +584,31 @@ export function reviewActions({ jobOf, crumbBack, redraftLine, openSaved = null 
             x && (await saveReview(view, c.jobId, (r) => ({ ...r, comments: { ...r.comments, [key]: appendComment(r.comments[key], issueCommentLine(x)) } })), view.renderBody());
             let box = [...hostDocument().querySelectorAll('[data-rv-comment]')].find((b) => b.dataset.rvComment === key);
             box && x && x.level !== 'error' && (box.focus(), box.setSelectionRange(box.value.length, box.value.length));
+        },
+        // 导入检查的一键修：走 editDraft，可以「撤销上次修改」
+        async 'rv-quick'(view, target) {
+            let c = current(view);
+            if (!c) return;
+            let x = (reviewIssues(view, c.review, indexOf(c.job))[target.dataset.unit] || []).find((y) => y.id === target.dataset.issue),
+                pick = Number(target.dataset.pick),
+                fix = x && (pick < 0 ? x.quick : (x.alts || [])[pick]);
+            if (!fix) return;
+            await saveReview(view, c.jobId, (r) => editDraft(r, fix.label, (d) => applyImportFix(d, fix.q)));
+            view.renderBody();
+            toast('info', `已修改：${fix.label}。不对的话点下面的「撤销上次修改」。`);
+        },
+        async 'rv-quick-more'(view, target) {
+            let c = current(view);
+            if (!c) return;
+            let x = (reviewIssues(view, c.review, indexOf(c.job))[target.dataset.unit] || []).find((y) => y.id === target.dataset.issue);
+            if (!x || !(x.alts || []).length) return;
+            let v = await menuDialog({ title: '其他修法', items: x.alts.map((a, i) => ({ label: a.label, value: String(i) })) });
+            v != null && actions['rv-quick'](view, { dataset: { unit: target.dataset.unit, issue: target.dataset.issue, pick: v } });
+        },
+        // 去执行页填故事时间的绑定（审阅内容已存，回来接着看）
+        async 'rv-bind'(view) {
+            view.tabState('run').bindOpen = !0;
+            view.switchTab && view.switchTab('run');
         },
         // 疑似短名：是同一人 → 当保密名字（下一次检查报成要改的问题）；不是 → 不再提示。都可以在「已确认」里撤回。
         async 'rv-short'(view, target) {

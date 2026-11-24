@@ -1,4 +1,4 @@
-// PlotInjector v0.4.4
+// PlotInjector v0.4.5
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -2723,7 +2723,7 @@ ${u.yaml}`].filter(Boolean).join(`
       let named = CODE.exec(text2), req = named && open.find((o) => o.code === named[1]) || open[open.length - 1];
       if (!req) {
         let again = named && out[named[1]] && { code: named[1], skill: out[named[1]].skill } || dupes[dupes.length - 1];
-        again && (named || STRICT_ROLL.test(text2)) ? problems2.push({ at, kind: "dup", skill: again.skill, code: again.code }) : STRICT_ROLL.test(text2) && problems2.push({ at, kind: "noreq", skill: "", code: named ? named[1] : "" });
+        again && (named || STRICT_ROLL.test(text2)) ? problems2.push({ at, kind: "dup", skill: again.skill, code: again.code }) : STRICT_ROLL.test(text2) && !(IGS_ROLL.test(text2) && !named) && problems2.push({ at, kind: "noreq", skill: "", code: named ? named[1] : "" });
         return;
       }
       let igs = IGS_ROLL.exec(text2);
@@ -6832,13 +6832,13 @@ ${guide ? `${guide}
         { ...plan, facts: plan.facts.filter((f) => wantFact(f.code)), knows: plan.knows.filter((k) => wantFact(k.fact)) },
         c.snap,
         p.clue.bindings
-      ), labelOf = (code) => labels[code] || {}, newFacts = can.facts ? diff.newFacts : [], ready = newFacts.filter((f) => labelOf(f.code).label), waiting = newFacts.length - ready.length;
+      ), labelOf2 = (code) => labels[code] || {}, newFacts = can.facts ? diff.newFacts : [], ready = newFacts.filter((f) => labelOf2(f.code).label), waiting = newFacts.length - ready.length;
       if (waiting && !labelsWarned && (labelsWarned = !0, note(`有${waiting}条事实尚无标签，暂不补行（采用大纲时自动生成，也可用「补全表格」）`)), !ready.length && !diff.newKnows.length)
         return;
       let factOk = new Set(c.snap.facts ? c.snap.facts.keys() : []), done = [];
       for (let f of ready) {
         if (!ticketValid(t0)) return;
-        let l = labelOf(f.code), row2 = { [fb.编号列]: f.code, 标签: l.label, 登记口径: l.criterion || "" };
+        let l = labelOf2(f.code), row2 = { [fb.编号列]: f.code, 标签: l.label, 登记口径: l.criterion || "" };
         fb.状态列 && (row2[fb.状态列] = "未获得"), await Promise.resolve(api.insertRow({ tableName: fb.表, data: row2, skipNotify: !0 })).catch(() => -1) >= 0 && (factOk.add(f.code), done.push(f.code));
       }
       if (kb)
@@ -8342,7 +8342,11 @@ ${guide ? `${guide}
       ])
     );
   }
-  function clueReachability2(volumes, { knownFacts = [], claimedFacts = [] } = {}) {
+  var CLOCK_FACT = "\0clock";
+  function clockCond(cond) {
+    return cond && (cond.kind === "group" ? { ...cond, items: cond.items.map(clockCond) } : cond.kind === "time" || cond.kind === "say" ? { kind: "fact", fact: CLOCK_FACT, raw: cond.raw } : cond);
+  }
+  function clueReachability2(volumes, { knownFacts = [], claimedFacts = [], clock = null, skipGives = null } = {}) {
     let compiled = compileClue2(volumes || []), have = new Set(knownFacts), claimed = new Set(claimedFacts), external = /* @__PURE__ */ new Set(), cfg = normalizeClue2({ mode: "clue", autoFocusSingle: !1 }), gives2 = new Map(
       compiled.nodes.map((n) => [
         n,
@@ -8362,6 +8366,12 @@ ${guide ? `${guide}
     for (let n of compiled.nodes) [n.open, n.early, n.done].forEach(extAtoms);
     for (let l of compiled.lines || []) extAtoms(l.open);
     for (let [f, ids] of lineTriggerFacts2(compiled)) have.add(f), assumptions.add(`正文里发生线 ${ids.join("、")} 要等的事（${f}）`);
+    if (clock) {
+      for (let u of compiled.units) u.clue && (u.clue.enter = clockCond(u.clue.enter), u.clue.end = clockCond(u.clue.end));
+      for (let n of compiled.nodes) n.open = clockCond(n.open), n.early = clockCond(n.early), n.done = clockCond(n.done);
+      for (let l of compiled.lines || []) l.open = clockCond(l.open);
+      clock === "reached" && have.add(CLOCK_FACT);
+    }
     let allFacts = /* @__PURE__ */ new Set([...have, ...claimed]);
     for (let u of compiled.units)
       u.clue && [u.clue.enter, u.clue.end].forEach((c) => conditionRefs2(c).facts.forEach((f) => allFacts.add(f)));
@@ -8379,7 +8389,7 @@ ${guide ? `${guide}
       if (Object.keys(lineProg.lines).length !== before0) continue;
       let before = have.size;
       for (let s of state.nodeStates)
-        (s.status === "available" || s.status === "active" || s.status === "done") && gives2.get(s.node).forEach((f) => have.add(f));
+        (s.status === "available" || s.status === "active" || s.status === "done") && !(skipGives && skipGives(s.node)) && gives2.get(s.node).forEach((f) => have.add(f));
       if (have.size === before) break;
     }
     let stuckStages = [], stuckNodes = [], depends = !1;
@@ -10166,13 +10176,13 @@ ${facts.length ? facts.map((f) => `- ${f}`).join(`
         { ...plan, facts: plan.facts.filter((f) => wantFact(f.code)), knows: plan.knows.filter((k) => wantFact(k.fact)) },
         c.snap,
         p.clue.bindings
-      ), labelOf = (code) => labels[code] || {}, ready = diff.newFacts.filter((f) => labelOf(f.code).label), waiting = diff.newFacts.length - ready.length;
+      ), labelOf2 = (code) => labels[code] || {}, ready = diff.newFacts.filter((f) => labelOf2(f.code).label), waiting = diff.newFacts.length - ready.length;
       if (waiting && !labelsWarned && (labelsWarned = !0, note(`有${waiting}条事实还没有标签，先不补行（采用模组时会自动生成；也可以用「补全表格」）`)), !ready.length && !diff.newKnows.length)
         return;
       let factOk = new Set(c.snap.facts ? c.snap.facts.keys() : []), done = [];
       for (let f of ready) {
         if (!ticketValid(t0)) return;
-        let l = labelOf(f.code), row2 = { [fb.编号列]: f.code, 标签: l.label, 登记口径: l.criterion || "" };
+        let l = labelOf2(f.code), row2 = { [fb.编号列]: f.code, 标签: l.label, 登记口径: l.criterion || "" };
         fb.状态列 && (row2[fb.状态列] = "未获得"), await Promise.resolve(api.insertRow({ tableName: fb.表, data: row2, skipNotify: !0 })).catch(() => -1) >= 0 && (factOk.add(f.code), done.push(f.code));
       }
       if (kb)
@@ -12014,7 +12024,7 @@ ${floor.text}`)].join(`
   function kpScenes(state) {
     return state.nodeStates.filter((ns) => (ns.status === "available" || ns.status === "active") && !ns.disabled && ns.node.uid).map((ns) => ({ uid: ns.node.uid, name: ns.node.name || ns.node.uid, entry: String(ns.node.item && ns.node.item.入口 || "") }));
   }
-  function kpCheckMessages({ recent, candidates, says, scenes, stage, rules, labelOf = (id) => id }) {
+  function kpCheckMessages({ recent, candidates, says, scenes, stage, rules, labelOf: labelOf2 = (id) => id }) {
     return [
       {
         role: "system",
@@ -12041,7 +12051,7 @@ ${recent.map((m) => `${m.user ? "玩家" : "正文"}：${m.text}`).join(`
 
 `) || "（没有）"}`,
           candidates.length ? `【要判断的线索】
-${candidates.map((c) => `- id ${c.fact}（${labelOf(c.fact)}）：${c.text}${c.record ? `
+${candidates.map((c) => `- id ${c.fact}（${labelOf2(c.fact)}）：${c.text}${c.record ? `
   记录标准：${c.record}` : ""}`).join(`
 `)}` : `【要判断的线索】
 （没有）`,
@@ -12083,8 +12093,8 @@ ${rules}`
       pullBack: str2(v.pullBack)
     };
   }
-  function quoteIn(quote, hay) {
-    let q = sayKey(quote);
+  function quoteIn(quote2, hay) {
+    let q = sayKey(quote2);
     return q.length >= QUOTE_MIN && sayKey(hay).includes(q);
   }
   function verifyKp(parsed, { candidates, says, scenes, recent }) {
@@ -12152,7 +12162,7 @@ ${rules}`
     }
     return out.slice(0, RECHECK_FACT_MAX);
   }
-  function kpRecheckMessages({ recent, candidates, says, stage, rules, labelOf = (id) => id }) {
+  function kpRecheckMessages({ recent, candidates, says, stage, rules, labelOf: labelOf2 = (id) => id }) {
     return [
       {
         role: "system",
@@ -12177,7 +12187,7 @@ ${recent.map((m) => `[第${m.floor}楼] ${m.user ? "玩家" : "正文"}：${m.te
 
 `) || "（没有）"}`,
           candidates.length ? `【要判断的线索】
-${candidates.map((c) => `- id ${c.fact}（${labelOf(c.fact)}，${c.stage}·${c.node}）：${c.text}${c.record ? `
+${candidates.map((c) => `- id ${c.fact}（${labelOf2(c.fact)}，${c.stage}·${c.node}）：${c.text}${c.record ? `
   记录标准：${c.record}` : ""}`).join(`
 `)}` : `【要判断的线索】
 （没有）`,
@@ -12198,11 +12208,11 @@ ${rules}`
   function kpFactLabel(labels, id, text2) {
     return labels && labels[id] && labels[id].label || (String(text2 || "").length > 12 ? `${String(text2).slice(0, 12)}…` : String(text2 || "") || "一条线索");
   }
-  function kpLogEntry({ floor, at = Date.now(), result: result2, labelOf, scenes, off }) {
+  function kpLogEntry({ floor, at = Date.now(), result: result2, labelOf: labelOf2, scenes, off }) {
     return {
       at,
       floor,
-      facts: result2.facts.map((x) => ({ label: labelOf(x.id), ok: x.ok, why: x.ok ? x.why : x.note || x.why, quote: x.ok ? x.quote : "" })),
+      facts: result2.facts.map((x) => ({ label: labelOf2(x.id), ok: x.ok, why: x.ok ? x.why : x.note || x.why, quote: x.ok ? x.quote : "" })),
       conds: result2.conds.map((x) => ({ text: x.text, ok: x.ok, why: x.ok ? x.why : x.note || x.why, quote: x.ok ? x.quote : "" })),
       scene: result2.sceneName || "",
       off: !!off,
@@ -13746,9 +13756,9 @@ ${list.join(`
   }
   var recheckHits = (r) => r.result.facts.filter((f) => f.ok).length + r.result.conds.filter((x) => x.ok).length;
   async function confirmRecheck(r, { kp, compute, title: title2 = "重新核实阶段" }) {
-    let okFacts = r.result.facts.filter((f) => f.ok), okConds = r.result.conds.filter((x) => x.ok), miss = [...r.result.facts.filter((f) => !f.ok).map((f) => r.labelOf(f.id)), ...r.result.conds.filter((x) => !x.ok).map((x) => x.text)], quote = (q) => q ? `<p class="pi-hint">「${esc(q)}」</p>` : "", html = `<p class="pi-hint">读了第${r.from}–${r.to}楼。勾选的会写进进度和线索表格。</p>
-        ${okFacts.map((f) => `<label class="pi-check"><input type="checkbox" data-kv-f="${esc(f.id)}" checked><span>线索：${esc(r.labelOf(f.id))}</span></label>${quote(f.quote)}`).join("")}
-        ${okConds.map((x, i) => `<label class="pi-check"><input type="checkbox" data-kv-c="${i}" checked><span>条件成立：${esc(x.text)}</span></label>${quote(x.quote)}`).join("")}
+    let okFacts = r.result.facts.filter((f) => f.ok), okConds = r.result.conds.filter((x) => x.ok), miss = [...r.result.facts.filter((f) => !f.ok).map((f) => r.labelOf(f.id)), ...r.result.conds.filter((x) => !x.ok).map((x) => x.text)], quote2 = (q) => q ? `<p class="pi-hint">「${esc(q)}」</p>` : "", html = `<p class="pi-hint">读了第${r.from}–${r.to}楼。勾选的会写进进度和线索表格。</p>
+        ${okFacts.map((f) => `<label class="pi-check"><input type="checkbox" data-kv-f="${esc(f.id)}" checked><span>线索：${esc(r.labelOf(f.id))}</span></label>${quote2(f.quote)}`).join("")}
+        ${okConds.map((x, i) => `<label class="pi-check"><input type="checkbox" data-kv-c="${i}" checked><span>条件成立：${esc(x.text)}</span></label>${quote2(x.quote)}`).join("")}
         ${okFacts.length || okConds.length ? "" : '<p class="pi-hint">这几楼里没找到新拿到的线索或成立的条件。</p>'}
         ${miss.length ? `<details class="pi-fold"><summary>没找到的（${miss.length}，可能剧透）</summary>${miss.map((t) => `<p class="pi-hint">${esc(t)}</p>`).join("")}</details>` : ""}`, sel = await openDialog({
       title: title2,
@@ -13795,7 +13805,7 @@ ${list.join(`
       let iso0 = deps.clue.opScope().iso, t = deps.ticket();
       try {
         lastKey = key;
-        let checks = trpgCheckResults(chat), recent = recentTwo(chat), candidates = kpCandidates({ prog: deps.getProgress(), chat, floor: at, state: c.state, snap: c.snap, effective: (id, snap2) => effectiveFact2(id, snap2, c.prog), checks }), says = kpPendingSays({ compiled: c.compiled, state: c.state, conds: c.prog.trpgConds }), scenes = kpScenes(c.state), labels = isPlainObject(project.clue.labels) ? project.clue.labels : {}, labelOf = (id) => kpFactLabel(labels, id, (candidates.find((x) => x.fact === id) || {}).text), ctx2 = steerContext(project, c), messages = kpCheckMessages({ recent, candidates, says, scenes, stage: ctx2.stage, rules: ctx2.rules, labelOf });
+        let checks = trpgCheckResults(chat), recent = recentTwo(chat), candidates = kpCandidates({ prog: deps.getProgress(), chat, floor: at, state: c.state, snap: c.snap, effective: (id, snap2) => effectiveFact2(id, snap2, c.prog), checks }), says = kpPendingSays({ compiled: c.compiled, state: c.state, conds: c.prog.trpgConds }), scenes = kpScenes(c.state), labels = isPlainObject(project.clue.labels) ? project.clue.labels : {}, labelOf2 = (id) => kpFactLabel(labels, id, (candidates.find((x) => x.fact === id) || {}).text), ctx2 = steerContext(project, c), messages = kpCheckMessages({ recent, candidates, says, scenes, stage: ctx2.stage, rules: ctx2.rules, labelOf: labelOf2 });
         log(`跑团检测：第 ${at} 楼，${candidates.length} 条线索、${says.length} 个条件`);
         let parsed = null;
         for (let attempt = 0; ; attempt += 1)
@@ -13817,7 +13827,7 @@ ${list.join(`
           if (!(!f.ok || prog0[f.id]))
             try {
               let text2 = (candidates.find((x) => x.fact === f.id) || {}).text || "";
-              deps.clue.act({ kind: "fact", target: f.id, value: "confirmed", text: text2, note: KP_NOTE }), recorded.push({ id: f.id, text: text2, label: labelOf(f.id) });
+              deps.clue.act({ kind: "fact", target: f.id, value: "confirmed", text: text2, note: KP_NOTE }), recorded.push({ id: f.id, text: text2, label: labelOf2(f.id) });
             } catch (error) {
               log(`跑团检测：记录线索失败：${error.message}`);
             }
@@ -13830,7 +13840,7 @@ ${list.join(`
         let stage = c.state.current ? c.state.current.id : "", kp = kpOf(), muted = !!stage && kp.offMuted === stage, conds = { ...kp.conds || {} };
         for (let x of result2.conds) x.ok && (conds[x.text] = { floor: at, quote: x.quote });
         let tables = await mirrorTables(recorded, project, t, iso0);
-        return deps.ticketValid(t) ? (saveKp2({ conds, log: pushLog(kp.log, { ...kpLogEntry({ floor: at, result: result2, labelOf, off: result2.offTrack }), ...tables.length ? { tables } : {} }) }), deps.clue.invalidate("kp-check"), result2.offTrack && !muted && offerOffTrack({ result: result2, stage }), log(`跑团检测完成：拿到 ${result2.facts.filter((x) => x.ok).length} 条线索，${result2.conds.filter((x) => x.ok).length} 个条件成立${result2.offTrack ? "，偏离模组" : ""}`), result2) : (log("跑团检测写表后聊天或项目已切换，不再保存日志"), null);
+        return deps.ticketValid(t) ? (saveKp2({ conds, log: pushLog(kp.log, { ...kpLogEntry({ floor: at, result: result2, labelOf: labelOf2, off: result2.offTrack }), ...tables.length ? { tables } : {} }) }), deps.clue.invalidate("kp-check"), result2.offTrack && !muted && offerOffTrack({ result: result2, stage }), log(`跑团检测完成：拿到 ${result2.facts.filter((x) => x.ok).length} 条线索，${result2.conds.filter((x) => x.ok).length} 个条件成立${result2.offTrack ? "，偏离模组" : ""}`), result2) : (log("跑团检测写表后聊天或项目已切换，不再保存日志"), null);
       } catch (error) {
         return deps.ticketValid(t) && (lastKey = "", log(`跑团检测失败：${error.message}`), notice.show({
           id: "checkfail",
@@ -13964,7 +13974,7 @@ ${list.join(`
       if (!recent.length) return { error: "聊天里还没有正文" };
       let candidates = kpRecheckCandidates({ compiled: c.compiled, state: c.state, snap: c.snap, effective: (id, snap2) => effectiveFact2(id, snap2, c.prog), checks: trpgCheckResults(chat) }), says = kpPendingSays({ compiled: c.compiled, state: c.state, conds: c.prog.trpgConds });
       if (!candidates.length && !says.length) return { empty: !0 };
-      let labels = isPlainObject(project.clue.labels) ? project.clue.labels : {}, labelOf = (id) => kpFactLabel(labels, id, (candidates.find((x) => x.fact === id) || {}).text), ctx2 = steerContext(project, c), messages = kpRecheckMessages({ recent, candidates, says, stage: ctx2.stage, rules: ctx2.rules, labelOf }), t = deps.ticket(), iso0 = deps.clue.opScope().iso;
+      let labels = isPlainObject(project.clue.labels) ? project.clue.labels : {}, labelOf2 = (id) => kpFactLabel(labels, id, (candidates.find((x) => x.fact === id) || {}).text), ctx2 = steerContext(project, c), messages = kpRecheckMessages({ recent, candidates, says, stage: ctx2.stage, rules: ctx2.rules, labelOf: labelOf2 }), t = deps.ticket(), iso0 = deps.clue.opScope().iso;
       running2 = !0, log(`重新核实阶段：第 ${recent[0].floor}–${recent[recent.length - 1].floor} 楼，${candidates.length} 条线索、${says.length} 个条件`);
       try {
         let parsed = null;
@@ -13977,7 +13987,7 @@ ${list.join(`
             if (!deps.ticketValid(t) || attempt >= CHECK_RETRIES) throw error;
             log(`重新核实请求失败：${error.message}，${RETRY_GAP_MS / 1e3} 秒后第 ${attempt + 1} 次重试`), await new Promise((resolve) => deps.setTimeout(resolve, RETRY_GAP_MS));
           }
-        return deps.ticketValid(t) ? { result: verifyKp(parsed, { candidates, says, scenes: [], recent }), candidates, labelOf, from: recent[0].floor, to: recent[recent.length - 1].floor, t, iso0 } : null;
+        return deps.ticketValid(t) ? { result: verifyKp(parsed, { candidates, says, scenes: [], recent }), candidates, labelOf: labelOf2, from: recent[0].floor, to: recent[recent.length - 1].floor, t, iso0 } : null;
       } finally {
         running2 = !1, again && (again = !1, deps.setTimeout(() => run({ floor: -1 }), 0));
       }
@@ -17701,9 +17711,9 @@ ${add}` : add;
 `);
   }
   function mergeImportParts(vols, { rewrite = !1 } = {}) {
-    let stages = [], conflicts = [], seen = /* @__PURE__ */ new Set(), skipped = 0, asList = (x) => Array.isArray(x) ? x : isPlainObject(x) ? [x] : [], same2 = (a, b) => JSON.stringify(a) === JSON.stringify(b), empty = (v) => v == null || v === "" || Array.isArray(v) && !v.length, mergeFields = (into, from, skip, where) => {
+    let stages = [], conflicts = [], seen = /* @__PURE__ */ new Set(), skipped = 0, asList = (x) => Array.isArray(x) ? x : isPlainObject(x) ? [x] : [], same2 = (a, b) => JSON.stringify(a) === JSON.stringify(b), empty2 = (v) => v == null || v === "" || Array.isArray(v) && !v.length, mergeFields = (into, from, skip, where) => {
       for (let [k, v] of Object.entries(from))
-        skip.includes(k) || empty(v) || (empty(into[k]) ? into[k] = v : same2(into[k], v) || (rewrite ? skipped++ : conflicts.push({ ...where, field: k, kept: into[k], other: v })));
+        skip.includes(k) || empty2(v) || (empty2(into[k]) ? into[k] = v : same2(into[k], v) || (rewrite ? skipped++ : conflicts.push({ ...where, field: k, kept: into[k], other: v })));
     }, mergeNode = (a, b, where) => {
       let finds = asList(a.发现);
       for (let d of asList(b.发现)) {
@@ -18738,8 +18748,8 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
         ]
       });
       if (!picked) return;
-      let empty = picked.filter((f) => !f.label);
-      if (empty.length) return toast("warning", `标签不能为空：${empty.map((f) => f.code).join("、")}`);
+      let empty2 = picked.filter((f) => !f.label);
+      if (empty2.length) return toast("warning", `标签不能为空：${empty2.map((f) => f.code).join("、")}`);
       let live2 = () => prebuildScopeValid(view, scope) && view.runtime.clue.opScope().iso === s0.iso, pid = project.id, changed = picked.filter((f) => f.label !== f.table.label || f.criterion !== f.table.criterion), synced = picked.filter((f) => !changed.includes(f) && f.draft && f.draft.label === f.label && f.draft.criterion === f.criterion);
       if (!live2()) return toast("warning", "确认期间已切换聊天、项目、推进方式或数据隔离，未写入。请回原聊天重试。");
       let checked = picked.filter((f) => !changed.includes(f) && !synced.includes(f) && f.src === "ai");
@@ -18853,8 +18863,8 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
         ]
       });
       if (!picked) return;
-      let empty = picked.filter((f) => !f.label);
-      if (empty.length) return toast("warning", `请为这些线索填写不透露答案的标签：${empty.map((f) => f.code).join("、")}`);
+      let empty2 = picked.filter((f) => !f.label);
+      if (empty2.length) return toast("warning", `请为这些线索填写不透露答案的标签：${empty2.map((f) => f.code).join("、")}`);
       if (!prebuildScopeValid(view, scope))
         return toast("warning", "确认期间已切换聊天、项目、推进方式或数据隔离，未写入。请回原聊天重试。");
       keepLabels(view, picked, scope.projectId);
@@ -18940,8 +18950,8 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
       });
       if (!picked) return;
       if (!hasFacts) {
-        let empty = picked.filter((f) => !f.label);
-        if (empty.length) return toast("warning", `请为这些线索填写不透露答案的标签：${empty.map((f) => f.code).join("、")}`);
+        let empty2 = picked.filter((f) => !f.label);
+        if (empty2.length) return toast("warning", `请为这些线索填写不透露答案的标签：${empty2.map((f) => f.code).join("、")}`);
       }
       if (!prebuildScopeValid(view, scope))
         return toast("warning", "确认期间已切换聊天、项目、推进方式或数据隔离，未导入。请回原聊天重试。");
@@ -19255,12 +19265,12 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
           ${l.brief ? `<p class="pi-hint">${esc(l.brief)}</p>` : ""}${wait ? `<p class="pi-hint">${esc(maskFacts(wait))}</p>` : ""}${fm ? fm.kept : ""}${orig}${fix}${tierBtns}</div>`;
     }, mainBtn = mains.length > 1 || c.prog.mainPaused ? `<button type="button" class="pi-btn is-sm${c.prog.mainPaused ? " is-primary" : ""}" data-act="clue-pause-mains" data-value="${c.prog.mainPaused ? "" : "1"}" title="${c.prog.mainPaused ? "主线恢复注入，原进行中的主线继续" : "所有主线暂停推进与注入；支线照常"}">${c.prog.mainPaused ? "继续全部主线" : "暂停全部主线"}</button>` : "", sideBtn = sides.length ? `<button type="button" class="pi-btn is-sm${c.prog.sidePaused ? " is-primary" : ""}" data-act="clue-pause-side" data-value="${c.prog.sidePaused ? "" : "1"}" title="${c.prog.sidePaused ? "支线恢复注入和提示，原进行中的支线继续" : "所有支线停止注入和新提示；主线照常，进度和名额保留"}">${c.prog.sidePaused ? "继续全部支线" : "暂停全部支线"}</button>` : "", endNote = fold ? fold.blocked ? `<p class="pi-hint">${esc(fold.blocked)}，不收起。</p>` : autoFold ? "" : '<p class="pi-hint">可在「⋯」里手动收起。</p>' : "", foldedRows = fold ? fold.status.filter((x) => x.st === "folded" || x.st === "lost").length : 0, chatFold = autoFold && project.clue.foldAuto !== !1 ? view0.runtime.clue.foldChat() : "on", ask2 = chatFold === "" && fold.lines.some((x) => x.rows) ? '<p class="pi-hint">本聊天尚未开启自动收起。 <button type="button" class="pi-btn is-sm" data-act="clue-fold-chat" data-value="ask">开启</button></p>' : chatFold === "off" ? '<p class="pi-hint">本聊天不收起。 <button type="button" class="pi-btn is-sm" data-act="clue-fold-chat" data-value="ask">开启</button></p>' : "", endFoot = fold && fold.records.length ? `<div class="pi-line-endfoot"><span class="pi-meta">${foldedRows ? `已收起${foldedRows}行` : ""}</span><span class="pi-spacer"></span><button type="button" class="pi-btn is-sm is-ghost" data-act="clue-fold-log">收起记录</button></div>` : "", body = list.map(row2).join("");
     if (list.length === 1 && (body += lineGroup(list[0]) === "end" ? endNote + ask2 + endFoot : endFoot), list.length > 1) {
-      let q = cellText(st72.lineQ), tab = LINE_TABS.some(([k]) => k === st72.lineTab) ? st72.lineTab : "now", of = (g) => list.filter((s) => lineGroup(s) === g), empty = { now: "暂无进行中的剧情线。", idle: "暂无未进行的剧情线。", end: "暂无已结束的剧情线。" };
+      let q = cellText(st72.lineQ), tab = LINE_TABS.some(([k]) => k === st72.lineTab) ? st72.lineTab : "now", of = (g) => list.filter((s) => lineGroup(s) === g), empty2 = { now: "暂无进行中的剧情线。", idle: "暂无未进行的剧情线。", end: "暂无已结束的剧情线。" };
       body = `<div class="pi-seg pi-line-seg">${LINE_TABS.map(([k, label]) => `<button type="button" class="pi-seg-btn${k === tab && !q ? " is-sel" : ""}" data-act="clue-line-tab" data-tab="${k}">${label}（${of(k).length}）</button>`).join("")}</div>
         ${list.length > 8 ? `<input class="pi-inp pi-line-search" data-clue-line-q placeholder="搜索编号或名称" value="${esc(q)}">` : ""}
         ${LINE_TABS.map(([k]) => {
         let rows2 = of(k);
-        return `<div class="pi-line-grp" data-line-grp="${k}"${q || k === tab ? "" : " hidden"}>${k === "end" && rows2.length ? endNote + ask2 : ""}${rows2.map(row2).join("") || (q ? "" : `<p class="pi-hint">${empty[k]}</p>`)}${k === "end" ? endFoot : ""}</div>`;
+        return `<div class="pi-line-grp" data-line-grp="${k}"${q || k === tab ? "" : " hidden"}>${k === "end" && rows2.length ? endNote + ask2 : ""}${rows2.map(row2).join("") || (q ? "" : `<p class="pi-hint">${empty2[k]}</p>`)}${k === "end" ? endFoot : ""}</div>`;
       }).join("")}`;
     }
     return `<div class="pi-card pi-line-card"><h3>剧情线${list.length > 1 ? `<span class="pi-meta">共${list.length}条</span>` : ""}${c.prog.mainPaused || c.prog.sidePaused ? `<span class="pi-spacer"></span>${c.prog.mainPaused ? mainBtn : ""}${c.prog.sidePaused ? sideBtn : ""}` : ""}</h3>
@@ -19345,7 +19355,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
         let toReview = [
           ...[...fresh].map(([code, v]) => ({ code, label: v.label, criterion: v.criterion })),
           ...todo.filter((x) => x.review).map((x) => ({ code: x.code, ...x.review }))
-        ], itemOf2 = (b) => {
+        ], itemOf3 = (b) => {
           let c = ctxOf.get(b.code).ctx;
           return {
             code: b.code,
@@ -19357,7 +19367,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
             record: [c.record, ...(c.routes || []).map((q) => q.record)].filter(Boolean).join("；或者："),
             pieces: factLabelCheck({ label: b.label, criterion: b.criterion }, c, { secrets }).suspects.map((s) => s.piece)
           };
-        }, rvItems = new Map(toReview.map((b) => [b, itemOf2(b)])), rvTasks = labelBatchesBy(toReview, (batch) => msgChars(factLabelReviewMessages(batch.map((b) => rvItems.get(b))))).map(
+        }, rvItems = new Map(toReview.map((b) => [b, itemOf3(b)])), rvTasks = labelBatchesBy(toReview, (batch) => msgChars(factLabelReviewMessages(batch.map((b) => rvItems.get(b))))).map(
           (batch) => async () => {
             let items = batch.map((b) => rvItems.get(b)), map = parseFactLabelReview(
               await ask(view, "outline", factLabelReviewMessages(items)),
@@ -19680,6 +19690,368 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
     splitLongText: () => splitLongText2,
     splitUnitReplies: () => splitUnitReplies2
   });
+
+  // src/trpg/trpg-import-check.js
+  var itemOf2 = (n) => isPlainObject(n.item) ? n.item : {}, sat = (cond, fn) => !cond || (cond.kind === "group" ? cond.mode === "any" ? cond.items.some((i) => sat(i, fn)) : cond.items.every((i) => sat(i, fn)) : fn(cond)), isClock = (a) => a.kind === "time" || a.kind === "say";
+  function atomsOf2(cond, out = []) {
+    return cond && (cond.kind === "group" ? cond.items.forEach((i) => atomsOf2(i, out)) : out.push(cond)), out;
+  }
+  var quote = (names2) => names2.map((n) => `「${n}」`).join("、");
+  function clockItems(...conds) {
+    let out = [], seen = /* @__PURE__ */ new Set();
+    for (let a of conds.flatMap((c) => atomsOf2(c)).filter(isClock)) {
+      let it = a.kind === "time" ? `时间 ${a.op} ${a.value}` : { 情况: a.text }, k = normAtom(it);
+      seen.has(k) || (seen.add(k), out.push(it));
+    }
+    return out;
+  }
+  function unatom(s) {
+    let m = /^(事实|知情|核实|节点|表|线|情况)\s*[:：]\s*([\s\S]*)$/.exec(s);
+    return m ? [m[1], m[2]] : (m = /^时间\s*([\s\S]*)$/.exec(s), m ? ["时间", m[1]] : null);
+  }
+  var atomText = (it) => typeof it == "string" ? it : isPlainObject(it) && Object.keys(it).length === 1 ? Object.keys(it)[0] === "时间" ? `时间 ${it.时间}` : `${Object.keys(it)[0]}: ${Object.values(it)[0]}` : "", normAtom = (it) => atomText(it).replace(/\s+/g, "").replace(/：/g, ":") || JSON.stringify(it), isAny = (v) => isPlainObject(v) && Array.isArray(v.任一) && Object.keys(v).length === 1, isAll = (v) => isPlainObject(v) && Array.isArray(v.全部) && Object.keys(v).length === 1, empty = (v) => v == null || v === "" || Array.isArray(v) && !v.length || isPlainObject(v) && !Object.keys(v).length;
+  function withFallback(orig, items) {
+    if (empty(orig)) return orig;
+    let have = new Set((isAny(orig) ? orig.任一 : [orig]).map(normAtom)), extra = items.filter((it) => !have.has(normAtom(it)));
+    return extra.length ? isAny(orig) ? { 任一: [...orig.任一, ...extra] } : { 任一: [orig, ...extra] } : orig;
+  }
+  function withAll(orig, items) {
+    return empty(orig) ? { 全部: items } : isAll(orig) ? { 全部: [...orig.全部, ...items] } : { 全部: [orig, ...items] };
+  }
+  function mapRaw(raw, fn) {
+    if (typeof raw == "string") return fn(raw);
+    if (Array.isArray(raw)) return raw.map((x) => mapRaw(x, fn));
+    if (!isPlainObject(raw)) return raw;
+    let out = {};
+    for (let [k, v] of Object.entries(raw))
+      if (k === "全部" || k === "任一") out[k] = mapRaw(v, fn);
+      else if (typeof v == "string" && unatom(`${k}${k === "时间" ? " " : ":"}${v}`)) {
+        let t = k === "时间" ? `时间 ${v}` : `${k}: ${v}`, r = fn(t), u = r !== t && typeof r == "string" ? unatom(r) : null;
+        u ? out[u[0]] = u[1] : out[k] = v;
+      } else out[k] = v;
+    return out;
+  }
+  function dropRaw(raw, pred) {
+    if (typeof raw == "string") return pred(raw) ? void 0 : raw;
+    if (Array.isArray(raw)) {
+      let l = raw.map((x) => dropRaw(x, pred)).filter((x) => x !== void 0);
+      return l.length ? l : void 0;
+    }
+    if (!isPlainObject(raw)) return raw;
+    let out = {};
+    for (let [k, v] of Object.entries(raw))
+      if (k === "全部" || k === "任一") {
+        let l = dropRaw(v, pred);
+        l !== void 0 && (out[k] = l);
+      } else {
+        if (typeof v == "string" && pred(k === "时间" ? `时间 ${v}` : `${k}: ${v}`)) continue;
+        out[k] = v;
+      }
+    return Object.keys(out).length ? out : void 0;
+  }
+  var factAtom = (code) => new RegExp(`^(?:事实|核实|知情)\\s*[:：]\\s*${code.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:\\s*@[\\s\\S]*)?$`), STAGE_CONDS = ["进入条件", "结束条件"], NODE_CONDS = ["开放条件", "提前条件", "完成条件"];
+  function applyImportFix(volumes, q) {
+    let stage = (id) => volumes.flatMap((v) => v.stages).find((s) => s.id === id), locate = (uid) => {
+      for (let v of volumes) for (let s of v.stages) for (let n of stageNodes(s.data)) if (isPlainObject(n.item) && nodeUid2(n.item) === uid) return n.item;
+      return null;
+    }, each = (st9, fn) => {
+      if (!(!st9 || !isPlainObject(st9.data))) {
+        for (let k of STAGE_CONDS) st9.data[k] != null && (st9.data[k] = fn(st9.data[k]));
+        for (let n of stageNodes(st9.data)) if (isPlainObject(n.item)) for (let k of NODE_CONDS) n.item[k] != null && (n.item[k] = fn(n.item[k]));
+      }
+    };
+    switch (q.op) {
+      case "fallback":
+        for (let { uid, field: field2 } of q.nodes || []) {
+          let it = locate(uid);
+          it && it[field2] != null && (it[field2] = withFallback(it[field2], q.items));
+        }
+        for (let id of q.ends || []) {
+          let st9 = stage(id);
+          st9 && st9.data && st9.data.结束条件 != null && (st9.data.结束条件 = withFallback(st9.data.结束条件, q.items));
+        }
+        break;
+      case "optional":
+        for (let uid of q.nodes || []) {
+          let it = locate(uid);
+          it && (it.必需 = !1);
+        }
+        break;
+      case "gate": {
+        let st9 = stage(q.stage);
+        st9 && st9.data && (st9.data.进入条件 = withAll(st9.data.进入条件, q.nodes.map((uid) => ({ 节点: uid }))));
+        break;
+      }
+      case "rename":
+        each(stage(q.stage), (raw) => mapRaw(raw, (t) => factAtom(q.from).test(t) ? t.replace(q.from, q.to) : t));
+        break;
+      case "drop":
+        each(stage(q.stage), (raw) => {
+          let r = dropRaw(raw, (t) => factAtom(q.from).test(t));
+          return r === void 0 ? raw : r;
+        });
+        break;
+      case "time":
+        each(
+          stage(q.stage),
+          (raw) => mapRaw(raw, (t) => {
+            let m = /^时间\s*([=!<>≥≤＞＜＝]+)\s*([\s\S]+)$/.exec(t);
+            return m && m[2].trim() === q.from ? `时间 ${m[1]} ${q.to}` : t;
+          })
+        );
+        break;
+    }
+    return volumes;
+  }
+  function worksOn(volumes, q) {
+    try {
+      let copy = JSON.parse(JSON.stringify(volumes)), before = compileClue2(copy).errors.length;
+      return applyImportFix(copy, q), JSON.stringify(copy) !== JSON.stringify(volumes) && compileClue2(copy).errors.length <= before;
+    } catch {
+      return !1;
+    }
+  }
+  var fixOf = (volumes, label, q) => worksOn(volumes, q) ? { label, q } : null;
+  function chainsOf(c) {
+    return [c.units.filter((u) => !u.line), ...(c.lines || []).map((l) => l.units || [])].filter((x) => x.length);
+  }
+  var shortText2 = (t, n = 12) => {
+    let x = String(t || "").trim().replace(/[。；，、.!！]+$/, "");
+    return x.length > n ? `${x.slice(0, n)}…` : x;
+  };
+  function factInfo(compiled) {
+    let out = /* @__PURE__ */ new Map();
+    for (let n of compiled.nodes)
+      for (let d of discoveryList2(itemOf2(n)))
+        d.fact && (out.has(d.fact) ? out.get(d.fact).nodes.push(n) : out.set(d.fact, { text: d.text, nodes: [n], checks: [] }), out.get(d.fact).checks.push(d.check || null));
+    return out;
+  }
+  var labelOf = (info, labels, code) => labels && labels[code] && labels[code].label || shortText2(info.get(code) && info.get(code).text) || "一条线索";
+  function importFlowIssues(volumes, { labels = null } = {}) {
+    let compiled = compileClue2(volumes || []), out = [], hang = /* @__PURE__ */ new Map(), cross = /* @__PURE__ */ new Map(), info = factInfo(compiled), byUid = new Map(compiled.nodes.filter((n) => n.uid).map((n) => [n.uid, n]));
+    if (compiled.errors.length && compiled.errors.some((e) => /引用了不存在的节点/.test(e))) return out;
+    for (let ch of chainsOf(compiled))
+      for (let k = 0; k < ch.length - 1; k++) {
+        let cur = ch[k], next = ch[k + 1], r = clueReachability2(volumes, { clock: "reached", skipGives: (n) => n.unit.id === cur.id }), notEntered = (u) => r.stuckStages.some((s) => s.stageId === u.id && /^进不去/.test(s.why)), own = r.stuckStages.find((s) => s.stageId === cur.id), left = r.stuckNodes.filter((n) => n.stageId === cur.id && byUid.has(n.node));
+        own && !/^进不去/.test(own.why) && !notEntered(next) && (left.length || /^结束条件不满足/.test(own.why)) && (hang.has(cur.id) || hang.set(cur.id, { cur, next, nodes: left.map((n) => byUid.get(n.node)), end: /^结束条件不满足/.test(own.why) }));
+        for (let j = k + 1; j < ch.length; j++)
+          if (!notEntered(ch[j]))
+            for (let s of r.stuckNodes.filter((n) => n.stageId === ch[j].id && byUid.has(n.node))) {
+              let n0 = byUid.get(s.node), refs = conditionRefs2(/^一直打不开/.test(s.why) ? n0.open : n0.done);
+              if (![...refs.facts].some((f) => info.has(f) && info.get(f).nodes.every((x) => x.unit === cur)) && ![...refs.nodes].some((id) => byUid.has(id) && byUid.get(id).unit === cur))
+                continue;
+              let e = cross.get(s.node) || { node: byUid.get(s.node), skipped: [], locked: !1 };
+              e.skipped.includes(cur) || e.skipped.push(cur), e.locked = e.locked || /^一直打不开/.test(s.why), cross.set(s.node, e);
+            }
+      }
+    for (let { cur, next, nodes, end } of hang.values()) {
+      let hasDone = nodes.filter((n) => n.done), items = clockItems(cur.clue.end).length ? clockItems(cur.clue.end) : clockItems(next.clue.enter), names2 = nodes.map((n) => n.name || "一个节点"), ends = end && cur.clue.end ? [cur.id] : [], opt = [
+        nodes.length ? fixOf(volumes, "把这些节点改为可选", { op: "optional", nodes: nodes.filter((n) => n.uid).map((n) => n.uid) }) : null,
+        nodes.length && next.clue.hasEnter ? fixOf(volumes, `让「${stageLabel(next.stage.key)}」要等这些节点做完`, { op: "gate", stage: next.id, nodes: nodes.filter((n) => n.uid).map((n) => n.uid) }) : null
+      ].filter(Boolean), main = items.length ? fixOf(volumes, "补上时间兜底", { op: "fallback", items, nodes: hasDone.filter((n) => n.uid).map((n) => ({ uid: n.uid, field: "完成条件" })), ends }) : null, prev = stageLabel(cur.stage.key);
+      out.push({
+        level: "error",
+        kind: "gap",
+        name: "gap",
+        stage: prev,
+        stageId: cur.id,
+        nodeIds: nodes.map((n) => n.uid).filter(Boolean),
+        text: `阶段衔接：${stageLabel(next.stage.key)}不必等${prev}结束就能开始，但${prev}${nodes.length ? `的${quote(names2)}` : "的结束条件"}只认线索`,
+        plain: `「${stageLabel(next.stage.key)}」不必等「${prev}」结束就能开始，但「${prev}」${nodes.length ? `的${quote(names2)}` : "的结束条件"}只认线索；剧情跳过${nodes.length ? "它们" : "这些线索"}时，「${prev}」会一直显示进行中。`,
+        fix: items.length ? "给它们补上时间或情节的兜底，剧情推过去时也算完成。" : "给它们加上别的出路，或改为可选。",
+        ...main ? { quick: main } : {},
+        ...opt.length ? { alts: opt } : {}
+      });
+    }
+    let byStage = /* @__PURE__ */ new Map();
+    for (let e of cross.values()) {
+      let u = e.node.unit;
+      byStage.set(u.id, [...byStage.get(u.id) || [], e]);
+    }
+    for (let [id, list] of byStage) {
+      let u = list[0].node.unit, skipped = [...new Set(list.flatMap((e) => e.skipped.map((s) => stageLabel(s.stage.key))))], items = clockItems(u.clue.enter), nodes = list.filter((e) => e.node.uid), names2 = list.map((e) => e.node.name || "一个节点"), main = items.length ? fixOf(volumes, "补上本阶段的进入兜底", { op: "fallback", items, nodes: nodes.map((e) => ({ uid: e.node.uid, field: e.locked ? "开放条件" : "完成条件" })) }) : null;
+      out.push({
+        level: "error",
+        kind: "skip-stuck",
+        name: "skip",
+        stage: stageLabel(u.stage.key),
+        stageId: id,
+        nodeIds: nodes.map((e) => e.node.uid),
+        text: `跨阶段卡死：${skipped.join("、")}被时间推过去时，${stageLabel(u.stage.key)}的${names2.join("、")}开不了或完不成`,
+        plain: `如果剧情被时间推着走、跳过了「${skipped.join("」「")}」，「${stageLabel(u.stage.key)}」的${quote(names2)}就${list.some((e) => e.locked) ? "一直开不了" : "完不成"}：它们要的线索只在前面的阶段产出，而本阶段到时间就会开始。`,
+        fix: items.length ? "给它们补上本阶段的进入兜底，到点就放行。" : "让它们也能靠别的途径开放。",
+        ...main ? { quick: main } : {}
+      });
+    }
+    return out;
+  }
+  function editDistance(a, b) {
+    let d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
+    for (let j = 1; j <= b.length; j++) d[0][j] = j;
+    for (let i = 1; i <= a.length; i++)
+      for (let j = 1; j <= b.length; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    return d[a.length][b.length];
+  }
+  var CN = { 零: 0, "〇": 0, 一: 1, 二: 2, 两: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9 };
+  function cnInt(s) {
+    if (/^\d+$/.test(s)) return +s;
+    if (s.length === 1 && s in CN) return CN[s];
+    let m = /^([一二两三四五六七八九])?十([一二三四五六七八九])?$/.exec(s);
+    return m ? (m[1] ? CN[m[1]] : 1) * 10 + (m[2] ? CN[m[2]] : 0) : null;
+  }
+  function guessClock(text2) {
+    let m = /^(凌晨|清晨|早上|早晨|上午|中午|下午|傍晚|晚上|夜里|夜晚|深夜)?\s*(\d{1,2}|[零〇一二两三四五六七八九十]{1,3})\s*(?:[:：]|点|时)\s*(半|整|\d{1,2}|[零〇一二三四五六七八九十]{1,3})?\s*分?\s*$/.exec(String(text2 || "").trim());
+    if (!m) return null;
+    let h = cnInt(m[2]), mm = m[3] === "半" ? 30 : !m[3] || m[3] === "整" ? 0 : cnInt(m[3]);
+    if (h == null || mm == null || h > 24 || mm > 59) return null;
+    let v = readClock(`${m[1] || ""}${h}:${String(mm).padStart(2, "0")}`);
+    return v == null ? null : clockText2(v);
+  }
+  function mustNodes(cond, producers, mode2) {
+    if (!cond) return /* @__PURE__ */ new Set();
+    if (cond.kind === "group") {
+      let sets = cond.items.map((i) => mustNodes(i, producers, mode2));
+      return cond.mode === "any" ? sets.reduce((a, b) => new Set([...a].filter((x) => b.has(x))), sets[0] || /* @__PURE__ */ new Set()) : new Set(sets.flatMap((s) => [...s]));
+    }
+    if (cond.kind === "node") return /* @__PURE__ */ new Set([cond.node]);
+    if (mode2 === "open" && cond.kind === "fact") {
+      let p = producers.get(cond.fact);
+      return p && p.size === 1 ? new Set(p) : /* @__PURE__ */ new Set();
+    }
+    return /* @__PURE__ */ new Set();
+  }
+  function findCycles(edges) {
+    let out = [], seen = /* @__PURE__ */ new Set(), state = /* @__PURE__ */ new Map(), visit = (u, path) => {
+      state.set(u, 1);
+      for (let v of edges.get(u) || [])
+        if (state.get(v) === 1) {
+          let cyc = path.slice(path.indexOf(v));
+          cyc.length > 1 && !seen.has([...cyc].sort().join()) && (seen.add([...cyc].sort().join()), out.push(cyc));
+        } else state.has(v) || visit(v, [...path, v]);
+      state.set(u, 2);
+    };
+    for (let u of edges.keys()) state.has(u) || visit(u, [u]);
+    return out;
+  }
+  function importCondIssues(volumes, { only = null, labels = null, timeBound = !0 } = {}) {
+    let compiled = compileClue2(volumes || []), info = factInfo(compiled), out = [], mine = (u) => !only || only.has(u.id), produced = new Set(info.keys());
+    for (let l of compiled.lines || [])
+      conditionRefs2(l.open).facts.forEach((f) => produced.add(f)), l.legacyFact && produced.add(l.legacyFact);
+    let nearest = (code) => [...info.keys()].map((f) => [f, editDistance(code.toLowerCase(), f.toLowerCase())]).filter(([, d]) => d <= Math.max(2, Math.floor(code.length / 3))).sort((a, b) => a[1] - b[1]).slice(0, 3).map(([f]) => f), draftVols = volumes || [];
+    for (let u of compiled.units.filter(mine)) {
+      let where = /* @__PURE__ */ new Map(), times = /* @__PURE__ */ new Map(), spots = [
+        ["本阶段的进入条件", u.clue.enter],
+        ["本阶段的结束条件", u.clue.end],
+        ...compiled.nodes.filter((n) => n.unit === u).flatMap((n) => [["开放条件", n.open], ["提前条件", n.early], ["完成条件", n.done]].map(([w, c]) => [`节点「${n.name}」的${w}`, c]))
+      ];
+      for (let [place, c] of spots) {
+        for (let f of conditionRefs2(c).facts) produced.has(f) || where.set(f, [...where.get(f) || [], place]);
+        for (let a of atomsOf2(c).filter((x) => x.kind === "time" && ["==", "!=", ">=", "<=", ">", "<"].includes(x.op) && !/^\d{1,2}[:：]\d{2}$/.test(String(x.value).trim())))
+          times.set(a.value, [...times.get(a.value) || [], place]);
+      }
+      for (let [code, ws] of where) {
+        let near = nearest(code), alts = near.map((f) => fixOf(draftVols, `改成「${labelOf(info, labels, f)}」`, { op: "rename", stage: u.id, from: code, to: f })).filter(Boolean), drop = fixOf(draftVols, "去掉这一项", { op: "drop", stage: u.id, from: code }), place = [...new Set(ws)].join("、");
+        out.push({
+          level: "error",
+          kind: "orphan",
+          name: code,
+          stage: stageLabel(u.stage.key),
+          stageId: u.id,
+          text: `条件用到了没有任何节点产出的线索：${stageLabel(u.stage.key)}，${place}`,
+          plain: `「${stageLabel(u.stage.key)}」里，${place}要一条找不到的线索：没有任何节点产出它，玩家永远拿不到。`,
+          fix: near.length ? `是不是写错了？最接近的是${near.map((f) => `「${labelOf(info, labels, f)}」`).join("、")}。` : "补上产出它的节点，或把这一项从条件里去掉。",
+          ...alts[0] ? { quick: alts[0] } : {},
+          ...[...alts.slice(1), ...drop ? [drop] : []].length ? { alts: [...alts.slice(1), ...drop ? [drop] : []] } : {}
+        });
+      }
+      for (let [val, ws] of times) {
+        let to = guessClock(val), fx = to ? fixOf(draftVols, `改成${to}`, { op: "time", stage: u.id, from: String(val).trim(), to }) : null;
+        out.push({
+          level: "warn",
+          kind: "time-format",
+          name: String(val),
+          stage: stageLabel(u.stage.key),
+          stageId: u.id,
+          text: `时间写法读不出钟点：${stageLabel(u.stage.key)}，${[...new Set(ws)].join("、")}写了「${val}」`,
+          plain: `「${stageLabel(u.stage.key)}」里，${[...new Set(ws)].join("、")}把时间写成了「${val}」，插件按钟点比较，读不出来。`,
+          fix: to ? `应写成${to}这样的钟点。` : "请写成19:30这样的钟点。",
+          ...fx ? { quick: fx } : {}
+        });
+      }
+    }
+    if (!timeBound) {
+      let u = compiled.units.filter(mine).find((x) => atomsOfUnit(x, compiled).some((a) => a.kind === "time"));
+      u && out.push({
+        level: "warn",
+        kind: "time-unbound",
+        name: "time-unbound",
+        stage: stageLabel(u.stage.key),
+        stageId: u.id,
+        text: "条件里用到了时间，但项目还没有绑定故事时间",
+        plain: "条件里用到了时间，可项目还没有绑定故事时间所在的那一格，时间条件会一直算不出来。",
+        fix: "保存到模组后，到执行页的「表格绑定」里填上故事时间。",
+        action: { label: "去设置", act: "rv-bind" }
+      });
+    }
+    let producers = new Map([...info].map(([f, v]) => [f, new Set(v.nodes.map((n) => n.uid).filter(Boolean))])), nameOf = new Map(compiled.nodes.filter((n) => n.uid).map((n) => [n.uid, n])), seenCycle = /* @__PURE__ */ new Set();
+    for (let mode2 of ["open", "done"]) {
+      let edges = /* @__PURE__ */ new Map();
+      for (let n of compiled.nodes.filter((x) => x.uid)) edges.set(n.uid, [...mustNodes(mode2 === "open" ? n.open : n.done, producers, mode2)].filter((x) => x !== n.uid && nameOf.has(x)));
+      for (let cyc of findCycles(edges)) {
+        let key = [...cyc].sort().join();
+        if (seenCycle.has(key)) continue;
+        seenCycle.add(key);
+        let ns = cyc.map((x) => nameOf.get(x)), units = [...new Set(ns.map((n) => n.unit))];
+        only && !units.some(mine) || out.push({
+          level: "warn",
+          kind: "cycle",
+          name: key,
+          stageIds: units.map((x) => x.id),
+          stageId: units.find(mine) ? units.find(mine).id : units[0].id,
+          nodeIds: cyc,
+          text: `节点条件成环：${ns.map((n) => n.name).join("、")}`,
+          plain: `${quote(ns.map((n) => n.name))}互相等对方${mode2 === "open" ? "开放" : "完成"}，谁也等不到，这几个节点都不会走通。`,
+          fix: "改掉其中一个节点的条件，让它不必等另一个。"
+        });
+      }
+    }
+    let chainOfUnit = new Map(chainsOf(compiled).flatMap((ch) => ch.map((u, i) => [u.id, { ch, i }])));
+    for (let n of compiled.nodes.filter((x) => x.uid && x.open && mine(x.unit))) {
+      let at = chainOfUnit.get(n.unit.id), laters = [...mustNodes(n.open, producers, "open")].map((id) => nameOf.get(id)).filter((d) => d && d !== n && chainOfUnit.get(d.unit.id) && chainOfUnit.get(d.unit.id).ch === at.ch && chainOfUnit.get(d.unit.id).i > at.i);
+      laters.length && out.push({
+        level: "warn",
+        kind: "later-stage",
+        name: n.uid,
+        stage: stageLabel(n.unit.stage.key),
+        stageId: n.unit.id,
+        nodeIds: [n.uid],
+        text: `开放条件要等后面阶段的内容：${n.name}`,
+        plain: `「${n.name}」在「${stageLabel(n.unit.stage.key)}」，开放条件却要等${quote([...new Set(laters.map((d) => stageLabel(d.unit.stage.key)))])}才产出的内容，到那时这个阶段早就过去了。`,
+        fix: "看看这个节点的开放条件是不是写错了线索。"
+      });
+    }
+    for (let n of compiled.nodes.filter((x) => x.required && x.done && mine(x.unit))) {
+      let free = (f) => {
+        let v = info.get(f);
+        return !v || v.checks.some((c) => !c || c.fail && GOT_ANYWAY.test(c.fail));
+      };
+      sat(n.done, (a) => a.kind === "fact" ? free(a.fact) : !0) || out.push({
+        level: "warn",
+        kind: "judge-only",
+        name: n.uid || n.name,
+        stage: stageLabel(n.unit.stage.key),
+        stageId: n.unit.id,
+        nodeIds: [n.uid].filter(Boolean),
+        text: `必需节点只靠判定：${n.name}`,
+        plain: `「${n.name}」必须完成，它的完成条件却只能靠要掷骰的线索；判定失败又没写「仍然得到」的话，就会一直卡在这里。`,
+        fix: "给判定写上失败时也能拿到线索的情形，或在完成条件里加上别的出路。"
+      });
+    }
+    return out;
+  }
+  var atomsOfUnit = (u, compiled) => [u.clue.enter, u.clue.end, ...compiled.nodes.filter((n) => n.unit === u).flatMap((n) => [n.open, n.early, n.done])].flatMap((c) => atomsOf2(c));
+
+  // src/trpg/trpg-long-import.js
   var CHAPTER_HEAD2 = /^(?:#{1,4}\s+.+|第[0-9一二三四五六七八九十百零〇两]+[章回节幕部卷].*|Chapter\s+\d+.*|[一二三四五六七八九十]+、.+)$/i;
   function splitLongText2(text2, { target = 8e3, overlap = 300 } = {}) {
     let src = String(text2 || "").replace(/\r\n?/g, `
@@ -20279,7 +20651,7 @@ ${add}` : add;
     }
     return out.push(...importReachIssues2(volumes || [])), out;
   }
-  var shortText2 = (t, n = 20) => {
+  var shortText3 = (t, n = 20) => {
     let x = String(t || "").trim().replace(/[。；，、.!！]+$/, "");
     return x.length > n ? `${x.slice(0, n)}…` : x;
   };
@@ -20300,10 +20672,10 @@ ${add}` : add;
   }
   var FIELD_WORDS2 = { 入口: "入口", 地点: "地点", 场景: "场景", id: "编号", 发现: "发现", "发现.内容": "发现", "发现.记录": "登记标准（记录）", "发现.事实": "事实编号", 主线节点: "剧情节点", 支线事件: "可选事件", 世界动态: "世界动态" };
   function spotOf2(x) {
-    return { stageId: x.stageId, where: x.where, field: x.field, excerpt: shortText2(x.text, 60) };
+    return { stageId: x.stageId, where: x.where, field: x.field, excerpt: shortText3(x.text, 60) };
   }
   function routePlain2(r, facts) {
-    let path = r.nodeNames.map((n) => `「${n}」`).join("、然后"), need = r.needs.map((f) => `「${shortText2(facts.get(f) || f)}」`).join("或");
+    let path = r.nodeNames.map((n) => `「${n}」`).join("、然后"), need = r.needs.map((f) => `「${shortText3(facts.get(f) || f)}」`).join("或");
     return !r.gets.length && r.at !== "next" ? {
       plain: `「${r.stage}」：「${r.nodeNames[0]}」一直开不了（它的开放条件要的线索，前面拿不到），这条路走不通。`,
       fix: "看看它的开放条件：要的线索是不是写错了，或者前面阶段漏了产出这条线索的地方。",
@@ -20349,10 +20721,10 @@ ${add}` : add;
         level: "warn",
         text: `替代途径要到运行时才能确认：${r.stage}·${r.node}单独走完时，${r.why}`,
         plain: `「${r.stage}」：玩家只走${r.nodeNames.map((n) => `「${n}」`).join("、然后")}时能不能继续，要看游戏里表格、时间这些情况。`,
-        fix: "多半不用改；想确定的话，看看这一阶段的结束条件是不是依赖表格或时间。"
+        fix: "这条路能不能继续取决于表格里的值或谁知道什么；看看这一阶段的结束条件引用的格子是不是会有值。"
       });
     }
-    let reach = clueReachability2(applied, { knownFacts, claimedFacts }), all = [...reach.stuckStages, ...reach.stuckNodes].filter(mine), routed = new Set(out.filter((x) => x.kind === "route" && x.level === "error").map((x) => x.stageId)), follow = (x) => /上一阶段尚未结束|阶段未进入/.test(x.why), stuck = all.filter((x) => !follow(x) && !(routed.has(x.stageId) && !x.node && /^结束条件不满足|^必需节点做不完/.test(x.why))), after = all.filter(follow).length;
+    let late = clueReachability2(applied, { knownFacts, claimedFacts, clock: "reached" }), stuckLate = /* @__PURE__ */ new Set([...late.stuckStages.map((x) => `s${x.stageId}`), ...late.stuckNodes.map((x) => `n${x.node}`)]), clocky = (x) => !stuckLate.has(x.node ? `n${x.node}` : `s${x.stageId}`), reach = clueReachability2(applied, { knownFacts, claimedFacts, clock: "early" }), all = [...reach.stuckStages, ...reach.stuckNodes].filter(mine).filter((x) => !clocky(x)), routed = new Set(out.filter((x) => x.kind === "route" && x.level === "error").map((x) => x.stageId)), follow = (x) => /上一阶段尚未结束|阶段未进入/.test(x.why), stuck = all.filter((x) => !follow(x) && !(routed.has(x.stageId) && !x.node && /^结束条件不满足|^必需节点做不完/.test(x.why))), after = all.filter(follow).length;
     return !stuck.length && all.length && !routed.size && (stuck = all), stuck.length && reach.verdict === "blocked" && out.push({
       level: "error",
       kind: "reach",
@@ -20364,10 +20736,10 @@ ${add}` : add;
       level: "warn",
       kind: "reach-unknown",
       stageIds: [...new Set(stuck.map((x) => x.stageId).filter(Boolean))],
-      plain: `有些地方能不能走到，要看游戏里的时间、谁知道什么或表格里的值：${stuck.slice(0, 4).map((x) => `「${x.stage}」`).join("、")}。`,
-      fix: "多半不用改，游戏里自然会满足；确实卡住时可以在执行页手动开放。",
-      text: `有些地方取决于时间、知情或表格的值：${stuck.slice(0, 4).map((x) => `${x.stage}${x.node ? `·${x.node}` : ""}`).join("、")}`
-    }), out;
+      plain: `有些地方能不能走到，要看游戏里谁知道什么或表格里的值，导入时判断不了：${stuck.slice(0, 4).map((x) => `「${x.stage}」`).join("、")}。`,
+      fix: "看看这些地方的条件引用的表格格子、知情记录是不是真的会出现；确实卡住时可以在执行页手动开放。",
+      text: `有些地方取决于知情或表格的值：${stuck.slice(0, 4).map((x) => `${x.stage}${x.node ? `·${x.node}` : ""}`).join("、")}`
+    }), out.push(...importFlowIssues(applied).filter(mine)), out;
   }
   function importDoneText2(volumes) {
     return flattenUnits(volumes || []).map(
@@ -20376,9 +20748,9 @@ ${add}` : add;
 `);
   }
   function mergeImportParts2(vols, { rewrite = !1 } = {}) {
-    let stages = [], conflicts = [], seen = /* @__PURE__ */ new Set(), skipped = 0, asList = (x) => Array.isArray(x) ? x : isPlainObject(x) ? [x] : [], same2 = (a, b) => JSON.stringify(a) === JSON.stringify(b), empty = (v) => v == null || v === "" || Array.isArray(v) && !v.length, mergeFields = (into, from, skip, where) => {
+    let stages = [], conflicts = [], seen = /* @__PURE__ */ new Set(), skipped = 0, asList = (x) => Array.isArray(x) ? x : isPlainObject(x) ? [x] : [], same2 = (a, b) => JSON.stringify(a) === JSON.stringify(b), empty2 = (v) => v == null || v === "" || Array.isArray(v) && !v.length, mergeFields = (into, from, skip, where) => {
       for (let [k, v] of Object.entries(from))
-        skip.includes(k) || empty(v) || (empty(into[k]) ? into[k] = v : same2(into[k], v) || (rewrite ? skipped++ : conflicts.push({ ...where, field: k, kept: into[k], other: v })));
+        skip.includes(k) || empty2(v) || (empty2(into[k]) ? into[k] = v : same2(into[k], v) || (rewrite ? skipped++ : conflicts.push({ ...where, field: k, kept: into[k], other: v })));
     }, mergeNode = (a, b, where) => {
       let finds = asList(a.发现);
       for (let d of asList(b.发现)) {
@@ -21634,8 +22006,8 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
         ]
       });
       if (!picked) return;
-      let empty = picked.filter((f) => !f.label);
-      if (empty.length) return toast("warning", `标签不能为空：${empty.map((f) => f.code).join("、")}`);
+      let empty2 = picked.filter((f) => !f.label);
+      if (empty2.length) return toast("warning", `标签不能为空：${empty2.map((f) => f.code).join("、")}`);
       let live2 = () => prebuildScopeValid2(view, scope) && view.runtime.clue.opScope().iso === s0.iso, pid = project.id, changed = picked.filter((f) => f.label !== f.table.label || f.criterion !== f.table.criterion), synced = picked.filter((f) => !changed.includes(f) && f.draft && f.draft.label === f.label && f.draft.criterion === f.criterion);
       if (!live2()) return toast("warning", "确认期间切换了聊天、项目、推进方式或数据隔离，没有写入。请回到原聊天重新操作。");
       if (seedOnly && changed.length)
@@ -21735,8 +22107,8 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
         ]
       });
       if (!picked) return;
-      let empty = picked.filter((f) => !f.label);
-      if (empty.length) return toast("warning", `请给这些事实填上中性标签：${empty.map((f) => f.code).join("、")}`);
+      let empty2 = picked.filter((f) => !f.label);
+      if (empty2.length) return toast("warning", `请给这些事实填上中性标签：${empty2.map((f) => f.code).join("、")}`);
       if (keepLabels2(view, picked), !prebuildScopeValid2(view, scope))
         return toast("warning", "确认期间切换了聊天、项目或推进方式，没有写入。请回到原聊天重新操作。");
       let now = view.runtime.clue.compute(), fresh = prebuildDiff2(plan, now.snap, project.clue.bindings), labels = new Map(picked.map((f) => [f.code, f])), previewKnows = new Set(diff.newKnows.map((k) => k.key)), vanished = diff.kept.filter((code) => !(now.snap.facts && now.snap.facts.has(code)));
@@ -21821,8 +22193,8 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
       });
       if (!picked) return;
       if (!hasFacts) {
-        let empty = picked.filter((f) => !f.label);
-        if (empty.length) return toast("warning", `请给这些事实填上中性标签：${empty.map((f) => f.code).join("、")}`);
+        let empty2 = picked.filter((f) => !f.label);
+        if (empty2.length) return toast("warning", `请给这些事实填上中性标签：${empty2.map((f) => f.code).join("、")}`);
       }
       if (!prebuildScopeValid2(view, scope))
         return toast("warning", "确认期间切换了聊天、项目或推进方式，没有导入。请回到原聊天重新操作。");
@@ -22459,10 +22831,10 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
             ...c.tierPending ? { fix: "tiers", tiers: c.tierPending } : {}
           })
         ), line && line.mode === "manual" && line.origCond && issues.push({ level: "info", text: `人工开启。原来的要求：${line.origCond}` }), rs.src === "import" && dups.filter((d) => d.a.id === x.id || d.b.id === x.id).forEach((d) => issues.push({ level: "error", text: d.text, fix: "redraft", lines: [d.a.id, d.b.id] }));
-        let empty = x.vol.stages.filter((s) => !stageNodes(s.data).length).map((s) => stageLabel(s.key));
-        empty.length && issues.push({
+        let empty2 = x.vol.stages.filter((s) => !stageNodes(s.data).length).map((s) => stageLabel(s.key));
+        empty2.length && issues.push({
           level: "error",
-          text: `以下阶段没有读到场景（节点）：${empty.join("、")}。可能是场景写在了无法识别的字段下，请写意见让AI重写这一条`
+          text: `以下阶段没有读到场景（节点）：${empty2.join("、")}。可能是场景写在了无法识别的字段下，请写意见让AI重写这一条`
         });
         let job = rs.src === "import" ? importJobOf(view, rs.jobId) : null, inv = job && job.lineIdent ? inventedOpenIssue(
           x.vol,
@@ -22899,8 +23271,8 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
         box0 && await reviewOnInput(view, box0, jobOf, { blur: !0 });
         let c = current(view);
         if (!c) return;
-        let review = c.review, units = reviewUnits(view.project(), review), labelOf = (key) => unitTitle(review, key), sendKeys = new Set(sendableNotes(view.project(), review)), list = units.filter((u) => sendKeys.has(u.key)), curVol = review.draft.find((v) => v.id === (units[Math.max(0, Math.min(units.length - 1, review.at || 0))] || units[0]).volumeId), curLocked = !curVol || lineLocked(review, curVol.id, view.project()), chat = await view.data.loadChat(view.projectId).catch(() => null), hasTalk = !!(chat && (chat.summary || (chat.messages || []).length)), overallBox = !curLocked, stages = curVol ? curVol.stages.length : 0, curName = curVol ? review.draft.length > 1 ? lineTitle(curVol) : reviewIsClue(view.project(), review) ? "这条线" : "这一卷" : "", html = `${list.length ? `<div class="pi-rv-sec">各页意见（${list.length}）</div><p class="pi-hint">可在此修改；点标题返回对应页。改完先进草稿。</p>
-                ${list.map((u) => `<div class="pi-rv-q"><button type="button" class="pi-rv-q-go" data-dlg-value="go:${esc(u.key)}">${esc(labelOf(u.key))} ›</button><textarea class="pi-ta" rows="2" data-rv-q="${esc(u.key)}">${esc(review.comments[u.key])}</textarea></div>`).join("")}` : ""}
+        let review = c.review, units = reviewUnits(view.project(), review), labelOf2 = (key) => unitTitle(review, key), sendKeys = new Set(sendableNotes(view.project(), review)), list = units.filter((u) => sendKeys.has(u.key)), curVol = review.draft.find((v) => v.id === (units[Math.max(0, Math.min(units.length - 1, review.at || 0))] || units[0]).volumeId), curLocked = !curVol || lineLocked(review, curVol.id, view.project()), chat = await view.data.loadChat(view.projectId).catch(() => null), hasTalk = !!(chat && (chat.summary || (chat.messages || []).length)), overallBox = !curLocked, stages = curVol ? curVol.stages.length : 0, curName = curVol ? review.draft.length > 1 ? lineTitle(curVol) : reviewIsClue(view.project(), review) ? "这条线" : "这一卷" : "", html = `${list.length ? `<div class="pi-rv-sec">各页意见（${list.length}）</div><p class="pi-hint">可在此修改；点标题返回对应页。改完先进草稿。</p>
+                ${list.map((u) => `<div class="pi-rv-q"><button type="button" class="pi-rv-q-go" data-dlg-value="go:${esc(u.key)}">${esc(labelOf2(u.key))} ›</button><textarea class="pi-ta" rows="2" data-rv-q="${esc(u.key)}">${esc(review.comments[u.key])}</textarea></div>`).join("")}` : ""}
                 ${curLocked ? "" : `<label class="pi-field"><span>对${esc(curName)}的整体意见（可选）</span><textarea class="pi-ta" rows="2" data-rv-overall placeholder="例：人名统一；入口语气更轻松">${esc(review.overall || "")}</textarea></label>
                 <p class="pi-hint">整体意见只修改${esc(curName)}，并发送它的全部内容（${stages}个阶段），请求较长。其他线请在对应页写意见。</p>`}
                 ${hasTalk ? `<label class="pi-check"><input type="checkbox" data-rv-talk${review.noTalk ? "" : " checked"}><span>附带讨论记录</span></label>` : ""}`, read = (root) => ({
@@ -22960,16 +23332,16 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
     }, background = project.outline.volumes.filter((v) => !review.draft.some((d) => d.id === v.id)), all = [...background, ...review.draft], yamlOf = (key) => {
       let v = unitValue(all, key);
       return key.endsWith("/line") ? stringifyYaml({ [VOLUME_LINE_KEY]: v }) : stringifyYaml({ [v.key]: v.data });
-    }, labelOf = (key) => {
+    }, labelOf2 = (key) => {
       let mine = review.draft.some((v) => v.id === key.split("/")[0]), vol = all.find((v) => v.id === key.split("/")[0]), own = key.endsWith("/line") ? "线信息" : stageLabel(unitValue(all, key).key);
       return mine ? review.draft.length > 1 ? unitTitle(review, key) : own : `${volumeLabel(vol.key)} ${key.endsWith("/line") ? "线头" : own}`;
-    }, tables = clue ? currentTables() : null, ctx2 = groupContext(all, want), ctxText = ctx2.units.filter((k) => !want.includes(k)).map((k) => `【${labelOf(k)}】
+    }, tables = clue ? currentTables() : null, ctx2 = groupContext(all, want), ctxText = ctx2.units.filter((k) => !want.includes(k)).map((k) => `【${labelOf2(k)}】
 ${yamlOf(k)}`).join(`
 `), snap2 = Object.fromEntries(want.map((k) => [k, JSON.stringify(unitValue(review.draft, k))])), sentComments = Object.fromEntries(commented.map((k) => [k, String((review.comments || {})[k] || "")])), reply2 = await ask(
       view,
       "outline",
       reviewReviseMessages({
-        units: want.map((k) => ({ key: k, label: labelOf(k), yaml: yamlOf(k), comment: (review.comments || {})[k] || "", source: commented.includes(k) ? sourceOf(k) : "", overall: !overall || k.split("/")[0] === overallVol })),
+        units: want.map((k) => ({ key: k, label: labelOf2(k), yaml: yamlOf(k), comment: (review.comments || {})[k] || "", source: commented.includes(k) ? sourceOf(k) : "", overall: !overall || k.split("/")[0] === overallVol })),
         context: ctxText,
         secrets,
         tableCatalog: tables ? tableCatalogText(tables) : "",
@@ -22991,30 +23363,30 @@ ${yamlOf(k)}`).join(`
           bad.push(k);
         }
     if (overall && !Object.keys(parsed).length) {
-      let why = Object.keys(reasons).length ? `AI说明保持原样：${Object.entries(reasons).map(([k, r]) => `「${want.includes(k) ? labelOf(k) : k}」${r}`).join("；")}` : bad.length ? "回复格式无法读取" : "回复里没有修改内容";
+      let why = Object.keys(reasons).length ? `AI说明保持原样：${Object.entries(reasons).map(([k, r]) => `「${want.includes(k) ? labelOf2(k) : k}」${r}`).join("；")}` : bad.length ? "回复格式无法读取" : "回复里没有修改内容";
       return toast("warning", `没有读到修改结果（${why}）。意见保留，可重试。`);
     }
     let need = overall ? [.../* @__PURE__ */ new Set([...commented, ...Object.keys(parsed), ...bad])] : want, groups = relatedGroups(review.draft, need), cur = view.data.imports.get(jobId).review, curBackground = view.project().outline.volumes.filter((v) => !cur.draft.some((d) => d.id === v.id)), okKeys = [], failed = [], outside = [];
     for (let g of groups) {
       let verdict = groupVerdict(g, parsed, snap2, cur.draft);
       if (!verdict.ok) {
-        failed.push({ g, why: verdict.missing.length ? `未返回「${verdict.missing.map(labelOf).join("、")}」` : `「${verdict.touched.map(labelOf).join("、")}」在修改期间被改过` });
+        failed.push({ g, why: verdict.missing.length ? `未返回「${verdict.missing.map(labelOf2).join("、")}」` : `「${verdict.touched.map(labelOf2).join("、")}」在修改期间被改过` });
         continue;
       }
       let after = g.reduce((acc, k) => putUnit(acc, k, parsed[k]), cur.draft), breaks = refBreaks(cur.draft, after, g, curBackground), inner = breaks.filter((x) => cur.draft.some((v) => v.id === x.key.split("/")[0])), missing = newMissingRefs(cur.draft, after, g, curBackground);
       if (missing.length) {
-        failed.push({ g, why: `「${missing.map((x) => labelOf(x.key)).join("、")}」新写的条件引用了不存在的${[...new Set(missing.flatMap((x) => x.refs))].join("、")}` });
+        failed.push({ g, why: `「${missing.map((x) => labelOf2(x.key)).join("、")}」新写的条件引用了不存在的${[...new Set(missing.flatMap((x) => x.refs))].join("、")}` });
         continue;
       }
       if (inner.length) {
-        failed.push({ g, why: `「${g.map(labelOf).join("、")}」改掉了「${inner.map((x) => labelOf(x.key)).join("、")}」还在用的${[...new Set(inner.flatMap((x) => x.refs))].join("、")}，需要一起改` });
+        failed.push({ g, why: `「${g.map(labelOf2).join("、")}」改掉了「${inner.map((x) => labelOf2(x.key)).join("、")}」还在用的${[...new Set(inner.flatMap((x) => x.refs))].join("、")}，需要一起改` });
         continue;
       }
       outside.push(...breaks), okKeys.push(...g);
     }
     let same2 = [], newer = [], changedKeys = [];
     okKeys.length && await saveReview(view, jobId, (r) => {
-      let before = r.draft, next = editDraft(r, overall ? "按意见修改（含整体意见）" : `按意见修改：${okKeys.map(labelOf).join("、")}`, (d) => okKeys.reduce((acc, k) => putUnit(acc, k, parsed[k]), d)), ch = Object.fromEntries(draftChanges(before, next.draft).map((x) => [x.key, x.changes])), differs = (k) => JSON.stringify(unitValue(before, k)) !== JSON.stringify(unitValue(next.draft, k)), comments = { ...next.comments };
+      let before = r.draft, next = editDraft(r, overall ? "按意见修改（含整体意见）" : `按意见修改：${okKeys.map(labelOf2).join("、")}`, (d) => okKeys.reduce((acc, k) => putUnit(acc, k, parsed[k]), d)), ch = Object.fromEntries(draftChanges(before, next.draft).map((x) => [x.key, x.changes])), differs = (k) => JSON.stringify(unitValue(before, k)) !== JSON.stringify(unitValue(next.draft, k)), comments = { ...next.comments };
       for (let k of okKeys)
         differs(k) ? (changedKeys.push(k), String(comments[k] || "") === (sentComments[k] || "") ? comments[k] = "" : newer.push(k)) : commented.includes(k) && same2.push(k);
       return {
@@ -23028,15 +23400,15 @@ ${yamlOf(k)}`).join(`
           )
         }
       };
-    }), same2.length && failed.push({ g: same2, why: same2.map((k) => reasons[k] ? `「${labelOf(k)}」保持原样：${reasons[k]}` : `「${labelOf(k)}」原样返回`).join("；") }), overall && !failed.length && await saveReview(view, jobId, (r) => ({ ...r, overall: "" }));
+    }), same2.length && failed.push({ g: same2, why: same2.map((k) => reasons[k] ? `「${labelOf2(k)}」保持原样：${reasons[k]}` : `「${labelOf2(k)}」原样返回`).join("；") }), overall && !failed.length && await saveReview(view, jobId, (r) => ({ ...r, overall: "" }));
     let tail = [
       failed.length ? `${failed.map((f) => f.why).join("；")}，相关意见保留。可写得更具体后重试` : "",
-      newer.length ? `「${newer.map(labelOf).join("、")}」有新写的意见，还没发送` : "",
-      outside.length ? `其他线仍在使用被改动的内容：${outside.map((x) => `「${labelOf(x.key)}」用${x.refs.join("、")}`).join("；")}，需另行修改那条线` : ""
+      newer.length ? `「${newer.map(labelOf2).join("、")}」有新写的意见，还没发送` : "",
+      outside.length ? `其他线仍在使用被改动的内容：${outside.map((x) => `「${labelOf2(x.key)}」用${x.refs.join("、")}`).join("；")}，需另行修改那条线` : ""
     ].filter(Boolean);
     toast(
       failed.length || outside.length ? "warning" : "success",
-      `已修改${changedKeys.length}页${changedKeys.length ? `：${changedKeys.map(labelOf).join("、")}` : ""}${tail.length ? `。${tail.join("。")}` : ""}。`
+      `已修改${changedKeys.length}页${changedKeys.length ? `：${changedKeys.map(labelOf2).join("、")}` : ""}${tail.length ? `。${tail.join("。")}` : ""}。`
     );
   }
   function adoptPlan(view, job, review) {
@@ -24004,10 +24376,10 @@ ${r2.yaml}`,
             ...c.tierPending ? { fix: "tiers", tiers: c.tierPending } : {}
           })
         ), line && line.mode === "manual" && line.origCond && issues.push({ level: "info", text: `人工开启。原来的要求：${line.origCond}` }), rs.src === "import" && dups.filter((d) => d.a.id === x.id || d.b.id === x.id).forEach((d) => issues.push({ level: "error", text: d.text, fix: "redraft", lines: [d.a.id, d.b.id] }));
-        let empty = x.vol.stages.filter((s) => !stageNodes(s.data).length).map((s) => stageLabel(s.key));
-        empty.length && issues.push({
+        let empty2 = x.vol.stages.filter((s) => !stageNodes(s.data).length).map((s) => stageLabel(s.key));
+        empty2.length && issues.push({
           level: "error",
-          text: `这些阶段没有读到任何场景（节点）：${empty.join("、")}。可能是AI把场景写在了不认识的字段下，写意见让AI重写这一条`
+          text: `这些阶段没有读到任何场景（节点）：${empty2.join("、")}。可能是AI把场景写在了不认识的字段下，写意见让AI重写这一条`
         });
         let job = rs.src === "import" ? importJobOf2(view, rs.jobId) : null, inv = job && job.lineIdent ? inventedOpenIssue2(
           x.vol,
@@ -24086,8 +24458,12 @@ ${r2.yaml}`,
   }
   function reviewIssues2(view, review, index) {
     let project = view.project(), clue = reviewIsClue2(project, review), draft = review.draft.map((v, i) => isPlainObject(v.line) && !String(v.line.编号 || "").trim() ? { ...v, line: { ...v.line, 编号: `新${i + 1}` } } : v), mine = new Set(draft.flatMap((v) => v.stages.map((s) => stageLabel(s.key)))), others = project.outline.volumes.filter((v) => !draft.some((d) => d.id === v.id)), known0 = compileClue2(others), exists = new Set([...known0.nodes.map((n) => n.uid), ...known0.lines.map((l) => l.id)].filter(Boolean)), secrets = review.source && review.source !== "import" ? projectSecretNames(project) || [] : null, shorts = reviewShorts2(project, review), runSecrets = clue && !isClueMode2(project) ? checkImportDraft2(draft, { index, secrets, mode: "outline", ...shorts }).filter((x) => /^secret-/.test(x.kind || "")) : [], own0 = checkImportDraft2(draft, { index, secrets, mode: clue ? "clue" : "outline", ...shorts }), own = [...own0, ...runSecrets.filter((x) => !own0.some((y) => y.kind === x.kind && y.name === x.name && y.stageId === x.stageId))].filter(
-      (x) => !/^(route|reach|reach-unknown)$/.test(x.kind || "") && !/按模组推演|替代途径/.test(x.text) && !((/引用了不存在的(?:节点|线)「([^」]+)」/.exec(x.text) || [])[1] && exists.has(/引用了不存在的(?:节点|线)「([^」]+)」/.exec(x.text)[1]))
-    ), c = view.runtime.activeId() === view.projectId && isClueMode2(project) ? view.runtime.clue.compute() : null, { known, claimed } = chatFactSets2(c), reach = clue ? importReachIssues2([...others, ...draft], { only: mine, knownFacts: known, claimedFacts: claimed }) : [], all = [...own, ...reach], dismissed = new Set(review.dismissed || []), by = {}, stageOf = new Map(draft.flatMap((v) => v.stages.map((s) => [s.id, unitKey(v.id, s.id)]))), firstStage = draft[0] && draft[0].stages[0] ? unitKey(draft[0].id, draft[0].stages[0].id) : "";
+      (x) => !/^(route|reach|reach-unknown|gap|skip-stuck)$/.test(x.kind || "") && !/按模组推演|替代途径/.test(x.text) && !((/引用了不存在的(?:节点|线)「([^」]+)」/.exec(x.text) || [])[1] && exists.has(/引用了不存在的(?:节点|线)「([^」]+)」/.exec(x.text)[1]))
+    ), c = view.runtime.activeId() === view.projectId && isClueMode2(project) ? view.runtime.clue.compute() : null, { known, claimed } = chatFactSets2(c), reach = clue ? importReachIssues2([...others, ...draft], { only: mine, knownFacts: known, claimedFacts: claimed }) : [], cond = clue ? importCondIssues([...others, ...draft], {
+      only: new Set(draft.flatMap((v) => v.stages.map((s) => s.id))),
+      labels: project.clue && project.clue.labels,
+      timeBound: !!(project.clue && project.clue.bindings && project.clue.bindings.time && project.clue.bindings.time.路径)
+    }) : [], all = [...own, ...reach, ...cond], dismissed = new Set(review.dismissed || []), by = {}, stageOf = new Map(draft.flatMap((v) => v.stages.map((s) => [s.id, unitKey(v.id, s.id)]))), firstStage = draft[0] && draft[0].stages[0] ? unitKey(draft[0].id, draft[0].stages[0].id) : "";
     for (let x of all) {
       let key = x.stageId && stageOf.get(x.stageId) || x.stageIds && x.stageIds.map((id2) => stageOf.get(id2)).find(Boolean) || firstStage, id = `${x.kind || "x"}|${x.name || ""}|${x.stageId || ""}|${(x.nodeIds || []).join(",")}`;
       dismissed.has(id) || (by[key] = [...by[key] || [], { ...x, id }]);
@@ -24114,14 +24490,18 @@ ${r2.yaml}`,
     let item = isPlainObject(n.item) ? n.item : {}, val = (k, v) => /条件$/.test(k) && v && typeof v == "object" ? condWords2(parseCondition2(v, []), names2) || clueText2(JSON.stringify(v)) : clueText2(v), rows2 = (clue ? FULL_CLUE2 : FULL_OUTLINE2).filter(([k]) => item[k] != null && item[k] !== "").map(([k, label]) => [label, val(k, item[k])]), gets = clue ? discoveryList2(item).map((d) => d.text.replace(/[。；;]+$/, "")) : [], req = clue ? item.必需 === !1 || item.必需 === "false" || n.kind === "side" ? "可选" : "必需" : n.kind === "side" ? "支线" : "", note = clueText2(item.作者备注 || "");
     return gets.length && rows2.splice(rows2.findIndex(([l]) => l === "完成") < 0 ? rows2.length : rows2.findIndex(([l]) => l === "完成"), 0, ["获得", `${gets.join("；")}。`]), `<div class="pi-rv-full"><b>${esc(n.name)}</b>${req ? `<i class="pi-rv-tag">${req}</i>` : ""}<dl>${rows2.map(([l, v]) => `<dt>${l}</dt><dd>${esc(v)}</dd>`).join("")}</dl>${note ? `<div class="pi-rv-auth">作者备注（正文看不到）：${esc(note)}</div>` : ""}</div>`;
   }
+  function fixButtons(x, unit) {
+    let at = `data-unit="${esc(unit)}" data-issue="${esc(x.id)}"`;
+    return `${x.quick ? `<button type="button" class="pi-btn is-sm" data-act="rv-quick" ${at} data-pick="-1">${esc(x.quick.label)}</button>` : ""}${x.action ? `<button type="button" class="pi-btn is-sm" data-act="${esc(x.action.act)}">${esc(x.action.label)}</button>` : ""}${x.alts && x.alts.length ? `<button type="button" class="pi-icon-btn" data-act="rv-quick-more" ${at} title="其他修法" aria-label="其他修法">${ICONS.more}</button>` : ""}`;
+  }
   function issueCard2(x, unit, filled) {
     if (x.level === "error")
       return `<div class="pi-rv-issue"><p>${esc(x.plain || x.text)}</p>${x.names ? `<ul class="pi-rv-names">${x.names.map((n) => `<li>${esc(n)}</li>`).join("")}</ul>` : ""}${x.fix ? `<span class="pi-rv-fix"><b>建议：</b>${esc(x.fix)}</span>` : ""}
-            <div class="pi-row">${filled ? '<span class="pi-badge is-ok">已加入意见</span>' : `<button type="button" class="pi-btn is-sm" data-act="rv-fill" data-unit="${esc(unit)}" data-issue="${esc(x.id)}">加入意见</button>`}
+            <div class="pi-row">${fixButtons(x, unit)}${filled ? '<span class="pi-badge is-ok">已加入意见</span>' : `<button type="button" class="pi-btn is-sm${x.quick ? " is-ghost" : ""}" data-act="rv-fill" data-unit="${esc(unit)}" data-issue="${esc(x.id)}">加入意见</button>`}
             <details><summary class="pi-hint">详情</summary><p class="pi-hint pi-rv-tech">${esc(x.text)}</p></details></div></div>`;
     let { q, how } = issueQuestion2(x), acts = x.kind === "secret-short" ? `<button type="button" class="pi-btn is-sm" data-act="rv-short" data-name="${esc(x.name)}" data-v="yes">是同一人</button><button type="button" class="pi-btn is-sm is-ghost" data-act="rv-short" data-name="${esc(x.name)}" data-v="no">不是</button>` : `<button type="button" class="pi-btn is-sm" data-act="rv-dismiss" data-issue="${esc(x.id)}">${x.kind === "secret-reveal" ? "是，收起" : "没问题，收起"}</button>${filled ? '<span class="pi-badge is-ok">已加入意见</span>' : `<button type="button" class="pi-btn is-sm is-ghost" data-act="rv-fill" data-unit="${esc(unit)}" data-issue="${esc(x.id)}">加入意见</button>`}`;
     return `<div class="pi-rv-issue is-ask"><p>${esc(q)}</p>${how ? `<span class="pi-rv-fix">${esc(how)}</span>` : ""}
-        <div class="pi-row">${acts}</div></div>`;
+        <div class="pi-row">${fixButtons(x, unit)}${acts}</div></div>`;
   }
   function whenText2(line, volumes) {
     if (!isPlainObject(line)) return "";
@@ -24306,6 +24686,25 @@ ${r2.yaml}`,
         let box = [...hostDocument().querySelectorAll("[data-rv-comment]")].find((b) => b.dataset.rvComment === key);
         box && x && x.level !== "error" && (box.focus(), box.setSelectionRange(box.value.length, box.value.length));
       },
+      // 导入检查的一键修：走 editDraft，可以「撤销上次修改」
+      async "rv-quick"(view, target) {
+        let c = current(view);
+        if (!c) return;
+        let x = (reviewIssues2(view, c.review, indexOf(c.job))[target.dataset.unit] || []).find((y) => y.id === target.dataset.issue), pick = Number(target.dataset.pick), fix = x && (pick < 0 ? x.quick : (x.alts || [])[pick]);
+        fix && (await saveReview2(view, c.jobId, (r) => editDraft(r, fix.label, (d) => applyImportFix(d, fix.q))), view.renderBody(), toast("info", `已修改：${fix.label}。不对的话点下面的「撤销上次修改」。`));
+      },
+      async "rv-quick-more"(view, target) {
+        let c = current(view);
+        if (!c) return;
+        let x = (reviewIssues2(view, c.review, indexOf(c.job))[target.dataset.unit] || []).find((y) => y.id === target.dataset.issue);
+        if (!x || !(x.alts || []).length) return;
+        let v = await menuDialog({ title: "其他修法", items: x.alts.map((a, i) => ({ label: a.label, value: String(i) })) });
+        v != null && actions12["rv-quick"](view, { dataset: { unit: target.dataset.unit, issue: target.dataset.issue, pick: v } });
+      },
+      // 去执行页填故事时间的绑定（审阅内容已存，回来接着看）
+      async "rv-bind"(view) {
+        view.tabState("run").bindOpen = !0, view.switchTab && view.switchTab("run");
+      },
       // 疑似短名：是同一人 → 当保密名字（下一次检查报成要改的问题）；不是 → 不再提示。都可以在「已确认」里撤回。
       async "rv-short"(view, target) {
         let c = current(view);
@@ -24445,8 +24844,8 @@ ${r2.yaml}`,
         box0 && await reviewOnInput2(view, box0, jobOf, { blur: !0 });
         let c = current(view);
         if (!c) return;
-        let review = c.review, units = reviewUnits2(view.project(), review), labelOf = (key) => unitTitle2(review, key), sendKeys = new Set(sendableNotes2(view.project(), review)), list = units.filter((u) => sendKeys.has(u.key)), curVol = review.draft.find((v) => v.id === (units[Math.max(0, Math.min(units.length - 1, review.at || 0))] || units[0]).volumeId), curLocked = !curVol || lineLocked2(review, curVol.id, view.project()), chat = await view.data.loadChat(view.projectId).catch(() => null), hasTalk = !!(chat && (chat.summary || (chat.messages || []).length)), overallBox = !curLocked, stages = curVol ? curVol.stages.length : 0, curName = curVol ? review.draft.length > 1 ? lineTitle2(curVol) : reviewIsClue2(view.project(), review) ? "这条线" : "这一卷" : "", html = `${list.length ? `<div class="pi-rv-sec">各页意见（${list.length}）</div><p class="pi-hint">可在此修改；点标题返回对应页。改完先进草稿。</p>
-                ${list.map((u) => `<div class="pi-rv-q"><button type="button" class="pi-rv-q-go" data-dlg-value="go:${esc(u.key)}">${esc(labelOf(u.key))} ›</button><textarea class="pi-ta" rows="2" data-rv-q="${esc(u.key)}">${esc(review.comments[u.key])}</textarea></div>`).join("")}` : ""}
+        let review = c.review, units = reviewUnits2(view.project(), review), labelOf2 = (key) => unitTitle2(review, key), sendKeys = new Set(sendableNotes2(view.project(), review)), list = units.filter((u) => sendKeys.has(u.key)), curVol = review.draft.find((v) => v.id === (units[Math.max(0, Math.min(units.length - 1, review.at || 0))] || units[0]).volumeId), curLocked = !curVol || lineLocked2(review, curVol.id, view.project()), chat = await view.data.loadChat(view.projectId).catch(() => null), hasTalk = !!(chat && (chat.summary || (chat.messages || []).length)), overallBox = !curLocked, stages = curVol ? curVol.stages.length : 0, curName = curVol ? review.draft.length > 1 ? lineTitle2(curVol) : reviewIsClue2(view.project(), review) ? "这条线" : "这一卷" : "", html = `${list.length ? `<div class="pi-rv-sec">各页意见（${list.length}）</div><p class="pi-hint">可在此修改；点标题返回对应页。改完先进草稿。</p>
+                ${list.map((u) => `<div class="pi-rv-q"><button type="button" class="pi-rv-q-go" data-dlg-value="go:${esc(u.key)}">${esc(labelOf2(u.key))} ›</button><textarea class="pi-ta" rows="2" data-rv-q="${esc(u.key)}">${esc(review.comments[u.key])}</textarea></div>`).join("")}` : ""}
                 ${curLocked ? "" : `<label class="pi-field"><span>对${esc(curName)}的整体意见（可选）</span><textarea class="pi-ta" rows="2" data-rv-overall placeholder="例：人名统一；入口语气更轻松">${esc(review.overall || "")}</textarea></label>
                 <p class="pi-hint">整体意见只改${esc(curName)}，会发送它的全部内容（${stages}个阶段），请求较长。别的线请在对应页写意见。</p>`}
                 ${hasTalk ? `<label class="pi-check"><input type="checkbox" data-rv-talk${review.noTalk ? "" : " checked"}><span>附带讨论记录</span></label>` : ""}`, read = (root) => ({
@@ -24506,16 +24905,16 @@ ${r2.yaml}`,
     }, background = project.outline.volumes.filter((v) => !review.draft.some((d) => d.id === v.id)), all = [...background, ...review.draft], yamlOf = (key) => {
       let v = unitValue(all, key);
       return key.endsWith("/line") ? stringifyYaml({ [VOLUME_LINE_KEY]: v }) : stringifyYaml({ [v.key]: v.data });
-    }, labelOf = (key) => {
+    }, labelOf2 = (key) => {
       let mine = review.draft.some((v) => v.id === key.split("/")[0]), vol = all.find((v) => v.id === key.split("/")[0]), own = key.endsWith("/line") ? "线（开头信息）" : stageLabel(unitValue(all, key).key);
       return mine ? review.draft.length > 1 ? unitTitle2(review, key) : own : `${volumeLabel(vol.key)} ${key.endsWith("/line") ? "线头" : own}`;
-    }, tables = clue ? currentTables() : null, ctx2 = groupContext(all, want), ctxText = ctx2.units.filter((k) => !want.includes(k)).map((k) => `【${labelOf(k)}】
+    }, tables = clue ? currentTables() : null, ctx2 = groupContext(all, want), ctxText = ctx2.units.filter((k) => !want.includes(k)).map((k) => `【${labelOf2(k)}】
 ${yamlOf(k)}`).join(`
 `), snap2 = Object.fromEntries(want.map((k) => [k, JSON.stringify(unitValue(review.draft, k))])), sentComments = Object.fromEntries(commented.map((k) => [k, String((review.comments || {})[k] || "")])), reply2 = await ask(
       view,
       "outline",
       reviewReviseMessages2({
-        units: want.map((k) => ({ key: k, label: labelOf(k), yaml: yamlOf(k), comment: (review.comments || {})[k] || "", source: commented.includes(k) ? sourceOf(k) : "", overall: !overall || k.split("/")[0] === overallVol })),
+        units: want.map((k) => ({ key: k, label: labelOf2(k), yaml: yamlOf(k), comment: (review.comments || {})[k] || "", source: commented.includes(k) ? sourceOf(k) : "", overall: !overall || k.split("/")[0] === overallVol })),
         context: ctxText,
         secrets,
         tableCatalog: tables ? tableCatalogText(tables) : "",
@@ -24537,30 +24936,30 @@ ${yamlOf(k)}`).join(`
           bad.push(k);
         }
     if (overall && !Object.keys(parsed).length) {
-      let why = Object.keys(reasons).length ? `AI说明保持原样：${Object.entries(reasons).map(([k, r]) => `「${want.includes(k) ? labelOf(k) : k}」${r}`).join("；")}` : bad.length ? "回复格式无法读取" : "回复里没有修改内容";
+      let why = Object.keys(reasons).length ? `AI说明保持原样：${Object.entries(reasons).map(([k, r]) => `「${want.includes(k) ? labelOf2(k) : k}」${r}`).join("；")}` : bad.length ? "回复格式无法读取" : "回复里没有修改内容";
       return toast("warning", `没有读到修改结果（${why}）。意见保留，可重试。`);
     }
     let need = overall ? [.../* @__PURE__ */ new Set([...commented, ...Object.keys(parsed), ...bad])] : want, groups = relatedGroups(review.draft, need), cur = view.data.imports.get(jobId).review, curBackground = view.project().outline.volumes.filter((v) => !cur.draft.some((d) => d.id === v.id)), okKeys = [], failed = [], outside = [];
     for (let g of groups) {
       let verdict = groupVerdict(g, parsed, snap2, cur.draft);
       if (!verdict.ok) {
-        failed.push({ g, why: verdict.missing.length ? `未返回「${verdict.missing.map(labelOf).join("、")}」` : `「${verdict.touched.map(labelOf).join("、")}」在修改期间被改过` });
+        failed.push({ g, why: verdict.missing.length ? `未返回「${verdict.missing.map(labelOf2).join("、")}」` : `「${verdict.touched.map(labelOf2).join("、")}」在修改期间被改过` });
         continue;
       }
       let after = g.reduce((acc, k) => putUnit2(acc, k, parsed[k]), cur.draft), breaks = refBreaks(cur.draft, after, g, curBackground), inner = breaks.filter((x) => cur.draft.some((v) => v.id === x.key.split("/")[0])), missing = newMissingRefs(cur.draft, after, g, curBackground);
       if (missing.length) {
-        failed.push({ g, why: `「${missing.map((x) => labelOf(x.key)).join("、")}」新写的条件用到了找不到的${[...new Set(missing.flatMap((x) => x.refs))].join("、")}` });
+        failed.push({ g, why: `「${missing.map((x) => labelOf2(x.key)).join("、")}」新写的条件用到了找不到的${[...new Set(missing.flatMap((x) => x.refs))].join("、")}` });
         continue;
       }
       if (inner.length) {
-        failed.push({ g, why: `「${g.map(labelOf).join("、")}」改掉了「${inner.map((x) => labelOf(x.key)).join("、")}」还在用的${[...new Set(inner.flatMap((x) => x.refs))].join("、")}，需要一起改` });
+        failed.push({ g, why: `「${g.map(labelOf2).join("、")}」改掉了「${inner.map((x) => labelOf2(x.key)).join("、")}」还在用的${[...new Set(inner.flatMap((x) => x.refs))].join("、")}，需要一起改` });
         continue;
       }
       outside.push(...breaks), okKeys.push(...g);
     }
     let same2 = [], newer = [], changedKeys = [];
     okKeys.length && await saveReview2(view, jobId, (r) => {
-      let before = r.draft, next = editDraft(r, overall ? "按意见修改（含整体意见）" : `按意见修改：${okKeys.map(labelOf).join("、")}`, (d) => okKeys.reduce((acc, k) => putUnit2(acc, k, parsed[k]), d)), ch = Object.fromEntries(draftChanges(before, next.draft).map((x) => [x.key, x.changes])), differs = (k) => JSON.stringify(unitValue(before, k)) !== JSON.stringify(unitValue(next.draft, k)), comments = { ...next.comments };
+      let before = r.draft, next = editDraft(r, overall ? "按意见修改（含整体意见）" : `按意见修改：${okKeys.map(labelOf2).join("、")}`, (d) => okKeys.reduce((acc, k) => putUnit2(acc, k, parsed[k]), d)), ch = Object.fromEntries(draftChanges(before, next.draft).map((x) => [x.key, x.changes])), differs = (k) => JSON.stringify(unitValue(before, k)) !== JSON.stringify(unitValue(next.draft, k)), comments = { ...next.comments };
       for (let k of okKeys)
         differs(k) ? (changedKeys.push(k), String(comments[k] || "") === (sentComments[k] || "") ? comments[k] = "" : newer.push(k)) : commented.includes(k) && same2.push(k);
       return {
@@ -24574,15 +24973,15 @@ ${yamlOf(k)}`).join(`
           )
         }
       };
-    }), same2.length && failed.push({ g: same2, why: same2.map((k) => reasons[k] ? `「${labelOf(k)}」保持原样：${reasons[k]}` : `「${labelOf(k)}」原样返回`).join("；") }), overall && !failed.length && await saveReview2(view, jobId, (r) => ({ ...r, overall: "" }));
+    }), same2.length && failed.push({ g: same2, why: same2.map((k) => reasons[k] ? `「${labelOf2(k)}」保持原样：${reasons[k]}` : `「${labelOf2(k)}」原样返回`).join("；") }), overall && !failed.length && await saveReview2(view, jobId, (r) => ({ ...r, overall: "" }));
     let tail = [
       failed.length ? `${failed.map((f) => f.why).join("；")}，相关意见保留。可写得更具体后重试` : "",
-      newer.length ? `「${newer.map(labelOf).join("、")}」有新写的意见，还没发送` : "",
-      outside.length ? `别的线还在用改掉的内容：${outside.map((x) => `「${labelOf(x.key)}」用${x.refs.join("、")}`).join("；")}，需要另外修改那条线` : ""
+      newer.length ? `「${newer.map(labelOf2).join("、")}」有新写的意见，还没发送` : "",
+      outside.length ? `别的线还在用改掉的内容：${outside.map((x) => `「${labelOf2(x.key)}」用${x.refs.join("、")}`).join("；")}，需要另外修改那条线` : ""
     ].filter(Boolean);
     toast(
       failed.length || outside.length ? "warning" : "success",
-      `已修改${changedKeys.length}页${changedKeys.length ? `：${changedKeys.map(labelOf).join("、")}` : ""}${tail.length ? `。${tail.join("。")}` : ""}。`
+      `已修改${changedKeys.length}页${changedKeys.length ? `：${changedKeys.map(labelOf2).join("、")}` : ""}${tail.length ? `。${tail.join("。")}` : ""}。`
     );
   }
   function adoptPlan2(view, job, review) {
@@ -24766,8 +25165,8 @@ ${yamlOf(k)}`).join(`
     let warnings = [], pages = (input2 || []).map((p, i) => {
       let lines2 = streamLines(p.items);
       return orderLooksBroken(lines2, p.width) && (lines2 = coordLines(p.items, p.width)), { no: i + 1, width: p.width, height: p.height, lines: lines2 };
-    }), empty = pages.filter((p) => !p.lines.length).map((p) => p.no);
-    empty.length && warnings.push(`第${empty.join("、")}页没有文字层（可能是图片或扫描页），没有转出文字。`);
+    }), empty2 = pages.filter((p) => !p.lines.length).map((p) => p.no);
+    empty2.length && warnings.push(`第${empty2.join("、")}页没有文字层（可能是图片或扫描页），没有转出文字。`);
     let toc = pages.filter((p) => p.lines.filter((l) => DOT_LEADER.test(l.text)).length >= 3);
     keepToc || toc.forEach((p) => p.lines = []);
     let margins = marginKeys(pages);
@@ -27597,10 +27996,10 @@ ${parsed.body}` : parsed.body;
       let isUser = msg.role === "user", tools = `<div class="pi-msg-tools">${isUser || msg !== lastAiMsg ? "" : `<button type="button" class="pi-btn is-sm is-ghost" data-act="to-setting">整理成设定</button>
             <button type="button" class="pi-btn is-sm is-ghost" data-act="to-outline">${clueWord ? "写新剧情线" : "写新卷"}</button>`}${msg === unanswered && !busy ? '<button type="button" class="pi-btn is-sm is-ghost" data-act="resend">重新发送</button>' : ""}<span class="pi-msg-gap"></span><button type="button" class="pi-icon-btn pi-msg-more" data-act="msg-more" data-id="${esc(msg.id)}" title="更多">⋯</button></div>`;
       return `<div class="pi-msg ${isUser ? "is-user" : "is-ai"}"><div class="pi-md">${renderMarkdown(msg.content)}</div>${tools}</div>`;
-    }).join(""), empty = chat.messages.length ? "" : `<div class="pi-empty">输入想写的剧情或设定，一句话即可。<br>AI协助梳理世界观、人物和剧情走向；完成后可在AI回复下方点「${clueWord ? "写新剧情线" : "写新卷"}」。</div>`;
+    }).join(""), empty2 = chat.messages.length ? "" : `<div class="pi-empty">输入想写的剧情或设定，一句话即可。<br>AI协助梳理世界观、人物和剧情走向；完成后可在AI回复下方点「${clueWord ? "写新剧情线" : "写新卷"}」。</div>`;
     return `${chips}<div class="pi-chat">
         ${folded ? `<button type="button" class="pi-msg-fold" data-act="summary">更早的${folded}条已折叠为摘要，查看</button>` : ""}
-        ${empty}${messages}${busy ? '<div class="pi-msg is-ai"><span class="pi-spin"></span></div>' : ""}</div>
+        ${empty2}${messages}${busy ? '<div class="pi-msg is-ai"><span class="pi-spin"></span></div>' : ""}</div>
         <div class="pi-compose">${chat.messages.length ? `<button type="button" class="pi-compose-side" data-act="clear-talk" title="清空讨论">${ICONS.trash}</button>` : ""}<textarea class="pi-ta" data-compose placeholder="Ctrl+Enter发送">${esc(st3(view).draft || "")}</textarea>
         ${busy ? `<button type="button" class="pi-send" data-act="stop" title="停止回复">${ICONS.close}</button>` : `<button type="button" class="pi-send" data-act="send" title="发送（Ctrl+Enter）">${ICONS.send}</button>`}</div>`;
   }
@@ -28574,10 +28973,10 @@ ${suffix.trim()}` : body;
       return `<div class="pi-line-row" data-line-row="${esc(id)}"><div class="pi-line-head"><b class="pi-line-name">${esc(lineDisplayName3(s.line))}</b><div class="pi-line-acts">${main0}${more}</div></div>
           <div class="pi-line-tags"><span class="pi-badge ${s.missed ? "" : OL_BADGE[s.state] || ""}">${esc(s.missed ? "已错过" : OL_LABEL[s.state] || s.state)}</span>${note ? `<span class="pi-meta">${esc(note)}</span>` : ""}</div>
           ${s.line.brief ? `<p class="pi-hint">${esc(s.line.brief)}</p>` : ""}${why ? `<p class="pi-hint">${esc(why)}</p>` : ""}</div>`;
-    }, empty = { now: "没有正在演的剧情线。", idle: "暂无未进行的剧情线。", end: "暂无已结束的剧情线。" };
+    }, empty2 = { now: "没有正在演的剧情线。", idle: "暂无未进行的剧情线。", end: "暂无已结束的剧情线。" };
     return `<div class="pi-card pi-line-card"><h3>剧情线<span class="pi-meta">共${ov.ls.length}条</span></h3>
         <div class="pi-seg pi-line-seg">${OL_TABS.map(([k, label]) => `<button type="button" class="pi-seg-btn${k === tab ? " is-sel" : ""}" data-act="ol-line-tab" data-tab="${k}">${label} ${of(k).length}</button>`).join("")}</div>
-        ${OL_TABS.map(([k]) => `<div class="pi-line-grp" data-line-grp="${k}"${k === tab ? "" : " hidden"}>${of(k).map(row2).join("") || `<p class="pi-hint">${empty[k]}</p>`}</div>`).join("")}
+        ${OL_TABS.map(([k]) => `<div class="pi-line-grp" data-line-grp="${k}"${k === tab ? "" : " hidden"}>${of(k).map(row2).join("") || `<p class="pi-hint">${empty2[k]}</p>`}</div>`).join("")}
         <div class="pi-row pi-line-foot"><p class="pi-hint">同一时间只演一条线。开始另一条时，当前这条暂停，阶段和已演节点都保留。</p><span class="pi-spacer"></span><button type="button" class="pi-btn is-sm is-ghost" data-act="ol-flow" data-flow="seq">按顺序推进…</button></div></div>`;
   }
   function liveOf(units, states, progress, settings) {
@@ -29498,10 +29897,10 @@ ${suffix.trim()}` : body;
         ${title(entry)}<span class="pi-badge">顺序${entry.order}</span></label>`;
   }
   var bulkBtn = (attrs, label, disabled) => `<button type="button" class="pi-btn is-sm is-ghost" ${attrs}${disabled ? " disabled" : ""}>${label}</button>`;
-  function section(name, entries, empty, bulk, openKey, picked, advOpen) {
+  function section(name, entries, empty2, bulk, openKey, picked, advOpen) {
     let rows2 = entries.map((entry) => picked ? pickRow(entry, picked) : entryRow2(entry, entry.key === openKey, !!(advOpen && advOpen.has(entry.key)))).join("");
     return `<div class="pi-wb-sec"><div class="pi-wb-sec-hd">${name}<small>${entries.length}</small>${entries.length ? `<span class="pi-wb-bulk">${bulk}</span>` : ""}</div>
-        ${rows2 || `<p class="pi-hint">${empty}</p>`}</div>`;
+        ${rows2 || `<p class="pi-hint">${empty2}</p>`}</div>`;
   }
   function tokenText(s) {
     if (!s.tokens) return '<span class="pi-meta">统计中…</span>';
@@ -30645,7 +31044,7 @@ ${suffix.trim()}` : body;
   }
 
   // src/index.js
-  var VERSION = "0.4.4", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.4.5", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")
