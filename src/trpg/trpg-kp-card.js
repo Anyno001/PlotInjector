@@ -1,6 +1,5 @@
 // 跑团模式执行页的「KP」卡：卡住了吗（体检+推一把）、对照剧本、察觉卡关。逻辑在 core/trpg-kp.js。
-import { confirmDialog, esc, menuDialog, openDialog, promptDialog } from '../ui/dom.js';
-import { stageLabel } from '../core/outline.js';
+import { confirmDialog, esc, menuDialog, promptDialog } from '../ui/dom.js';
 import { ICONS } from '../ui/styles.js';
 import { chatMessages, toast } from '../host/st.js';
 import { chatFactSets } from './trpg-clue-project.js';
@@ -9,7 +8,8 @@ import { steerActions, timelineHintHtml, steerResultHtml, steerContext } from '.
 import { readGameClock } from './trpg-timeline.js';
 import { trpgHealth, kpPushTarget, aiFloorCount, KP_LEVELS, KP_STUCK_ROUNDS, kpSectionText, npcImportMessage, stuckMessages, parseStuckReply, pendingDiscoveries } from './trpg-kp.js';
 import { ask, runTask } from '../ui/ai.js';
-import { kpSummary, kpOffText, RECHECK_FLOORS, RECHECK_MAX } from './trpg-kp-check.js';
+import { kpSummary, kpOffText, RECHECK_FLOORS, RECHECK_MAX, AUTO_VERIFY_STEPS } from './trpg-kp-check.js';
+import { confirmRecheck } from './trpg-kp-verify-ui.js';
 
 // 体检结果只留在内存里，换项目就丢
 let shown = null;
@@ -103,25 +103,6 @@ export function kpCard(view, project, c, d) {
         }${npcImportHtml(project)}</div>`;
 }
 
-// 重新核实前后对比阶段：哪些阶段这次结束了，哪些还卡着、还差哪几个必需节点
-function stageDoneSet(view) {
-    let c = view.runtime.clue.compute();
-    return new Set(c ? [...c.state.stageStates].filter(([, s]) => s.done).map(([id]) => id) : []);
-}
-function stageNote(view, before) {
-    let c = view.runtime.clue.compute();
-    if (!c) return '';
-    let ended = [],
-        stuck = [];
-    for (let [id, s] of c.state.stageStates) {
-        let name = s.unit && s.unit.stage ? stageLabel(s.unit.stage.key) : id;
-        if (s.done && !before.has(id)) ended.push(name);
-        else if (!s.done && s.entered.v === 'true')
-            stuck.push(s.requiredLeft.length ? `${name}还差${s.requiredLeft.map((n) => `「${n.name || n.uid}」`).join('')}` : `${name}结束条件还没满足`);
-    }
-    return [ended.length ? `${ended.join('、')}已结束。` : '', stuck.length ? `${stuck.join('；')}（可在节点「⋯」里手动标完成）。` : ''].join('');
-}
-
 export const kpActions = {
     ...steerActions,
     async 'kp-menu'(view) {
@@ -131,6 +112,7 @@ export const kpActions = {
                 { label: '对照剧本', value: 'kp-steer' },
                 { label: '重新检测最新一楼', value: 'kp-recheck' },
                 { label: '重新核实阶段', value: 'kp-verify' },
+                { label: '自动核实阶段…', value: 'kp-auto-verify' },
                 { label: '清空KP记录', value: 'kp-clear', danger: !0 },
             ],
         });
@@ -156,43 +138,31 @@ export const kpActions = {
         let floors = Math.round(Number(pick));
         if (!(floors >= 1)) return toast('info', '楼数要填一个正整数。');
         floors = Math.min(floors, RECHECK_MAX);
-        let before = stageDoneSet(view),
-            r = await runTask(view, 'kp-verify', () => view.runtime.kp.recheck({ floors })).catch((e) => ({ error: `请求失败：${e.message}` }));
+        let r = await runTask(view, 'kp-verify', () => view.runtime.kp.recheck({ floors })).catch((e) => ({ error: `请求失败：${e.message}` }));
         if (!r) return;
         if (r.error) return toast('info', `没法核实：${r.error}。`);
         if (r.empty) return toast('info', '进行中的阶段没有待核实的线索和条件。');
-        let okFacts = r.result.facts.filter((f) => f.ok),
-            okConds = r.result.conds.filter((x) => x.ok),
-            miss = [...r.result.facts.filter((f) => !f.ok).map((f) => r.labelOf(f.id)), ...r.result.conds.filter((x) => !x.ok).map((x) => x.text)],
-            quote = (q) => (q ? `<p class="pi-hint">「${esc(q)}」</p>` : ''),
-            html = `<p class="pi-hint">读了第${r.from}–${r.to}楼。勾选的会写进进度和线索表格。</p>
-            ${okFacts.map((f) => `<label class="pi-check"><input type="checkbox" data-kv-f="${esc(f.id)}" checked><span>线索：${esc(r.labelOf(f.id))}</span></label>${quote(f.quote)}`).join('')}
-            ${okConds.map((x, i) => `<label class="pi-check"><input type="checkbox" data-kv-c="${i}" checked><span>条件成立：${esc(x.text)}</span></label>${quote(x.quote)}`).join('')}
-            ${okFacts.length || okConds.length ? '' : '<p class="pi-hint">这几楼里没找到新拿到的线索或成立的条件。</p>'}
-            ${miss.length ? `<details class="pi-fold"><summary>没找到的（${miss.length}，可能剧透）</summary>${miss.map((t) => `<p class="pi-hint">${esc(t)}</p>`).join('')}</details>` : ''}`,
-            sel = await openDialog({
-                title: '重新核实阶段',
-                html,
-                actions:
-                    okFacts.length || okConds.length
-                        ? [
-                              { label: '取消', value: null },
-                              {
-                                  label: '写入勾选的',
-                                  primary: !0,
-                                  value: (root) => ({
-                                      facts: [...root.querySelectorAll('[data-kv-f]:checked')].map((b) => b.dataset.kvF),
-                                      conds: [...root.querySelectorAll('[data-kv-c]:checked')].map((b) => okConds[Number(b.dataset.kvC)].text),
-                                  }),
-                              },
-                          ]
-                        : [{ label: '关闭', value: null }],
+        (await confirmRecheck(r, { kp: view.runtime.kp, compute: () => view.runtime.clue.compute() })) && view.renderBody();
+    },
+    // 每 N 层自动核实（用户 2026-11-24）：默认关，按聊天存；到点后台核实，有结果弹提示卡再确认
+    async 'kp-auto-verify'(view) {
+        let now = view.runtime.kp.autoVerifyEvery(),
+            pick = await menuDialog({
+                title: `自动核实阶段（现在：${now ? `每${now}层` : '关'}）`,
+                items: [{ label: '关', value: '0' }, ...AUTO_VERIFY_STEPS.map((n) => ({ label: `每${n}层`, value: String(n) })), { label: '自己填层数', value: 'custom' }],
             });
-        if (!sel || (!sel.facts.length && !sel.conds.length)) return;
-        let done = await view.runtime.kp.applyRecheck(r, sel);
-        if (!done) return toast('info', '聊天或项目已切换，没有写入。');
+        if (!pick) return;
+        if (pick === 'custom') {
+            let typed = await promptDialog({ title: '自动核实阶段', label: `每几层核实一次（1–${RECHECK_MAX}）`, value: String(now || 15) });
+            if (typed == null) return;
+            pick = String(typed).trim();
+        }
+        let every = Math.round(Number(pick));
+        if (!(every >= 0)) return toast('info', '层数要填一个整数。');
+        every = Math.min(every, RECHECK_MAX);
+        view.runtime.kp.setAutoVerify(every);
+        toast('success', every ? `已开启：每${every}层自动核实一次，有结果会弹提示。` : '已关闭自动核实。');
         view.renderBody();
-        toast('success', `已写入${done.facts}条线索、${done.conds}个条件。${stageNote(view, before)}`);
     },
     async 'kp-clear'(view) {
         let ok = await confirmDialog({

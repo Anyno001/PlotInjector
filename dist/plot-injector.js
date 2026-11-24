@@ -1,4 +1,4 @@
-// PlotInjector v0.4.1
+// PlotInjector v0.4.2
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -13217,6 +13217,47 @@ ${list.join(`
     }
   };
 
+  // src/trpg/trpg-kp-verify-ui.js
+  function stageDoneSet(compute) {
+    let c = compute();
+    return new Set(c ? [...c.state.stageStates].filter(([, s]) => s.done).map(([id]) => id) : []);
+  }
+  function stageNote(compute, before) {
+    let c = compute();
+    if (!c) return "";
+    let ended = [], stuck = [];
+    for (let [id, s] of c.state.stageStates) {
+      let name = s.unit && s.unit.stage ? stageLabel(s.unit.stage.key) : id;
+      s.done && !before.has(id) ? ended.push(name) : !s.done && s.entered.v === "true" && stuck.push(s.requiredLeft.length ? `${name}还差${s.requiredLeft.map((n) => `「${n.name || n.uid}」`).join("")}` : `${name}结束条件还没满足`);
+    }
+    return [ended.length ? `${ended.join("、")}已结束。` : "", stuck.length ? `${stuck.join("；")}（可在节点「⋯」里手动标完成）。` : ""].join("");
+  }
+  var recheckHits = (r) => r.result.facts.filter((f) => f.ok).length + r.result.conds.filter((x) => x.ok).length;
+  async function confirmRecheck(r, { kp, compute, title: title2 = "重新核实阶段" }) {
+    let okFacts = r.result.facts.filter((f) => f.ok), okConds = r.result.conds.filter((x) => x.ok), miss = [...r.result.facts.filter((f) => !f.ok).map((f) => r.labelOf(f.id)), ...r.result.conds.filter((x) => !x.ok).map((x) => x.text)], quote = (q) => q ? `<p class="pi-hint">「${esc(q)}」</p>` : "", html = `<p class="pi-hint">读了第${r.from}–${r.to}楼。勾选的会写进进度和线索表格。</p>
+        ${okFacts.map((f) => `<label class="pi-check"><input type="checkbox" data-kv-f="${esc(f.id)}" checked><span>线索：${esc(r.labelOf(f.id))}</span></label>${quote(f.quote)}`).join("")}
+        ${okConds.map((x, i) => `<label class="pi-check"><input type="checkbox" data-kv-c="${i}" checked><span>条件成立：${esc(x.text)}</span></label>${quote(x.quote)}`).join("")}
+        ${okFacts.length || okConds.length ? "" : '<p class="pi-hint">这几楼里没找到新拿到的线索或成立的条件。</p>'}
+        ${miss.length ? `<details class="pi-fold"><summary>没找到的（${miss.length}，可能剧透）</summary>${miss.map((t) => `<p class="pi-hint">${esc(t)}</p>`).join("")}</details>` : ""}`, sel = await openDialog({
+      title: title2,
+      html,
+      actions: okFacts.length || okConds.length ? [
+        { label: "取消", value: null },
+        {
+          label: "写入勾选的",
+          primary: !0,
+          value: (root) => ({
+            facts: [...root.querySelectorAll("[data-kv-f]:checked")].map((b) => b.dataset.kvF),
+            conds: [...root.querySelectorAll("[data-kv-c]:checked")].map((b) => okConds[Number(b.dataset.kvC)].text)
+          })
+        }
+      ] : [{ label: "关闭", value: null }]
+    });
+    if (!sel || !sel.facts.length && !sel.conds.length) return !1;
+    let before = stageDoneSet(compute), done = await kp.applyRecheck(r, sel);
+    return done ? (toast("success", `已写入${done.facts}条线索、${done.conds}个条件。${stageNote(compute, before)}`), !0) : (toast("info", "聊天或项目已切换，没有写入。"), !1);
+  }
+
   // src/core/check.js
   function cleanFloorText(text2, limit = 3e3) {
     let out = String(text2 || "");
@@ -13540,7 +13581,7 @@ ${rules}`
       pullBack: parsed.pullBack
     };
   }
-  var RECHECK_FLOORS = [10, 20, 30], RECHECK_MAX = 60, RECHECK_FACT_MAX = 40;
+  var RECHECK_FLOORS = [10, 20, 30], RECHECK_MAX = 60, AUTO_VERIFY_STEPS = [5, 10, 20], RECHECK_FACT_MAX = 40;
   function recentFloors(messages, n, limit = 4e3, total = 3e4) {
     let out = [], sum = 0;
     for (let i = (messages || []).length - 1; i >= 0 && out.length < n; i -= 1) {
@@ -13650,7 +13691,7 @@ ${rules}`
     }
     async function run({ floor = -1, manual = !1 } = {}) {
       let project = deps.getProject();
-      if (!project || !kpAutoOn(data.settings())) return null;
+      if (!project || !kpAutoOn(data.settings())) return project && deps.setTimeout(() => autoVerify(), 0), null;
       if (running2) return again = !0, log("跑团检测：上一次还没结束，结束后再检测"), null;
       let chat = chatMessages(), at = floor >= 0 && chat[floor] && !chat[floor].is_user ? floor : chat.length - 1, msg = chat[at];
       if (!msg || msg.is_user || msg.is_system) return null;
@@ -13710,12 +13751,49 @@ ${rules}`
           ]
         })), null;
       } finally {
-        running2 = !1, again && (again = !1, deps.setTimeout(() => run({ floor: -1 }), 0));
+        running2 = !1, again ? (again = !1, deps.setTimeout(() => run({ floor: -1 }), 0)) : deps.setTimeout(() => autoVerify(), 0);
+      }
+    }
+    function autoVerifyEvery() {
+      let a = kpOf().autoVerify;
+      return a && Number(a.every) > 0 ? Number(a.every) : 0;
+    }
+    function setAutoVerify(every) {
+      saveKp2({ autoVerify: every > 0 ? { every, last: chatMessages().length } : null });
+    }
+    let autoBusy = !1;
+    async function autoVerify() {
+      let every = autoVerifyEvery();
+      if (!every || autoBusy || running2) return;
+      let floors = chatMessages().length, last = Number((kpOf().autoVerify || {}).last) || 0;
+      if (floors < last) return saveKp2({ autoVerify: { every, last: floors } });
+      if (!(floors - last < every)) {
+        autoBusy = !0, saveKp2({ autoVerify: { every, last: floors } });
+        try {
+          let r = await recheck({ floors: every + 2 });
+          if (!r || r.error || r.empty) return r && r.error && log(`自动核实没做：${r.error}`);
+          let hits = recheckHits(r);
+          if (log(`自动核实第 ${r.from}–${r.to} 楼：${hits} 条有结果`), !hits) return;
+          notice.show({
+            id: "kp-verify",
+            title: "自动核实阶段",
+            body: `第${r.from}–${r.to}楼里找到${r.result.facts.filter((f) => f.ok).length}条线索、${r.result.conds.filter((x) => x.ok).length}个条件，确认后写入`,
+            actions: [
+              { label: "查看并写入", primary: !0, run: () => confirmRecheck(r, { kp: api, compute: () => deps.clue.compute(), title: "自动核实阶段" }) },
+              { label: "忽略", run: () => {
+              } }
+            ]
+          });
+        } catch (error) {
+          log(`自动核实失败：${error.message}`);
+        } finally {
+          autoBusy = !1;
+        }
       }
     }
     async function mirrorTables(items, project, t, iso0) {
       if (!items.length) return [];
-      let api = acuApi2(), fb = ((project.clue.bindings || {}).facts || [])[0], kb = ((project.clue.bindings || {}).knowledge || [])[0], first = (v, d = "") => String(Array.isArray(v) ? v[0] ?? d : v ?? d), live2 = () => deps.ticketValid(t) && deps.clue.opScope().iso === iso0, tableNow = (name) => {
+      let api2 = acuApi2(), fb = ((project.clue.bindings || {}).facts || [])[0], kb = ((project.clue.bindings || {}).knowledge || [])[0], first = (v, d = "") => String(Array.isArray(v) ? v[0] ?? d : v ?? d), live2 = () => deps.ticketValid(t) && deps.clue.opScope().iso === iso0, tableNow = (name) => {
         deps.clue.invalidate();
         let now = deps.clue.compute(), sh = findSheet2(now && now.snap.tables || {}, name);
         return sh.error ? null : { sheet: sh.sheet, col: sheetRows2(sh.sheet).col };
@@ -13725,13 +13803,13 @@ ${rules}`
         if (at === -2) return "表里有多行同一个编号，没写";
         if (at < 1) return "表里还没有这一行，没写";
         if (Object.keys(data2).some((k) => t0.col(k) < 0)) return `表里缺少列：${Object.keys(data2).filter((k) => t0.col(k) < 0).join("、")}`;
-        if (typeof api.updateRow == "function") await Promise.resolve(api.updateRow(name, at, data2)).catch(() => !1);
+        if (typeof api2.updateRow == "function") await Promise.resolve(api2.updateRow(name, at, data2)).catch(() => !1);
         else
           for (let [k, v] of Object.entries(data2)) {
             if (!live2()) break;
             let t2 = tableNow(name), at2 = t2 ? find(t2) : -1;
             if (at2 < 1) break;
-            await Promise.resolve(api.updateCell({ tableName: name, rowIndex: at2, colIdentifier: k, value: v, skipNotify: !0 })).catch(() => !1);
+            await Promise.resolve(api2.updateCell({ tableName: name, rowIndex: at2, colIdentifier: k, value: v, skipNotify: !0 })).catch(() => !1);
           }
         if (!live2()) return "写表途中切换了聊天、项目或数据隔离，没法确认结果";
         let t3 = tableNow(name), at3 = t3 ? find(t3) : -1;
@@ -13743,7 +13821,7 @@ ${rules}`
         return t0.sheet.content.forEach((r, k) => k > 0 && Array.isArray(r) && test(idx.map((i) => cellText2(r[i]))) && hits.push(k)), hits.length > 1 ? -2 : hits.length ? hits[0] : -1;
       }, out = [];
       try {
-        if (!api || !fb || !fb.状态列 || typeof api.updateRow != "function" && typeof api.updateCell != "function")
+        if (!api2 || !fb || !fb.状态列 || typeof api2.updateRow != "function" && typeof api2.updateCell != "function")
           return items.map((x) => ({ label: x.label, fact: "没有可写的数据库接口，或没绑定事实表状态列" }));
         for (let x of items) {
           let data2 = { [fb.状态列]: first(fb.已核实值, "已核实") };
@@ -13840,7 +13918,8 @@ ${rules}`
       for (let id of ids) deps.clue.act({ kind: "fact", target: id, value: "", note: "清空KP记录" });
       return saveKp2({ conds: {}, log: [], offMuted: "" }), lastKey = "", deps.clue.invalidate("kp-clear"), ids.length;
     }
-    return { run, recheck, applyRecheck, clearKp, reset: () => (again = !1, lastKey = "") };
+    let api = { run, recheck, applyRecheck, clearKp, autoVerifyEvery, setAutoVerify, reset: () => (again = !1, lastKey = "") };
+    return api;
   }
 
   // src/core/infinite-state.js
@@ -19282,20 +19361,6 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
         ${push ? `<p class="pi-hint">下一轮：${esc(pushLabel)} <button type="button" class="pi-btn is-sm is-ghost" data-act="kp-cancel">取消</button></p>` : ""}
         ${stuck >= KP_STUCK_ROUNDS && !push ? `<p class="pi-hint is-warn">已经${stuck}轮没拿到新线索。</p>` : ""}${npcImportHtml(project)}</div>`;
   }
-  function stageDoneSet(view) {
-    let c = view.runtime.clue.compute();
-    return new Set(c ? [...c.state.stageStates].filter(([, s]) => s.done).map(([id]) => id) : []);
-  }
-  function stageNote(view, before) {
-    let c = view.runtime.clue.compute();
-    if (!c) return "";
-    let ended = [], stuck = [];
-    for (let [id, s] of c.state.stageStates) {
-      let name = s.unit && s.unit.stage ? stageLabel(s.unit.stage.key) : id;
-      s.done && !before.has(id) ? ended.push(name) : !s.done && s.entered.v === "true" && stuck.push(s.requiredLeft.length ? `${name}还差${s.requiredLeft.map((n) => `「${n.name || n.uid}」`).join("")}` : `${name}结束条件还没满足`);
-    }
-    return [ended.length ? `${ended.join("、")}已结束。` : "", stuck.length ? `${stuck.join("；")}（可在节点「⋯」里手动标完成）。` : ""].join("");
-  }
   var kpActions = {
     ...steerActions,
     async "kp-menu"(view) {
@@ -19305,6 +19370,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
           { label: "对照剧本", value: "kp-steer" },
           { label: "重新检测最新一楼", value: "kp-recheck" },
           { label: "重新核实阶段", value: "kp-verify" },
+          { label: "自动核实阶段…", value: "kp-auto-verify" },
           { label: "清空KP记录", value: "kp-clear", danger: !0 }
         ]
       });
@@ -19329,33 +19395,28 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
       let floors = Math.round(Number(pick));
       if (!(floors >= 1)) return toast("info", "楼数要填一个正整数。");
       floors = Math.min(floors, RECHECK_MAX);
-      let before = stageDoneSet(view), r = await runTask(view, "kp-verify", () => view.runtime.kp.recheck({ floors })).catch((e) => ({ error: `请求失败：${e.message}` }));
-      if (!r) return;
-      if (r.error) return toast("info", `没法核实：${r.error}。`);
-      if (r.empty) return toast("info", "进行中的阶段没有待核实的线索和条件。");
-      let okFacts = r.result.facts.filter((f) => f.ok), okConds = r.result.conds.filter((x) => x.ok), miss = [...r.result.facts.filter((f) => !f.ok).map((f) => r.labelOf(f.id)), ...r.result.conds.filter((x) => !x.ok).map((x) => x.text)], quote = (q) => q ? `<p class="pi-hint">「${esc(q)}」</p>` : "", html = `<p class="pi-hint">读了第${r.from}–${r.to}楼。勾选的会写进进度和线索表格。</p>
-            ${okFacts.map((f) => `<label class="pi-check"><input type="checkbox" data-kv-f="${esc(f.id)}" checked><span>线索：${esc(r.labelOf(f.id))}</span></label>${quote(f.quote)}`).join("")}
-            ${okConds.map((x, i) => `<label class="pi-check"><input type="checkbox" data-kv-c="${i}" checked><span>条件成立：${esc(x.text)}</span></label>${quote(x.quote)}`).join("")}
-            ${okFacts.length || okConds.length ? "" : '<p class="pi-hint">这几楼里没找到新拿到的线索或成立的条件。</p>'}
-            ${miss.length ? `<details class="pi-fold"><summary>没找到的（${miss.length}，可能剧透）</summary>${miss.map((t) => `<p class="pi-hint">${esc(t)}</p>`).join("")}</details>` : ""}`, sel = await openDialog({
-        title: "重新核实阶段",
-        html,
-        actions: okFacts.length || okConds.length ? [
-          { label: "取消", value: null },
-          {
-            label: "写入勾选的",
-            primary: !0,
-            value: (root) => ({
-              facts: [...root.querySelectorAll("[data-kv-f]:checked")].map((b) => b.dataset.kvF),
-              conds: [...root.querySelectorAll("[data-kv-c]:checked")].map((b) => okConds[Number(b.dataset.kvC)].text)
-            })
-          }
-        ] : [{ label: "关闭", value: null }]
+      let r = await runTask(view, "kp-verify", () => view.runtime.kp.recheck({ floors })).catch((e) => ({ error: `请求失败：${e.message}` }));
+      if (r) {
+        if (r.error) return toast("info", `没法核实：${r.error}。`);
+        if (r.empty) return toast("info", "进行中的阶段没有待核实的线索和条件。");
+        await confirmRecheck(r, { kp: view.runtime.kp, compute: () => view.runtime.clue.compute() }) && view.renderBody();
+      }
+    },
+    // 每 N 层自动核实（用户 2026-11-24）：默认关，按聊天存；到点后台核实，有结果弹提示卡再确认
+    async "kp-auto-verify"(view) {
+      let now = view.runtime.kp.autoVerifyEvery(), pick = await menuDialog({
+        title: `自动核实阶段（现在：${now ? `每${now}层` : "关"}）`,
+        items: [{ label: "关", value: "0" }, ...AUTO_VERIFY_STEPS.map((n) => ({ label: `每${n}层`, value: String(n) })), { label: "自己填层数", value: "custom" }]
       });
-      if (!sel || !sel.facts.length && !sel.conds.length) return;
-      let done = await view.runtime.kp.applyRecheck(r, sel);
-      if (!done) return toast("info", "聊天或项目已切换，没有写入。");
-      view.renderBody(), toast("success", `已写入${done.facts}条线索、${done.conds}个条件。${stageNote(view, before)}`);
+      if (!pick) return;
+      if (pick === "custom") {
+        let typed = await promptDialog({ title: "自动核实阶段", label: `每几层核实一次（1–${RECHECK_MAX}）`, value: String(now || 15) });
+        if (typed == null) return;
+        pick = String(typed).trim();
+      }
+      let every = Math.round(Number(pick));
+      if (!(every >= 0)) return toast("info", "层数要填一个整数。");
+      every = Math.min(every, RECHECK_MAX), view.runtime.kp.setAutoVerify(every), toast("success", every ? `已开启：每${every}层自动核实一次，有结果会弹提示。` : "已关闭自动核实。"), view.renderBody();
     },
     async "kp-clear"(view) {
       if (!await confirmDialog({
@@ -30435,7 +30496,7 @@ ${suffix.trim()}` : body;
   }
 
   // src/index.js
-  var VERSION = "0.4.1", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.4.2", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")

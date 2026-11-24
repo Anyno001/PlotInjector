@@ -200,6 +200,8 @@ export function verifyKp(parsed, { candidates, says, scenes, recent }) {
 // 把进行中阶段里还没完成的节点的线索、没成立的一句话条件重新判一遍；结果先给用户勾选确认才写入。
 export const RECHECK_FLOORS = [10, 20, 30];
 export const RECHECK_MAX = 60;
+// 每 N 层自动核实的可选档位（默认关）
+export const AUTO_VERIFY_STEPS = [5, 10, 20];
 const RECHECK_FACT_MAX = 40;
 
 // 最近 n 楼（玩家和正文都算）：[{ user, text, floor }]；从后往前取，总字数超了就停

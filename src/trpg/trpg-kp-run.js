@@ -11,6 +11,7 @@ import { acuApi } from './trpg-clue-runtime.js';
 import { trpgCheckResults } from './trpg.js';
 import { aiFloorCount, KP_LEVELS, kpPushTarget } from './trpg-kp.js';
 import { steerContext } from './trpg-steer.js';
+import { confirmRecheck, recheckHits } from './trpg-kp-verify-ui.js';
 import {
     KP_NOTE,
     kpAutoOn,
@@ -51,7 +52,8 @@ export function createKpRunner(deps) {
     // floor：刚收到的那一楼；manual：手动重试时不看「已经检测过这一楼」
     async function run({ floor = -1, manual = false } = {}) {
         let project = deps.getProject();
-        if (!project || !kpAutoOn(data.settings())) return null;
+        // 每轮检测关着也照样数层数做自动核实
+        if (!project || !kpAutoOn(data.settings())) return (project && deps.setTimeout(() => autoVerify(), 0), null);
         if (running) return ((again = true), log('跑团检测：上一次还没结束，结束后再检测'), null);
         let chat = chatMessages(),
             at = floor >= 0 && chat[floor] && !chat[floor].is_user ? floor : chat.length - 1,
@@ -145,7 +147,50 @@ export function createKpRunner(deps) {
             return null;
         } finally {
             running = false;
-            again && ((again = false), deps.setTimeout(() => run({ floor: -1 }), 0));
+            again ? ((again = false), deps.setTimeout(() => run({ floor: -1 }), 0)) : deps.setTimeout(() => autoVerify(), 0);
+        }
+    }
+
+    // ---- 每 N 层自动核实（用户 2026-11-24）：progress.trpgKp.autoVerify = { every, last }，按聊天存，默认关 ----
+    // last = 上次核实时的聊天楼数；楼数比它多出 every 层就在后台核实最近 every+2 层（多读两层接上前一次），
+    // 有结果弹提示卡，点开走和手动核实同一个勾选确认窗口；没结果、出错都只记日志不打扰
+    function autoVerifyEvery() {
+        let a = kpOf().autoVerify;
+        return a && Number(a.every) > 0 ? Number(a.every) : 0;
+    }
+    function setAutoVerify(every) {
+        saveKp({ autoVerify: every > 0 ? { every, last: chatMessages().length } : null });
+    }
+    let autoBusy = false;
+    async function autoVerify() {
+        let every = autoVerifyEvery();
+        if (!every || autoBusy || running) return;
+        let floors = chatMessages().length,
+            last = Number((kpOf().autoVerify || {}).last) || 0;
+        // 删楼、换分支后楼数变少：从现在重新计
+        if (floors < last) return saveKp({ autoVerify: { every, last: floors } });
+        if (floors - last < every) return;
+        autoBusy = true;
+        saveKp({ autoVerify: { every, last: floors } });
+        try {
+            let r = await recheck({ floors: every + 2 });
+            if (!r || r.error || r.empty) return r && r.error && log(`自动核实没做：${r.error}`);
+            let hits = recheckHits(r);
+            log(`自动核实第 ${r.from}–${r.to} 楼：${hits} 条有结果`);
+            if (!hits) return;
+            notice.show({
+                id: 'kp-verify',
+                title: '自动核实阶段',
+                body: `第${r.from}–${r.to}楼里找到${r.result.facts.filter((f) => f.ok).length}条线索、${r.result.conds.filter((x) => x.ok).length}个条件，确认后写入`,
+                actions: [
+                    { label: '查看并写入', primary: !0, run: () => confirmRecheck(r, { kp: api, compute: () => deps.clue.compute(), title: '自动核实阶段' }) },
+                    { label: '忽略', run: () => {} },
+                ],
+            });
+        } catch (error) {
+            log(`自动核实失败：${error.message}`);
+        } finally {
+            autoBusy = false;
         }
     }
 
@@ -347,5 +392,6 @@ export function createKpRunner(deps) {
         deps.clue.invalidate('kp-clear');
         return ids.length;
     }
-    return { run, recheck, applyRecheck, clearKp, reset:() => ((again = false), (lastKey = '')) };
+    const api = { run, recheck, applyRecheck, clearKp, autoVerifyEvery, setAutoVerify, reset: () => ((again = false), (lastKey = '')) };
+    return api;
 }
