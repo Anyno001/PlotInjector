@@ -1,10 +1,14 @@
 // 跑团「原文切片」管理（模组页「⋯」里进入）：开关、查看与启停、改所属场景、给导入过的模组补全原文。逻辑在 trpg-slices.js。
 import { esc, menuDialog, openDialog } from '../ui/dom.js';
-import { toast } from '../host/st.js';
 import { clueNodes } from './trpg-clue-model.js';
 import { SLICE_KINDS, ALIGN_BATCH, attachSlices, alignNodes, alignMessages, parseAlign, alignChanges } from './trpg-slices.js';
 import { ask, runTask } from '../ui/ai.js';
 import { splitStageKey } from '../core/outline.js';
+
+// 结果一律用插件自己的小窗说明：酒馆的 toastr 提示可能被插件面板盖住，点了像没反应
+function say(text) {
+    return openDialog({ title: '原文切片', html: `<p class="pi-hint">${esc(text)}</p>`, actions: [{ label: '好', value: !0, primary: !0 }] });
+}
 
 const slicesOf = (project) => (project.trpg && project.trpg.slices) || [];
 
@@ -28,7 +32,7 @@ function listHtml(project) {
 
 async function showList(view) {
     let project = view.project();
-    if (!slicesOf(project).length) return toast('info', '还没有切片。可以先「补全原文」。');
+    if (!slicesOf(project).length) return say('还没有切片。可以先「补全原文」。');
     let got = await openDialog({
         title: '原文切片',
         html: `<p class="pi-hint">取消勾选的不再注入。每条切片只在它所属的场景进行时才会给出。原文不能改。</p>${listHtml(project)}`,
@@ -50,7 +54,6 @@ async function showList(view) {
             return x ? { ...s, off: x.off, node: x.node, stage: x.node ? (nodes.find((n) => n.uid === x.node) || { unit: { id: '' } }).unit.id : '' } : s;
         }),
     }));
-    toast('success', '已保存。');
 }
 
 // AI 核对所属场景：把切片和节点清单交给 AI，给每条选最合适的节点；和现在不同的列出来，勾选确认后才改。
@@ -58,8 +61,10 @@ async function alignCheck(view) {
     let project = view.project(),
         list = slicesOf(project).filter((s) => !s.off),
         nodes = alignNodes(project.outline.volumes, (key) => splitStageKey(key).short);
-    if (!list.length || !nodes.length) return toast('info', list.length ? '模组里还没有可选的场景。' : '还没有切片。');
-    let items = [];
+    if (!list.length || !nodes.length) return say(list.length ? '模组里还没有可选的场景。' : '还没有切片。');
+    let items = [],
+        pg = progressDialog('核对所属场景');
+    pg.set(`正在让 AI 核对${list.length}条切片…`);
     try {
         await runTask(view, 'kp-slices', async () => {
             for (let i = 0; i < list.length; i += ALIGN_BATCH) {
@@ -69,10 +74,12 @@ async function alignCheck(view) {
             }
         });
     } catch (error) {
-        return toast('error', `核对失败：${error.message}`);
+        pg.close();
+        return say(`核对失败：${error.message}`);
     }
+    pg.close();
     let changes = alignChanges(list, items, nodes);
-    if (!changes.length) return toast('success', `已核对${list.length}条切片，所属场景都对得上。`);
+    if (!changes.length) return say(`已核对${list.length}条切片，所属场景都对得上。`);
     let nameOf = (uid) => (nodes.find((n) => n.uid === uid) || {}).name || '未指定场景',
         byId = new Map(list.map((s) => [s.id, s])),
         got = await openDialog({
@@ -92,7 +99,7 @@ async function alignCheck(view) {
     let pick = new Map(changes.filter((c) => got.includes(c.id)).map((c) => [c.id, c.to])),
         stageOf = (uid) => (clueNodes(project.outline.volumes).find((n) => n.uid === uid) || { unit: { id: '' } }).unit.id;
     save(view, (t) => ({ slices: (t.slices || []).map((s) => (pick.has(s.id) ? { ...s, node: pick.get(s.id), stage: pick.get(s.id) ? stageOf(pick.get(s.id)) : '' } : s)) }));
-    toast('success', `已调整${pick.size}条的所属场景。`);
+    say(`已调整${pick.size}条的所属场景。`);
     view.renderBody();
 }
 
@@ -127,12 +134,12 @@ export const sliceActions = {
             });
         if (pick === 'toggle') {
             save(view, (t) => (t.sliceOff ? { sliceOff: void 0 } : { sliceOff: !0 }));
-            (toast('success', off ? '已打开原文切片。' : '已关闭原文切片，之后不再注入、不再检测伏笔。'), view.renderBody());
+            (say(off ? '已打开原文切片。' : '已关闭原文切片，之后不再注入、不再检测伏笔。'), view.renderBody());
         } else if (pick === 'list') await showList(view);
         else if (pick === 'attach') {
             let fixed = attachSlices(list, project.outline.volumes);
             save(view, () => ({ slices: fixed }));
-            toast('success', `已重新匹配，还有${fixed.filter((s) => !s.node).length}条没找到对应的场景。`);
+            say(`已重新匹配，还有${fixed.filter((s) => !s.node).length}条没找到对应的场景。`);
         } else if (pick === 'align') await alignCheck(view);
         else if (pick === 'fill') {
             let pg = progressDialog('补全原文'),
@@ -141,9 +148,9 @@ export const sliceActions = {
                     .catch((e) => ({ error: e.message, failed: 1, total: 0, jobs: 0 }));
             pg.close();
             view.renderBody();
-            if (!r.jobs) return toast('warning', r.error ? `补全原文失败：${r.error}` : `没有找到可用的模组原文${r.gone ? '（导入任务的原文已被删除）' : '。只有用 PDF 导入过的跑团模组才能补全'}。`);
+            if (!r.jobs) return say(r.error ? `补全原文失败：${r.error}` : `没有找到可用的模组原文${r.gone ? '（导入任务的原文已被删除）' : '。只有用 PDF 导入过的跑团模组才能补全'}。`);
             let msg = `读了${r.jobs}份原文共${r.total}段：现有${r.slices}条切片，新增${r.added}条${r.failed ? `；有${r.failed}段失败（${r.error}），可以再点一次补全，已完成的不会重做` : r.added ? '' : '（这些原文之前已经切过了）'}。`;
-            toast(r.failed || !r.added ? 'warning' : 'success', msg);
+            await say(msg);
             // 补全之后接着让 AI 核对一遍所属场景，对不上的列出来确认
             r.slices && (await alignCheck(view));
         }

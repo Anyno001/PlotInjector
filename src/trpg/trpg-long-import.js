@@ -544,7 +544,7 @@ export function mergeSameIssues(list) {
 }
 export function issueCommentLine(x) {
     if (x.level === 'error') return `${x.plain || x.text}${x.names ? `：${x.names.map((n) => `「${n}」`).join('、')}` : ''}${x.fix ? `（${x.fix}）` : ''}`;
-    return x.kind === 'secret-short' ? `关于${(x.spots && x.spots[0] && `「${x.spots[0].where}」里的`) || ''}「${x.name}」：` : x.kind === 'secret-reveal' ? `关于揭晓「${x.name}」的地方：` : `关于「${(x.plain || x.text).slice(0, 20)}…」：`;
+    return x.kind === 'secret-short' ? `关于${(x.spots && x.spots[0] && `「${x.spots[0].where}」里的`) || ''}「${x.name}」：` : x.kind === 'secret-reveal' ? `关于揭晓「${x.name}」的地方：` : `${x.plain || x.text}${x.fix ? `（${x.fix}）` : ''}回答：`;
 }
 export function appendComment(comment, line) {
     let cur = String(comment || ''),

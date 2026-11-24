@@ -405,10 +405,11 @@ export function renderReview(view, job, review, index, crumb, notes = []) {
         dot = (x, n) => {
             let i = x.i,
                 has = (issues[x.key] || []).some((y) => y.level === 'error'),
-                cls = (i === at ? ' is-cur' : has ? ' is-err' : changed.has(x.key) && review.revised ? ' is-chg' : '') + (String((review.comments || {})[x.key] || '').trim() ? ' is-note' : '');
+                asks = (issues[x.key] || []).filter((y) => y.level !== 'error').length,
+                cls = (i === at ? ' is-cur' : has ? ' is-err' : asks ? ' is-ask' : changed.has(x.key) && review.revised ? ' is-chg' : '') + (String((review.comments || {})[x.key] || '').trim() ? ' is-note' : '');
             // 页签（第四批，用户 2026-11-16）：线信息 / 阶段名，代替数字圆点；多了横向滑动
             void n;
-            return `<button type="button" class="pi-rv-dot${cls}" data-act="rv-go" data-i="${i}">${x.kind === 'line' ? '线信息' : esc(stageLabel(unitValue(review.draft, x.key).key))}</button>`;
+            return `<button type="button" class="pi-rv-dot${cls}" data-act="rv-go" data-i="${i}">${x.kind === 'line' ? '线信息' : esc(stageLabel(unitValue(review.draft, x.key).key))}${asks ? `<span class="pi-rv-n" title="${asks}项待确认">${asks}</span>` : ''}</button>`;
         },
         vols = review.draft,
         vi = vols.findIndex((v) => v.id === vol.id),
@@ -438,7 +439,7 @@ export function renderReview(view, job, review, index, crumb, notes = []) {
         synced = !dirty && (isEdit || review.reopened),
         // 顶部（第四批）：标题一行，问题数在右；下面一句灰字说明范围和状态（项目级审阅写明几条线、几条待保存）
         stateText = stateLine(review, dirtyIds, dirty),
-        head = `<h3>${isEdit ? '审阅修改' : '审阅'}${vols.length > 1 ? (review.lines ? '：导入的支线' : '') : `：${esc(volumeName(vol.key))}`}<span class="pi-rv-end">${errCount ? `<button type="button" class="pi-badge is-warn pi-rv-issues" data-act="rv-first-issue" title="跳到有问题的页">问题${errCount} ›</button>` : review.revised ? '<span class="pi-badge is-ok">检查通过</span>' : ''}</span></h3><div class="pi-rv-state${dirty ? ' is-draft' : ''}">${stateText}</div>${picker}`,
+        head = `<h3>${isEdit ? '审阅修改' : '审阅'}${vols.length > 1 ? (review.lines ? '：导入的支线' : '') : `：${esc(volumeName(vol.key))}`}<span class="pi-rv-end">${errCount ? `<button type="button" class="pi-badge is-warn pi-rv-issues" data-act="rv-first-issue" title="跳到有问题的页">问题${errCount} ›</button>` : ''}${askCount ? `<button type="button" class="pi-badge is-accent pi-rv-issues" data-act="rv-first-ask" title="跳到有待确认项的页">待确认${askCount} ›</button>` : ''}${!errCount && !askCount && review.revised ? '<span class="pi-badge is-ok">检查通过</span>' : ''}</span></h3><div class="pi-rv-state${dirty ? ' is-draft' : ''}">${stateText}</div>${picker}`,
         nav = `<div class="pi-rv-nav"><div class="pi-rv-dots">${mineUnits.map(dot).join('')}</div></div>`,
         body = '';
     if (u.kind === 'line') {
@@ -684,6 +685,17 @@ export function reviewActions({ jobOf, crumbBack, redraftLine, openSaved = null 
                 at = c.review.at || 0,
                 bad = units.map((u, i) => ((issues[u.key] || []).some((x) => x.level === 'error') ? i : -1)).filter((i) => i >= 0),
                 next = bad.find((i) => i > at) ?? bad[0];
+            next != null && (await saveReview(view, c.jobId, (r) => ({ ...r, at: next })), view.renderBody());
+        },
+        // 标题上的「待确认 N」：跳到下一个有待确认项的页
+        async 'rv-first-ask'(view) {
+            let c = current(view);
+            if (!c) return;
+            let units = reviewUnits(view.project(), c.review),
+                issues = reviewIssues(view, c.review, indexOf(c.job)),
+                at = c.review.at || 0,
+                list = units.map((u, i) => ((issues[u.key] || []).some((x) => x.level !== 'error') ? i : -1)).filter((i) => i >= 0),
+                next = list.find((i) => i > at) ?? list[0];
             next != null && (await saveReview(view, c.jobId, (r) => ({ ...r, at: next })), view.renderBody());
         },
         async 'rv-fill-all'(view) {

@@ -54,7 +54,7 @@ import { projectSecretNames } from '../core/store.js';
 
 import { settingPiecesFromEntries, afterImport, classifyEntries, pickWorldbookEntries } from './wb-import.js';
 import { stringifyYaml, parseYaml } from '../core/yaml.js';
-import { ctx, downloadBlob, toast } from '../host/st.js';
+import { ctx, downloadBlob, toast, hostDocument } from '../host/st.js';
 
 import { resolveRefs, progressText, fitRefs } from './discuss-refs.js';
 
@@ -1774,7 +1774,10 @@ ${yaml}
         ((st(view).overview = !st(view).overview), view.renderBody());
     },
     'issue-go'(view, target) {
-        ((st(view).sel = target.dataset.id), (st(view).raw = !1), (st(view).overview = !1), view.renderBody());
+        // 跑团项目：跳转后收起检查列表，并把编辑区滚到眼前（列表占满屏时，跳了也看不出来）；其他项目照旧
+        const trpg = isTrpg(view.project());
+        ((st(view).sel = target.dataset.id), (st(view).raw = !1), (st(view).overview = !1), trpg && (st(view).check = !1), view.renderBody());
+        trpg && hostDocument().querySelector('.pi-tree')?.scrollIntoView?.({ block: 'start' });
     },
     'ov-go'(view, target) {
         ((st(view).sel = target.dataset.id), (st(view).raw = !1), (st(view).overview = !1), view.renderBody());
