@@ -17,9 +17,5 @@ import * as M15 from '../src/core/store.js';
 import * as M16 from '../src/core/guide.js';
 import * as M17 from '../src/core/setting.js';
 import * as M18 from '../src/core/review-draft.js';
-import * as M19 from '../src/core/fold.js';
-import * as M20 from '../src/core/check.js';
-import * as M21 from '../src/core/ol-lines.js';
-import * as M22 from '../src/core/plot-scene.js';
 import YAML from 'yaml';
-export function loadCore(){ const api={...Lines,...M0,...M1,...M2,...M3,...M4,...M5,...M6,...M7,...M8,...M9,...M11,...M12,...M13,...M14,...M15,...M16,...M17,...M18,...M19,...M20,...M21,...M22};api.setYamlLib(YAML);return api;}
+export function loadCore(){ const api={...Lines,...M0,...M1,...M2,...M3,...M4,...M5,...M6,...M7,...M8,...M9,...M11,...M12,...M13,...M14,...M15,...M16,...M17,...M18};api.setYamlLib(YAML);return api;}

@@ -36,7 +36,7 @@ export function createHost({ tables = {} } = {}) {
     count(name) { return (listeners.get(name) || []).length; },
   };
   const state = {
-    chat: [], chatMetadata: {}, chatId: 'chat-1', saves: 0, server: {}, saveFails: false,
+    chat: [], chatMetadata: {}, chatId: 'chat-1', saves: 0,
   };
   const ctxObj = {
     get chat() { return state.chat; },
@@ -47,8 +47,7 @@ export function createHost({ tables = {} } = {}) {
     getCurrentChatId: () => state.chatId,
     getRequestHeaders: () => ({ 'Content-Type': 'application/json' }),
     saveMetadataDebounced: () => { state.saves++; },
-    // Real ST saveMetadata swallows errors and timeouts; the server copy is what /api/chats/get returns.
-    saveMetadata: async () => { state.saves++; if (!state.saveFails) state.server = JSON.parse(JSON.stringify(state.chatMetadata)); },
+    saveMetadata: async () => { state.saves++; },
     getTokenCountAsync: async (t) => Math.ceil(String(t).length / 2),
     // "tavern" LLM source goes through generateRaw — count it as a model call.
     // llmReply: tests can set host.llm.reply to control what the model returns (default: an outline-check JSON).
@@ -56,8 +55,7 @@ export function createHost({ tables = {} } = {}) {
     generateRaw: async (args) => { const body = JSON.stringify(args); llmCalls.push({ url: 'generateRaw', body, args }); if (llm.respond) return llm.respond(body); return llm.reply ?? '{"done":[],"stageDone":false,"offTrack":false,"reason":"未演完"}'; },
   };
   w.SillyTavern = { getContext: () => ctxObj, libs: { yaml: YAML } };
-  const toasts = [];
-  w.toastr = Object.fromEntries(['info', 'success', 'warning', 'error'].map((k) => [k, (msg) => { toasts.push({ type: k, msg: String(msg) }); }]));
+  w.toastr = { info() {}, success() {}, warning() {}, error() {} };
   w.fetch = async (url, init = {}) => {
     const u = String(url);
     const ok = (body, status = 200) => ({ ok: status < 300, status, json: async () => body, text: async () => (typeof body === 'string' ? body : JSON.stringify(body)) });
@@ -73,8 +71,6 @@ export function createHost({ tables = {} } = {}) {
     }
     if (u === '/api/files/delete') { files.delete(path.basename(JSON.parse(init.body).path)); return ok({}); }
     if (u === '/api/files/verify') return ok({});
-    // ST /api/chats/get: whole chat file, element 0 is the header with chat_metadata
-    if (u === '/api/chats/get' || u === '/api/chats/group/get') return ok([{ chat_metadata: JSON.parse(JSON.stringify(state.server)), user_name: 'unused', character_name: 'unused' }, ...state.chat]);
     llmCalls.push({ url: u, body: init.body });
     return ok({ choices: [{ message: { content: '{}' } }] });
   };
@@ -86,30 +82,6 @@ export function createHost({ tables = {} } = {}) {
     exportTableAsJson: () => currentTables,
     registerTableUpdateCallback: (fn) => { if (!tableCallbacks.includes(fn)) tableCallbacks.push(fn); },
     unregisterTableUpdateCallback: (fn) => { const i = tableCallbacks.indexOf(fn); if (i >= 0) tableCallbacks.splice(i, 1); },
-    fillStartCallbacks: [],
-    registerTableFillStartCallback: (fn) => { api.fillStartCallbacks.includes(fn) || api.fillStartCallbacks.push(fn); },
-    unregisterTableFillStartCallback: (fn) => { const i = api.fillStartCallbacks.indexOf(fn); if (i >= 0) api.fillStartCallbacks.splice(i, 1); },
-    // Official deleteRow (spv8.9.2 table-crud-api): ({tableName, rowIndex}), rowIndex is the content index (1 = first row);
-    // returns a boolean. Writes a manual_crud log entry with operations [{kind:'row_delete', sheetKey, rowId}] on the latest
-    // AI floor that carries a frame (else the latest AI floor).
-    deleted: [],
-    deleteRow: async (a, b) => {
-      const tableName = typeof a === 'object' ? a.tableName : a, rowIndex = typeof a === 'object' ? a.rowIndex : b;
-      if (api.deleteFails) return false;
-      const entry = Object.entries(currentTables).find(([, s]) => s && s.name === tableName);
-      if (!entry || rowIndex < 1 || !entry[1].content[rowIndex]) return false;
-      const [sheetKey, sheet] = entry, rowId = sheet.content[rowIndex][0];
-      let target = -1;
-      for (let i = state.chat.length - 1; i >= 0; i--) if (state.chat[i] && !state.chat[i].is_user) { if (target < 0) target = i; if (state.chat[i].TavernDB_ACU_IsolatedData) { target = i; break; } }
-      if (target < 0) return false;
-      sheet.content.splice(rowIndex, 1);
-      const msg = state.chat[target];
-      const iso = msg.TavernDB_ACU_IsolatedData || (msg.TavernDB_ACU_IsolatedData = { '': { storageFrame: { version: 2, logEntries: [] } } });
-      const frame = iso[''].storageFrame || (iso[''].storageFrame = { version: 2, logEntries: [] });
-      frame.logEntries.push({ seq: frame.logEntries.length + 1, source: 'manual_crud', targetMessageIndex: target, filledSheetKeys: [], changedSheetKeys: [sheetKey], operations: rowId != null ? [{ kind: 'row_delete', sheetKey, rowId }] : [] });
-      api.deleted.push({ tableName, rowId, floor: target });
-      return true;
-    },
     // Official insertRow semantics: (tableName, {列名: 值}) or ({tableName, data}); appends a row; unknown column → -1 (SQLite rejects).
     insertRow: async (a, b) => {
       const tableName = typeof a === 'object' ? a.tableName : a, data = typeof a === 'object' ? a.data : b;
@@ -123,39 +95,6 @@ export function createHost({ tables = {} } = {}) {
       return sheet.content.length - 1;
     },
     inserted: [],
-    // Official manual fill (spv8.9.2 settings-config-api + handleManualUpdate_ACU): the selection lives in settings;
-    // manualUpdate shows a confirm (manualCancel = the user clicked 取消), then deletes the selected sheets' data in the
-    // refill range and fills from empty: here every selected sheet becomes header-only, one group_fill entry lists them
-    // on the latest AI floor (aiFloor = AI count), and a per-sheet 'manual' checkpoint stores the emptied sheet.
-    manualSel: { selectedTables: [], hasManualSelection: false },
-    manualCalls: [],
-    getManualSelectedTables: () => ({ selectedTables: [...api.manualSel.selectedTables], hasManualSelection: api.manualSel.hasManualSelection }),
-    setManualSelectedTables: (keys) => { api.manualSel = { selectedTables: keys.filter((k) => currentTables[k]), hasManualSelection: true }; return true; },
-    clearManualSelectedTables: () => { api.manualSel = { selectedTables: [], hasManualSelection: false }; return true; },
-    manualUpdate: async () => {
-      const keys = [...api.manualSel.selectedTables];
-      const call = { keys, insertedBefore: api.inserted.length };
-      api.manualCalls.push(call);
-      if (api.confirmDelay) await new Promise((r) => setTimeout(r, api.confirmDelay));
-      if (api.manualCancel || !keys.length) return;
-      // like the real fill, the tables stay readable until it commits
-      for (const fn of api.fillStartCallbacks) fn();
-      if (api.manualBusy) { api.manualBusy--; for (const fn of tableCallbacks) fn(currentTables); return; }
-      let target = -1, n = 0;
-      for (let i = 0; i < state.chat.length; i++) if (state.chat[i] && !state.chat[i].is_user) { n++; target = i; }
-      if (target < 0) return;
-      const msg = state.chat[target];
-      const iso = msg.TavernDB_ACU_IsolatedData || (msg.TavernDB_ACU_IsolatedData = { '': { storageFrame: { version: 2, logEntries: [] } } });
-      const frame = iso[''].storageFrame || (iso[''].storageFrame = { version: 2, logEntries: [] });
-      frame.perSheetCheckpoints = frame.perSheetCheckpoints || {};
-      call.insertedBefore = api.inserted.length;
-      for (const k of keys) {
-        currentTables[k].content = [currentTables[k].content[0]];
-        frame.perSheetCheckpoints[k] = { kind: 'sheet_full', reason: 'manual', createdAt: Date.now(), sheetKey: k, data: { content: [currentTables[k].content[0]] } };
-      }
-      frame.logEntries.push({ seq: frame.logEntries.length + 1, source: 'group_fill', targetMessageIndex: target, aiFloor: n, filledSheetKeys: keys, changedSheetKeys: [], groupKeys: keys });
-      for (const fn of tableCallbacks) fn(currentTables);
-    },
     // Official updateCell (spv8.9.2 table-crud-api): ({tableName, rowIndex, colIdentifier, value}); rowIndex is the content index.
     updateCell: async (a) => {
       const sheet = Object.values(currentTables).find((s) => s && s.name === a.tableName);
@@ -183,30 +122,16 @@ export function createHost({ tables = {} } = {}) {
     sqlCalls: [],
     executeSqlMutation: async (sql, params = []) => {
       if (api.beforeSql) await api.beforeSql(sql, params);
-      if (sql && typeof sql === 'object') ({ sql, params = [] } = sql);
       api.sqlCalls.push({ sql, params: [...params], chat: state.chatId });
       if (api.sqlFails) return { changes: 0, errors: [api.sqlFails] };
-      const del = /^DELETE FROM (\S+) WHERE row_id = \? AND (\S+) = \?$/.exec(sql);
-      if (del) {
-        const sheet = Object.values(currentTables).find((s) => s && s.name === del[1]);
-        if (!sheet) return { changes: 0, errors: [`no such table: ${del[1]}`] };
-        const c = sheet.content[0].indexOf(del[2]);
-        if (c < 1) return { changes: 0, errors: ['no such column'] };
-        const before = sheet.content.length;
-        sheet.content = [sheet.content[0], ...sheet.content.slice(1).filter((r) => !(String(r[0]) === String(params[0]) && String(r[c]) === String(params[1])))];
-        let target = -1;
-        for (let i = state.chat.length - 1; i >= 0; i--) if (state.chat[i] && !state.chat[i].is_user) { target = i; break; }
-        return { changes: before - sheet.content.length, errors: [], saved: true, messageIndex: target };
-      }
-      // WHERE 可以是一个或几个「列 = ?」用 AND 连起来
-      const m = /^UPDATE (\S+) SET (.+?) WHERE (\S+ = \?(?: AND \S+ = \?)*)$/.exec(sql);
+      const m = /^UPDATE (\S+) SET (.+) WHERE (\S+) = \?$/.exec(sql);
       if (!m) return { changes: 0, errors: ['unsupported sql in host-sim'] };
       const sheet = Object.values(currentTables).find((s) => s && s.name === m[1]);
       if (!sheet) return { changes: 0, errors: [`no such table: ${m[1]}`] };
-      const head = sheet.content[0], sets = m[2].split(',').map((x) => x.trim().replace(/ = \?$/, '')), wheres = m[3].split(' AND ').map((x) => head.indexOf(x.replace(/ = \?$/, '')));
-      if (wheres.some((w) => w < 1) || sets.some((c) => head.indexOf(c) < 1)) return { changes: 0, errors: ['no such column'] };
+      const head = sheet.content[0], sets = m[2].split(',').map((x) => x.trim().replace(/ = \?$/, '')), where = head.indexOf(m[3]);
+      if (where < 1 || sets.some((c) => head.indexOf(c) < 1)) return { changes: 0, errors: ['no such column'] };
       let changes = 0;
-      for (const row of sheet.content.slice(1)) if (wheres.every((w, k) => String(row[w]) === String(params[sets.length + k]))) { sets.forEach((c, i) => { row[head.indexOf(c)] = params[i]; }); changes++; }
+      for (const row of sheet.content.slice(1)) if (String(row[where]) === String(params[sets.length])) { sets.forEach((c, i) => { row[head.indexOf(c)] = params[i]; }); changes++; }
       return { changes, errors: [], saved: true, messageIndex: -1 };
     },
     // Official template API (spv8.9.2 template-preset-api): getTableTemplate returns the chat template object
@@ -240,42 +165,9 @@ export function createHost({ tables = {} } = {}) {
         cur.sourceData = JSON.parse(JSON.stringify(s.sourceData)); cur.updateConfig = JSON.parse(JSON.stringify(s.updateConfig)); cur.exportConfig = JSON.parse(JSON.stringify(s.exportConfig));
         if (cur.content.length === 1 && s.content.length > 1) cur.content.push(...s.content.slice(1).map((r, i) => [i + 1, ...r.slice(1)]));
       }
-      // Real SQLite mode (2026-11-22 tavern): right after a chat-template import the runtime may not have the new sheets yet;
-      // they show up after refreshDataAndWorldbook (unless refreshNoop) or reveal().
-      if (api.hideNew) {
-        api.pending = Object.fromEntries(Object.entries(next).filter(([k]) => !currentTables[k]));
-        for (const k of Object.keys(api.pending)) delete next[k];
-      }
       currentTables = next;
       for (const fn of tableCallbacks) fn(currentTables);
       return { success: true, scope: options.scope, dataMode: options.dataMode, runtimeReady: true };
-    },
-    pending: null,
-    // Official plot preset API (spv8.9.2 plot-preset-api): presets are global; the binding is per chat (one chat here).
-    // importPlotPresetFromData(data, {overwrite}) replaces by name or adds "name (1)"; switchPlotPreset binds this chat.
-    plotPresets: {},
-    plotBinding: '',
-    plotImports: 0,
-    getCurrentPlotPreset: () => api.plotBinding,
-    getPlotPresetDetails: (n) => (api.plotPresets[n] ? JSON.parse(JSON.stringify(api.plotPresets[n])) : null),
-    importPlotPresetFromData: async (data, o = {}) => {
-      let name = data.name;
-      if (api.plotPresets[name] && !o.overwrite) { let i = 1; while (api.plotPresets[`${data.name} (${i})`]) i++; name = `${data.name} (${i})`; }
-      api.plotPresets[name] = { ...JSON.parse(JSON.stringify(data)), name }; api.plotImports++;
-      if (o.switchTo) api.plotBinding = name;
-      return { success: true, presetName: name };
-    },
-    switchPlotPreset: (n) => (api.plotPresets[n] ? ((api.plotBinding = n), true) : false),
-    refreshCalls: 0,
-    refreshDataAndWorldbook: async () => {
-      api.refreshCalls++;
-      if (!api.refreshNoop) api.reveal();
-      return true;
-    },
-    reveal: () => {
-      if (!api.pending) return;
-      Object.assign(currentTables, api.pending); api.pending = null;
-      for (const fn of tableCallbacks) fn(currentTables);
     },
   };
   Object.defineProperty(api, 'querySql', { enumerable: true, get: () => (api.sqlite ? () => ({ columns: [], rows: [] }) : undefined) });
@@ -329,6 +221,6 @@ export function createHost({ tables = {} } = {}) {
     await eventSource.emit(eventTypes.GENERATION_ENDED);
     return { lore, text: lore.map((e) => e.content).join('\n') };
   }
-  return { w, dom, state, ctx: ctxObj, eventSource, eventTypes, files, llmCalls, llm, db, load, worldInfo, addMessage, generate, send, promptReady, toasts,
+  return { w, dom, state, ctx: ctxObj, eventSource, eventTypes, files, llmCalls, llm, db, load, worldInfo, addMessage, generate, send, promptReady,
     settle: () => new Promise((r) => setTimeout(r, 30)) };
 }
