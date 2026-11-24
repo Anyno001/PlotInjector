@@ -188,7 +188,7 @@ function nodeFull(n, clue, names) {
 // 一键修的按钮：一个文字按钮 + 其余修法收进「⋯」（quick / alts 见 trpg-import-check.js）
 function fixButtons(x, unit) {
     let at = `data-unit="${esc(unit)}" data-issue="${esc(x.id)}"`;
-    return `${x.quick ? `<button type="button" class="pi-btn is-sm" data-act="rv-quick" ${at} data-pick="-1">${esc(x.quick.label)}</button>` : ''}${x.action ? `<button type="button" class="pi-btn is-sm" data-act="${esc(x.action.act)}">${esc(x.action.label)}</button>` : ''}${x.alts && x.alts.length ? `<button type="button" class="pi-icon-btn" data-act="rv-quick-more" ${at} title="其他修法" aria-label="其他修法">${ICONS.more}</button>` : ''}`;
+    return `${x.quick ? `<button type="button" class="pi-btn is-sm" data-act="rv-quick" ${at} data-pick="-1">${esc(x.quick.label)}</button>` : ''}${x.action ? `<button type="button" class="pi-btn is-sm" data-act="${esc(x.action.act)}">${esc(x.action.label)}</button>` : ''}${x.alts && x.alts.length ? `<button type="button" class="pi-icon-btn" data-act="rv-quick-more" ${at} title="其他处理方式" aria-label="其他处理方式">${ICONS.more}</button>` : ''}`;
 }
 function issueCard(x, unit, filled) {
     if (x.level === 'error')
@@ -595,14 +595,14 @@ export function reviewActions({ jobOf, crumbBack, redraftLine, openSaved = null 
             if (!fix) return;
             await saveReview(view, c.jobId, (r) => editDraft(r, fix.label, (d) => applyImportFix(d, fix.q)));
             view.renderBody();
-            toast('info', `已修改：${fix.label}。不对的话点下面的「撤销上次修改」。`);
+            toast('info', `已修改：${fix.label}。如需还原，可点击下方的「撤销上次修改」。`);
         },
         async 'rv-quick-more'(view, target) {
             let c = current(view);
             if (!c) return;
             let x = (reviewIssues(view, c.review, indexOf(c.job))[target.dataset.unit] || []).find((y) => y.id === target.dataset.issue);
             if (!x || !(x.alts || []).length) return;
-            let v = await menuDialog({ title: '其他修法', items: x.alts.map((a, i) => ({ label: a.label, value: String(i) })) });
+            let v = await menuDialog({ title: '其他处理方式', items: x.alts.map((a, i) => ({ label: a.label, value: String(i) })) });
             v != null && actions['rv-quick'](view, { dataset: { unit: target.dataset.unit, issue: target.dataset.issue, pick: v } });
         },
         // 去执行页填故事时间的绑定（审阅内容已存，回来接着看）

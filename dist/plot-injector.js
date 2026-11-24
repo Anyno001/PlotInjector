@@ -1,4 +1,4 @@
-// PlotInjector v0.4.6
+// PlotInjector v0.4.7
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -11512,6 +11512,7 @@ label.pi-wb-row{cursor:pointer}
 .pi-rl-focus>.pi-grow{flex:1;min-width:60px}
 .pi-rl-focus .pi-btn:not(.is-primary),.pi-rl-lines .pi-btn:not(.is-primary),.pi-rl-sec .pi-btn:not(.is-primary),.pi-rl-sec .pi-sel{background:var(--pi-bg)}
 .pi-rl-foot{margin:10px 0 0}
+.pi-root .pi-card .pi-meta.pi-rl-foot{white-space:normal;overflow-wrap:anywhere}
 .pi-rl-lines{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
 .pi-rl-lines .pi-line-row{background:var(--pi-fill);border-radius:var(--pi-r-in);padding:6px 6px 6px 12px;border-top:0}
 .pi-rl-lines .pi-line-head{align-items:center;gap:6px}
@@ -12316,26 +12317,26 @@ ${rules}`
   function problemText(p) {
     switch (p.kind) {
       case "unparsed":
-        return "没认出骰点，掷骰请写成1D100=23";
+        return "未能识别骰点，本次不计入判定。骰点可写作1D100=23。";
       case "novalue":
-        return `${p.skill || "这项技能"}缺技能值，请写23/60，或在IGS调查员档补上`;
+        return `${p.skill || "该技能"}缺少技能值，无法判定成败。可写作23/60，或在IGS调查员档中补充。`;
       case "badcode":
-        return "正文里的检定编号对不上模组";
+        return "正文中的检定编号与模组不符，无法对应到线索。";
       case "dup":
-        return `${p.skill || "这项"}已经掷过，以第一次为准`;
+        return `${p.skill || "该项"}此前已经掷过，结果以第一次为准。`;
       case "noreq":
-        return "掷了骰，但前面没有等着掷的检定，这次没有算";
+        return "这次掷骰前没有待进行的检定，骰点未计入判定。";
       default:
         return "";
     }
   }
   function rollNoticeText(r, { hidden = !1, rescue = !1, anyway = !1 } = {}) {
-    let what = `${rescue ? "补救检定 " : ""}${checkWhat(r.skill, r.level)}`;
-    if (hidden) return { title: "判定", body: `${what}：已掷（暗骰），结果看正文`, fail: !1, canRescue: !1 };
-    let roll = r.die != null ? `${r.die}${r.value ? `/${r.value}` : ""}` : "", head = `${what}${roll ? ` ${roll}` : ""}`;
-    return r.ok ? { title: "判定成功", body: `${head}：${r.tier && r.tier !== "成功" ? r.tier : "成功"}，线索会交给正文`, fail: !1, canRescue: !1 } : {
+    let what = `${checkWhat(r.skill, r.level)}${rescue ? "补救检定" : "检定"}`;
+    if (hidden) return { title: "暗骰已掷", body: `${what}为暗骰，结果将在正文中体现。`, fail: !1, canRescue: !1 };
+    let roll = r.die != null ? `掷出${r.die}${r.value ? `（技能值${r.value}）` : ""}` : "", head = `${what}${roll}`;
+    return r.ok ? { title: "判定成功", body: `${head}，${r.tier && r.tier !== "成功" ? r.tier : "成功"}。相应线索将交由正文写出。`, fail: !1, canRescue: !1 } : {
       title: "判定失败",
-      body: `${head}：${r.tier === "大失败" ? "大失败" : "失败"}${anyway ? "，失败了也能拿到这条线索" : ""}`,
+      body: `${head}，${r.tier === "大失败" ? "大失败" : "失败"}。${anyway ? "按模组设定，失败后仍可获得这条线索。" : ""}`,
       fail: !0,
       canRescue: !rescue && !anyway
     };
@@ -14074,7 +14075,7 @@ ${list.join(`
       }
       if (!fresh.length && !probs.length) return;
       if (saveKp2({ rollSeen: [...seen, ...Object.keys(checks).filter((code) => checks[code].fresh).map((code) => `${stamp}:${code}`), ...probs.map((p) => `${stamp}:!${p.kind}`)].slice(-40) }), probs.length && !fresh.length)
-        return notice.show({ id: "kp-roll", title: "判定没算上", body: probs.map(problemText).join("；"), actions: [{ label: "知道了", run: () => {
+        return notice.show({ id: "kp-roll", title: "判定未生效", body: probs.map(problemText).join("；"), actions: [{ label: "关闭", run: () => {
         } }] });
       let parts = fresh.map(([code, r]) => {
         let rescue = /-KP$/.test(code), base = code.replace(/-KP$/, ""), hit = c && kpFind(c.state, base), check = hit && hit.discovery.check;
@@ -14087,7 +14088,7 @@ ${list.join(`
           let now = chatMessages(), tail = now[now.length - 1];
           saveKp2({ push: { fact: rescueOf.base, level: 2, floor: aiFloorCount2(now) + (tail && tail.is_user ? 1 : 0) } });
         }
-      }), actions12.push({ label: "知道了", run: () => {
+      }), actions12.push({ label: "关闭", run: () => {
       } }), notice.show({ id: "kp-roll", title: parts.length === 1 ? parts[0].title : "判定结果", body, actions: actions12, ...rescueOf ? {} : { timeout: 8e3 } });
     }
     let api = { run, recheck, applyRecheck, clearKp, autoVerifyEvery, setAutoVerify, rollNotice, reset: () => (again = !1, lastKey = "") };
@@ -19499,18 +19500,18 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
 
   // src/trpg/trpg-check-card.js
   var STATUS = {
-    wait: ["", "等正文出检定"],
-    roll: ["is-accent", "等你掷骰"],
+    wait: ["", "待正文提出"],
+    roll: ["is-accent", "待掷骰"],
     ok: ["is-ok", "成功"],
     fail: ["is-warn", "失败"],
-    got: ["is-ok", "已拿到"]
-  }, CLUE = { confirmed: "线索已确认", offered: "已交给正文", pending: "线索还没确认" };
+    got: ["is-ok", "已获得"]
+  }, CLUE = { confirmed: "线索已确认", offered: "线索已交由正文", pending: "线索待确认" };
   function nudgeHtml(r) {
-    return r.nudge === "norequest" ? `<span class="pi-ck-nudge"><span class="pi-hint is-warn">正文两轮没出这项检定</span><button type="button" class="pi-btn is-sm" data-act="kp-remind" data-skill="${esc(r.skill)}">下一轮提醒AI写检定</button></span>` : r.nudge === "unconfirmed" ? `<span class="pi-ck-nudge"><span class="pi-hint is-warn">${r.status === "fail" && r.anyway ? "失败也能拿到，线索还没确认" : "判定成功了，线索还没确认"}</span><button type="button" class="pi-btn is-sm" data-act="kp-verify">重新核实阶段</button><button type="button" class="pi-icon-btn" data-act="kp-fact-menu" data-fact="${esc(r.fact)}" title="更多" aria-label="更多">${ICONS.more}</button></span>` : "";
+    return r.nudge === "norequest" ? `<span class="pi-ck-nudge"><span class="pi-hint is-warn">正文已有两轮未提出这项检定</span><button type="button" class="pi-btn is-sm" data-act="kp-remind" data-skill="${esc(r.skill)}">下轮提醒检定</button></span>` : r.nudge === "unconfirmed" ? `<span class="pi-ck-nudge"><span class="pi-hint is-warn">${r.status === "fail" && r.anyway ? "失败仍可获得线索，但尚未确认" : "判定已成功，线索尚未确认"}</span><button type="button" class="pi-btn is-sm" data-act="kp-verify">重新核实阶段</button><button type="button" class="pi-icon-btn" data-act="kp-fact-menu" data-fact="${esc(r.fact)}" title="更多" aria-label="更多">${ICONS.more}</button></span>` : "";
   }
   function rowHtml(r) {
     let [cls, text2] = STATUS[r.status], meta2 = [r.node, r.roll].filter(Boolean), tail = [];
-    return r.status === "fail" && tail.push(r.kp ? `补救检定${r.kp.ok ? "成功" : "失败"}` : r.anyway ? "失败也能拿到线索" : "这次没拿到线索"), r.clue && tail.push(CLUE[r.clue]), `<div class="pi-ck-row"><span class="pi-badge ${cls}">${text2}</span><span class="pi-ck-what">${esc(r.what)}${r.hidden ? '<span class="pi-meta">暗骰</span>' : ""}</span><span class="pi-meta pi-ck-meta">${esc(meta2.join(" · "))}</span>${r.label || tail.length ? `<span class="pi-meta pi-ck-tail">${esc([r.label ? `「${r.label}」` : "", ...tail].filter(Boolean).join("，"))}</span>` : ""}${nudgeHtml(r)}</div>`;
+    return r.status === "fail" && tail.push(r.kp ? `补救检定${r.kp.ok ? "成功" : "失败"}` : r.anyway ? "失败仍可获得线索" : "未获得线索"), r.clue && tail.push(CLUE[r.clue]), `<div class="pi-ck-row"><span class="pi-badge ${cls}">${text2}</span><span class="pi-ck-what">${esc(r.what)}${r.hidden ? '<span class="pi-meta">暗骰</span>' : ""}</span><span class="pi-meta pi-ck-meta">${esc(meta2.join(" · "))}</span>${r.label || tail.length ? `<span class="pi-meta pi-ck-tail">${esc([r.label ? `「${r.label}」` : "", ...tail].filter(Boolean).join("，"))}</span>` : ""}${nudgeHtml(r)}</div>`;
   }
   function checkSection(project, c, raw) {
     let checks = trpgCheckResults(chatMessages()), labels = isPlainObject(project.clue.labels) ? project.clue.labels : {}, board = trpgCheckBoard({ state: c.state, snap: c.snap, prog: c.prog, checks, labels, messages: chatMessages(), raw });
@@ -19518,7 +19519,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
     let live2 = board.rows.filter((r) => !r.done), done = board.rows.filter((r) => r.done);
     return `<div class="pi-ck"><div class="pi-ck-hd">判定</div>
         ${board.problems.map((p) => `<p class="pi-hint is-warn">${esc(problemText(p))}</p>`).join("")}
-        ${live2.map(rowHtml).join("") || (board.rows.length ? '<p class="pi-hint">眼下没有等着的判定。</p>' : "")}
+        ${live2.map(rowHtml).join("") || (board.rows.length ? '<p class="pi-hint">目前没有待进行的判定。</p>' : "")}
         ${done.length ? `<details class="pi-fold"><summary><b>已完成（${done.length}）</b></summary>${done.map(rowHtml).join("")}</details>` : ""}</div>`;
   }
 
@@ -19540,7 +19541,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
     let prog = view.runtime.progress();
     view.runtime.setProgress({ ...prog, trpgKp: { ...prog.trpgKp || {}, ...patch } }, "trpg-kp");
   }
-  var CHECK_WHY = { roll: "判定没成功", text: "正文没写出来" };
+  var CHECK_WHY = { roll: "判定未成功", text: "正文未写出" };
   function stageLags(state) {
     let list = [...state.stageStates.values()], out = [];
     for (let i = 1; i < list.length; i += 1) {
@@ -19561,7 +19562,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
   function stageLagHtml(state, snap2, prog) {
     return stageLags(state).map((g) => {
       let names2 = g.left.map((ns) => `『${esc(ns.node.name || "未命名")}』`).join("、");
-      return `<div class="pi-ck-nudge"><span class="pi-hint is-warn">${esc(g.prev)}还差${names2}，${esc(g.next)}已经开始</span>${lagTarget(g.left, snap2, prog) ? '<button type="button" class="pi-btn is-sm" data-act="kp-lag-push">推一把</button>' : ""}<button type="button" class="pi-icon-btn" data-act="kp-lag-menu" title="更多" aria-label="更多">${ICONS.more}</button></div>`;
+      return `<div class="pi-ck-nudge"><span class="pi-hint is-warn">${esc(g.next)}已经开始，${esc(g.prev)}尚有${names2}未完成</span>${lagTarget(g.left, snap2, prog) ? '<button type="button" class="pi-btn is-sm" data-act="kp-lag-push">推一把</button>' : ""}<button type="button" class="pi-icon-btn" data-act="kp-lag-menu" title="更多" aria-label="更多">${ICONS.more}</button></div>`;
     }).join("");
   }
   function lastCheckHtml(kp) {
@@ -19697,17 +19698,17 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
     // 判定那一行：正文两轮没出检定，下一轮提醒 AI 写（只说技能，不说线索内容）
     "kp-remind"(view, target) {
       let skill = (target.dataset.skill || "").trim() || "相应";
-      saveKp(view, { push: { kind: "steer", text: `这一轮正文里请按检定写法补上「${skill}」检定，让玩家掷骰，先不要写出结果。`, floor: aiFloorCount2(chatMessages()) } }), toast("success", "下一轮会提醒AI写这项检定。"), view.renderBody();
+      saveKp(view, { push: { kind: "steer", text: `这一轮正文里请按检定写法补上「${skill}」检定，让玩家掷骰，先不要写出结果。`, floor: aiFloorCount2(chatMessages()) } }), toast("success", "下一轮将提醒正文提出这项检定。"), view.renderBody();
     },
     // 判定成功了线索没确认：收进「⋯」的次要操作
     async "kp-fact-menu"(view, target) {
       let fact = target.dataset.fact;
-      !fact || await menuDialog({ title: "线索", items: [{ label: "手动确认拿到了", value: "confirm" }] }) !== "confirm" || (view.runtime.clue.act({ kind: "fact", target: fact, value: "confirmed", note: "玩家手动确认（判定已成功）" }), toast("success", "已确认这条线索。"), view.renderBody());
+      !fact || await menuDialog({ title: "线索", items: [{ label: "手动确认已获得", value: "confirm" }] }) !== "confirm" || (view.runtime.clue.act({ kind: "fact", target: fact, value: "confirmed", note: "玩家手动确认（判定已成功）" }), toast("success", "已确认这条线索。"), view.renderBody());
     },
     // 阶段提醒的「推一把」：目标取前一阶段还差的节点里的线索，档位沿用 KP_LEVELS
     async "kp-lag-push"(view) {
       let c = view.runtime.clue.compute(), fact = "";
-      if (!(c && stageLags(c.state).find((g) => fact = lagTarget(g.left, c.snap, c.prog)))) return toast("info", "眼下没有能推的线索。"), view.renderBody();
+      if (!(c && stageLags(c.state).find((g) => fact = lagTarget(g.left, c.snap, c.prog)))) return toast("info", "目前没有可推进的线索。"), view.renderBody();
       let pick = await menuDialog({ title: "推一把", items: KP_LEVELS.map((x) => ({ label: x.label, value: String(x.level) })) });
       pick && (saveKp(view, { push: { fact, level: Number(pick), floor: aiFloorCount2(chatMessages()) } }), view.renderBody());
     },
@@ -19717,7 +19718,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
       if (!left.length) return;
       let pick = await menuDialog({ title: "手动标完成", items: left.map((ns) => ({ label: ns.node.name || "未命名", value: ns.node.uid })) });
       if (!pick) return;
-      let note = await promptDialog({ title: "记录原因（可空）", label: "为什么手动处理" });
+      let note = await promptDialog({ title: "手动标完成", label: "原因（可不填）" });
       note !== null && (clue.act({ kind: "done", target: pick, value: "force", note }), view.renderBody());
     },
     "kp-cancel"(view) {
@@ -19939,9 +19940,9 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
       }
     for (let { cur, next, nodes, end } of hang.values()) {
       let hasDone = nodes.filter((n) => n.done), items = clockItems(cur.clue.end).length ? clockItems(cur.clue.end) : clockItems(next.clue.enter), names2 = nodes.map((n) => n.name || "一个节点"), ends = end && cur.clue.end ? [cur.id] : [], opt = [
-        nodes.length ? fixOf(volumes, "把这些节点改为可选", { op: "optional", nodes: nodes.filter((n) => n.uid).map((n) => n.uid) }) : null,
-        nodes.length && next.clue.hasEnter ? fixOf(volumes, `让「${stageLabel(next.stage.key)}」要等这些节点做完`, { op: "gate", stage: next.id, nodes: nodes.filter((n) => n.uid).map((n) => n.uid) }) : null
-      ].filter(Boolean), main = items.length ? fixOf(volumes, "补上时间兜底", { op: "fallback", items, nodes: hasDone.filter((n) => n.uid).map((n) => ({ uid: n.uid, field: "完成条件" })), ends }) : null, prev = stageLabel(cur.stage.key);
+        nodes.length ? fixOf(volumes, "设为可选", { op: "optional", nodes: nodes.filter((n) => n.uid).map((n) => n.uid) }) : null,
+        nodes.length && next.clue.hasEnter ? fixOf(volumes, `节点完成后才开始「${stageLabel(next.stage.key)}」`, { op: "gate", stage: next.id, nodes: nodes.filter((n) => n.uid).map((n) => n.uid) }) : null
+      ].filter(Boolean), main = items.length ? fixOf(volumes, "补充时间条件", { op: "fallback", items, nodes: hasDone.filter((n) => n.uid).map((n) => ({ uid: n.uid, field: "完成条件" })), ends }) : null, prev = stageLabel(cur.stage.key);
       out.push({
         level: "error",
         kind: "gap",
@@ -19949,9 +19950,9 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
         stage: prev,
         stageId: cur.id,
         nodeIds: nodes.map((n) => n.uid).filter(Boolean),
-        text: `阶段衔接：${stageLabel(next.stage.key)}不必等${prev}结束就能开始，但${prev}${nodes.length ? `的${quote(names2)}` : "的结束条件"}只认线索`,
-        plain: `「${stageLabel(next.stage.key)}」不必等「${prev}」结束就能开始，但「${prev}」${nodes.length ? `的${quote(names2)}` : "的结束条件"}只认线索；剧情跳过${nodes.length ? "它们" : "这些线索"}时，「${prev}」会一直显示进行中。`,
-        fix: items.length ? "给它们补上时间或情节的兜底，剧情推过去时也算完成。" : "给它们加上别的出路，或改为可选。",
+        text: `阶段衔接：${stageLabel(next.stage.key)}不必等${prev}结束即可开始，但${prev}${nodes.length ? `的${quote(names2)}` : "的结束条件"}只能通过线索完成`,
+        plain: `「${stageLabel(next.stage.key)}」不必等「${prev}」结束即可开始，但「${prev}」${nodes.length ? `的${quote(names2)}` : "的结束条件"}只能通过线索完成；若剧情跳过${nodes.length ? "这些节点" : "这些线索"}，「${prev}」将持续显示为进行中。`,
+        fix: items.length ? "可为其补充时间或情节条件作为出路，使剧情推进时也能视为完成。" : "可为其增加其他完成途径，或设为可选。",
         ...main ? { quick: main } : {},
         ...opt.length ? { alts: opt } : {}
       });
@@ -19962,7 +19963,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
       byStage.set(u.id, [...byStage.get(u.id) || [], e]);
     }
     for (let [id, list] of byStage) {
-      let u = list[0].node.unit, skipped = [...new Set(list.flatMap((e) => e.skipped.map((s) => stageLabel(s.stage.key))))], items = clockItems(u.clue.enter), nodes = list.filter((e) => e.node.uid), names2 = list.map((e) => e.node.name || "一个节点"), main = items.length ? fixOf(volumes, "补上本阶段的进入兜底", { op: "fallback", items, nodes: nodes.map((e) => ({ uid: e.node.uid, field: e.locked ? "开放条件" : "完成条件" })) }) : null;
+      let u = list[0].node.unit, skipped = [...new Set(list.flatMap((e) => e.skipped.map((s) => stageLabel(s.stage.key))))], items = clockItems(u.clue.enter), nodes = list.filter((e) => e.node.uid), names2 = list.map((e) => e.node.name || "一个节点"), main = items.length ? fixOf(volumes, "补充进入条件", { op: "fallback", items, nodes: nodes.map((e) => ({ uid: e.node.uid, field: e.locked ? "开放条件" : "完成条件" })) }) : null;
       out.push({
         level: "error",
         kind: "skip-stuck",
@@ -19970,9 +19971,9 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
         stage: stageLabel(u.stage.key),
         stageId: id,
         nodeIds: nodes.map((e) => e.node.uid),
-        text: `跨阶段卡死：${skipped.join("、")}被时间推过去时，${stageLabel(u.stage.key)}的${names2.join("、")}开不了或完不成`,
-        plain: `如果剧情被时间推着走、跳过了「${skipped.join("」「")}」，「${stageLabel(u.stage.key)}」的${quote(names2)}就${list.some((e) => e.locked) ? "一直开不了" : "完不成"}：它们要的线索只在前面的阶段产出，而本阶段到时间就会开始。`,
-        fix: items.length ? "给它们补上本阶段的进入兜底，到点就放行。" : "让它们也能靠别的途径开放。",
+        text: `跨阶段受阻：${skipped.join("、")}被时间推过时，${stageLabel(u.stage.key)}的${names2.join("、")}无法开放或完成`,
+        plain: `若剧情因时间推进而跳过「${skipped.join("」「")}」，「${stageLabel(u.stage.key)}」的${quote(names2)}将${list.some((e) => e.locked) ? "无法开放" : "无法完成"}：所需线索只在前面的阶段产出，而本阶段到达时间即会开始。`,
+        fix: items.length ? "可为其补充本阶段的进入条件，使到达时间后即可开放。" : "可为其增加其他开放途径。",
         ...main ? { quick: main } : {}
       });
     }
@@ -20043,31 +20044,31 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
           times.set(a.value, [...times.get(a.value) || [], place]);
       }
       for (let [code, ws] of where) {
-        let near = nearest(code), alts = near.map((f) => fixOf(draftVols, `改成「${labelOf(info, labels, f)}」`, { op: "rename", stage: u.id, from: code, to: f })).filter(Boolean), drop = fixOf(draftVols, "去掉这一项", { op: "drop", stage: u.id, from: code }), place = [...new Set(ws)].join("、");
+        let near = nearest(code), alts = near.map((f) => fixOf(draftVols, `改为「${labelOf(info, labels, f)}」`, { op: "rename", stage: u.id, from: code, to: f })).filter(Boolean), drop = fixOf(draftVols, "删除此项", { op: "drop", stage: u.id, from: code }), place = [...new Set(ws)].join("、");
         out.push({
           level: "error",
           kind: "orphan",
           name: code,
           stage: stageLabel(u.stage.key),
           stageId: u.id,
-          text: `条件用到了没有任何节点产出的线索：${stageLabel(u.stage.key)}，${place}`,
-          plain: `「${stageLabel(u.stage.key)}」里，${place}要一条找不到的线索：没有任何节点产出它，玩家永远拿不到。`,
-          fix: near.length ? `是不是写错了？最接近的是${near.map((f) => `「${labelOf(info, labels, f)}」`).join("、")}。` : "补上产出它的节点，或把这一项从条件里去掉。",
+          text: `条件引用了没有任何节点产出的线索：${stageLabel(u.stage.key)}，${place}`,
+          plain: `「${stageLabel(u.stage.key)}」里，${place}引用了一条无法找到的线索：没有任何节点产出该线索，玩家无法获得。`,
+          fix: near.length ? `可能是写错了，最接近的是${near.map((f) => `「${labelOf(info, labels, f)}」`).join("、")}。` : "可补充产出该线索的节点，或将这一项从条件中删除。",
           ...alts[0] ? { quick: alts[0] } : {},
           ...[...alts.slice(1), ...drop ? [drop] : []].length ? { alts: [...alts.slice(1), ...drop ? [drop] : []] } : {}
         });
       }
       for (let [val, ws] of times) {
-        let to = guessClock(val), fx = to ? fixOf(draftVols, `改成${to}`, { op: "time", stage: u.id, from: String(val).trim(), to }) : null;
+        let to = guessClock(val), fx = to ? fixOf(draftVols, `改为${to}`, { op: "time", stage: u.id, from: String(val).trim(), to }) : null;
         out.push({
           level: "warn",
           kind: "time-format",
           name: String(val),
           stage: stageLabel(u.stage.key),
           stageId: u.id,
-          text: `时间写法读不出钟点：${stageLabel(u.stage.key)}，${[...new Set(ws)].join("、")}写了「${val}」`,
-          plain: `「${stageLabel(u.stage.key)}」里，${[...new Set(ws)].join("、")}把时间写成了「${val}」，插件按钟点比较，读不出来。`,
-          fix: to ? `应写成${to}这样的钟点。` : "请写成19:30这样的钟点。",
+          text: `时间写法无法识别为钟点：${stageLabel(u.stage.key)}，${[...new Set(ws)].join("、")}写了「${val}」`,
+          plain: `「${stageLabel(u.stage.key)}」里，${[...new Set(ws)].join("、")}将时间写成了「${val}」，插件按钟点进行比较，因而无法识别。`,
+          fix: to ? `可写作${to}这样的钟点。` : "可写作19:30这样的钟点。",
           ...fx ? { quick: fx } : {}
         });
       }
@@ -20080,10 +20081,10 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
         name: "time-unbound",
         stage: stageLabel(u.stage.key),
         stageId: u.id,
-        text: "条件里用到了时间，但项目还没有绑定故事时间",
-        plain: "条件里用到了时间，可项目还没有绑定故事时间所在的那一格，时间条件会一直算不出来。",
-        fix: "保存到模组后，到执行页的「表格绑定」里填上故事时间。",
-        action: { label: "去设置", act: "rv-bind" }
+        text: "条件中用到了时间，但项目尚未绑定故事时间",
+        plain: "条件中用到了时间，但项目尚未绑定故事时间所在的格子，因此时间条件无法计算。",
+        fix: "保存到模组后，可在执行页的「表格绑定」中填写故事时间。",
+        action: { label: "前往设置", act: "rv-bind" }
       });
     }
     let producers = new Map([...info].map(([f, v]) => [f, new Set(v.nodes.map((n) => n.uid).filter(Boolean))])), nameOf = new Map(compiled.nodes.filter((n) => n.uid).map((n) => [n.uid, n])), seenCycle = /* @__PURE__ */ new Set();
@@ -20102,9 +20103,9 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
           stageIds: units.map((x) => x.id),
           stageId: units.find(mine) ? units.find(mine).id : units[0].id,
           nodeIds: cyc,
-          text: `节点条件成环：${ns.map((n) => n.name).join("、")}`,
-          plain: `${quote(ns.map((n) => n.name))}互相等对方${mode2 === "open" ? "开放" : "完成"}，谁也等不到，这几个节点都不会走通。`,
-          fix: "改掉其中一个节点的条件，让它不必等另一个。"
+          text: `节点条件循环依赖：${ns.map((n) => n.name).join("、")}`,
+          plain: `${quote(ns.map((n) => n.name))}互相等待对方${mode2 === "open" ? "开放" : "完成"}，因而都无法进行，这几个节点将无法走通。`,
+          fix: "可修改其中一个节点的条件，使其不必等待另一个。"
         });
       }
     }
@@ -20118,9 +20119,9 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
         stage: stageLabel(n.unit.stage.key),
         stageId: n.unit.id,
         nodeIds: [n.uid],
-        text: `开放条件要等后面阶段的内容：${n.name}`,
-        plain: `「${n.name}」在「${stageLabel(n.unit.stage.key)}」，开放条件却要等${quote([...new Set(laters.map((d) => stageLabel(d.unit.stage.key)))])}才产出的内容，到那时这个阶段早就过去了。`,
-        fix: "看看这个节点的开放条件是不是写错了线索。"
+        text: `开放条件依赖后面阶段的内容：${n.name}`,
+        plain: `「${n.name}」在「${stageLabel(n.unit.stage.key)}」，其开放条件却依赖${quote([...new Set(laters.map((d) => stageLabel(d.unit.stage.key)))])}才产出的内容，届时该阶段已经结束。`,
+        fix: "建议检查该节点的开放条件是否写错了线索。"
       });
     }
     for (let n of compiled.nodes.filter((x) => x.required && x.done && mine(x.unit))) {
@@ -20135,9 +20136,9 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
         stage: stageLabel(n.unit.stage.key),
         stageId: n.unit.id,
         nodeIds: [n.uid].filter(Boolean),
-        text: `必需节点只靠判定：${n.name}`,
-        plain: `「${n.name}」必须完成，它的完成条件却只能靠要掷骰的线索；判定失败又没写「仍然得到」的话，就会一直卡在这里。`,
-        fix: "给判定写上失败时也能拿到线索的情形，或在完成条件里加上别的出路。"
+        text: `必需节点仅依赖判定：${n.name}`,
+        plain: `「${n.name}」为必需节点，其完成条件只能通过需要掷骰的线索达成；若判定失败且未写明「仍然得到」，该节点将无法完成。`,
+        fix: "可补充判定失败时仍能获得线索的情形，或在完成条件中增加其他途径。"
       });
     }
     return out;
@@ -20814,7 +20815,7 @@ ${add}` : add;
         level: "warn",
         text: `替代途径要到运行时才能确认：${r.stage}·${r.node}单独走完时，${r.why}`,
         plain: `「${r.stage}」：玩家只走${r.nodeNames.map((n) => `「${n}」`).join("、然后")}时能不能继续，要看游戏里表格、时间这些情况。`,
-        fix: "这条路能不能继续取决于表格里的值或谁知道什么；看看这一阶段的结束条件引用的格子是不是会有值。"
+        fix: "这条路能否继续取决于表格中的值或知情记录；建议检查该阶段结束条件所引用的格子是否会有值。"
       });
     }
     let late = clueReachability2(applied, { knownFacts, claimedFacts, clock: "reached" }), stuckLate = /* @__PURE__ */ new Set([...late.stuckStages.map((x) => `s${x.stageId}`), ...late.stuckNodes.map((x) => `n${x.node}`)]), clocky = (x) => !stuckLate.has(x.node ? `n${x.node}` : `s${x.stageId}`), reach = clueReachability2(applied, { knownFacts, claimedFacts, clock: "early" }), all = [...reach.stuckStages, ...reach.stuckNodes].filter(mine).filter((x) => !clocky(x)), routed = new Set(out.filter((x) => x.kind === "route" && x.level === "error").map((x) => x.stageId)), follow = (x) => /上一阶段尚未结束|阶段未进入/.test(x.why), stuck = all.filter((x) => !follow(x) && !(routed.has(x.stageId) && !x.node && /^结束条件不满足|^必需节点做不完/.test(x.why))), after = all.filter(follow).length;
@@ -20829,8 +20830,8 @@ ${add}` : add;
       level: "warn",
       kind: "reach-unknown",
       stageIds: [...new Set(stuck.map((x) => x.stageId).filter(Boolean))],
-      plain: `有些地方能不能走到，要看游戏里谁知道什么或表格里的值，导入时判断不了：${stuck.slice(0, 4).map((x) => `「${x.stage}」`).join("、")}。`,
-      fix: "看看这些地方的条件引用的表格格子、知情记录是不是真的会出现；确实卡住时可以在执行页手动开放。",
+      plain: `有些地方能否走到，取决于游戏内的知情情况或表格中的值，导入时无法判断：${stuck.slice(0, 4).map((x) => `「${x.stage}」`).join("、")}。`,
+      fix: "建议检查这些地方的条件所引用的表格格子和知情记录是否会出现；若确实受阻，可在执行页手动开放。",
       text: `有些地方取决于知情或表格的值：${stuck.slice(0, 4).map((x) => `${x.stage}${x.node ? `·${x.node}` : ""}`).join("、")}`
     }), out.push(...importFlowIssues(applied).filter(mine)), out;
   }
@@ -24585,7 +24586,7 @@ ${r2.yaml}`,
   }
   function fixButtons(x, unit) {
     let at = `data-unit="${esc(unit)}" data-issue="${esc(x.id)}"`;
-    return `${x.quick ? `<button type="button" class="pi-btn is-sm" data-act="rv-quick" ${at} data-pick="-1">${esc(x.quick.label)}</button>` : ""}${x.action ? `<button type="button" class="pi-btn is-sm" data-act="${esc(x.action.act)}">${esc(x.action.label)}</button>` : ""}${x.alts && x.alts.length ? `<button type="button" class="pi-icon-btn" data-act="rv-quick-more" ${at} title="其他修法" aria-label="其他修法">${ICONS.more}</button>` : ""}`;
+    return `${x.quick ? `<button type="button" class="pi-btn is-sm" data-act="rv-quick" ${at} data-pick="-1">${esc(x.quick.label)}</button>` : ""}${x.action ? `<button type="button" class="pi-btn is-sm" data-act="${esc(x.action.act)}">${esc(x.action.label)}</button>` : ""}${x.alts && x.alts.length ? `<button type="button" class="pi-icon-btn" data-act="rv-quick-more" ${at} title="其他处理方式" aria-label="其他处理方式">${ICONS.more}</button>` : ""}`;
   }
   function issueCard2(x, unit, filled) {
     if (x.level === "error")
@@ -24784,14 +24785,14 @@ ${r2.yaml}`,
         let c = current(view);
         if (!c) return;
         let x = (reviewIssues2(view, c.review, indexOf(c.job))[target.dataset.unit] || []).find((y) => y.id === target.dataset.issue), pick = Number(target.dataset.pick), fix = x && (pick < 0 ? x.quick : (x.alts || [])[pick]);
-        fix && (await saveReview2(view, c.jobId, (r) => editDraft(r, fix.label, (d) => applyImportFix(d, fix.q))), view.renderBody(), toast("info", `已修改：${fix.label}。不对的话点下面的「撤销上次修改」。`));
+        fix && (await saveReview2(view, c.jobId, (r) => editDraft(r, fix.label, (d) => applyImportFix(d, fix.q))), view.renderBody(), toast("info", `已修改：${fix.label}。如需还原，可点击下方的「撤销上次修改」。`));
       },
       async "rv-quick-more"(view, target) {
         let c = current(view);
         if (!c) return;
         let x = (reviewIssues2(view, c.review, indexOf(c.job))[target.dataset.unit] || []).find((y) => y.id === target.dataset.issue);
         if (!x || !(x.alts || []).length) return;
-        let v = await menuDialog({ title: "其他修法", items: x.alts.map((a, i) => ({ label: a.label, value: String(i) })) });
+        let v = await menuDialog({ title: "其他处理方式", items: x.alts.map((a, i) => ({ label: a.label, value: String(i) })) });
         v != null && actions12["rv-quick"](view, { dataset: { unit: target.dataset.unit, issue: target.dataset.issue, pick: v } });
       },
       // 去执行页填故事时间的绑定（审阅内容已存，回来接着看）
@@ -31137,7 +31138,7 @@ ${suffix.trim()}` : body;
   }
 
   // src/index.js
-  var VERSION = "0.4.6", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.4.7", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")

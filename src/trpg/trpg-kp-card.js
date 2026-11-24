@@ -45,7 +45,7 @@ function saveKp(view, patch) {
 }
 
 // 带判定的线索没通过的原因
-const CHECK_WHY = { roll: '判定没成功', text: '正文没写出来' };
+const CHECK_WHY = { roll: '判定未成功', text: '正文未写出' };
 
 // 阶段提醒（用户 2026-11-24）：后一阶段已经开始、前一阶段还有必需节点没完成。不自动把前一阶段算完成。
 // 返回 [{ prev, next, left: [node 状态] }]，阶段名用「阶段一」这样的短名
@@ -76,7 +76,7 @@ function stageLagHtml(state, snap, prog) {
     return stageLags(state)
         .map((g) => {
             let names = g.left.map((ns) => `『${esc(ns.node.name || '未命名')}』`).join('、');
-            return `<div class="pi-ck-nudge"><span class="pi-hint is-warn">${esc(g.prev)}还差${names}，${esc(g.next)}已经开始</span>${
+            return `<div class="pi-ck-nudge"><span class="pi-hint is-warn">${esc(g.next)}已经开始，${esc(g.prev)}尚有${names}未完成</span>${
                 lagTarget(g.left, snap, prog) ? '<button type="button" class="pi-btn is-sm" data-act="kp-lag-push">推一把</button>' : ''
             }<button type="button" class="pi-icon-btn" data-act="kp-lag-menu" title="更多" aria-label="更多">${ICONS.more}</button></div>`;
         })
@@ -268,13 +268,13 @@ export const kpActions = {
     // 判定那一行：正文两轮没出检定，下一轮提醒 AI 写（只说技能，不说线索内容）
     'kp-remind'(view, target) {
         let skill = (target.dataset.skill || '').trim() || '相应';
-        (saveKp(view, { push: { kind: 'steer', text: `这一轮正文里请按检定写法补上「${skill}」检定，让玩家掷骰，先不要写出结果。`, floor: aiFloorCount(chatMessages()) } }), toast('success', '下一轮会提醒AI写这项检定。'), view.renderBody());
+        (saveKp(view, { push: { kind: 'steer', text: `这一轮正文里请按检定写法补上「${skill}」检定，让玩家掷骰，先不要写出结果。`, floor: aiFloorCount(chatMessages()) } }), toast('success', '下一轮将提醒正文提出这项检定。'), view.renderBody());
     },
     // 判定成功了线索没确认：收进「⋯」的次要操作
     async 'kp-fact-menu'(view, target) {
         let fact = target.dataset.fact;
         if (!fact) return;
-        let pick = await menuDialog({ title: '线索', items: [{ label: '手动确认拿到了', value: 'confirm' }] });
+        let pick = await menuDialog({ title: '线索', items: [{ label: '手动确认已获得', value: 'confirm' }] });
         if (pick !== 'confirm') return;
         view.runtime.clue.act({ kind: 'fact', target: fact, value: 'confirmed', note: '玩家手动确认（判定已成功）' });
         (toast('success', '已确认这条线索。'), view.renderBody());
@@ -284,7 +284,7 @@ export const kpActions = {
         let c = view.runtime.clue.compute(),
             fact = '',
             lag = c && stageLags(c.state).find((g) => (fact = lagTarget(g.left, c.snap, c.prog)));
-        if (!lag) return (toast('info', '眼下没有能推的线索。'), view.renderBody());
+        if (!lag) return (toast('info', '目前没有可推进的线索。'), view.renderBody());
         let pick = await menuDialog({ title: '推一把', items: KP_LEVELS.map((x) => ({ label: x.label, value: String(x.level) })) });
         pick && (saveKp(view, { push: { fact, level: Number(pick), floor: aiFloorCount(chatMessages()) } }), view.renderBody());
     },
@@ -296,7 +296,7 @@ export const kpActions = {
         if (!left.length) return;
         let pick = await menuDialog({ title: '手动标完成', items: left.map((ns) => ({ label: ns.node.name || '未命名', value: ns.node.uid })) });
         if (!pick) return;
-        let note = await promptDialog({ title: '记录原因（可空）', label: '为什么手动处理' });
+        let note = await promptDialog({ title: '手动标完成', label: '原因（可不填）' });
         note !== null && (clue.act({ kind: 'done', target: pick, value: 'force', note }), view.renderBody());
     },
     'kp-cancel'(view) {

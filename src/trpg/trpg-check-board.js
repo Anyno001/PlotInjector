@@ -120,15 +120,15 @@ export function checkProblems(checks, known) {
 export function problemText(p) {
     switch (p.kind) {
         case 'unparsed':
-            return '没认出骰点，掷骰请写成1D100=23';
+            return '未能识别骰点，本次不计入判定。骰点可写作1D100=23。';
         case 'novalue':
-            return `${p.skill || '这项技能'}缺技能值，请写23/60，或在IGS调查员档补上`;
+            return `${p.skill || '该技能'}缺少技能值，无法判定成败。可写作23/60，或在IGS调查员档中补充。`;
         case 'badcode':
-            return '正文里的检定编号对不上模组';
+            return '正文中的检定编号与模组不符，无法对应到线索。';
         case 'dup':
-            return `${p.skill || '这项'}已经掷过，以第一次为准`;
+            return `${p.skill || '该项'}此前已经掷过，结果以第一次为准。`;
         case 'noreq':
-            return '掷了骰，但前面没有等着掷的检定，这次没有算';
+            return '这次掷骰前没有待进行的检定，骰点未计入判定。';
         default:
             return '';
     }
@@ -136,14 +136,14 @@ export function problemText(p) {
 
 // 掷完弹的小卡：{ title, body, fail, canRescue }。hidden = 暗骰（不报骰点、不报成败）
 export function rollNoticeText(r, { hidden = !1, rescue = !1, anyway = !1 } = {}) {
-    let what = `${rescue ? '补救检定 ' : ''}${checkWhat(r.skill, r.level)}`;
-    if (hidden) return { title: '判定', body: `${what}：已掷（暗骰），结果看正文`, fail: !1, canRescue: !1 };
-    let roll = r.die != null ? `${r.die}${r.value ? `/${r.value}` : ''}` : '',
-        head = `${what}${roll ? ` ${roll}` : ''}`;
-    if (r.ok) return { title: '判定成功', body: `${head}：${r.tier && r.tier !== '成功' ? r.tier : '成功'}，线索会交给正文`, fail: !1, canRescue: !1 };
+    let what = `${checkWhat(r.skill, r.level)}${rescue ? '补救检定' : '检定'}`;
+    if (hidden) return { title: '暗骰已掷', body: `${what}为暗骰，结果将在正文中体现。`, fail: !1, canRescue: !1 };
+    let roll = r.die != null ? `掷出${r.die}${r.value ? `（技能值${r.value}）` : ''}` : '',
+        head = `${what}${roll}`;
+    if (r.ok) return { title: '判定成功', body: `${head}，${r.tier && r.tier !== '成功' ? r.tier : '成功'}。相应线索将交由正文写出。`, fail: !1, canRescue: !1 };
     return {
         title: '判定失败',
-        body: `${head}：${r.tier === '大失败' ? '大失败' : '失败'}${anyway ? '，失败了也能拿到这条线索' : ''}`,
+        body: `${head}，${r.tier === '大失败' ? '大失败' : '失败'}。${anyway ? '按模组设定，失败后仍可获得这条线索。' : ''}`,
         fail: !0,
         canRescue: !rescue && !anyway,
     };

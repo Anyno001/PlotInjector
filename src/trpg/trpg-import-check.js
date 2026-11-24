@@ -219,10 +219,10 @@ export function importFlowIssues(volumes, { labels = null } = {}) {
             names = nodes.map((n) => n.name || '一个节点'),
             ends = end && cur.clue.end ? [cur.id] : [],
             opt = [
-                nodes.length ? fixOf(volumes, '把这些节点改为可选', { op: 'optional', nodes: nodes.filter((n) => n.uid).map((n) => n.uid) }) : null,
-                nodes.length && next.clue.hasEnter ? fixOf(volumes, `让「${stageLabel(next.stage.key)}」要等这些节点做完`, { op: 'gate', stage: next.id, nodes: nodes.filter((n) => n.uid).map((n) => n.uid) }) : null,
+                nodes.length ? fixOf(volumes, '设为可选', { op: 'optional', nodes: nodes.filter((n) => n.uid).map((n) => n.uid) }) : null,
+                nodes.length && next.clue.hasEnter ? fixOf(volumes, `节点完成后才开始「${stageLabel(next.stage.key)}」`, { op: 'gate', stage: next.id, nodes: nodes.filter((n) => n.uid).map((n) => n.uid) }) : null,
             ].filter(Boolean),
-            main = items.length ? fixOf(volumes, '补上时间兜底', { op: 'fallback', items, nodes: hasDone.filter((n) => n.uid).map((n) => ({ uid: n.uid, field: '完成条件' })), ends }) : null,
+            main = items.length ? fixOf(volumes, '补充时间条件', { op: 'fallback', items, nodes: hasDone.filter((n) => n.uid).map((n) => ({ uid: n.uid, field: '完成条件' })), ends }) : null,
             prev = stageLabel(cur.stage.key);
         out.push({
             level: 'error',
@@ -231,9 +231,9 @@ export function importFlowIssues(volumes, { labels = null } = {}) {
             stage: prev,
             stageId: cur.id,
             nodeIds: nodes.map((n) => n.uid).filter(Boolean),
-            text: `阶段衔接：${stageLabel(next.stage.key)}不必等${prev}结束就能开始，但${prev}${nodes.length ? `的${quote(names)}` : '的结束条件'}只认线索`,
-            plain: `「${stageLabel(next.stage.key)}」不必等「${prev}」结束就能开始，但「${prev}」${nodes.length ? `的${quote(names)}` : '的结束条件'}只认线索；剧情跳过${nodes.length ? '它们' : '这些线索'}时，「${prev}」会一直显示进行中。`,
-            fix: items.length ? '给它们补上时间或情节的兜底，剧情推过去时也算完成。' : '给它们加上别的出路，或改为可选。',
+            text: `阶段衔接：${stageLabel(next.stage.key)}不必等${prev}结束即可开始，但${prev}${nodes.length ? `的${quote(names)}` : '的结束条件'}只能通过线索完成`,
+            plain: `「${stageLabel(next.stage.key)}」不必等「${prev}」结束即可开始，但「${prev}」${nodes.length ? `的${quote(names)}` : '的结束条件'}只能通过线索完成；若剧情跳过${nodes.length ? '这些节点' : '这些线索'}，「${prev}」将持续显示为进行中。`,
+            fix: items.length ? '可为其补充时间或情节条件作为出路，使剧情推进时也能视为完成。' : '可为其增加其他完成途径，或设为可选。',
             ...(main ? { quick: main } : {}),
             ...(opt.length ? { alts: opt } : {}),
         });
@@ -251,7 +251,7 @@ export function importFlowIssues(volumes, { labels = null } = {}) {
             nodes = list.filter((e) => e.node.uid),
             names = list.map((e) => e.node.name || '一个节点'),
             main = items.length
-                ? fixOf(volumes, '补上本阶段的进入兜底', { op: 'fallback', items, nodes: nodes.map((e) => ({ uid: e.node.uid, field: e.locked ? '开放条件' : '完成条件' })) })
+                ? fixOf(volumes, '补充进入条件', { op: 'fallback', items, nodes: nodes.map((e) => ({ uid: e.node.uid, field: e.locked ? '开放条件' : '完成条件' })) })
                 : null;
         out.push({
             level: 'error',
@@ -260,9 +260,9 @@ export function importFlowIssues(volumes, { labels = null } = {}) {
             stage: stageLabel(u.stage.key),
             stageId: id,
             nodeIds: nodes.map((e) => e.node.uid),
-            text: `跨阶段卡死：${skipped.join('、')}被时间推过去时，${stageLabel(u.stage.key)}的${names.join('、')}开不了或完不成`,
-            plain: `如果剧情被时间推着走、跳过了「${skipped.join('」「')}」，「${stageLabel(u.stage.key)}」的${quote(names)}就${list.some((e) => e.locked) ? '一直开不了' : '完不成'}：它们要的线索只在前面的阶段产出，而本阶段到时间就会开始。`,
-            fix: items.length ? '给它们补上本阶段的进入兜底，到点就放行。' : '让它们也能靠别的途径开放。',
+            text: `跨阶段受阻：${skipped.join('、')}被时间推过时，${stageLabel(u.stage.key)}的${names.join('、')}无法开放或完成`,
+            plain: `若剧情因时间推进而跳过「${skipped.join('」「')}」，「${stageLabel(u.stage.key)}」的${quote(names)}将${list.some((e) => e.locked) ? '无法开放' : '无法完成'}：所需线索只在前面的阶段产出，而本阶段到达时间即会开始。`,
+            fix: items.length ? '可为其补充本阶段的进入条件，使到达时间后即可开放。' : '可为其增加其他开放途径。',
             ...(main ? { quick: main } : {}),
         });
     }
@@ -359,8 +359,8 @@ export function importCondIssues(volumes, { only = null, labels = null, timeBoun
         }
         for (let [code, ws] of where) {
             let near = nearest(code),
-                alts = near.map((f) => fixOf(draftVols, `改成「${labelOf(info, labels, f)}」`, { op: 'rename', stage: u.id, from: code, to: f })).filter(Boolean),
-                drop = fixOf(draftVols, '去掉这一项', { op: 'drop', stage: u.id, from: code }),
+                alts = near.map((f) => fixOf(draftVols, `改为「${labelOf(info, labels, f)}」`, { op: 'rename', stage: u.id, from: code, to: f })).filter(Boolean),
+                drop = fixOf(draftVols, '删除此项', { op: 'drop', stage: u.id, from: code }),
                 place = [...new Set(ws)].join('、');
             out.push({
                 level: 'error',
@@ -368,25 +368,25 @@ export function importCondIssues(volumes, { only = null, labels = null, timeBoun
                 name: code,
                 stage: stageLabel(u.stage.key),
                 stageId: u.id,
-                text: `条件用到了没有任何节点产出的线索：${stageLabel(u.stage.key)}，${place}`,
-                plain: `「${stageLabel(u.stage.key)}」里，${place}要一条找不到的线索：没有任何节点产出它，玩家永远拿不到。`,
-                fix: near.length ? `是不是写错了？最接近的是${near.map((f) => `「${labelOf(info, labels, f)}」`).join('、')}。` : '补上产出它的节点，或把这一项从条件里去掉。',
+                text: `条件引用了没有任何节点产出的线索：${stageLabel(u.stage.key)}，${place}`,
+                plain: `「${stageLabel(u.stage.key)}」里，${place}引用了一条无法找到的线索：没有任何节点产出该线索，玩家无法获得。`,
+                fix: near.length ? `可能是写错了，最接近的是${near.map((f) => `「${labelOf(info, labels, f)}」`).join('、')}。` : '可补充产出该线索的节点，或将这一项从条件中删除。',
                 ...(alts[0] ? { quick: alts[0] } : {}),
                 ...([...alts.slice(1), ...(drop ? [drop] : [])].length ? { alts: [...alts.slice(1), ...(drop ? [drop] : [])] } : {}),
             });
         }
         for (let [val, ws] of times) {
             let to = guessClock(val),
-                fx = to ? fixOf(draftVols, `改成${to}`, { op: 'time', stage: u.id, from: String(val).trim(), to }) : null;
+                fx = to ? fixOf(draftVols, `改为${to}`, { op: 'time', stage: u.id, from: String(val).trim(), to }) : null;
             out.push({
                 level: 'warn',
                 kind: 'time-format',
                 name: String(val),
                 stage: stageLabel(u.stage.key),
                 stageId: u.id,
-                text: `时间写法读不出钟点：${stageLabel(u.stage.key)}，${[...new Set(ws)].join('、')}写了「${val}」`,
-                plain: `「${stageLabel(u.stage.key)}」里，${[...new Set(ws)].join('、')}把时间写成了「${val}」，插件按钟点比较，读不出来。`,
-                fix: to ? `应写成${to}这样的钟点。` : '请写成19:30这样的钟点。',
+                text: `时间写法无法识别为钟点：${stageLabel(u.stage.key)}，${[...new Set(ws)].join('、')}写了「${val}」`,
+                plain: `「${stageLabel(u.stage.key)}」里，${[...new Set(ws)].join('、')}将时间写成了「${val}」，插件按钟点进行比较，因而无法识别。`,
+                fix: to ? `可写作${to}这样的钟点。` : '可写作19:30这样的钟点。',
                 ...(fx ? { quick: fx } : {}),
             });
         }
@@ -401,10 +401,10 @@ export function importCondIssues(volumes, { only = null, labels = null, timeBoun
                 name: 'time-unbound',
                 stage: stageLabel(u.stage.key),
                 stageId: u.id,
-                text: '条件里用到了时间，但项目还没有绑定故事时间',
-                plain: '条件里用到了时间，可项目还没有绑定故事时间所在的那一格，时间条件会一直算不出来。',
-                fix: '保存到模组后，到执行页的「表格绑定」里填上故事时间。',
-                action: { label: '去设置', act: 'rv-bind' },
+                text: '条件中用到了时间，但项目尚未绑定故事时间',
+                plain: '条件中用到了时间，但项目尚未绑定故事时间所在的格子，因此时间条件无法计算。',
+                fix: '保存到模组后，可在执行页的「表格绑定」中填写故事时间。',
+                action: { label: '前往设置', act: 'rv-bind' },
             });
     }
     // 条件成环：开放条件（节点和唯一产出线索的节点）、完成条件（节点）各查一遍
@@ -428,9 +428,9 @@ export function importCondIssues(volumes, { only = null, labels = null, timeBoun
                 stageIds: units.map((x) => x.id),
                 stageId: units.find(mine) ? units.find(mine).id : units[0].id,
                 nodeIds: cyc,
-                text: `节点条件成环：${ns.map((n) => n.name).join('、')}`,
-                plain: `${quote(ns.map((n) => n.name))}互相等对方${mode === 'open' ? '开放' : '完成'}，谁也等不到，这几个节点都不会走通。`,
-                fix: '改掉其中一个节点的条件，让它不必等另一个。',
+                text: `节点条件循环依赖：${ns.map((n) => n.name).join('、')}`,
+                plain: `${quote(ns.map((n) => n.name))}互相等待对方${mode === 'open' ? '开放' : '完成'}，因而都无法进行，这几个节点将无法走通。`,
+                fix: '可修改其中一个节点的条件，使其不必等待另一个。',
             });
         }
     }
@@ -447,9 +447,9 @@ export function importCondIssues(volumes, { only = null, labels = null, timeBoun
                 stage: stageLabel(n.unit.stage.key),
                 stageId: n.unit.id,
                 nodeIds: [n.uid],
-                text: `开放条件要等后面阶段的内容：${n.name}`,
-                plain: `「${n.name}」在「${stageLabel(n.unit.stage.key)}」，开放条件却要等${quote([...new Set(laters.map((d) => stageLabel(d.unit.stage.key)))])}才产出的内容，到那时这个阶段早就过去了。`,
-                fix: '看看这个节点的开放条件是不是写错了线索。',
+                text: `开放条件依赖后面阶段的内容：${n.name}`,
+                plain: `「${n.name}」在「${stageLabel(n.unit.stage.key)}」，其开放条件却依赖${quote([...new Set(laters.map((d) => stageLabel(d.unit.stage.key)))])}才产出的内容，届时该阶段已经结束。`,
+                fix: '建议检查该节点的开放条件是否写错了线索。',
             });
     }
     // 必需节点的完成条件只能靠判定拿线索，而判定失败又没写照样拿到
@@ -466,9 +466,9 @@ export function importCondIssues(volumes, { only = null, labels = null, timeBoun
                 stage: stageLabel(n.unit.stage.key),
                 stageId: n.unit.id,
                 nodeIds: [n.uid].filter(Boolean),
-                text: `必需节点只靠判定：${n.name}`,
-                plain: `「${n.name}」必须完成，它的完成条件却只能靠要掷骰的线索；判定失败又没写「仍然得到」的话，就会一直卡在这里。`,
-                fix: '给判定写上失败时也能拿到线索的情形，或在完成条件里加上别的出路。',
+                text: `必需节点仅依赖判定：${n.name}`,
+                plain: `「${n.name}」为必需节点，其完成条件只能通过需要掷骰的线索达成；若判定失败且未写明「仍然得到」，该节点将无法完成。`,
+                fix: '可补充判定失败时仍能获得线索的情形，或在完成条件中增加其他途径。',
             });
     }
     return out;

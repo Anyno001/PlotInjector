@@ -422,7 +422,7 @@ export function createKpRunner(deps) {
         if (!fresh.length && !probs.length) return;
         saveKp({ rollSeen: [...seen, ...Object.keys(checks).filter((code) => checks[code].fresh).map((code) => `${stamp}:${code}`), ...probs.map((p) => `${stamp}:!${p.kind}`)].slice(-40) });
         if (probs.length && !fresh.length)
-            return notice.show({ id: 'kp-roll', title: '判定没算上', body: probs.map(problemText).join('；'), actions: [{ label: '知道了', run: () => {} }] });
+            return notice.show({ id: 'kp-roll', title: '判定未生效', body: probs.map(problemText).join('；'), actions: [{ label: '关闭', run: () => {} }] });
         let parts = fresh.map(([code, r]) => {
                 let rescue = /-KP$/.test(code),
                     base = code.replace(/-KP$/, ''),
@@ -444,7 +444,7 @@ export function createKpRunner(deps) {
                     saveKp({ push: { fact: rescueOf.base, level: 2, floor: aiFloorCount(now) + (tail && tail.is_user ? 1 : 0) } });
                 },
             });
-        actions.push({ label: '知道了', run: () => {} });
+        actions.push({ label: '关闭', run: () => {} });
         notice.show({ id: 'kp-roll', title: parts.length === 1 ? parts[0].title : '判定结果', body, actions, ...(rescueOf ? {} : { timeout: 8e3 }) });
     }
     const api = { run, recheck, applyRecheck, clearKp, autoVerifyEvery, setAutoVerify, rollNotice, reset: () => ((again = false), (lastKey = '')) };

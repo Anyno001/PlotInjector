@@ -899,7 +899,7 @@ export function importReachIssues(applied, { only = null, knownFacts = [], claim
                   level: 'warn',
                   text: `替代途径要到运行时才能确认：${r.stage}·${r.node}单独走完时，${r.why}`,
                   plain: `「${r.stage}」：玩家只走${r.nodeNames.map((n) => `「${n}」`).join('、然后')}时能不能继续，要看游戏里表格、时间这些情况。`,
-                  fix: '这条路能不能继续取决于表格里的值或谁知道什么；看看这一阶段的结束条件引用的格子是不是会有值。',
+                  fix: '这条路能否继续取决于表格中的值或知情记录；建议检查该阶段结束条件所引用的格子是否会有值。',
               });
     }
     // 推演第一遍：钟点和「情况」都当作还没到（玩家走得慢，线索都拿到了）。只靠「到点就放行」才走得通的地方不报：
@@ -936,11 +936,11 @@ export function importReachIssues(applied, { only = null, knownFacts = [], claim
             level: 'warn',
             kind: 'reach-unknown',
             stageIds: [...new Set(stuck.map((x) => x.stageId).filter(Boolean))],
-            plain: `有些地方能不能走到，要看游戏里谁知道什么或表格里的值，导入时判断不了：${stuck
+            plain: `有些地方能否走到，取决于游戏内的知情情况或表格中的值，导入时无法判断：${stuck
                 .slice(0, 4)
                 .map((x) => `「${x.stage}」`)
                 .join('、')}。`,
-            fix: '看看这些地方的条件引用的表格格子、知情记录是不是真的会出现；确实卡住时可以在执行页手动开放。',
+            fix: '建议检查这些地方的条件所引用的表格格子和知情记录是否会出现；若确实受阻，可在执行页手动开放。',
             text: `有些地方取决于知情或表格的值：${stuck
                 .slice(0, 4)
                 .map((x) => `${x.stage}${x.node ? `·${x.node}` : ''}`)
