@@ -280,12 +280,29 @@ export function kpFactLabel(labels, id, text) {
     return l || (String(text || '').length > 12 ? `${String(text).slice(0, 12)}…` : String(text || '') || '一条线索');
 }
 
-// 存进 progress.trpgKp.log 的一条（只留最近 KP_LOG_MAX 条）
-export function kpLogEntry({ floor, at = Date.now(), result, labelOf, scenes, off }) {
+// 已开放节点里「掷过但判定没成功」、线索还没到手的带判定发现（给上轮检测标「判定没成功」用）：[编号]
+export function kpFailedChecks({ state, snap, effective, checks }) {
+    let out = [];
+    for (let ns of state.nodeStates) {
+        if (ns.status !== 'available' && ns.status !== 'active') continue;
+        for (let d of discoveryList(isPlainObject(ns.node.item) ? ns.node.item : {})) {
+            if (!d.check || !d.fact || out.includes(d.fact) || !(checks && checks[d.fact]) || effective(d.fact, snap).confirmed) continue;
+            let gate = checkLine(d, checks);
+            gate && !gate.reveal && out.push(d.fact);
+        }
+    }
+    return out;
+}
+
+// 存进 progress.trpgKp.log 的一条。fact.check 只给带判定的线索：text = 判定成功了但正文没写出来，roll = 判定没成功（只留最近 KP_LOG_MAX 条）
+export function kpLogEntry({ floor, at = Date.now(), result, labelOf, scenes, off, checkOf = () => !1, failed = [] }) {
     return {
         at,
         floor,
-        facts: result.facts.map((x) => ({ label: labelOf(x.id), ok: x.ok, why: x.ok ? x.why : x.note || x.why, quote: x.ok ? x.quote : '' })),
+        facts: [
+            ...result.facts.map((x) => ({ label: labelOf(x.id), ok: x.ok, why: x.ok ? x.why : x.note || x.why, quote: x.ok ? x.quote : '', ...(!x.ok && checkOf(x.id) ? { check: 'text' } : {}) })),
+            ...failed.map(() => ({ label: '一条线索', ok: !1, why: '', quote: '', check: 'roll' })),
+        ],
         conds: result.conds.map((x) => ({ text: x.text, ok: x.ok, why: x.ok ? x.why : x.note || x.why, quote: x.ok ? x.quote : '' })),
         scene: result.sceneName || '',
         off: !!off,

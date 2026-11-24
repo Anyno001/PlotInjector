@@ -19,12 +19,39 @@ function rollText(r, hidden) {
     return r.die != null ? `1D100=${r.die}${r.value ? `/${r.value}` : ''}` : r.tier;
 }
 
+// 提醒：节点开放后连着这么多个 AI 楼没出检定；判定成了之后连着这么多个 AI 楼线索没确认
+export const NUDGE_FLOORS = 2;
+
+// 从第 from 楼起（算不算 from 本身看 inclusive）有几个 AI 楼
+export function aiFloorsSince(messages, from, inclusive) {
+    let n = 0;
+    for (let i = Math.max(0, from) + (inclusive ? 0 : 1); i < (messages || []).length; i += 1) {
+        let m = messages[i];
+        m && !m.is_user && !m.is_system && (n += 1);
+    }
+    return n;
+}
+
+// 这个节点第一次作为本轮场景注入的楼层（带判定的发现就是那一轮写成「待判定」的）；没有记录返回 -1。
+// 候选记录只留最近 40 条，所以只会偏晚、不会偏早，提醒偏保守。
+export function nodeOpenFloor(prog, uid, messages) {
+    let at = -1;
+    for (let x of (prog && Array.isArray(prog.clueCandidates) ? prog.clueCandidates : [])) {
+        let m = (messages || [])[x.i];
+        if (!uid || !m || m.is_user || !(x.scenes || []).some((s) => s.uid === uid && s.focus)) continue;
+        (at < 0 || x.i < at) && (at = x.i);
+    }
+    return at;
+}
+
 // 一行的状态：wait 等正文出检定 / roll 等你掷骰 / ok 成功 / fail 失败
 // clue：线索进度 confirmed 已确认 / offered 已交给正文 / pending 还没确认 / ''（还轮不到）
-export function trpgCheckBoard({ state, snap, prog, checks, labels = {} }) {
+export function trpgCheckBoard({ state, snap, prog, checks, labels = {}, messages = null, raw = null }) {
     let rows = [],
         requests = (checks && checks.requests) || [],
-        offered = new Set(Array.isArray(prog && prog.clueOffered) ? prog.clueOffered : []),
+        // clueOffered、clueCandidates 在原始进度里（不在 c.prog 里）
+        stored = raw || prog,
+        offered = new Set(Array.isArray(stored && stored.clueOffered) ? stored.clueOffered : []),
         known = new Set();
     for (let ns of state.nodeStates || []) {
         let item = isPlainObject(ns.node.item) ? ns.node.item : {};
@@ -44,7 +71,16 @@ export function trpgCheckBoard({ state, snap, prog, checks, labels = {} }) {
                 clue = got ? 'confirmed' : reveal ? (offered.has(d.fact) ? 'offered' : 'pending') : '',
                 skill = r ? r.skill : d.check.skills.join('/'),
                 level = r ? r.level : d.check.level;
+            let nudge = '';
+            if (messages) {
+                let openAt = status === 'wait' ? nodeOpenFloor(stored, ns.node.uid, messages) : -1,
+                    rolledAt = r ? Math.max(r.at, rescued ? kp.at : -1) : -1;
+                if (status === 'wait' && openAt >= 0 && aiFloorsSince(messages, openAt, true) >= NUDGE_FLOORS) nudge = 'norequest';
+                else if (reveal && clue !== 'confirmed' && rolledAt >= 0 && aiFloorsSince(messages, rolledAt, false) >= NUDGE_FLOORS) nudge = 'unconfirmed';
+            }
             rows.push({
+                skill,
+                nudge,
                 fact: d.fact,
                 node: ns.node.name || '',
                 what: checkWhat(skill, level),

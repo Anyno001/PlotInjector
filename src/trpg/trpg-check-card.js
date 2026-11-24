@@ -1,5 +1,6 @@
 // 执行页「判定」卡（用户 2026-11-24）：哪些在等判定、骰点、成败、线索有没有交给正文。计算在 trpg-check-board.js。
 import { esc } from '../ui/dom.js';
+import { ICONS } from '../ui/styles.js';
 import { chatMessages } from '../host/st.js';
 import { isPlainObject } from '../core/outline.js';
 import { trpgCheckResults } from './trpg.js';
@@ -14,6 +15,15 @@ const STATUS = {
 };
 const CLUE = { confirmed: '线索已确认', offered: '已交给正文', pending: '线索还没确认' };
 
+// 行上的提醒（用户 2026-11-24）：每行最多一个文字按钮 + 一个「⋯」。编号只放在 data 里，不显示
+function nudgeHtml(r) {
+    if (r.nudge === 'norequest')
+        return `<span class="pi-ck-nudge"><span class="pi-hint is-warn">正文两轮没出这项检定</span><button type="button" class="pi-btn is-sm" data-act="kp-remind" data-skill="${esc(r.skill)}">下一轮提醒AI写检定</button></span>`;
+    if (r.nudge === 'unconfirmed')
+        return `<span class="pi-ck-nudge"><span class="pi-hint is-warn">${r.status === 'fail' && r.anyway ? '失败也能拿到，线索还没确认' : '判定成功了，线索还没确认'}</span><button type="button" class="pi-btn is-sm" data-act="kp-verify">重新核实阶段</button><button type="button" class="pi-icon-btn" data-act="kp-fact-menu" data-fact="${esc(r.fact)}" title="更多" aria-label="更多">${ICONS.more}</button></span>`;
+    return '';
+}
+
 function rowHtml(r) {
     let [cls, text] = STATUS[r.status],
         meta = [r.node, r.roll].filter(Boolean),
@@ -22,14 +32,14 @@ function rowHtml(r) {
     r.clue && tail.push(CLUE[r.clue]);
     return `<div class="pi-ck-row"><span class="pi-badge ${cls}">${text}</span><span class="pi-ck-what">${esc(r.what)}${r.hidden ? '<span class="pi-meta">暗骰</span>' : ''}</span><span class="pi-meta pi-ck-meta">${esc(meta.join(' · '))}</span>${
         r.label || tail.length ? `<span class="pi-meta pi-ck-tail">${esc([r.label ? `「${r.label}」` : '', ...tail].filter(Boolean).join('，'))}</span>` : ''
-    }</div>`;
+    }${nudgeHtml(r)}</div>`;
 }
 
 // 放在 KP 卡里的一段（用户 2026-11-24：判定和 KP 融在一起）
-export function checkSection(project, c) {
+export function checkSection(project, c, raw) {
     let checks = trpgCheckResults(chatMessages()),
         labels = isPlainObject(project.clue.labels) ? project.clue.labels : {},
-        board = trpgCheckBoard({ state: c.state, snap: c.snap, prog: c.prog, checks, labels });
+        board = trpgCheckBoard({ state: c.state, snap: c.snap, prog: c.prog, checks, labels, messages: chatMessages(), raw });
     if (!board.rows.length && !board.problems.length) return '';
     let live = board.rows.filter((r) => !r.done),
         done = board.rows.filter((r) => r.done);

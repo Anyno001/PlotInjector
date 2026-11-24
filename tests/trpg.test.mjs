@@ -151,3 +151,23 @@ test('导入检查：阶段衔接、跨阶段卡死能报出，一键修后不�
     assert.deepEqual(kinds(), []);
     assert.equal(K.guessClock('晚上七点半'), '19:30');
 });
+
+test('判定提醒：两轮没出检定、判定成功线索没确认；阶段提醒', async () => {
+    let B = await import('../src/trpg/trpg-check-board.js'),
+        KC = await import('../src/trpg/trpg-kp-card.js'),
+        ai = (mes) => ({ is_user: false, mes }),
+        usr = (mes) => ({ is_user: true, mes }),
+        node = { uid: 'n1', name: '厕所', item: { 发现: [{ 事实: 'F01', 内容: '墙上有字', 判定: '侦查' }] } },
+        state = { nodeStates: [{ status: 'available', node }] },
+        prog = { clueCandidates: [{ i: 0, scenes: [{ uid: 'n1', focus: !0 }], candidates: [] }] },
+        rows = (chat) => B.trpgCheckBoard({ state, snap: { facts: new Map() }, prog, checks: T.trpgCheckResults(chat), messages: chat }).rows;
+    assert.equal(rows([ai('a')])[0].nudge, '');
+    assert.equal(rows([ai('a'), usr('x'), ai('b')])[0].nudge, 'norequest');
+    let asked = [ai('a【检定】我：侦查 #F01'), usr('1D100=10/50'), ai('b'), usr('x')];
+    assert.equal(rows(asked)[0].nudge, '');
+    assert.equal(rows([...asked, ai('c')])[0].nudge, 'unconfirmed');
+    let stage = (id, k, left, entered) => [id, { unit: { volIndex: 0, stage: { key: k } }, done: !1, requiredLeft: left, entered: { v: entered } }],
+        lags = KC.stageLags({ stageStates: new Map([stage('a', '阶段1_开场', [node], 'true'), stage('b', '阶段2_中段', [], 'true')]), nodeStates: state.nodeStates });
+    assert.deepEqual(lags.map((g) => [g.prev, g.next, g.left.length]), [['阶段1', '阶段2', 1]]);
+    assert.equal(KC.stageLags({ stageStates: new Map([stage('a', '阶段1_开场', [node], 'true'), stage('b', '阶段2_中段', [], 'false')]), nodeStates: state.nodeStates }).length, 0);
+});

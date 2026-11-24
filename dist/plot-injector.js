@@ -1,4 +1,4 @@
-// PlotInjector v0.4.5
+// PlotInjector v0.4.6
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -11374,6 +11374,9 @@ label.pi-wb-row{cursor:pointer}
 .pi-ck-what{font-size:13px;color:var(--pi-txt);display:inline-flex;gap:6px;align-items:baseline}
 .pi-ck .pi-ck-meta{flex:1 1 auto;min-width:0;text-align:left;white-space:normal}
 .pi-ck .pi-ck-tail{flex:1 1 100%;text-align:left;white-space:normal}
+.pi-ck-nudge{flex:1 1 100%;display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px}
+.pi-ck-nudge .pi-hint{margin:0;flex:1 1 auto;min-width:0}
+.pi-card>.pi-ck-nudge{padding:7px 10px;margin:0 0 6px;border-radius:10px;background:var(--pi-fill)}
 .pi-fold{margin:2px 0 10px}
 .pi-fold>summary{list-style:none;cursor:pointer;display:flex;align-items:baseline;gap:8px;font-size:13px;color:var(--pi-txt2);padding:4px 0}
 .pi-fold>summary::-webkit-details-marker{display:none}
@@ -12208,11 +12211,25 @@ ${rules}`
   function kpFactLabel(labels, id, text2) {
     return labels && labels[id] && labels[id].label || (String(text2 || "").length > 12 ? `${String(text2).slice(0, 12)}…` : String(text2 || "") || "一条线索");
   }
-  function kpLogEntry({ floor, at = Date.now(), result: result2, labelOf: labelOf2, scenes, off }) {
+  function kpFailedChecks({ state, snap: snap2, effective, checks }) {
+    let out = [];
+    for (let ns of state.nodeStates)
+      if (!(ns.status !== "available" && ns.status !== "active"))
+        for (let d of discoveryList2(isPlainObject(ns.node.item) ? ns.node.item : {})) {
+          if (!d.check || !d.fact || out.includes(d.fact) || !(checks && checks[d.fact]) || effective(d.fact, snap2).confirmed) continue;
+          let gate = checkLine(d, checks);
+          gate && !gate.reveal && out.push(d.fact);
+        }
+    return out;
+  }
+  function kpLogEntry({ floor, at = Date.now(), result: result2, labelOf: labelOf2, scenes, off, checkOf = () => !1, failed = [] }) {
     return {
       at,
       floor,
-      facts: result2.facts.map((x) => ({ label: labelOf2(x.id), ok: x.ok, why: x.ok ? x.why : x.note || x.why, quote: x.ok ? x.quote : "" })),
+      facts: [
+        ...result2.facts.map((x) => ({ label: labelOf2(x.id), ok: x.ok, why: x.ok ? x.why : x.note || x.why, quote: x.ok ? x.quote : "", ...!x.ok && checkOf(x.id) ? { check: "text" } : {} })),
+        ...failed.map(() => ({ label: "一条线索", ok: !1, why: "", quote: "", check: "roll" }))
+      ],
       conds: result2.conds.map((x) => ({ text: x.text, ok: x.ok, why: x.ok ? x.why : x.note || x.why, quote: x.ok ? x.quote : "" })),
       scene: result2.sceneName || "",
       off: !!off,
@@ -12237,8 +12254,25 @@ ${rules}`
   function rollText(r, hidden) {
     return hidden ? "已掷" : r.die != null ? `1D100=${r.die}${r.value ? `/${r.value}` : ""}` : r.tier;
   }
-  function trpgCheckBoard({ state, snap: snap2, prog, checks, labels = {} }) {
-    let rows2 = [], requests = checks && checks.requests || [], offered = new Set(Array.isArray(prog && prog.clueOffered) ? prog.clueOffered : []), known = /* @__PURE__ */ new Set();
+  var NUDGE_FLOORS = 2;
+  function aiFloorsSince(messages, from, inclusive) {
+    let n = 0;
+    for (let i = Math.max(0, from) + (inclusive ? 0 : 1); i < (messages || []).length; i += 1) {
+      let m = messages[i];
+      m && !m.is_user && !m.is_system && (n += 1);
+    }
+    return n;
+  }
+  function nodeOpenFloor(prog, uid, messages) {
+    let at = -1;
+    for (let x of prog && Array.isArray(prog.clueCandidates) ? prog.clueCandidates : []) {
+      let m = (messages || [])[x.i];
+      !uid || !m || m.is_user || !(x.scenes || []).some((s) => s.uid === uid && s.focus) || (at < 0 || x.i < at) && (at = x.i);
+    }
+    return at;
+  }
+  function trpgCheckBoard({ state, snap: snap2, prog, checks, labels = {}, messages = null, raw = null }) {
+    let rows2 = [], requests = checks && checks.requests || [], stored = raw || prog, offered = new Set(Array.isArray(stored && stored.clueOffered) ? stored.clueOffered : []), known = /* @__PURE__ */ new Set();
     for (let ns of state.nodeStates || []) {
       let item = isPlainObject(ns.node.item) ? ns.node.item : {};
       for (let d of discoveryList2(item)) {
@@ -12246,8 +12280,14 @@ ${rules}`
         known.add(d.fact);
         let r = checks ? checks[d.fact] : null, kp = checks ? checks[`${d.fact}-KP`] : null, asked = requests.some((q) => q.code === d.fact), got2 = effectiveFact2(d.fact, snap2, prog).confirmed;
         if (!OPEN.includes(ns.status) && !r && !asked && !got2) continue;
-        let status = r ? r.ok ? "ok" : "fail" : asked ? "roll" : got2 ? "got" : "wait", anyway = !!(d.check.fail && GOT_ANYWAY.test(d.check.fail)), rescued = !!(kp && kp.ok), reveal = status === "ok" || status === "fail" && (anyway || rescued), clue = got2 ? "confirmed" : reveal ? offered.has(d.fact) ? "offered" : "pending" : "", skill = r ? r.skill : d.check.skills.join("/"), level = r ? r.level : d.check.level;
+        let status = r ? r.ok ? "ok" : "fail" : asked ? "roll" : got2 ? "got" : "wait", anyway = !!(d.check.fail && GOT_ANYWAY.test(d.check.fail)), rescued = !!(kp && kp.ok), reveal = status === "ok" || status === "fail" && (anyway || rescued), clue = got2 ? "confirmed" : reveal ? offered.has(d.fact) ? "offered" : "pending" : "", skill = r ? r.skill : d.check.skills.join("/"), level = r ? r.level : d.check.level, nudge = "";
+        if (messages) {
+          let openAt = status === "wait" ? nodeOpenFloor(stored, ns.node.uid, messages) : -1, rolledAt = r ? Math.max(r.at, rescued ? kp.at : -1) : -1;
+          status === "wait" && openAt >= 0 && aiFloorsSince(messages, openAt, !0) >= NUDGE_FLOORS ? nudge = "norequest" : reveal && clue !== "confirmed" && rolledAt >= 0 && aiFloorsSince(messages, rolledAt, !1) >= NUDGE_FLOORS && (nudge = "unconfirmed");
+        }
         rows2.push({
+          skill,
+          nudge,
           fact: d.fact,
           node: ns.node.name || "",
           what: checkWhat(skill, level),
@@ -13840,7 +13880,7 @@ ${list.join(`
         let stage = c.state.current ? c.state.current.id : "", kp = kpOf(), muted = !!stage && kp.offMuted === stage, conds = { ...kp.conds || {} };
         for (let x of result2.conds) x.ok && (conds[x.text] = { floor: at, quote: x.quote });
         let tables = await mirrorTables(recorded, project, t, iso0);
-        return deps.ticketValid(t) ? (saveKp2({ conds, log: pushLog(kp.log, { ...kpLogEntry({ floor: at, result: result2, labelOf: labelOf2, off: result2.offTrack }), ...tables.length ? { tables } : {} }) }), deps.clue.invalidate("kp-check"), result2.offTrack && !muted && offerOffTrack({ result: result2, stage }), log(`跑团检测完成：拿到 ${result2.facts.filter((x) => x.ok).length} 条线索，${result2.conds.filter((x) => x.ok).length} 个条件成立${result2.offTrack ? "，偏离模组" : ""}`), result2) : (log("跑团检测写表后聊天或项目已切换，不再保存日志"), null);
+        return deps.ticketValid(t) ? (saveKp2({ conds, log: pushLog(kp.log, { ...kpLogEntry({ floor: at, result: result2, labelOf: labelOf2, off: result2.offTrack, checkOf: (id) => !!(kpFind(c.state, id) || {}).discovery?.check, failed: kpFailedChecks({ state: c.state, snap: c.snap, effective: (id, snap2) => effectiveFact2(id, snap2, c.prog), checks }) }), ...tables.length ? { tables } : {} }) }), deps.clue.invalidate("kp-check"), result2.offTrack && !muted && offerOffTrack({ result: result2, stage }), log(`跑团检测完成：拿到 ${result2.facts.filter((x) => x.ok).length} 条线索，${result2.conds.filter((x) => x.ok).length} 个条件成立${result2.offTrack ? "，偏离模组" : ""}`), result2) : (log("跑团检测写表后聊天或项目已切换，不再保存日志"), null);
       } catch (error) {
         return deps.ticketValid(t) && (lastKey = "", log(`跑团检测失败：${error.message}`), notice.show({
           id: "checkfail",
@@ -19465,12 +19505,15 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
     fail: ["is-warn", "失败"],
     got: ["is-ok", "已拿到"]
   }, CLUE = { confirmed: "线索已确认", offered: "已交给正文", pending: "线索还没确认" };
+  function nudgeHtml(r) {
+    return r.nudge === "norequest" ? `<span class="pi-ck-nudge"><span class="pi-hint is-warn">正文两轮没出这项检定</span><button type="button" class="pi-btn is-sm" data-act="kp-remind" data-skill="${esc(r.skill)}">下一轮提醒AI写检定</button></span>` : r.nudge === "unconfirmed" ? `<span class="pi-ck-nudge"><span class="pi-hint is-warn">${r.status === "fail" && r.anyway ? "失败也能拿到，线索还没确认" : "判定成功了，线索还没确认"}</span><button type="button" class="pi-btn is-sm" data-act="kp-verify">重新核实阶段</button><button type="button" class="pi-icon-btn" data-act="kp-fact-menu" data-fact="${esc(r.fact)}" title="更多" aria-label="更多">${ICONS.more}</button></span>` : "";
+  }
   function rowHtml(r) {
     let [cls, text2] = STATUS[r.status], meta2 = [r.node, r.roll].filter(Boolean), tail = [];
-    return r.status === "fail" && tail.push(r.kp ? `补救检定${r.kp.ok ? "成功" : "失败"}` : r.anyway ? "失败也能拿到线索" : "这次没拿到线索"), r.clue && tail.push(CLUE[r.clue]), `<div class="pi-ck-row"><span class="pi-badge ${cls}">${text2}</span><span class="pi-ck-what">${esc(r.what)}${r.hidden ? '<span class="pi-meta">暗骰</span>' : ""}</span><span class="pi-meta pi-ck-meta">${esc(meta2.join(" · "))}</span>${r.label || tail.length ? `<span class="pi-meta pi-ck-tail">${esc([r.label ? `「${r.label}」` : "", ...tail].filter(Boolean).join("，"))}</span>` : ""}</div>`;
+    return r.status === "fail" && tail.push(r.kp ? `补救检定${r.kp.ok ? "成功" : "失败"}` : r.anyway ? "失败也能拿到线索" : "这次没拿到线索"), r.clue && tail.push(CLUE[r.clue]), `<div class="pi-ck-row"><span class="pi-badge ${cls}">${text2}</span><span class="pi-ck-what">${esc(r.what)}${r.hidden ? '<span class="pi-meta">暗骰</span>' : ""}</span><span class="pi-meta pi-ck-meta">${esc(meta2.join(" · "))}</span>${r.label || tail.length ? `<span class="pi-meta pi-ck-tail">${esc([r.label ? `「${r.label}」` : "", ...tail].filter(Boolean).join("，"))}</span>` : ""}${nudgeHtml(r)}</div>`;
   }
-  function checkSection(project, c) {
-    let checks = trpgCheckResults(chatMessages()), labels = isPlainObject(project.clue.labels) ? project.clue.labels : {}, board = trpgCheckBoard({ state: c.state, snap: c.snap, prog: c.prog, checks, labels });
+  function checkSection(project, c, raw) {
+    let checks = trpgCheckResults(chatMessages()), labels = isPlainObject(project.clue.labels) ? project.clue.labels : {}, board = trpgCheckBoard({ state: c.state, snap: c.snap, prog: c.prog, checks, labels, messages: chatMessages(), raw });
     if (!board.rows.length && !board.problems.length) return "";
     let live2 = board.rows.filter((r) => !r.done), done = board.rows.filter((r) => r.done);
     return `<div class="pi-ck"><div class="pi-ck-hd">判定</div>
@@ -19497,10 +19540,34 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
     let prog = view.runtime.progress();
     view.runtime.setProgress({ ...prog, trpgKp: { ...prog.trpgKp || {}, ...patch } }, "trpg-kp");
   }
+  var CHECK_WHY = { roll: "判定没成功", text: "正文没写出来" };
+  function stageLags(state) {
+    let list = [...state.stageStates.values()], out = [];
+    for (let i = 1; i < list.length; i += 1) {
+      let p = list[i - 1], n = list[i];
+      p.unit.volIndex !== n.unit.volIndex || p.done || !p.requiredLeft.length || n.entered.v !== "true" || n.done || out.push({
+        prev: splitStageKey(p.unit.stage.key).short,
+        next: splitStageKey(n.unit.stage.key).short,
+        left: p.requiredLeft.map((x) => state.nodeStates.find((ns) => ns.node === x || x.uid && ns.node.uid === x.uid)).filter(Boolean)
+      });
+    }
+    return out;
+  }
+  function lagTarget(left, snap2, prog) {
+    for (let ns of left)
+      for (let d of discoveryList2(isPlainObject(ns.node.item) ? ns.node.item : {})) if (d.fact && !effectiveFact2(d.fact, snap2, prog).confirmed) return d.fact;
+    return "";
+  }
+  function stageLagHtml(state, snap2, prog) {
+    return stageLags(state).map((g) => {
+      let names2 = g.left.map((ns) => `『${esc(ns.node.name || "未命名")}』`).join("、");
+      return `<div class="pi-ck-nudge"><span class="pi-hint is-warn">${esc(g.prev)}还差${names2}，${esc(g.next)}已经开始</span>${lagTarget(g.left, snap2, prog) ? '<button type="button" class="pi-btn is-sm" data-act="kp-lag-push">推一把</button>' : ""}<button type="button" class="pi-icon-btn" data-act="kp-lag-menu" title="更多" aria-label="更多">${ICONS.more}</button></div>`;
+    }).join("");
+  }
   function lastCheckHtml(kp) {
     let log = Array.isArray(kp.log) ? kp.log : [], last = log[log.length - 1];
     if (!last) return "";
-    let row2 = (ok, text2, why) => `<p class="pi-hint"><span class="pi-badge ${ok ? "is-ok" : "is-warn"}">${ok ? "通过" : "没通过"}</span> ${esc(text2)}${why ? `：${esc(why)}` : ""}</p>`, items = [...last.facts.map((x) => row2(x.ok, x.label, x.why)), ...last.conds.map((x) => row2(x.ok, x.text, x.why))];
+    let row2 = (ok, text2, why) => `<p class="pi-hint"><span class="pi-badge ${ok ? "is-ok" : "is-warn"}">${ok ? "通过" : "没通过"}</span> ${esc(text2)}${why ? `：${esc(why)}` : ""}</p>`, items = [...last.facts.map((x) => row2(x.ok, x.label, x.check ? CHECK_WHY[x.check] : x.why)), ...last.conds.map((x) => row2(x.ok, x.text, x.why))];
     return `<details class="pi-fold"><summary><b>上轮检测</b><span>${esc(kpSummary(last))}</span></summary>${items.join("") || '<p class="pi-hint">这一轮没有要判断的线索和条件。</p>'}${last.off ? `<p class="pi-hint is-warn">${esc(kpOffText(last.offKind))}</p>${last.offReason ? `<details class="pi-fold"><summary>查看原因（可能剧透）</summary><p class="pi-hint">${esc(last.offReason)}</p></details>` : ""}` : ""}</details>`;
   }
   function kpCard(view, project, c, d) {
@@ -19513,7 +19580,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
     return `<div class="pi-card"><h3>KP<span class="pi-spacer"></span>
         <button type="button" class="pi-btn is-sm is-ghost" data-act="kp-health" title="推演凭已经拿到的线索，主线还能不能走通，并可以推一把；只给结论，展开才剧透">卡住了吗</button>
         ${busy ? '<span class="pi-spin"></span>' : `<button type="button" class="pi-icon-btn" data-act="kp-menu" title="更多" aria-label="更多">${ICONS.more}</button>`}</h3>
-        ${checkSection(project, c)}${timelineHintHtml(project, readGameClock(c.snap.tables, bind && bind.路径))}${lastCheckHtml(kp)}${steerResultHtml(project)}
+        ${checkSection(project, c, view.runtime.progress())}${stageLagHtml(c.state, c.snap, c.prog)}${timelineHintHtml(project, readGameClock(c.snap.tables, bind && bind.路径))}${lastCheckHtml(kp)}${steerResultHtml(project)}
         ${mine ? `<p class="pi-hint">${thinking ? '<span class="pi-badge">判断中</span>' : `<span class="pi-badge ${BADGE[shownLevel(mine)][0]}">${BADGE[shownLevel(mine)][1]}</span>`} ${esc(
       ai && ai.plain.length ? ai.plain.join("；") : thinking ? "AI 正在读最近的正文…" : mine.aiError ? `AI 判断失败（${mine.aiError}），下面只是插件推演。` : ai ? "AI 没有给出说明。" : ""
     )}${spoils.length && !thinking ? ` <button type="button" class="pi-btn is-sm is-ghost" data-act="kp-spoil">${mine.open ? "收起" : "展开（会剧透）"}</button>` : ""}</p><p class="pi-hint">插件推演：${esc(mine.lines.join("；"))}</p>${mine.open && !thinking ? spoils.map((t) => `<p class="pi-hint">${esc(t)}</p>`).join("") : ""}${leaks ? `<p class="pi-hint is-warn">最近一次请求里疑似提前写出了${leaks}处线索</p>` : ""}${advice && advice !== "不用推" && !push ? `<p class="pi-hint">AI 建议：${esc(advice)}</p>` : ""}${mine.fact && !push && !thinking ? `<div class="pi-tools is-c3">${KP_LEVELS.map((x) => `<button type="button" class="pi-btn is-sm${advice === x.label ? " is-primary" : ""}" data-act="kp-push" data-level="${x.level}">${esc(x.label)}</button>`).join("")}</div>` : mine.fact || push ? "" : '<p class="pi-hint">眼下没有能推的线索。</p>'}` : ""}
@@ -19626,6 +19693,32 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
       let t = kpPushTarget(c.state, c.snap, c.prog);
       if (!t) return toast("info", "眼下没有能推的线索。"), view.renderBody();
       saveKp(view, { push: { fact: t.fact, level: Number(target.dataset.level), floor: aiFloorCount2(chatMessages()) } }), view.renderBody();
+    },
+    // 判定那一行：正文两轮没出检定，下一轮提醒 AI 写（只说技能，不说线索内容）
+    "kp-remind"(view, target) {
+      let skill = (target.dataset.skill || "").trim() || "相应";
+      saveKp(view, { push: { kind: "steer", text: `这一轮正文里请按检定写法补上「${skill}」检定，让玩家掷骰，先不要写出结果。`, floor: aiFloorCount2(chatMessages()) } }), toast("success", "下一轮会提醒AI写这项检定。"), view.renderBody();
+    },
+    // 判定成功了线索没确认：收进「⋯」的次要操作
+    async "kp-fact-menu"(view, target) {
+      let fact = target.dataset.fact;
+      !fact || await menuDialog({ title: "线索", items: [{ label: "手动确认拿到了", value: "confirm" }] }) !== "confirm" || (view.runtime.clue.act({ kind: "fact", target: fact, value: "confirmed", note: "玩家手动确认（判定已成功）" }), toast("success", "已确认这条线索。"), view.renderBody());
+    },
+    // 阶段提醒的「推一把」：目标取前一阶段还差的节点里的线索，档位沿用 KP_LEVELS
+    async "kp-lag-push"(view) {
+      let c = view.runtime.clue.compute(), fact = "";
+      if (!(c && stageLags(c.state).find((g) => fact = lagTarget(g.left, c.snap, c.prog)))) return toast("info", "眼下没有能推的线索。"), view.renderBody();
+      let pick = await menuDialog({ title: "推一把", items: KP_LEVELS.map((x) => ({ label: x.label, value: String(x.level) })) });
+      pick && (saveKp(view, { push: { fact, level: Number(pick), floor: aiFloorCount2(chatMessages()) } }), view.renderBody());
+    },
+    // 阶段提醒的「⋯」：手动把前一阶段还差的节点标完成
+    async "kp-lag-menu"(view) {
+      let clue = view.runtime.clue, c = clue.compute(), left = c ? stageLags(c.state).flatMap((g) => g.left) : [];
+      if (!left.length) return;
+      let pick = await menuDialog({ title: "手动标完成", items: left.map((ns) => ({ label: ns.node.name || "未命名", value: ns.node.uid })) });
+      if (!pick) return;
+      let note = await promptDialog({ title: "记录原因（可空）", label: "为什么手动处理" });
+      note !== null && (clue.act({ kind: "done", target: pick, value: "force", note }), view.renderBody());
     },
     "kp-cancel"(view) {
       saveKp(view, { push: null }), view.renderBody();
@@ -31044,7 +31137,7 @@ ${suffix.trim()}` : body;
   }
 
   // src/index.js
-  var VERSION = "0.4.5", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.4.6", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")

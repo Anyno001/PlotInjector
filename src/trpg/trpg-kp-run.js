@@ -26,6 +26,7 @@ import {
     verifyKp,
     kpFactLabel,
     kpLogEntry,
+    kpFailedChecks,
     pushLog,
     kpOffText,
     recentFloors,
@@ -127,7 +128,7 @@ export function createKpRunner(deps) {
             // 判断以上面的进度记录为准；表格只是镜像，写不进去只记日志
             let tables = await mirrorTables(recorded, project, t, iso0);
             if (!deps.ticketValid(t)) return (log('跑团检测写表后聊天或项目已切换，不再保存日志'), null);
-            saveKp({ conds, log: pushLog(kp.log, { ...kpLogEntry({ floor: at, result, labelOf, off: result.offTrack }), ...(tables.length ? { tables } : {}) }) });
+            saveKp({ conds, log: pushLog(kp.log, { ...kpLogEntry({ floor: at, result, labelOf, off: result.offTrack, checkOf: (id) => !!(kpFind(c.state, id) || {}).discovery?.check, failed: kpFailedChecks({ state: c.state, snap: c.snap, effective: (id, snap) => effectiveFact(id, snap, c.prog), checks }) }), ...(tables.length ? { tables } : {}) }) });
             deps.clue.invalidate('kp-check');
             result.offTrack && !muted && offerOffTrack({ result, stage });
             log(`跑团检测完成：拿到 ${result.facts.filter((x) => x.ok).length} 条线索，${result.conds.filter((x) => x.ok).length} 个条件成立${result.offTrack ? '，偏离模组' : ''}`);
