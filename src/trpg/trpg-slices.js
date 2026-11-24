@@ -332,3 +332,63 @@ export function sliceContext({ project, state, snap, prog, clueProg, chat }) {
         counts: sliceCounts(prog),
     };
 }
+
+// ---------------- AI 核对挂靠 ----------------
+
+export const ALIGN_BATCH = 30;
+const short = (t, n) => String(t || '').replace(/\s+/g, ' ').slice(0, n);
+
+// 节点清单：[{ uid, name, stage, entry }]，stage 是阶段短名
+export function alignNodes(volumes, stageName = (key) => key) {
+    return clueNodes(volumes)
+        .filter((n) => n.uid)
+        .map((n) => ({ uid: n.uid, name: n.name, stage: stageName(n.unit.stage.key), entry: short(isPlainObject(n.item) ? n.item.入口 : '', 60) }));
+}
+
+export function alignMessages({ slices, nodes }) {
+    return [
+        {
+            role: 'system',
+            content: [
+                '你在核对跑团模组的原文切片挂在哪个场景节点上。每条切片是从模组原文里摘出的台词、场景描写或伏笔，请判断它最适合挂在下面哪个节点（在这个节点进行时才会给出）。',
+                '规则：1. node 只能填节点清单里的编号，不能自己编。2. 切片讲的场景、地点、人物明显不属于任何节点时，node 留空。3. 台词看说话人在哪个节点出场；场景描写看写的是哪个地点。4. why 一句话说明依据。',
+                '严格输出一个 JSON，不要写别的：{"items":[{"id":"切片编号","node":"节点编号或空","why":"一句话"}]}',
+            ].join('\n'),
+        },
+        {
+            role: 'user',
+            content: [
+                `【节点清单】\n${nodes.map((n) => `- ${n.uid}：${n.name}（${n.stage}）${n.entry ? `入口：${n.entry}` : ''}`).join('\n')}`,
+                `【切片】\n${slices.map((s) => `- ${s.id}（${SLICE_KINDS[s.kind]}${s.who ? `，${s.who}` : ''}${s.where ? `，原文地点：${s.where}` : ''}）：${short(s.kind === 'seed' || s.kind === 'taboo' ? `${s.hint}｜${s.text}` : s.text, 160)}`).join('\n')}`,
+            ].join('\n\n'),
+        },
+    ];
+}
+
+export function parseAlign(text) {
+    let raw = String(text || ''),
+        a = raw.indexOf('{'),
+        b = raw.lastIndexOf('}');
+    if (a < 0 || b <= a) throw new Error('核对结果不是 JSON');
+    let v;
+    try {
+        v = JSON.parse(raw.slice(a, b + 1));
+    } catch {
+        throw new Error('核对结果 JSON 无法解析');
+    }
+    return (Array.isArray(v.items) ? v.items : []).filter((x) => isPlainObject(x)).map((x) => ({ id: textOf(x.id), node: textOf(x.node), why: textOf(x.why) }));
+}
+
+// 和现在挂靠不同的建议：[{ id, from, to, why }]；AI 给的节点不在清单里一律当「都不对应」
+export function alignChanges(slices, items, nodes) {
+    let live = new Set(nodes.map((n) => n.uid)),
+        by = new Map(items.map((x) => [x.id, x])),
+        out = [];
+    for (let s of slices) {
+        let x = by.get(s.id);
+        if (!x) continue;
+        let to = live.has(x.node) ? x.node : '';
+        to !== s.node && out.push({ id: s.id, from: s.node, to, why: x.why });
+    }
+    return out;
+}

@@ -1,4 +1,4 @@
-// PlotInjector v0.4.10
+// PlotInjector v0.4.11
 (() => {
   var __defProp = Object.defineProperty;
   var __getOwnPropNames = Object.getOwnPropertyNames;
@@ -670,18 +670,18 @@ ${body}
     return at < 0 ? { short: rest, title: "" } : { short: rest.slice(0, at), title: rest.slice(at + 1) };
   }
   function volumeLabel(key) {
-    let { short, title: title2 } = splitVolumeKey(key);
-    return title2 ? `${short}·${title2}` : short;
+    let { short: short2, title: title2 } = splitVolumeKey(key);
+    return title2 ? `${short2}·${title2}` : short2;
   }
   function volumeName(key) {
-    let { short, title: title2 } = splitVolumeKey(key);
-    return title2 ? `${short} ${title2}` : short;
+    let { short: short2, title: title2 } = splitVolumeKey(key);
+    return title2 ? `${short2} ${title2}` : short2;
   }
   function volumeShowName(volume) {
     let key = volume && volume.key, id = volume && isPlainObject(volume.line) ? String(volume.line.编号 || "").trim() : "";
     if (!id) return volumeName(key);
-    let { short, title: title2 } = splitVolumeKey(key);
-    return short === id || /^卷/.test(short) ? `${id}${title2 ? ` ${title2}` : ""}` : `${id} ${volumeName(key)}`;
+    let { short: short2, title: title2 } = splitVolumeKey(key);
+    return short2 === id || /^卷/.test(short2) ? `${id}${title2 ? ` ${title2}` : ""}` : `${id} ${volumeName(key)}`;
   }
   function lineShowName(l) {
     let name = String(l && l.name || "").replace(/·/g, " ");
@@ -692,8 +692,8 @@ ${body}
     return at < 0 ? { short: text2, title: "" } : { short: text2.slice(0, at), title: text2.slice(at + 1) };
   }
   function stageLabel(key) {
-    let { short, title: title2 } = splitStageKey(key);
-    return title2 ? `${short} ${title2}` : short;
+    let { short: short2, title: title2 } = splitStageKey(key);
+    return title2 ? `${short2} ${title2}` : short2;
   }
   function flattenUnits(volumes) {
     let units = [];
@@ -4375,8 +4375,8 @@ ${guide ? `${guide}
       let r = String(ref ?? "").trim();
       if (!r) return { unit: null };
       let hits = main.units.filter((u) => {
-        let { short, title: title2 } = splitStageKey(u.stage.key);
-        return [u.stage.key, short, title2, stageLabel(u.stage.key)].map((x) => String(x || "").trim()).includes(r);
+        let { short: short2, title: title2 } = splitStageKey(u.stage.key);
+        return [u.stage.key, short2, title2, stageLabel(u.stage.key)].map((x) => String(x || "").trim()).includes(r);
       });
       return hits.length === 1 ? { unit: hits[0] } : {
         error: hits.length ? `开启时段里的「${r}」在${mainId}里有好几个同名阶段` : `开启时段里的阶段「${r}」在${mainId}里找不到`
@@ -4674,7 +4674,57 @@ ${text2}` }
       counts: sliceCounts(prog)
     };
   }
-  var SLICE_KINDS, SLICE_TEXT_MAX, SLICE_HINT_MAX, SLICE_PER_PART, SLICE_STORE_MAX, MIN_KEY, SEED_ROUNDS, SCENE_ROUNDS, PICK_MAX, PICK_CHARS, LINE_MAX, isCjkEnd, textOf, sameText, FOOT, ORDER, init_trpg_slices = __esm({
+  function alignNodes(volumes, stageName = (key) => key) {
+    return clueNodes2(volumes).filter((n) => n.uid).map((n) => ({ uid: n.uid, name: n.name, stage: stageName(n.unit.stage.key), entry: short(isPlainObject(n.item) ? n.item.入口 : "", 60) }));
+  }
+  function alignMessages({ slices, nodes }) {
+    return [
+      {
+        role: "system",
+        content: [
+          "你在核对跑团模组的原文切片挂在哪个场景节点上。每条切片是从模组原文里摘出的台词、场景描写或伏笔，请判断它最适合挂在下面哪个节点（在这个节点进行时才会给出）。",
+          "规则：1. node 只能填节点清单里的编号，不能自己编。2. 切片讲的场景、地点、人物明显不属于任何节点时，node 留空。3. 台词看说话人在哪个节点出场；场景描写看写的是哪个地点。4. why 一句话说明依据。",
+          '严格输出一个 JSON，不要写别的：{"items":[{"id":"切片编号","node":"节点编号或空","why":"一句话"}]}'
+        ].join(`
+`)
+      },
+      {
+        role: "user",
+        content: [
+          `【节点清单】
+${nodes.map((n) => `- ${n.uid}：${n.name}（${n.stage}）${n.entry ? `入口：${n.entry}` : ""}`).join(`
+`)}`,
+          `【切片】
+${slices.map((s) => `- ${s.id}（${SLICE_KINDS[s.kind]}${s.who ? `，${s.who}` : ""}${s.where ? `，原文地点：${s.where}` : ""}）：${short(s.kind === "seed" || s.kind === "taboo" ? `${s.hint}｜${s.text}` : s.text, 160)}`).join(`
+`)}`
+        ].join(`
+
+`)
+      }
+    ];
+  }
+  function parseAlign(text2) {
+    let raw = String(text2 || ""), a = raw.indexOf("{"), b = raw.lastIndexOf("}");
+    if (a < 0 || b <= a) throw new Error("核对结果不是 JSON");
+    let v;
+    try {
+      v = JSON.parse(raw.slice(a, b + 1));
+    } catch {
+      throw new Error("核对结果 JSON 无法解析");
+    }
+    return (Array.isArray(v.items) ? v.items : []).filter((x) => isPlainObject(x)).map((x) => ({ id: textOf(x.id), node: textOf(x.node), why: textOf(x.why) }));
+  }
+  function alignChanges(slices, items, nodes) {
+    let live2 = new Set(nodes.map((n) => n.uid)), by = new Map(items.map((x) => [x.id, x])), out = [];
+    for (let s of slices) {
+      let x = by.get(s.id);
+      if (!x) continue;
+      let to = live2.has(x.node) ? x.node : "";
+      to !== s.node && out.push({ id: s.id, from: s.node, to, why: x.why });
+    }
+    return out;
+  }
+  var SLICE_KINDS, SLICE_TEXT_MAX, SLICE_HINT_MAX, SLICE_PER_PART, SLICE_STORE_MAX, MIN_KEY, SEED_ROUNDS, SCENE_ROUNDS, PICK_MAX, PICK_CHARS, LINE_MAX, isCjkEnd, textOf, sameText, FOOT, ORDER, ALIGN_BATCH, short, init_trpg_slices = __esm({
     "src/trpg/trpg-slices.js"() {
       init_outline();
       init_trpg_clue_rules();
@@ -4691,6 +4741,7 @@ ${text2}` }
         seed: "伏笔（自然带过即可，不要点破、不要解释）：",
         taboo: "此刻不要说破："
       }, ORDER = ["line", "seed", "scene", "taboo"];
+      ALIGN_BATCH = 30, short = (t, n) => String(t || "").replace(/\s+/g, " ").slice(0, n);
     }
   });
 
@@ -7285,8 +7336,8 @@ ${guide ? `${guide}
       let r = String(ref ?? "").trim();
       if (!r) return { unit: null };
       let hits = main.units.filter((u) => {
-        let { short, title: title2 } = splitStageKey(u.stage.key);
-        return [u.stage.key, short, title2, stageLabel(u.stage.key)].map((x) => String(x || "").trim()).includes(r);
+        let { short: short2, title: title2 } = splitStageKey(u.stage.key);
+        return [u.stage.key, short2, title2, stageLabel(u.stage.key)].map((x) => String(x || "").trim()).includes(r);
       });
       return hits.length === 1 ? { unit: hits[0] } : {
         error: hits.length ? `开启时段里的「${r}」在${mainId}里有好几个同名阶段` : `开启时段里的阶段「${r}」在${mainId}里找不到`
@@ -15550,7 +15601,7 @@ ${add}` : add;
     for (let full of names2)
       for (let part of String(full).split(/[·•\s]+/).map((x) => x.trim()))
         part.length >= 2 && part !== full && !names2.includes(part) && !openParts.has(part) && !SECRET_SHORT_STOP.includes(part) && !out.has(part) && out.set(part, full);
-    return [...out].map(([short, full]) => ({ short, full }));
+    return [...out].map(([short2, full]) => ({ short: short2, full }));
   }
   function importVisibleText(volumes, mode2 = "clue") {
     let out = [], stage = "", stageId = "", put = (layer, where, value, field2 = "") => {
@@ -15633,18 +15684,18 @@ ${add}` : add;
     let shorts = secrets ? [] : importSecretShorts(index, base).filter((x) => !shortsSure.includes(x.short) && !shortsNot.includes(x.short)), shortHits = /* @__PURE__ */ new Map();
     for (let x of importVisibleText(volumes, mode2))
       if (!(x.layer !== "body" && x.layer !== "fill"))
-        for (let { short, full } of shorts)
-          x.text.includes(short) && !x.text.includes(full) && shortHits.set(short, [...shortHits.get(short) || [], { ...x, full }]);
-    for (let [short, w] of shortHits)
+        for (let { short: short2, full } of shorts)
+          x.text.includes(short2) && !x.text.includes(full) && shortHits.set(short2, [...shortHits.get(short2) || [], { ...x, full }]);
+    for (let [short2, w] of shortHits)
       out.push({
         level: "warn",
         kind: "secret-short",
-        name: short,
+        name: short2,
         full: w[0].full,
         stageId: w[0].stageId,
         spots: w.map(spotOf),
-        text: `疑似保密名字「${short}」（「${w[0].full}」的一部分）出现在${[...new Set(w.map((x) => IMPORT_LAYER_TEXT[x.layer]))].join("、")}里（${[...new Set(w.map((x) => x.where))].join("、")}）`,
-        plain: `${placeText(w)}出现了「${short}」，它可能就是保密的「${w[0].full}」。`,
+        text: `疑似保密名字「${short2}」（「${w[0].full}」的一部分）出现在${[...new Set(w.map((x) => IMPORT_LAYER_TEXT[x.layer]))].join("、")}里（${[...new Set(w.map((x) => x.where))].join("、")}）`,
+        plain: `${placeText(w)}出现了「${short2}」，它可能就是保密的「${w[0].full}」。`,
         fix: "是同一个人的话，按保密名字处理，换成称呼；只是碰巧同字，比如别的人物、普通词，就不用改。"
       });
     let left = /* @__PURE__ */ new Set();
@@ -16969,8 +17020,8 @@ ${mainLines}`,
   }
   function unofferedHtml(c, project) {
     return (c.unoffered || []).map((x) => {
-      let labels = project && isPlainObject(project.clue.labels) ? project.clue.labels : {}, text2 = labels[x.id] && labels[x.id].label || clueText2(x.text) || factName(x.id) || "一条线索", short = text2.length > 40 ? `${text2.slice(0, 40)}…` : text2;
-      return x.revoked ? `<p class="pi-hint pi-unoffered">已作废（按未获得处理）：<span title="${esc(`${x.id} ${text2}`)}">${esc(short)}</span> <button type="button" class="pi-btn is-sm is-ghost" data-act="clue-fact-restore" data-id="${esc(x.id)}" title="解除作废，恢复按表格判断；不恢复已清除的记录">解除作废</button></p>` : `<p class="pi-hint is-warn pi-unoffered">正文可能自行编造：<span title="${esc(`${x.id} ${text2}`)}">${esc(short)}</span> <button type="button" class="pi-btn is-sm is-ghost" data-act="clue-fact-keep" data-id="${esc(x.id)}" title="视为已发生，剧情照常推进">保留</button><button type="button" class="pi-btn is-sm is-ghost" data-act="clue-fact-void" data-id="${esc(x.id)}" title="视为未发生，表格改回未获得；以后查到了点「解除作废」">作废</button><span class="pi-unoffered-tip">保留：视为已发生；作废：视为未发生</span></p>`;
+      let labels = project && isPlainObject(project.clue.labels) ? project.clue.labels : {}, text2 = labels[x.id] && labels[x.id].label || clueText2(x.text) || factName(x.id) || "一条线索", short2 = text2.length > 40 ? `${text2.slice(0, 40)}…` : text2;
+      return x.revoked ? `<p class="pi-hint pi-unoffered">已作废（按未获得处理）：<span title="${esc(`${x.id} ${text2}`)}">${esc(short2)}</span> <button type="button" class="pi-btn is-sm is-ghost" data-act="clue-fact-restore" data-id="${esc(x.id)}" title="解除作废，恢复按表格判断；不恢复已清除的记录">解除作废</button></p>` : `<p class="pi-hint is-warn pi-unoffered">正文可能自行编造：<span title="${esc(`${x.id} ${text2}`)}">${esc(short2)}</span> <button type="button" class="pi-btn is-sm is-ghost" data-act="clue-fact-keep" data-id="${esc(x.id)}" title="视为已发生，剧情照常推进">保留</button><button type="button" class="pi-btn is-sm is-ghost" data-act="clue-fact-void" data-id="${esc(x.id)}" title="视为未发生，表格改回未获得；以后查到了点「解除作废」">作废</button><span class="pi-unoffered-tip">保留：视为已发生；作废：视为未发生</span></p>`;
     }).join("");
   }
   var CLUE_STATUS_BADGE, FOCUS_SOURCE, BINDING_EXAMPLE, FACT_NAMES, startFace, clueActions, LINE_BADGE, LINE_TABS, FOLD_WHY, labelDrafts, draftKey, labelJob, voidAsked, LABEL_CONCURRENCY, labelProgress, init_clue_run = __esm({
@@ -18721,7 +18772,7 @@ ${add}` : add;
     for (let full of names2)
       for (let part of String(full).split(/[·•\s]+/).map((x) => x.trim()))
         part.length >= 2 && part !== full && !names2.includes(part) && !openParts.has(part) && !SECRET_SHORT_STOP2.includes(part) && !out.has(part) && out.set(part, full);
-    return [...out].map(([short, full]) => ({ short, full }));
+    return [...out].map(([short2, full]) => ({ short: short2, full }));
   }
   function importVisibleText2(volumes, mode2 = "clue") {
     let out = [], stage = "", stageId = "", put = (layer, where, value, field2 = "") => {
@@ -18804,18 +18855,18 @@ ${add}` : add;
     let shorts = secrets ? [] : importSecretShorts2(index, base).filter((x) => !shortsSure.includes(x.short) && !shortsNot.includes(x.short)), shortHits = /* @__PURE__ */ new Map();
     for (let x of importVisibleText2(volumes, mode2))
       if (!(x.layer !== "body" && x.layer !== "fill"))
-        for (let { short, full } of shorts)
-          x.text.includes(short) && !x.text.includes(full) && shortHits.set(short, [...shortHits.get(short) || [], { ...x, full }]);
-    for (let [short, w] of shortHits)
+        for (let { short: short2, full } of shorts)
+          x.text.includes(short2) && !x.text.includes(full) && shortHits.set(short2, [...shortHits.get(short2) || [], { ...x, full }]);
+    for (let [short2, w] of shortHits)
       out.push({
         level: "warn",
         kind: "secret-short",
-        name: short,
+        name: short2,
         full: w[0].full,
         stageId: w[0].stageId,
         spots: w.map(spotOf2),
-        text: `疑似保密名字「${short}」（「${w[0].full}」的一部分）出现在${[...new Set(w.map((x) => IMPORT_LAYER_TEXT2[x.layer]))].join("、")}里（${[...new Set(w.map((x) => x.where))].join("、")}）`,
-        plain: `${placeText2(w)}出现了「${short}」，它可能就是保密的「${w[0].full}」。`,
+        text: `疑似保密名字「${short2}」（「${w[0].full}」的一部分）出现在${[...new Set(w.map((x) => IMPORT_LAYER_TEXT2[x.layer]))].join("、")}里（${[...new Set(w.map((x) => x.where))].join("、")}）`,
+        plain: `${placeText2(w)}出现了「${short2}」，它可能就是保密的「${w[0].full}」。`,
         fix: "是同一个人的话，按保密名字处理，换成称呼；只是碰巧同字，比如别的人物、普通词，就不用改。"
       });
     let left = /* @__PURE__ */ new Set();
@@ -20246,8 +20297,8 @@ SQL示例: INSERT INTO important_non_romance (name, gender, age, brief_intro, ap
   }
   function unofferedHtml2(c, project) {
     return (c.unoffered || []).map((x) => {
-      let labels = project && isPlainObject(project.clue.labels) ? project.clue.labels : {}, text2 = labels[x.id] && labels[x.id].label || clueText(x.text) || factName2(x.id) || "一条线索", short = text2.length > 40 ? `${text2.slice(0, 40)}…` : text2;
-      return x.revoked ? `<p class="pi-hint pi-unoffered">已作废（按没拿到算）：<span title="${esc(`${x.id} ${text2}`)}">${esc(short)}</span> <button type="button" class="pi-btn is-sm is-ghost" data-act="clue-fact-restore" data-id="${esc(x.id)}" title="解除作废，重新按表格判断；不会还原被清掉的记录">解除作废</button></p>` : `<p class="pi-hint is-warn pi-unoffered">⚠ 正文可能自己编了：<span title="${esc(`${x.id} ${text2}`)}">${esc(short)}</span> <button type="button" class="pi-btn is-sm is-ghost" data-act="clue-fact-keep" data-id="${esc(x.id)}" title="保留：就当发生了，剧情照常走">保留</button><button type="button" class="pi-btn is-sm is-ghost" data-act="clue-fact-void" data-id="${esc(x.id)}" title="作废：当作没发生，之后可以重新查">作废</button></p>`;
+      let labels = project && isPlainObject(project.clue.labels) ? project.clue.labels : {}, text2 = labels[x.id] && labels[x.id].label || clueText(x.text) || factName2(x.id) || "一条线索", short2 = text2.length > 40 ? `${text2.slice(0, 40)}…` : text2;
+      return x.revoked ? `<p class="pi-hint pi-unoffered">已作废（按没拿到算）：<span title="${esc(`${x.id} ${text2}`)}">${esc(short2)}</span> <button type="button" class="pi-btn is-sm is-ghost" data-act="clue-fact-restore" data-id="${esc(x.id)}" title="解除作废，重新按表格判断；不会还原被清掉的记录">解除作废</button></p>` : `<p class="pi-hint is-warn pi-unoffered">⚠ 正文可能自己编了：<span title="${esc(`${x.id} ${text2}`)}">${esc(short2)}</span> <button type="button" class="pi-btn is-sm is-ghost" data-act="clue-fact-keep" data-id="${esc(x.id)}" title="保留：就当发生了，剧情照常走">保留</button><button type="button" class="pi-btn is-sm is-ghost" data-act="clue-fact-void" data-id="${esc(x.id)}" title="作废：当作没发生，之后可以重新查">作废</button></p>`;
     }).join("");
   }
   var CLUE_STATUS_BADGE2, FOCUS_SOURCE2, BINDING_EXAMPLE2, FACT_NAMES2, startFace2, clueActions2, LINE_BADGE2, labelDrafts2, draftKey2, labelJob2, voidAsked2, init_trpg_clue_run = __esm({
@@ -23573,8 +23624,8 @@ ${yamlOf(k)}`).join(`
       }
       let breakHere = !cur || kind !== "text" || cur.kind === "h1" || cur.kind === "h2";
       if (!breakHere && prev) {
-        let samePage = prev.page === l.page, below = samePage && prev.y > l.y, room = pageRight(prev) - prev.right, rightAligned = (a, b) => a && b && a.page === b.page && a.y > b.y && Math.abs(a.x - b.x) < b.h * 1.5 && Math.abs(a.right - b.right) < b.h * 0.6 && a.right - a.x > b.h * 3.5 && b.right - b.x > b.h * 3.5, justified = rightAligned(prev, l) || rightAligned(all[prev.i - 1], prev), short = room > prev.h * 1.5, deliberate = room > prev.h * 1.5 + leadWidth(l.text, l.h) && !justified, ragged = below && !justified && pageRight(prev) - prev.right > prev.h * 3 && pageRight(l) - l.right > l.h * 3 && Math.abs(prev.right - l.right) > l.h * 1.5;
-        (Math.round(prev.h) !== Math.round(l.h) || below && Math.abs(prev.x - l.x) < l.h * 3 && prev.y - l.y > lineGap * 1.5 || short && SENT_END.test(prev.text) || short && LIST_HEAD.test(l.text) || (deliberate || ragged) && !/[，、,；;]$/.test(prev.text)) && (breakHere = !0);
+        let samePage = prev.page === l.page, below = samePage && prev.y > l.y, room = pageRight(prev) - prev.right, rightAligned = (a, b) => a && b && a.page === b.page && a.y > b.y && Math.abs(a.x - b.x) < b.h * 1.5 && Math.abs(a.right - b.right) < b.h * 0.6 && a.right - a.x > b.h * 3.5 && b.right - b.x > b.h * 3.5, justified = rightAligned(prev, l) || rightAligned(all[prev.i - 1], prev), short2 = room > prev.h * 1.5, deliberate = room > prev.h * 1.5 + leadWidth(l.text, l.h) && !justified, ragged = below && !justified && pageRight(prev) - prev.right > prev.h * 3 && pageRight(l) - l.right > l.h * 3 && Math.abs(prev.right - l.right) > l.h * 1.5;
+        (Math.round(prev.h) !== Math.round(l.h) || below && Math.abs(prev.x - l.x) < l.h * 3 && prev.y - l.y > lineGap * 1.5 || short2 && SENT_END.test(prev.text) || short2 && LIST_HEAD.test(l.text) || (deliberate || ragged) && !/[，、,；;]$/.test(prev.text)) && (breakHere = !0);
       }
       !breakHere && cur.kind === "bullet" && prev && prev.page === l.page && !(l.x > cur.x + l.h * 0.5) && (breakHere = !0), breakHere ? open(kind, kind === "bullet" ? l.text.replace(BULLET, "") : l.text, l) : cur.text = joinText(cur.text, l.text), prev = l;
     }
@@ -24571,12 +24622,46 @@ ${r2.yaml}`,
       })
     })), toast("success", "已保存。");
   }
+  async function alignCheck(view) {
+    let project = view.project(), list = slicesOf(project).filter((s) => !s.off), nodes = alignNodes(project.outline.volumes, (key) => splitStageKey(key).short);
+    if (!list.length || !nodes.length) return toast("info", list.length ? "模组里还没有可挂靠的节点。" : "还没有切片。");
+    let items = [];
+    try {
+      await runTask(view, "kp-slices", async () => {
+        for (let i = 0; i < list.length; i += ALIGN_BATCH) {
+          let reply2 = await ask(view, "outline", alignMessages({ slices: list.slice(i, i + ALIGN_BATCH), nodes }));
+          if (reply2 == null) throw new Error("已取消");
+          items.push(...parseAlign(reply2));
+        }
+      });
+    } catch (error) {
+      return toast("error", `核对失败：${error.message}`);
+    }
+    let changes = alignChanges(list, items, nodes);
+    if (!changes.length) return toast("success", `已核对${list.length}条切片，挂靠都对得上。`);
+    let nameOf = (uid) => (nodes.find((n) => n.uid === uid) || {}).name || "未挂靠", byId = new Map(list.map((s) => [s.id, s])), got2 = await openDialog({
+      title: `核对结果：${changes.length}条建议调整`,
+      html: `<p class="pi-hint">已核对${list.length}条，下面这些 AI 认为挂的节点不对。勾选的会改，不勾的保持不变。</p>${changes.map((c) => {
+        let s = byId.get(c.id);
+        return `<label class="pi-check"><input type="checkbox" data-al="${esc(c.id)}" checked><span>${esc(SLICE_KINDS[s.kind])}：${esc((s.who ? `${s.who}：` : "") + (s.kind === "seed" || s.kind === "taboo" ? s.hint : s.text).slice(0, 40))}<br>${esc(nameOf(c.from))} → ${esc(nameOf(c.to))}${c.why ? `（${esc(c.why)}）` : ""}</span></label>`;
+      }).join("")}`,
+      actions: [
+        { label: "取消", value: null },
+        { label: "应用勾选的", primary: !0, value: (root) => [...root.querySelectorAll("[data-al]:checked")].map((e) => e.dataset.al) }
+      ]
+    });
+    if (!got2 || !got2.length) return;
+    let pick = new Map(changes.filter((c) => got2.includes(c.id)).map((c) => [c.id, c.to])), stageOf = (uid) => (clueNodes2(project.outline.volumes).find((n) => n.uid === uid) || { unit: { id: "" } }).unit.id;
+    save2(view, (t) => ({ slices: (t.slices || []).map((s) => pick.has(s.id) ? { ...s, node: pick.get(s.id), stage: pick.get(s.id) ? stageOf(pick.get(s.id)) : "" } : s) })), toast("success", `已调整${pick.size}条挂靠。`), view.renderBody();
+  }
   var slicesOf, sliceActions, init_trpg_slice_ui = __esm({
     "src/trpg/trpg-slice-ui.js"() {
       init_dom();
       init_st();
       init_trpg_clue_model();
       init_trpg_slices();
+      init_ai();
+      init_outline();
       slicesOf = (project) => project.trpg && project.trpg.slices || [];
       sliceActions = {
         async "kp-slices"(view) {
@@ -24586,7 +24671,8 @@ ${r2.yaml}`,
               { label: off ? "使用原文切片：关（点这里打开）" : "使用原文切片：开（点这里关闭）", value: "toggle" },
               { label: `查看和调整切片（共${list.length}条${loose2 ? `，${loose2}条未挂靠` : ""}）`, value: "list" },
               { label: "补全原文（读导入过的模组原文）", value: "fill" },
-              { label: "重新挂靠未挂靠的", value: "attach" }
+              { label: "重新挂靠未挂靠的", value: "attach" },
+              { label: "让 AI 核对挂靠是否对准模组", value: "align" }
             ]
           });
           if (pick === "toggle")
@@ -24595,11 +24681,12 @@ ${r2.yaml}`,
           else if (pick === "attach") {
             let fixed = attachSlices(list, project.outline.volumes);
             save2(view, () => ({ slices: fixed })), toast("success", `已重新挂靠，还有${fixed.filter((s) => !s.node).length}条没找到对应节点。`);
-          } else if (pick === "fill") {
+          } else if (pick === "align") await alignCheck(view);
+          else if (pick === "fill") {
             toast("info", "正在读取模组原文并补全，可能要一会儿…");
             let r = await Promise.resolve().then(() => (init_trpg_long_import_ui(), trpg_long_import_ui_exports)).then((m) => m.backfillSlices(view)).catch((e) => ({ error: e.message }));
             if (view.renderBody(), r.error) return toast("error", `补全原文失败：${r.error}`);
-            toast(r.jobs ? "success" : "warning", r.jobs ? `已读取${r.jobs}份模组原文，现在共有${r.slices}条切片。` : `没有找到可用的模组原文${r.gone ? "（导入任务的原文已被删除）" : "。只有用 PDF 导入过的跑团模组才能补全"}。`);
+            toast(r.jobs ? "success" : "warning", r.jobs ? `已读取${r.jobs}份模组原文，现在共有${r.slices}条切片。` : `没有找到可用的模组原文${r.gone ? "（导入任务的原文已被删除）" : "。只有用 PDF 导入过的跑团模组才能补全"}。`), r.jobs && r.slices && await alignCheck(view);
           }
         }
       };
@@ -32475,7 +32562,7 @@ ${suffix.trim()}` : body;
   }
 
   // src/index.js
-  var VERSION = "0.4.10", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.4.11", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")

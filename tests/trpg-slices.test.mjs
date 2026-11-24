@@ -75,3 +75,12 @@ test('重 roll 之后伏笔当没埋', () => {
     assert.ok(!S.plantedSeeds({ b: { floor: 0, swipe: 1, stamp: 'x' } }, chat).has('b'));
     assert.ok(!S.plantedSeeds({ b: { floor: 3, swipe: 0, stamp: 'x' } }, chat).has('b'));
 });
+
+test('AI 核对挂靠：只采纳清单里的节点，清单外的当作都不对应，只列出和现在不同的', () => {
+    let nodes = [{ uid: 'n1', name: '茶馆' }, { uid: 'n2', name: '阁楼' }],
+        slices = [{ id: 'a', node: 'n1' }, { id: 'b', node: 'n1' }, { id: 'c', node: '' }, { id: 'd', node: 'n2' }],
+        items = S.parseAlign(JSON.stringify({ items: [{ id: 'a', node: 'n1' }, { id: 'b', node: 'n2', why: '写的是阁楼' }, { id: 'c', node: 'n9' }, { id: 'd', node: '' }] })),
+        out = S.alignChanges(slices, items, nodes);
+    assert.deepEqual(out.map((x) => [x.id, x.from, x.to]), [['b', 'n1', 'n2'], ['d', 'n2', '']]);
+    assert.ok(JSON.stringify(S.alignMessages({ slices: [{ id: 'a', kind: 'line', who: '老周', text: '那口井三十年前就封了' }], nodes: [{ uid: 'n1', name: '茶馆', stage: '阶段一', entry: '' }] })).includes('节点清单'));
+});
