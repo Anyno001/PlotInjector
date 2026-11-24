@@ -267,6 +267,7 @@ export function cocJudge(die, value, level = '普通') {
 const LOOKS_ROLL = /[dD]\s*100|🎲|掷|骰|roll/i;
 // IGS forum-anke-play.js ankeFillLine 的 coc 行：1D100=23，技能60 ／ 1D100=23，困难线30，困难成功（没达到难度）
 const IGS_ROLL = /1D100=(\d{1,3})，(?:技能(\d{1,3})|(?:困难|极难)线(\d{1,3}))，(大成功|极难成功|困难成功|成功|大失败|失败)(（没达到难度）)?/;
+const ANKE_PICK_LINE = /【(?:安价|多数决|征集)】[^\n]*/g;
 const STRICT_ROLL = /[dD]\s*100\s*[=＝:：]?\s*\d{1,3}|🎲\s*\d{1,3}|(?:掷出|骰出|出目)\D{0,3}\d{1,3}/;
 
 // 返回值另带两个不可枚举字段（遍历结果的老代码不受影响）：
@@ -281,6 +282,8 @@ export function trpgCheckResults(messages) {
     (messages || []).forEach((msg, at) => {
         if (!msg || msg.is_system) return;
         let text = String(msg.mes || '');
+        // 论坛安科的安价/多数决/征集行带「🎲1D6=3」这类点数，不是模组检定的骰点，先去掉再判
+        msg.is_user && (text = text.replace(ANKE_PICK_LINE, ''));
         if (!msg.is_user) {
             dupes = [];
             for (let r of parseCheckRequests(text)) {

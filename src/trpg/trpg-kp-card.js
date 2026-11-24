@@ -18,6 +18,8 @@ import { checkSection } from './trpg-check-card.js';
 let shown = null;
 // 交给 IGS 建 NPC 档：进行中 / 结果文字（只在内存，按项目记）
 let npcImport = null;
+// 重新核实阶段正在读几楼（只用来在卡片上显示进度）
+let verifyFloors = 0;
 
 function npcImportHtml(project) {
     if (typeof window === 'undefined' || typeof (window.IGS && window.IGS.stats && window.IGS.stats.importNpcCocText) !== 'function') return '';
@@ -122,6 +124,7 @@ export function kpCard(view, project, c, d) {
         <button type="button" class="pi-btn is-sm is-ghost" data-act="kp-health" title="推演凭已经拿到的线索，主线还能不能走通，并可以推一把；只给结论，展开才剧透">卡住了吗</button>
         ${busy ? '<span class="pi-spin"></span>' : `<button type="button" class="pi-icon-btn" data-act="kp-menu" title="更多" aria-label="更多">${ICONS.more}</button>`}</h3>
         ${checkSection(project, c, view.runtime.progress())}${stageLagHtml(c.state, c.snap, c.prog)}${timelineHintHtml(project, readGameClock(c.snap.tables, bind && bind.路径))}${lastCheckHtml(kp)}${steerResultHtml(project)}
+        ${view.busy['kp-verify'] ? `<p class="pi-hint"><span class="pi-badge">核实中</span> KP 正在读最近${verifyFloors ? ` ${verifyFloors} ` : ''}楼的正文，重新判断进行中阶段的线索和条件…</p>` : ''}
         ${
             mine
                 ? `<p class="pi-hint">${thinking ? '<span class="pi-badge">判断中</span>' : `<span class="pi-badge ${BADGE[shownLevel(mine)][0]}">${BADGE[shownLevel(mine)][1]}</span>`} ${esc(
@@ -180,6 +183,7 @@ export const kpActions = {
         let floors = Math.round(Number(pick));
         if (!(floors >= 1)) return toast('info', '楼数要填一个正整数。');
         floors = Math.min(floors, RECHECK_MAX);
+        verifyFloors = floors;
         let r = await runTask(view, 'kp-verify', () => view.runtime.kp.recheck({ floors })).catch((e) => ({ error: `请求失败：${e.message}` }));
         if (!r) return;
         if (r.error) return toast('info', `没法核实：${r.error}。`);

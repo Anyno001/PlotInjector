@@ -422,7 +422,7 @@ export function createKpRunner(deps) {
         if (!fresh.length && !probs.length) return;
         saveKp({ rollSeen: [...seen, ...Object.keys(checks).filter((code) => checks[code].fresh).map((code) => `${stamp}:${code}`), ...probs.map((p) => `${stamp}:!${p.kind}`)].slice(-40) });
         if (probs.length && !fresh.length)
-            return notice.show({ id: 'kp-roll', title: '判定未生效', body: probs.map(problemText).join('；'), actions: [{ label: '关闭', run: () => {} }] });
+            return notice.show({ id: 'kp-roll', title: '判定未生效', body: probs.map(problemText).join('；'), actions: [{ label: '关闭', run: () => {} }], timeout: 8e3 });
         let parts = fresh.map(([code, r]) => {
                 let rescue = /-KP$/.test(code),
                     base = code.replace(/-KP$/, ''),

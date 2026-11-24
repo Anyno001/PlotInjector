@@ -1,4 +1,4 @@
-// PlotInjector v0.4.7
+// PlotInjector v0.4.8
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -2708,13 +2708,13 @@ ${u.yaml}`].filter(Boolean).join(`
     let fumble = die >= 100 || value < 50 && die >= 96, tier = die <= 5 ? "大成功" : fumble ? "大失败" : die <= Math.floor(value / 5) ? "极难成功" : die <= Math.floor(value / 2) ? "困难成功" : die <= value ? "成功" : "失败", need = level === "极难" ? Math.floor(value / 5) : level === "困难" ? Math.floor(value / 2) : value;
     return { tier, ok: die <= 5 || !fumble && die <= need, need };
   }
-  var LOOKS_ROLL = /[dD]\s*100|🎲|掷|骰|roll/i, IGS_ROLL = /1D100=(\d{1,3})，(?:技能(\d{1,3})|(?:困难|极难)线(\d{1,3}))，(大成功|极难成功|困难成功|成功|大失败|失败)(（没达到难度）)?/, STRICT_ROLL = /[dD]\s*100\s*[=＝:：]?\s*\d{1,3}|🎲\s*\d{1,3}|(?:掷出|骰出|出目)\D{0,3}\d{1,3}/;
+  var LOOKS_ROLL = /[dD]\s*100|🎲|掷|骰|roll/i, IGS_ROLL = /1D100=(\d{1,3})，(?:技能(\d{1,3})|(?:困难|极难)线(\d{1,3}))，(大成功|极难成功|困难成功|成功|大失败|失败)(（没达到难度）)?/, ANKE_PICK_LINE = /【(?:安价|多数决|征集)】[^\n]*/g, STRICT_ROLL = /[dD]\s*100\s*[=＝:：]?\s*\d{1,3}|🎲\s*\d{1,3}|(?:掷出|骰出|出目)\D{0,3}\d{1,3}/;
   function trpgCheckResults(messages) {
     let open = [], out = {}, problems2 = [], requests = [], dupes = [];
     (messages || []).forEach((msg, at) => {
       if (!msg || msg.is_system) return;
       let text2 = String(msg.mes || "");
-      if (!msg.is_user) {
+      if (msg.is_user && (text2 = text2.replace(ANKE_PICK_LINE, "")), !msg.is_user) {
         dupes = [];
         for (let r of parseCheckRequests(text2))
           requests.push({ at, code: r.code, skill: r.skill, level: r.level }), out[r.code] ? dupes.push(r) : open.some((o) => o.code === r.code) || open.push(r);
@@ -11214,11 +11214,12 @@ label.pi-wb-row{cursor:pointer}
 .pi-topbar-acts .pi-btn{min-width:52px}
 .pi-topbar-act.is-armed{color:var(--pi-danger);background:var(--pi-danger-soft)}
 @media (max-width:600px){.pi-topbar{font-size:14px}.pi-topbar-acts .pi-btn.is-sm{min-height:32px;font-size:13px}}
-.pi-notice{pointer-events:auto;width:340px;max-width:100%;background:var(--pi-bg);border-radius:var(--pi-r);box-shadow:var(--pi-shadow);padding:12px 14px;border-left:4px solid var(--pi-accent)}
-.pi-notice b{display:block;font-size:13px;color:var(--pi-dark);margin-bottom:3px}
+.pi-notice{pointer-events:auto;width:340px;max-width:100%;background:var(--pi-bg);border-radius:var(--pi-r);box-shadow:var(--pi-shadow);padding:12px 14px}
+.pi-notice b{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--pi-dark);margin-bottom:4px}
+.pi-notice-ico{flex:none;width:22px;height:22px;border-radius:50%;background:var(--pi-accent-soft);color:var(--pi-accent);display:inline-flex;align-items:center;justify-content:center;font-style:normal}
 .pi-notice p{margin:0 0 8px;font-size:12px;color:var(--pi-txt2)}
-.pi-notice .pi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:6px}
-.pi-notice .pi-row>.pi-btn{width:100%;padding:0 6px}
+.pi-notice .pi-row{display:flex;flex-wrap:wrap;gap:6px}
+.pi-notice .pi-row>.pi-btn{flex:1 1 auto;width:auto;min-width:0;padding:4px 10px;white-space:normal;line-height:1.3;text-align:center}
 @media (max-width:720px){
 .pi-overlay{align-items:stretch}
 .pi-panel{grid-template-columns:minmax(0,1fr);width:100vw;max-width:100vw;height:100vh;height:100dvh;max-height:none;border-radius:0}
@@ -11681,6 +11682,10 @@ label.pi-wb-row{cursor:pointer}
 .pi-line-opts .pi-check{min-width:0;flex:1 1 auto}
 .pi-line-opts .pi-check span{white-space:normal;min-width:0}
 `, ICONS = {
+    noticeCompass: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></svg>',
+    noticeCheck: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.7 2.7L16 9.5"/></svg>',
+    noticeDice: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="4"/><circle cx="9" cy="9" r=".6"/><circle cx="15" cy="15" r=".6"/><circle cx="12" cy="12" r=".6"/></svg>',
+    noticeMark: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4h10v16l-5-3.5L7 20z"/></svg>',
     // 折叠和下拉用的细线箭头（用户 2026-11-23 选定圆底样式）
     chev: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>',
     chevDown: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>',
@@ -14076,7 +14081,7 @@ ${list.join(`
       if (!fresh.length && !probs.length) return;
       if (saveKp2({ rollSeen: [...seen, ...Object.keys(checks).filter((code) => checks[code].fresh).map((code) => `${stamp}:${code}`), ...probs.map((p) => `${stamp}:!${p.kind}`)].slice(-40) }), probs.length && !fresh.length)
         return notice.show({ id: "kp-roll", title: "判定未生效", body: probs.map(problemText).join("；"), actions: [{ label: "关闭", run: () => {
-        } }] });
+        } }], timeout: 8e3 });
       let parts = fresh.map(([code, r]) => {
         let rescue = /-KP$/.test(code), base = code.replace(/-KP$/, ""), hit = c && kpFind(c.state, base), check = hit && hit.discovery.check;
         return { base, ...rollNoticeText(r, { hidden: !!(check && check.hidden), rescue, anyway: !!(check && check.fail && GOT_ANYWAY.test(check.fail)) }) };
@@ -18163,7 +18168,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
     return result2 && result2.reasons && result2.reasons.length ? result2.reasons.slice(0, 4).map((r) => `<li>${esc(maskFacts(r))}</li>`).join("") : "";
   }
   function nodeRow(s, focusUid, open) {
-    let badge = CLUE_STATUS_BADGE[s.status], flags = [
+    let badge2 = CLUE_STATUS_BADGE[s.status], flags = [
       s.node.required ? "" : "可选",
       s.skipped ? "已跳过" : "",
       s.disabled ? "暂时停用" : "",
@@ -18172,7 +18177,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
     ].filter(Boolean).join("，"), why = s.status === "locked" ? reasonList(s.open) : s.status !== "done" ? reasonList(s.done) : "";
     return `<div class="pi-clue-node${s.node.uid === focusUid ? " is-focus" : ""}">
         <div class="pi-clue-hd" data-act="clue-node-open" data-uid="${esc(s.node.uid)}">
-            <span class="pi-badge ${badge}">${esc(NODE_STATUS_LABELS[s.status])}</span>
+            <span class="pi-badge ${badge2}">${esc(NODE_STATUS_LABELS[s.status])}</span>
             <span class="pi-clue-name">${esc(s.node.name)}</span>
             ${flags ? `<span class="pi-meta">${esc(flags)}</span>` : ""}
             ${s.node.uid ? `<button type="button" class="pi-icon-btn" data-act="clue-node-menu" data-uid="${esc(s.node.uid)}" title="手动调整" aria-label="手动调整">${ICONS.more}</button>` : ""}</div>
@@ -19524,7 +19529,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
   }
 
   // src/trpg/trpg-kp-card.js
-  var shown = null, npcImport = null;
+  var shown = null, npcImport = null, verifyFloors = 0;
   function npcImportHtml(project) {
     if (typeof window > "u" || typeof (window.IGS && window.IGS.stats && window.IGS.stats.importNpcCocText) != "function" || !kpSectionText(project.setting && project.setting.text, "NPC与敌人数据")) return "";
     let mine = npcImport && npcImport.projectId === project.id ? npcImport : null;
@@ -19582,6 +19587,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
         <button type="button" class="pi-btn is-sm is-ghost" data-act="kp-health" title="推演凭已经拿到的线索，主线还能不能走通，并可以推一把；只给结论，展开才剧透">卡住了吗</button>
         ${busy ? '<span class="pi-spin"></span>' : `<button type="button" class="pi-icon-btn" data-act="kp-menu" title="更多" aria-label="更多">${ICONS.more}</button>`}</h3>
         ${checkSection(project, c, view.runtime.progress())}${stageLagHtml(c.state, c.snap, c.prog)}${timelineHintHtml(project, readGameClock(c.snap.tables, bind && bind.路径))}${lastCheckHtml(kp)}${steerResultHtml(project)}
+        ${view.busy["kp-verify"] ? `<p class="pi-hint"><span class="pi-badge">核实中</span> KP 正在读最近${verifyFloors ? ` ${verifyFloors} ` : ""}楼的正文，重新判断进行中阶段的线索和条件…</p>` : ""}
         ${mine ? `<p class="pi-hint">${thinking ? '<span class="pi-badge">判断中</span>' : `<span class="pi-badge ${BADGE[shownLevel(mine)][0]}">${BADGE[shownLevel(mine)][1]}</span>`} ${esc(
       ai && ai.plain.length ? ai.plain.join("；") : thinking ? "AI 正在读最近的正文…" : mine.aiError ? `AI 判断失败（${mine.aiError}），下面只是插件推演。` : ai ? "AI 没有给出说明。" : ""
     )}${spoils.length && !thinking ? ` <button type="button" class="pi-btn is-sm is-ghost" data-act="kp-spoil">${mine.open ? "收起" : "展开（会剧透）"}</button>` : ""}</p><p class="pi-hint">插件推演：${esc(mine.lines.join("；"))}</p>${mine.open && !thinking ? spoils.map((t) => `<p class="pi-hint">${esc(t)}</p>`).join("") : ""}${leaks ? `<p class="pi-hint is-warn">最近一次请求里疑似提前写出了${leaks}处线索</p>` : ""}${advice && advice !== "不用推" && !push ? `<p class="pi-hint">AI 建议：${esc(advice)}</p>` : ""}${mine.fact && !push && !thinking ? `<div class="pi-tools is-c3">${KP_LEVELS.map((x) => `<button type="button" class="pi-btn is-sm${advice === x.label ? " is-primary" : ""}" data-act="kp-push" data-level="${x.level}">${esc(x.label)}</button>`).join("")}</div>` : mine.fact || push ? "" : '<p class="pi-hint">眼下没有能推的线索。</p>'}` : ""}
@@ -19621,7 +19627,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
       }
       let floors = Math.round(Number(pick));
       if (!(floors >= 1)) return toast("info", "楼数要填一个正整数。");
-      floors = Math.min(floors, RECHECK_MAX);
+      floors = Math.min(floors, RECHECK_MAX), verifyFloors = floors;
       let r = await runTask(view, "kp-verify", () => view.runtime.kp.recheck({ floors })).catch((e) => ({ error: `请求失败：${e.message}` }));
       if (r) {
         if (r.error) return toast("info", `没法核实：${r.error}。`);
@@ -21631,7 +21637,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
     return result2 && result2.reasons && result2.reasons.length ? result2.reasons.slice(0, 4).map((r) => `<li>${esc(maskFacts2(r))}</li>`).join("") : "";
   }
   function nodeRow2(s, focusUid, open) {
-    let badge = CLUE_STATUS_BADGE2[s.status], flags = [
+    let badge2 = CLUE_STATUS_BADGE2[s.status], flags = [
       s.node.required ? "" : "可选",
       s.skipped ? "已跳过" : "",
       s.disabled ? "暂时停用" : "",
@@ -21640,7 +21646,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
     ].filter(Boolean).join("，"), why = s.status === "locked" ? reasonList2(s.open) : s.status !== "done" ? reasonList2(s.done) : "";
     return `<div class="pi-clue-node${s.node.uid === focusUid ? " is-focus" : ""}">
         <div class="pi-clue-hd" data-act="clue-node-open" data-uid="${esc(s.node.uid)}">
-            <span class="pi-badge ${badge}">${esc(NODE_STATUS_LABELS2[s.status])}</span>
+            <span class="pi-badge ${badge2}">${esc(NODE_STATUS_LABELS2[s.status])}</span>
             <span class="pi-clue-name">${esc(s.node.name)}</span>
             ${flags ? `<span class="pi-meta">${esc(flags)}</span>` : ""}
             ${s.node.uid ? `<button type="button" class="pi-icon-btn" data-act="clue-node-menu" data-uid="${esc(s.node.uid)}" title="手动调整" aria-label="手动调整">${ICONS.more}</button>` : ""}</div>
@@ -23088,18 +23094,18 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
     return `<div class="pi-rv-issue${x.level === "error" ? "" : " is-ask"}"><p>${esc(x.text)}</p>${btn ? `<div class="pi-row">${btn}</div>` : ""}</div>`;
   }
   function tableForm(vol, locked = !1) {
-    let l = vol.line || {}, t = (isPlainObject(l.表格条件草稿) ? { op: ">=", ...l.表格条件草稿 } : null) || simpleTableCond(l.开启条件) || { table: "", row: "", col: "", op: ">=", value: "" }, tables = currentTables(), sheets = tables ? sheetList(tables) : [], attr = (k) => `data-rv-vol="${esc(vol.id)}" data-rv-tbl="${k}"${locked ? " disabled" : ""}`, opt = (list, val) => list.map((o) => `<option value="${esc(o.v)}"${o.v === val ? " selected" : ""}>${esc(o.label)}</option>`).join(""), pickOf = (list, val, ph) => opt([{ v: "", label: ph }, ...val && !list.includes(val) ? [val] : [], ...list].map((x) => typeof x == "string" ? { v: x, label: x } : x), val), sheet = sheets.find((x) => x.name === t.table), sr = sheet ? sheetRows(sheet) : null, cols = sr ? sr.head.slice(1).map((c) => String(c ?? "").trim()).filter(Boolean) : [], rows2 = sr ? sr.rows.map((r) => String(r[1] ?? "").trim()).filter(Boolean) : [], field2 = (k, list, ph) => tables ? `<select class="pi-sel is-sm" ${attr(k)}>${pickOf(list, t[k], ph)}</select>` : `<input class="pi-inp is-sm" ${attr(k)} value="${esc(t[k])}" placeholder="${ph}">`, status = "", badge = "", tierFix = null;
+    let l = vol.line || {}, t = (isPlainObject(l.表格条件草稿) ? { op: ">=", ...l.表格条件草稿 } : null) || simpleTableCond(l.开启条件) || { table: "", row: "", col: "", op: ">=", value: "" }, tables = currentTables(), sheets = tables ? sheetList(tables) : [], attr = (k) => `data-rv-vol="${esc(vol.id)}" data-rv-tbl="${k}"${locked ? " disabled" : ""}`, opt = (list, val) => list.map((o) => `<option value="${esc(o.v)}"${o.v === val ? " selected" : ""}>${esc(o.label)}</option>`).join(""), pickOf = (list, val, ph) => opt([{ v: "", label: ph }, ...val && !list.includes(val) ? [val] : [], ...list].map((x) => typeof x == "string" ? { v: x, label: x } : x), val), sheet = sheets.find((x) => x.name === t.table), sr = sheet ? sheetRows(sheet) : null, cols = sr ? sr.head.slice(1).map((c) => String(c ?? "").trim()).filter(Boolean) : [], rows2 = sr ? sr.rows.map((r) => String(r[1] ?? "").trim()).filter(Boolean) : [], field2 = (k, list, ph) => tables ? `<select class="pi-sel is-sm" ${attr(k)}>${pickOf(list, t[k], ph)}</select>` : `<input class="pi-inp is-sm" ${attr(k)} value="${esc(t[k])}" placeholder="${ph}">`, status = "", badge2 = "", tierFix = null;
     if (t.table && t.row && t.col)
       if (!tables) status = "无法读取当前表格（数据库未开启或这张卡未绑定表格），保存后到执行页核对。";
       else {
         let errs = [], c = t.value !== "" ? parseCondition(tableCondOf(t), errs) : null, r = !errs.length && c ? cellCondCheck(c, tables) : null, v = r && r.now ? evalAtom(c, { tables }).v : "", num3 = [">=", "<=", ">", "<"].includes(t.op) ? tierNumberInNote(sheet ? sheet.note : "", t.value) : null;
-        num3 != null && (tierFix = { vol: vol.id, value: String(num3) }), status = t.value === "" ? "填上比较的值。" : r ? `${r.now ? `现在：${r.now}` : "现在：表里还没有这一格的值"}${num3 != null ? `。表格说明里「${t.value}」是${num3}，比大小请填数字` : r.notes.length ? `。${r.notes[0]}` : ""}` : errs.join("；"), badge = v === "true" ? '<span class="pi-badge is-ok">已满足</span>' : v === "false" ? '<span class="pi-badge is-warn">未满足</span>' : "";
+        num3 != null && (tierFix = { vol: vol.id, value: String(num3) }), status = t.value === "" ? "填上比较的值。" : r ? `${r.now ? `现在：${r.now}` : "现在：表里还没有这一格的值"}${num3 != null ? `。表格说明里「${t.value}」是${num3}，比大小请填数字` : r.notes.length ? `。${r.notes[0]}` : ""}` : errs.join("；"), badge2 = v === "true" ? '<span class="pi-badge is-ok">已满足</span>' : v === "false" ? '<span class="pi-badge is-warn">未满足</span>' : "";
       }
     return `<div class="pi-rv-tbl">
       ${field2("table", sheets.map((x) => x.name), "选择表")}
       <div class="pi-row pi-rv-tbl-row">${field2("row", rows2, "选择行")}${field2("col", cols, "选择列")}</div>
       <div class="pi-row pi-rv-tbl-row is-cmp"><select class="pi-sel is-sm" ${attr("op")}>${opt(TABLE_OPS, t.op)}</select><input class="pi-inp is-sm" ${attr("value")} value="${esc(t.value)}" placeholder="值，如2或熟悉"></div>
-      ${isPlainObject(l.表格条件草稿) ? '<p class="pi-hint is-warn">条件未填完，保存前需补全。</p>' : ""}${status ? `<p class="pi-hint pi-rv-tbl-now">${esc(status)}${badge}</p>` : '<p class="pi-hint">选择表、行、列并填写比较值。</p>'}${tierFix && !locked ? `<div class="pi-row"><button type="button" class="pi-btn is-sm" data-act="rv-tbl-num" data-vol="${esc(tierFix.vol)}" data-value="${esc(tierFix.value)}">改成${esc(tierFix.value)}</button></div>` : ""}
+      ${isPlainObject(l.表格条件草稿) ? '<p class="pi-hint is-warn">条件未填完，保存前需补全。</p>' : ""}${status ? `<p class="pi-hint pi-rv-tbl-now">${esc(status)}${badge2}</p>` : '<p class="pi-hint">选择表、行、列并填写比较值。</p>'}${tierFix && !locked ? `<div class="pi-row"><button type="button" class="pi-btn is-sm" data-act="rv-tbl-num" data-vol="${esc(tierFix.vol)}" data-value="${esc(tierFix.value)}">改成${esc(tierFix.value)}</button></div>` : ""}
     </div>`;
   }
   function windowField(project, vol, locked = !1) {
@@ -24641,18 +24647,18 @@ ${r2.yaml}`,
     return `<div class="pi-rv-issue${x.level === "error" ? "" : " is-ask"}"><p>${esc(x.text)}</p>${btn ? `<div class="pi-row">${btn}</div>` : ""}</div>`;
   }
   function tableForm2(vol, locked = !1) {
-    let l = vol.line || {}, t = (isPlainObject(l.表格条件草稿) ? { op: ">=", ...l.表格条件草稿 } : null) || simpleTableCond2(l.开启条件) || { table: "", row: "", col: "", op: ">=", value: "" }, tables = currentTables(), sheets = tables ? sheetList2(tables) : [], attr = (k) => `data-rv-vol="${esc(vol.id)}" data-rv-tbl="${k}"${locked ? " disabled" : ""}`, opt = (list, val) => list.map((o) => `<option value="${esc(o.v)}"${o.v === val ? " selected" : ""}>${esc(o.label)}</option>`).join(""), pickOf = (list, val, ph) => opt([{ v: "", label: ph }, ...val && !list.includes(val) ? [val] : [], ...list].map((x) => typeof x == "string" ? { v: x, label: x } : x), val), sheet = sheets.find((x) => x.name === t.table), sr = sheet ? sheetRows2(sheet) : null, cols = sr ? sr.head.slice(1).map((c) => String(c ?? "").trim()).filter(Boolean) : [], rows2 = sr ? sr.rows.map((r) => String(r[1] ?? "").trim()).filter(Boolean) : [], field2 = (k, list, ph) => tables ? `<select class="pi-sel is-sm" ${attr(k)}>${pickOf(list, t[k], ph)}</select>` : `<input class="pi-inp is-sm" ${attr(k)} value="${esc(t[k])}" placeholder="${ph}">`, status = "", badge = "", tierFix = null;
+    let l = vol.line || {}, t = (isPlainObject(l.表格条件草稿) ? { op: ">=", ...l.表格条件草稿 } : null) || simpleTableCond2(l.开启条件) || { table: "", row: "", col: "", op: ">=", value: "" }, tables = currentTables(), sheets = tables ? sheetList2(tables) : [], attr = (k) => `data-rv-vol="${esc(vol.id)}" data-rv-tbl="${k}"${locked ? " disabled" : ""}`, opt = (list, val) => list.map((o) => `<option value="${esc(o.v)}"${o.v === val ? " selected" : ""}>${esc(o.label)}</option>`).join(""), pickOf = (list, val, ph) => opt([{ v: "", label: ph }, ...val && !list.includes(val) ? [val] : [], ...list].map((x) => typeof x == "string" ? { v: x, label: x } : x), val), sheet = sheets.find((x) => x.name === t.table), sr = sheet ? sheetRows2(sheet) : null, cols = sr ? sr.head.slice(1).map((c) => String(c ?? "").trim()).filter(Boolean) : [], rows2 = sr ? sr.rows.map((r) => String(r[1] ?? "").trim()).filter(Boolean) : [], field2 = (k, list, ph) => tables ? `<select class="pi-sel is-sm" ${attr(k)}>${pickOf(list, t[k], ph)}</select>` : `<input class="pi-inp is-sm" ${attr(k)} value="${esc(t[k])}" placeholder="${ph}">`, status = "", badge2 = "", tierFix = null;
     if (t.table && t.row && t.col)
       if (!tables) status = "读不到当前的表格（数据库没打开或这张卡没绑表格），保存后到执行页核对。";
       else {
         let errs = [], c = t.value !== "" ? parseCondition2(tableCondOf2(t), errs) : null, r = !errs.length && c ? cellCondCheck2(c, tables) : null, v = r && r.now ? evalAtom2(c, { tables }).v : "", num3 = [">=", "<=", ">", "<"].includes(t.op) ? tierNumberInNote2(sheet ? sheet.note : "", t.value) : null;
-        num3 != null && (tierFix = { vol: vol.id, value: String(num3) }), status = t.value === "" ? "填上比较的值。" : r ? `${r.now ? `现在：${r.now}` : "现在：表里还没有这一格的值"}${num3 != null ? `。表格说明里「${t.value}」是${num3}，比大小请填数字` : r.notes.length ? `。${r.notes[0]}` : ""}` : errs.join("；"), badge = v === "true" ? '<span class="pi-badge is-ok">已满足</span>' : v === "false" ? '<span class="pi-badge is-warn">未满足</span>' : "";
+        num3 != null && (tierFix = { vol: vol.id, value: String(num3) }), status = t.value === "" ? "填上比较的值。" : r ? `${r.now ? `现在：${r.now}` : "现在：表里还没有这一格的值"}${num3 != null ? `。表格说明里「${t.value}」是${num3}，比大小请填数字` : r.notes.length ? `。${r.notes[0]}` : ""}` : errs.join("；"), badge2 = v === "true" ? '<span class="pi-badge is-ok">已满足</span>' : v === "false" ? '<span class="pi-badge is-warn">未满足</span>' : "";
       }
     return `<div class="pi-rv-tbl">
       ${field2("table", sheets.map((x) => x.name), "选择表")}
       <div class="pi-row pi-rv-tbl-row">${field2("row", rows2, "选择行")}${field2("col", cols, "选择列")}</div>
       <div class="pi-row pi-rv-tbl-row is-cmp"><select class="pi-sel is-sm" ${attr("op")}>${opt(TABLE_OPS2, t.op)}</select><input class="pi-inp is-sm" ${attr("value")} value="${esc(t.value)}" placeholder="值，如2或 熟悉"></div>
-      ${isPlainObject(l.表格条件草稿) ? '<p class="pi-hint is-warn">条件还没填完，保存前要补全。</p>' : ""}${status ? `<p class="pi-hint pi-rv-tbl-now">${esc(status)}${badge}</p>` : '<p class="pi-hint">选好表、行、列，填比较的值。</p>'}${tierFix && !locked ? `<div class="pi-row"><button type="button" class="pi-btn is-sm" data-act="rv-tbl-num" data-vol="${esc(tierFix.vol)}" data-value="${esc(tierFix.value)}">改成${esc(tierFix.value)}</button></div>` : ""}
+      ${isPlainObject(l.表格条件草稿) ? '<p class="pi-hint is-warn">条件还没填完，保存前要补全。</p>' : ""}${status ? `<p class="pi-hint pi-rv-tbl-now">${esc(status)}${badge2}</p>` : '<p class="pi-hint">选好表、行、列，填比较的值。</p>'}${tierFix && !locked ? `<div class="pi-row"><button type="button" class="pi-btn is-sm" data-act="rv-tbl-num" data-vol="${esc(tierFix.vol)}" data-value="${esc(tierFix.value)}">改成${esc(tierFix.value)}</button></div>` : ""}
     </div>`;
   }
   function windowField2(project, vol, locked = !1) {
@@ -31065,6 +31071,10 @@ ${suffix.trim()}` : body;
   }
 
   // src/ui/notice.js
+  var ICON_OF = { offtrack: "noticeCompass", "kp-offtrack": "noticeCompass", advance: "noticeCheck", "kp-roll": "noticeDice", checkfail: "noticeDice" };
+  function badge(id) {
+    return `<i class="pi-notice-ico">${ICONS[ICON_OF[id] || (id.startsWith("kp-") ? "noticeCompass" : "noticeMark")]}</i>`;
+  }
   function createNotices() {
     let doc = hostDocument(), view = hostWindow(), box = null, timers = /* @__PURE__ */ new Map();
     function container() {
@@ -31075,7 +31085,7 @@ ${suffix.trim()}` : body;
     }
     function show({ id, title: title2, body = "", actions: actions12 = [], timeout = 0 }) {
       hide(id);
-      let card = el(`<div class="pi-notice" data-notice="${esc(id)}"><b>${esc(title2)}</b>${body ? `<p>${esc(body)}</p>` : ""}
+      let card = el(`<div class="pi-notice" data-notice="${esc(id)}"><b>${badge(id)}<span>${esc(title2)}</span></b>${body ? `<p>${esc(body)}</p>` : ""}
             <div class="pi-row">${actions12.map((action, index) => `<button type="button" class="pi-btn is-sm${action.primary ? " is-primary" : ""}" data-act="${index}">${esc(action.label)}</button>`).join("")}</div></div>`);
       card.addEventListener("click", (event) => {
         let button = event.target.closest("[data-act]");
@@ -31138,7 +31148,7 @@ ${suffix.trim()}` : body;
   }
 
   // src/index.js
-  var VERSION = "0.4.7", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.4.8", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")
