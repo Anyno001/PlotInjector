@@ -18,7 +18,7 @@ const CLUE = { confirmed: '线索已确认', offered: '线索已交由正文', p
 // 行上的提醒（用户 2026-11-24）：每行最多一个文字按钮 + 一个「⋯」。编号只放在 data 里，不显示
 function nudgeHtml(r) {
     if (r.nudge === 'norequest')
-        return `<span class="pi-ck-nudge"><span class="pi-hint is-warn">正文已有两轮未提出这项检定</span><button type="button" class="pi-btn is-sm" data-act="kp-remind" data-skill="${esc(r.skill)}">下轮提醒检定</button></span>`;
+        return `<span class="pi-ck-nudge"><span class="pi-hint is-warn">正文已有两轮未提出这项检定</span><button type="button" class="pi-btn is-sm" data-act="kp-remind" data-skill="${esc(r.skill)}" data-fact="${esc(r.fact)}">下轮提醒检定</button></span>`;
     if (r.nudge === 'unconfirmed')
         return `<span class="pi-ck-nudge"><span class="pi-hint is-warn">${r.status === 'fail' && r.anyway ? '失败仍可获得线索，但尚未确认' : '判定已成功，线索尚未确认'}</span><button type="button" class="pi-btn is-sm" data-act="kp-verify">重新核实阶段</button><button type="button" class="pi-icon-btn" data-act="kp-fact-menu" data-fact="${esc(r.fact)}" title="更多" aria-label="更多">${ICONS.more}</button></span>`;
     return '';

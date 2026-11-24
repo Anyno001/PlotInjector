@@ -1,4 +1,4 @@
-// PlotInjector v0.4.8
+// PlotInjector v0.4.9
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -19512,7 +19512,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
     got: ["is-ok", "已获得"]
   }, CLUE = { confirmed: "线索已确认", offered: "线索已交由正文", pending: "线索待确认" };
   function nudgeHtml(r) {
-    return r.nudge === "norequest" ? `<span class="pi-ck-nudge"><span class="pi-hint is-warn">正文已有两轮未提出这项检定</span><button type="button" class="pi-btn is-sm" data-act="kp-remind" data-skill="${esc(r.skill)}">下轮提醒检定</button></span>` : r.nudge === "unconfirmed" ? `<span class="pi-ck-nudge"><span class="pi-hint is-warn">${r.status === "fail" && r.anyway ? "失败仍可获得线索，但尚未确认" : "判定已成功，线索尚未确认"}</span><button type="button" class="pi-btn is-sm" data-act="kp-verify">重新核实阶段</button><button type="button" class="pi-icon-btn" data-act="kp-fact-menu" data-fact="${esc(r.fact)}" title="更多" aria-label="更多">${ICONS.more}</button></span>` : "";
+    return r.nudge === "norequest" ? `<span class="pi-ck-nudge"><span class="pi-hint is-warn">正文已有两轮未提出这项检定</span><button type="button" class="pi-btn is-sm" data-act="kp-remind" data-skill="${esc(r.skill)}" data-fact="${esc(r.fact)}">下轮提醒检定</button></span>` : r.nudge === "unconfirmed" ? `<span class="pi-ck-nudge"><span class="pi-hint is-warn">${r.status === "fail" && r.anyway ? "失败仍可获得线索，但尚未确认" : "判定已成功，线索尚未确认"}</span><button type="button" class="pi-btn is-sm" data-act="kp-verify">重新核实阶段</button><button type="button" class="pi-icon-btn" data-act="kp-fact-menu" data-fact="${esc(r.fact)}" title="更多" aria-label="更多">${ICONS.more}</button></span>` : "";
   }
   function rowHtml(r) {
     let [cls, text2] = STATUS[r.status], meta2 = [r.node, r.roll].filter(Boolean), tail = [];
@@ -19703,8 +19703,8 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
     },
     // 判定那一行：正文两轮没出检定，下一轮提醒 AI 写（只说技能，不说线索内容）
     "kp-remind"(view, target) {
-      let skill = (target.dataset.skill || "").trim() || "相应";
-      saveKp(view, { push: { kind: "steer", text: `这一轮正文里请按检定写法补上「${skill}」检定，让玩家掷骰，先不要写出结果。`, floor: aiFloorCount2(chatMessages()) } }), toast("success", "下一轮将提醒正文提出这项检定。"), view.renderBody();
+      let skill = (target.dataset.skill || "").trim() || "相应", c = view.runtime.clue.compute(), hit = c && target.dataset.fact ? kpFind(c.state, target.dataset.fact) : null, why = hit && hit.discovery.text ? `这项检定是为了查明：${hit.discovery.text}（出自「${hit.node.name || "当前场景"}」。这只用来判断检定落在哪个行动上，成败没定之前不要写出，也不要暗示。）` : "";
+      saveKp(view, { push: { kind: "steer", text: `这一轮正文里请按检定写法补上「${skill}」检定，让玩家掷骰，先不要写出结果。${why}`, floor: aiFloorCount2(chatMessages()) } }), toast("success", "下一轮将提醒正文提出这项检定。"), view.renderBody();
     },
     // 判定成功了线索没确认：收进「⋯」的次要操作
     async "kp-fact-menu"(view, target) {
@@ -31148,7 +31148,7 @@ ${suffix.trim()}` : body;
   }
 
   // src/index.js
-  var VERSION = "0.4.8", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.4.9", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")

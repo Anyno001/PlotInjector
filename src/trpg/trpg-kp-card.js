@@ -8,7 +8,7 @@ import { isPlainObject, splitStageKey } from '../core/outline.js';
 import { trpgCheckResults } from './trpg.js';
 import { steerActions, timelineHintHtml, steerResultHtml, steerContext } from './trpg-steer.js';
 import { readGameClock } from './trpg-timeline.js';
-import { trpgHealth, kpPushTarget, aiFloorCount, KP_LEVELS, KP_STUCK_ROUNDS, kpSectionText, npcImportMessage, stuckMessages, parseStuckReply, pendingDiscoveries } from './trpg-kp.js';
+import { trpgHealth, kpFind, kpPushTarget, aiFloorCount, KP_LEVELS, KP_STUCK_ROUNDS, kpSectionText, npcImportMessage, stuckMessages, parseStuckReply, pendingDiscoveries } from './trpg-kp.js';
 import { ask, runTask } from '../ui/ai.js';
 import { kpSummary, kpOffText, RECHECK_FLOORS, RECHECK_MAX, AUTO_VERIFY_STEPS } from './trpg-kp-check.js';
 import { confirmRecheck } from './trpg-kp-verify-ui.js';
@@ -271,8 +271,12 @@ export const kpActions = {
     },
     // 判定那一行：正文两轮没出检定，下一轮提醒 AI 写（只说技能，不说线索内容）
     'kp-remind'(view, target) {
-        let skill = (target.dataset.skill || '').trim() || '相应';
-        (saveKp(view, { push: { kind: 'steer', text: `这一轮正文里请按检定写法补上「${skill}」检定，让玩家掷骰，先不要写出结果。`, floor: aiFloorCount(chatMessages()) } }), toast('success', '下一轮将提醒正文提出这项检定。'), view.renderBody());
+        let skill = (target.dataset.skill || '').trim() || '相应',
+            c = view.runtime.clue.compute(),
+            hit = c && target.dataset.fact ? kpFind(c.state, target.dataset.fact) : null,
+            // 带上这条发现的内容，只用来让正文知道检定该落在哪件事上；成败没定，不能写出来，也不能暗示
+            why = hit && hit.discovery.text ? `这项检定是为了查明：${hit.discovery.text}（出自「${hit.node.name || '当前场景'}」。这只用来判断检定落在哪个行动上，成败没定之前不要写出，也不要暗示。）` : '';
+        (saveKp(view, { push: { kind: 'steer', text: `这一轮正文里请按检定写法补上「${skill}」检定，让玩家掷骰，先不要写出结果。${why}`, floor: aiFloorCount(chatMessages()) } }), toast('success', '下一轮将提醒正文提出这项检定。'), view.renderBody());
     },
     // 判定成功了线索没确认：收进「⋯」的次要操作
     async 'kp-fact-menu'(view, target) {
