@@ -111,7 +111,8 @@ export function kpCard(view, project, c, d) {
         });
     let stuck = kp.pulse && kp.pulse.facts === confirmed ? floors - kp.pulse.floor : 0,
         push = kp.push && kp.push.floor === floors ? kp.push : null,
-        mine = shown && shown.projectId === project.id ? shown : null,
+        // 体检结果只对当时那一楼有效：聊天往下走了就不再显示，免得旧结论一直挂着
+        mine = shown && shown.projectId === project.id && shown.floor === floors ? shown : null,
         leaks = d && d.lastAudit ? (d.lastAudit.leaks || []).filter((l) => l.level === 'leak').length : 0,
         pushLabel = push ? (push.kind === 'steer' ? '按建议拉回' : (KP_LEVELS.find((x) => x.level === push.level) || {}).label) : '',
         busy = view.busy['kp-steer'] || view.busy['kp-health'] || view.busy['kp-verify'],
@@ -131,7 +132,7 @@ export function kpCard(view, project, c, d) {
                       ai && ai.plain.length ? ai.plain.join('；') : thinking ? 'AI 正在读最近的正文…' : mine.aiError ? `AI 判断失败（${mine.aiError}），下面只是插件推演。` : ai ? 'AI 没有给出说明。' : '',
                   )}${
                       spoils.length && !thinking ? ` <button type="button" class="pi-btn is-sm is-ghost" data-act="kp-spoil">${mine.open ? '收起' : '展开（会剧透）'}</button>` : ''
-                  }</p><p class="pi-hint">插件推演：${esc(mine.lines.join('；'))}</p>${mine.open && !thinking ? spoils.map((t) => `<p class="pi-hint">${esc(t)}</p>`).join('') : ''}${
+                  }${thinking ? '' : ' <button type="button" class="pi-btn is-sm is-ghost" data-act="kp-health-clear">清除</button>'}</p><p class="pi-hint">插件推演：${esc(mine.lines.join('；'))}</p>${mine.open && !thinking ? spoils.map((t) => `<p class="pi-hint">${esc(t)}</p>`).join('') : ''}${
                       leaks ? `<p class="pi-hint is-warn">最近一次请求里疑似提前写出了${leaks}处线索</p>` : ''
                   }${advice && advice !== '不用推' && !push ? `<p class="pi-hint">AI 建议：${esc(advice)}</p>` : ''}${
                       mine.fact && !push && !thinking
@@ -230,7 +231,7 @@ export const kpActions = {
         let project = view.project(),
             r = trpgHealth({ volumes: c.outline.volumes, state: c.state, snap: c.snap, prog: c.prog, checks: trpgCheckResults(chatMessages()), focus: c.state.focus }),
             target = kpPushTarget(c.state, c.snap, c.prog),
-            mine = { ...r, fact: target ? target.fact : '', projectId: view.projectId, open: !1, ai: null, aiError: '' };
+            mine = { ...r, fact: target ? target.fact : '', projectId: view.projectId, floor: aiFloorCount(chatMessages()), open: !1, ai: null, aiError: '' };
         shown = mine;
         let messages = stuckMessages({ ...steerContext(project, c), pending: pendingDiscoveries(c.state, c.snap, c.prog, r.deadFacts), health: r.lines });
         try {
@@ -257,6 +258,9 @@ export const kpActions = {
         }
         mine.busy = !1;
         view.renderBody();
+    },
+    'kp-health-clear'(view) {
+        ((shown = null), view.renderBody());
     },
     'kp-spoil'(view) {
         (shown && (shown.open = !shown.open), view.renderBody());

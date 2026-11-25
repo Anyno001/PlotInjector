@@ -43,13 +43,17 @@ const got = (fact, snap, prog) => effectiveFact(fact, snap, prog).confirmed;
 export function deadDiscoveries(state, snap, prog, checks) {
     let out = [];
     if (!checks) return out;
-    for (let ns of state.nodeStates)
+    for (let ns of state.nodeStates) {
+        // 已经走完的阶段，里面的失败记录不再算
+        let stage = ns.node.unit && state.stageStates.get(ns.node.unit.id);
+        if (stage && stage.done) continue;
         for (let d of discoveryList(itemOf(ns.node))) {
             let r = d.check && d.fact ? checks[d.fact] : null,
                 kp = d.fact ? checks[`${d.fact}-KP`] : null;
             if (!r || r.ok || (d.check.fail && GOT_ANYWAY.test(d.check.fail)) || (kp && kp.ok) || got(d.fact, snap, prog)) continue;
             out.push({ fact: d.fact, text: d.text, node: ns.node.name || ns.node.uid });
         }
+    }
     return out;
 }
 
@@ -69,7 +73,12 @@ export function trpgHealth({ volumes, state, snap, prog, checks, focus }) {
     let { known, claimed } = chatFactSets({ snap, prog }),
         dead = deadDiscoveries(state, snap, prog, checks),
         deadSet = new Set(dead.map((d) => d.fact)),
-        opts = { knownFacts: known, claimedFacts: claimed },
+        // 推演从头模拟，要把实际已走完阶段里的线索当作已拿到，否则旧阶段的缺口会让后面的阶段一直显示走不通
+        doneIds = new Set([...state.stageStates].filter(([, s]) => s.done).map(([id]) => id)),
+        known2 = new Set(known);
+    for (let ns of state.nodeStates)
+        if (ns.node.unit && doneIds.has(ns.node.unit.id)) for (let d of discoveryList(itemOf(ns.node))) d.fact && known2.add(d.fact);
+    let opts = { knownFacts: known2, claimedFacts: claimed },
         reach = clueReachability(stripFacts(volumes || [], deadSet), opts),
         base = dead.length ? clueReachability(volumes || [], opts) : reach,
         lines = [],

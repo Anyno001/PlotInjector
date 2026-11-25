@@ -1,4 +1,4 @@
-// PlotInjector v0.4.13
+// PlotInjector v0.4.14
 (() => {
   var __defProp = Object.defineProperty;
   var __getOwnPropNames = Object.getOwnPropertyNames;
@@ -9694,11 +9694,14 @@ ${guide ? `${guide}
   function deadDiscoveries(state, snap2, prog, checks) {
     let out = [];
     if (!checks) return out;
-    for (let ns of state.nodeStates)
-      for (let d of discoveryList(itemOf(ns.node))) {
-        let r = d.check && d.fact ? checks[d.fact] : null, kp = d.fact ? checks[`${d.fact}-KP`] : null;
-        !r || r.ok || d.check.fail && GOT_ANYWAY.test(d.check.fail) || kp && kp.ok || got(d.fact, snap2, prog) || out.push({ fact: d.fact, text: d.text, node: ns.node.name || ns.node.uid });
-      }
+    for (let ns of state.nodeStates) {
+      let stage = ns.node.unit && state.stageStates.get(ns.node.unit.id);
+      if (!(stage && stage.done))
+        for (let d of discoveryList(itemOf(ns.node))) {
+          let r = d.check && d.fact ? checks[d.fact] : null, kp = d.fact ? checks[`${d.fact}-KP`] : null;
+          !r || r.ok || d.check.fail && GOT_ANYWAY.test(d.check.fail) || kp && kp.ok || got(d.fact, snap2, prog) || out.push({ fact: d.fact, text: d.text, node: ns.node.name || ns.node.uid });
+        }
+    }
     return out;
   }
   function stripFacts(value, dead) {
@@ -9710,7 +9713,10 @@ ${guide ? `${guide}
     return out;
   }
   function trpgHealth({ volumes, state, snap: snap2, prog, checks, focus }) {
-    let { known, claimed } = chatFactSets({ snap: snap2, prog }), dead = deadDiscoveries(state, snap2, prog, checks), deadSet = new Set(dead.map((d) => d.fact)), opts = { knownFacts: known, claimedFacts: claimed }, reach = clueReachability(stripFacts(volumes || [], deadSet), opts), base = dead.length ? clueReachability(volumes || [], opts) : reach, lines2 = [], spoil = [];
+    let { known, claimed } = chatFactSets({ snap: snap2, prog }), dead = deadDiscoveries(state, snap2, prog, checks), deadSet = new Set(dead.map((d) => d.fact)), doneIds = new Set([...state.stageStates].filter(([, s]) => s.done).map(([id]) => id)), known2 = new Set(known);
+    for (let ns of state.nodeStates)
+      if (ns.node.unit && doneIds.has(ns.node.unit.id)) for (let d of discoveryList(itemOf(ns.node))) d.fact && known2.add(d.fact);
+    let opts = { knownFacts: known2, claimedFacts: claimed }, reach = clueReachability(stripFacts(volumes || [], deadSet), opts), base = dead.length ? clueReachability(volumes || [], opts) : reach, lines2 = [], spoil = [];
     reach.verdict === "ok" ? lines2.push(dead.length ? `有${dead.length}条判定失败的线索，暂时不影响主线` : "主线走得通") : reach.verdict === "blocked" ? lines2.push(
       dead.length && base.verdict !== "blocked" ? `有${dead.length}条判定失败的线索，主线因此卡住，可以在下面推一把` : "主线现在走不通，需要检查剧本或表格"
     ) : lines2.push("走不走得通要看表格或时间");
@@ -17735,7 +17741,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
       let now = kpState(view).pulse;
       (!now || now.facts !== confirmed) && saveKp(view, { pulse: { facts: confirmed, floor: floors } });
     });
-    let stuck = kp.pulse && kp.pulse.facts === confirmed ? floors - kp.pulse.floor : 0, push = kp.push && kp.push.floor === floors ? kp.push : null, mine = shown && shown.projectId === project.id ? shown : null, leaks = d && d.lastAudit ? (d.lastAudit.leaks || []).filter((l) => l.level === "leak").length : 0, pushLabel = push ? push.kind === "steer" ? "按建议拉回" : (KP_LEVELS.find((x) => x.level === push.level) || {}).label : "", busy = view.busy["kp-steer"] || view.busy["kp-health"] || view.busy["kp-verify"], thinking = !!view.busy["kp-health"], ai = mine && mine.ai, spoils = mine ? [...ai && ai.spoil || [], ...mine.spoil] : [], advice = ai && ai.advice, bind = project.clue.bindings.time;
+    let stuck = kp.pulse && kp.pulse.facts === confirmed ? floors - kp.pulse.floor : 0, push = kp.push && kp.push.floor === floors ? kp.push : null, mine = shown && shown.projectId === project.id && shown.floor === floors ? shown : null, leaks = d && d.lastAudit ? (d.lastAudit.leaks || []).filter((l) => l.level === "leak").length : 0, pushLabel = push ? push.kind === "steer" ? "按建议拉回" : (KP_LEVELS.find((x) => x.level === push.level) || {}).label : "", busy = view.busy["kp-steer"] || view.busy["kp-health"] || view.busy["kp-verify"], thinking = !!view.busy["kp-health"], ai = mine && mine.ai, spoils = mine ? [...ai && ai.spoil || [], ...mine.spoil] : [], advice = ai && ai.advice, bind = project.clue.bindings.time;
     return `<div class="pi-card"><h3>KP<span class="pi-spacer"></span>
         <button type="button" class="pi-btn is-sm is-ghost" data-act="kp-health" title="推演凭已经拿到的线索，主线还能不能走通，并可以推一把；只给结论，展开才剧透">卡住了吗</button>
         ${busy ? '<span class="pi-spin"></span>' : `<button type="button" class="pi-icon-btn" data-act="kp-menu" title="更多" aria-label="更多">${ICONS.more}</button>`}</h3>
@@ -17743,7 +17749,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
         ${view.busy["kp-verify"] ? `<p class="pi-hint"><span class="pi-badge">核实中</span> KP 正在读最近${verifyFloors ? ` ${verifyFloors} ` : ""}楼的正文，重新判断进行中阶段的线索和条件…</p>` : ""}
         ${mine ? `<p class="pi-hint">${thinking ? '<span class="pi-badge">判断中</span>' : `<span class="pi-badge ${BADGE[shownLevel(mine)][0]}">${BADGE[shownLevel(mine)][1]}</span>`} ${esc(
       ai && ai.plain.length ? ai.plain.join("；") : thinking ? "AI 正在读最近的正文…" : mine.aiError ? `AI 判断失败（${mine.aiError}），下面只是插件推演。` : ai ? "AI 没有给出说明。" : ""
-    )}${spoils.length && !thinking ? ` <button type="button" class="pi-btn is-sm is-ghost" data-act="kp-spoil">${mine.open ? "收起" : "展开（会剧透）"}</button>` : ""}</p><p class="pi-hint">插件推演：${esc(mine.lines.join("；"))}</p>${mine.open && !thinking ? spoils.map((t) => `<p class="pi-hint">${esc(t)}</p>`).join("") : ""}${leaks ? `<p class="pi-hint is-warn">最近一次请求里疑似提前写出了${leaks}处线索</p>` : ""}${advice && advice !== "不用推" && !push ? `<p class="pi-hint">AI 建议：${esc(advice)}</p>` : ""}${mine.fact && !push && !thinking ? `<div class="pi-tools is-c3">${KP_LEVELS.map((x) => `<button type="button" class="pi-btn is-sm${advice === x.label ? " is-primary" : ""}" data-act="kp-push" data-level="${x.level}">${esc(x.label)}</button>`).join("")}</div>` : mine.fact || push ? "" : '<p class="pi-hint">眼下没有能推的线索。</p>'}` : ""}
+    )}${spoils.length && !thinking ? ` <button type="button" class="pi-btn is-sm is-ghost" data-act="kp-spoil">${mine.open ? "收起" : "展开（会剧透）"}</button>` : ""}${thinking ? "" : ' <button type="button" class="pi-btn is-sm is-ghost" data-act="kp-health-clear">清除</button>'}</p><p class="pi-hint">插件推演：${esc(mine.lines.join("；"))}</p>${mine.open && !thinking ? spoils.map((t) => `<p class="pi-hint">${esc(t)}</p>`).join("") : ""}${leaks ? `<p class="pi-hint is-warn">最近一次请求里疑似提前写出了${leaks}处线索</p>` : ""}${advice && advice !== "不用推" && !push ? `<p class="pi-hint">AI 建议：${esc(advice)}</p>` : ""}${mine.fact && !push && !thinking ? `<div class="pi-tools is-c3">${KP_LEVELS.map((x) => `<button type="button" class="pi-btn is-sm${advice === x.label ? " is-primary" : ""}" data-act="kp-push" data-level="${x.level}">${esc(x.label)}</button>`).join("")}</div>` : mine.fact || push ? "" : '<p class="pi-hint">眼下没有能推的线索。</p>'}` : ""}
         ${push ? `<p class="pi-hint">下一轮：${esc(pushLabel)} <button type="button" class="pi-btn is-sm is-ghost" data-act="kp-cancel">取消</button></p>` : ""}
         ${stuck >= KP_STUCK_ROUNDS && !push ? `<p class="pi-hint is-warn">已经${stuck}轮没拿到新线索。</p>` : ""}${npcImportHtml(project)}</div>`;
   }
@@ -17838,7 +17844,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
           if (view.busy["kp-health"]) return;
           let c = view.runtime.clue.compute();
           if (!c) return;
-          let project = view.project(), r = trpgHealth({ volumes: c.outline.volumes, state: c.state, snap: c.snap, prog: c.prog, checks: trpgCheckResults(chatMessages()), focus: c.state.focus }), target = kpPushTarget(c.state, c.snap, c.prog), mine = { ...r, fact: target ? target.fact : "", projectId: view.projectId, open: !1, ai: null, aiError: "" };
+          let project = view.project(), r = trpgHealth({ volumes: c.outline.volumes, state: c.state, snap: c.snap, prog: c.prog, checks: trpgCheckResults(chatMessages()), focus: c.state.focus }), target = kpPushTarget(c.state, c.snap, c.prog), mine = { ...r, fact: target ? target.fact : "", projectId: view.projectId, floor: aiFloorCount2(chatMessages()), open: !1, ai: null, aiError: "" };
           shown = mine;
           let messages = stuckMessages({ ...steerContext(project, c), pending: pendingDiscoveries(c.state, c.snap, c.prog, r.deadFacts), health: r.lines });
           try {
@@ -17861,6 +17867,9 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
             mine.msg = npcImportMessage({ ok: !1, reason: error && error.message || String(error) });
           }
           mine.busy = !1, view.renderBody();
+        },
+        "kp-health-clear"(view) {
+          shown = null, view.renderBody();
         },
         "kp-spoil"(view) {
           shown && (shown.open = !shown.open), view.renderBody();
@@ -32620,7 +32629,7 @@ ${suffix.trim()}` : body;
   }
 
   // src/index.js
-  var VERSION = "0.4.13", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.4.14", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")
