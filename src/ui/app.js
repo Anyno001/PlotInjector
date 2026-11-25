@@ -348,7 +348,12 @@ export function createApp({ data, runtime, version, notice = null }) {
     function setTrpg(id, on) {
         data.updateProject(id, (project) => {
             const { trpg, ...rest } = project;
-            return on ? { ...rest, trpg: { ...(trpg || {}), on: !0, rule: 'coc7' }, clue: { ...project.clue, mode: 'clue' } } : rest;
+            // 关闭跑团时保留 trpg 里的切片，只把 on 改成 false，再打开不用重新导入
+            return on
+                ? { ...rest, trpg: { ...(trpg || {}), on: !0, rule: 'coc7' }, clue: { ...project.clue, mode: 'clue' } }
+                : trpg && trpg.slices && trpg.slices.length
+                  ? { ...rest, trpg: { ...trpg, on: !1 } }
+                  : rest;
         });
     }
     async function newProject() {

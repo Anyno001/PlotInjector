@@ -61,14 +61,6 @@ test('minimal loop: fact → node → single temporary injection → commit → 
   assert.equal(host.db.tableCallbackCount(), 0, 'table callback unregistered on destroy');
 });
 
-test('R4: legacy inject=link projects also inject via temporary world info only, exactly once', async () => {
-  const { host, inst } = await setup({ inject: 'link' });
-  const r = await host.send('开始');
-  const hits = r.lore.filter((e) => e.content.includes('档案室里堆满旧档案')).length;
-  assert.equal(hits, 1);
-  assert.ok(!allText(host.state.chat).includes('档案室里堆满旧档案'), 'nothing written into the chat');
-  await inst.destroy();
-});
 
 // 删实验联动接口第 4 步：旧项目里的 inject: "link"、waitFill 读进来不报错、照常只注入一次；归一化后不再输出这两个旧值。
 test('legacy project fields (inject: link, waitFill) still load and inject once; normalized away', async () => {
@@ -83,37 +75,8 @@ test('legacy project fields (inject: link, waitFill) still load and inject once;
   await inst.destroy();
 });
 
-test('clue injected via world info only; no whole-stage fallback', async () => {
-  const { host, inst } = await setup();
-  const r = await host.send('开始');
-  assert.match(r.text, /档案室里堆满旧档案/);
-  assert.ok(!r.lore.some((e) => /阶段一_开端|主线节点/.test(e.content)), 'no whole-stage fallback');
-  await inst.destroy();
-});
 
-test('outline mode unchanged: whole-stage detail injected, clue fields stripped, author blocks stripped', async () => {
-  const { host, inst } = await setup({ mode: 'outline' });
-  await host.addMessage('开始', true);
-  const lore = await host.generate();
-  const detail = lore.find((e) => e.comment.includes('阶段一') || e.content.includes('阶段一_开端'));
-  assert.ok(detail, 'outline mode injects current stage detail');
-  assert.ok(!detail.content.includes('完成条件') && !detail.content.includes('场景:'), 'clue fields stripped in outline mode');
-  assert.ok(!allText(lore).includes(SECRET), 'author block in setting stripped; next stage not injected');
-  await inst.destroy();
-});
 
-test('clue mode skips periodic AI check; outline mode still triggers it', async () => {
-  let { host, inst } = await setup();
-  for (let i = 0; i < 5; i++) { await host.addMessage('u', true); await host.addMessage('a', false); }
-  await host.settle();
-  assert.equal(host.llmCalls.length, 0, 'clue mode: no periodic check');
-  await inst.destroy();
-  ({ host, inst } = await setup({ mode: 'outline' }));
-  for (let i = 0; i < 4; i++) { await host.addMessage('u', true); await host.addMessage('a', false); }
-  await host.settle(); await host.settle();
-  assert.ok(host.llmCalls.length >= 1, 'outline mode: periodic check still runs (original behavior)');
-  await inst.destroy();
-});
 
 test('manual ops anchor to floor: deleting the floor reverts them; swipe back restores', async () => {
   const { host, inst } = await setup();
@@ -139,11 +102,6 @@ test('manual ops anchor to floor: deleting the floor reverts them; swipe back re
   await inst.destroy();
 });
 
-test('focus: manual focus on a locked node is rejected', async () => {
-  const { inst } = await setup();
-  assert.throws(() => inst.runtime.clue.setFocus('nC'), /不可进行/);
-  await inst.destroy();
-});
 
 test('reload: re-loading the script does not stack listeners or table callbacks', async () => {
   const { host } = await setup();

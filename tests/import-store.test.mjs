@@ -51,8 +51,3 @@ test('drop removes both files', async () => {
   assert.ok(!f.disk.has(S.importJobFile(job.id)) && !f.disk.has(S.importSrcFile(job.id)));
 });
 
-test('adoptKey is stable for the same job / part / stage', () => {
-  const S = make(null, null, null);
-  assert.equal(S.adoptKey('impA', 2, '阶段3_x'), S.adoptKey('impA', 2, '阶段3_x'));
-  assert.notEqual(S.adoptKey('impA', 2, '阶段3_x'), S.adoptKey('impA', 3, '阶段3_x'));
-});

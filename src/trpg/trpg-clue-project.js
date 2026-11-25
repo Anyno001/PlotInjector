@@ -665,7 +665,16 @@ export function claimSnapshot(allFacts, have, claimed) {
     );
 }
 
-export function clueReachability(volumes, { knownFacts = [], claimedFacts = [] } = {}) {
+// 导入检查用的两个可选参数（默认不传，行为不变）：
+//   clock：'early' 钟点和「情况」都当作还没到；'reached' 都当作已到（模拟剧情被时间推着走）。不传时钟点算未知、情况算未成立。
+//   skipGives：(节点) => boolean，返回 true 的节点不产出任何发现（模拟这个阶段被跳过）。
+const CLOCK_FACT = '\u0000clock';
+function clockCond(cond) {
+    if (!cond) return cond;
+    if (cond.kind === 'group') return { ...cond, items: cond.items.map(clockCond) };
+    return cond.kind === 'time' || cond.kind === 'say' ? { kind: 'fact', fact: CLOCK_FACT, raw: cond.raw } : cond;
+}
+export function clueReachability(volumes, { knownFacts = [], claimedFacts = [], clock = null, skipGives = null } = {}) {
     let compiled = compileClue(volumes || []),
         have = new Set(knownFacts),
         claimed = new Set(claimedFacts),
@@ -703,6 +712,12 @@ export function clueReachability(volumes, { knownFacts = [], claimedFacts = [] }
     for (let n of compiled.nodes) [n.open, n.early, n.done].forEach(extAtoms);
     for (let l of compiled.lines || []) extAtoms(l.open);
     for (let [f, ids] of lineTriggerFacts(compiled)) (have.add(f), assumptions.add(`正文里发生线 ${ids.join('、')} 要等的事（${f}）`));
+    if (clock) {
+        for (let u of compiled.units) u.clue && ((u.clue.enter = clockCond(u.clue.enter)), (u.clue.end = clockCond(u.clue.end)));
+        for (let n of compiled.nodes) ((n.open = clockCond(n.open)), (n.early = clockCond(n.early)), (n.done = clockCond(n.done)));
+        for (let l of compiled.lines || []) l.open = clockCond(l.open);
+        clock === 'reached' && have.add(CLOCK_FACT);
+    }
     let allFacts = /* @__PURE__ */ new Set([...have, ...claimed]);
     for (let u of compiled.units)
         u.clue && [u.clue.enter, u.clue.end].forEach((c) => conditionRefs(c).facts.forEach((f) => allFacts.add(f)));
@@ -723,7 +738,7 @@ export function clueReachability(volumes, { knownFacts = [], claimedFacts = [] }
         if (Object.keys(lineProg.lines).length !== before0) continue;
         let before = have.size;
         for (let s of state.nodeStates)
-            (s.status === 'available' || s.status === 'active' || s.status === 'done') && gives.get(s.node).forEach((f) => have.add(f));
+            (s.status === 'available' || s.status === 'active' || s.status === 'done') && !(skipGives && skipGives(s.node)) && gives.get(s.node).forEach((f) => have.add(f));
         if (have.size === before) break;
     }
     let stuckStages = [],

@@ -1,5 +1,12 @@
 import { hostDocument, hostWindow } from '../host/st.js';
 import { el, esc, layerParent } from './dom.js';
+import { ICONS } from './styles.js';
+
+// 标题前的小圆章：按提示卡类型换图，没登记的用默认的书签。
+const ICON_OF = { offtrack: 'noticeCompass', 'kp-offtrack': 'noticeCompass', advance: 'noticeCheck', 'kp-roll': 'noticeDice', checkfail: 'noticeDice' };
+function badge(id) {
+    return `<i class="pi-notice-ico">${ICONS[ICON_OF[id] || (id.startsWith('kp-') ? 'noticeCompass' : 'noticeMark')]}</i>`;
+}
 
 // 同 id 只留一张，新的替换旧的。
 export function createNotices() {
@@ -15,7 +22,7 @@ export function createNotices() {
     }
     function show({ id, title, body = '', actions = [], timeout = 0 }) {
         hide(id);
-        const card = el(`<div class="pi-notice" data-notice="${esc(id)}"><b>${esc(title)}</b>${body ? `<p>${esc(body)}</p>` : ''}
+        const card = el(`<div class="pi-notice" data-notice="${esc(id)}"><b>${badge(id)}<span>${esc(title)}</span></b>${body ? `<p>${esc(body)}</p>` : ''}
             <div class="pi-row">${actions.map((action, index) => `<button type="button" class="pi-btn is-sm${action.primary ? ' is-primary' : ''}" data-act="${index}">${esc(action.label)}</button>`).join('')}</div></div>`);
         (card.addEventListener('click', (event) => {
             const button = event.target.closest('[data-act]');

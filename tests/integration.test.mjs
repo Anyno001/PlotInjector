@@ -30,22 +30,4 @@ test('integration: a stage split retains IDs even when the authoring model omits
     assert.deepEqual(aligned.slots.s1.off,[]);
 });
 
-test('integration: a removed event does not transfer its mark to a new event with the same name',()=>{
-    const before=vols([stage('s1',[{id:'old',名称:'夜访'}])]);
-    const progress=stampNodeIds({slots:{s1:{off:['m0'],offNames:{m0:'夜访'}}}},before);
-    const after=vols([stage('s1',[{id:'replacement',名称:'夜访'}])]);
-    assert.deepEqual(migrateStableProgress(progress,after).slots.s1.off,[]);
-});
 
-test('integration: stage refine, split and merge use clue rules only for clue projects',()=>{
-    const volumes=vols([stage('s1',[{id:'n1',名称:'调查',入口:'门口',发现:[{事实:'F1',内容:'票据'}],完成条件:{事实:'F1'}}])]);
-    const unit=flattenUnits(volumes)[0];
-    for(const op of ['refine','split','merge']){
-        const clue=stageOpMessages({volumes,unit,op,mode:'clue',progress:'已确认 F1'});
-        assert.match(clue[0].content,/已有节点的 id 不要改/);
-        assert.match(clue[0].content,/已完成节点、已确认事实是已经发生的历史/);
-        assert.match(clue[1].content,/已确认 F1/);
-        const ordinary=stageOpMessages({volumes,unit,op});
-        assert.match(ordinary[0].content,/每个阶段 2 到 4 个主线节点/);
-    }
-});

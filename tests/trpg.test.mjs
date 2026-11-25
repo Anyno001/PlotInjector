@@ -105,3 +105,69 @@ test('项目文件：跑团标记随完整项目导出、导入；普通项目�
 
 
 
+
+test('判定卡：状态、没认出的骰点、对不上的编号', async () => {
+    let B = await import('../src/trpg/trpg-check-board.js'),
+        chat = [
+            { is_user: false, mes: '【检定】我：侦查（困难）#F01' },
+            { is_user: true, mes: '1d100 23' },
+            { is_user: true, mes: '1D100=23/60' },
+            { is_user: false, mes: '【检定】我：聆听 #F99' },
+        ],
+        checks = T.trpgCheckResults(chat);
+    assert.deepEqual(Object.keys(checks), ['F01']);
+    assert.deepEqual(checks.problems.map((p) => [p.at, p.kind]), [[1, 'unparsed']]);
+    let state = { nodeStates: [{ status: 'available', node: { name: '厕所', item: { 发现: [{ 事实: 'F01', 内容: '墙上有字', 判定: { 技能: '侦查', 难度: '困难' } }, { 事实: 'F02', 内容: '门后有人', 判定: '聆听' }] } } }] },
+        board = B.trpgCheckBoard({ state, snap: { facts: new Map() }, prog: {}, checks });
+    assert.deepEqual(board.rows.map((r) => [r.status, !!r.label]), [['ok', true], ['wait', false]]);
+    assert.deepEqual(board.problems.map((p) => p.kind), ['badcode']);
+});
+
+test('机械判定：IGS 安科 ROLL 那一行照用 IGS 判的成败', () => {
+    let chat = [
+            { is_user: false, mes: '[igs-anke:检定|翻不翻|楼主|侦查|50|困难|F01]' },
+            { is_user: true, mes: '【检定】楼主 侦查：1D100=40，困难线35，困难成功 #F01' },
+        ],
+        r = T.trpgCheckResults(chat).F01;
+    assert.equal(r.ok, true);
+    assert.equal(r.die, 40);
+    chat[1].mes = '【检定】楼主 侦查：1D100=40，困难线30，成功（没达到难度） #F01';
+    assert.equal(T.trpgCheckResults(chat).F01.ok, false);
+});
+
+test('导入检查：阶段衔接、跨阶段卡死能报出，一键修后不再报', async () => {
+    let K = await import('../src/trpg/trpg-import-check.js'),
+        L = await import('../src/trpg/trpg-long-import.js'),
+        node = (id, name, extra) => ({ id, 名称: name, 入口: '入口', 地点: ['地点'], 场景: '场景', ...extra }),
+        data = (a, b) => [
+            { key: '阶段1 开场', data: { 结束条件: { 任一: ['时间 >= 18:00', { 事实: 'F_a' }] }, 主线节点: [node('n1', '入住', { 发现: [{ 事实: 'F_a', 内容: '甲', 记录: '甲' }], 完成条件: { 事实: 'F_a' } })] } },
+            { key: '阶段2 中段', data: { 进入条件: { 任一: ['时间 >= 18:00', { 事实: 'F_a' }] }, 结束条件: { 事实: 'F_b' }, 主线节点: [node('n2', '深入', { 发现: [{ 事实: 'F_b', 内容: '乙', 记录: '乙' }], 完成条件: { 事实: 'F_b' } })] } },
+            { key: '阶段3 收尾', data: { 进入条件: { 任一: ['时间 >= 21:00', { 事实: 'F_b' }] }, 主线节点: [node('n3', '收尾', { 开放条件: { 事实: 'F_b' }, 发现: [{ 事实: 'F_c', 内容: '丙', 记录: '丙' }], 完成条件: { 事实: 'F_c' } })] } },
+        ].map((s, i) => ({ ...s, id: `s${i}` })),
+        vols = [{ id: 'v1', key: '卷', stages: data() }],
+        kinds = () => L.importReachIssues(vols).filter((x) => /^(gap|skip-stuck)$/.test(x.kind));
+    assert.deepEqual(kinds().map((x) => x.kind).sort(), ['gap', 'gap', 'skip-stuck']);
+    for (let i = 0; i < 6 && kinds().length; i++) K.applyImportFix(vols, kinds().find((x) => x.quick).quick.q);
+    assert.deepEqual(kinds(), []);
+    assert.equal(K.guessClock('晚上七点半'), '19:30');
+});
+
+test('判定提醒：两轮没出检定、判定成功线索没确认；阶段提醒', async () => {
+    let B = await import('../src/trpg/trpg-check-board.js'),
+        KC = await import('../src/trpg/trpg-kp-card.js'),
+        ai = (mes) => ({ is_user: false, mes }),
+        usr = (mes) => ({ is_user: true, mes }),
+        node = { uid: 'n1', name: '厕所', item: { 发现: [{ 事实: 'F01', 内容: '墙上有字', 判定: '侦查' }] } },
+        state = { nodeStates: [{ status: 'available', node }] },
+        prog = { clueCandidates: [{ i: 0, scenes: [{ uid: 'n1', focus: !0 }], candidates: [] }] },
+        rows = (chat) => B.trpgCheckBoard({ state, snap: { facts: new Map() }, prog, checks: T.trpgCheckResults(chat), messages: chat }).rows;
+    assert.equal(rows([ai('a')])[0].nudge, '');
+    assert.equal(rows([ai('a'), usr('x'), ai('b')])[0].nudge, 'norequest');
+    let asked = [ai('a【检定】我：侦查 #F01'), usr('1D100=10/50'), ai('b'), usr('x')];
+    assert.equal(rows(asked)[0].nudge, '');
+    assert.equal(rows([...asked, ai('c')])[0].nudge, 'unconfirmed');
+    let stage = (id, k, left, entered) => [id, { unit: { volIndex: 0, stage: { key: k } }, done: !1, requiredLeft: left, entered: { v: entered } }],
+        lags = KC.stageLags({ stageStates: new Map([stage('a', '阶段1_开场', [node], 'true'), stage('b', '阶段2_中段', [], 'true')]), nodeStates: state.nodeStates });
+    assert.deepEqual(lags.map((g) => [g.prev, g.next, g.left.length]), [['阶段1', '阶段2', 1]]);
+    assert.equal(KC.stageLags({ stageStates: new Map([stage('a', '阶段1_开场', [node], 'true'), stage('b', '阶段2_中段', [], 'false')]), nodeStates: state.nodeStates }).length, 0);
+});

@@ -35,6 +35,8 @@ import * as trpgImport from '../trpg/trpg-long-import-ui.js';
 import * as trpgReview from '../trpg/trpg-import-review.js';
 import * as trpgLong from '../trpg/trpg-long-import.js';
 import { isTrpg } from '../trpg/trpg.js';
+import { sliceActions } from '../trpg/trpg-slice-ui.js';
+import { planLines, prepareReplace, commitReplace } from '../trpg/trpg-replace.js';
 import { routeActions, viewIsTrpg, outlineWord } from '../trpg/trpg-route.js';
 import { importJobKind } from '../core/long-import.js';
 
@@ -52,7 +54,7 @@ import { projectSecretNames } from '../core/store.js';
 
 import { settingPiecesFromEntries, afterImport, classifyEntries, pickWorldbookEntries } from './wb-import.js';
 import { stringifyYaml, parseYaml } from '../core/yaml.js';
-import { ctx, downloadBlob, toast } from '../host/st.js';
+import { ctx, downloadBlob, toast, hostDocument } from '../host/st.js';
 
 import { resolveRefs, progressText, fitRefs } from './discuss-refs.js';
 
@@ -637,6 +639,48 @@ async function importTexts(view, texts) {
     }
 }
 
+async function replaceModule(view, { name, text }) {
+    let incoming;
+    try {
+        incoming = parseOutlineText(text);
+    } catch (error) {
+        return openDialog({ title: '导入失败', html: `<p class="pi-hint"><b>${esc(name)}</b></p>${errHtml(error)}`, actions: [{ label: '关闭', value: true, primary: true }] });
+    }
+    const projectId = view.projectId,
+        prepare = () => {
+            const p = view.project(),
+                cur = isClueMode(p) && view.runtime.activeId() === projectId ? view.runtime.clue.compute() : null;
+            return prepareReplace(p, incoming, { clue: cur ? { snap: cur.snap, prog: cur.prog, config: normalizeClue(p.clue) } : null });
+        },
+        effects = (pr) => [...(pr.guard ? [...pr.guard.diffs, ...pr.guard.notes] : []), ...(pr.restored.length ? [`已经完成的节点会保留：${pr.restored.join('、')}（完成条件不变）`] : [])];
+    let prep = prepare();
+    const shown = effects(prep),
+        lines = planLines(prep.plan);
+    if (
+        !(await confirmDialog({
+            title: '替换当前模组',
+            body: `${lines.length ? '' : '内容没有变化，'}当前模组换成这份文件的内容，对得上的剧情线和阶段保留原来的编号和进度${shown.length ? '；按这个聊天的进度：' : '。'}`,
+            list: [...lines.slice(0, 40), ...(lines.length > 40 ? [`……另有${lines.length - 40}项`] : []), ...shown],
+            okLabel: '替换',
+            danger: !0,
+        }))
+    )
+        return;
+    if (view.projectId !== projectId) return toast('warning', '确认期间切换了项目，没有替换。');
+    const again = prepare();
+    if (JSON.stringify(effects(again)) !== JSON.stringify(shown)) return toast('warning', '确认期间剧情进度变了，对进度的影响和刚才显示的不同，没有替换。请再点一次核对。');
+    prep = again;
+    let written = !1;
+    view.data.updateProject(projectId, (p) => {
+        const w = commitReplace(p, prep);
+        return w.ok ? ((written = !0), { ...p, outline: w.outline }) : p;
+    });
+    if (!written) return toast('warning', '大纲刚刚又被改过了，没有替换。请再点一次。');
+    prep.restored.length && toast('info', `已保留已经完成的节点：${prep.restored.join('、')}（完成条件不变）。`);
+    toast('success', '已替换当前模组。');
+    ((st(view).sel = prep.volumes[0] && prep.volumes[0].id), view.runtime.refresh(), view.renderBody());
+}
+
 // all：多卷相关的入口（讨论页送来的 YAML、多卷写作）合并所有 yaml 代码块，其余只取第一个块。
 function setDraft(view, mode, reply, extra = {}, { all = !1 } = {}) {
     const task = extra.task || taskContext(view);
@@ -1048,6 +1092,8 @@ async function writeVolumes(view, n, request, onConfirmed = null) {
 export const actions = {
     ...genActions,
     ...importActions,
+    // 跑团模组的原文切片：开关、调整、补全原文（逻辑在 trpg/trpg-slice-ui.js）
+    'kp-slices': (view) => sliceActions['kp-slices'](view),
     // 大纲页顶部「审阅修改」打开所有线（从选中的线或第一条开始）；选中一条线时的按钮只打开这一条。
     async 'review-open'(view, target) {
         const project = view.project();
@@ -1314,6 +1360,13 @@ export const actions = {
                 { label: `${st(view).history ? '收起历史' : '历史'}（${view.project().outline.history.length}）`, value: 'history' },
                 { label: '导入YAML', value: 'import-file' },
                 { label: '粘贴YAML', value: 'import-paste' },
+                ...(isTrpg(view.project())
+                    ? [
+                          { label: '替换当前模组（选文件）', value: 'replace-file' },
+                          { label: '替换当前模组（粘贴）', value: 'replace-paste' },
+                          { label: '原文切片…', value: 'kp-slices' },
+                      ]
+                    : []),
                 { label: '从世界书导入', value: 'import-wb' },
                 { label: '导出', value: 'export', disabled: !view.project().outline.volumes.length },
             ],
@@ -1341,6 +1394,14 @@ export const actions = {
     时间范围: …`,
         });
         text && (await importTexts(view, [{ name: '粘贴内容', text }]));
+    },
+    async 'replace-file'(view) {
+        const files = await pickFiles({ accept: '.yaml,.yml,.txt' });
+        files.length && (await replaceModule(view, { name: files[0].name, text: await files[0].text() }));
+    },
+    async 'replace-paste'(view) {
+        const text = await promptDialog({ title: '粘贴模组YAML', multiline: !0, placeholder: '剧情_M1_标题:' });
+        text && (await replaceModule(view, { name: '粘贴内容', text }));
     },
     async 'import-wb'(view) {
         const picked = await pickWorldbookEntries('从世界书导入大纲或设定');
@@ -1713,7 +1774,10 @@ ${yaml}
         ((st(view).overview = !st(view).overview), view.renderBody());
     },
     'issue-go'(view, target) {
-        ((st(view).sel = target.dataset.id), (st(view).raw = !1), (st(view).overview = !1), view.renderBody());
+        // 跑团项目：跳转后收起检查列表，并把编辑区滚到眼前（列表占满屏时，跳了也看不出来）；其他项目照旧
+        const trpg = isTrpg(view.project());
+        ((st(view).sel = target.dataset.id), (st(view).raw = !1), (st(view).overview = !1), trpg && (st(view).check = !1), view.renderBody());
+        trpg && hostDocument().querySelector('.pi-tree')?.scrollIntoView?.({ block: 'start' });
     },
     'ov-go'(view, target) {
         ((st(view).sel = target.dataset.id), (st(view).raw = !1), (st(view).overview = !1), view.renderBody());

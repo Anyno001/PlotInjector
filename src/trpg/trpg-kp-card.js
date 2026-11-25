@@ -1,19 +1,25 @@
 // 跑团模式执行页的「KP」卡：卡住了吗（体检+推一把）、对照剧本、察觉卡关。逻辑在 core/trpg-kp.js。
-import { confirmDialog, esc, menuDialog } from '../ui/dom.js';
+import { confirmDialog, esc, menuDialog, promptDialog } from '../ui/dom.js';
 import { ICONS } from '../ui/styles.js';
 import { chatMessages, toast } from '../host/st.js';
-import { chatFactSets } from './trpg-clue-project.js';
+import { chatFactSets, discoveryList } from './trpg-clue-project.js';
+import { effectiveFact } from './trpg-clue-rules.js';
+import { isPlainObject, splitStageKey } from '../core/outline.js';
 import { trpgCheckResults } from './trpg.js';
 import { steerActions, timelineHintHtml, steerResultHtml, steerContext } from './trpg-steer.js';
 import { readGameClock } from './trpg-timeline.js';
-import { trpgHealth, kpPushTarget, aiFloorCount, KP_LEVELS, KP_STUCK_ROUNDS, kpSectionText, npcImportMessage, stuckMessages, parseStuckReply, pendingDiscoveries } from './trpg-kp.js';
+import { trpgHealth, kpFind, kpPushTarget, aiFloorCount, KP_LEVELS, KP_STUCK_ROUNDS, kpSectionText, npcImportMessage, stuckMessages, parseStuckReply, pendingDiscoveries } from './trpg-kp.js';
 import { ask, runTask } from '../ui/ai.js';
-import { kpSummary } from './trpg-kp-check.js';
+import { kpSummary, kpOffText, RECHECK_FLOORS, RECHECK_MAX, AUTO_VERIFY_STEPS } from './trpg-kp-check.js';
+import { confirmRecheck } from './trpg-kp-verify-ui.js';
+import { checkSection } from './trpg-check-card.js';
 
 // 体检结果只留在内存里，换项目就丢
 let shown = null;
 // 交给 IGS 建 NPC 档：进行中 / 结果文字（只在内存，按项目记）
 let npcImport = null;
+// 重新核实阶段正在读几楼（只用来在卡片上显示进度）
+let verifyFloors = 0;
 
 function npcImportHtml(project) {
     if (typeof window === 'undefined' || typeof (window.IGS && window.IGS.stats && window.IGS.stats.importNpcCocText) !== 'function') return '';
@@ -40,15 +46,56 @@ function saveKp(view, patch) {
     view.runtime.setProgress({ ...prog, trpgKp: { ...(prog.trpgKp || {}), ...patch } }, 'trpg-kp');
 }
 
+// 带判定的线索没通过的原因
+const CHECK_WHY = { roll: '判定未成功', text: '正文未写出' };
+
+// 阶段提醒（用户 2026-11-24）：后一阶段已经开始、前一阶段还有必需节点没完成。不自动把前一阶段算完成。
+// 返回 [{ prev, next, left: [node 状态] }]，阶段名用「阶段一」这样的短名
+export function stageLags(state) {
+    let list = [...state.stageStates.values()],
+        out = [];
+    for (let i = 1; i < list.length; i += 1) {
+        let p = list[i - 1],
+            n = list[i];
+        if (p.unit.volIndex !== n.unit.volIndex || p.done || !p.requiredLeft.length || n.entered.v !== 'true' || n.done) continue;
+        out.push({
+            prev: splitStageKey(p.unit.stage.key).short,
+            next: splitStageKey(n.unit.stage.key).short,
+            left: p.requiredLeft.map((x) => state.nodeStates.find((ns) => ns.node === x || (x.uid && ns.node.uid === x.uid))).filter(Boolean),
+        });
+    }
+    return out;
+}
+
+// 推一把的目标：这些节点里第一条还没拿到的线索
+function lagTarget(left, snap, prog) {
+    for (let ns of left)
+        for (let d of discoveryList(isPlainObject(ns.node.item) ? ns.node.item : {})) if (d.fact && !effectiveFact(d.fact, snap, prog).confirmed) return d.fact;
+    return '';
+}
+
+function stageLagHtml(state, snap, prog) {
+    return stageLags(state)
+        .map((g) => {
+            let names = g.left.map((ns) => `『${esc(ns.node.name || '未命名')}』`).join('、');
+            return `<div class="pi-ck-nudge"><span class="pi-hint is-warn">${esc(g.next)}已经开始，${esc(g.prev)}尚有${names}未完成</span>${
+                lagTarget(g.left, snap, prog) ? '<button type="button" class="pi-btn is-sm" data-act="kp-lag-push">推一把</button>' : ''
+            }<button type="button" class="pi-icon-btn" data-act="kp-lag-menu" title="更多" aria-label="更多">${ICONS.more}</button></div>`;
+        })
+        .join('');
+}
+
 // 上轮检测：一句话概览，点开看每条线索和条件的通过情况与理由
 function lastCheckHtml(kp) {
     let log = Array.isArray(kp.log) ? kp.log : [],
         last = log[log.length - 1];
     if (!last) return '';
     let row = (ok, text, why) => `<p class="pi-hint"><span class="pi-badge ${ok ? 'is-ok' : 'is-warn'}">${ok ? '通过' : '没通过'}</span> ${esc(text)}${why ? `：${esc(why)}` : ''}</p>`,
-        items = [...last.facts.map((x) => row(x.ok, x.label, x.why)), ...last.conds.map((x) => row(x.ok, x.text, x.why))];
+        items = [...last.facts.map((x) => row(x.ok, x.label, x.check ? CHECK_WHY[x.check] : x.why)), ...last.conds.map((x) => row(x.ok, x.text, x.why))];
     return `<details class="pi-fold"><summary><b>上轮检测</b><span>${esc(kpSummary(last))}</span></summary>${items.join('') || '<p class="pi-hint">这一轮没有要判断的线索和条件。</p>'}${
-        last.off && last.offReason ? `<p class="pi-hint is-warn">${esc(last.offReason)}</p>` : ''
+        last.off
+            ? `<p class="pi-hint is-warn">${esc(kpOffText(last.offKind))}</p>${last.offReason ? `<details class="pi-fold"><summary>查看原因（可能剧透）</summary><p class="pi-hint">${esc(last.offReason)}</p></details>` : ''}`
+            : ''
     }</details>`;
 }
 
@@ -64,10 +111,11 @@ export function kpCard(view, project, c, d) {
         });
     let stuck = kp.pulse && kp.pulse.facts === confirmed ? floors - kp.pulse.floor : 0,
         push = kp.push && kp.push.floor === floors ? kp.push : null,
-        mine = shown && shown.projectId === project.id ? shown : null,
+        // 体检结果只对当时那一楼有效：聊天往下走了就不再显示，免得旧结论一直挂着
+        mine = shown && shown.projectId === project.id && shown.floor === floors ? shown : null,
         leaks = d && d.lastAudit ? (d.lastAudit.leaks || []).filter((l) => l.level === 'leak').length : 0,
         pushLabel = push ? (push.kind === 'steer' ? '按建议拉回' : (KP_LEVELS.find((x) => x.level === push.level) || {}).label) : '',
-        busy = view.busy['kp-steer'] || view.busy['kp-health'],
+        busy = view.busy['kp-steer'] || view.busy['kp-health'] || view.busy['kp-verify'],
         thinking = !!view.busy['kp-health'],
         ai = mine && mine.ai,
         spoils = mine ? [...((ai && ai.spoil) || []), ...mine.spoil] : [],
@@ -76,14 +124,15 @@ export function kpCard(view, project, c, d) {
     return `<div class="pi-card"><h3>KP<span class="pi-spacer"></span>
         <button type="button" class="pi-btn is-sm is-ghost" data-act="kp-health" title="推演凭已经拿到的线索，主线还能不能走通，并可以推一把；只给结论，展开才剧透">卡住了吗</button>
         ${busy ? '<span class="pi-spin"></span>' : `<button type="button" class="pi-icon-btn" data-act="kp-menu" title="更多" aria-label="更多">${ICONS.more}</button>`}</h3>
-        ${timelineHintHtml(project, readGameClock(c.snap.tables, bind && bind.路径))}${lastCheckHtml(kp)}${steerResultHtml(project)}
+        ${checkSection(project, c, view.runtime.progress())}${stageLagHtml(c.state, c.snap, c.prog)}${timelineHintHtml(project, readGameClock(c.snap.tables, bind && bind.路径))}${lastCheckHtml(kp)}${steerResultHtml(project)}
+        ${view.busy['kp-verify'] ? `<p class="pi-hint"><span class="pi-badge">核实中</span> KP 正在读最近${verifyFloors ? ` ${verifyFloors} ` : ''}楼的正文，重新判断进行中阶段的线索和条件…</p>` : ''}
         ${
             mine
                 ? `<p class="pi-hint">${thinking ? '<span class="pi-badge">判断中</span>' : `<span class="pi-badge ${BADGE[shownLevel(mine)][0]}">${BADGE[shownLevel(mine)][1]}</span>`} ${esc(
                       ai && ai.plain.length ? ai.plain.join('；') : thinking ? 'AI 正在读最近的正文…' : mine.aiError ? `AI 判断失败（${mine.aiError}），下面只是插件推演。` : ai ? 'AI 没有给出说明。' : '',
                   )}${
                       spoils.length && !thinking ? ` <button type="button" class="pi-btn is-sm is-ghost" data-act="kp-spoil">${mine.open ? '收起' : '展开（会剧透）'}</button>` : ''
-                  }</p><p class="pi-hint">插件推演：${esc(mine.lines.join('；'))}</p>${mine.open && !thinking ? spoils.map((t) => `<p class="pi-hint">${esc(t)}</p>`).join('') : ''}${
+                  }${thinking ? '' : ' <button type="button" class="pi-btn is-sm is-ghost" data-act="kp-health-clear">清除</button>'}</p><p class="pi-hint">插件推演：${esc(mine.lines.join('；'))}</p>${mine.open && !thinking ? spoils.map((t) => `<p class="pi-hint">${esc(t)}</p>`).join('') : ''}${
                       leaks ? `<p class="pi-hint is-warn">最近一次请求里疑似提前写出了${leaks}处线索</p>` : ''
                   }${advice && advice !== '不用推' && !push ? `<p class="pi-hint">AI 建议：${esc(advice)}</p>` : ''}${
                       mine.fact && !push && !thinking
@@ -108,6 +157,8 @@ export const kpActions = {
             items: [
                 { label: '对照剧本', value: 'kp-steer' },
                 { label: '重新检测最新一楼', value: 'kp-recheck' },
+                { label: '重新核实阶段', value: 'kp-verify' },
+                { label: '自动核实阶段…', value: 'kp-auto-verify' },
                 { label: '清空KP记录', value: 'kp-clear', danger: !0 },
             ],
         });
@@ -116,6 +167,49 @@ export const kpActions = {
     async 'kp-recheck'(view) {
         let r = await view.runtime.kp.run({ manual: !0 });
         r ? view.renderBody() : toast('info', '没有检测：最新一楼不是AI回复，或「跑团每轮自动检测」已关、数据库未就绪。');
+    },
+    // 重新核实阶段（用户 2026-11-24）：选楼层范围 → KP 读这几楼重判进行中阶段的线索和条件 → 列给用户勾选确认才写入
+    async 'kp-verify'(view) {
+        if (view.busy['kp-verify']) return;
+        let pick = await menuDialog({
+            title: '重新核实阶段：读最近几楼',
+            items: [...RECHECK_FLOORS.map((n) => ({ label: `最近${n}楼`, value: String(n) })), { label: '自己填楼数', value: 'custom' }],
+        });
+        if (!pick) return;
+        if (pick === 'custom') {
+            let typed = await promptDialog({ title: '重新核实阶段', label: `读最近几楼（1–${RECHECK_MAX}）`, value: '15' });
+            if (typed == null) return;
+            pick = String(typed).trim();
+        }
+        let floors = Math.round(Number(pick));
+        if (!(floors >= 1)) return toast('info', '楼数要填一个正整数。');
+        floors = Math.min(floors, RECHECK_MAX);
+        verifyFloors = floors;
+        let r = await runTask(view, 'kp-verify', () => view.runtime.kp.recheck({ floors })).catch((e) => ({ error: `请求失败：${e.message}` }));
+        if (!r) return;
+        if (r.error) return toast('info', `没法核实：${r.error}。`);
+        if (r.empty) return toast('info', '进行中的阶段没有待核实的线索和条件。');
+        (await confirmRecheck(r, { kp: view.runtime.kp, compute: () => view.runtime.clue.compute() })) && view.renderBody();
+    },
+    // 每 N 层自动核实（用户 2026-11-24）：默认关，按聊天存；到点后台核实，有结果弹提示卡再确认
+    async 'kp-auto-verify'(view) {
+        let now = view.runtime.kp.autoVerifyEvery(),
+            pick = await menuDialog({
+                title: `自动核实阶段（现在：${now ? `每${now}层` : '关'}）`,
+                items: [{ label: '关', value: '0' }, ...AUTO_VERIFY_STEPS.map((n) => ({ label: `每${n}层`, value: String(n) })), { label: '自己填层数', value: 'custom' }],
+            });
+        if (!pick) return;
+        if (pick === 'custom') {
+            let typed = await promptDialog({ title: '自动核实阶段', label: `每几层核实一次（1–${RECHECK_MAX}）`, value: String(now || 15) });
+            if (typed == null) return;
+            pick = String(typed).trim();
+        }
+        let every = Math.round(Number(pick));
+        if (!(every >= 0)) return toast('info', '层数要填一个整数。');
+        every = Math.min(every, RECHECK_MAX);
+        view.runtime.kp.setAutoVerify(every);
+        toast('success', every ? `已开启：每${every}层自动核实一次，有结果会弹提示。` : '已关闭自动核实。');
+        view.renderBody();
     },
     async 'kp-clear'(view) {
         let ok = await confirmDialog({
@@ -137,7 +231,7 @@ export const kpActions = {
         let project = view.project(),
             r = trpgHealth({ volumes: c.outline.volumes, state: c.state, snap: c.snap, prog: c.prog, checks: trpgCheckResults(chatMessages()), focus: c.state.focus }),
             target = kpPushTarget(c.state, c.snap, c.prog),
-            mine = { ...r, fact: target ? target.fact : '', projectId: view.projectId, open: !1, ai: null, aiError: '' };
+            mine = { ...r, fact: target ? target.fact : '', projectId: view.projectId, floor: aiFloorCount(chatMessages()), open: !1, ai: null, aiError: '' };
         shown = mine;
         let messages = stuckMessages({ ...steerContext(project, c), pending: pendingDiscoveries(c.state, c.snap, c.prog, r.deadFacts), health: r.lines });
         try {
@@ -165,6 +259,9 @@ export const kpActions = {
         mine.busy = !1;
         view.renderBody();
     },
+    'kp-health-clear'(view) {
+        ((shown = null), view.renderBody());
+    },
     'kp-spoil'(view) {
         (shown && (shown.open = !shown.open), view.renderBody());
     },
@@ -175,6 +272,44 @@ export const kpActions = {
         let t = kpPushTarget(c.state, c.snap, c.prog);
         if (!t) return (toast('info', '眼下没有能推的线索。'), view.renderBody());
         (saveKp(view, { push: { fact: t.fact, level: Number(target.dataset.level), floor: aiFloorCount(chatMessages()) } }), view.renderBody());
+    },
+    // 判定那一行：正文两轮没出检定，下一轮提醒 AI 写（只说技能，不说线索内容）
+    'kp-remind'(view, target) {
+        let skill = (target.dataset.skill || '').trim() || '相应',
+            c = view.runtime.clue.compute(),
+            hit = c && target.dataset.fact ? kpFind(c.state, target.dataset.fact) : null,
+            // 带上这条发现的内容，只用来让正文知道检定该落在哪件事上；成败没定，不能写出来，也不能暗示
+            why = hit && hit.discovery.text ? `这项检定是为了查明：${hit.discovery.text}（出自「${hit.node.name || '当前场景'}」。这只用来判断检定落在哪个行动上，成败没定之前不要写出，也不要暗示。）` : '';
+        (saveKp(view, { push: { kind: 'steer', text: `这一轮正文里请按检定写法补上「${skill}」检定，让玩家掷骰，先不要写出结果。${why}`, floor: aiFloorCount(chatMessages()) } }), toast('success', '下一轮将提醒正文提出这项检定。'), view.renderBody());
+    },
+    // 判定成功了线索没确认：收进「⋯」的次要操作
+    async 'kp-fact-menu'(view, target) {
+        let fact = target.dataset.fact;
+        if (!fact) return;
+        let pick = await menuDialog({ title: '线索', items: [{ label: '手动确认已获得', value: 'confirm' }] });
+        if (pick !== 'confirm') return;
+        view.runtime.clue.act({ kind: 'fact', target: fact, value: 'confirmed', note: '玩家手动确认（判定已成功）' });
+        (toast('success', '已确认这条线索。'), view.renderBody());
+    },
+    // 阶段提醒的「推一把」：目标取前一阶段还差的节点里的线索，档位沿用 KP_LEVELS
+    async 'kp-lag-push'(view) {
+        let c = view.runtime.clue.compute(),
+            fact = '',
+            lag = c && stageLags(c.state).find((g) => (fact = lagTarget(g.left, c.snap, c.prog)));
+        if (!lag) return (toast('info', '目前没有可推进的线索。'), view.renderBody());
+        let pick = await menuDialog({ title: '推一把', items: KP_LEVELS.map((x) => ({ label: x.label, value: String(x.level) })) });
+        pick && (saveKp(view, { push: { fact, level: Number(pick), floor: aiFloorCount(chatMessages()) } }), view.renderBody());
+    },
+    // 阶段提醒的「⋯」：手动把前一阶段还差的节点标完成
+    async 'kp-lag-menu'(view) {
+        let clue = view.runtime.clue,
+            c = clue.compute(),
+            left = c ? stageLags(c.state).flatMap((g) => g.left) : [];
+        if (!left.length) return;
+        let pick = await menuDialog({ title: '手动标完成', items: left.map((ns) => ({ label: ns.node.name || '未命名', value: ns.node.uid })) });
+        if (!pick) return;
+        let note = await promptDialog({ title: '手动标完成', label: '原因（可不填）' });
+        note !== null && (clue.act({ kind: 'done', target: pick, value: 'force', note }), view.renderBody());
     },
     'kp-cancel'(view) {
         (saveKp(view, { push: null }), view.renderBody());

@@ -49,6 +49,7 @@ import { compileClue, parseCondition, confirmTierOrder, evalAtom, splitCompare }
 import { sheetList, sheetRows, tierNumberInNote } from './trpg-clue-tables.js';
 import { chatFactSets, discoveryList, clueText, cellCondCheck } from './trpg-clue-project.js';
 import { reidLines, mainLinesText } from './trpg-long-import.js';
+import { importCondIssues, applyImportFix } from './trpg-import-check.js';
 import { esc, openDialog, menuDialog } from '../ui/dom.js';
 import { transcript } from '../core/prompts.js';
 import { ask, runTask } from '../ui/ai.js';
@@ -57,6 +58,7 @@ import { toast, hostDocument } from '../host/st.js';
 import { currentTables } from '../ui/tab-outline.js';
 import { projectSecretNames } from '../core/store.js';
 import { condWords, condNames, reviewCheck } from './trpg-review-lines.js';
+import { matchSlices, SLICE_KINDS } from './trpg-slices.js';
 import { ICONS } from '../ui/styles.js';
 
 // ---------------- 会话（存在导入任务里：job.review）----------------
@@ -120,12 +122,20 @@ export function reviewIssues(view, review, index) {
         runSecrets = clue && !isClueMode(project) ? checkImportDraft(draft, { index, secrets, mode: 'outline', ...shorts }).filter((x) => /^secret-/.test(x.kind || '')) : [],
         own0 = checkImportDraft(draft, { index, secrets, mode: clue ? 'clue' : 'outline', ...shorts }),
         own = [...own0, ...runSecrets.filter((x) => !own0.some((y) => y.kind === x.kind && y.name === x.name && y.stageId === x.stageId))].filter(
-            (x) => !/^(route|reach|reach-unknown)$/.test(x.kind || '') && !/按模组推演|替代途径/.test(x.text) && !((/引用了不存在的(?:节点|线)「([^」]+)」/.exec(x.text) || [])[1] && exists.has(/引用了不存在的(?:节点|线)「([^」]+)」/.exec(x.text)[1])),
+            (x) => !/^(route|reach|reach-unknown|gap|skip-stuck)$/.test(x.kind || '') && !/按模组推演|替代途径/.test(x.text) && !((/引用了不存在的(?:节点|线)「([^」]+)」/.exec(x.text) || [])[1] && exists.has(/引用了不存在的(?:节点|线)「([^」]+)」/.exec(x.text)[1])),
         ),
         c = view.runtime.activeId() === view.projectId && isClueMode(project) ? view.runtime.clue.compute() : null,
         { known, claimed } = chatFactSets(c),
         reach = clue ? importReachIssues([...others, ...draft], { only: mine, knownFacts: known, claimedFacts: claimed }) : [],
-        all = [...own, ...reach],
+        // 条件检查（线索不存在、时间写法、成环、必需节点只靠判定）：只报这次草稿里的阶段
+        cond = clue
+            ? importCondIssues([...others, ...draft], {
+                  only: new Set(draft.flatMap((v) => v.stages.map((s) => s.id))),
+                  labels: project.clue && project.clue.labels,
+                  timeBound: !!(project.clue && project.clue.bindings && project.clue.bindings.time && project.clue.bindings.time.路径),
+              })
+            : [],
+        all = [...own, ...reach, ...cond],
         dismissed = new Set(review.dismissed || []),
         by = {},
         stageOf = new Map(draft.flatMap((v) => v.stages.map((s) => [s.id, unitKey(v.id, s.id)]))),
@@ -176,10 +186,15 @@ function nodeFull(n, clue, names) {
     gets.length && rows.splice(rows.findIndex(([l]) => l === '完成') < 0 ? rows.length : rows.findIndex(([l]) => l === '完成'), 0, ['获得', `${gets.join('；')}。`]);
     return `<div class="pi-rv-full"><b>${esc(n.name)}</b>${req ? `<i class="pi-rv-tag">${req}</i>` : ''}<dl>${rows.map(([l, v]) => `<dt>${l}</dt><dd>${esc(v)}</dd>`).join('')}</dl>${note ? `<div class="pi-rv-auth">作者备注（正文看不到）：${esc(note)}</div>` : ''}</div>`;
 }
+// 一键修的按钮：一个文字按钮 + 其余修法收进「⋯」（quick / alts 见 trpg-import-check.js）
+function fixButtons(x, unit) {
+    let at = `data-unit="${esc(unit)}" data-issue="${esc(x.id)}"`;
+    return `${x.quick ? `<button type="button" class="pi-btn is-sm" data-act="rv-quick" ${at} data-pick="-1">${esc(x.quick.label)}</button>` : ''}${x.action ? `<button type="button" class="pi-btn is-sm" data-act="${esc(x.action.act)}">${esc(x.action.label)}</button>` : ''}${x.alts && x.alts.length ? `<button type="button" class="pi-icon-btn" data-act="rv-quick-more" ${at} title="其他处理方式" aria-label="其他处理方式">${ICONS.more}</button>` : ''}`;
+}
 function issueCard(x, unit, filled) {
     if (x.level === 'error')
         return `<div class="pi-rv-issue"><p>${esc(x.plain || x.text)}</p>${x.names ? `<ul class="pi-rv-names">${x.names.map((n) => `<li>${esc(n)}</li>`).join('')}</ul>` : ''}${x.fix ? `<span class="pi-rv-fix"><b>建议：</b>${esc(x.fix)}</span>` : ''}
-            <div class="pi-row">${filled ? '<span class="pi-badge is-ok">已加入意见</span>' : `<button type="button" class="pi-btn is-sm" data-act="rv-fill" data-unit="${esc(unit)}" data-issue="${esc(x.id)}">加入意见</button>`}
+            <div class="pi-row">${fixButtons(x, unit)}${filled ? '<span class="pi-badge is-ok">已加入意见</span>' : `<button type="button" class="pi-btn is-sm${x.quick ? ' is-ghost' : ''}" data-act="rv-fill" data-unit="${esc(unit)}" data-issue="${esc(x.id)}">加入意见</button>`}
             <details><summary class="pi-hint">详情</summary><p class="pi-hint pi-rv-tech">${esc(x.text)}</p></details></div></div>`;
     let { q, how } = issueQuestion(x),
         // 是不是同一个人：两个按钮直接回答（用户 2026-11-17）。揭晓的地方：确认后收起；不是的话写意见。
@@ -188,7 +203,7 @@ function issueCard(x, unit, filled) {
                 ? `<button type="button" class="pi-btn is-sm" data-act="rv-short" data-name="${esc(x.name)}" data-v="yes">是同一人</button><button type="button" class="pi-btn is-sm is-ghost" data-act="rv-short" data-name="${esc(x.name)}" data-v="no">不是</button>`
                 : `<button type="button" class="pi-btn is-sm" data-act="rv-dismiss" data-issue="${esc(x.id)}">${x.kind === 'secret-reveal' ? '是，收起' : '没问题，收起'}</button>${filled ? '<span class="pi-badge is-ok">已加入意见</span>' : `<button type="button" class="pi-btn is-sm is-ghost" data-act="rv-fill" data-unit="${esc(unit)}" data-issue="${esc(x.id)}">加入意见</button>`}`;
     return `<div class="pi-rv-issue is-ask"><p>${esc(q)}</p>${how ? `<span class="pi-rv-fix">${esc(how)}</span>` : ''}
-        <div class="pi-row">${acts}</div></div>`;
+        <div class="pi-row">${fixButtons(x, unit)}${acts}</div></div>`;
 }
 function whenText(line, volumes) {
     if (!isPlainObject(line)) return '';
@@ -353,6 +368,25 @@ function saveLabel(review, dirtyIds) {
 }
 // 发送意见按钮（用户 2026-11-16：按钮要写明会发送）。点了先弹预览框，可改意见、加整体意见。
 const sendLabel = (n) => (n ? `发送意见（${n}页）` : '发送意见');
+// 这一阶段各场景对应了哪些模组原文（只读）：导入时从 PDF 里原样留下的台词、描写、伏笔，保存到模组后在注入时按场景给出
+function sliceBlock(job, nodes) {
+    let slices = Object.values((job && job.slicesByPart) || {}).flat();
+    if (!slices.length || !nodes.length) return '';
+    let hit = matchSlices(slices, nodes.map((n) => ({ key: n.id, name: n.name, item: n.item }))),
+        rows = nodes.filter((n) => hit.has(n.id)),
+        total = rows.reduce((c, n) => c + hit.get(n.id).length, 0);
+    if (!total) return `<p class="pi-hint">导入时留下了${slices.length}条模组原文，这一阶段没有对应的。</p>`;
+    return `<details class="pi-fold"><summary><b>模组原文</b><span>本阶段对应${total}条，共${slices.length}条</span></summary>${rows
+        .map(
+            (n) =>
+                `<div class="pi-rv-sec">${esc(n.name)}</div>${hit
+                    .get(n.id)
+                    .map((x) => `<p class="pi-hint"><span class="pi-badge">${esc(SLICE_KINDS[x.kind])}</span> ${esc(x.who ? `${x.who}：` : '')}${esc(x.kind === 'seed' || x.kind === 'taboo' ? `${x.hint}（原文：${x.text}）` : x.text)}</p>`)
+                    .join('')}`,
+        )
+        .join('')}<p class="pi-hint">只读。保存到模组后，可在模组页「⋯」→「原文切片…」里调整。</p></details>`;
+}
+
 export function renderReview(view, job, review, index, crumb, notes = []) {
     let units = reviewUnits(view.project(), review),
         issues = reviewIssues(view, review, index),
@@ -371,10 +405,11 @@ export function renderReview(view, job, review, index, crumb, notes = []) {
         dot = (x, n) => {
             let i = x.i,
                 has = (issues[x.key] || []).some((y) => y.level === 'error'),
-                cls = (i === at ? ' is-cur' : has ? ' is-err' : changed.has(x.key) && review.revised ? ' is-chg' : '') + (String((review.comments || {})[x.key] || '').trim() ? ' is-note' : '');
+                asks = (issues[x.key] || []).filter((y) => y.level !== 'error').length,
+                cls = (i === at ? ' is-cur' : has ? ' is-err' : asks ? ' is-ask' : changed.has(x.key) && review.revised ? ' is-chg' : '') + (String((review.comments || {})[x.key] || '').trim() ? ' is-note' : '');
             // 页签（第四批，用户 2026-11-16）：线信息 / 阶段名，代替数字圆点；多了横向滑动
             void n;
-            return `<button type="button" class="pi-rv-dot${cls}" data-act="rv-go" data-i="${i}">${x.kind === 'line' ? '线信息' : esc(stageLabel(unitValue(review.draft, x.key).key))}</button>`;
+            return `<button type="button" class="pi-rv-dot${cls}" data-act="rv-go" data-i="${i}">${x.kind === 'line' ? '线信息' : esc(stageLabel(unitValue(review.draft, x.key).key))}${asks ? `<span class="pi-rv-n" title="${asks}项待确认">${asks}</span>` : ''}</button>`;
         },
         vols = review.draft,
         vi = vols.findIndex((v) => v.id === vol.id),
@@ -404,7 +439,7 @@ export function renderReview(view, job, review, index, crumb, notes = []) {
         synced = !dirty && (isEdit || review.reopened),
         // 顶部（第四批）：标题一行，问题数在右；下面一句灰字说明范围和状态（项目级审阅写明几条线、几条待保存）
         stateText = stateLine(review, dirtyIds, dirty),
-        head = `<h3>${isEdit ? '审阅修改' : '审阅'}${vols.length > 1 ? (review.lines ? '：导入的支线' : '') : `：${esc(volumeName(vol.key))}`}<span class="pi-rv-end">${errCount ? `<button type="button" class="pi-badge is-warn pi-rv-issues" data-act="rv-first-issue" title="跳到有问题的页">问题${errCount} ›</button>` : review.revised ? '<span class="pi-badge is-ok">检查通过</span>' : ''}</span></h3><div class="pi-rv-state${dirty ? ' is-draft' : ''}">${stateText}</div>${picker}`,
+        head = `<h3>${isEdit ? '审阅修改' : '审阅'}${vols.length > 1 ? (review.lines ? '：导入的支线' : '') : `：${esc(volumeName(vol.key))}`}<span class="pi-rv-end">${errCount ? `<button type="button" class="pi-badge is-warn pi-rv-issues" data-act="rv-first-issue" title="跳到有问题的页">问题${errCount} ›</button>` : ''}${askCount ? `<button type="button" class="pi-badge is-accent pi-rv-issues" data-act="rv-first-ask" title="跳到有待确认项的页">待确认${askCount} ›</button>` : ''}${!errCount && !askCount && review.revised ? '<span class="pi-badge is-ok">检查通过</span>' : ''}</span></h3><div class="pi-rv-state${dirty ? ' is-draft' : ''}">${stateText}</div>${picker}`,
         nav = `<div class="pi-rv-nav"><div class="pi-rv-dots">${mineUnits.map(dot).join('')}</div></div>`,
         body = '';
     if (u.kind === 'line') {
@@ -441,6 +476,7 @@ export function renderReview(view, job, review, index, crumb, notes = []) {
               return clueOn ? nodes.map(one).join('') : main.map(one).join('') + (side.length ? `<div class="pi-rv-sec">支线</div>${side.map(one).join('')}` : '');
           })()}
           ${nodes.length ? '' : '<p class="pi-hint is-warn">本阶段没有读到节点。</p>'}
+          ${sliceBlock(job, nodes)}
           ${last && last.length ? `<div class="pi-rv-sec">本次修改</div>${last.map((t) => `<div class="pi-rv-chg">${esc(t)}</div>`).join('')}` : ''}
           ${errs.length ? `<div class="pi-rv-sec">问题（${errs.length}）${fillAll}</div>${errs.map((x) => issueCard(x, u.key, filled(x))).join('')}` : ''}
           ${asks.length ? `<div class="pi-rv-sec">待确认（${asks.length}）${errs.length ? '' : fillAll}</div>${asks.map((x) => issueCard(x, u.key, filled(x))).join('')}` : ''}
@@ -473,7 +509,6 @@ export function renderReview(view, job, review, index, crumb, notes = []) {
           <div class="pi-tools is-c1"><button type="button" class="pi-btn is-sm" data-act="rv-yaml-save" data-unit="${esc(u.key)}">保存并检查</button></div><p class="pi-status" data-rv-yaml-status></p></details>`
          }
         ${locked ? '' : trpgReviewButton(view, job)}
-        ${locked || busy ? '' : `<div class="pi-row pi-rv-extra"><button type="button" class="pi-btn is-sm is-ghost" data-act="rv-preview" title="对整条线的意见、是否附带讨论记录；也能一次看全各页意见">整体意见${String(review.overall || '').trim() ? '（已写）' : ''}…</button></div>`}
         <div class="pi-rv-foot">${busy ? progressHtml(`rv-${view.projectId}`) : ''}<button type="button" class="pi-btn${pending ? ' is-primary' : ''}" data-act="rv-send"${busy ? ' disabled' : ''}>${busy ? '<span class="pi-spin"></span>修改中' : sendLabel(pending)}</button>${
             synced
                 ? '<button type="button" class="pi-btn" data-act="import-adopt" disabled>已与模组一致</button>'
@@ -544,12 +579,6 @@ export function reviewActions({ jobOf, crumbBack, redraftLine, openSaved = null 
             let ok = (job.localIndex || []).filter((x) => isPlainObject(x) && !x.error);
             return ok.length ? mergeImportIndex(ok) : job.index;
         },
-        // 当前这条线（整体意见只改它）
-        curLine = (view, review) => {
-            let units = reviewUnits(view.project(), review),
-                vol = review.draft.find((v) => v.id === (units[Math.max(0, Math.min(units.length - 1, review.at || 0))] || units[0]).volumeId);
-            return { vol, locked: !vol || lineLocked(review, vol.id, view.project()) };
-        },
         // 发给AI并显示进度（用户 2026-11-23：发送后只有按钮上一个小转圈，不知道走到哪了）
         sendRevise = async (view, c2, opts) => {
             let projectId = view.projectId,
@@ -565,21 +594,6 @@ export function reviewActions({ jobOf, crumbBack, redraftLine, openSaved = null 
             view.renderBody();
         };
     let actions = {
-        // 发送意见（用户 2026-11-23）：直接发，不再先弹预览框；整体意见、附带讨论记录在「整体意见…」里设
-        async 'rv-send'(view) {
-            let box0 = hostDocument().querySelector('.pi-rv [data-rv-comment]');
-            box0 && (await reviewOnInput(view, box0, jobOf, { blur: !0 }));
-            let c = current(view);
-            if (!c) return;
-            let review = c.review,
-                { vol, locked } = curLine(view, review),
-                overall = locked ? '' : String(review.overall || '').trim();
-            if (!sendableNotes(view.project(), review).length && !overall)
-                return toast('info', '各页还没有意见。在页下面的「意见」框里写，写完点「发送意见」一次发给AI。');
-            let chat = review.noTalk ? null : await view.data.loadChat(view.projectId).catch(() => null),
-                talk = chat && (chat.summary || (chat.messages || []).length) ? transcript(chat.summary, chat.messages, 8e3) : '';
-            await sendRevise(view, c, { overall, overallVol: vol && vol.id, talk });
-        },
         async 'rv-go'(view, target) {
             let c = current(view);
             c && (await saveReview(view, c.jobId, (r) => ({ ...r, at: Number(target.dataset.i) || 0 })), view.renderBody());
@@ -592,6 +606,31 @@ export function reviewActions({ jobOf, crumbBack, redraftLine, openSaved = null 
             x && (await saveReview(view, c.jobId, (r) => ({ ...r, comments: { ...r.comments, [key]: appendComment(r.comments[key], issueCommentLine(x)) } })), view.renderBody());
             let box = [...hostDocument().querySelectorAll('[data-rv-comment]')].find((b) => b.dataset.rvComment === key);
             box && x && x.level !== 'error' && (box.focus(), box.setSelectionRange(box.value.length, box.value.length));
+        },
+        // 导入检查的一键修：走 editDraft，可以「撤销上次修改」
+        async 'rv-quick'(view, target) {
+            let c = current(view);
+            if (!c) return;
+            let x = (reviewIssues(view, c.review, indexOf(c.job))[target.dataset.unit] || []).find((y) => y.id === target.dataset.issue),
+                pick = Number(target.dataset.pick),
+                fix = x && (pick < 0 ? x.quick : (x.alts || [])[pick]);
+            if (!fix) return;
+            await saveReview(view, c.jobId, (r) => editDraft(r, fix.label, (d) => applyImportFix(d, fix.q)));
+            view.renderBody();
+            toast('info', `已修改：${fix.label}。如需还原，可点击下方的「撤销上次修改」。`);
+        },
+        async 'rv-quick-more'(view, target) {
+            let c = current(view);
+            if (!c) return;
+            let x = (reviewIssues(view, c.review, indexOf(c.job))[target.dataset.unit] || []).find((y) => y.id === target.dataset.issue);
+            if (!x || !(x.alts || []).length) return;
+            let v = await menuDialog({ title: '其他处理方式', items: x.alts.map((a, i) => ({ label: a.label, value: String(i) })) });
+            v != null && actions['rv-quick'](view, { dataset: { unit: target.dataset.unit, issue: target.dataset.issue, pick: v } });
+        },
+        // 去执行页填故事时间的绑定（审阅内容已存，回来接着看）
+        async 'rv-bind'(view) {
+            view.tabState('run').bindOpen = !0;
+            view.switchTab && view.switchTab('run');
         },
         // 疑似短名：是同一人 → 当保密名字（下一次检查报成要改的问题）；不是 → 不再提示。都可以在「已确认」里撤回。
         async 'rv-short'(view, target) {
@@ -646,6 +685,17 @@ export function reviewActions({ jobOf, crumbBack, redraftLine, openSaved = null 
                 at = c.review.at || 0,
                 bad = units.map((u, i) => ((issues[u.key] || []).some((x) => x.level === 'error') ? i : -1)).filter((i) => i >= 0),
                 next = bad.find((i) => i > at) ?? bad[0];
+            next != null && (await saveReview(view, c.jobId, (r) => ({ ...r, at: next })), view.renderBody());
+        },
+        // 标题上的「待确认 N」：跳到下一个有待确认项的页
+        async 'rv-first-ask'(view) {
+            let c = current(view);
+            if (!c) return;
+            let units = reviewUnits(view.project(), c.review),
+                issues = reviewIssues(view, c.review, indexOf(c.job)),
+                at = c.review.at || 0,
+                list = units.map((u, i) => ((issues[u.key] || []).some((x) => x.level !== 'error') ? i : -1)).filter((i) => i >= 0),
+                next = list.find((i) => i > at) ?? list[0];
             next != null && (await saveReview(view, c.jobId, (r) => ({ ...r, at: next })), view.renderBody());
         },
         async 'rv-fill-all'(view) {
@@ -763,8 +813,8 @@ export function reviewActions({ jobOf, crumbBack, redraftLine, openSaved = null 
             await saveReview(view, c.jobId, (r) => ({ ...editDraft(r, '直接改YAML', (d) => putUnit(d, key, parsed)), yamlOpen: key }));
             view.renderBody();
         },
-        // 预览意见（用户 2026-11-16）：各页意见汇总可改，加整体意见、附带讨论记录，一次发送。
-        async 'rv-preview'(view) {
+        // 发送（用户 2026-11-24）：整体意见并进发送。没写页意见只弹整体意见框；写了就先列各页意见（可改、点标题回到那页），下面是整体意见。
+        async 'rv-send'(view) {
             let box0 = hostDocument().querySelector('.pi-rv [data-rv-comment]');
             box0 && (await reviewOnInput(view, box0, jobOf, { blur: !0 }));
             let c = current(view);
@@ -779,10 +829,11 @@ export function reviewActions({ jobOf, crumbBack, redraftLine, openSaved = null 
                 curLocked = !curVol || lineLocked(review, curVol.id, view.project()),
                 chat = await view.data.loadChat(view.projectId).catch(() => null),
                 hasTalk = !!(chat && (chat.summary || (chat.messages || []).length)),
+                overallBox = !curLocked,
                 stages = curVol ? curVol.stages.length : 0,
                 curName = curVol ? (review.draft.length > 1 ? lineTitle(curVol) : reviewIsClue(view.project(), review) ? '这条线' : '这一卷') : '',
-                html = `<p class="pi-hint">以下意见会一次发给AI，改完先进草稿。可在此修改；点标题返回对应页。</p>
-                ${list.map((u) => `<div class="pi-rv-q"><button type="button" class="pi-rv-q-go" data-dlg-value="go:${esc(u.key)}">${esc(labelOf(u.key))} ›</button><textarea class="pi-ta" rows="2" data-rv-q="${esc(u.key)}">${esc(review.comments[u.key])}</textarea></div>`).join('') || '<p class="pi-hint">各页还没有意见。</p>'}
+                html = `${list.length ? `<div class="pi-rv-sec">各页意见（${list.length}）</div><p class="pi-hint">可在此修改；点标题返回对应页。改完先进草稿。</p>
+                ${list.map((u) => `<div class="pi-rv-q"><button type="button" class="pi-rv-q-go" data-dlg-value="go:${esc(u.key)}">${esc(labelOf(u.key))} ›</button><textarea class="pi-ta" rows="2" data-rv-q="${esc(u.key)}">${esc(review.comments[u.key])}</textarea></div>`).join('')}` : ''}
                 ${
                      curLocked
                          ? ''
@@ -796,8 +847,10 @@ export function reviewActions({ jobOf, crumbBack, redraftLine, openSaved = null 
                     talk: hasTalk ? root.querySelector('[data-rv-talk]').checked : !1,
                 }),
                 typed = null,
-                pick = await openDialog({
-                    title: '整体意见',
+                pick = !list.length && !overallBox
+                    ? (toast('info', '各页还没有意见。在页下面的「意见」框里写，写完点「发送意见」一次发给AI。'), null)
+                    : await openDialog({
+                    title: list.length ? '发送意见' : '整体意见',
                     html,
                     // 点标题回到那一页之前，先记下框里改过的内容（GPT 第二轮 N6）
                     onMount: (root) => root.addEventListener('click', (e) => e.target.closest('[data-dlg-value]') && (typed = read(root)), !0),

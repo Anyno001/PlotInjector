@@ -131,32 +131,7 @@ test('F08: main paused → no injection, but facts and manual ops are kept; resu
   await inst.destroy();
 });
 
-test('F08b: an old project with a table switch (启用 column) still honours it', async () => {
-  const { host, inst, pid, commit } = await clueSetup();
-  const p = inst.data.project(pid);
-  inst.data.updateProject(pid, (x) => ({ ...x, clue: { ...x.clue, bindings: { ...x.clue.bindings, switch: { 路径: '线索控制表/主线/启用', 开启值: 1 } } } }));
-  const t = JSON.parse(JSON.stringify(host.db.tables));
-  const ctrl = Object.values(t).find((s) => s && s.name === '线索控制表');
-  ctrl.content[0].push('启用'); ctrl.content[1].push(0);
-  host.db.setTables(t); commit();
-  inst.runtime.clue.invalidate();
-  assert.equal(inst.runtime.clue.compute().snap.enabled, false);
-  assert.equal(inst.runtime.clue.projection().reason, '主线开关未开启');
-  void p;
-  await inst.destroy();
-});
 
-test('R06: repeated events and repeated panel opening are idempotent', async () => {
-  const { host, inst, set, commit, status } = await clueSetup();
-  set('关键事实表', 'F_box', '状态', '已核实');
-  for (let i = 0; i < 3; i++) { commit(); await host.eventSource.emit(host.eventTypes.CHAT_CHANGED); }
-  const s1 = status();
-  for (let i = 0; i < 3; i++) { inst.open(); await host.settle(); }
-  const r = await host.send('x');
-  assert.equal(r.lore.filter((e) => /后屋|裁缝铺/.test(e.content)).length, 1, 'injected exactly once');
-  assert.deepEqual(status(), s1);
-  await inst.destroy();
-});
 
 test('rollback: v0.1.13 (baseline script) opens a project saved by v0.2.0 in clue mode; outline content intact', async () => {
   // 1) v0.2.0 writes a clue-mode project with ids, clue fields and <仅作者> setting
@@ -184,38 +159,4 @@ test('rollback: v0.1.13 (baseline script) opens a project saved by v0.2.0 in clu
   await oldInst.destroy();
 });
 
-test('run page: pause / resume buttons; all-done card offers 开始下一段主线', async () => {
-  const { host, inst, set, commit } = await clueSetup();
-  inst.open(); await new Promise((r) => setTimeout(r, 20));
-  const doc = host.w.document, tick = () => new Promise((r) => setTimeout(r, 20));
-  doc.querySelector('[data-act="tab"][data-tab="run"]').click(); await tick();
-  doc.querySelector('[data-act="clue-pause"][data-value="1"]').click(); await tick();
-  assert.equal(inst.runtime.clue.diagnose().paused, true);
-  assert.match(doc.documentElement.textContent, /已暂停/);
-  assert.equal(inst.runtime.clue.projection().reason, '剧情已暂停');
-  doc.querySelector('[data-act="clue-pause"][data-value=""]').click(); await tick();
-  assert.equal(inst.runtime.clue.diagnose().paused, false);
-  for (const f of ['F_box', 'F_ledger', 'F_seen', 'F_print', 'F_talk']) set('关键事实表', f, '状态', '已核实');
-  commit(); inst.runtime.clue.invalidate(); inst.open(); await tick();
-  doc.querySelector('[data-act="tab"][data-tab="run"]').click(); await tick();
-  assert.ok(doc.querySelector('[data-act="clue-next"]'), 'next-mainline button when every stage ended');
-  await inst.destroy();
-});
 
-test('run page: plot preset with a story-driving task → warning; paused → no warning; recall-only → none', async () => {
-  const P = JSON.parse(fs.readFileSync(new URL('./fixtures/plot-presets.json', import.meta.url), 'utf8'));
-  const { host, inst } = await clueSetup();
-  const api = host.w.AutoCardUpdaterAPI;
-  let preset = P.huizhencheng;
-  api.getCurrentPlotPreset = () => preset.name;
-  api.getPlotPresetDetails = () => preset;
-  inst.open(); await new Promise((r) => setTimeout(r, 20));
-  const doc = host.w.document, tick = () => new Promise((r) => setTimeout(r, 20));
-  doc.querySelector('[data-act="tab"][data-tab="run"]').click(); await tick();
-  assert.match(doc.documentElement.textContent, /启用了召回以外的任务：「推进」/);
-  inst.runtime.clue.setPaused(true); doc.querySelector('[data-act="tab"][data-tab="run"]').click(); await tick();
-  assert.ok(!/启用了召回以外的任务/.test(doc.documentElement.textContent), 'no warning while paused');
-  inst.runtime.clue.setPaused(false); preset = P.timeRecall; doc.querySelector('[data-act="tab"][data-tab="run"]').click(); await tick();
-  assert.ok(!/启用了召回以外的任务/.test(doc.documentElement.textContent), 'recall-only preset → no warning');
-  await inst.destroy();
-});

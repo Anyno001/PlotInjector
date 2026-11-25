@@ -577,6 +577,12 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
             } catch (error) {
                 console.error('[剧情注入器] 注入失败', error);
             }
+            // 跑团：用户这一轮刚掷的判定弹小卡（只在真正生成时，试算 token 不弹）
+            try {
+                generating && isTrpg(activeProject()) && kpRunner.rollNotice();
+            } catch (error) {
+                log(`判定小卡出错：${error.message}`);
+            }
         }
     }
     function scheduleFallback() {

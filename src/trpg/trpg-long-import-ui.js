@@ -32,7 +32,8 @@ import { normalizeClue } from './trpg-clue-model.js';
 
 import { lineReviewFromJob, adoptedLineOf } from './trpg-review-lines.js';
 
-import { afterAdopt, currentTables, st } from '../ui/tab-outline.js';
+import { afterAdopt as baseAfterAdopt, currentTables, st } from '../ui/tab-outline.js';
+import { sliceMessages, parseSliceReply, verifySlices, mergeSlices, attachSlices } from './trpg-slices.js';
 
 import { tableCatalogText, extractYaml, fixYamlMessages, parseOutlineReply } from '../core/prompts.js';
 
@@ -118,6 +119,74 @@ export function importJobOf(view, jobId) {
 
 export function projectAdopted(project) {
     return new Set(project && Array.isArray(project.importAdopted) ? project.importAdopted : []);
+}
+
+// 采用之后（四条保存路径都会走到这里）：把导入任务里切好的原文切片并进项目，并按当前模组里的节点挂靠。可重复执行。
+function afterAdopt(view) {
+    baseAfterAdopt(view);
+    syncSlices(view);
+}
+
+export function syncSlices(view) {
+    let project = view.project(),
+        jobs = importJobIds(project)
+            .map((id) => view.data.imports.get(id))
+            .filter((j) => j && j.trpg && j.slicesByPart),
+        incoming = jobs.flatMap((j) => Object.keys(j.slicesByPart).sort((a, b) => a - b).flatMap((k) => j.slicesByPart[k] || []));
+    if (!project || !project.trpg || !project.outline) return;
+    let cur = project.trpg.slices || [],
+        merged = attachSlices(mergeSlices(cur, incoming), project.outline.volumes);
+    if (JSON.stringify(merged) === JSON.stringify(cur)) return;
+    view.data.updateProject(view.projectId, (p) => (p.trpg ? { ...p, trpg: { ...p.trpg, slices: merged } } : p));
+}
+
+async function runSlices(view, jobId, parts, partText, still, onStep = () => {}) {
+    let store = view.data.imports,
+        out = { failed: 0, error: '' },
+        cut = async (p) => {
+            if (!still()) return;
+            if ((store.get(jobId).slicesByPart || {})[p.i]) return onStep();
+            try {
+                let items = parseSliceReply(await askLive(view, jobId, `第${p.i + 1}段切片`, sliceMessages({ part: p, text: partText(p), total: parts.length }))),
+                    got = verifySlices(items, partText(p), p.i);
+                still() && (await store.update(jobId, (j) => ({ ...j, slicesByPart: { ...(j.slicesByPart || {}), [p.i]: got } })));
+            } catch (error) {
+                ((out.failed += 1), (out.error ||= (error && error.message) || String(error)));
+            }
+            onStep();
+        };
+    await runPool(parts.map((p) => () => cut(p)), IMPORT_CONCURRENCY, still);
+    return out;
+}
+
+// 已经导入、审阅过的跑团模组补全原文切片：任务和原文还在才能补（入库后任务不会自动删，用户手动删了就没有原文了）。
+// onProgress({ done, total })：每段完成时调一次。
+// 返回 { jobs, gone, slices, added, failed, error, total }
+export async function backfillSlices(view, { onProgress = () => {} } = {}) {
+    let store = view.data.imports,
+        pid = view.projectId,
+        still = () => view.projectId === pid,
+        todo = [],
+        gone = 0,
+        before = ((view.project().trpg || {}).slices || []).length;
+    for (let id of importJobIds(view.project())) {
+        let job = await store.load(id);
+        if (!job || !job.trpg || !job.parts || !job.parts.length) continue;
+        let text = await store.source(id);
+        text ? todo.push({ id, job, text }) : (gone += 1);
+    }
+    let total = todo.reduce((n, x) => n + x.job.parts.length, 0),
+        done = 0,
+        failed = 0,
+        error = '';
+    onProgress({ done, total });
+    for (let { id, job, text } of todo) {
+        let r = await runSlices(view, id, job.parts, (p) => text.slice(Math.max(0, p.start - p.lead), p.end), still, () => onProgress({ done: ++done, total }));
+        ((failed += r.failed), (error ||= r.error));
+    }
+    still() && syncSlices(view);
+    let slices = ((view.project().trpg || {}).slices || []).length;
+    return { jobs: todo.length, gone, slices, added: slices - before, failed, error, total };
 }
 
 export async function runImportJob(view, jobId) {
@@ -213,6 +282,11 @@ async function runImportJobInner(view, jobId, signal) {
             } catch {}
         };
         await runPool(parts.map((p) => () => retry(p)), IMPORT_CONCURRENCY, still);
+        if (!still()) return;
+    }
+    // 跑团模组：每段再挑一次原文切片（台词、场景描写、伏笔）。按段存，点「继续」跳过已切好的段；失败不影响导入。
+    if (job.trpg) {
+        await runSlices(view, jobId, parts, partText, still);
         if (!still()) return;
     }
     let index = mergeImportIndex(okList());
