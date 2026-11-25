@@ -48,6 +48,21 @@ export function cardKey() {
     return card && card.avatar ? `char:${card.avatar}` : '';
 }
 
+// 当前单聊的角色卡对象（群聊、没开卡时为 null）。
+export function currentCard() {
+    const c = ctx();
+    if (!c || c.groupId || c.characterId == null || !Array.isArray(c.characters)) return null;
+    return c.characters[c.characterId] || null;
+}
+
+// 往当前角色卡的 data.extensions 写一项（酒馆的 writeExtensionField：只合并这一个键，并存回卡文件）。
+export async function writeCardExtension(key, value) {
+    const c = ctx();
+    if (!c || typeof c.writeExtensionField !== 'function') throw new Error('当前酒馆版本不支持往角色卡写数据');
+    if (!currentCard()) throw new Error('请先打开一张角色卡（群聊不支持）');
+    await c.writeExtensionField(c.characterId, key, value);
+}
+
 export function cardName() {
     const c = ctx();
     if (!c) return '';

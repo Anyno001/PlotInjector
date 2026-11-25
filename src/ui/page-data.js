@@ -5,7 +5,8 @@ import { buildZip } from '../core/zip.js';
 import { buildPersonaFile } from '../core/persona-file.js';
 import { chatHasFoldedRows, clearChatProgress } from '../app/progress-store.js';
 import { deleteFile, readRawFile, verifyFiles } from '../host/files.js';
-import { downloadBlob, hostWindow, toast } from '../host/st.js';
+import { currentCard, downloadBlob, hostWindow, toast, writeCardExtension } from '../host/st.js';
+import { CARD_PACK_KEY, buildCardPack, packIdOf, readCardPack } from '../core/card-pack.js';
 import { compareVersions, fetchLatestVersion } from '../host/update.js';
 import { confirmDialog, esc, openDialog, options } from './dom.js';
 import { buildProjectFile, projectSummary, PROJECT_FILE_EXT } from '../core/project-file.js';
@@ -14,6 +15,18 @@ import { labelsToPrepare } from '../core/fact-labels.js';
 import { writeUi } from './app.js';
 
 const st = (view) => view.tabState('data');
+
+// 把项目写进当前角色卡，并记下卡内 id ↔ 项目（作者再写时沿用 id；本机也就不会再提示导入自己写的项目）。
+async function writeToCard(view, project, opts, packId) {
+    const card = currentCard();
+    if (!card) throw new Error('请先打开一张角色卡（群聊不支持）');
+    const pack = buildCardPack(project, { ...opts, id: packId, version: view.version });
+    await writeCardExtension(CARD_PACK_KEY, pack);
+    const back = readCardPack(currentCard());
+    if (!back || back.id !== pack.id || back.savedAt !== pack.savedAt) throw new Error('写进角色卡后读回不一致，请刷新酒馆后重试');
+    view.data.updateSettings({ cardLinks: { ...(view.data.settings().cardLinks || {}), [pack.id]: { project: project.id, savedAt: pack.savedAt } } });
+    toast('success', `已写进角色卡「${card.name}」（${Math.ceil(pack.file.length / 1024)}KB）。在酒馆导出这张卡就会带上剧情项目。`);
+}
 
 // 最新版本每次打开页面只查一次，结果留到刷新酒馆页面为止。
 const latest = { state: '', version: '', error: '' };
@@ -221,6 +234,15 @@ export const actions = {
             srcCount = (k) => Object.values((project.clue && project.clue.labels) || {}).filter((v) => (k ? v.src === k : !v.src)).length,
             byUser = sum.clue ? srcCount('user') : 0,
             legacy = sum.clue ? srcCount('') : 0,
+            card = currentCard(),
+            old = card ? readCardPack(card) : null,
+            links = view.data.settings().cardLinks,
+            // 这个项目以前写进过卡就沿用那个 id（玩家那边据此认出是新版本）；卡里已是这个项目时也沿用
+            packId = packIdOf(links, project.id) || (old && links && links[old.id] && links[old.id].project === project.id ? old.id : ''),
+            readPick = (box) => ({
+                personas: !!(box.querySelector('[data-f=personas]') || {}).checked,
+                setting: !!(box.querySelector('[data-f=setting]') || {}).checked,
+            }),
             pick = await openDialog({
                 title: `导出「${project.name}」`,
                 html: `<p class="pi-hint">包含：${esc(parts.join('、'))}。</p>
@@ -229,21 +251,18 @@ export const actions = {
                 ${sum.personas ? `<label class="pi-check"><input type="checkbox" data-f="personas" checked><span>人设（${sum.personas}条）</span></label>` : ''}
                 ${sum.setting ? '<label class="pi-check"><input type="checkbox" data-f="setting" checked><span>设定</span></label>' : ''}
                 ${sum.personas || sum.setting ? '<p class="pi-hint">人设、设定已写入世界书的，可不勾选。</p>' : ''}
-                <p class="pi-hint">不含讨论记录、聊天进度和导入草稿。</p>`,
+                <p class="pi-hint">不含讨论记录、聊天进度和导入草稿。</p>
+                ${card ? `<p class="pi-hint">「写进角色卡」：存进「${esc(card.name)}」${old && old.id !== packId ? `（替换卡里原有的「${esc(old.name)}」）` : ''}，卡里原有的正则、脚本、世界书都不动。之后在酒馆导出这张卡就会带上剧情，玩家导入卡时插件会提示导入。</p>` : ''}`,
                 actions: [
                     { label: '取消', value: null },
-                    {
-                        label: '导出',
-                        primary: !0,
-                        value: (box) => ({
-                            personas: !!(box.querySelector('[data-f=personas]') || {}).checked,
-                            setting: !!(box.querySelector('[data-f=setting]') || {}).checked,
-                        }),
-                    },
+                    ...(card ? [{ label: '写进角色卡', value: (box) => ({ ...readPick(box), toCard: !0 }) }] : []),
+                    { label: '导出文件', primary: !0, value: readPick },
                 ],
             });
         if (!pick) return;
-        downloadBlob(`${project.name}${PROJECT_FILE_EXT}`, JSON.stringify(buildProjectFile(project, { ...pick, version: view.version }), null, 2), 'application/json');
+        const { toCard, ...opts } = pick;
+        if (toCard) return writeToCard(view, project, opts, packId);
+        downloadBlob(`${project.name}${PROJECT_FILE_EXT}`, JSON.stringify(buildProjectFile(project, { ...opts, version: view.version }), null, 2), 'application/json');
         toast('success', `已导出「${project.name}」。`);
     },
     async 'export-personas'(view) {

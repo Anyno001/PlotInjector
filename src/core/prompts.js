@@ -671,7 +671,7 @@ export function fixFullWidthKeys(yaml) {
 export { OUTLINE_RULES };
 
 // 入口提示：线可以开始、主角还没去做时，插件把它作为「可以去做的事」的由头交给正文（lines.js 的 offer.hint）。
-// 要 AI 顺手写好，不让作者自己想。对比见 开发/import-lab/entry-check.mjs。
+// 要 AI 顺手写好，不让作者自己想。
 export const BRIEF_RULE = [
     '· 简介（每条线都必须写）：一句话说这条线讲的是什么事，给作者在执行页、审阅页一眼认出这条线用。',
     '  - 写成「谁 + 遇到什么事 + 主角要做什么」，具体到人和事，十五到三十字。',

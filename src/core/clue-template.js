@@ -1,10 +1,23 @@
 import { LINE_CATALOG_COL } from './lines.js';
 import { isPlainObject } from './outline.js';
-// 「已核实」按各行口径写的取得者判断，不一律要求主角（用户扮演的角色）取得（蜘蛛侠卡实测 2026-11-23：查案的是 char）。
+// 「已核实」按各行口径写的取得者判断，不一律要求主角（用户扮演的角色）取得（查线索的常常是 char，不是用户扮演的角色）。
 // 旧聊天的说明里还是旧句子，重新「创建模板」时换成这一句。
 const FACT_VERIFIED_OLD = '已核实：正文里主角实际取得了这项结果，而且有可靠依据（亲眼看到实物、读到原件、得到明确验证）。';
 const FACT_VERIFIED_RULE =
     '    · 已核实：正文里实际出现了这一行口径所说的结果（口径写了由谁取得，以那个人为准），而且有可靠依据（亲眼看到实物、读到原件、得到明确验证）。';
+// 依据不写楼层号：数据库交给填表 AI 的对话不带楼层编号，它只能在本批里自己数（写出「第1楼」）。
+// 旧聊天的事实表、知情表说明里还是旧句子，重新「创建模板」时按这张表逐句换掉。
+const EVIDENCE_TEXT = '- 依据：写故事里的时间和情节，如「周一晚 码头仓库 看守交出账本」。时间照正文或全局表写，拿不准就只写情节。不写楼层号（你看到的对话没有楼层编号）。';
+export const EVIDENCE_REWRITES = [
+    ['- 依据：写明正文哪一楼、哪个情节。', EVIDENCE_TEXT],
+    ['「；后续：<楼层 新情节>」。没有新信息、或同一楼的情节已经追加过，就不改。', '「；后续：<时间 新情节>」。没有新信息、或同一情节已经追加过，就不改。'],
+    ['依据追加「；后续：第<N>楼 另一份收据上的签名相同」', '依据追加「；后续：次日 另一份收据上的签名相同」'],
+    ['在依据里写明新证据和楼层', '在依据里追加新证据'],
+    ["'第<N>楼 <情节>'", "'<时间> <情节>'"],
+    ["'；后续：第<N>楼 <新情节>'", "'；后续：<时间> <新情节>'"],
+    ["'；第<N>楼 <新证据>'", "'；<时间> <新证据>'"],
+];
+const rewriteEvidence = (text) => EVIDENCE_REWRITES.reduce((s, [from, to]) => s.split(from).join(to), String(text || ''));
 export const CLUE_TPL_MARK_BEGIN = '【线索主线附加规则·剧情注入器】';
 
 export const CLUE_TPL_MARK_END = '【附加规则结束】';
@@ -97,19 +110,19 @@ export function clueFactSheet() {
                 '    · 存疑：正文里确实出现了这项内容，但来源只是某人的说法、传闻或推测，还没有可靠依据。「内容」要写明是谁说的。拿不准正文有没有写出这项内容时不要记为存疑，保持原值。',
                 '    · 未获得：其余情况。到达地点、尝试调查、对方答应提供、中途离开，都仍是未获得。',
                 '- 内容：一句话写出正文里实际出现的内容，只写正文写出来的部分，不补充正文没有的细节。例：只承认拿了钱、没说原因，就只写拿了钱。',
-                '- 依据：写明正文哪一楼、哪个情节。',
+                '- 依据：写故事里的时间和情节，如「周一晚 码头仓库 看守交出账本」。时间照正文或全局表写，拿不准就只写情节。不写楼层号（你看到的对话没有楼层编号）。',
                 '怎么找编号：',
                 '    · 首次获得：按各行的「登记口径」判断正文写出的结果对应哪个编号、是否已经取得。附有【线索编号对照】时也可以参考。口径和对照都只用于对号，不代表已经发生。',
                 '    · 维护已有记录：已经是已核实或存疑的行，正文出现新证据推翻或证实它时，可以按这一行已有的「内容」匹配并更新。无法确定是哪一行时保持原值。',
-                '    · 已有记录又出现佐证（不推翻、也不改变状态）：「内容」保持不变；只有带来新信息时，才在「依据」原文后面追加「；后续：<楼层 新情节>」。没有新信息、或同一楼的情节已经追加过，就不改。不要用新情节覆盖第一次取得时的内容和依据。',
-                '      例：之前已核实「第一次签收的回执」，这一楼主角在另一份收据上看到同样的签名 → 内容不变，依据追加「；后续：第<N>楼 另一份收据上的签名相同」。',
+                '    · 已有记录又出现佐证（不推翻、也不改变状态）：「内容」保持不变；只有带来新信息时，才在「依据」原文后面追加「；后续：<时间 新情节>」。没有新信息、或同一情节已经追加过，就不改。不要用新情节覆盖第一次取得时的内容和依据。',
+                '      例：之前已核实「第一次签收的回执」，这一楼主角在另一份收据上看到同样的签名 → 内容不变，依据追加「；后续：次日 另一份收据上的签名相同」。',
                 '    · 正文没写出对应结果时，不要改任何行。',
                 CLUE_TPL_EVIDENCE,
             ].join('\n'),
             initNode: '保留模板里预先建好的行，不要清空、不要新增。',
             deleteNode: '禁止删除。',
             updateNode:
-                "只有正文明确写出结果时，才把对应编号的状态改为已核实或存疑，并填写内容和依据。已核实的事实后来被正文推翻时改为存疑，在依据里写明新证据和楼层；存疑的说法后来得到可靠证实时改为已核实。\nSQL示例(首次登记说法): UPDATE clue_facts SET status = '存疑', content = '<谁>说<正文里的原意>', evidence = '第<N>楼 <情节>' WHERE code = '<编号>';\nSQL示例(纯佐证，只追加依据): UPDATE clue_facts SET evidence = evidence || '；后续：第<N>楼 <新情节>' WHERE code = '<编号>';\nSQL示例(原说法被推翻或证实): UPDATE clue_facts SET status = '<已核实或存疑>', evidence = evidence || '；第<N>楼 <新证据>' WHERE code = '<编号>';",
+                "只有正文明确写出结果时，才把对应编号的状态改为已核实或存疑，并填写内容和依据。已核实的事实后来被正文推翻时改为存疑，在依据里追加新证据；存疑的说法后来得到可靠证实时改为已核实。\nSQL示例(首次登记说法): UPDATE clue_facts SET status = '存疑', content = '<谁>说<正文里的原意>', evidence = '<时间> <情节>' WHERE code = '<编号>';\nSQL示例(纯佐证，只追加依据): UPDATE clue_facts SET evidence = evidence || '；后续：<时间> <新情节>' WHERE code = '<编号>';\nSQL示例(原说法被推翻或证实): UPDATE clue_facts SET status = '<已核实或存疑>', evidence = evidence || '；<时间> <新证据>' WHERE code = '<编号>';",
             insertNode: '禁止插入。只修改已有行。',
             ddl: "CREATE TABLE clue_facts ( -- 关键事实表\n  row_id INTEGER PRIMARY KEY, -- 行号\n  code TEXT NOT NULL UNIQUE, -- 编号\n  label TEXT NOT NULL, -- 标签\n  criterion TEXT, -- 登记口径\n  status TEXT NOT NULL DEFAULT '未获得' CHECK(status IN ('未获得', '已核实', '存疑')), -- 状态\n  content TEXT, -- 内容\n  evidence TEXT -- 依据\n);",
         },
@@ -137,7 +150,7 @@ export function clueKnowSheet() {
                 '      这个角色亲眼看了实物或原件、再据此得出的判断（如读了单据后判断证词对不上），记为「亲见」，不是推测。推测不配「已核实」。',
                 '    · 未知：其余情况。【在场不等于知道】：只是在场、没听清、别人私下得知时他在附近，都保持原值，除非正文写出他看到或听到了内容。',
                 '- 可信度：只能是 已核实 / 未核实。跟着这个角色手里的证据走：亲见通常是已核实；被告知、听说、推测通常是未核实，除非正文写出他确认了真假。',
-                '- 依据：写明正文哪一楼、哪个情节。',
+                '- 依据：写故事里的时间和情节，如「周一晚 码头仓库 看守交出账本」。时间照正文或全局表写，拿不准就只写情节。不写楼层号（你看到的对话没有楼层编号）。',
                 '【先看事实表】某条事实在关键事实表里仍是「未获得」、本次也没有把它登记成已核实或存疑时，它的知情行全部保持原值。',
                 '    知情的对象是关键事实表里那一行的「登记口径」所说的结果，不是标签字面上的东西。',
                 '    例：口径是「在抽屉里找到那封信并读到内容」，正文只写主角看见了上锁的抽屉、没打开 → 事实表保持未获得，知情行也保持未知。',
@@ -148,7 +161,7 @@ export function clueKnowSheet() {
             initNode: '保留模板里预先建好的行，不要清空、不要新增。',
             deleteNode: '禁止删除。',
             updateNode:
-                "只有正文明确写出某个角色看到、被告知、听到、猜到某条事实时，才更新对应行。例：老人当面对主角说看见了人 → 主角那一行改为「被告知 / 未核实」；老板娘当时不在场 → 她那一行保持原值。\nSQL示例: UPDATE clue_knowledge SET way = '被告知', credibility = '未核实', evidence = '第<N>楼 <情节>' WHERE key = '<事实编号>@<角色>';",
+                "只有正文明确写出某个角色看到、被告知、听到、猜到某条事实时，才更新对应行。例：老人当面对主角说看见了人 → 主角那一行改为「被告知 / 未核实」；老板娘当时不在场 → 她那一行保持原值。\nSQL示例: UPDATE clue_knowledge SET way = '被告知', credibility = '未核实', evidence = '<时间> <情节>' WHERE key = '<事实编号>@<角色>';",
             insertNode: '禁止插入。只修改已有行。',
             ddl: "CREATE TABLE clue_knowledge ( -- 知情表\n  row_id INTEGER PRIMARY KEY, -- 行号\n  key TEXT NOT NULL UNIQUE, -- 键\n  fact TEXT NOT NULL, -- 事实\n  actor TEXT NOT NULL, -- 角色\n  way TEXT NOT NULL DEFAULT '未知' CHECK(way IN ('未知', '亲见', '被告知', '听说', '推测')), -- 获知方式\n  credibility TEXT NOT NULL DEFAULT '未核实' CHECK(credibility IN ('已核实', '未核实')), -- 可信度\n  evidence TEXT -- 依据\n);",
         },
@@ -216,7 +229,7 @@ export const CLUE_TPL_RULES = {
     重要角色表: [
         '- 建行：本批正文中实际登场，或有人明确提到、且对当前事件有作用的人，才建行。沿用当时可辨认的称呼；姓名还没揭示就用正文里的称呼，以后确认是同一人时更新原行，不另建一行。',
         '- 背景设定里写了、但正文还没有展示的身份、关系、秘密和未来安排，不写进任何一列。关系和经历只补正文已经展示的部分。',
-        '- 剧情身份：写成「谁在第几楼如何称呼或自述」，如「第3楼自称本地商人」。之后被核实或推翻时，在后面追加证据和楼层，不删原来的说法。',
+        '- 剧情身份：写成「什么场合下如何称呼或自述」，如「初到茶馆时自称本地商人」。之后被核实或推翻时，在后面追加证据和时间，不删原来的说法。不写楼层号（你看到的对话没有楼层编号）。',
         '- 当前动向：分清「说打算去」「已出发」「已到达」。正文没有交代新的动向就保持原值；离开场景后在做什么，正文写了才记。',
         '- 一句话介绍只写公开特征；交互选项只写主角目前有依据尝试的行动。',
     ].join('\n'),
@@ -400,6 +413,14 @@ export function synthesizeClueTemplate(base, { clue = {} } = {}) {
             note.includes(FACT_VERIFIED_OLD) &&
                 ((have.sheet.sourceData = { ...have.sheet.sourceData, note: note.replace(`    · ${FACT_VERIFIED_OLD}`, FACT_VERIFIED_RULE).replace(FACT_VERIFIED_OLD, FACT_VERIFIED_RULE.trim()) }),
                 changes.push('「关键事实表」说明：「已核实」改为按各行口径里的取得者判断，不一律要求主角取得'));
+        }
+        if (sheet.name === '关键事实表' || sheet.name === '知情表') {
+            let sd = have.sheet.sourceData || {},
+                note = rewriteEvidence(sd.note),
+                upd = sd.updateNode == null ? sd.updateNode : rewriteEvidence(sd.updateNode);
+            (note !== String(sd.note || '') || upd !== sd.updateNode) &&
+                ((have.sheet.sourceData = { ...sd, note, updateNode: upd }),
+                changes.push(`「${sheet.name}」说明：依据改为写故事时间和情节，不写楼层号`));
         }
         if (sheet.name === '线索控制表') {
             let note = String((have.sheet.sourceData && have.sheet.sourceData.note) || ''),

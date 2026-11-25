@@ -67,6 +67,16 @@
     let card = c.characterId != null && Array.isArray(c.characters) ? c.characters[c.characterId] : null;
     return card && card.avatar ? `char:${card.avatar}` : "";
   }
+  function currentCard() {
+    let c = ctx();
+    return !c || c.groupId || c.characterId == null || !Array.isArray(c.characters) ? null : c.characters[c.characterId] || null;
+  }
+  async function writeCardExtension(key, value) {
+    let c = ctx();
+    if (!c || typeof c.writeExtensionField != "function") throw new Error("当前酒馆版本不支持往角色卡写数据");
+    if (!currentCard()) throw new Error("请先打开一张角色卡（群聊不支持）");
+    await c.writeExtensionField(c.characterId, key, value);
+  }
   function cardName() {
     let c = ctx();
     if (!c) return "";
@@ -6408,13 +6418,12 @@ ${guide ? `${guide}
         offer: used.offer || ""
       }), setProgress({ ...prog, lineFloors: list.sort((a, b) => a.i - b.i).slice(-LINE_FLOOR_KEEP) }, "line-floor");
     }
-    var SYNC_DELAY_MS = 1500;
-    let syncTimer = 0, syncing = !1, syncAgain = !1, lastToast = { key: "", at: 0 }, lineBar = null, catalogMissing = !1, labelsWarned = !1;
+    let syncDelay = { ms: 1500 }, syncTimer = 0, syncing = !1, syncAgain = !1, lastToast = { key: "", at: 0 }, lineBar = null, catalogMissing = !1, labelsWarned = !1;
     function scheduleSync() {
       let w = hostWindow();
       w.clearTimeout(syncTimer), syncTimer = w.setTimeout(() => {
         syncLines().catch((e) => note(`多线同步出错：${e.message}`));
-      }, SYNC_DELAY_MS);
+      }, syncDelay.ms);
     }
     let startBusyAt = 0, recoverTimer = 0, lastFillStart = 0;
     function clueSheetKeys(p, tables) {
@@ -7416,6 +7425,7 @@ ${guide ? `${guide}
       startFromNow,
       wantStart,
       startTiming: START_TIMING,
+      syncDelay,
       setLineBar: (fn) => {
         lineBar = fn;
       },
@@ -11992,7 +12002,15 @@ NSFW指引（涉及成人内容时）:
   var BUILTIN_GUIDE = GENERIC_GUIDE;
 
   // src/core/clue-template.js
-  var FACT_VERIFIED_OLD = "已核实：正文里主角实际取得了这项结果，而且有可靠依据（亲眼看到实物、读到原件、得到明确验证）。", FACT_VERIFIED_RULE = "    · 已核实：正文里实际出现了这一行口径所说的结果（口径写了由谁取得，以那个人为准），而且有可靠依据（亲眼看到实物、读到原件、得到明确验证）。", CLUE_TPL_MARK_BEGIN = "【线索主线附加规则·剧情注入器】", CLUE_TPL_MARK_END = "【附加规则结束】", CLUE_TPL_PLACE = (depth, order, position = "at_depth_as_system") => ({ position, depth, order });
+  var FACT_VERIFIED_OLD = "已核实：正文里主角实际取得了这项结果，而且有可靠依据（亲眼看到实物、读到原件、得到明确验证）。", FACT_VERIFIED_RULE = "    · 已核实：正文里实际出现了这一行口径所说的结果（口径写了由谁取得，以那个人为准），而且有可靠依据（亲眼看到实物、读到原件、得到明确验证）。", EVIDENCE_TEXT = "- 依据：写故事里的时间和情节，如「周一晚 码头仓库 看守交出账本」。时间照正文或全局表写，拿不准就只写情节。不写楼层号（你看到的对话没有楼层编号）。", EVIDENCE_REWRITES = [
+    ["- 依据：写明正文哪一楼、哪个情节。", EVIDENCE_TEXT],
+    ["「；后续：<楼层 新情节>」。没有新信息、或同一楼的情节已经追加过，就不改。", "「；后续：<时间 新情节>」。没有新信息、或同一情节已经追加过，就不改。"],
+    ["依据追加「；后续：第<N>楼 另一份收据上的签名相同」", "依据追加「；后续：次日 另一份收据上的签名相同」"],
+    ["在依据里写明新证据和楼层", "在依据里追加新证据"],
+    ["'第<N>楼 <情节>'", "'<时间> <情节>'"],
+    ["'；后续：第<N>楼 <新情节>'", "'；后续：<时间> <新情节>'"],
+    ["'；第<N>楼 <新证据>'", "'；<时间> <新证据>'"]
+  ], rewriteEvidence = (text2) => EVIDENCE_REWRITES.reduce((s, [from, to]) => s.split(from).join(to), String(text2 || "")), CLUE_TPL_MARK_BEGIN = "【线索主线附加规则·剧情注入器】", CLUE_TPL_MARK_END = "【附加规则结束】", CLUE_TPL_PLACE = (depth, order, position = "at_depth_as_system") => ({ position, depth, order });
   function clueTplExport(name, extra = {}) {
     return {
       enabled: !1,
@@ -12075,22 +12093,22 @@ SQL示例: UPDATE clue_control SET cur_scene = '<场景编号>' WHERE tag = '主
           "    · 存疑：正文里确实出现了这项内容，但来源只是某人的说法、传闻或推测，还没有可靠依据。「内容」要写明是谁说的。拿不准正文有没有写出这项内容时不要记为存疑，保持原值。",
           "    · 未获得：其余情况。到达地点、尝试调查、对方答应提供、中途离开，都仍是未获得。",
           "- 内容：一句话写出正文里实际出现的内容，只写正文写出来的部分，不补充正文没有的细节。例：只承认拿了钱、没说原因，就只写拿了钱。",
-          "- 依据：写明正文哪一楼、哪个情节。",
+          "- 依据：写故事里的时间和情节，如「周一晚 码头仓库 看守交出账本」。时间照正文或全局表写，拿不准就只写情节。不写楼层号（你看到的对话没有楼层编号）。",
           "怎么找编号：",
           "    · 首次获得：按各行的「登记口径」判断正文写出的结果对应哪个编号、是否已经取得。附有【线索编号对照】时也可以参考。口径和对照都只用于对号，不代表已经发生。",
           "    · 维护已有记录：已经是已核实或存疑的行，正文出现新证据推翻或证实它时，可以按这一行已有的「内容」匹配并更新。无法确定是哪一行时保持原值。",
-          "    · 已有记录又出现佐证（不推翻、也不改变状态）：「内容」保持不变；只有带来新信息时，才在「依据」原文后面追加「；后续：<楼层 新情节>」。没有新信息、或同一楼的情节已经追加过，就不改。不要用新情节覆盖第一次取得时的内容和依据。",
-          "      例：之前已核实「第一次签收的回执」，这一楼主角在另一份收据上看到同样的签名 → 内容不变，依据追加「；后续：第<N>楼 另一份收据上的签名相同」。",
+          "    · 已有记录又出现佐证（不推翻、也不改变状态）：「内容」保持不变；只有带来新信息时，才在「依据」原文后面追加「；后续：<时间 新情节>」。没有新信息、或同一情节已经追加过，就不改。不要用新情节覆盖第一次取得时的内容和依据。",
+          "      例：之前已核实「第一次签收的回执」，这一楼主角在另一份收据上看到同样的签名 → 内容不变，依据追加「；后续：次日 另一份收据上的签名相同」。",
           "    · 正文没写出对应结果时，不要改任何行。",
           CLUE_TPL_EVIDENCE
         ].join(`
 `),
         initNode: "保留模板里预先建好的行，不要清空、不要新增。",
         deleteNode: "禁止删除。",
-        updateNode: `只有正文明确写出结果时，才把对应编号的状态改为已核实或存疑，并填写内容和依据。已核实的事实后来被正文推翻时改为存疑，在依据里写明新证据和楼层；存疑的说法后来得到可靠证实时改为已核实。
-SQL示例(首次登记说法): UPDATE clue_facts SET status = '存疑', content = '<谁>说<正文里的原意>', evidence = '第<N>楼 <情节>' WHERE code = '<编号>';
-SQL示例(纯佐证，只追加依据): UPDATE clue_facts SET evidence = evidence || '；后续：第<N>楼 <新情节>' WHERE code = '<编号>';
-SQL示例(原说法被推翻或证实): UPDATE clue_facts SET status = '<已核实或存疑>', evidence = evidence || '；第<N>楼 <新证据>' WHERE code = '<编号>';`,
+        updateNode: `只有正文明确写出结果时，才把对应编号的状态改为已核实或存疑，并填写内容和依据。已核实的事实后来被正文推翻时改为存疑，在依据里追加新证据；存疑的说法后来得到可靠证实时改为已核实。
+SQL示例(首次登记说法): UPDATE clue_facts SET status = '存疑', content = '<谁>说<正文里的原意>', evidence = '<时间> <情节>' WHERE code = '<编号>';
+SQL示例(纯佐证，只追加依据): UPDATE clue_facts SET evidence = evidence || '；后续：<时间> <新情节>' WHERE code = '<编号>';
+SQL示例(原说法被推翻或证实): UPDATE clue_facts SET status = '<已核实或存疑>', evidence = evidence || '；<时间> <新证据>' WHERE code = '<编号>';`,
         insertNode: "禁止插入。只修改已有行。",
         ddl: `CREATE TABLE clue_facts ( -- 关键事实表
   row_id INTEGER PRIMARY KEY, -- 行号
@@ -12125,7 +12143,7 @@ SQL示例(原说法被推翻或证实): UPDATE clue_facts SET status = '<已核�
           "      这个角色亲眼看了实物或原件、再据此得出的判断（如读了单据后判断证词对不上），记为「亲见」，不是推测。推测不配「已核实」。",
           "    · 未知：其余情况。【在场不等于知道】：只是在场、没听清、别人私下得知时他在附近，都保持原值，除非正文写出他看到或听到了内容。",
           "- 可信度：只能是 已核实 / 未核实。跟着这个角色手里的证据走：亲见通常是已核实；被告知、听说、推测通常是未核实，除非正文写出他确认了真假。",
-          "- 依据：写明正文哪一楼、哪个情节。",
+          "- 依据：写故事里的时间和情节，如「周一晚 码头仓库 看守交出账本」。时间照正文或全局表写，拿不准就只写情节。不写楼层号（你看到的对话没有楼层编号）。",
           "【先看事实表】某条事实在关键事实表里仍是「未获得」、本次也没有把它登记成已核实或存疑时，它的知情行全部保持原值。",
           "    知情的对象是关键事实表里那一行的「登记口径」所说的结果，不是标签字面上的东西。",
           "    例：口径是「在抽屉里找到那封信并读到内容」，正文只写主角看见了上锁的抽屉、没打开 → 事实表保持未获得，知情行也保持未知。",
@@ -12137,7 +12155,7 @@ SQL示例(原说法被推翻或证实): UPDATE clue_facts SET status = '<已核�
         initNode: "保留模板里预先建好的行，不要清空、不要新增。",
         deleteNode: "禁止删除。",
         updateNode: `只有正文明确写出某个角色看到、被告知、听到、猜到某条事实时，才更新对应行。例：老人当面对主角说看见了人 → 主角那一行改为「被告知 / 未核实」；老板娘当时不在场 → 她那一行保持原值。
-SQL示例: UPDATE clue_knowledge SET way = '被告知', credibility = '未核实', evidence = '第<N>楼 <情节>' WHERE key = '<事实编号>@<角色>';`,
+SQL示例: UPDATE clue_knowledge SET way = '被告知', credibility = '未核实', evidence = '<时间> <情节>' WHERE key = '<事实编号>@<角色>';`,
         insertNode: "禁止插入。只修改已有行。",
         ddl: `CREATE TABLE clue_knowledge ( -- 知情表
   row_id INTEGER PRIMARY KEY, -- 行号
@@ -12191,7 +12209,7 @@ SQL示例: UPDATE clue_knowledge SET way = '被告知', credibility = '未核实
     重要角色表: [
       "- 建行：本批正文中实际登场，或有人明确提到、且对当前事件有作用的人，才建行。沿用当时可辨认的称呼；姓名还没揭示就用正文里的称呼，以后确认是同一人时更新原行，不另建一行。",
       "- 背景设定里写了、但正文还没有展示的身份、关系、秘密和未来安排，不写进任何一列。关系和经历只补正文已经展示的部分。",
-      "- 剧情身份：写成「谁在第几楼如何称呼或自述」，如「第3楼自称本地商人」。之后被核实或推翻时，在后面追加证据和楼层，不删原来的说法。",
+      "- 剧情身份：写成「什么场合下如何称呼或自述」，如「初到茶馆时自称本地商人」。之后被核实或推翻时，在后面追加证据和时间，不删原来的说法。不写楼层号（你看到的对话没有楼层编号）。",
       "- 当前动向：分清「说打算去」「已出发」「已到达」。正文没有交代新的动向就保持原值；离开场景后在做什么，正文写了才记。",
       "- 一句话介绍只写公开特征；交互选项只写主角目前有依据尝试的行动。"
     ].join(`
@@ -12333,6 +12351,10 @@ ${tail}` };
       if (sheet.name === "关键事实表") {
         let note = String(have.sheet.sourceData && have.sheet.sourceData.note || "");
         note.includes(FACT_VERIFIED_OLD) && (have.sheet.sourceData = { ...have.sheet.sourceData, note: note.replace(`    · ${FACT_VERIFIED_OLD}`, FACT_VERIFIED_RULE).replace(FACT_VERIFIED_OLD, FACT_VERIFIED_RULE.trim()) }, changes.push("「关键事实表」说明：「已核实」改为按各行口径里的取得者判断，不一律要求主角取得"));
+      }
+      if (sheet.name === "关键事实表" || sheet.name === "知情表") {
+        let sd = have.sheet.sourceData || {}, note = rewriteEvidence(sd.note), upd = sd.updateNode == null ? sd.updateNode : rewriteEvidence(sd.updateNode);
+        (note !== String(sd.note || "") || upd !== sd.updateNode) && (have.sheet.sourceData = { ...sd, note, updateNode: upd }, changes.push(`「${sheet.name}」说明：依据改为写故事时间和情节，不写楼层号`));
       }
       if (sheet.name === "线索控制表") {
         let note = String(have.sheet.sourceData && have.sheet.sourceData.note || ""), i = note.lastIndexOf(CLUE_SCENE_CATALOG_HEAD), base0 = i < 0 ? note : note.slice(0, i).replace(/\s+$/, ""), fresh0 = clueControlSheet().sourceData, oldStart = base0.indexOf("主角眼下正在做哪一段剧情的事。"), oldEnd = base0.indexOf(CLUE_TPL_EVIDENCE), next = oldStart >= 0 && oldEnd > oldStart ? base0.slice(0, oldStart) + fresh0.note + base0.slice(oldEnd + CLUE_TPL_EVIDENCE.length) : base0;
@@ -15225,6 +15247,7 @@ ${finds.map((d) => `- ${d.text}`).join(`
       start,
       stop,
       activeId,
+      chatBoundId,
       activeProject,
       progress: () => currentProgress() || emptyProgress(""),
       setProgress,
@@ -15801,6 +15824,58 @@ ${finds.map((d) => `- ${d.text}`).join(`
     return [...new Set(want)].filter((n) => !names2.has(n));
   }
 
+  // src/core/card-pack.js
+  var CARD_PACK_KEY = "plot_injector", CARD_PACK_KIND = "plot-injector-card";
+  function buildCardPack(project, { id = "", personas: personas2 = !0, setting = !0, version = "", now = Date.now() } = {}) {
+    let file = buildProjectFile(project, { personas: personas2, setting, version });
+    return { kind: CARD_PACK_KIND, version: 1, id: id || makeId("k"), name: file.project.name, savedAt: now, file: JSON.stringify(file) };
+  }
+  function readCardPack(card) {
+    let ext = card && card.data && card.data.extensions, pack = ext && ext[CARD_PACK_KEY];
+    return !isPlainObject(pack) || pack.kind !== CARD_PACK_KIND || typeof pack.file != "string" || !pack.id ? null : { id: String(pack.id), name: String(pack.name || ""), savedAt: Number(pack.savedAt) || 0, file: pack.file, version: Number(pack.version) || 1 };
+  }
+  function cardPackState(pack, links, projectIds) {
+    if (!pack) return { kind: "none" };
+    let link = isPlainObject(links) ? links[pack.id] : null;
+    return !link || !projectIds.includes(link.project) ? { kind: "new" } : { kind: pack.savedAt > (Number(link.savedAt) || 0) ? "update" : "same", project: link.project };
+  }
+  function packIdOf(links, projectId) {
+    let hit = Object.entries(isPlainObject(links) ? links : {}).find(([, v]) => v && v.project === projectId);
+    return hit ? hit[0] : "";
+  }
+  function applyCardUpdate(local, text2, now = Date.now()) {
+    let { project: next, summary } = parseProjectFile(text2), label = "角色卡更新前", { trpg, infinite, secretNames, ...base } = local;
+    return {
+      summary,
+      project: {
+        ...base,
+        mode: next.mode,
+        clue: next.clue,
+        defaults: next.defaults,
+        threads: next.threads,
+        outline: {
+          ...local.outline,
+          volumes: next.outline.volumes,
+          renames: next.outline.renames,
+          idAlias: next.outline.idAlias,
+          history: pushOutlineHistory(local.outline && local.outline.history, local.outline && local.outline.volumes, label, now)
+        },
+        ...next.secretNames ? { secretNames: next.secretNames } : {},
+        ...next.trpg ? { trpg: next.trpg } : {},
+        ...next.infinite ? { infinite: next.infinite } : {},
+        ...summary.hasSetting ? {
+          setting: {
+            ...local.setting,
+            text: next.setting.text,
+            mute: next.setting.mute,
+            history: String(local.setting && local.setting.text || "").trim() ? pushHistory(local.setting.history, local.setting.text, 10, now, label) : local.setting && local.setting.history || []
+          }
+        } : {},
+        ...summary.hasPersonas ? { personas: next.personas } : {}
+      }
+    };
+  }
+
   // src/ui/tab-discuss.js
   var tab_discuss_exports = {};
   __export(tab_discuss_exports, {
@@ -16348,7 +16423,7 @@ ${floor.text}`).join(`
           "你在帮作者给剧情里的关键事实写标签和登记口径。两样都会写进数据库表格，填表模型每一楼都看得到，所以都不能透露答案。",
           "标签：两到八个字的中性名字，只说「这是关于什么的」，不说「查到了什么」。例：「看守的证词」「抽屉里的单据」。不写人物真名、身份、动机、结论。",
           "登记口径：一两句话，写清正文写到哪里才算拿到这一条。要写清三件事：",
-          "1. 谁取得：写材料里取得它的人（材料写「彼得询问使用者」，就写彼得问到），不要一律改成「主角」。材料没写是谁，或写的是 <user>，才写「主角」。",
+          "1. 谁取得：写材料里取得它的人（材料写「老周询问看守」，就写老周问到），不要一律改成「主角」。材料没写是谁，或写的是 <user>，才写「主角」。",
           "2. 什么时候：点出这一步接在哪一步之后。「前提」给的是前一步开头的公开说法，把它概括成那件事写进口径（前提是「仓库后门外的泥地上好像留着痕迹，可以过去看看」，就写「查过仓库后门的痕迹之后」），不要只写「现场处理完后」，否则会和前面阶段的相似场面混在一起。",
           "3. 做到哪一步：写取得的动作和看到、听到的程度（当面听到、亲手打开读到、看清是什么），不写看到、听到的内容本身（写「对方当面说出那晚看到了什么时」，不写他说了什么）；再写一句什么不算，如只是到了地方、看到上了锁、对方推托没开口、远远看见还没看清、自己猜的。",
           "作者登记标准里带出答案的部分不要照抄。",
@@ -17828,7 +17903,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
     let prog = runtime.progress(), allOps = normalizeClueOps(prog.clue).ops, ops = allOps.slice(-12).reverse(), open = !!st72.logOpen, chat = chatMessages();
     return ops.length ? `<div class="pi-card pi-run-set"><h3><button type="button" class="pi-run-fold" data-act="run-fold" data-key="logOpen" aria-expanded="${open}">${foldIcon(open)}<span>操作记录</span></button><span class="pi-fold-count">${allOps.length}</span></h3>${open ? ops.map((op) => `<p class="pi-hint${anchorValid(op.at, chat) ? "" : " is-off"}">${new Date(op.time).toLocaleString("zh-CN", { hour12: !1 })}　${esc(runtime.clue.opLabel(op))}${anchorValid(op.at, chat) ? "" : "（所在楼层已回退，未生效）"}</p>`).join("") : ""}</div>` : "";
   }
-  function factRowsHtml(facts, prefix, volumes, stored = {}, { intro = !0 } = {}) {
+  function factRowsHtml(facts, prefix, volumes, stored = {}, { intro = !0, auto = intro } = {}) {
     let ctx2 = new Map(
       factLabelContext(
         volumes,
@@ -17847,9 +17922,9 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
       return have && have.label;
     }).length;
     return `<div class="pi-fr" data-fr="${prefix}">
-          <div class="pi-fr-start"${intro ? "" : " hidden"}><button type="button" class="pi-btn is-primary is-lg${filledN >= n ? " is-done" : ""}" data-fr-auto>${startFace(filledN >= n ? "" : filledN ? `开始自动填写（还有${n - filledN}条）` : `开始自动填写（共${n}条）`)}</button>
+          <div class="pi-fr-start"${auto ? "" : " hidden"}><button type="button" class="pi-btn is-primary is-lg${filledN >= n ? " is-done" : ""}" data-fr-auto>${startFace(filledN >= n ? "" : filledN ? `开始自动填写（还有${n - filledN}条）` : `开始自动填写（共${n}条）`)}</button>
           ${clearProgress(`fr-${prefix}`), progressHtml(`fr-${prefix}`)}</div>
-          <p class="pi-hint" data-fr-status>${intro ? filledN >= n ? "已经按以前填过的内容填好了。想重新生成某条，先清空它的框再点上面的按钮。" : "AI按大纲写好标签和判定说明，你只需要检查标黄的地方。也可以自己填。" : "标黄的地方是插件检查出的问题，照着改框里的字就行。"}</p>
+          <p class="pi-hint" data-fr-status>${intro ? filledN >= n ? "已经按以前填过的内容填好了。想重新生成某条，先清空它的框再点上面的按钮。" : "AI按大纲写好标签和判定说明，你只需要检查标黄的地方。也可以自己填。" : `${auto ? "想让AI重新写某条，先清空它的框，再点上面的按钮；只重新生成清空的那几条。" : ""}标黄的地方是插件检查出的问题，照着改框里的字就行。`}</p>
           <details class="pi-fr-intro"${intro ? "" : " hidden"}><summary>这一步在做什么</summary>
           <p>每轮正文写完后，数据库的填表模型会对照这里的说明，判断主角有没有拿到某条线索；拿到了，后面的剧情才会开放。</p>
           <p>所以每条线索要两样东西：一个<b>标签</b>，让填表模型认出是哪一条；一句<b>「写到哪一步才算拿到」</b>。这句写得太宽，主角还没真正查到就会被算作拿到，剧情会提前推进。</p>
@@ -17908,8 +17983,8 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
       let has = !!field2(i, "label").value.trim();
       b.className = `pi-badge pi-fr-st${has ? warn ? " is-warn" : " is-ok" : ""}`, b.textContent = has ? warn ? "标黄" : "已填" : "待填", sync();
     }, dlg = root.closest && root.closest(".pi-dialog") || root, mainBtn = gate ? [...dlg.querySelectorAll("[data-dlg]")].find((b) => b.classList.contains("is-primary")) : null, startBtn = box.querySelector("[data-fr-auto]"), running2 = !1, sync = () => {
-      let left = facts.filter((_, i) => !field2(i, "label").value.trim()).length;
-      mainBtn && (mainBtn.disabled = running2 || left > 0, mainBtn.textContent = running2 ? "正在填写…" : left ? `还差${left}条没填` : gate), startBtn && !running2 && (startBtn.classList.remove("is-busy"), startBtn.classList.toggle("is-done", !left), startBtn.innerHTML = startFace(left ? `开始自动填写（还有${left}条）` : ""));
+      let left = facts.filter((_, i) => !field2(i, "label").value.trim()).length, open = facts.filter((_, i) => !field2(i, "label").value.trim() || !field2(i, "crit").value.trim()).length;
+      mainBtn && (mainBtn.disabled = running2 || left > 0, mainBtn.textContent = running2 ? "正在填写…" : left ? `还差${left}条没填` : gate), startBtn && !running2 && (startBtn.classList.remove("is-busy"), startBtn.classList.toggle("is-done", !open), startBtn.innerHTML = startFace(open ? `开始自动填写（还有${open}条）` : ""));
     };
     sync(), box.addEventListener("input", (event) => {
       let m = event.target.closest("[data-fr-row]");
@@ -18317,7 +18392,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
       if (!facts.length) return toast("info", "表格中暂无本项目的线索行。请先用「创建模板」或「补全表格」建立。");
       let retry = facts.filter((f) => f.retry).length, newer = facts.filter((f) => f.newer).length, picked = await openDialog({
         title: "修改线索标签",
-        html: `<p class="pi-hint">修改当前聊天「${esc(fb.表)}」中的标签和登记口径。口径过宽会使未获得的线索被算作已获得。</p>${seedOnly ? '<p class="pi-hint is-warn">本聊天尚未填表，表格内目前是模板初始行。修改先保存到项目；数据库首次填表后，再打开这里点保存即可写入表格。</p>' : ""}${retry ? `<p class="pi-hint is-warn">上次有${retry}条未写入表格，下方为当时填写的内容，点保存重试。</p>` : ""}${newer && !seedOnly ? `<p class="pi-hint is-warn">有${newer}条与项目保存的不一致，下方为项目中的版本，点保存写入本聊天表格。</p>` : ""}${factRowsHtml(facts, "le", project.outline.volumes, {}, { intro: !1 })}`,
+        html: `<p class="pi-hint">修改当前聊天「${esc(fb.表)}」中的标签和登记口径。口径过宽会使未获得的线索被算作已获得。</p>${seedOnly ? '<p class="pi-hint is-warn">本聊天尚未填表，表格内目前是模板初始行。修改先保存到项目；数据库首次填表后，再打开这里点保存即可写入表格。</p>' : ""}${retry ? `<p class="pi-hint is-warn">上次有${retry}条未写入表格，下方为当时填写的内容，点保存重试。</p>` : ""}${newer && !seedOnly ? `<p class="pi-hint is-warn">有${newer}条与项目保存的不一致，下方为项目中的版本，点保存写入本聊天表格。</p>` : ""}${factRowsHtml(facts, "le", project.outline.volumes, {}, { intro: !1, auto: !0 })}`,
         onMount: (root) => mountFactRows(view, root, facts, "le", project.outline.volumes),
         actions: [
           { label: "取消", value: null },
@@ -28678,7 +28753,17 @@ ${suffix.trim()}` : body;
   }
 
   // src/ui/page-data.js
-  var st7 = (view) => view.tabState("data"), latest = { state: "", version: "", error: "" }, viaLoader = () => !!window.__plotInjectorLoader;
+  var st7 = (view) => view.tabState("data");
+  async function writeToCard(view, project, opts, packId) {
+    let card = currentCard();
+    if (!card) throw new Error("请先打开一张角色卡（群聊不支持）");
+    let pack = buildCardPack(project, { ...opts, id: packId, version: view.version });
+    await writeCardExtension(CARD_PACK_KEY, pack);
+    let back = readCardPack(currentCard());
+    if (!back || back.id !== pack.id || back.savedAt !== pack.savedAt) throw new Error("写进角色卡后读回不一致，请刷新酒馆后重试");
+    view.data.updateSettings({ cardLinks: { ...view.data.settings().cardLinks || {}, [pack.id]: { project: project.id, savedAt: pack.savedAt } } }), toast("success", `已写进角色卡「${card.name}」（${Math.ceil(pack.file.length / 1024)}KB）。在酒馆导出这张卡就会带上剧情项目。`);
+  }
+  var latest = { state: "", version: "", error: "" }, viaLoader = () => !!window.__plotInjectorLoader;
   async function checkLatest(view) {
     latest.state = "checking", view.renderBody();
     try {
@@ -28821,7 +28906,10 @@ ${suffix.trim()}` : body;
         sum.labels ? `${sum.labels}条线索标签` : "",
         project.secretNames ? "保密名单" : "",
         `推进方式（${sum.clue ? "线索推进" : "大纲推进"}）和注入设置`
-      ].filter(Boolean), todoLabels = sum.clue ? labelsToPrepare(project.outline.volumes, project.clue.labels) : [], noLabel = todoLabels.filter((x) => !x.review).length, unreviewed = todoLabels.length - noLabel, srcCount = (k) => Object.values(project.clue && project.clue.labels || {}).filter((v) => k ? v.src === k : !v.src).length, byUser = sum.clue ? srcCount("user") : 0, legacy = sum.clue ? srcCount("") : 0, pick = await openDialog({
+      ].filter(Boolean), todoLabels = sum.clue ? labelsToPrepare(project.outline.volumes, project.clue.labels) : [], noLabel = todoLabels.filter((x) => !x.review).length, unreviewed = todoLabels.length - noLabel, srcCount = (k) => Object.values(project.clue && project.clue.labels || {}).filter((v) => k ? v.src === k : !v.src).length, byUser = sum.clue ? srcCount("user") : 0, legacy = sum.clue ? srcCount("") : 0, card = currentCard(), old = card ? readCardPack(card) : null, links = view.data.settings().cardLinks, packId = packIdOf(links, project.id) || (old && links && links[old.id] && links[old.id].project === project.id ? old.id : ""), readPick = (box) => ({
+        personas: !!(box.querySelector("[data-f=personas]") || {}).checked,
+        setting: !!(box.querySelector("[data-f=setting]") || {}).checked
+      }), pick = await openDialog({
         title: `导出「${project.name}」`,
         html: `<p class="pi-hint">包含：${esc(parts.join("、"))}。</p>
                 ${todoLabels.length ? `<p class="pi-hint is-warn">还有${[noLabel && `${noLabel}条线索没有标签`, unreviewed && `${unreviewed}条标签没检查是否透露答案`].filter(Boolean).join("，")}。可以先到执行页点「立即准备」补齐，再导出。</p>` : ""}
@@ -28829,20 +28917,18 @@ ${suffix.trim()}` : body;
                 ${sum.personas ? `<label class="pi-check"><input type="checkbox" data-f="personas" checked><span>人设（${sum.personas}条）</span></label>` : ""}
                 ${sum.setting ? '<label class="pi-check"><input type="checkbox" data-f="setting" checked><span>设定</span></label>' : ""}
                 ${sum.personas || sum.setting ? '<p class="pi-hint">人设、设定已写入世界书的，可不勾选。</p>' : ""}
-                <p class="pi-hint">不含讨论记录、聊天进度和导入草稿。</p>`,
+                <p class="pi-hint">不含讨论记录、聊天进度和导入草稿。</p>
+                ${card ? `<p class="pi-hint">「写进角色卡」：存进「${esc(card.name)}」${old && old.id !== packId ? `（替换卡里原有的「${esc(old.name)}」）` : ""}，卡里原有的正则、脚本、世界书都不动。之后在酒馆导出这张卡就会带上剧情，玩家导入卡时插件会提示导入。</p>` : ""}`,
         actions: [
           { label: "取消", value: null },
-          {
-            label: "导出",
-            primary: !0,
-            value: (box) => ({
-              personas: !!(box.querySelector("[data-f=personas]") || {}).checked,
-              setting: !!(box.querySelector("[data-f=setting]") || {}).checked
-            })
-          }
+          ...card ? [{ label: "写进角色卡", value: (box) => ({ ...readPick(box), toCard: !0 }) }] : [],
+          { label: "导出文件", primary: !0, value: readPick }
         ]
       });
-      pick && (downloadBlob(`${project.name}${PROJECT_FILE_EXT}`, JSON.stringify(buildProjectFile(project, { ...pick, version: view.version }), null, 2), "application/json"), toast("success", `已导出「${project.name}」。`));
+      if (!pick) return;
+      let { toCard, ...opts } = pick;
+      if (toCard) return writeToCard(view, project, opts, packId);
+      downloadBlob(`${project.name}${PROJECT_FILE_EXT}`, JSON.stringify(buildProjectFile(project, { ...opts, version: view.version }), null, 2), "application/json"), toast("success", `已导出「${project.name}」。`);
     },
     async "export-personas"(view) {
       let files = [];
@@ -29621,7 +29707,7 @@ ${suffix.trim()}` : body;
     } catch {
     }
   }
-  function createApp({ data, runtime, version }) {
+  function createApp({ data, runtime, version, notice = null }) {
     let doc = hostDocument(), root = null, busyTimer = 0;
     setNight(readUi().night);
     let view = {
@@ -29833,7 +29919,7 @@ ${suffix.trim()}` : body;
                 ${groupField(current2 && current2.group ? current2.group : "")}
                 <label class="pi-check"><input type="checkbox" data-f="infinite"><span>无限流模式（主空间出发、世界库、污染）</span></label>
                 ${trpgField(!1)}
-                <div class="pi-row"><span class="pi-hint">已有导出的项目文件：</span><button type="button" class="pi-btn is-sm" data-dlg-value="import-file">从文件导入</button></div>`,
+                <div class="pi-row"><span class="pi-hint">已有导出的项目文件：</span><button type="button" class="pi-btn is-sm" data-dlg-value="import-file">从文件导入</button>${cardPackNow() ? '<button type="button" class="pi-btn is-sm" data-dlg-value="import-card">从角色卡导入</button>' : ""}</div>`,
         onMount: mountGroupField,
         actions: [
           { label: "取消", value: null },
@@ -29851,6 +29937,7 @@ ${suffix.trim()}` : body;
       });
       if (!result2) return;
       if (result2 === "import-file") return importProjectFile(current2 && current2.group ? current2.group : "");
+      if (result2 === "import-card") return importFromCard();
       let name = result2.name;
       try {
         let project = await data.createProject(name, result2.group, result2.mode);
@@ -29861,10 +29948,13 @@ ${suffix.trim()}` : body;
     }
     async function importProjectFile(group = "") {
       let [file] = await pickFiles({ accept: ".json,application/json" });
-      if (!file) return;
+      if (file)
+        return importProjectText(await file.text(), group);
+    }
+    async function importProjectText(text2, group = "", pack = null) {
       let parsed;
       try {
-        parsed = parseProjectFile(await file.text());
+        parsed = parseProjectFile(text2);
       } catch (error) {
         return toast("error", `导入失败：${error.message}`);
       }
@@ -29877,7 +29967,7 @@ ${suffix.trim()}` : body;
       ].filter(Boolean), missing = summary.clue ? missingBoundTables(project, currentTables()) : [];
       if (await openDialog({
         // 版式：灰色小标题、大号项目名、一排小标签、细线下一句提示
-        html: `<div><p class="pi-pf-imp-ttl">导入项目</p><p class="pi-pf-imp-name">${esc(name)}</p>
+        html: `<div><p class="pi-pf-imp-ttl">${pack ? "从角色卡导入项目" : "导入项目"}</p><p class="pi-pf-imp-name">${esc(name)}</p>
                 <div class="pi-pf-imp-pills">${what.map((w) => `<span class="pi-badge">${esc(w)}</span>`).join("")}</div>
                 ${summary.clue ? `<p class="pi-pf-imp-note${missing && missing.length ? " is-warn" : ""}">${missing && missing.length ? `当前聊天缺少${esc(missing.join("、"))}。` : ""}游玩前在执行页点「创建模板」。</p>` : ""}</div>`,
         actions: [
@@ -29887,10 +29977,69 @@ ${suffix.trim()}` : body;
       }))
         try {
           let added = await data.addProject({ ...project, name }, group);
-          !runtime.activeId() && cardKey() && await runtime.switchProject(added.id), await selectProject(added.id, summary.clue ? "run" : "outline"), toast("success", `已导入「${name}」。`);
+          pack && data.updateSettings({ cardLinks: { ...data.settings().cardLinks || {}, [pack.id]: { project: added.id, savedAt: pack.savedAt } } }), pack && cardKey() ? runtime.chatBoundId() ? data.setActive(added.id) : await runtime.switchProject(added.id, "card") : !runtime.activeId() && cardKey() && await runtime.switchProject(added.id), root || open(), await selectProject(added.id, summary.clue ? "run" : "outline"), toast("success", `已导入「${name}」。`);
         } catch (error) {
           toast("error", `导入失败：${error.message}`);
         }
+    }
+    function cardPackNow() {
+      let card = currentCard();
+      return card ? readCardPack(card) : null;
+    }
+    function packState(pack) {
+      return cardPackState(pack, data.settings().cardLinks, data.index().projects.map((p) => p.id));
+    }
+    async function importFromCard(pack = cardPackNow()) {
+      if (!pack) return toast("warning", "当前角色卡里没有剧情项目");
+      let state = packState(pack);
+      return state.kind === "update" || state.kind === "same" ? updateFromCard(pack, state.project) : importProjectText(pack.file, "", pack);
+    }
+    async function updateFromCard(pack, projectId) {
+      let meta2 = data.index().projects.find((p) => p.id === projectId);
+      if (!meta2) return importProjectText(pack.file, "", pack);
+      if (packState(pack).kind === "same") return toast("info", `「${meta2.name}」已是角色卡里的版本`);
+      let local, result2;
+      try {
+        local = data.project(projectId) || await data.loadProject(projectId), result2 = applyCardUpdate(local, pack.file);
+      } catch (error) {
+        return toast("error", `更新失败：${error.message}`);
+      }
+      if (await openDialog({
+        html: `<div><p class="pi-pf-imp-ttl">用角色卡里的新版本更新</p><p class="pi-pf-imp-name">${esc(meta2.name)}</p>
+                <p class="pi-hint">换成卡里的大纲和线索设置${result2.summary.hasSetting ? "、设定" : ""}${result2.summary.hasPersonas ? "、人设" : ""}。项目还是这一个，各聊天的进度接着用：已经走过的剧情不变，新增和改动的剧情按新大纲继续。</p>
+                <p class="pi-hint">旧大纲${result2.summary.hasSetting ? "、旧设定" : ""}存进修改历史。线索模式下，执行页如果提示「修改线索」或「补全表格」，照提示点一下，表格就会跟上新大纲。</p></div>`,
+        actions: [
+          { label: "取消", value: null },
+          { label: "更新", primary: !0, value: !0 }
+        ]
+      }))
+        try {
+          data.updateProject(projectId, () => result2.project), data.updateSettings({ cardLinks: { ...data.settings().cardLinks || {}, [pack.id]: { project: projectId, savedAt: pack.savedAt } } }), cardKey() && !data.activeIdFor() && (runtime.chatBoundId() ? data.setActive(projectId) : await runtime.switchProject(projectId, "card")), root || open(), await selectProject(projectId, result2.summary.clue ? "run" : "outline"), toast("success", `已更新「${meta2.name}」。`);
+        } catch (error) {
+          toast("error", `更新失败：${error.message}`);
+        }
+    }
+    let packAsked = "";
+    function checkCardPack() {
+      if (!data.isReady()) return;
+      let pack = cardPackNow();
+      if (!pack) return packAsked = "", notice && notice.hide("card-pack");
+      let key = `${cardKey()}|${pack.id}|${pack.savedAt}`;
+      if (key === packAsked) return;
+      packAsked = key;
+      let state = packState(pack), skip = (data.settings().cardPackSkip || {})[pack.id];
+      if (!notice || state.kind !== "new" && state.kind !== "update" || Number(skip) >= pack.savedAt) return notice && notice.hide("card-pack");
+      notice.show({
+        id: "card-pack",
+        title: state.kind === "new" ? "这张角色卡带有剧情项目" : "角色卡里的剧情项目有新版本",
+        body: `「${pack.name || "未命名"}」${state.kind === "new" ? "。导入后这张卡的聊天都会用它。" : "。更新后聊天进度接着用。"}`,
+        actions: [
+          { label: state.kind === "new" ? "导入" : "更新", primary: !0, run: () => state.kind === "new" ? importProjectText(pack.file, "", pack) : updateFromCard(pack, state.project) },
+          { label: "稍后", run: () => {
+          } },
+          { label: "不再提示", run: () => data.updateSettings({ cardPackSkip: { ...data.settings().cardPackSkip || {}, [pack.id]: pack.savedAt } }) }
+        ]
+      });
     }
     async function projectMenu(id) {
       let meta2 = data.index().projects.find((item) => item.id === id);
@@ -30034,7 +30183,7 @@ ${suffix.trim()}` : body;
       }));
     }
     function refresh(reason) {
-      if (!root) return;
+      if ((reason === "chat" || reason === "index") && checkCardPack(), !root) return;
       if (!view.restored && data.isReady()) return restore();
       (reason === "index" || reason === "switch" || reason === "chat") && renderSide();
       let focused = doc.activeElement, typing = focused && root.contains(focused) && (focused.tagName === "TEXTAREA" || focused.tagName === "INPUT" && !["checkbox", "radio", "button"].includes(focused.type));
@@ -30145,7 +30294,7 @@ ${suffix.trim()}` : body;
         console.error("[剧情注入器] 界面刷新失败", error);
       }
     }, runtime = createRuntime({ data, notice, emit, askReason });
-    runtime.clue.setLineBar((x) => x ? notice.topBar(x) : notice.hideBar()), app = createApp({ data, runtime, version: VERSION });
+    runtime.clue.setLineBar((x) => x ? notice.topBar(x) : notice.hideBar()), app = createApp({ data, runtime, version: VERSION, notice });
     let started = !1, ready = data.init().then(() => {
       runtime.start(), started = !0, emit("index");
     }).catch((error) => {

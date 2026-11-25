@@ -48,7 +48,7 @@ function boot() {
     };
     const runtime = createRuntime({ data, notice, emit, askReason });
     runtime.clue.setLineBar(x => x ? notice.topBar(x) : notice.hideBar());
-    app = createApp({ data, runtime, version: VERSION });
+    app = createApp({ data, runtime, version: VERSION, notice });
 
     let started = false;
     const ready = data

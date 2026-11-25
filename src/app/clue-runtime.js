@@ -352,7 +352,8 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
         }),
             setProgress({ ...prog, lineFloors: list.sort((a, b) => a.i - b.i).slice(-LINE_FLOOR_KEEP) }, 'line-floor'));
     }
-    var SYNC_DELAY_MS = 1500;
+    // 填表后等多久再同步（ms）；测试可调小
+    const syncDelay = { ms: 1500 };
     let syncTimer = 0,
         syncing = !1,
         syncAgain = !1,
@@ -365,7 +366,7 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
         (w.clearTimeout(syncTimer),
             (syncTimer = w.setTimeout(() => {
                 syncLines().catch((e) => note(`多线同步出错：${e.message}`));
-            }, SYNC_DELAY_MS)));
+            }, syncDelay.ms)));
     }
     // 线索表从当前楼层开始记。数据库对新加的表会从第 1 楼起逐批补填旧楼层，补完之前新剧情记不进表。
     // 官方能把「已记录」推到当前楼层的只有手动填表，它会先清空所选的表再从空表填，
@@ -1823,6 +1824,7 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
         startFromNow,
         wantStart,
         startTiming: START_TIMING,
+        syncDelay,
         setLineBar: (fn) => {
             lineBar = fn;
         },

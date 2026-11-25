@@ -377,7 +377,8 @@ export function clueLogCard(runtime, st7) {
 }
 
 // stored：项目已存标签；线索内容未变（签名一致）则直接沿用，不重新生成
-export function factRowsHtml(facts, prefix, volumes, stored = {}, { intro = !0 } = {}) {
+// intro：首次填写（创建模板、补全表格）带说明；auto：显示「自动填写」按钮（修改线索也有：清空哪条只重新生成哪条，实测问题 2）。
+export function factRowsHtml(facts, prefix, volumes, stored = {}, { intro = !0, auto = intro } = {}) {
     let ctx = new Map(
         factLabelContext(
             volumes,
@@ -403,9 +404,9 @@ export function factRowsHtml(facts, prefix, volumes, stored = {}, { intro = !0 }
             return have && have.label;
         }).length;
     return `<div class="pi-fr" data-fr="${prefix}">
-          <div class="pi-fr-start"${intro ? '' : ' hidden'}><button type="button" class="pi-btn is-primary is-lg${filledN >= n ? ' is-done' : ''}" data-fr-auto>${startFace(filledN >= n ? '' : filledN ? `开始自动填写（还有${n - filledN}条）` : `开始自动填写（共${n}条）`)}</button>
+          <div class="pi-fr-start"${auto ? '' : ' hidden'}><button type="button" class="pi-btn is-primary is-lg${filledN >= n ? ' is-done' : ''}" data-fr-auto>${startFace(filledN >= n ? '' : filledN ? `开始自动填写（还有${n - filledN}条）` : `开始自动填写（共${n}条）`)}</button>
           ${(clearProgress(`fr-${prefix}`), progressHtml(`fr-${prefix}`))}</div>
-          <p class="pi-hint" data-fr-status>${intro ? (filledN >= n ? '已经按以前填过的内容填好了。想重新生成某条，先清空它的框再点上面的按钮。' : 'AI按大纲写好标签和判定说明，你只需要检查标黄的地方。也可以自己填。') : '标黄的地方是插件检查出的问题，照着改框里的字就行。'}</p>
+          <p class="pi-hint" data-fr-status>${intro ? (filledN >= n ? '已经按以前填过的内容填好了。想重新生成某条，先清空它的框再点上面的按钮。' : 'AI按大纲写好标签和判定说明，你只需要检查标黄的地方。也可以自己填。') : `${auto ? '想让AI重新写某条，先清空它的框，再点上面的按钮；只重新生成清空的那几条。' : ''}标黄的地方是插件检查出的问题，照着改框里的字就行。`}</p>
           <details class="pi-fr-intro"${intro ? '' : ' hidden'}><summary>这一步在做什么</summary>
           <p>每轮正文写完后，数据库的填表模型会对照这里的说明，判断主角有没有拿到某条线索；拿到了，后面的剧情才会开放。</p>
           <p>所以每条线索要两样东西：一个<b>标签</b>，让填表模型认出是哪一条；一句<b>「写到哪一步才算拿到」</b>。这句写得太宽，主角还没真正查到就会被算作拿到，剧情会提前推进。</p>
@@ -514,9 +515,11 @@ export function mountFactRows(view, root, facts, prefix, volumes, { gate = '', k
         startBtn = box.querySelector('[data-fr-auto]'),
         running = !1,
         sync = () => {
-            let left = facts.filter((_, i) => !field(i, 'label').value.trim()).length;
+            let left = facts.filter((_, i) => !field(i, 'label').value.trim()).length,
+                // 自动填写补的是任一框空着的行（只清空口径也算）
+                open = facts.filter((_, i) => !field(i, 'label').value.trim() || !field(i, 'crit').value.trim()).length;
             mainBtn && ((mainBtn.disabled = running || left > 0), (mainBtn.textContent = running ? '正在填写…' : left ? `还差${left}条没填` : gate));
-            startBtn && !running && (startBtn.classList.remove('is-busy'), startBtn.classList.toggle('is-done', !left), (startBtn.innerHTML = startFace(left ? `开始自动填写（还有${left}条）` : '')));
+            startBtn && !running && (startBtn.classList.remove('is-busy'), startBtn.classList.toggle('is-done', !open), (startBtn.innerHTML = startFace(open ? `开始自动填写（还有${open}条）` : '')));
         };
     sync();
     box.addEventListener('input', (event) => {
@@ -1124,7 +1127,7 @@ export const clueActions = {
             newer = facts.filter((f) => f.newer).length,
             picked = await openDialog({
                 title: '修改线索标签',
-                html: `<p class="pi-hint">修改当前聊天「${esc(fb.表)}」中的标签和登记口径。口径过宽会使未获得的线索被算作已获得。</p>${seedOnly ? '<p class="pi-hint is-warn">本聊天尚未填表，表格内目前是模板初始行。修改先保存到项目；数据库首次填表后，再打开这里点保存即可写入表格。</p>' : ''}${retry ? `<p class="pi-hint is-warn">上次有${retry}条未写入表格，下方为当时填写的内容，点保存重试。</p>` : ''}${newer && !seedOnly ? `<p class="pi-hint is-warn">有${newer}条与项目保存的不一致，下方为项目中的版本，点保存写入本聊天表格。</p>` : ''}${factRowsHtml(facts, 'le', project.outline.volumes, {}, { intro: !1 })}`,
+                html: `<p class="pi-hint">修改当前聊天「${esc(fb.表)}」中的标签和登记口径。口径过宽会使未获得的线索被算作已获得。</p>${seedOnly ? '<p class="pi-hint is-warn">本聊天尚未填表，表格内目前是模板初始行。修改先保存到项目；数据库首次填表后，再打开这里点保存即可写入表格。</p>' : ''}${retry ? `<p class="pi-hint is-warn">上次有${retry}条未写入表格，下方为当时填写的内容，点保存重试。</p>` : ''}${newer && !seedOnly ? `<p class="pi-hint is-warn">有${newer}条与项目保存的不一致，下方为项目中的版本，点保存写入本聊天表格。</p>` : ''}${factRowsHtml(facts, 'le', project.outline.volumes, {}, { intro: !1, auto: !0 })}`,
                 onMount: (root) => mountFactRows(view, root, facts, 'le', project.outline.volumes),
                 actions: [
                     { label: '取消', value: null },

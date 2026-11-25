@@ -3,9 +3,10 @@ import { createTour, tourState, tourScopeOf, TOUR_REVISION } from './tour.js';
 import { normalizeInfinite } from '../core/infinite.js';
 import { isTrpg } from '../trpg/trpg.js';
 import { groupProjects } from '../core/store.js';
-import { cardKey, cardName, hostDocument, hostWindow, toast } from '../host/st.js';
+import { cardKey, cardName, currentCard, hostDocument, hostWindow, toast } from '../host/st.js';
 import { confirmDialog, el, ensureStyle, esc, isNight, layerParent, menuDialog, openDialog, options, pickFiles, setNight } from './dom.js';
 import { parseProjectFile, importedName, missingBoundTables } from '../core/project-file.js';
+import { applyCardUpdate, cardPackState, readCardPack } from '../core/card-pack.js';
 import { ICONS } from './styles.js';
 import * as discuss from './tab-discuss.js';
 import * as setting from './tab-setting.js';
@@ -64,7 +65,7 @@ export function writeUi(patch) {
     }
 }
 
-export function createApp({ data, runtime, version }) {
+export function createApp({ data, runtime, version, notice = null }) {
     const doc = hostDocument();
     let root = null,
         busyTimer = 0;
@@ -360,7 +361,7 @@ export function createApp({ data, runtime, version }) {
                 ${groupField(current2 && current2.group ? current2.group : '')}
                 <label class="pi-check"><input type="checkbox" data-f="infinite"><span>无限流模式（主空间出发、世界库、污染）</span></label>
                 ${trpgField(!1)}
-                <div class="pi-row"><span class="pi-hint">已有导出的项目文件：</span><button type="button" class="pi-btn is-sm" data-dlg-value="import-file">从文件导入</button></div>`,
+                <div class="pi-row"><span class="pi-hint">已有导出的项目文件：</span><button type="button" class="pi-btn is-sm" data-dlg-value="import-file">从文件导入</button>${cardPackNow() ? '<button type="button" class="pi-btn is-sm" data-dlg-value="import-card">从角色卡导入</button>' : ''}</div>`,
                 onMount: mountGroupField,
                 actions: [
                     { label: '取消', value: null },
@@ -378,6 +379,7 @@ export function createApp({ data, runtime, version }) {
             });
         if (!result) return;
         if (result === 'import-file') return importProjectFile(current2 && current2.group ? current2.group : '');
+        if (result === 'import-card') return importFromCard();
         const name = result.name;
         try {
             const project = await data.createProject(name, result.group, result.mode);
@@ -391,9 +393,13 @@ export function createApp({ data, runtime, version }) {
     async function importProjectFile(group = '') {
         const [file] = await pickFiles({ accept: '.json,application/json' });
         if (!file) return;
+        return importProjectText(await file.text(), group);
+    }
+    // 从项目文件或角色卡导入（pack：卡里的那一项）。从卡导入的设为本卡默认项目，并记下卡内 id，卡更新时据此提示。
+    async function importProjectText(text, group = '', pack = null) {
         let parsed;
         try {
-            parsed = parseProjectFile(await file.text());
+            parsed = parseProjectFile(text);
         } catch (error) {
             return toast('error', `导入失败：${error.message}`);
         }
@@ -411,7 +417,7 @@ export function createApp({ data, runtime, version }) {
             missing = summary.clue ? missingBoundTables(project, outline.currentTables()) : [],
             ok = await openDialog({
                 // 版式：灰色小标题、大号项目名、一排小标签、细线下一句提示
-                html: `<div><p class="pi-pf-imp-ttl">导入项目</p><p class="pi-pf-imp-name">${esc(name)}</p>
+                html: `<div><p class="pi-pf-imp-ttl">${pack ? '从角色卡导入项目' : '导入项目'}</p><p class="pi-pf-imp-name">${esc(name)}</p>
                 <div class="pi-pf-imp-pills">${what.map((w) => `<span class="pi-badge">${esc(w)}</span>`).join('')}</div>
                 ${summary.clue ? `<p class="pi-pf-imp-note${missing && missing.length ? ' is-warn' : ''}">${missing && missing.length ? `当前聊天缺少${esc(missing.join('、'))}。` : ''}游玩前在执行页点「创建模板」。</p>` : ''}</div>`,
                 actions: [
@@ -422,11 +428,88 @@ export function createApp({ data, runtime, version }) {
         if (!ok) return;
         try {
             const added = await data.addProject({ ...project, name }, group);
-            (!runtime.activeId() && cardKey() && (await runtime.switchProject(added.id)), await selectProject(added.id, summary.clue ? 'run' : 'outline'));
+            pack && data.updateSettings({ cardLinks: { ...(data.settings().cardLinks || {}), [pack.id]: { project: added.id, savedAt: pack.savedAt } } });
+            // 从卡导入：设为本卡默认（新聊天都用它）；当前聊天已在用别的项目时不改它
+            pack && cardKey()
+                ? runtime.chatBoundId()
+                    ? data.setActive(added.id)
+                    : await runtime.switchProject(added.id, 'card')
+                : !runtime.activeId() && cardKey() && (await runtime.switchProject(added.id));
+            (root || open(), await selectProject(added.id, summary.clue ? 'run' : 'outline'));
             toast('success', `已导入「${name}」。`);
         } catch (error) {
             toast('error', `导入失败：${error.message}`);
         }
+    }
+    // ---------- 角色卡里的剧情项目 ----------
+    function cardPackNow() {
+        const card = currentCard();
+        return card ? readCardPack(card) : null;
+    }
+    function packState(pack) {
+        return cardPackState(pack, data.settings().cardLinks, data.index().projects.map((p) => p.id));
+    }
+    async function importFromCard(pack = cardPackNow()) {
+        if (!pack) return toast('warning', '当前角色卡里没有剧情项目');
+        const state = packState(pack);
+        if (state.kind === 'update' || state.kind === 'same') return updateFromCard(pack, state.project);
+        return importProjectText(pack.file, '', pack);
+    }
+    // 卡里是新版本：更新本机那个项目（id 不变，聊天进度接着用）。已是最新时只说明一下。
+    async function updateFromCard(pack, projectId) {
+        const meta = data.index().projects.find((p) => p.id === projectId);
+        if (!meta) return importProjectText(pack.file, '', pack);
+        if (packState(pack).kind === 'same') return toast('info', `「${meta.name}」已是角色卡里的版本`);
+        let local, result;
+        try {
+            local = data.project(projectId) || (await data.loadProject(projectId));
+            result = applyCardUpdate(local, pack.file);
+        } catch (error) {
+            return toast('error', `更新失败：${error.message}`);
+        }
+        const ok = await openDialog({
+            html: `<div><p class="pi-pf-imp-ttl">用角色卡里的新版本更新</p><p class="pi-pf-imp-name">${esc(meta.name)}</p>
+                <p class="pi-hint">换成卡里的大纲和线索设置${result.summary.hasSetting ? '、设定' : ''}${result.summary.hasPersonas ? '、人设' : ''}。项目还是这一个，各聊天的进度接着用：已经走过的剧情不变，新增和改动的剧情按新大纲继续。</p>
+                <p class="pi-hint">旧大纲${result.summary.hasSetting ? '、旧设定' : ''}存进修改历史。线索模式下，执行页如果提示「修改线索」或「补全表格」，照提示点一下，表格就会跟上新大纲。</p></div>`,
+            actions: [
+                { label: '取消', value: null },
+                { label: '更新', primary: !0, value: !0 },
+            ],
+        });
+        if (!ok) return;
+        try {
+            data.updateProject(projectId, () => result.project);
+            data.updateSettings({ cardLinks: { ...(data.settings().cardLinks || {}), [pack.id]: { project: projectId, savedAt: pack.savedAt } } });
+            // 重新导入的卡在酒馆里可能是另一张卡（头像文件名不同）：这张卡还没有默认项目就用它
+            cardKey() && !data.activeIdFor() && (runtime.chatBoundId() ? data.setActive(projectId) : await runtime.switchProject(projectId, 'card'));
+            (root || open(), await selectProject(projectId, result.summary.clue ? 'run' : 'outline'));
+            toast('success', `已更新「${meta.name}」。`);
+        } catch (error) {
+            toast('error', `更新失败：${error.message}`);
+        }
+    }
+    // 打开带剧情的卡：没导入过、或卡里有新版本时提示一次（同一张卡同一版本只提示一次；「不再提示」记到这个版本为止）。
+    let packAsked = '';
+    function checkCardPack() {
+        if (!data.isReady()) return;
+        const pack = cardPackNow();
+        if (!pack) return ((packAsked = ''), notice && notice.hide('card-pack'));
+        const key = `${cardKey()}|${pack.id}|${pack.savedAt}`;
+        if (key === packAsked) return;
+        packAsked = key;
+        const state = packState(pack),
+            skip = (data.settings().cardPackSkip || {})[pack.id];
+        if (!notice || (state.kind !== 'new' && state.kind !== 'update') || Number(skip) >= pack.savedAt) return notice && notice.hide('card-pack');
+        notice.show({
+            id: 'card-pack',
+            title: state.kind === 'new' ? '这张角色卡带有剧情项目' : '角色卡里的剧情项目有新版本',
+            body: `「${pack.name || '未命名'}」${state.kind === 'new' ? '。导入后这张卡的聊天都会用它。' : '。更新后聊天进度接着用。'}`,
+            actions: [
+                { label: state.kind === 'new' ? '导入' : '更新', primary: !0, run: () => (state.kind === 'new' ? importProjectText(pack.file, '', pack) : updateFromCard(pack, state.project)) },
+                { label: '稍后', run: () => {} },
+                { label: '不再提示', run: () => data.updateSettings({ cardPackSkip: { ...(data.settings().cardPackSkip || {}), [pack.id]: pack.savedAt } }) },
+            ],
+        });
     }
     async function projectMenu(id) {
         const meta = data.index().projects.find((item) => item.id === id);
@@ -630,6 +713,7 @@ export function createApp({ data, runtime, version }) {
                 data.flush().catch(() => {})));
     }
     function refresh(reason) {
+        (reason === 'chat' || reason === 'index') && checkCardPack();
         if (!root) return;
         if (!view.restored && data.isReady()) return restore();
         (reason === 'index' || reason === 'switch' || reason === 'chat') && renderSide();

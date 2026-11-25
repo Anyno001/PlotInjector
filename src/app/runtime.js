@@ -1710,6 +1710,7 @@ ${finds.map((d) => `- ${d.text}`).join(`
         start,
         stop,
         activeId,
+        chatBoundId,
         activeProject,
         progress: () => currentProgress() || emptyProgress(''),
         setProgress,
