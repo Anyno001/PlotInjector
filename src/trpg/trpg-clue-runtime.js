@@ -953,6 +953,8 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
                   : op.value ? '暂停剧情' : '继续剧情';
         if (op.kind === 'line')
             return `${{ start: '开启', pause: '暂停', resume: '继续', done: '标记完成', abandon: '放弃', deny: '取消开启', skip: '跳过', '': '还原手动操作' }[String(op.value || '')] || op.value}线${op.target}${op.note ? `（${op.note}）` : ''}`;
+        if (op.kind === 'stage')
+            return `${{ enter: '手动设为进行中', done: '手动标记已结束', '': '阶段改回按条件判断' }[String(op.value || '')] || op.value} ${op.target}${op.note ? `（${op.note}）` : ''}`;
         let names = {
                 open: { force: '手动开放', block: '暂时停用', '': '开放改回按条件判断' },
                 done: { force: '手动完成', undo: '算作没完成', '': '完成改回按表格判断' },

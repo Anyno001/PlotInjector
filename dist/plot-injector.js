@@ -1,4 +1,4 @@
-// PlotInjector v0.4.15
+// PlotInjector v0.4.16
 (() => {
   var __defProp = Object.defineProperty;
   var __getOwnPropNames = Object.getOwnPropertyNames;
@@ -4125,8 +4125,8 @@ ${guide ? `${guide}
     function stageChain(list, firstEntered) {
       let prevDone = !0;
       for (let [k, unit] of list.entries()) {
-        let own = nodes.filter((n) => n.unit === unit), required = own.filter((n) => n.required), gate = k === 0 && firstEntered ? firstEntered() : null, entered = gate && gate.v !== TRI.t ? gate : unit.clue.hasEnter ? evalCondition(unit.clue.enter, env) : prevDone ? { v: TRI.t, reasons: [k === 0 && gate ? gate.reasons[0] : "上一阶段已结束"] } : { v: TRI.f, reasons: ["上一阶段尚未结束"] }, requiredLeft = required.filter((n) => !(overrides[n.uid] || {}).skip && nodeDone(n).v !== TRI.t), end = evalCondition(unit.clue.end, env), done = entered.v === TRI.t && !requiredLeft.length && end.v === TRI.t;
-        gate && gate.v !== TRI.t && (entered = gate), stageStates.set(unit.id, { unit, entered, end, requiredLeft, done: entered.v === TRI.t && done }), prevDone = entered.v === TRI.t && done;
+        let own = nodes.filter((n) => n.unit === unit), required = own.filter((n) => n.required), gate = k === 0 && firstEntered ? firstEntered() : null, hand = (clueProg.stages || {})[unit.id] || "", entered = hand === "enter" || hand === "done" ? { v: TRI.t, reasons: ["人工设为已进入"], manual: !0 } : gate && gate.v !== TRI.t ? gate : unit.clue.hasEnter ? evalCondition(unit.clue.enter, env) : prevDone ? { v: TRI.t, reasons: [k === 0 && gate ? gate.reasons[0] : "上一阶段已结束"] } : { v: TRI.f, reasons: ["上一阶段尚未结束"] }, requiredLeft = required.filter((n) => !(overrides[n.uid] || {}).skip && nodeDone(n).v !== TRI.t), end = evalCondition(unit.clue.end, env), done = hand === "done" ? !0 : hand === "enter" ? !1 : entered.v === TRI.t && !requiredLeft.length && end.v === TRI.t;
+        gate && gate.v !== TRI.t && !hand && (entered = gate), stageStates.set(unit.id, { unit, entered, end, requiredLeft, done: entered.v === TRI.t && done }), prevDone = entered.v === TRI.t && done;
       }
     }
     function legacySeen(l) {
@@ -9549,7 +9549,7 @@ ${guide ? `${guide}
     };
   }
   function effectiveClueProgress2(clueOps, chat) {
-    let out = { focus: "", paused: !1, sidePaused: !1, mainPaused: !1, overrides: {}, factOverrides: {}, lines: {}, log: [] }, valid = (clueOps.ops || []).filter((op) => anchorValid2(op.at, chat));
+    let out = { focus: "", paused: !1, sidePaused: !1, mainPaused: !1, overrides: {}, factOverrides: {}, stages: {}, lines: {}, log: [] }, valid = (clueOps.ops || []).filter((op) => anchorValid2(op.at, chat));
     for (let [seq, op] of valid.entries()) {
       if (op.kind === "line") {
         let cur2 = { ...out.lines[op.target] || {} };
@@ -9571,6 +9571,10 @@ ${guide ? `${guide}
           // KP 自动检测判的（备注是「KP判定」）带上来源和楼层；人工确认的没有 by
           ...op.note === "KP判定" ? { by: "kp", floor: op.at ? op.at.i : -1 } : {}
         } : delete out.factOverrides[op.target];
+        continue;
+      }
+      if (op.kind === "stage") {
+        op.value ? out.stages[op.target] = op.value : delete out.stages[op.target];
         continue;
       }
       let cur = { ...out.overrides[op.target] || {} };
@@ -9682,7 +9686,7 @@ ${guide ? `${guide}
   var CLUE_OP_KINDS2, STAY_WORDS2, init_trpg_clue_progress = __esm({
     "src/trpg/trpg-clue-progress.js"() {
       init_outline();
-      CLUE_OP_KINDS2 = ["open", "done", "skip", "fact", "focus", "pause", "line"];
+      CLUE_OP_KINDS2 = ["open", "done", "skip", "fact", "focus", "pause", "line", "stage"];
       STAY_WORDS2 = {
         long: ["", "有一阵了", "写了很久"],
         idle: ["最近一直有新的", "最近几轮没有新的", "很久没有新的"],
@@ -10758,6 +10762,8 @@ ${facts.length ? facts.map((f) => `- ${f}`).join(`
         return op.target === "side" ? op.value ? "暂停全部支线" : "继续全部支线" : op.target === "mains" ? op.value ? "暂停全部主线" : "继续全部主线" : op.value ? "暂停剧情" : "继续剧情";
       if (op.kind === "line")
         return `${{ start: "开启", pause: "暂停", resume: "继续", done: "标记完成", abandon: "放弃", deny: "取消开启", skip: "跳过", "": "还原手动操作" }[String(op.value || "")] || op.value}线${op.target}${op.note ? `（${op.note}）` : ""}`;
+      if (op.kind === "stage")
+        return `${{ enter: "手动设为进行中", done: "手动标记已结束", "": "阶段改回按条件判断" }[String(op.value || "")] || op.value} ${op.target}${op.note ? `（${op.note}）` : ""}`;
       let names2 = {
         open: { force: "手动开放", block: "暂时停用", "": "开放改回按条件判断" },
         done: { force: "手动完成", undo: "算作没完成", "": "完成改回按表格判断" },
@@ -19905,7 +19911,7 @@ SQL示例: INSERT INTO important_non_romance (name, gender, age, brief_intro, ap
         ${open ? `<ul class="pi-clue-why">${reasonList2(s.open) + reasonList2(s.done)}</ul>` : ""}</div>`;
   }
   function stageBlock2(unit, stage, nodes, focusUid, st72, { next = !1, expand = !1 } = {}) {
-    let live2 = stage.entered.v === "true" && !stage.done, key = `st:${unit.id}`, open = live2 || expand || !!st72[key], state = stage.done ? "已结束" : live2 ? "进行中" : next ? "下一个" : "", left = stage.requiredLeft.length && live2 ? `还差${stage.requiredLeft.length}个` : "", endWhy = live2 && !stage.requiredLeft.length && stage.end.v !== "true" ? `结束条件：${stage.end.reasons.join("；")}` : "", enterWhy = !live2 && !stage.done ? stage.entered.reasons.join("；") : "", cls = stage.done ? "done" : live2 ? "active" : next ? "next" : "todo", head = `<span class="pi-tl-name">${esc(stageLabel(unit.stage.key))}</span>${left ? `<span class="pi-tl-state is-left">${left}</span>` : ""}${state ? `<span class="pi-tl-state">${state}</span>` : ""}`;
+    let live2 = stage.entered.v === "true" && !stage.done, key = `st:${unit.id}`, open = live2 || expand || !!st72[key], state = stage.done ? "已结束" : live2 ? "进行中" : next ? "下一个" : "", left = stage.requiredLeft.length && live2 ? `还差${stage.requiredLeft.length}个` : "", endWhy = live2 && !stage.requiredLeft.length && stage.end.v !== "true" ? `结束条件：${stage.end.reasons.join("；")}` : "", enterWhy = !live2 && !stage.done ? stage.entered.reasons.join("；") : "", cls = stage.done ? "done" : live2 ? "active" : next ? "next" : "todo", hand = stage.entered.manual, head = `<span class="pi-tl-name">${esc(stageLabel(unit.stage.key))}</span>${left ? `<span class="pi-tl-state is-left">${left}</span>` : ""}${state ? `<span class="pi-tl-state">${state}${hand ? "（手动）" : ""}</span>` : ""}<button type="button" class="pi-icon-btn" data-act="clue-stage-menu" data-id="${esc(unit.id)}" title="手动调整阶段" aria-label="手动调整阶段">${ICONS.more}</button>`;
     return `<div class="pi-tl-item is-${cls}"><span class="pi-tl-dot"></span><div class="pi-tl-box">
         ${live2 ? `<div class="pi-tl-hd">${head}</div>` : `<div class="pi-tl-hd is-fold" data-act="run-fold" data-key="${esc(key)}" role="button" aria-expanded="${open}">${head}<span class="pi-tl-state">${open ? "▾" : "▸"}</span></div>`}
         ${open ? `${[endWhy, enterWhy].filter(Boolean).map((t) => `<p class="pi-hint">${esc(t)}</p>`).join("")}<div class="pi-tl-nodes">${nodes.map((s) => nodeRow2(s, focusUid, st72.nodeOpen === s.node.uid)).join("")}</div>` : ""}</div></div>`;
@@ -20851,6 +20857,22 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
         },
         "clue-leave"(view, target) {
           view.runtime.clue.leaveScene(target.dataset.uid), toast("info", "已记下主角离开了这件事：不再注入它的场景，只给入口。"), view.renderBody();
+        },
+        // 阶段「⋯」：手动设进行中 / 已结束 / 改回按条件判断
+        async "clue-stage-menu"(view, target) {
+          let clue = view.runtime.clue, c = clue.compute(), id = target.dataset.id, s = c && c.state.stageStates.get(id);
+          if (!s) return;
+          let hand = (c.prog.stages || {})[id] || "", live2 = s.entered.v === "true" && !s.done, pick = await menuDialog({
+            title: stageLabel(s.unit.stage.key),
+            items: [
+              ...live2 && hand !== "enter" ? [] : [{ label: "设为进行中", value: "enter" }],
+              ...s.done && hand === "done" ? [] : [{ label: "标记为已结束", value: "done" }],
+              ...hand ? [{ label: "改回按条件判断", value: "" }] : []
+            ]
+          });
+          if (pick == null) return;
+          let note = pick ? await promptDialog({ title: "记录原因（可空）", label: "为什么手动处理" }) : "";
+          note !== null && (clue.act({ kind: "stage", target: id, value: pick, note }), view.renderBody());
         },
         async "clue-node-menu"(view, target) {
           let clue = view.runtime.clue, c = clue.compute(), uid = target.dataset.uid, s = c && c.state.nodeStates.find((x) => x.node.uid === uid);
@@ -32780,7 +32802,7 @@ ${suffix.trim()}` : body;
   }
 
   // src/index.js
-  var VERSION = "0.4.15", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.4.16", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")

@@ -1,6 +1,6 @@
 import { isPlainObject, makeId } from '../core/outline.js';
 
-export const CLUE_OP_KINDS = ['open', 'done', 'skip', 'fact', 'focus', 'pause', 'line'];
+export const CLUE_OP_KINDS = ['open', 'done', 'skip', 'fact', 'focus', 'pause', 'line', 'stage'];
 
 export function anchorOf(chat, index) {
     let list = Array.isArray(chat) ? chat : [],
@@ -27,7 +27,7 @@ export function normalizeClueOps(value) {
 }
 
 export function effectiveClueProgress(clueOps, chat) {
-    let out = { focus: '', paused: !1, sidePaused: !1, mainPaused: !1, overrides: {}, factOverrides: {}, lines: {}, log: [] },
+    let out = { focus: '', paused: !1, sidePaused: !1, mainPaused: !1, overrides: {}, factOverrides: {}, stages: {}, lines: {}, log: [] },
         valid = (clueOps.ops || []).filter((op) => anchorValid(op.at, chat));
     for (let [seq, op] of valid.entries()) {
         if (op.kind === 'line') {
@@ -73,6 +73,10 @@ export function effectiveClueProgress(clueOps, chat) {
                       ...(op.note === 'KP判定' ? { by: 'kp', floor: op.at ? op.at.i : -1 } : {}),
                   })
                 : delete out.factOverrides[op.target];
+            continue;
+        }
+        if (op.kind === 'stage') {
+            op.value ? (out.stages[op.target] = op.value) : delete out.stages[op.target];
             continue;
         }
         let cur = { ...(out.overrides[op.target] || {}) };
