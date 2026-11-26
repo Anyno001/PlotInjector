@@ -12,6 +12,7 @@ import * as discuss from './tab-discuss.js';
 import * as setting from './tab-setting.js';
 import * as outline from './tab-outline.js';
 import * as persona from './tab-persona.js';
+import * as trpgPeople from '../trpg/trpg-people-ui.js';
 import * as run from './tab-run.js';
 import * as worlds from './tab-worlds.js';
 import * as infiniteRun from './tab-infinite-run.js';
@@ -29,8 +30,8 @@ const TABS = [
 ];
 // 无限流项目：大纲页签换成世界库，执行页签换成状态页。
 const INFINITE_TABS = { outline: { label: '世界库', mod: worlds }, run: { mod: infiniteRun } };
-// 跑团项目：设定叫公共设定，大纲叫模组，人设页签不显示。
-const TRPG_TABS = { setting: { label: '公共设定' }, outline: { label: '模组' }, persona: { hidden: !0 } };
+// 跑团项目：设定叫公共设定，大纲叫模组，人设页签换成人物档案（关键词触发的精简编辑页）。
+const TRPG_TABS = { setting: { label: '公共设定' }, outline: { label: '模组' }, persona: { label: '人物档案', mod: trpgPeople } };
 const PAGES = {
     books: { label: '世界书管理', icon: 'book', mod: books },
     data: { label: '数据管理', icon: 'box', mod: dataPage },

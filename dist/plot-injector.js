@@ -1,4 +1,4 @@
-// PlotInjector v0.4.16
+// PlotInjector v0.4.17
 (() => {
   var __defProp = Object.defineProperty;
   var __getOwnPropNames = Object.getOwnPropertyNames;
@@ -53,12 +53,12 @@
     return hostWindow().document;
   }
   function ctx() {
-    let st9 = hostWindow().SillyTavern;
-    return st9 && typeof st9.getContext == "function" ? st9.getContext() : st9 || null;
+    let st10 = hostWindow().SillyTavern;
+    return st10 && typeof st10.getContext == "function" ? st10.getContext() : st10 || null;
   }
   function libs() {
-    let st9 = hostWindow().SillyTavern;
-    return st9 && st9.libs || {};
+    let st10 = hostWindow().SillyTavern;
+    return st10 && st10.libs || {};
   }
   function helper() {
     let w = hostWindow();
@@ -343,9 +343,9 @@ ${body}
   function keepNodeIds(raw, view) {
     if (!isPlainObject(raw) || !isPlainObject(view)) return view;
     let out = { ...view };
-    for (let { field: field2 } of NODE_FIELDS)
-      !Array.isArray(raw[field2]) || !Array.isArray(view[field2]) || (out[field2] = view[field2].map((item, i) => {
-        let id = nodeUid(raw[field2][i]);
+    for (let { field: field3 } of NODE_FIELDS)
+      !Array.isArray(raw[field3]) || !Array.isArray(view[field3]) || (out[field3] = view[field3].map((item, i) => {
+        let id = nodeUid(raw[field3][i]);
         return id ? isPlainObject(item) ? { ...item, id } : { 名称: item, id } : item;
       }));
     return out;
@@ -356,12 +356,12 @@ ${body}
         let data = stage.data, stageChanged = !1;
         if (!isPlainObject(data)) return stage;
         let patch = {};
-        for (let { field: field2 } of NODE_FIELDS) {
-          if (!Array.isArray(data[field2])) continue;
-          let listChanged = !1, list = data[field2].map(
+        for (let { field: field3 } of NODE_FIELDS) {
+          if (!Array.isArray(data[field3])) continue;
+          let listChanged = !1, list = data[field3].map(
             (item) => isPlainObject(item) && !nodeUid(item) ? (listChanged = !0, { ...item, id: idOf2() }) : item
           );
-          listChanged && (patch[field2] = list, stageChanged = !0);
+          listChanged && (patch[field3] = list, stageChanged = !0);
         }
         return stageChanged ? (volChanged = !0, { ...stage, data: { ...data, ...patch } }) : stage;
       });
@@ -375,16 +375,16 @@ ${body}
         let data = stage.data;
         if (!isPlainObject(data)) return stage;
         let patch = {}, stageChanged = !1, entries = {};
-        for (let { field: field2, prefix } of NODE_FIELDS) {
-          if (!Array.isArray(data[field2])) continue;
-          let listChanged = !1, list = data[field2].map((item, index) => {
+        for (let { field: field3, prefix } of NODE_FIELDS) {
+          if (!Array.isArray(data[field3])) continue;
+          let listChanged = !1, list = data[field3].map((item, index) => {
             let old = `${prefix}${index}`;
             if (isPlainObject(item) && nodeUid(item)) return entries[old] = nodeUid(item), item;
             if (item == null || isPlainObject(item) === !1 && typeof item != "string") return item;
             let id = idOf2();
             return listChanged = !0, entries[old] = id, isPlainObject(item) ? { ...item, id } : { 名称: String(item), id };
           });
-          listChanged && (patch[field2] = list, stageChanged = !0);
+          listChanged && (patch[field3] = list, stageChanged = !0);
         }
         return stageChanged && !map[stage.id] && (newMap[stage.id] = entries, mapChanged = !0), stageChanged ? (volChanged = !0, { ...stage, data: { ...data, ...patch } }) : stage;
       });
@@ -434,7 +434,7 @@ ${body}
           if (!isPlainObject(stage.data)) return stage;
           let data = { ...stage.data };
           for (let key of STAGE_COND_KEYS) key in data && (data[key] = remapNodeRefs(data[key], map));
-          for (let { field: field2 } of NODE_FIELDS) Array.isArray(data[field2]) && (data[field2] = data[field2].map(fixNode));
+          for (let { field: field3 } of NODE_FIELDS) Array.isArray(data[field3]) && (data[field3] = data[field3].map(fixNode));
           return { ...stage, data };
         })
       })),
@@ -519,7 +519,7 @@ ${body}
 
   // src/core/setting.js
   function splitBlocks(text2) {
-    let lines2 = String(text2 || "").replace(
+    let lines3 = String(text2 || "").replace(
       /\r\n/g,
       `
 `
@@ -527,7 +527,7 @@ ${body}
 `), blocks = [], current = { key: "", lines: [] }, counts = {}, depth = 0, closed = !1, lastPublic = "开头", open = (title2, line, flag2 = {}) => {
       (current.key || current.lines.some((item) => item.trim())) && blocks.push(current), counts[title2] = (counts[title2] || 0) + 1, current = { key: counts[title2] > 1 ? `${title2}#${counts[title2]}` : title2, title: title2, lines: [line], ...flag2 };
     };
-    for (let line of lines2) {
+    for (let line of lines3) {
       let match = depth === 0 && !/^\s*<仅作者>/.test(line) && HEADING.exec(line);
       depth === 0 && /^\s*<仅作者>/.test(line) ? open(AUTHOR_BLOCK_TITLE, line, { author: !0 }) : match ? open(lastPublic = (match[1] || match[2] || match[3]).trim(), line) : closed && line.trim() ? open(`${lastPublic}·续`, line, { cont: !0 }) : current.lines.push(line);
       for (let m of line.matchAll(/<(\/?)仅作者>/g)) depth = m[1] ? Math.max(0, depth - 1) : depth + 1;
@@ -567,10 +567,10 @@ ${body}
     return (match ? match[1] : text2).trim();
   }
   function parseSettingReply(text2) {
-    let lines2 = String(text2 || "").replace(/\r\n/g, `
+    let lines3 = String(text2 || "").replace(/\r\n/g, `
 `).split(`
 `), sections = { 世界观正文: [], 补定: [], 速查: [] }, current = "世界观正文", sawHeading = !1;
-    for (let line of lines2) {
+    for (let line of lines3) {
       let match = SECTION.exec(line);
       if (match && (match[1] !== "速查" || /PASS|FAIL/i.test(line) || line.replace(SECTION, "").trim() === "")) {
         current = match[1], sawHeading = !0;
@@ -581,7 +581,7 @@ ${body}
       sections[current].push(line);
     }
     let body = stripFence(sections.世界观正文.join(`
-`)), fixes = sections.补定.map((line) => line.replace(/^\s*(?:[-*•]|\d+[.、])\s*/, "").trim()).filter(Boolean), verdict = /(PASS|FAIL)/i.exec([...sections.速查, ...sawHeading ? [] : lines2.slice(-3)].join(" "));
+`)), fixes = sections.补定.map((line) => line.replace(/^\s*(?:[-*•]|\d+[.、])\s*/, "").trim()).filter(Boolean), verdict = /(PASS|FAIL)/i.exec([...sections.速查, ...sawHeading ? [] : lines3.slice(-3)].join(" "));
     return { body, fixes, check: verdict ? verdict[1].toUpperCase() : "" };
   }
   function pushHistory(history, text2, limit = 10, now = Date.now(), label = "") {
@@ -715,10 +715,10 @@ ${body}
   }
   function stageNodes(data) {
     let nodes = [];
-    for (let { field: field2, kind, prefix, label } of NODE_FIELDS)
-      (Array.isArray(data && data[field2]) ? data[field2] : []).forEach((item, index) => {
+    for (let { field: field3, kind, prefix, label } of NODE_FIELDS)
+      (Array.isArray(data && data[field3]) ? data[field3] : []).forEach((item, index) => {
         let name = isPlainObject(item) ? String(item.名称 || item.类型 || item.内容 || "").trim() : String(item || "").trim();
-        nodes.push({ id: `${prefix}${index}`, kind, field: field2, label, index, name: name || `${label}${index + 1}`, item });
+        nodes.push({ id: `${prefix}${index}`, kind, field: field3, label, index, name: name || `${label}${index + 1}`, item });
       });
     return nodes;
   }
@@ -804,28 +804,28 @@ ${body}
     }), leftovers = old.flatMap(
       (volume) => volume.stages.filter((stage) => !used.has(stage.id)).map((stage) => ({ key: stage.key, stage, volume }))
     ), takeAny = queueByKey(leftovers);
-    for (let row2 of parsed)
-      for (let item of row2.stages) {
+    for (let row3 of parsed)
+      for (let item of row3.stages) {
         if (item.same) continue;
         let hit = takeAny(item.stage.key);
         hit && (item.same = hit.stage, item.from = hit.volume, used.add(hit.stage.id));
       }
-    let usedVolumes = new Set(parsed.filter((row2) => row2.match).map((row2) => row2.match.id)), alias = [];
-    return { volumes: parsed.map((row2) => {
-      let id = row2.match ? row2.match.id : row2.volume.id;
-      if (!row2.match) {
+    let usedVolumes = new Set(parsed.filter((row3) => row3.match).map((row3) => row3.match.id)), alias = [];
+    return { volumes: parsed.map((row3) => {
+      let id = row3.match ? row3.match.id : row3.volume.id;
+      if (!row3.match) {
         let votes = /* @__PURE__ */ new Map();
-        for (let item of row2.stages)
+        for (let item of row3.stages)
           item.from && !usedVolumes.has(item.from.id) && votes.set(item.from, (votes.get(item.from) || 0) + 1);
         let best = [...votes.entries()].sort((a, b) => b[1] - a[1])[0];
         best && (id = best[0].id, usedVolumes.add(id));
       }
-      let source = row2.match || old.find((volume) => volume.id === id) || null, stages = row2.stages.map((item, index) => {
+      let source = row3.match || old.find((volume) => volume.id === id) || null, stages = row3.stages.map((item, index) => {
         if (item.same) return { ...item.stage, id: item.same.id };
         let spot = source && source.stages[index];
         return spot && !used.has(spot.id) && (used.add(spot.id), alias.push([spot.id, item.stage.id])), item.stage;
       });
-      return { ...row2.volume, id, stages };
+      return { ...row3.volume, id, stages };
     }), alias };
   }
   function nearestUnitId(oldVolumes, newVolumes, currentId) {
@@ -930,9 +930,9 @@ ${body}
   }
   function nodeMapsToLists(data) {
     let out = data;
-    for (let { field: field2 } of NODE_FIELDS) {
-      let v = data[field2];
-      !isPlainObject(v) || !Object.values(v).length || !Object.values(v).every(isPlainObject) || (out === data && (out = { ...data }), out[field2] = Object.entries(v).map(([k, item]) => item.id ? item : { id: k, ...item }));
+    for (let { field: field3 } of NODE_FIELDS) {
+      let v = data[field3];
+      !isPlainObject(v) || !Object.values(v).length || !Object.values(v).every(isPlainObject) || (out === data && (out = { ...data }), out[field3] = Object.entries(v).map(([k, item]) => item.id ? item : { id: k, ...item }));
     }
     return out;
   }
@@ -1283,12 +1283,12 @@ ${world.body}
       }
       return id;
     }, cache = /* @__PURE__ */ new Map();
-    return { resolve, family: (stageId, field2, name) => {
+    return { resolve, family: (stageId, field3, name) => {
       let cacheKey = `${stageId}
-${field2}
+${field3}
 ${name}`;
       if (cache.has(cacheKey)) return cache.get(cacheKey);
-      let edges = renames.filter((item) => item.field === field2 && resolve(item.stageId) === stageId), names2 = /* @__PURE__ */ new Set([name]);
+      let edges = renames.filter((item) => item.field === field3 && resolve(item.stageId) === stageId), names2 = /* @__PURE__ */ new Set([name]);
       for (let grew = !0; grew; ) {
         grew = !1;
         for (let item of edges)
@@ -1408,7 +1408,7 @@ ${node.name}`;
     let out = map;
     for (let [key, value] of Object.entries(map)) {
       if (!keyNode(key).includes("~") || !isObj(value) || !value.name) continue;
-      let field2 = FIELD_OF[prefixOf(keyNode(key))], hit = byName.get(`${field2}
+      let field3 = FIELD_OF[prefixOf(keyNode(key))], hit = byName.get(`${field3}
 ${value.name}`);
       if (!hit) continue;
       let target = `${hit.unit.id}:${hit.node.id}`;
@@ -1438,10 +1438,10 @@ ${value.name}`);
     }
     if (next.slots = slots, isObj(progress.threads)) {
       let threads = { ...progress.threads };
-      for (let [kind, field2] of Object.entries(KIND_MAP)) {
-        let map = isObj(threads[field2]) ? threads[field2] : {};
+      for (let [kind, field3] of Object.entries(KIND_MAP)) {
+        let map = isObj(threads[field3]) ? threads[field3] : {};
         for (let unit of units) map = realignStage(map, unit.id, stageNodes(unit.stage.data).filter((node) => node.kind === kind), links);
-        threads[field2] = adoptAcross(map, units, kind);
+        threads[field3] = adoptAcross(map, units, kind);
       }
       next.threads = threads;
     }
@@ -1451,7 +1451,7 @@ ${value.name}`);
     "src/core/align.js"() {
       init_outline();
       RENAME_MAX = 200, ALIAS_MAX = 300, isObj = (value) => !!value && typeof value == "object" && !Array.isArray(value), FIELD_OF = Object.fromEntries(NODE_FIELDS.map((meta2) => [meta2.prefix, meta2.field])), FIELDS = new Set(NODE_FIELDS.map((meta2) => meta2.field)), prefixOf = (id) => String(id).replace(/~?\d+$/, ""), keyStage = (key) => key.slice(0, key.indexOf(":")), keyNode = (key) => key.slice(key.indexOf(":") + 1);
-      NO_LINKS = { resolve: (id) => id, family: (stageId, field2, name) => /* @__PURE__ */ new Set([name]), empty: !0 };
+      NO_LINKS = { resolve: (id) => id, family: (stageId, field3, name) => /* @__PURE__ */ new Set([name]), empty: !0 };
       KIND_MAP = { world: "clocks", side: "hooks" };
     }
   });
@@ -1648,9 +1648,9 @@ ${value.name}`);
     for (let entry of entries) {
       let patch = {}, hits = 0;
       if (fields.content && countIn(entry.content, pattern) && (hits += countIn(entry.content, pattern), patch.content = sub(entry.content)), fields.comment && entry.comment && countIn(entry.comment, pattern) && (hits += countIn(entry.comment, pattern), patch.comment = sub(entry.comment)), fields.keys)
-        for (let [from, field2] of [[entry.keys, "key"], [entry.keysSecondary, "keysecondary"]]) {
+        for (let [from, field3] of [[entry.keys, "key"], [entry.keysSecondary, "keysecondary"]]) {
           let n = from.reduce((sum, key) => sum + countIn(key, pattern), 0);
-          n && (hits += n, patch[field2] = from.map(sub).map((key) => key.trim()).filter(Boolean));
+          n && (hits += n, patch[field3] = from.map(sub).map((key) => key.trim()).filter(Boolean));
         }
       hits && out.push({ key: entry.key, title: entry.title, patch, hits });
     }
@@ -1819,9 +1819,9 @@ ${value.name}`);
       imported: (Array.isArray(src.imported) ? src.imported : []).filter(isObj3).map((item) => ({ book: text(item.book), uid: text(item.uid), key: text(item.key ?? item.uid), title: text(item.title) }))
     };
   }
-  function groupLines(lines2) {
+  function groupLines(lines3) {
     let groups = /* @__PURE__ */ new Map();
-    for (let line of lines2) {
+    for (let line of lines3) {
       let key = line.group || "";
       groups.has(key) || groups.set(key, []), groups.get(key).push(line);
     }
@@ -2072,7 +2072,7 @@ ${value.name}`);
     let drop = [...sw.sideOn ? [] : ["支线事件"], ...sw.worldOn ? [] : ["世界动态"]];
     return (units || []).map((unit) => {
       let data = { ...unit.stage.data };
-      for (let field2 of drop) delete data[field2];
+      for (let field3 of drop) delete data[field3];
       return { ...unit, stage: { ...unit.stage, data } };
     });
   }
@@ -2088,9 +2088,9 @@ ${value.name}`);
     return { ...progress, threads: { ...threadState(progress), ...patch } };
   }
   function patchLive(progress, item, patch) {
-    let field2 = mapOf(item.node), state = threadState(progress)[field2], map = item.unit.stage ? realignStage(state, item.unit.id, kindNodes(item.unit, field2), item.links || NO_LINKS) : { ...state }, next = patch === null ? { name: item.node.name } : { ...item.saved, ...patch, name: item.node.name };
+    let field3 = mapOf(item.node), state = threadState(progress)[field3], map = item.unit.stage ? realignStage(state, item.unit.id, kindNodes(item.unit, field3), item.links || NO_LINKS) : { ...state }, next = patch === null ? { name: item.node.name } : { ...item.saved, ...patch, name: item.node.name };
     for (let name of Object.keys(next)) next[name] === void 0 && delete next[name];
-    return map[item.key] = next, withState(progress, { [field2]: map });
+    return map[item.key] = next, withState(progress, { [field3]: map });
   }
   function remapNodes(progress, unitId, prefix, mapIndex) {
     let pattern = new RegExp(`^${prefix}(\\d+)$`), move = (id) => {
@@ -2128,8 +2128,8 @@ ${value.name}`);
   function renameNode(progress, unit, node) {
     let next = progress, slot = progress.slots && progress.slots[unit.id], offName = slot && slot.offNames && slot.offNames[node.id];
     if (offName && offName !== node.name && (next = { ...next, slots: { ...next.slots, [unit.id]: { ...slot, offNames: { ...slot.offNames, [node.id]: node.name } } } }), node.kind === "main") return next;
-    let field2 = mapOf(node), map = threadState(next)[field2], key = threadKey(unit, node);
-    return !map[key] || !map[key].name || map[key].name === node.name ? next : withState(next, { [field2]: { ...map, [key]: { ...map[key], name: node.name } } });
+    let field3 = mapOf(node), map = threadState(next)[field3], key = threadKey(unit, node);
+    return !map[key] || !map[key].name || map[key].name === node.name ? next : withState(next, { [field3]: { ...map, [key]: { ...map[key], name: node.name } } });
   }
   function renameByPosition(progress, units, links = NO_LINKS) {
     let next = progress;
@@ -2147,8 +2147,8 @@ ${value.name}`);
     for (let stage of oldStages) {
       let unit = { id: stage.id, stage }, off = new Set(offNodes(progress, unit)), nodes = stageNodes(stage.data), placed = { clocks: placeStageMap(state.clocks, stage.id, nodes.filter((node) => node.kind === "world")), hooks: placeStageMap(state.hooks, stage.id, nodes.filter((node) => node.kind === "side")) };
       for (let node of nodes) {
-        let field2 = mapOf(node), hit = node.kind === "main" ? null : placed[field2].get(node.id);
-        pool.push({ field: node.field, name: node.name, map: field2, value: hit && Object.keys(hit.saved).length ? hit.saved : null, off: off.has(node.id), used: !1 });
+        let field3 = mapOf(node), hit = node.kind === "main" ? null : placed[field3].get(node.id);
+        pool.push({ field: node.field, name: node.name, map: field3, value: hit && Object.keys(hit.saved).length ? hit.saved : null, off: off.has(node.id), used: !1 });
       }
     }
     let strip = (map) => Object.fromEntries(Object.entries(map).filter(([key]) => !oldIds.has(unitOfKey(key)))), clocks = strip(state.clocks), hooks = strip(state.hooks), slots = { ...progress.slots }, kept = slots[keepId] ? { ...slots[keepId] } : null;
@@ -2170,9 +2170,9 @@ ${value.name}`);
       let out = {};
       for (let [key, value] of Object.entries(map)) {
         let item = value;
-        for (let field2 of fields) {
-          let top = field2 === "lastTickFloor" ? floors : Math.max(1, floors);
-          item && Number(item[field2]) > top && (item = { ...item, [field2]: top }, changed = !0);
+        for (let field3 of fields) {
+          let top = field3 === "lastTickFloor" ? floors : Math.max(1, floors);
+          item && Number(item[field3]) > top && (item = { ...item, [field3]: top }, changed = !0);
         }
         out[key] = item;
       }
@@ -2252,23 +2252,23 @@ ${clocks.map(clockLine).join(`
 `)}`), parts.join("");
   }
   function threadIndexLines(live2) {
-    let lines2 = [], marks = { wait: "待触发", active: "已激活", queue: "已激活·排队", expired: "已过期" }, hooks = live2.hooks.filter((hook) => hook.status !== "done");
+    let lines3 = [], marks = { wait: "待触发", active: "已激活", queue: "已激活·排队", expired: "已过期" }, hooks = live2.hooks.filter((hook) => hook.status !== "done");
     if (hooks.length) {
-      lines2.push("【支线钩子】");
+      lines3.push("【支线钩子】");
       for (let hook of hooks) {
         let chain = hook.steps.length && hook.status !== "wait" && hook.status !== "expired", mark = chain ? `${stepText(hook)}${hook.status === "queue" ? "·排队" : ""}` : marks[hook.status], item = isObj4(hook.node.item) ? hook.node.item : {}, detail = hook.status === "wait" ? `条件：${hook.cond}` : chain ? hook.steps[hook.step] : str(item.事件 || item.内容);
-        lines2.push(`  - [${mark}] 支线｜${indexName(hook)}${detail ? `：${detail.replace(/\s+/g, " ").slice(0, 120)}` : ""}`);
+        lines3.push(`  - [${mark}] 支线｜${indexName(hook)}${detail ? `：${detail.replace(/\s+/g, " ").slice(0, 120)}` : ""}`);
       }
     }
     let clocks = live2.clocks.filter((clock) => !clock.done);
     if (clocks.length) {
-      lines2.push("【世界进度钟】");
+      lines3.push("【世界进度钟】");
       for (let clock of clocks) {
         let name = clock.label === clock.node.name ? `${clock.node.name} ${clock.filled}/${clock.total}${fromText(clock)}` : `${clock.label} ${clock.filled}/${clock.total}`;
-        lines2.push(`  - ${name}${clock.event ? `：${clock.event.replace(/\s+/g, " ").slice(0, 120)}` : ""}`);
+        lines3.push(`  - ${name}${clock.event ? `：${clock.event.replace(/\s+/g, " ").slice(0, 120)}` : ""}`);
       }
     }
-    return lines2;
+    return lines3;
   }
   function threadChangeLines(live2) {
     return live2 ? [
@@ -2353,7 +2353,7 @@ ${clocks.map(clockLine).join(`
       init_progress();
       isObj4 = (value) => !!value && typeof value == "object" && !Array.isArray(value), str = (value) => String(value ?? "").trim(), clamp = (value, min, max) => Math.max(min, Math.min(max, value)), int = (value) => Number.isFinite(Number(value)) ? Math.round(Number(value)) : 0, CLOCK_MAX_TICK = 2, DEFAULT_HOOK_CAP = 2;
       threadKey = (unit, node) => `${unit.id}:${node.id}`;
-      mapOf = (node) => node.kind === "world" ? "clocks" : "hooks", unitOfKey = (key) => key.slice(0, key.indexOf(":")), nodeOfKey = (key) => key.slice(key.indexOf(":") + 1), kindNodes = (unit, field2) => stageNodes(unit.stage && unit.stage.data).filter((node) => node.kind === (field2 === "clocks" ? "world" : "side"));
+      mapOf = (node) => node.kind === "world" ? "clocks" : "hooks", unitOfKey = (key) => key.slice(0, key.indexOf(":")), nodeOfKey = (key) => key.slice(key.indexOf(":") + 1), kindNodes = (unit, field3) => stageNodes(unit.stage && unit.stage.data).filter((node) => node.kind === (field3 === "clocks" ? "world" : "side"));
       fromText = (item) => item.carried ? `（来自${splitStageKey(item.unit.stage.key).short}）` : "", indexName = (item) => item.label === item.node.name ? `${item.node.name}${fromText(item)}` : item.label;
     }
   });
@@ -2384,37 +2384,37 @@ ${clocks.map(clockLine).join(`
     return `  - ${mark ? `[${mark}] ` : ""}${node.label}｜${node.name}${event}`;
   }
   function buildIndexText(units, states, progress, { carryOver = !0, hookCap, links = NO_LINKS, olView = null } = {}) {
-    let lines2 = [], all = units;
+    let lines3 = [], all = units;
     olView && (states = olView.states, units = units.filter((u) => olView.own.has(u.id)));
     let done = units.filter((unit) => states[unit.id] === "done"), active = units.filter((unit) => states[unit.id] === "active"), next = units.filter((unit) => states[unit.id] === "next"), later = units.filter((unit) => states[unit.id] === "todo");
     if (done.length) {
-      lines2.push("【已过】");
+      lines3.push("【已过】");
       for (let unit of done) {
         let names2 = stageNodes(unit.stage.data).filter((node) => node.kind === "main").map((node) => node.name);
-        lines2.push(`- ${stagePlace(unit)}${names2.length ? `（${names2.join("／")}）` : ""}`);
+        lines3.push(`- ${stagePlace(unit)}${names2.length ? `（${names2.join("／")}）` : ""}`);
       }
     }
     for (let unit of active) {
       let off = new Set(offNodes(progress, unit, links)), range = rangeOf(unit);
-      lines2.push("【当前】", `- ${stagePlace(unit)}${range ? `｜时间范围：${range}` : ""}`);
+      lines3.push("【当前】", `- ${stagePlace(unit)}${range ? `｜时间范围：${range}` : ""}`);
       for (let node of stageNodes(unit.stage.data).filter((item) => item.kind !== "world" && !isThreadNode(item)))
-        lines2.push(nodeLine(node, off.has(node.id) ? "已演" : "未演"));
+        lines3.push(nodeLine(node, off.has(node.id) ? "已演" : "未演"));
       if (carryOver)
         for (let { node } of carriedNodes(units, states, progress, { links }))
-          node.kind !== "world" && lines2.push(nodeLine(node, "未演·延续"));
+          node.kind !== "world" && lines3.push(nodeLine(node, "未演·延续"));
     }
-    active.length && lines2.push(...threadIndexLines(liveThreads(units, states, progress, { carryOver, hookCap, links })));
+    active.length && lines3.push(...threadIndexLines(liveThreads(units, states, progress, { carryOver, hookCap, links })));
     for (let unit of next) {
       let range = rangeOf(unit), instr = unit.stage.data && unit.stage.data.AI指令;
-      lines2.push("【下一段】", `- ${stagePlace(unit)}${range ? `｜时间范围：${range}` : ""}`), instr && lines2.push(`  AI指令：${String(instr).trim()}`);
-      for (let node of stageNodes(unit.stage.data).filter((item) => item.kind === "main")) lines2.push(nodeLine(node, ""));
+      lines3.push("【下一段】", `- ${stagePlace(unit)}${range ? `｜时间范围：${range}` : ""}`), instr && lines3.push(`  AI指令：${String(instr).trim()}`);
+      for (let node of stageNodes(unit.stage.data).filter((item) => item.kind === "main")) lines3.push(nodeLine(node, ""));
     }
     if (later.length) {
-      lines2.push("【之后】");
-      for (let unit of later.slice(0, LATER_LIMIT)) lines2.push(`- ${stagePlace(unit)}`);
-      later.length > LATER_LIMIT && lines2.push(`- ……另有 ${later.length - LATER_LIMIT} 段`);
+      lines3.push("【之后】");
+      for (let unit of later.slice(0, LATER_LIMIT)) lines3.push(`- ${stagePlace(unit)}`);
+      later.length > LATER_LIMIT && lines3.push(`- ……另有 ${later.length - LATER_LIMIT} 段`);
     }
-    return olView && olView.others && lines2.push(olView.others), lines2.join(`
+    return olView && olView.others && lines3.push(olView.others), lines3.join(`
 `);
   }
   function paceText(settings, pace) {
@@ -2460,9 +2460,9 @@ ${stay ? `${stay}
 </${tag}>`;
   }
   function changesText(units, states, live2 = null) {
-    let lines2 = units.filter((unit) => states[unit.id] === "done").flatMap((unit) => changeLines(unit.stage.data).map((text2) => `- ${text2}（${stagePlace(unit)}）`)).concat(threadChangeLines(live2));
-    return lines2.length ? `${CHANGES_HEAD}
-${lines2.join(`
+    let lines3 = units.filter((unit) => states[unit.id] === "done").flatMap((unit) => changeLines(unit.stage.data).map((text2) => `- ${text2}（${stagePlace(unit)}）`)).concat(threadChangeLines(live2));
+    return lines3.length ? `${CHANGES_HEAD}
+${lines3.join(`
 `)}` : "";
   }
   function buildEntries(project, progress, settings, personaOpts = {}) {
@@ -2701,17 +2701,17 @@ ${lines2.join(`
       let noVerifiedValue = stateCol >= 0 && (binding.已核实值 === void 0 || cellText(binding.已核实值) === "");
       noVerifiedValue && problems2.push(`表「${binding.表}」配置了状态列但没有设置「已核实值」，事实一律按待确认处理`);
       let claimValues = valueSet(binding.说法值);
-      for (let row2 of rows2) {
-        let id = cellText(row2[idCol]);
+      for (let row3 of rows2) {
+        let id = cellText(row3[idCol]);
         if (!id) continue;
-        let raw = stateCol >= 0 ? row2[stateCol] : "", status = stateCol < 0 ? "confirmed" : cellText(raw) === "" || noVerifiedValue ? "pending" : sameValue(raw, binding.已核实值) ? "confirmed" : "unconfirmed", prev = facts.get(id);
+        let raw = stateCol >= 0 ? row3[stateCol] : "", status = stateCol < 0 ? "confirmed" : cellText(raw) === "" || noVerifiedValue ? "pending" : sameValue(raw, binding.已核实值) ? "confirmed" : "unconfirmed", prev = facts.get(id);
         prev && prev.status === "confirmed" || facts.set(id, {
           id,
           status,
           claimed: status === "unconfirmed" && claimValues.has(cellText(raw)),
           raw: cellText(raw),
-          text: textCol >= 0 ? cellText(row2[textCol]) : "",
-          source: srcCol >= 0 ? cellText(row2[srcCol]) : "",
+          text: textCol >= 0 ? cellText(row3[textCol]) : "",
+          source: srcCol >= 0 ? cellText(row3[srcCol]) : "",
           table: binding.表
         });
       }
@@ -2740,20 +2740,20 @@ ${lines2.join(`
       let credMissing = binding.可信度列 && credCol < 0, noVerifiedValue = credCol >= 0 && (binding.已核实值 === void 0 || cellText(binding.已核实值) === "");
       credMissing && problems2.push(`表「${binding.表}」缺少可信度列「${binding.可信度列}」，「核实」条件一律为未知`), noVerifiedValue && problems2.push(`表「${binding.表}」配置了可信度列但没有设置「已核实值」，「核实」条件一律为未知`);
       let unknownWays = new Set((Array.isArray(binding.未知值) ? binding.未知值 : [binding.未知值 ?? "未知"]).map(cellText).concat([""])), validWays = valueSet(binding.有效值), badWays = /* @__PURE__ */ new Set();
-      for (let row2 of data) {
-        let fact = cellText(row2[factCol]), actor = cellText(row2[actorCol]);
-        if (fact && actor && present.add(`${fact}@${actor}`), !(wayCol >= 0 && unknownWays.has(cellText(row2[wayCol])))) {
-          if (wayCol >= 0 && validWays.size && !validWays.has(cellText(row2[wayCol]))) {
-            badWays.add(cellText(row2[wayCol]));
+      for (let row3 of data) {
+        let fact = cellText(row3[factCol]), actor = cellText(row3[actorCol]);
+        if (fact && actor && present.add(`${fact}@${actor}`), !(wayCol >= 0 && unknownWays.has(cellText(row3[wayCol])))) {
+          if (wayCol >= 0 && validWays.size && !validWays.has(cellText(row3[wayCol]))) {
+            badWays.add(cellText(row3[wayCol]));
             continue;
           }
           !fact || !actor || rows2.push({
             fact,
             actor,
-            way: wayCol >= 0 ? cellText(row2[wayCol]) : "",
-            credibility: credCol >= 0 ? cellText(row2[credCol]) : "",
-            verified: credCol < 0 || noVerifiedValue || cellText(row2[credCol]) === "" ? null : sameValue(row2[credCol], binding.已核实值),
-            source: srcCol >= 0 ? cellText(row2[srcCol]) : "",
+            way: wayCol >= 0 ? cellText(row3[wayCol]) : "",
+            credibility: credCol >= 0 ? cellText(row3[credCol]) : "",
+            verified: credCol < 0 || noVerifiedValue || cellText(row3[credCol]) === "" ? null : sameValue(row3[credCol], binding.已核实值),
+            source: srcCol >= 0 ? cellText(row3[srcCol]) : "",
             table: binding.表
           });
         }
@@ -2782,8 +2782,8 @@ ${lines2.join(`
     return out;
   }
   function findRow(rows2, rowKey2) {
-    let first = rows2.filter((row2) => cellText(row2[1]) === rowKey2);
-    return first.length ? first : rows2.filter((row2) => row2.slice(1).some((cell) => cellText(cell) === rowKey2));
+    let first = rows2.filter((row3) => cellText(row3[1]) === rowKey2);
+    return first.length ? first : rows2.filter((row3) => row3.slice(1).some((cell) => cellText(cell) === rowKey2));
   }
   function entryOf(key, value) {
     let k = String(key).trim(), m = /^(?:与|和|对|跟)\s*(.+?)\s*的(?:关系|好感度?|态度|印象|看法)$/.exec(k);
@@ -2859,7 +2859,7 @@ ${lines2.join(`
     return nums.length === 1 ? nums[0] : null;
   }
   function tierOrderInNote(note, tiers) {
-    let list = (tiers || []).map((t) => cellText(t)).filter(Boolean), lines2 = String(note || "").split(/\r?\n/);
+    let list = (tiers || []).map((t) => cellText(t)).filter(Boolean), lines3 = String(note || "").split(/\r?\n/);
     if (list.length < 2) return !1;
     let inLine = (line, seq) => {
       let at = 0;
@@ -2870,15 +2870,15 @@ ${lines2.join(`
       }
       return !0;
     }, stated = (k, words) => {
-      if (words.test(lines2[k])) return !0;
-      for (let j = k + 1; j < lines2.length && /^[\s·•\-*]/.test(lines2[j]) && !/^\s*-\s*列\d/.test(lines2[j]); j++)
-        if (words.test(lines2[j])) return !0;
+      if (words.test(lines3[k])) return !0;
+      for (let j = k + 1; j < lines3.length && /^[\s·•\-*]/.test(lines3[j]) && !/^\s*-\s*列\d/.test(lines3[j]); j++)
+        if (words.test(lines3[j])) return !0;
       return !1;
     }, down = [...list].reverse();
-    if (lines2.some((l, k) => inLine(l, list) && stated(k, TIER_UP_WORDS) && !TIER_DOWN_WORDS.test(l)) || lines2.some((l, k) => inLine(l, down) && stated(k, TIER_DOWN_WORDS) && !TIER_UP_WORDS.test(l)))
+    if (lines3.some((l, k) => inLine(l, list) && stated(k, TIER_UP_WORDS) && !TIER_DOWN_WORDS.test(l)) || lines3.some((l, k) => inLine(l, down) && stated(k, TIER_DOWN_WORDS) && !TIER_UP_WORDS.test(l)))
       return !0;
     let nums = list.map((t) => {
-      let re = new RegExp(`^\\s*[-·•*]?\\s*(\\d+)\\s*[.、:：)）]?\\s*${t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![^\\s:：（(，,。])`), hit = lines2.map((l) => re.exec(l)).find(Boolean);
+      let re = new RegExp(`^\\s*[-·•*]?\\s*(\\d+)\\s*[.、:：)）]?\\s*${t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![^\\s:：（(，,。])`), hit = lines3.map((l) => re.exec(l)).find(Boolean);
       return hit ? Number(hit[1]) : NaN;
     });
     return nums.every(Number.isFinite) && nums.every((n, i) => !i || n > nums[i - 1]);
@@ -2889,9 +2889,9 @@ ${lines2.join(`
     let { col, rows: rows2 } = sheetRows(found.sheet), c = col(column);
     if (c < 0) return { state: "unknown", reason: `表「${table}」缺少列「${column}」` };
     let n = 0, unsure = 0;
-    for (let row2 of rows2) {
-      if (cellText(row2[c]) === "") continue;
-      let ok = applyOp3(op, row2[c], value);
+    for (let row3 of rows2) {
+      if (cellText(row3[c]) === "") continue;
+      let ok = applyOp3(op, row3[c], value);
       ok === null ? unsure++ : ok && n++;
     }
     return { state: "ok", count: n, unsure };
@@ -2971,12 +2971,12 @@ ${lines2.join(`
         let data = stage.data, stageChanged = !1;
         if (!isPlainObject(data)) return stage;
         let patch = {};
-        for (let { field: field2 } of NODE_FIELDS) {
-          if (!Array.isArray(data[field2])) continue;
-          let listChanged = !1, list = data[field2].map(
+        for (let { field: field3 } of NODE_FIELDS) {
+          if (!Array.isArray(data[field3])) continue;
+          let listChanged = !1, list = data[field3].map(
             (item) => isPlainObject(item) && !nodeUid2(item) ? (listChanged = !0, { ...item, id: idOf2() }) : item
           );
-          listChanged && (patch[field2] = list, stageChanged = !0);
+          listChanged && (patch[field3] = list, stageChanged = !0);
         }
         return stageChanged ? (volChanged = !0, { ...stage, data: { ...data, ...patch } }) : stage;
       });
@@ -3026,7 +3026,7 @@ ${lines2.join(`
           if (!isPlainObject(stage.data)) return stage;
           let data = { ...stage.data };
           for (let key of STAGE_COND_KEYS2) key in data && (data[key] = remapNodeRefs2(data[key], map));
-          for (let { field: field2 } of NODE_FIELDS) Array.isArray(data[field2]) && (data[field2] = data[field2].map(fixNode));
+          for (let { field: field3 } of NODE_FIELDS) Array.isArray(data[field3]) && (data[field3] = data[field3].map(fixNode));
           return { ...stage, data };
         })
       })),
@@ -3326,8 +3326,8 @@ ${lines2.join(`
       stages: v.stages.map((st22) => {
         if (!isPlainObject(st22.data)) return st22;
         let data = { ...st22.data };
-        for (let { field: field2 } of NODE_FIELDS)
-          Array.isArray(data[field2]) && (data[field2] = data[field2].map((it) => {
+        for (let { field: field3 } of NODE_FIELDS)
+          Array.isArray(data[field3]) && (data[field3] = data[field3].map((it) => {
             let uid = nodeUid2(it);
             return uid && guard.keepDone.has(uid) ? { ...it, 完成条件: guard.keepDone.get(uid) } : it;
           }));
@@ -3341,7 +3341,7 @@ ${lines2.join(`
     return out;
   }
   function buildClueProjection(state, snapshot, clueProg, settings, { pace = "normal", stay = "", plan = null, notReady = null, checks = null } = {}) {
-    let tag = String(settings.tagName || "剧情参考").trim() || "剧情参考", focus = state.nodeStates.find((s) => s.node.uid && s.node.uid === state.focus.uid), lines2 = [], used = {
+    let tag = String(settings.tagName || "剧情参考").trim() || "剧情参考", focus = state.nodeStates.find((s) => s.node.uid && s.node.uid === state.focus.uid), lines3 = [], used = {
       focus: focus ? focus.node.uid : "",
       facts: [],
       discoveries: [],
@@ -3353,31 +3353,31 @@ ${lines2.join(`
     };
     if (focus) {
       let node = focus.node, item = isPlainObject(node.item) ? node.item : {}, stageData = isPlainObject(node.unit.stage.data) ? node.unit.stage.data : {}, instr = clueText(stageData.AI指令), place = clueText(item.地点), scene = clueText(item.场景), finds = discoveryList(item);
-      used.scenes.push({ uid: node.uid, entry: clueText(item.入口), place, focus: !0 }), lines2.push(
+      used.scenes.push({ uid: node.uid, entry: clueText(item.入口), place, focus: !0 }), lines3.push(
         "以下是本轮可演的场景材料。列出的发现尚未发生，只有正文中实际完成相应调查、交谈或行动时才能揭示；中途离开、失败或转去做别的事，就不要揭示，也不要当作已知。"
-      ), stay && lines2.push(stay), instr && lines2.push(`本段要求：${instr}`), place && lines2.push(`地点：${place}`), scene && lines2.push(`场景（初次到达时的样子；人物态度和环境后来的变化以前文为准，不要重置）：${scene}`);
+      ), stay && lines3.push(stay), instr && lines3.push(`本段要求：${instr}`), place && lines3.push(`地点：${place}`), scene && lines3.push(`场景（初次到达时的样子；人物态度和环境后来的变化以前文为准，不要重置）：${scene}`);
       let isClaimed = (d) => {
         if (!d.fact) return !1;
         let f = snapshot.facts && snapshot.facts.get(d.fact), over = clueProg && clueProg.factOverrides && clueProg.factOverrides[d.fact];
         return !!(f && f.claimed) && !(over && over.status === "revoked");
       }, got2 = finds.filter((d) => d.fact && effectiveFact(d.fact, snapshot, clueProg).confirmed), voiced = finds.filter((d) => !got2.includes(d) && isClaimed(d)), held = finds.filter((d) => !got2.includes(d) && !voiced.includes(d) && d.fact && notReady && notReady.has(d.fact)), pending = finds.filter((d) => !got2.includes(d) && !voiced.includes(d) && !held.includes(d)), gotFacts = new Set([...got2, ...voiced].map((d) => d.fact));
-      held.length && (used.held = held.map((d) => d.fact)), held.length && !pending.length && lines2.push("这一场的具体发现还在准备，这一轮先写到人物和环境，不要写出调查结果。"), pending.length && (lines2.push(got2.length ? "本场景还可能获得的发现（尚未发生）：" : "本场景可能获得的发现（尚未发生）："), pending.forEach((d) => {
+      held.length && (used.held = held.map((d) => d.fact)), held.length && !pending.length && lines3.push("这一场的具体发现还在准备，这一轮先写到人物和环境，不要写出调查结果。"), pending.length && (lines3.push(got2.length ? "本场景还可能获得的发现（尚未发生）：" : "本场景可能获得的发现（尚未发生）："), pending.forEach((d) => {
         let ck = checkLine(d, checks);
-        lines2.push(ck ? ck.line : `- ${d.text}`), used.discoveries.push(d.fact || d.text.slice(0, 20)), d.fact && (!ck || ck.reveal) && used.candidates.push({ fact: d.fact, record: d.record });
+        lines3.push(ck ? ck.line : `- ${d.text}`), used.discoveries.push(d.fact || d.text.slice(0, 20)), d.fact && (!ck || ck.reveal) && used.candidates.push({ fact: d.fact, record: d.record });
       }), // 跑团模式：有带判定的发现时，加一条检定写法（没有判定时什么都不加）
-      hasChecks(pending) && lines2.push(checkRule(settings, [...new Set(pending.flatMap((d) => d && d.check && d.check.skills || []))])));
+      hasChecks(pending) && lines3.push(checkRule(settings, [...new Set(pending.flatMap((d) => d && d.check && d.check.skills || []))])));
       let holdersOf = (id) => [
         ...new Set(
-          (snapshot.knowledge || []).filter((row2) => row2.fact === id && clueText(row2.actor)).map((row2) => `${clueText(row2.actor)}${row2.verified === !0 ? "" : `（${clueText(row2.credibility) || "未核实"}）`}`)
+          (snapshot.knowledge || []).filter((row3) => row3.fact === id && clueText(row3.actor)).map((row3) => `${clueText(row3.actor)}${row3.verified === !0 ? "" : `（${clueText(row3.credibility) || "未核实"}）`}`)
         )
       ], whoText = (id) => {
         let h = holdersOf(id);
         return snapshot.knowPresent || (snapshot.knowledge || []).length ? h.length ? `｜知道的人：${h.join("、")}` : "｜知情范围未记录" : "";
       }, recordedOr = (id, text2) => text2 || `（${id} 已经${snapshot.facts && snapshot.facts.get(id) && snapshot.facts.get(id).claimed ? "有人说出" : "确认"}，但表格没有记录具体内容；沿用正文里已经写出的部分，不要补充）`;
-      got2.length && lines2.push(
+      got2.length && lines3.push(
         "本场景已经获得的发现（不要重复揭示）：",
         ...got2.map((d) => `- ${recordedOr(d.fact, clueText(effectiveFact(d.fact, snapshot, clueProg).text))}${whoText(d.fact)}`)
-      ), voiced.length && (lines2.push(
+      ), voiced.length && (lines3.push(
         "本场景已经有人说出、但尚未核实的内容（只是说法；沿用原话、说话人和听到的人，不要当成事实，也不要重复首次揭示）：",
         ...voiced.map((d) => {
           let f = snapshot.facts.get(d.fact), src = clueText(f.source);
@@ -3401,7 +3401,7 @@ ${lines2.join(`
           text2 && (claims.push(`- ${text2}${whoText(id)}`), used.facts.push(id));
         }
       }
-      known.length && lines2.push("与本场景相关、已经确认的事实（只有列出的人知道；其他角色要经过告知、展示或亲眼所见才会知道）：", ...known), claims.length && lines2.push("与本场景相关、已经出现过但尚未核实的说法（只是说法，不要当成事实；只有列出的人听到过）：", ...claims);
+      known.length && lines3.push("与本场景相关、已经确认的事实（只有列出的人知道；其他角色要经过告知、展示或亲眼所见才会知道）：", ...known), claims.length && lines3.push("与本场景相关、已经出现过但尚未核实的说法（只是说法，不要当成事实；只有列出的人听到过）：", ...claims);
     }
     let leadOf = (s) => ({
       uid: s.node.uid,
@@ -3412,40 +3412,40 @@ ${lines2.join(`
       let listed = (uid) => !plan.known || plan.known.has(uid), sameLine = focus ? state.nodeStates.filter(
         (s) => s.status === "available" && s !== focus && !s.disabled && s.node.uid && s.node.unit.line === focus.node.unit.line && listed(s.node.uid)
       ).map(leadOf).filter((l) => l.text) : [];
-      sameLine.length && (lines2.push("同一段剧情里另外可以去做的事（由用户选择，不要强行引导）：", ...sameLine.map((l) => `- ${l.text}`)), used.leads = sameLine.map((l) => l.uid), sameLine.forEach((l) => used.scenes.push({ uid: l.uid, entry: l.text, place: l.place, focus: !1 })));
+      sameLine.length && (lines3.push("同一段剧情里另外可以去做的事（由用户选择，不要强行引导）：", ...sameLine.map((l) => `- ${l.text}`)), used.leads = sameLine.map((l) => l.uid), sameLine.forEach((l) => used.scenes.push({ uid: l.uid, entry: l.text, place: l.place, focus: !1 })));
       let offer = !focus && plan.offer, items = offer ? offer.items.filter((x) => x.entry) : [];
-      items.length && (lines2.push(
+      items.length && (lines3.push(
         `可用的后续方向：${items.map((x) => x.entry).join("；")}。${offer.hint ? `（由头：${offer.hint}）` : ""}`,
         "只有本轮行动自然涉及它时才接入；否则继续眼前的事，不必提及。尚未进入时不要补写调查结果。",
         ...offer.kind === "side" ? ["如果前文已经发生过类似的事，就接着前文写，不要重演。"] : []
       ), used.offer = offer.line, used.leads = items.map((x) => x.uid));
       let sidePaused = !!(clueProg && clueProg.sidePaused), mainPaused = !!(clueProg && clueProg.mainPaused), live2 = (state.lineStates || []).some((s) => s.state === "进行中" && (s.line.kind === "main" ? !mainPaused : !sidePaused));
-      (focus || lines2.length || plan.recognize.length || live2) && (lines2.push(CLUE_OFF_MATERIAL_RULE), used.guard = !0);
+      (focus || lines3.length || plan.recognize.length || live2) && (lines3.push(CLUE_OFF_MATERIAL_RULE), used.guard = !0);
       for (let r of plan.recognize)
         used.scenes.some((x) => x.uid === r.uid) || used.scenes.push({ uid: r.uid, entry: r.entry, place: r.place, focus: !1 });
     } else {
       let leads = state.nodeStates.filter((s) => s.status === "available" && s !== focus && !s.disabled && s.node.uid).map(leadOf).filter((l) => l.text);
-      leads.length && (lines2.push(
+      leads.length && (lines3.push(
         focus ? "另外可以去做的事（由用户选择，不要强行引导）：" : "目前可以去做的事（由用户选择，不要强行引导）：",
         ...leads.map((l) => `- ${l.text}`),
         "如果用户这一轮去做了上面的某件事，写到他到达、开始就可以；具体查到什么、对方说出什么，留到之后再写，不要自己编造结果。"
       ), used.leads = leads.map((l) => l.uid), leads.forEach((l) => used.scenes.push({ uid: l.uid, entry: l.text, place: l.place, focus: !1 })));
     }
-    if (checks && lines2.push(
+    if (checks && lines3.push(
       ...freshCheckLines(state.nodeStates, checks, {
         printed: used.discoveries,
         isGot: (id) => effectiveFact(id, snapshot, clueProg).confirmed,
         discoveriesOf: discoveryList,
         used
       })
-    ), !lines2.length) return { content: "", used };
+    ), !lines3.length) return { content: "", used };
     let note = pace === "slow" ? "节奏放慢，细写当下。" : pace === "fast" ? "节奏加快，次要细节一笔带过。" : "", guide = bodyGuideText(settings);
     return {
       content: `<${tag}>
 ${guide ? `${guide}
 
 ` : ""}${note ? `${note}
-` : ""}${lines2.join(`
+` : ""}${lines3.join(`
 `)}
 </${tag}>`,
       used
@@ -3918,16 +3918,16 @@ ${guide ? `${guide}
       case "know": {
         let over = env.factOverrides && env.factOverrides[atom.fact];
         if (over && over.status === "revoked") return { v: TRI.f, why: `${atom.fact}已人工撤销` };
-        let rows2 = env.knowledge.filter((row2) => row2.fact === atom.fact && row2.actor === atom.actor);
-        return rows2.length ? atom.verified ? rows2.some((row2) => row2.verified === !0) ? { v: TRI.t, why: `${atom.actor}已核实${atom.fact}` } : rows2.some((row2) => row2.verified === null) ? { v: TRI.u, why: `无法判断${atom.actor}是否核实${atom.fact}（可信度未绑定或未填写）` } : { v: TRI.f, why: `${atom.actor}对${atom.fact}仅为${rows2[0].credibility || "未核实"}` } : { v: TRI.t, why: `${atom.actor}知道${atom.fact}${rows2[0].way ? `（${rows2[0].way}）` : ""}` } : { v: TRI.u, why: `${atom.actor}没有${atom.fact}的知情记录` };
+        let rows2 = env.knowledge.filter((row3) => row3.fact === atom.fact && row3.actor === atom.actor);
+        return rows2.length ? atom.verified ? rows2.some((row3) => row3.verified === !0) ? { v: TRI.t, why: `${atom.actor}已核实${atom.fact}` } : rows2.some((row3) => row3.verified === null) ? { v: TRI.u, why: `无法判断${atom.actor}是否核实${atom.fact}（可信度未绑定或未填写）` } : { v: TRI.f, why: `${atom.actor}对${atom.fact}仅为${rows2[0].credibility || "未核实"}` } : { v: TRI.t, why: `${atom.actor}知道${atom.fact}${rows2[0].way ? `（${rows2[0].way}）` : ""}` } : { v: TRI.u, why: `${atom.actor}没有${atom.fact}的知情记录` };
       }
       case "line": {
-        let st9 = env.lineState ? env.lineState(atom.line) : void 0;
-        if (st9 === void 0) return { v: TRI.u, why: `没有编号为${atom.line}的线` };
-        if (st9 === null)
+        let st10 = env.lineState ? env.lineState(atom.line) : void 0;
+        if (st10 === void 0) return { v: TRI.u, why: `没有编号为${atom.line}的线` };
+        if (st10 === null)
           return atom.state === "开过" && env.lineStarted && env.lineStarted(atom.line) ? { v: atom.op === "==" ? TRI.t : TRI.f, why: `线${atom.line}已经开始过` } : { v: TRI.u, why: `线${atom.line}的状态还算不出来（开启条件未知，或线之间循环引用）` };
-        let hit = (LINE_STATE_ALIAS[atom.state] || [atom.state]).includes(st9);
-        return { v: (atom.op === "==" ? hit : !hit) ? TRI.t : TRI.f, why: `线${atom.line}现在是「${st9}」` };
+        let hit = (LINE_STATE_ALIAS[atom.state] || [atom.state]).includes(st10);
+        return { v: (atom.op === "==" ? hit : !hit) ? TRI.t : TRI.f, why: `线${atom.line}现在是「${st10}」` };
       }
       case "count": {
         let r = countRows(env.tables, atom.table, atom.column, atom.op, atom.value, applyOp);
@@ -4025,7 +4025,7 @@ ${guide ? `${guide}
   }
   function tableConsistencyHints(snapshot) {
     let hints = [], holders = /* @__PURE__ */ new Map();
-    for (let row2 of snapshot.knowledge || []) holders.set(row2.fact, [...holders.get(row2.fact) || [], row2.actor]);
+    for (let row3 of snapshot.knowledge || []) holders.set(row3.fact, [...holders.get(row3.fact) || [], row3.actor]);
     for (let [id, fact] of snapshot.facts || []) {
       let who = holders.get(id) || [];
       (fact.status === "confirmed" || fact.claimed) && !who.length && snapshot.knowPresent && [...snapshot.knowPresent].some((k) => k.startsWith(`${id}@`)) && hints.push(
@@ -4077,14 +4077,14 @@ ${guide ? `${guide}
       ])
         for (let ref of conditionRefs(cond).nodes)
           ids.has(ref) || errors.push(`${stageLabel(unit.stage.key)}·${label}：引用了不存在的节点「${ref}」`);
-    let lines2 = compileLines(units, errors), lineIds = new Set(lines2.map((l) => l.id)), refCheck = (cond, where) => {
+    let lines3 = compileLines(units, errors), lineIds = new Set(lines3.map((l) => l.id)), refCheck = (cond, where) => {
       for (let ref of conditionRefs(cond).lines) lineIds.has(ref) || errors.push(`${where}：引用了不存在的线「${ref}」`);
     };
-    for (let l of lines2) refCheck(l.open, `线 ${l.id} 的开启条件`);
+    for (let l of lines3) refCheck(l.open, `线 ${l.id} 的开启条件`);
     for (let node of nodes)
       [node.open, node.early, node.done].forEach((c) => refCheck(c, `${stageLabel(node.unit.stage.key)}·${node.name}`));
     for (let unit of units) [unit.clue.enter, unit.clue.end].forEach((c) => refCheck(c, stageLabel(unit.stage.key)));
-    return { units, nodes, errors, lines: lines2 };
+    return { units, nodes, errors, lines: lines3 };
   }
   function sayDone(conds, text2) {
     if (!conds) return null;
@@ -4092,7 +4092,7 @@ ${guide ? `${guide}
     return map || sayMemo.set(conds, map = new Map(Object.entries(conds).map(([k, v]) => [sayKey(k), v]))), map.get(sayKey(text2)) || null;
   }
   function computeClueState(compiled, snapshot, clueProg, config = DEFAULT_CLUE2) {
-    let { units, nodes } = compiled, lines2 = compiled.lines || [], byUid = new Map(nodes.filter((n) => n.uid).map((n) => [n.uid, n])), overrides = clueProg.overrides || {}, doneMemo = /* @__PURE__ */ new Map(), visiting = /* @__PURE__ */ new Set(), cycles = [], lineMemo = /* @__PURE__ */ new Map(), lineVisiting = /* @__PURE__ */ new Set(), byLine = new Map(lines2.map((l) => [l.id, l])), env = {
+    let { units, nodes } = compiled, lines3 = compiled.lines || [], byUid = new Map(nodes.filter((n) => n.uid).map((n) => [n.uid, n])), overrides = clueProg.overrides || {}, doneMemo = /* @__PURE__ */ new Map(), visiting = /* @__PURE__ */ new Set(), cycles = [], lineMemo = /* @__PURE__ */ new Map(), lineVisiting = /* @__PURE__ */ new Set(), byLine = new Map(lines3.map((l) => [l.id, l])), env = {
       facts: snapshot.facts || /* @__PURE__ */ new Map(),
       knowledge: snapshot.knowledge || [],
       tables: snapshot.tables || {},
@@ -4148,8 +4148,8 @@ ${guide ? `${guide}
       return from && from.entered.v !== TRI.t ? { v: from.entered.v === TRI.u ? TRI.u : TRI.f, reasons: [`要等${w.main}进入「${w.fromLabel}」`] } : to && to.done ? { v: TRI.f, missed: !0, reasons: [`开启时段已过（${w.main}的「${w.toLabel}」已经结束）`] } : { v: TRI.t, reasons: [`在${w.main}的开启时段内`] };
     }
     function mainBusy(l) {
-      let at = lines2.indexOf(l);
-      for (let [k, o] of lines2.entries()) {
+      let at = lines3.indexOf(l);
+      for (let [k, o] of lines3.entries()) {
         if (o === l || o.kind !== "main" || o.mode !== "auto" && !lineEvidence(o) || !lineEvidence(o) && k > at) continue;
         let s = lineStateOf(o);
         if (!s) return `主线${o.id}的状态还算不出来`;
@@ -4160,7 +4160,7 @@ ${guide ? `${guide}
     }
     function prevMainDone(l) {
       if (!l.after) return { v: TRI.t, reasons: [] };
-      let mains = lines2.filter((x) => x.kind === "main"), prev = mains[mains.indexOf(l) - 1];
+      let mains = lines3.filter((x) => x.kind === "main"), prev = mains[mains.indexOf(l) - 1];
       if (!prev) return { v: TRI.t, reasons: [] };
       let s = lineStateOf(prev);
       return s ? s.state === "完成" || s.state === "放弃" ? { v: TRI.t, reasons: [] } : { v: TRI.f, reasons: [`排在主线${prev.id}后面，要等它结束`] } : { v: TRI.u, reasons: [`主线${prev.id}的状态还算不出来`] };
@@ -4194,7 +4194,7 @@ ${guide ? `${guide}
     }
     let free = units.filter((u) => !u.line);
     stageChain(free, null);
-    let lineStates = lines2.map(
+    let lineStates = lines3.map(
       (l) => lineStateOf(l) || {
         line: l,
         state: "未触发",
@@ -4250,7 +4250,7 @@ ${guide ? `${guide}
       }
       let status = done.v === TRI.t ? "done" : open.v === TRI.t ? "available" : "locked";
       return { node, status, open, done, skipped: !!over.skip, disabled: over.open === "block", manualOpen: over.open === "force" };
-    }), focus = pickFocus(nodeStates, clueProg, lines2.length ? { ...config, autoFocusSingle: !1 } : config, snapshot, stageStates);
+    }), focus = pickFocus(nodeStates, clueProg, lines3.length ? { ...config, autoFocusSingle: !1 } : config, snapshot, stageStates);
     for (let state of nodeStates)
       state.node.uid && state.node.uid === focus.uid && state.status === "available" && (state.status = "active");
     let current = units.find((unit) => {
@@ -4375,10 +4375,10 @@ ${guide ? `${guide}
     });
     return changed ? next : list;
   }
-  function resolveLineWindow(raw, lines2, errs) {
+  function resolveLineWindow(raw, lines3, errs) {
     if (raw == null || raw === "") return null;
     if (!isPlainObject(raw)) return errs.push("开启时段应写成 {主线: M1, 从: 阶段2, 到: 阶段3}"), { bad: "开启时段写法不对" };
-    let mainId = String(raw.主线 || "").trim(), main = lines2.find((l) => l.id === mainId);
+    let mainId = String(raw.主线 || "").trim(), main = lines3.find((l) => l.id === mainId);
     if (!main) return errs.push(`开启时段引用了不存在的主线「${mainId}」`), { bad: `找不到主线${mainId}` };
     if (main.kind !== "main") return errs.push(`开启时段里的「${mainId}」不是主线`), { bad: `${mainId}不是主线` };
     let find = (ref) => {
@@ -4403,7 +4403,7 @@ ${guide ? `${guide}
   function compileLines(units, errors) {
     let vols = [...new Set(units.map((u) => u.volume))];
     if (!vols.some((v) => isPlainObject(v.line))) return [];
-    let named = withLineIds(vols), lines2 = [], seen = /* @__PURE__ */ new Set(), pend = [];
+    let named = withLineIds(vols), lines3 = [], seen = /* @__PURE__ */ new Set(), pend = [];
     for (let [k, volume] of vols.entries()) {
       let own = units.filter((u) => u.volume === volume), raw = named[k].line, where = `卷「${volumeLabel(volume.key)}」的线`, id = String(raw.编号 || "").trim(), errs = [];
       if (!id) {
@@ -4435,12 +4435,12 @@ ${guide ? `${guide}
         // 只管自动开始；手动进入可以跳过它，剧情条件照样要满足。
         after: kind === "main" && (raw.接上一条 === !0 || raw.接上一条 === "true" || raw.接上一条 === "是")
       };
-      lines2.push(line), pend.push([line, raw.开启时段, errs, where]);
+      lines3.push(line), pend.push([line, raw.开启时段, errs, where]);
     }
     for (let [l, w, errs, where] of pend)
-      l.window = resolveLineWindow(w, lines2, errs), errs.forEach((e) => errors.push(`${where}：${e}`));
-    for (let l of lines2) for (let u of l.units) u.line = l;
-    return lines2;
+      l.window = resolveLineWindow(w, lines3, errs), errs.forEach((e) => errors.push(`${where}：${e}`));
+    for (let l of lines3) for (let u of l.units) u.line = l;
+    return lines3;
   }
   function lineToManual(volumes, id) {
     let at = (volumes || []).findIndex((v) => isPlainObject(v.line) && String(v.line.编号 || "").trim() === id);
@@ -4774,12 +4774,14 @@ ${slices.map((s) => `- ${s.id}（${SLICE_KINDS[s.kind]}${s.who ? `，${s.who}` :
   // src/trpg/trpg.js
   function normalizeTrpg(value) {
     if (!isPlainObject(value)) return null;
-    let slices = normalizeSlices(value.slices);
+    let slices = normalizeSlices(value.slices), peopleSeen = Array.isArray(value.peopleSeen) ? value.peopleSeen.map(String).filter(Boolean) : [];
     return {
       on: value.on !== !1,
       rule: TRPG_RULES.some((r) => r.value === value.rule) ? value.rule : "coc7",
       ...slices.length ? { slices } : {},
-      ...value.sliceOff === !0 ? { sliceOff: !0 } : {}
+      ...value.sliceOff === !0 ? { sliceOff: !0 } : {},
+      // 人物档案已经从导入索引处理过的名字（用户删掉的不再补回）
+      ...peopleSeen.length ? { peopleSeen } : {}
     };
   }
   function isTrpg(project) {
@@ -5047,8 +5049,8 @@ ${u.yaml}`].filter(Boolean).join(`
   function groupByField(entries) {
     let map = /* @__PURE__ */ new Map();
     for (let entry of entries) {
-      let field2 = acuField(entry.title);
-      field2 && (map.has(field2) || map.set(field2, []), map.get(field2).push(entry));
+      let field3 = acuField(entry.title);
+      field3 && (map.has(field3) || map.set(field3, []), map.get(field3).push(entry));
     }
     return [...map].sort(([a], [b]) => +(a === EN_FIELD) - +(b === EN_FIELD));
   }
@@ -5068,20 +5070,20 @@ ${u.yaml}`].filter(Boolean).join(`
     if (src.picks && typeof src.picks == "object") for (let [id, on] of Object.entries(src.picks)) typeof on == "boolean" && (picks[id] = on);
     return { fields, picks };
   }
-  function fieldChecked(rule, field2) {
-    return Object.prototype.hasOwnProperty.call(rule.fields, field2) ? rule.fields[field2] : INDEX_FIELD.test(field2) && !isMemoField(field2);
+  function fieldChecked(rule, field3) {
+    return Object.prototype.hasOwnProperty.call(rule.fields, field3) ? rule.fields[field3] : INDEX_FIELD.test(field3) && !isMemoField(field3);
   }
   function defaultSet(rule, books, memo = DEFAULT_MEMO) {
     let out = /* @__PURE__ */ new Set();
     for (let book of books) {
       let memos = [];
       for (let entry of book.entries) {
-        let field2 = acuField(entry.title);
-        if (!field2) {
+        let field3 = acuField(entry.title);
+        if (!field3) {
           entry.disabled || out.add(entryRefId(book.name, entry));
           continue;
         }
-        isMemoField(field2) ? memos.push(entry) : fieldChecked(rule, field2) && out.add(entryRefId(book.name, entry));
+        isMemoField(field3) ? memos.push(entry) : fieldChecked(rule, field3) && out.add(entryRefId(book.name, entry));
       }
       memos.sort((a, b) => rowNo(b) - rowNo(a)).slice(0, Math.max(0, memo)).forEach((entry) => out.add(entryRefId(book.name, entry)));
     }
@@ -5095,7 +5097,7 @@ ${u.yaml}`].filter(Boolean).join(`
   }
   function ruleFromSelection(books, fields, checked, memo = DEFAULT_MEMO) {
     let rule = { fields: {}, picks: {} };
-    for (let [field2, on] of Object.entries(fields)) !isMemoField(field2) && on !== fieldChecked(rule, field2) && (rule.fields[field2] = on);
+    for (let [field3, on] of Object.entries(fields)) !isMemoField(field3) && on !== fieldChecked(rule, field3) && (rule.fields[field3] = on);
     let base = defaultSet(rule, books, memo);
     for (let book of books)
       for (let entry of book.entries) {
@@ -5114,7 +5116,7 @@ ${u.yaml}`].filter(Boolean).join(`
     "src/core/refs.js"() {
       init_acu();
       DEFAULT_WB_RULE = { fields: {}, picks: {} }, DEFAULT_MEMO = 10, MEMO_FIELD = /^纪要表?$/, INDEX_FIELD = /纪要/;
-      isMemoField = (field2) => MEMO_FIELD.test(field2);
+      isMemoField = (field3) => MEMO_FIELD.test(field3);
       rowNo = (entry) => {
         let match = /-(\d+)$/.exec(entry.title);
         return match ? Number(match[1]) : -1;
@@ -5504,26 +5506,26 @@ ${u.yaml}`].filter(Boolean).join(`
   function stayBand(n) {
     return n >= 7 ? 2 : n >= 4 ? 1 : 0;
   }
-  function stayText(st9, kind) {
-    if (!st9) return "";
-    let lines2 = [], ask2 = [], long = stayBand(st9.rounds), from = st9.since >= 0 ? `从第 ${st9.since} 楼开始，` : "";
-    if (st9.resumed) {
-      let b = stayBand(st9.resumed.rounds);
-      lines2.push(`- 刚恢复：${STAY_WORDS.paused[b]}（暂停了 ${st9.resumed.rounds} 条回复）`), ask2.push(
+  function stayText(st10, kind) {
+    if (!st10) return "";
+    let lines3 = [], ask2 = [], long = stayBand(st10.rounds), from = st10.since >= 0 ? `从第 ${st10.since} 楼开始，` : "";
+    if (st10.resumed) {
+      let b = stayBand(st10.resumed.rounds);
+      lines3.push(`- 刚恢复：${STAY_WORDS.paused[b]}（暂停了 ${st10.resumed.rounds} 条回复）`), ask2.push(
         `结合前文，以及本次提供的过去记忆（如果有）接着写。暂停期间发生的事照常算；${kind === "clue" ? "这一场" : "剧情"}按现在的情况自然接上，不用急着补回来。`
       );
     }
     if (long)
-      if (lines2.push(`- 写了多久：${STAY_WORDS.long[long]}（${from}这是这一${kind === "clue" ? "场" : "段"}的第 ${st9.rounds} 条回复）`), kind === "clue") {
-        let ib = st9.idle >= 7 ? 2 : st9.idle >= 4 ? 1 : 0;
-        lines2.push(
-          `- 发现：${STAY_WORDS.idle[ib]}（${ib ? `连续 ${st9.idle} 条回复没有新增或核实的发现` : "最近几条回复里有新增或核实的发现"}）`
+      if (lines3.push(`- 写了多久：${STAY_WORDS.long[long]}（${from}这是这一${kind === "clue" ? "场" : "段"}的第 ${st10.rounds} 条回复）`), kind === "clue") {
+        let ib = st10.idle >= 7 ? 2 : st10.idle >= 4 ? 1 : 0;
+        lines3.push(
+          `- 发现：${STAY_WORDS.idle[ib]}（${ib ? `连续 ${st10.idle} 条回复没有新增或核实的发现` : "最近几条回复里有新增或核实的发现"}）`
         ), ask2.push(
-          st9.resumed ? "" : "结合前文接着写。",
+          st10.resumed ? "" : "结合前文接着写。",
           `如果环境和人物前面已经交代过，就不必从头再写；说过的话、发生过的事，不要再写一遍。${ib ? "如果用户最近在聊别的、做别的，就跟着用户写，不必每轮把话题引回下面的发现；人物可以带着这件事做别的。等用户提起或采取相应的行动，再接着写。" : ""}`
         );
-      } else ask2.push(st9.resumed ? "" : "结合前文接着写。", "如果场景和人物前面已经交代过，就不必再铺陈；已经写过的事件，不要再写一遍。");
-    return lines2.length ? [`【这一${kind === "clue" ? "场" : "段"}到现在】`, ...lines2, ask2.filter(Boolean).join("")].join(`
+      } else ask2.push(st10.resumed ? "" : "结合前文接着写。", "如果场景和人物前面已经交代过，就不必再铺陈；已经写过的事件，不要再写一遍。");
+    return lines3.length ? [`【这一${kind === "clue" ? "场" : "段"}到现在】`, ...lines3, ask2.filter(Boolean).join("")].join(`
 `) : "";
   }
   var CLUE_OP_KINDS, STAY_KEEP, STAY_WORDS, init_clue_progress = __esm({
@@ -5630,18 +5632,18 @@ ${u.yaml}`].filter(Boolean).join(`
       let noVerifiedValue = stateCol >= 0 && (binding.已核实值 === void 0 || cellText2(binding.已核实值) === "");
       noVerifiedValue && problems2.push(`表「${binding.表}」配置了状态列但没有设置「已核实值」，事实一律按待确认处理`);
       let claimValues = valueSet2(binding.说法值);
-      for (let row2 of rows2) {
-        let id = cellText2(row2[idCol]);
+      for (let row3 of rows2) {
+        let id = cellText2(row3[idCol]);
         if (!id) continue;
-        let raw = stateCol >= 0 ? row2[stateCol] : "", status = stateCol < 0 ? "confirmed" : cellText2(raw) === "" || noVerifiedValue ? "pending" : sameValue2(raw, binding.已核实值) ? "confirmed" : "unconfirmed", prev = facts.get(id);
+        let raw = stateCol >= 0 ? row3[stateCol] : "", status = stateCol < 0 ? "confirmed" : cellText2(raw) === "" || noVerifiedValue ? "pending" : sameValue2(raw, binding.已核实值) ? "confirmed" : "unconfirmed", prev = facts.get(id);
         prev && prev.status === "confirmed" || facts.set(id, {
           id,
           status,
           claimed: status === "unconfirmed" && claimValues.has(cellText2(raw)),
           raw: cellText2(raw),
-          text: textCol >= 0 ? cellText2(row2[textCol]) : "",
-          source: srcCol >= 0 ? cellText2(row2[srcCol]) : "",
-          label: labelCol >= 0 ? cellText2(row2[labelCol]) : "",
+          text: textCol >= 0 ? cellText2(row3[textCol]) : "",
+          source: srcCol >= 0 ? cellText2(row3[srcCol]) : "",
+          label: labelCol >= 0 ? cellText2(row3[labelCol]) : "",
           table: binding.表
         });
       }
@@ -5670,20 +5672,20 @@ ${u.yaml}`].filter(Boolean).join(`
       let credMissing = binding.可信度列 && credCol < 0, noVerifiedValue = credCol >= 0 && (binding.已核实值 === void 0 || cellText2(binding.已核实值) === "");
       credMissing && problems2.push(`表「${binding.表}」缺少可信度列「${binding.可信度列}」，「核实」条件一律为未知`), noVerifiedValue && problems2.push(`表「${binding.表}」配置了可信度列但没有设置「已核实值」，「核实」条件一律为未知`);
       let unknownWays = new Set((Array.isArray(binding.未知值) ? binding.未知值 : [binding.未知值 ?? "未知"]).map(cellText2).concat([""])), validWays = valueSet2(binding.有效值), badWays = /* @__PURE__ */ new Set();
-      for (let row2 of data) {
-        let fact = cellText2(row2[factCol]), actor = cellText2(row2[actorCol]);
-        if (fact && actor && present.add(knowKey(fact, actor)), !(wayCol >= 0 && unknownWays.has(cellText2(row2[wayCol])))) {
-          if (wayCol >= 0 && validWays.size && !validWays.has(cellText2(row2[wayCol]))) {
-            badWays.add(cellText2(row2[wayCol]));
+      for (let row3 of data) {
+        let fact = cellText2(row3[factCol]), actor = cellText2(row3[actorCol]);
+        if (fact && actor && present.add(knowKey(fact, actor)), !(wayCol >= 0 && unknownWays.has(cellText2(row3[wayCol])))) {
+          if (wayCol >= 0 && validWays.size && !validWays.has(cellText2(row3[wayCol]))) {
+            badWays.add(cellText2(row3[wayCol]));
             continue;
           }
           !fact || !actor || rows2.push({
             fact,
             actor,
-            way: wayCol >= 0 ? cellText2(row2[wayCol]) : "",
-            credibility: credCol >= 0 ? cellText2(row2[credCol]) : "",
-            verified: credCol < 0 || noVerifiedValue || cellText2(row2[credCol]) === "" ? null : sameValue2(row2[credCol], binding.已核实值),
-            source: srcCol >= 0 ? cellText2(row2[srcCol]) : "",
+            way: wayCol >= 0 ? cellText2(row3[wayCol]) : "",
+            credibility: credCol >= 0 ? cellText2(row3[credCol]) : "",
+            verified: credCol < 0 || noVerifiedValue || cellText2(row3[credCol]) === "" ? null : sameValue2(row3[credCol], binding.已核实值),
+            source: srcCol >= 0 ? cellText2(row3[srcCol]) : "",
             table: binding.表
           });
         }
@@ -5712,17 +5714,17 @@ ${u.yaml}`].filter(Boolean).join(`
     return out;
   }
   function findRow2(rows2, rowKey2, { know = !1 } = {}) {
-    let first = rows2.filter((row2) => cellText2(row2[1]) === rowKey2);
+    let first = rows2.filter((row3) => cellText2(row3[1]) === rowKey2);
     if (first.length) return first;
     let i = String(rowKey2).lastIndexOf("@");
     if (know && i > 0 && SELF_KEYS2.includes(String(rowKey2).slice(i + 1).trim())) {
-      let want = knowKeyOf(rowKey2), alias = rows2.filter((row2) => {
-        let k = cellText2(row2[1]);
+      let want = knowKeyOf(rowKey2), alias = rows2.filter((row3) => {
+        let k = cellText2(row3[1]);
         return k.includes("@") && knowKeyOf(k) === want;
       });
       if (alias.length) return alias;
     }
-    return rows2.filter((row2) => row2.slice(1).some((cell) => cellText2(cell) === rowKey2));
+    return rows2.filter((row3) => row3.slice(1).some((cell) => cellText2(cell) === rowKey2));
   }
   function knowKey(fact, actor) {
     let a = cellText2(actor);
@@ -5806,7 +5808,7 @@ ${u.yaml}`].filter(Boolean).join(`
     return nums.length === 1 ? nums[0] : null;
   }
   function tierOrderInNote2(note, tiers) {
-    let list = (tiers || []).map((t) => cellText2(t)).filter(Boolean), lines2 = String(note || "").split(/\r?\n/);
+    let list = (tiers || []).map((t) => cellText2(t)).filter(Boolean), lines3 = String(note || "").split(/\r?\n/);
     if (list.length < 2) return !1;
     let inLine = (line, seq) => {
       let at = 0;
@@ -5817,15 +5819,15 @@ ${u.yaml}`].filter(Boolean).join(`
       }
       return !0;
     }, stated = (k, words) => {
-      if (words.test(lines2[k])) return !0;
-      for (let j = k + 1; j < lines2.length && /^[\s·•\-*]/.test(lines2[j]) && !/^\s*-\s*列\d/.test(lines2[j]); j++)
-        if (words.test(lines2[j])) return !0;
+      if (words.test(lines3[k])) return !0;
+      for (let j = k + 1; j < lines3.length && /^[\s·•\-*]/.test(lines3[j]) && !/^\s*-\s*列\d/.test(lines3[j]); j++)
+        if (words.test(lines3[j])) return !0;
       return !1;
     }, down = [...list].reverse();
-    if (lines2.some((l, k) => inLine(l, list) && stated(k, TIER_UP_WORDS2) && !TIER_DOWN_WORDS2.test(l)) || lines2.some((l, k) => inLine(l, down) && stated(k, TIER_DOWN_WORDS2) && !TIER_UP_WORDS2.test(l)))
+    if (lines3.some((l, k) => inLine(l, list) && stated(k, TIER_UP_WORDS2) && !TIER_DOWN_WORDS2.test(l)) || lines3.some((l, k) => inLine(l, down) && stated(k, TIER_DOWN_WORDS2) && !TIER_UP_WORDS2.test(l)))
       return !0;
     let nums = list.map((t) => {
-      let re = new RegExp(`^\\s*[-·•*]?\\s*(\\d+)\\s*[.、:：)）]?\\s*${t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![^\\s:：（(，,。])`), hit = lines2.map((l) => re.exec(l)).find(Boolean);
+      let re = new RegExp(`^\\s*[-·•*]?\\s*(\\d+)\\s*[.、:：)）]?\\s*${t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![^\\s:：（(，,。])`), hit = lines3.map((l) => re.exec(l)).find(Boolean);
       return hit ? Number(hit[1]) : NaN;
     });
     return nums.every(Number.isFinite) && nums.every((n, i) => !i || n > nums[i - 1]);
@@ -5836,9 +5838,9 @@ ${u.yaml}`].filter(Boolean).join(`
     let { col, rows: rows2 } = sheetRows2(found.sheet), c = col(column);
     if (c < 0) return { state: "unknown", reason: `表「${table}」缺少列「${column}」` };
     let n = 0, unsure = 0;
-    for (let row2 of rows2) {
-      if (cellText2(row2[c]) === "") continue;
-      let ok = applyOp3(op, row2[c], value);
+    for (let row3 of rows2) {
+      if (cellText2(row3[c]) === "") continue;
+      let ok = applyOp3(op, row3[c], value);
       ok === null ? unsure++ : ok && n++;
     }
     return { state: "ok", count: n, unsure };
@@ -5873,16 +5875,16 @@ ${u.yaml}`].filter(Boolean).join(`
   }
   function clueProgressText(state, snapshot, clueProg, { problems: problems2 = [] } = {}) {
     snapshot = snapshot && snapshot.cond || snapshot;
-    let lines2 = ["【线索进度（作者视角，含未开放节点的名称；只用于讨论和写大纲，不会给正文）】"], stages = [];
+    let lines3 = ["【线索进度（作者视角，含未开放节点的名称；只用于讨论和写大纲，不会给正文）】"], stages = [];
     for (let [, s] of state.stageStates) {
       let label = stageLabel(s.unit.stage.key), status = s.done ? "已结束" : s.entered.v === "true" ? "进行中" : "未进入";
       stages.push(
         `${label}（${status}${status === "未进入" && s.entered.reasons.length ? `：${s.entered.reasons.join("；")}` : status === "进行中" && s.requiredLeft.length ? `，还差 ${s.requiredLeft.map((n) => n.uid || n.name).join("、")}` : ""}）`
       );
     }
-    stages.length && lines2.push(`阶段：${stages.join(" → ")}`);
+    stages.length && lines3.push(`阶段：${stages.join(" → ")}`);
     let nodes = state.nodeStates.filter((s) => s.node.uid);
-    nodes.length && lines2.push(
+    nodes.length && lines3.push(
       "节点：",
       ...nodes.map((s) => {
         let why = s.status === "locked" ? (s.open && s.open.reasons || []).slice(0, 2).join("；") : "";
@@ -5900,7 +5902,7 @@ ${u.yaml}`].filter(Boolean).join(`
       over.status === "confirmed" && !(snapshot.facts && snapshot.facts.has(id)) && confirmed.push(`- ${id}：（人工确认）${clueText2(over.text)}`);
     for (let [id, over] of Object.entries(clueProg && clueProg.factOverrides || {}))
       over.status === "claimed" && !(snapshot.facts && snapshot.facts.has(id)) && claims.push(`- ${id}：（人工记为存疑）${clueText2(over.text)}`);
-    return lines2.push(confirmed.length ? "已确认的事实：" : "已确认的事实：暂无", ...confirmed), claims.length && lines2.push("已经出现、尚未核实的说法：", ...claims), problems2.length && lines2.push("表格问题：", ...problems2.slice(0, 5).map((p) => `- ${p}`)), lines2.join(`
+    return lines3.push(confirmed.length ? "已确认的事实：" : "已确认的事实：暂无", ...confirmed), claims.length && lines3.push("已经出现、尚未核实的说法：", ...claims), problems2.length && lines3.push("表格问题：", ...problems2.slice(0, 5).map((p) => `- ${p}`)), lines3.join(`
 `);
   }
   function volumeUses(compiled, v) {
@@ -5981,16 +5983,16 @@ ${brief.join(`
     return out;
   }
   function clueIndexText(volumes) {
-    let compiled = compileClue2(volumes || []), lines2 = [];
-    for (let l of compiled.lines || []) lines2.push(`- 线 ${l.id}（${l.kind === "main" ? "主线" : "支线"}）「${l.name}」`);
+    let compiled = compileClue2(volumes || []), lines3 = [];
+    for (let l of compiled.lines || []) lines3.push(`- 线 ${l.id}（${l.kind === "main" ? "主线" : "支线"}）「${l.name}」`);
     for (let node of compiled.nodes) {
       if (!node.uid) continue;
       let item = isPlainObject(node.item) ? node.item : {}, gives2 = discoveryList2(item).map((d) => d.fact).filter(Boolean), needs = [...new Set([node.open, node.done].flatMap((c) => [...conditionRefs2(c).facts]))];
-      lines2.push(
+      lines3.push(
         `- ${node.uid}「${node.name}」${clueText2(item.入口) ? ` 入口：${clueText2(item.入口)}` : ""}${gives2.length ? ` · 产出 ${gives2.join("、")}` : ""}${needs.length ? ` · 用到 ${needs.join("、")}` : ""}`
       );
     }
-    return lines2.join(`
+    return lines3.join(`
 `);
   }
   function chatFactSets2(c) {
@@ -6079,13 +6081,13 @@ ${brief.join(`
     return "";
   }
   function rowScope(compiled, started, frontier = null) {
-    let lines2 = compiled.lines || [], facts = /* @__PURE__ */ new Set(), all = /* @__PURE__ */ new Set(), producedBy = /* @__PURE__ */ new Map();
+    let lines3 = compiled.lines || [], facts = /* @__PURE__ */ new Set(), all = /* @__PURE__ */ new Set(), producedBy = /* @__PURE__ */ new Map();
     for (let n of compiled.nodes)
       for (let d of discoveryList2(isPlainObject(n.item) ? n.item : {}))
         d.fact && (all.add(d.fact), producedBy.set(d.fact, (producedBy.get(d.fact) || /* @__PURE__ */ new Set()).add(n.unit.line ? n.unit.line.id : "")));
     let trig = lineTriggerFacts2(compiled);
     for (let f of trig.keys()) all.add(f), facts.add(f);
-    for (let l of lines2) l.legacyFact && (all.add(l.legacyFact), facts.add(l.legacyFact));
+    for (let l of lines3) l.legacyFact && (all.add(l.legacyFact), facts.add(l.legacyFact));
     let refsOf2 = (units, nodes, extraConds = []) => {
       let r = { facts: /* @__PURE__ */ new Set(), nodes: /* @__PURE__ */ new Set(), knows: /* @__PURE__ */ new Set(), lines: /* @__PURE__ */ new Set() };
       for (let u of units) u.clue && (conditionRefs2(u.clue.enter, r), conditionRefs2(u.clue.end, r), condPathFacts(u.clue.enter, r), condPathFacts(u.clue.end, r));
@@ -6097,8 +6099,8 @@ ${brief.join(`
       for (let c of extraConds) conditionRefs2(c, r), condPathFacts(c, r);
       return r.facts;
     };
-    for (let f of refsOf2(compiled.units, compiled.nodes, lines2.map((l) => l.open))) producedBy.has(f) || (all.add(f), facts.add(f));
-    if (!started || !lines2.length) {
+    for (let f of refsOf2(compiled.units, compiled.nodes, lines3.map((l) => l.open))) producedBy.has(f) || (all.add(f), facts.add(f));
+    if (!started || !lines3.length) {
       for (let f of all) facts.add(f);
       return { facts, future: /* @__PURE__ */ new Set() };
     }
@@ -6110,7 +6112,7 @@ ${brief.join(`
       return { facts, future: new Set([...all].filter((f) => !facts.has(f))) };
     }
     for (let [f, ids] of producedBy) [...ids].some((id) => id === "" || started.has(id)) && facts.add(f);
-    let live2 = lines2.filter((l) => started.has(l.id));
+    let live2 = lines3.filter((l) => started.has(l.id));
     for (let f of refsOf2(
       live2.flatMap((l) => l.units),
       compiled.nodes.filter((n) => n.unit.line && started.has(n.unit.line.id)),
@@ -6154,14 +6156,14 @@ ${brief.join(`
     for (let n of compiled.nodes)
       for (let d of discoveryList2(isPlainObject(n.item) ? n.item : {})) d.fact && producers.set(d.fact, [...producers.get(d.fact) || [], n]);
     for (let id of [...pending]) producers.has(id) || (pending.delete(id), admit.add(id));
-    let lines2 = {};
+    let lines3 = {};
     for (let [k, v] of Object.entries(prog.lines || {})) {
       let { state, ...rest } = v || {};
-      lines2[k] = state === "pause" ? rest : v;
+      lines3[k] = state === "pause" ? rest : v;
     }
-    let loose2 = { ...prog, paused: !1, mainPaused: !1, sidePaused: !1, lines: lines2 };
+    let loose2 = { ...prog, paused: !1, mainPaused: !1, sidePaused: !1, lines: lines3 };
     for (let round = 0; round < 64 && pending.size; round++) {
-      let st9 = computeClueState2(compiled, withHeld(snap2, pending, config && config.bindings), loose2, config, { endedOpen: !0 }), ok = new Set(st9.nodeStates.filter((x) => x.open && x.open.v === TRI2.t).map((x) => x.node)), got2 = [...pending].filter((id) => producers.get(id).some((n) => ok.has(n)));
+      let st10 = computeClueState2(compiled, withHeld(snap2, pending, config && config.bindings), loose2, config, { endedOpen: !0 }), ok = new Set(st10.nodeStates.filter((x) => x.open && x.open.v === TRI2.t).map((x) => x.node)), got2 = [...pending].filter((id) => producers.get(id).some((n) => ok.has(n)));
       if (!got2.length) break;
       got2.forEach((id) => (pending.delete(id), admit.add(id)));
     }
@@ -6172,20 +6174,20 @@ ${brief.join(`
     let fb = (bindings && bindings.facts || [])[0], kb = (bindings && bindings.knowledge || [])[0], first = (v, d) => cellText2(Array.isArray(v) ? v[0] : v) || d, edit = (name, fn) => {
       let found = name ? findSheet2(tables, name) : { error: !0 };
       if (found.error || !Array.isArray(found.sheet.content) || !found.sheet.content[0]) return;
-      let head = found.sheet.content[0], col = (c) => c ? head.indexOf(c) : -1, key = found.sheet.key, changed = !1, rows2 = found.sheet.content.map((row2, i) => {
-        if (!i) return row2;
-        let next = fn(row2, col);
-        return next ? (changed = !0, next) : row2;
+      let head = found.sheet.content[0], col = (c) => c ? head.indexOf(c) : -1, key = found.sheet.key, changed = !1, rows2 = found.sheet.content.map((row3, i) => {
+        if (!i) return row3;
+        let next = fn(row3, col);
+        return next ? (changed = !0, next) : row3;
       });
       changed && (tables = { ...tables, [key]: { ...tables[key], content: rows2 } });
     };
-    return fb && fb.状态列 && set.facts.size && edit(fb.表, (row2, col) => {
-      let v = set.facts.get(cellText2(row2[col(fb.编号列)])), c = col(fb.状态列);
-      return v && c > 0 ? Object.assign([...row2], { [c]: v === "yes" ? first(fb.已核实值, "已核实") : "未获得" }) : null;
-    }), kb && kb.方式列 && set.knows.size && edit(kb.表, (row2, col) => {
-      let fact = cellText2(row2[col(kb.事实列)]), v = set.knows.get(knowKey(fact, cellText2(row2[col(kb.角色列)]))) || set.knows.get(`${fact}@*`), w = col(kb.方式列), cr = col(kb.可信度列);
+    return fb && fb.状态列 && set.facts.size && edit(fb.表, (row3, col) => {
+      let v = set.facts.get(cellText2(row3[col(fb.编号列)])), c = col(fb.状态列);
+      return v && c > 0 ? Object.assign([...row3], { [c]: v === "yes" ? first(fb.已核实值, "已核实") : "未获得" }) : null;
+    }), kb && kb.方式列 && set.knows.size && edit(kb.表, (row3, col) => {
+      let fact = cellText2(row3[col(kb.事实列)]), v = set.knows.get(knowKey(fact, cellText2(row3[col(kb.角色列)]))) || set.knows.get(`${fact}@*`), w = col(kb.方式列), cr = col(kb.可信度列);
       if (!v || w < 1) return null;
-      let out = Object.assign([...row2], { [w]: v === "yes" ? "亲见" : first(kb.未知值, "未知") });
+      let out = Object.assign([...row3], { [w]: v === "yes" ? "亲见" : first(kb.未知值, "未知") });
       return cr > 0 && (out[cr] = v === "yes" ? first(kb.已核实值, "已核实") : "未核实"), out;
     }), tables;
   }
@@ -6236,16 +6238,16 @@ ${brief.join(`
       let col = (c) => head.findIndex((x, i) => i > 0 && String(x ?? "").trim() === c), own = sheetRows2(found.sheet).rows, add = build(col, own, head);
       add && add.length && (out = { ...out, [key]: { ...out[key], content: [head, ...own, ...add], seedRows: [] } });
     }, blank = (head) => {
-      let row2 = head.map(() => "");
-      return row2[0] = null, row2;
+      let row3 = head.map(() => "");
+      return row3[0] = null, row3;
     };
     return can.facts && patch(fb.表, (col, own, head) => {
       let idCol = col(fb.编号列), stCol = col(fb.状态列);
       if (idCol < 0 || stCol < 0) return null;
       let have = new Set(own.map((r) => cellText2(r[idCol])));
       return plan.facts.filter((f) => !have.has(f.code)).map((f) => {
-        let row2 = blank(head);
-        return row2[idCol] = f.code, row2[stCol] = "未获得", col("标签") >= 0 && (row2[col("标签")] = labels[f.code] && labels[f.code].label || ""), col("登记口径") >= 0 && (row2[col("登记口径")] = labels[f.code] && labels[f.code].criterion || ""), row2;
+        let row3 = blank(head);
+        return row3[idCol] = f.code, row3[stCol] = "未获得", col("标签") >= 0 && (row3[col("标签")] = labels[f.code] && labels[f.code].label || ""), col("登记口径") >= 0 && (row3[col("登记口径")] = labels[f.code] && labels[f.code].criterion || ""), row3;
       });
     }), can.knows && patch(kb.表, (col, own, head) => {
       let fCol = col(kb.事实列), aCol = col(kb.角色列), wCol = col(kb.方式列), cCol = kb.可信度列 ? col(kb.可信度列) : -1, keyCol = col("键");
@@ -6255,8 +6257,8 @@ ${brief.join(`
         let key = knowKey(k.fact, k.actor);
         return have.has(key) ? !1 : (have.add(key), !0);
       }).map((k) => {
-        let row2 = blank(head);
-        return keyCol >= 0 && (row2[keyCol] = k.key), row2[fCol] = k.fact, row2[aCol] = k.actor, row2[wCol] = Array.isArray(kb.未知值) ? kb.未知值[0] : kb.未知值 || "未知", cCol >= 0 && (row2[cCol] = "未核实"), row2;
+        let row3 = blank(head);
+        return keyCol >= 0 && (row3[keyCol] = k.key), row3[fCol] = k.fact, row3[aCol] = k.actor, row3[wCol] = Array.isArray(kb.未知值) ? kb.未知值[0] : kb.未知值 || "未知", cCol >= 0 && (row3[cCol] = "未核实"), row3;
       });
     }), out;
   }
@@ -6402,8 +6404,8 @@ ${brief.join(`
       stages: v.stages.map((st22) => {
         if (!isPlainObject(st22.data)) return st22;
         let data = { ...st22.data };
-        for (let { field: field2 } of NODE_FIELDS)
-          Array.isArray(data[field2]) && (data[field2] = data[field2].map((it) => {
+        for (let { field: field3 } of NODE_FIELDS)
+          Array.isArray(data[field3]) && (data[field3] = data[field3].map((it) => {
             let uid = nodeUid(it);
             return uid && guard.keepDone.has(uid) ? { ...it, 完成条件: guard.keepDone.get(uid) } : it;
           }));
@@ -6417,7 +6419,7 @@ ${brief.join(`
     return out;
   }
   function buildClueProjection2(state, snapshot, clueProg, settings, { pace = "normal", stay = "", plan = null, notReady = null, arrive = !1 } = {}) {
-    let tag = String(settings.tagName || "剧情参考").trim() || "剧情参考", focus = state.nodeStates.find((s) => s.node.uid && s.node.uid === state.focus.uid), lines2 = [], used = {
+    let tag = String(settings.tagName || "剧情参考").trim() || "剧情参考", focus = state.nodeStates.find((s) => s.node.uid && s.node.uid === state.focus.uid), lines3 = [], used = {
       focus: focus ? focus.node.uid : "",
       facts: [],
       discoveries: [],
@@ -6429,20 +6431,20 @@ ${brief.join(`
     };
     if (focus) {
       let node = focus.node, item = isPlainObject(node.item) ? node.item : {}, stageData = isPlainObject(node.unit.stage.data) ? node.unit.stage.data : {}, instr = clueText2(stageData.AI指令), place = clueText2(item.地点), scene = clueText2(item.场景), finds = discoveryList2(item);
-      used.scenes.push({ uid: node.uid, entry: clueText2(item.入口), place, focus: !0 }), lines2.push(
+      used.scenes.push({ uid: node.uid, entry: clueText2(item.入口), place, focus: !0 }), lines3.push(
         "以下是本轮可演的场景材料。列出的发现尚未发生，只有正文中实际完成相应调查、交谈或行动时才能揭示；中途离开、失败或转去做别的事，就不要揭示，也不要当作已知。"
-      ), stay && lines2.push(stay), instr && lines2.push(`本段要求：${instr}`), place && lines2.push(`地点：${place}`), scene && lines2.push(`场景（初次到达时的样子；人物态度和环境后来的变化以前文为准，不要重置）：${scene}`), arrive && lines2.push(ARRIVE_RULE);
+      ), stay && lines3.push(stay), instr && lines3.push(`本段要求：${instr}`), place && lines3.push(`地点：${place}`), scene && lines3.push(`场景（初次到达时的样子；人物态度和环境后来的变化以前文为准，不要重置）：${scene}`), arrive && lines3.push(ARRIVE_RULE);
       let isClaimed = (d) => {
         if (!d.fact) return !1;
         let f = snapshot.facts && snapshot.facts.get(d.fact), over = clueProg && clueProg.factOverrides && clueProg.factOverrides[d.fact];
         return !!(f && f.claimed) && !(over && over.status === "revoked");
       }, got2 = finds.filter((d) => d.fact && effectiveFact2(d.fact, snapshot, clueProg).confirmed), voiced = finds.filter((d) => !got2.includes(d) && isClaimed(d)), held = finds.filter((d) => !got2.includes(d) && !voiced.includes(d) && d.fact && notReady && notReady.has(d.fact)), pending = finds.filter((d) => !got2.includes(d) && !voiced.includes(d) && !held.includes(d)), gotFacts = new Set([...got2, ...voiced].map((d) => d.fact));
-      held.length && (used.held = held.map((d) => d.fact)), held.length && !pending.length && lines2.push("这一场的具体发现还在准备，这一轮先写到人物和环境，不要写出调查结果。"), pending.length && (lines2.push(got2.length ? "本场景还可能获得的发现（尚未发生）：" : "本场景可能获得的发现（尚未发生）："), pending.forEach((d) => {
-        lines2.push(`- ${d.text}`), used.discoveries.push(d.fact || d.text.slice(0, 20)), d.fact && used.candidates.push({ fact: d.fact, record: d.record });
+      held.length && (used.held = held.map((d) => d.fact)), held.length && !pending.length && lines3.push("这一场的具体发现还在准备，这一轮先写到人物和环境，不要写出调查结果。"), pending.length && (lines3.push(got2.length ? "本场景还可能获得的发现（尚未发生）：" : "本场景可能获得的发现（尚未发生）："), pending.forEach((d) => {
+        lines3.push(`- ${d.text}`), used.discoveries.push(d.fact || d.text.slice(0, 20)), d.fact && used.candidates.push({ fact: d.fact, record: d.record });
       }));
       let holdersOf = (id) => [
         ...new Set(
-          (snapshot.knowledge || []).filter((row2) => row2.fact === id && clueText2(row2.actor)).map((row2) => `${clueText2(row2.actor)}${row2.verified === !0 ? "" : `（${clueText2(row2.credibility) || "未核实"}）`}`)
+          (snapshot.knowledge || []).filter((row3) => row3.fact === id && clueText2(row3.actor)).map((row3) => `${clueText2(row3.actor)}${row3.verified === !0 ? "" : `（${clueText2(row3.credibility) || "未核实"}）`}`)
         )
       ], whoText = (id) => {
         let h = holdersOf(id);
@@ -6451,10 +6453,10 @@ ${brief.join(`
         let f = snapshot.facts && snapshot.facts.get(id);
         return f && f.label ? `「${f.label}」` : id;
       }, recordedOr = (id, text2) => text2 || `（${nameOf(id)} 已经${snapshot.facts && snapshot.facts.get(id) && snapshot.facts.get(id).claimed ? "有人说出" : "确认"}，但表格没有记录具体内容；沿用正文里已经写出的部分，不要补充）`;
-      got2.length && lines2.push(
+      got2.length && lines3.push(
         "本场景已经获得的发现（不要重复揭示）：",
         ...got2.map((d) => `- ${recordedOr(d.fact, clueText2(effectiveFact2(d.fact, snapshot, clueProg).text))}${whoText(d.fact)}`)
-      ), voiced.length && (lines2.push(
+      ), voiced.length && (lines3.push(
         "本场景已经有人说出、但尚未核实的内容（只是说法；沿用原话、说话人和听到的人，不要当成事实，也不要重复首次揭示）：",
         ...voiced.map((d) => {
           let f = snapshot.facts.get(d.fact), src = clueText2(f.source);
@@ -6478,7 +6480,7 @@ ${brief.join(`
           text2 && (claims.push(`- ${text2}${whoText(id)}`), used.facts.push(id));
         }
       }
-      known.length && lines2.push("与本场景相关、已经确认的事实（只有列出的人知道；其他角色要经过告知、展示或亲眼所见才会知道）：", ...known), claims.length && lines2.push("与本场景相关、已经出现过但尚未核实的说法（只是说法，不要当成事实；只有列出的人听到过）：", ...claims);
+      known.length && lines3.push("与本场景相关、已经确认的事实（只有列出的人知道；其他角色要经过告知、展示或亲眼所见才会知道）：", ...known), claims.length && lines3.push("与本场景相关、已经出现过但尚未核实的说法（只是说法，不要当成事实；只有列出的人听到过）：", ...claims);
     }
     let leadOf = (s) => ({
       uid: s.node.uid,
@@ -6489,33 +6491,33 @@ ${brief.join(`
       let listed = (uid) => !plan.known || plan.known.has(uid), sameLine = focus ? state.nodeStates.filter(
         (s) => s.status === "available" && s !== focus && !s.disabled && s.node.uid && s.node.unit.line === focus.node.unit.line && listed(s.node.uid)
       ).map(leadOf).filter((l) => l.text) : [];
-      sameLine.length && (lines2.push("同一段剧情里另外可以去做的事（由用户选择，不要强行引导）：", ...sameLine.map((l) => `- ${l.text}`)), used.leads = sameLine.map((l) => l.uid), sameLine.forEach((l) => used.scenes.push({ uid: l.uid, entry: l.text, place: l.place, focus: !1 })));
+      sameLine.length && (lines3.push("同一段剧情里另外可以去做的事（由用户选择，不要强行引导）：", ...sameLine.map((l) => `- ${l.text}`)), used.leads = sameLine.map((l) => l.uid), sameLine.forEach((l) => used.scenes.push({ uid: l.uid, entry: l.text, place: l.place, focus: !1 })));
       let offer = !focus && plan.offer, items = offer ? offer.items.filter((x) => x.entry) : [];
-      items.length && (lines2.push(
+      items.length && (lines3.push(
         `可用的后续方向：${items.map((x) => String(x.entry).trim().replace(/[。；;，,\s]+$/, "")).join("；")}。${offer.hint ? `（由头：${offer.hint}）` : ""}`,
         "只有本轮行动自然涉及它时才接入；否则继续眼前的事，不必提及。尚未进入时不要补写调查结果。",
         ...offer.kind === "side" ? ["如果前文已经发生过类似的事，就接着前文写，不要重演。"] : []
       ), used.offer = offer.line, used.leads = items.map((x) => x.uid));
       let sidePaused = !!(clueProg && clueProg.sidePaused), mainPaused = !!(clueProg && clueProg.mainPaused), live2 = (state.lineStates || []).some((s) => s.state === "进行中" && (s.line.kind === "main" ? !mainPaused : !sidePaused));
-      (focus || lines2.length || plan.recognize.length || live2) && (lines2.push(CLUE_OFF_MATERIAL_RULE2), used.guard = !0);
+      (focus || lines3.length || plan.recognize.length || live2) && (lines3.push(CLUE_OFF_MATERIAL_RULE2), used.guard = !0);
       for (let r of plan.recognize)
         used.scenes.some((x) => x.uid === r.uid) || used.scenes.push({ uid: r.uid, entry: r.entry, place: r.place, focus: !1 });
     } else {
       let leads = state.nodeStates.filter((s) => s.status === "available" && s !== focus && !s.disabled && s.node.uid).map(leadOf).filter((l) => l.text);
-      leads.length && (lines2.push(
+      leads.length && (lines3.push(
         focus ? "另外可以去做的事（由用户选择，不要强行引导）：" : "目前可以去做的事（由用户选择，不要强行引导）：",
         ...leads.map((l) => `- ${l.text}`),
         "如果用户这一轮去做了上面的某件事，写到他到达、开始就可以；具体查到什么、对方说出什么，留到之后再写，不要自己编造结果。"
       ), used.leads = leads.map((l) => l.uid), leads.forEach((l) => used.scenes.push({ uid: l.uid, entry: l.text, place: l.place, focus: !1 })));
     }
-    if (!lines2.length) return { content: "", used };
+    if (!lines3.length) return { content: "", used };
     let note = pace === "slow" ? "节奏放慢，细写当下。" : pace === "fast" ? "节奏加快，次要细节一笔带过。" : "", guide = bodyGuideText(settings);
     return {
       content: `<${tag}>
 ${guide ? `${guide}
 
 ` : ""}${note ? `${note}
-` : ""}${lines2.join(`
+` : ""}${lines3.join(`
 `)}
 </${tag}>`,
       used
@@ -6904,16 +6906,16 @@ ${guide ? `${guide}
       case "know": {
         let over = env.factOverrides && env.factOverrides[atom.fact];
         if (over && over.status === "revoked") return { v: TRI2.f, why: `${atom.fact}已人工撤销` };
-        let want = knowKey(atom.fact, atom.actor), rows2 = env.knowledge.filter((row2) => row2.fact === atom.fact && knowKey(row2.fact, row2.actor) === want);
-        return rows2.length ? atom.verified ? rows2.some((row2) => row2.verified === !0) ? { v: TRI2.t, why: `${atom.actor}已核实${atom.fact}` } : rows2.some((row2) => row2.verified === null) ? { v: TRI2.u, why: `无法判断${atom.actor}是否核实${atom.fact}（可信度未绑定或未填写）` } : { v: TRI2.f, why: `${atom.actor}对${atom.fact}仅为${rows2[0].credibility || "未核实"}` } : { v: TRI2.t, why: `${atom.actor}知道${atom.fact}${rows2[0].way ? `（${rows2[0].way}）` : ""}` } : { v: TRI2.u, why: `${atom.actor}没有${atom.fact}的知情记录` };
+        let want = knowKey(atom.fact, atom.actor), rows2 = env.knowledge.filter((row3) => row3.fact === atom.fact && knowKey(row3.fact, row3.actor) === want);
+        return rows2.length ? atom.verified ? rows2.some((row3) => row3.verified === !0) ? { v: TRI2.t, why: `${atom.actor}已核实${atom.fact}` } : rows2.some((row3) => row3.verified === null) ? { v: TRI2.u, why: `无法判断${atom.actor}是否核实${atom.fact}（可信度未绑定或未填写）` } : { v: TRI2.f, why: `${atom.actor}对${atom.fact}仅为${rows2[0].credibility || "未核实"}` } : { v: TRI2.t, why: `${atom.actor}知道${atom.fact}${rows2[0].way ? `（${rows2[0].way}）` : ""}` } : { v: TRI2.u, why: `${atom.actor}没有${atom.fact}的知情记录` };
       }
       case "line": {
-        let st9 = env.lineState ? env.lineState(atom.line) : void 0;
-        if (st9 === void 0) return { v: TRI2.u, why: `没有编号为${atom.line}的线` };
-        if (st9 === null)
+        let st10 = env.lineState ? env.lineState(atom.line) : void 0;
+        if (st10 === void 0) return { v: TRI2.u, why: `没有编号为${atom.line}的线` };
+        if (st10 === null)
           return atom.state === "开过" && env.lineStarted && env.lineStarted(atom.line) ? { v: atom.op === "==" ? TRI2.t : TRI2.f, why: `线${atom.line}已经开始过` } : { v: TRI2.u, why: `线${atom.line}的状态还算不出来（开启条件未知，或线之间循环引用）` };
-        let hit = (LINE_STATE_ALIAS2[atom.state] || [atom.state]).includes(st9);
-        return { v: (atom.op === "==" ? hit : !hit) ? TRI2.t : TRI2.f, why: `线${atom.line}现在是「${st9}」` };
+        let hit = (LINE_STATE_ALIAS2[atom.state] || [atom.state]).includes(st10);
+        return { v: (atom.op === "==" ? hit : !hit) ? TRI2.t : TRI2.f, why: `线${atom.line}现在是「${st10}」` };
       }
       case "count": {
         let r = countRows2(env.tables, atom.table, atom.column, atom.op, atom.value, applyOp2);
@@ -7008,7 +7010,7 @@ ${guide ? `${guide}
   }
   function tableConsistencyHints2(snapshot, overrides = null) {
     let hints = [], holders = /* @__PURE__ */ new Map();
-    for (let row2 of snapshot.knowledge || []) holders.set(row2.fact, [...holders.get(row2.fact) || [], row2.actor]);
+    for (let row3 of snapshot.knowledge || []) holders.set(row3.fact, [...holders.get(row3.fact) || [], row3.actor]);
     for (let [id, fact] of snapshot.facts || []) {
       let who = holders.get(id) || [], over = overrides && overrides[id];
       (fact.status === "confirmed" || fact.claimed) && !who.length && !(over && ["kept", "confirmed", "claimed"].includes(over.status)) && snapshot.knowPresent && [...snapshot.knowPresent].some((k) => k.startsWith(`${id}@`)) && hints.push(
@@ -7060,17 +7062,17 @@ ${guide ? `${guide}
       ])
         for (let ref of conditionRefs2(cond).nodes)
           ids.has(ref) || errors.push(`${stageLabel(unit.stage.key)}·${label}：引用了不存在的节点「${ref}」`);
-    let lines2 = compileLines2(units, errors), lineIds = new Set(lines2.map((l) => l.id)), refCheck = (cond, where) => {
+    let lines3 = compileLines2(units, errors), lineIds = new Set(lines3.map((l) => l.id)), refCheck = (cond, where) => {
       for (let ref of conditionRefs2(cond).lines) lineIds.has(ref) || errors.push(`${where}：引用了不存在的线「${ref}」`);
     };
-    for (let l of lines2) refCheck(l.open, `线 ${l.id} 的开启条件`);
+    for (let l of lines3) refCheck(l.open, `线 ${l.id} 的开启条件`);
     for (let node of nodes)
       [node.open, node.early, node.done].forEach((c) => refCheck(c, `${stageLabel(node.unit.stage.key)}·${node.name}`));
     for (let unit of units) [unit.clue.enter, unit.clue.end].forEach((c) => refCheck(c, stageLabel(unit.stage.key)));
-    return { units, nodes, errors, lines: lines2 };
+    return { units, nodes, errors, lines: lines3 };
   }
   function computeClueState2(compiled, snapshot, clueProg, config = DEFAULT_CLUE, opts = {}) {
-    let { units, nodes } = compiled, lines2 = compiled.lines || [], byUid = new Map(nodes.filter((n) => n.uid).map((n) => [n.uid, n])), overrides = clueProg.overrides || {}, doneMemo = /* @__PURE__ */ new Map(), visiting = /* @__PURE__ */ new Set(), cycles = [], lineMemo = /* @__PURE__ */ new Map(), lineVisiting = /* @__PURE__ */ new Set(), byLine = new Map(lines2.map((l) => [l.id, l])), env = {
+    let { units, nodes } = compiled, lines3 = compiled.lines || [], byUid = new Map(nodes.filter((n) => n.uid).map((n) => [n.uid, n])), overrides = clueProg.overrides || {}, doneMemo = /* @__PURE__ */ new Map(), visiting = /* @__PURE__ */ new Set(), cycles = [], lineMemo = /* @__PURE__ */ new Map(), lineVisiting = /* @__PURE__ */ new Set(), byLine = new Map(lines3.map((l) => [l.id, l])), env = {
       facts: snapshot.facts || /* @__PURE__ */ new Map(),
       knowledge: snapshot.knowledge || [],
       tables: snapshot.tables || {},
@@ -7124,8 +7126,8 @@ ${guide ? `${guide}
       return from && from.entered.v !== TRI2.t ? { v: from.entered.v === TRI2.u ? TRI2.u : TRI2.f, reasons: [`要等${w.main}进入「${w.fromLabel}」`] } : to && to.done ? { v: TRI2.f, missed: !0, reasons: [`开启时段已过（${w.main}的「${w.toLabel}」已经结束）`] } : { v: TRI2.t, reasons: [`在${w.main}的开启时段内`] };
     }
     function mainBusy(l) {
-      let at = lines2.indexOf(l);
-      for (let [k, o] of lines2.entries()) {
+      let at = lines3.indexOf(l);
+      for (let [k, o] of lines3.entries()) {
         if (o === l || o.kind !== "main" || o.mode !== "auto" && !lineEvidence(o) || !lineEvidence(o) && k > at) continue;
         let s = lineStateOf(o);
         if (!s) return `主线${o.id}的状态还算不出来`;
@@ -7136,7 +7138,7 @@ ${guide ? `${guide}
     }
     function prevMainDone(l) {
       if (!l.after) return { v: TRI2.t, reasons: [] };
-      let mains = lines2.filter((x) => x.kind === "main"), prev = mains[mains.indexOf(l) - 1];
+      let mains = lines3.filter((x) => x.kind === "main"), prev = mains[mains.indexOf(l) - 1];
       if (!prev) return { v: TRI2.t, reasons: [] };
       let s = lineStateOf(prev);
       return s ? s.state === "完成" || s.state === "放弃" ? { v: TRI2.t, reasons: [] } : { v: TRI2.f, reasons: [`排在主线${prev.id}后面，要等它结束`] } : { v: TRI2.u, reasons: [`主线${prev.id}的状态还算不出来`] };
@@ -7170,7 +7172,7 @@ ${guide ? `${guide}
     }
     let free = units.filter((u) => !u.line);
     stageChain(free, null);
-    let lineStates = lines2.map(
+    let lineStates = lines3.map(
       (l) => lineStateOf(l) || {
         line: l,
         state: "未触发",
@@ -7227,7 +7229,7 @@ ${guide ? `${guide}
       }
       let status = done.v === TRI2.t ? "done" : open.v === TRI2.t ? "available" : "locked";
       return { node, status, open, done, skipped: !!over.skip, disabled: over.open === "block", manualOpen: over.open === "force" };
-    }), focus = pickFocus2(nodeStates, clueProg, lines2.length ? { ...config, autoFocusSingle: !1 } : config, snapshot, stageStates);
+    }), focus = pickFocus2(nodeStates, clueProg, lines3.length ? { ...config, autoFocusSingle: !1 } : config, snapshot, stageStates);
     for (let state of nodeStates)
       state.node.uid && state.node.uid === focus.uid && state.status === "available" && (state.status = "active");
     let current = units.find((unit) => {
@@ -7352,10 +7354,10 @@ ${guide ? `${guide}
     });
     return changed ? next : list;
   }
-  function resolveLineWindow2(raw, lines2, errs) {
+  function resolveLineWindow2(raw, lines3, errs) {
     if (raw == null || raw === "") return null;
     if (!isPlainObject(raw)) return errs.push("开启时段应写成 {主线: M1, 从: 阶段2, 到: 阶段3}"), { bad: "开启时段写法不对" };
-    let mainId = String(raw.主线 || "").trim(), main = lines2.find((l) => l.id === mainId);
+    let mainId = String(raw.主线 || "").trim(), main = lines3.find((l) => l.id === mainId);
     if (!main) return errs.push(`开启时段引用了不存在的主线「${mainId}」`), { bad: `找不到主线${mainId}` };
     if (main.kind !== "main") return errs.push(`开启时段里的「${mainId}」不是主线`), { bad: `${mainId}不是主线` };
     let find = (ref) => {
@@ -7380,7 +7382,7 @@ ${guide ? `${guide}
   function compileLines2(units, errors) {
     let vols = [...new Set(units.map((u) => u.volume))];
     if (!vols.some((v) => isPlainObject(v.line))) return [];
-    let named = withLineIds2(vols), lines2 = [], seen = /* @__PURE__ */ new Set(), pend = [];
+    let named = withLineIds2(vols), lines3 = [], seen = /* @__PURE__ */ new Set(), pend = [];
     for (let [k, volume] of vols.entries()) {
       let own = units.filter((u) => u.volume === volume), raw = named[k].line, where = `卷「${volumeLabel(volume.key)}」的线`, id = String(raw.编号 || "").trim(), errs = [];
       if (!id) {
@@ -7412,12 +7414,12 @@ ${guide ? `${guide}
         // 只管自动开始；手动进入可以跳过它，剧情条件照样要满足。
         after: kind === "main" && (raw.接上一条 === !0 || raw.接上一条 === "true" || raw.接上一条 === "是")
       };
-      lines2.push(line), pend.push([line, raw.开启时段, errs, where]);
+      lines3.push(line), pend.push([line, raw.开启时段, errs, where]);
     }
     for (let [l, w, errs, where] of pend)
-      l.window = resolveLineWindow2(w, lines2, errs), errs.forEach((e) => errors.push(`${where}：${e}`));
-    for (let l of lines2) for (let u of l.units) u.line = l;
-    return lines2;
+      l.window = resolveLineWindow2(w, lines3, errs), errs.forEach((e) => errors.push(`${where}：${e}`));
+    for (let l of lines3) for (let u of l.units) u.line = l;
+    return lines3;
   }
   function lineToManual2(volumes, id) {
     let at = (volumes || []).findIndex((v) => isPlainObject(v.line) && String(v.line.编号 || "").trim() === id);
@@ -7473,10 +7475,10 @@ ${guide ? `${guide}
     return null;
   }
   function sideQueue(lineStates, clueProg) {
-    let lines2 = clueProg && clueProg.lines || {}, list = (lineStates || []).filter(
+    let lines3 = clueProg && clueProg.lines || {}, list = (lineStates || []).filter(
       (s) => s.line.kind === "side" && s.line.mode !== "manual" && s.state === "可开启" && s.entries.length
     ), order = (s) => {
-      let at = lines2[s.line.id] && lines2[s.line.id].skipAt;
+      let at = lines3[s.line.id] && lines3[s.line.id].skipAt;
       return at === void 0 ? -1 : at;
     };
     return list.map((s, k) => ({ s, k, at: order(s) })).sort((a, b) => a.at - b.at || a.k - b.k).map((x) => x.s);
@@ -7490,7 +7492,7 @@ ${guide ? `${guide}
       return { uid, entry: clueText2(it.入口), place: clueText2(it.地点) };
     }, paused = !!(clueProg && clueProg.paused), sidePaused = !!(clueProg && clueProg.sidePaused), slots = sideSlots(lineStates, limit), unsynced = /* @__PURE__ */ new Set(), ok = (uid) => !known || known.has(uid) || (unsynced.add(uid), !1), mainNow = paused || clueProg && clueProg.mainPaused ? null : lineStates.find((s) => s.line.kind === "main" && s.state === "进行中") || null, mainUids = mainNow ? state.nodeStates.filter((s) => s.node.uid && s.status === "available" && !s.disabled && s.node.unit.line === mainNow.line).map((s) => s.node.uid) : [], queue = sidePaused ? [] : sideQueue(lineStates, clueProg), catalog = paused ? [] : queue.flatMap((s) => s.entries.map((uid) => ({ ...item(uid), line: s.line.id }))), recognize = catalog.filter((r) => ok(r.uid)), due = "", head = slots.full ? null : queue[0] || null;
     if (head) {
-      let lines2 = clueProg && clueProg.lines || {}, since = lines2[head.line.id] && lines2[head.line.id].skipFloor !== void 0 ? lines2[head.line.id].skipFloor : -1;
+      let lines3 = clueProg && clueProg.lines || {}, since = lines3[head.line.id] && lines3[head.line.id].skipFloor !== void 0 ? lines3[head.line.id].skipFloor : -1;
       offerCount(offers, head.line.id, since) >= LINE_SKIP_AFTER && queue.length > 1 && (due = head.line.id);
     }
     let pick = [], mainItems = mainUids.filter(ok).map(item), headItems = head ? head.entries.filter(ok).map(item) : [];
@@ -7515,9 +7517,9 @@ ${guide ? `${guide}
     return (lineStates || []).find((s) => s.line.kind === "main" && s.line.id !== id && s.state === "进行中") || null;
   }
   function catalogKnown(tables, scenePath) {
-    let [table, row2] = String(scenePath || "").split("/").map((x) => x.trim()), found = table ? findSheet2(tables || {}, table) : { error: "x" };
+    let [table, row3] = String(scenePath || "").split("/").map((x) => x.trim()), found = table ? findSheet2(tables || {}, table) : { error: "x" };
     if (found.error) return null;
-    let { col, rows: rows2 } = sheetRows2(found.sheet), ci = col(LINE_CATALOG_COL), hits = ci < 0 ? [] : findRow2(rows2, row2);
+    let { col, rows: rows2 } = sheetRows2(found.sheet), ci = col(LINE_CATALOG_COL), hits = ci < 0 ? [] : findRow2(rows2, row3);
     return hits.length !== 1 ? null : new Set(
       cellText2(hits[0][ci]).split(/\n|。/).map((x) => x.split(/[:：]/)[0].trim()).filter(Boolean)
     );
@@ -7694,8 +7696,8 @@ ${guide ? `${guide}
       let sheet = found.sheet, head = Array.isArray(sheet.content && sheet.content[0]) ? sheet.content[0] : [], ci = head.findIndex((cell, i) => i > 0 && cellText2(cell) === cellText2(b[idCol]));
       if (ci < 0) return void out.problems.push(`表「${b.表}」缺少列「${b[idCol]}」`);
       out[keyName] = sheet.key || "";
-      for (let row2 of (sheet.content || []).slice(1)) {
-        let code = Array.isArray(row2) ? cellText2(row2[ci]) : "";
+      for (let row3 of (sheet.content || []).slice(1)) {
+        let code = Array.isArray(row3) ? cellText2(row3[ci]) : "";
         want.has(code) && (into[code] = (into[code] || 0) + 1);
       }
     };
@@ -7747,15 +7749,15 @@ ${guide ? `${guide}
       let t = sheetOf(tables, bindings, kind);
       if (!t) continue;
       let byKey = /* @__PURE__ */ new Map();
-      for (let row2 of (t.sheet.content || []).slice(1)) {
-        if (!Array.isArray(row2)) continue;
-        let code = cellText2(row2[t.ci]);
+      for (let row3 of (t.sheet.content || []).slice(1)) {
+        if (!Array.isArray(row3)) continue;
+        let code = cellText2(row3[t.ci]);
         if (!want.has(code)) continue;
-        let key = rowKeyOf(kind, code, t.ai >= 0 ? row2[t.ai] : "");
-        (byKey.get(key) || byKey.set(key, []).get(key)).push(row2);
+        let key = rowKeyOf(kind, code, t.ai >= 0 ? row3[t.ai] : "");
+        (byKey.get(key) || byKey.set(key, []).get(key)).push(row3);
       }
       for (let [, rows2] of byKey) {
-        let row2 = rows2[0], code = cellText2(row2[t.ci]);
+        let row3 = rows2[0], code = cellText2(row3[t.ci]);
         if (rows2.length > 1) {
           skipped.add(code);
           continue;
@@ -7763,10 +7765,10 @@ ${guide ? `${guide}
         out.push({
           kind,
           code,
-          actor: t.ai >= 0 ? cellText2(row2[t.ai]) : "",
+          actor: t.ai >= 0 ? cellText2(row3[t.ai]) : "",
           head: t.names,
-          cells: row2.map((v) => v ?? ""),
-          rid: row2[0] ?? null,
+          cells: row3.map((v) => v ?? ""),
+          rid: row3[0] ?? null,
           st: "saved",
           del: null,
           clr: null
@@ -7775,11 +7777,11 @@ ${guide ? `${guide}
     }
     return { rows: out.filter((r) => !skipped.has(r.code)), skipped: [...skipped] };
   }
-  function foldFind(tables, bindings, row2) {
-    let t = sheetOf(tables, bindings, row2.kind);
+  function foldFind(tables, bindings, row3) {
+    let t = sheetOf(tables, bindings, row3.kind);
     if (!t) return null;
-    let key = rowKeyOf(row2.kind, row2.code, row2.actor);
-    return (t.sheet.content || []).slice(1).filter((r) => Array.isArray(r) && rowKeyOf(row2.kind, r[t.ci], t.ai >= 0 ? r[t.ai] : "") === key);
+    let key = rowKeyOf(row3.kind, row3.code, row3.actor);
+    return (t.sheet.content || []).slice(1).filter((r) => Array.isArray(r) && rowKeyOf(row3.kind, r[t.ci], t.ai >= 0 ? r[t.ai] : "") === key);
   }
   function foldSame(cells2, head, tableRow, tableHead) {
     let names2 = (tableHead || []).map((x) => cellText2(x));
@@ -7790,15 +7792,15 @@ ${guide ? `${guide}
     for (let j = 1; j < names2.length; j++) if (head.indexOf(names2[j]) < 1 && cellText2(tableRow[j]) !== "") return !1;
     return !0;
   }
-  function foldValues(row2, bindings, chat, anchorOk) {
-    let cells2 = row2.cells.slice();
-    if (row2.clr && anchorOk(row2.clr, chat)) {
+  function foldValues(row3, bindings, chat, anchorOk) {
+    let cells2 = row3.cells.slice();
+    if (row3.clr && anchorOk(row3.clr, chat)) {
       let set = (col, v) => {
-        let i = row2.head.indexOf(cellText2(col));
+        let i = row3.head.indexOf(cellText2(col));
         i > 0 && (cells2[i] = v);
-      }, b = bindingOf(bindings, row2.kind);
+      }, b = bindingOf(bindings, row3.kind);
       if (!b) return cells2;
-      row2.kind === "fact" ? set(b.状态列, "未获得") : (b.方式列 && set(b.方式列, Array.isArray(b.未知值) ? b.未知值[0] : b.未知值 || "未知"), b.可信度列 && set(b.可信度列, "未核实"));
+      row3.kind === "fact" ? set(b.状态列, "未获得") : (b.方式列 && set(b.方式列, Array.isArray(b.未知值) ? b.未知值[0] : b.未知值 || "未知"), b.可信度列 && set(b.可信度列, "未核实"));
     }
     return cells2;
   }
@@ -7807,9 +7809,9 @@ ${guide ? `${guide}
     for (let rec of recs || []) {
       if (rec.iso !== iso) continue;
       let endOk = anchorOk(rec.end, chat);
-      for (let row2 of rec.rows) {
-        let t = sheetOf(tables, bindings, row2.kind), found = t ? foldFind(tables, bindings, row2) : null, st9;
-        found === null ? st9 = "unknown" : found.length ? st9 = found.length === 1 && foldSame(foldValues(row2, bindings, chat, anchorOk), row2.head, found[0], t.sheet.content[0]) ? "same" : "back" : row2.st === "restored" && row2.ins && anchorOk(row2.ins, chat) ? st9 = "check" : row2.st !== "deleted" && row2.st !== "restored" ? st9 = "saved" : !row2.del || !anchorOk(row2.del, chat) ? st9 = "check" : st9 = endOk ? "folded" : "lost", out.push({ rec, row: row2, st: st9 });
+      for (let row3 of rec.rows) {
+        let t = sheetOf(tables, bindings, row3.kind), found = t ? foldFind(tables, bindings, row3) : null, st10;
+        found === null ? st10 = "unknown" : found.length ? st10 = found.length === 1 && foldSame(foldValues(row3, bindings, chat, anchorOk), row3.head, found[0], t.sheet.content[0]) ? "same" : "back" : row3.st === "restored" && row3.ins && anchorOk(row3.ins, chat) ? st10 = "check" : row3.st !== "deleted" && row3.st !== "restored" ? st10 = "saved" : !row3.del || !anchorOk(row3.del, chat) ? st10 = "check" : st10 = endOk ? "folded" : "lost", out.push({ rec, row: row3, st: st10 });
       }
     }
     return out;
@@ -7937,21 +7939,21 @@ ${guide ? `${guide}
       }
       return -1;
     }
-    async function deleteOne(api, p, row2, iso) {
-      let b = binding(p, row2.kind), tables = rawTables(api), found = b ? findSheet2(tables, b.表) : { error: "x" }, hits = found.error ? null : foldFind(tables, p.clue.bindings, row2);
-      if (!hits || hits.length !== 1 || !foldSame(row2.cells, row2.head, hits[0], found.sheet.content[0])) return { ok: !1, why: "changed" };
-      let rid = hits[0][0], idCol = row2.kind === "fact" ? b.编号列 : b.事实列, floor = -1, ok = !1;
+    async function deleteOne(api, p, row3, iso) {
+      let b = binding(p, row3.kind), tables = rawTables(api), found = b ? findSheet2(tables, b.表) : { error: "x" }, hits = found.error ? null : foldFind(tables, p.clue.bindings, row3);
+      if (!hits || hits.length !== 1 || !foldSame(row3.cells, row3.head, hits[0], found.sheet.content[0])) return { ok: !1, why: "changed" };
+      let rid = hits[0][0], idCol = row3.kind === "fact" ? b.编号列 : b.事实列, floor = -1, ok = !1;
       if (typeof api.querySql == "function") {
         if (!SQL_WORD.test(b.表) || !SQL_WORD.test(idCol)) return { ok: !1, why: "sql-name" };
         let res = await Promise.resolve(
-          api.executeSqlMutation({ sql: `DELETE FROM ${b.表} WHERE row_id = ? AND ${idCol} = ?`, params: [rid, row2.code], skipNotify: !0 })
+          api.executeSqlMutation({ sql: `DELETE FROM ${b.表} WHERE row_id = ? AND ${idCol} = ?`, params: [rid, row3.code], skipNotify: !0 })
         ).catch(() => null);
         ok = !!res && !(res.errors || []).length && res.changes === 1 && res.saved !== !1, floor = res && Number.isInteger(res.messageIndex) ? res.messageIndex : -1;
       } else if (typeof api.deleteRow == "function") {
         let index = found.sheet.content.indexOf(hits[0]);
         ok = !!await Promise.resolve(api.deleteRow({ tableName: b.表, rowIndex: index, skipNotify: !0 })).catch(() => !1), floor = ok ? deleteFloor(chatMessages(), rid, iso) : -1;
       } else return { ok: !1, why: "api" };
-      let left = foldFind(rawTables(api), p.clue.bindings, row2);
+      let left = foldFind(rawTables(api), p.clue.bindings, row3);
       return !left || left.length ? { ok: !1, why: "readback" } : floor >= 0 ? { ok: !0, floor, rid } : { ok: !0, floor: appendTargetFloor(chatMessages(), iso), rid, guess: !0 };
     }
     async function collapse(lineIds, { manual = !1 } = {}) {
@@ -7981,7 +7983,7 @@ ${guide ? `${guide}
       if (!await persist(list)) return { ok: !1, why: "收起记录未能确认存盘，没有删除表格行" };
       let done = 0, failed = 0, stopped = "";
       outer: for (let rec of recs)
-        for (let row2 of rec.rows) {
+        for (let row3 of rec.rows) {
           if (!d.ticketValid(t0) || d.isoKey() !== iso) {
             stopped = "已切换聊天、项目或数据库隔离";
             break outer;
@@ -7990,8 +7992,8 @@ ${guide ? `${guide}
             stopped = "数据库开始填表";
             break outer;
           }
-          let r = await deleteOne(api, p, row2, iso);
-          r.ok ? (row2.st = "deleted", row2.del = anchorOf(chatMessages(), r.floor), r.guess && (row2.guess = !0), row2.rid = r.rid, done++) : failed++;
+          let r = await deleteOne(api, p, row3, iso);
+          r.ok ? (row3.st = "deleted", row3.del = anchorOf(chatMessages(), r.floor), r.guess && (row3.guess = !0), row3.rid = r.rid, done++) : failed++;
         }
       return d.ticketValid(t0) && await persist(list), d.invalidate("fold"), d.note(`收起${recs.map((r) => r.line).join("、")}：删除${done}行${failed ? `，${failed}行未删` : ""}${stopped ? `（${stopped}，下次继续）` : ""}`), { ok: !0, rows: done, failed, stopped, lines: recs.map((r) => r.line), recs: recs.map((r) => r.id) };
     }
@@ -8000,25 +8002,25 @@ ${guide ? `${guide}
       if (!p) return { ok: !1, why: "当前项目不是线索模式" };
       if (why) return { ok: !1, why };
       if (typeof api.insertRow != "function") return { ok: !1, why: "数据库不支持插入行" };
-      let iso = d.isoKey(), t0 = d.ticket(), list = folds(), st9 = foldStatus(list, { tables: rawTables(api), bindings: p.clue.bindings, chat: chatMessages(), iso, anchorOk: anchorValid }), todo = st9.filter((x) => pick(x.rec, x.row, x.st) && (x.st === "folded" || x.st === "lost" || !auto && x.st === "check")), done = 0, failed = 0, missingCols = /* @__PURE__ */ new Set();
+      let iso = d.isoKey(), t0 = d.ticket(), list = folds(), st10 = foldStatus(list, { tables: rawTables(api), bindings: p.clue.bindings, chat: chatMessages(), iso, anchorOk: anchorValid }), todo = st10.filter((x) => pick(x.rec, x.row, x.st) && (x.st === "folded" || x.st === "lost" || !auto && x.st === "check")), done = 0, failed = 0, missingCols = /* @__PURE__ */ new Set();
       for (let x of todo) {
         if (!d.ticketValid(t0) || d.isoKey() !== iso || busyFill()) break;
-        let row2 = list.find((r) => r.id === x.rec.id).rows.find((r) => rowKey(r) === rowKey(x.row)), b = binding(p, row2.kind), tables = rawTables(api), found = b ? findSheet2(tables, b.表) : { error: "x" };
+        let row3 = list.find((r) => r.id === x.rec.id).rows.find((r) => rowKey(r) === rowKey(x.row)), b = binding(p, row3.kind), tables = rawTables(api), found = b ? findSheet2(tables, b.表) : { error: "x" };
         if (found.error) {
           failed++;
           continue;
         }
-        let head = found.sheet.content[0].map((h) => cellText2(h)), have = foldFind(tables, p.clue.bindings, row2);
+        let head = found.sheet.content[0].map((h) => cellText2(h)), have = foldFind(tables, p.clue.bindings, row3);
         if (have && have.length) {
-          row2.st = "restored", row2.ins = anchorOf(chatMessages(), appendTargetFloor(chatMessages(), iso));
+          row3.st = "restored", row3.ins = anchorOf(chatMessages(), appendTargetFloor(chatMessages(), iso));
           continue;
         }
-        let vals = foldValues(row2, p.clue.bindings, chatMessages(), anchorValid), data = {};
-        row2.head.forEach((name, i) => {
+        let vals = foldValues(row3, p.clue.bindings, chatMessages(), anchorValid), data = {};
+        row3.head.forEach((name, i) => {
           i < 1 || !name || (head.indexOf(name) > 0 ? data[name] = vals[i] : cellText2(vals[i]) && missingCols.add(name));
         });
-        let res = await Promise.resolve(api.insertRow({ tableName: b.表, data, skipNotify: !0 })).catch(() => -1), after = rawTables(api), back = foldFind(after, p.clue.bindings, row2), sheet = findSheet2(after, b.表);
-        res >= 0 && back && back.length === 1 && !sheet.error && foldSame(vals.map((v, i) => i > 0 && head.indexOf(row2.head[i]) < 1 ? "" : v), row2.head, back[0], sheet.sheet.content[0]) ? (row2.st = "restored", row2.ins = anchorOf(chatMessages(), appendTargetFloor(chatMessages(), iso)), done++) : failed++;
+        let res = await Promise.resolve(api.insertRow({ tableName: b.表, data, skipNotify: !0 })).catch(() => -1), after = rawTables(api), back = foldFind(after, p.clue.bindings, row3), sheet = findSheet2(after, b.表);
+        res >= 0 && back && back.length === 1 && !sheet.error && foldSame(vals.map((v, i) => i > 0 && head.indexOf(row3.head[i]) < 1 ? "" : v), row3.head, back[0], sheet.sheet.content[0]) ? (row3.st = "restored", row3.ins = anchorOf(chatMessages(), appendTargetFloor(chatMessages(), iso)), done++) : failed++;
       }
       return d.ticketValid(t0) && await persist(list), d.invalidate("fold"), (done || failed) && d.note(`恢复${done}行${failed ? `，${failed}行未恢复` : ""}${missingCols.size ? `；表里已没有这些列：${[...missingCols].join("、")}` : ""}`), { ok: !0, rows: done, failed, missingCols: [...missingCols] };
     }
@@ -8026,11 +8028,11 @@ ${guide ? `${guide}
       let p = d.project();
       if (!p || !c || !c.snap.fold || !c.snap.fold.length) return null;
       let codes = d.needRestore(c, p);
-      return codes.size ? restore((rec, row2) => codes.has(row2.code), { auto: !0 }) : null;
+      return codes.size ? restore((rec, row3) => codes.has(row3.code), { auto: !0 }) : null;
     }
     async function markCleared(code) {
       let list = folds(), at = anchorOf(chatMessages()), hit = 0;
-      for (let r of list) for (let row2 of r.rows) row2.code === code && row2.st === "deleted" && (row2.clr = at, hit++);
+      for (let r of list) for (let row3 of r.rows) row3.code === code && row3.st === "deleted" && (row3.clr = at, hit++);
       if (!hit) return 0;
       let ok = await persist(list);
       return d.invalidate("fold"), ok ? hit : 0;
@@ -8675,10 +8677,10 @@ ${guide ? `${guide}
       return out;
     }
     function foldNeedRestore(c, p) {
-      let st9 = c.snap.fold || [];
-      if (!st9.length) return /* @__PURE__ */ new Set();
+      let st10 = c.snap.fold || [];
+      if (!st10.length) return /* @__PURE__ */ new Set();
       let live2 = new Set(foldPlan(c.compiled, c.state.lineStates, { keep: p.clue.noFold, paused: new Set(pausedReady(c).keys()) }).flatMap((x) => x.facts));
-      return new Set(st9.filter((x) => (x.st === "folded" || x.st === "lost") && (x.st === "lost" || !live2.has(x.row.code))).map((x) => x.row.code));
+      return new Set(st10.filter((x) => (x.st === "folded" || x.st === "lost") && (x.st === "lost" || !live2.has(x.row.code))).map((x) => x.row.code));
     }
     function foldCheck() {
       let p = project();
@@ -8745,8 +8747,8 @@ ${guide ? `${guide}
       prog && setProgress({ ...prog, foldKept: list.length ? list : void 0 }, "fold-kept");
     }
     async function userRestore(pick) {
-      let lines2 = [...new Set(normalizeFolds((getProgress() || {}).folds).filter((rec) => pick(rec)).map((rec) => rec.line))], r = await fold.restore(pick);
-      return r && r.ok && lines2.length && setFoldKept([.../* @__PURE__ */ new Set([...foldKept(), ...lines2])]), r;
+      let lines3 = [...new Set(normalizeFolds((getProgress() || {}).folds).filter((rec) => pick(rec)).map((rec) => rec.line))], r = await fold.restore(pick);
+      return r && r.ok && lines3.length && setFoldKept([.../* @__PURE__ */ new Set([...foldKept(), ...lines3])]), r;
     }
     async function userCollapse(ids, opts = {}) {
       let r = await fold.collapse(ids, opts), kept = foldKept();
@@ -8842,16 +8844,16 @@ ${guide ? `${guide}
     async function writeCatalog(p, c, t0) {
       let api = acuApi(), col = LINE_CATALOG_COL, path = p.clue.bindings.scene && p.clue.bindings.scene.路径;
       if (!api || typeof api.updateCell != "function" || !path) return;
-      let [table, row2] = String(path).split("/").map((x) => x.trim()), want = sceneCatalogCell(c.state, c.plan || { recognize: [] }, c.prog), found = findSheet2(c.snap.tables || {}, table);
+      let [table, row3] = String(path).split("/").map((x) => x.trim()), want = sceneCatalogCell(c.state, c.plan || { recognize: [] }, c.prog), found = findSheet2(c.snap.tables || {}, table);
       if (found.error) return;
-      let { col: colOf, rows: rows2 } = sheetRows2(found.sheet), ci = colOf(col), hits = findRow2(rows2, row2);
+      let { col: colOf, rows: rows2 } = sheetRows2(found.sheet), ci = colOf(col), hits = findRow2(rows2, row3);
       if (ci < 0) return catalogMissing || (catalogMissing = !0, note(`线索控制表缺少「${col}」列：请点「创建模板」补上`));
       if (hits.length !== 1 || cellText2(hits[0][ci]) === want || !ticketValid(t0)) return;
       let index = found.sheet.content.indexOf(hits[0]);
       if (index < 1) return;
       let ok = await Promise.resolve(
         api.updateCell({ tableName: table, rowIndex: index, colIdentifier: col, value: want, skipNotify: !0 })
-      ).catch(() => !1), back = readCell2(entityTables(cloneTables2(api.exportTableAsJson())), `${table}/${row2}/${col}`);
+      ).catch(() => !1), back = readCell2(entityTables(cloneTables2(api.exportTableAsJson())), `${table}/${row3}/${col}`);
       ok && back.state === "ok" && cellText2(back.value) === want ? note("场景目录已更新") : note("场景目录写入失败，下次重试；未写入的入口暂不提示"), invalidate("clue-catalog");
     }
     async function fillRows(p, c, t0) {
@@ -8875,14 +8877,14 @@ ${guide ? `${guide}
       let factOk = new Set(c.snap.facts ? c.snap.facts.keys() : []), done = [];
       for (let f of ready) {
         if (!ticketValid(t0)) return;
-        let l = labelOf2(f.code), row2 = { [fb.编号列]: f.code, 标签: l.label, 登记口径: l.criterion || "" };
-        fb.状态列 && (row2[fb.状态列] = "未获得"), await Promise.resolve(api.insertRow({ tableName: fb.表, data: row2, skipNotify: !0 })).catch(() => -1) >= 0 && (factOk.add(f.code), done.push(f.code));
+        let l = labelOf2(f.code), row3 = { [fb.编号列]: f.code, 标签: l.label, 登记口径: l.criterion || "" };
+        fb.状态列 && (row3[fb.状态列] = "未获得"), await Promise.resolve(api.insertRow({ tableName: fb.表, data: row3, skipNotify: !0 })).catch(() => -1) >= 0 && (factOk.add(f.code), done.push(f.code));
       }
       if (kb)
         for (let k of diff.newKnows) {
           if (!factOk.has(k.fact) || !ticketValid(t0)) continue;
-          let row2 = { 键: k.key, [kb.事实列]: k.fact, [kb.角色列]: k.actor };
-          kb.方式列 && (row2[kb.方式列] = Array.isArray(kb.未知值) ? kb.未知值[0] : kb.未知值 || "未知"), kb.可信度列 && (row2[kb.可信度列] = "未核实"), await Promise.resolve(api.insertRow({ tableName: kb.表, data: row2, skipNotify: !0 })).catch(() => -1) >= 0 && done.push(k.key);
+          let row3 = { 键: k.key, [kb.事实列]: k.fact, [kb.角色列]: k.actor };
+          kb.方式列 && (row3[kb.方式列] = Array.isArray(kb.未知值) ? kb.未知值[0] : kb.未知值 || "未知"), kb.可信度列 && (row3[kb.可信度列] = "未核实"), await Promise.resolve(api.insertRow({ tableName: kb.表, data: row3, skipNotify: !0 })).catch(() => -1) >= 0 && done.push(k.key);
         }
       done.length && (note(`自动补入${done.length}行：${done.slice(0, 6).join("、")}${done.length > 6 ? "……" : ""}`), invalidate("clue-rows"));
     }
@@ -9057,8 +9059,8 @@ ${guide ? `${guide}
       let api = acuApi(), fb = (p.clue.bindings.facts || [])[0], kb = (p.clue.bindings.knowledge || [])[0], labels = p.clue.labels || {}, say2 = "手动补记", run = async (text2, params, names2) => names2.some((n) => !SQL_WORD2.test(String(n || ""))) ? { errors: ["表名或列名带特殊字符，插件没法安全改表"] } : scopeValid(s0) ? Promise.resolve(api.executeSqlMutation({ sql: text2, params, skipNotify: !0 })).catch((e) => ({ errors: [e && e.message || String(e)] })) : { errors: ["改表途中切换了聊天、项目或数据隔离"] }, bad = (r2) => r2 && Array.isArray(r2.errors) && r2.errors.length, src = fb.来源列 ? `, ${fb.来源列} = ?` : "", r = await run(`UPDATE ${fb.表} SET ${fb.状态列} = ?${src} WHERE ${fb.编号列} = ?`, [item.status, ...fb.来源列 ? [say2] : [], item.f], [fb.表, fb.状态列, fb.编号列, ...fb.来源列 ? [fb.来源列] : []]);
       if (bad(r)) return { ok: !1, why: r.errors[0] };
       if (!r || !r.changes) {
-        let lab = labels[item.f] || {}, row2 = { [fb.编号列]: item.f, 标签: lab.label || "", 登记口径: lab.criterion || "", [fb.状态列]: item.status, ...fb.来源列 ? { [fb.来源列]: say2 } : {} };
-        if (await Promise.resolve(api.insertRow({ tableName: fb.表, data: row2, skipNotify: !0 })).catch(() => -1) < 0) return { ok: !1, why: `关键事实表里没有 ${item.f} 这一行，也补不进去` };
+        let lab = labels[item.f] || {}, row3 = { [fb.编号列]: item.f, 标签: lab.label || "", 登记口径: lab.criterion || "", [fb.状态列]: item.status, ...fb.来源列 ? { [fb.来源列]: say2 } : {} };
+        if (await Promise.resolve(api.insertRow({ tableName: fb.表, data: row3, skipNotify: !0 })).catch(() => -1) < 0) return { ok: !1, why: `关键事实表里没有 ${item.f} 这一行，也补不进去` };
       }
       let had = (compute().snap.knowledge || []).filter((k) => k.fact === item.f);
       for (let k of item.knows || []) {
@@ -9066,8 +9068,8 @@ ${guide ? `${guide}
         let old = had.find((x) => knowKey(item.f, x.actor) === knowKey(item.f, k.actor)), way = old && old.way || "被告知", cred = k.verified ? Array.isArray(kb.已核实值) ? kb.已核实值[0] : kb.已核实值 || "已核实" : "未核实", set = `${kb.方式列} = ?${kb.可信度列 ? `, ${kb.可信度列} = ?` : ""}`, q = await run(`UPDATE ${kb.表} SET ${set} WHERE ${kb.事实列} = ? AND ${kb.角色列} = ?`, [way, ...kb.可信度列 ? [cred] : [], item.f, k.actor], [kb.表, kb.方式列, kb.事实列, kb.角色列, ...kb.可信度列 ? [kb.可信度列] : []]);
         if (bad(q)) return { ok: !1, why: q.errors[0] };
         if (!q || !q.changes) {
-          let row2 = { 键: `${item.f}@${k.actor}`, [kb.事实列]: item.f, [kb.角色列]: k.actor, [kb.方式列]: way, ...kb.可信度列 ? { [kb.可信度列]: cred } : {} };
-          if (await Promise.resolve(api.insertRow({ tableName: kb.表, data: row2, skipNotify: !0 })).catch(() => -1) < 0) return { ok: !1, why: `知情表里补不进 ${item.f}@${k.actor}` };
+          let row3 = { 键: `${item.f}@${k.actor}`, [kb.事实列]: item.f, [kb.角色列]: k.actor, [kb.方式列]: way, ...kb.可信度列 ? { [kb.可信度列]: cred } : {} };
+          if (await Promise.resolve(api.insertRow({ tableName: kb.表, data: row3, skipNotify: !0 })).catch(() => -1) < 0) return { ok: !1, why: `知情表里补不进 ${item.f}@${k.actor}` };
         }
       }
       return { ok: !0 };
@@ -9211,7 +9213,7 @@ ${guide ? `${guide}
         res && Array.isArray(res.errors) && res.errors.length && failed.push(`${j.what}：${res.errors[0]}`);
       }
       if (!ticketValid(t0) || isoKey() !== iso0) return { table: "partial", why: "改表途中切换了聊天、项目或数据隔离，没法确认表格结果" };
-      let tables = entityTables(cloneTables2(api.exportTableAsJson())), fr = readFacts2(tables, [fb]), kr = kb && kb.方式列 ? readKnowledge2(tables, [kb]) : null, fact = fr.facts.get(id), knows = kr ? kr.rows.filter((row2) => row2.fact === id) : [], factOk = !fr.problems.length && (!fact || fact.status === "unconfirmed" && !fact.claimed), knowOk = !kr || !kr.problems.length && !knows.length;
+      let tables = entityTables(cloneTables2(api.exportTableAsJson())), fr = readFacts2(tables, [fb]), kr = kb && kb.方式列 ? readKnowledge2(tables, [kb]) : null, fact = fr.facts.get(id), knows = kr ? kr.rows.filter((row3) => row3.fact === id) : [], factOk = !fr.problems.length && (!fact || fact.status === "unconfirmed" && !fact.claimed), knowOk = !kr || !kr.problems.length && !knows.length;
       if (factOk && knowOk && !failed.length) return { table: "ok", why: "" };
       let why = [
         failed.join("；"),
@@ -9264,8 +9266,8 @@ ${guide ? `${guide}
     function arriveState(c) {
       let uid = c.plan ? plot.roundScene() : "", s = uid && uid !== c.state.focus.uid ? c.state.nodeStates.find((x) => x.node.uid === uid) : null, ln = s && s.node.unit.line, ls = ln && c.state.lineStates.find((x) => x.line === ln || x.line.id === (ln.id || ln));
       if (!ls || ls.state !== "进行中") return { state: c.state, arrive: !1 };
-      let st9 = computeClueState2(c.compiled, c.snap.cond || c.snap, { ...c.prog, focus: uid, focusSceneAt: void 0, focusTaken: !1 }, project().clue);
-      return st9.focus.uid === uid ? (note(`本轮按剧情推进的判断给场景${uid}的材料`), { state: st9, arrive: !0 }) : { state: c.state, arrive: !1 };
+      let st10 = computeClueState2(c.compiled, c.snap.cond || c.snap, { ...c.prog, focus: uid, focusSceneAt: void 0, focusTaken: !1 }, project().clue);
+      return st10.focus.uid === uid ? (note(`本轮按剧情推进的判断给场景${uid}的材料`), { state: st10, arrive: !0 }) : { state: c.state, arrive: !1 };
     }
     function stripPlotSceneFrom(payload) {
       let list = payload && (payload.chat || payload.messages);
@@ -9428,14 +9430,14 @@ ${guide ? `${guide}
       let p = project(), fb = (p.clue.bindings.facts || [])[0], kb = (p.clue.bindings.knowledge || [])[0], sheet = (name) => {
         let f = name ? findSheet2(c.snap.tables || {}, name) : { error: "x" };
         return f.error ? null : f.sheet;
-      }, rowsOf = (s) => s ? sheetRows2(s).rows : [], chars = (s) => s ? JSON.stringify(rowsOf(s)).length : 0, fs = sheet(fb && fb.表), ks = sheet(kb && kb.表), scenePath = p.clue.bindings.scene && p.clue.bindings.scene.路径, ctrl = sheet(scenePath ? String(scenePath).split("/")[0].trim() : ""), lines2 = c.state.lineStates || [];
+      }, rowsOf = (s) => s ? sheetRows2(s).rows : [], chars = (s) => s ? JSON.stringify(rowsOf(s)).length : 0, fs = sheet(fb && fb.表), ks = sheet(kb && kb.表), scenePath = p.clue.bindings.scene && p.clue.bindings.scene.路径, ctrl = sheet(scenePath ? String(scenePath).split("/")[0].trim() : ""), lines3 = c.state.lineStates || [];
       return {
         factRows: rowsOf(fs).length,
         knowRows: rowsOf(ks).length,
         tableChars: chars(fs) + chars(ks) + chars(ctrl),
         future: c.snap.scope ? c.snap.scope.future.size : 0,
-        openable: lines2.filter((s) => s.state === "可开启").length,
-        running: lines2.filter((s) => s.state === "进行中").length,
+        openable: lines3.filter((s) => s.state === "可开启").length,
+        running: lines3.filter((s) => s.state === "进行中").length,
         catalog: c.plan ? c.plan.catalog.length : 0,
         injected: lastInjected ? String(lastInjected.content || "").length : null
       };
@@ -9661,26 +9663,26 @@ ${guide ? `${guide}
   function stayBand2(n) {
     return n >= 7 ? 2 : n >= 4 ? 1 : 0;
   }
-  function stayText2(st9, kind) {
-    if (!st9) return "";
-    let lines2 = [], ask2 = [], long = stayBand2(st9.rounds), from = st9.since >= 0 ? `从第 ${st9.since} 楼开始，` : "";
-    if (st9.resumed) {
-      let b = stayBand2(st9.resumed.rounds);
-      lines2.push(`- 刚恢复：${STAY_WORDS2.paused[b]}（暂停了 ${st9.resumed.rounds} 条回复）`), ask2.push(
+  function stayText2(st10, kind) {
+    if (!st10) return "";
+    let lines3 = [], ask2 = [], long = stayBand2(st10.rounds), from = st10.since >= 0 ? `从第 ${st10.since} 楼开始，` : "";
+    if (st10.resumed) {
+      let b = stayBand2(st10.resumed.rounds);
+      lines3.push(`- 刚恢复：${STAY_WORDS2.paused[b]}（暂停了 ${st10.resumed.rounds} 条回复）`), ask2.push(
         `结合前文，以及本次提供的过去记忆（如果有）接着写。暂停期间发生的事照常算；${kind === "clue" ? "这一场" : "剧情"}按现在的情况自然接上，不用急着补回来。`
       );
     }
     if (long)
-      if (lines2.push(`- 写了多久：${STAY_WORDS2.long[long]}（${from}这是这一${kind === "clue" ? "场" : "段"}的第 ${st9.rounds} 条回复）`), kind === "clue") {
-        let ib = st9.idle >= 7 ? 2 : st9.idle >= 4 ? 1 : 0;
-        lines2.push(
-          `- 发现：${STAY_WORDS2.idle[ib]}（${ib ? `连续 ${st9.idle} 条回复没有新增或核实的发现` : "最近几条回复里有新增或核实的发现"}）`
+      if (lines3.push(`- 写了多久：${STAY_WORDS2.long[long]}（${from}这是这一${kind === "clue" ? "场" : "段"}的第 ${st10.rounds} 条回复）`), kind === "clue") {
+        let ib = st10.idle >= 7 ? 2 : st10.idle >= 4 ? 1 : 0;
+        lines3.push(
+          `- 发现：${STAY_WORDS2.idle[ib]}（${ib ? `连续 ${st10.idle} 条回复没有新增或核实的发现` : "最近几条回复里有新增或核实的发现"}）`
         ), ask2.push(
-          st9.resumed ? "" : "结合前文接着写。",
+          st10.resumed ? "" : "结合前文接着写。",
           `如果环境和人物前面已经交代过，就不必从头再写；说过的话、发生过的事，不要再写一遍。${ib ? "如果用户最近在聊别的、做别的，就跟着用户写，不必每轮把话题引回下面的发现；人物可以带着这件事做别的。等用户提起或采取相应的行动，再接着写。" : ""}`
         );
-      } else ask2.push(st9.resumed ? "" : "结合前文接着写。", "如果场景和人物前面已经交代过，就不必再铺陈；已经写过的事件，不要再写一遍。");
-    return lines2.length ? [`【这一${kind === "clue" ? "场" : "段"}到现在】`, ...lines2, ask2.filter(Boolean).join("")].join(`
+      } else ask2.push(st10.resumed ? "" : "结合前文接着写。", "如果场景和人物前面已经交代过，就不必再铺陈；已经写过的事件，不要再写一遍。");
+    return lines3.length ? [`【这一${kind === "clue" ? "场" : "段"}到现在】`, ...lines3, ask2.filter(Boolean).join("")].join(`
 `) : "";
   }
   var CLUE_OP_KINDS2, STAY_WORDS2, init_trpg_clue_progress = __esm({
@@ -9730,19 +9732,19 @@ ${guide ? `${guide}
     let { known, claimed } = chatFactSets({ snap: snap2, prog }), dead = deadDiscoveries(state, snap2, prog, checks), deadSet = new Set(dead.map((d) => d.fact)), doneIds = new Set([...state.stageStates].filter(([, s]) => s.done).map(([id]) => id)), known2 = new Set(known);
     for (let ns of state.nodeStates)
       if (ns.node.unit && doneIds.has(ns.node.unit.id)) for (let d of discoveryList(itemOf(ns.node))) d.fact && known2.add(d.fact);
-    let opts = { knownFacts: known2, claimedFacts: claimed }, reach = clueReachability(stripFacts(volumes || [], deadSet), opts), base = dead.length ? clueReachability(volumes || [], opts) : reach, lines2 = [], spoil = [];
-    reach.verdict === "ok" ? lines2.push(dead.length ? `有${dead.length}条判定失败的线索，暂时不影响主线` : "主线走得通") : reach.verdict === "blocked" ? lines2.push(
+    let opts = { knownFacts: known2, claimedFacts: claimed }, reach = clueReachability(stripFacts(volumes || [], deadSet), opts), base = dead.length ? clueReachability(volumes || [], opts) : reach, lines3 = [], spoil = [];
+    reach.verdict === "ok" ? lines3.push(dead.length ? `有${dead.length}条判定失败的线索，暂时不影响主线` : "主线走得通") : reach.verdict === "blocked" ? lines3.push(
       dead.length && base.verdict !== "blocked" ? `有${dead.length}条判定失败的线索，主线因此卡住，可以在下面推一把` : "主线现在走不通，需要检查剧本或表格"
-    ) : lines2.push("走不走得通要看表格或时间");
+    ) : lines3.push("走不走得通要看表格或时间");
     let live2 = [...state.stageStates.values()].find((s) => s.entered.v === "true" && !s.done);
-    live2 && live2.requiredLeft.length && lines2.push(`当前阶段还差${live2.requiredLeft.length}个必需节点`);
+    live2 && live2.requiredLeft.length && lines3.push(`当前阶段还差${live2.requiredLeft.length}个必需节点`);
     let near = 0;
     for (let ns of state.nodeStates)
       (ns.status === "available" || ns.status === "active") && (near += discoveryList(itemOf(ns.node)).filter((d) => d.fact && !deadSet.has(d.fact) && !got(d.fact, snap2, prog)).length);
-    near && lines2.push(`眼前能拿到的线索${near}条`), focus && KP_UNSET_SOURCES.includes(focus.source) && lines2.push(KP_UNSET_HINT);
+    near && lines3.push(`眼前能拿到的线索${near}条`), focus && KP_UNSET_SOURCES.includes(focus.source) && lines3.push(KP_UNSET_HINT);
     for (let n of reach.stuckNodes) spoil.push(`${n.nodeName}（${n.stage}）：${n.why}`);
     for (let d of dead) spoil.push(`判定失败 #${d.fact}（${d.node}）：${d.text}`);
-    return { level: reach.verdict === "blocked" ? "bad" : reach.verdict === "unknown" || dead.length ? "warn" : "ok", lines: lines2, spoil, deadFacts: deadSet };
+    return { level: reach.verdict === "blocked" ? "bad" : reach.verdict === "unknown" || dead.length ? "warn" : "ok", lines: lines3, spoil, deadFacts: deadSet };
   }
   function kpPushTarget(state, snap2, prog) {
     let pending = (ns) => discoveryList(itemOf(ns.node)).filter((d) => d.fact && !got(d.fact, snap2, prog)).map((d) => ({ fact: d.fact, discovery: d, node: ns.node })), focus = state.nodeStates.find((ns) => ns.node.uid && ns.node.uid === state.focus.uid), mine = focus ? pending(focus) : [], live2 = [...state.stageStates.values()].find((s) => s.entered.v === "true" && !s.done), wanted = /* @__PURE__ */ new Set();
@@ -9789,24 +9791,24 @@ ${guide ? `${guide}
     return state.nodeStates.filter((ns) => ns.status === "available" && !ns.disabled && ns.node.uid && textOf2(itemOf(ns.node).入口)).map((ns) => textOf2(itemOf(ns.node).入口));
   }
   function kpInject(out, { state, snap: snap2, prog, checks, settings, push, floors, timeline: timeline2, slices }) {
-    let lines2 = [], seen = /* @__PURE__ */ new Set(), add = (p) => {
+    let lines3 = [], seen = /* @__PURE__ */ new Set(), add = (p) => {
       let hit = kpFind(state, p.fact);
       if (!hit || got(p.fact, snap2, prog)) return;
       let r = kpPushLines(p, hit.discovery, hit.node, checks, settings);
-      lines2.push(...r.lines), r.reveal && out.used.candidates.push({ fact: p.fact, record: hit.discovery.record }), seen.add(p.fact);
+      lines3.push(...r.lines), r.reveal && out.used.candidates.push({ fact: p.fact, record: hit.discovery.record }), seen.add(p.fact);
     };
-    push && push.floor === floors && (push.kind === "steer" ? textOf2(push.text) && lines2.push(`KP 拉回（只管这一轮）：${textOf2(push.text)}`) : add(push));
+    push && push.floor === floors && (push.kind === "steer" ? textOf2(push.text) && lines3.push(`KP 拉回（只管这一轮）：${textOf2(push.text)}`) : add(push));
     for (let [code, r] of Object.entries(checks || {}))
       r.fresh && /-KP$/.test(code) && !seen.has(code.slice(0, -3)) && add({ fact: code.slice(0, -3), level: 2 });
     if (timeline2) {
       let step = timelineStep({ events: timeline2.events || [], now: timeline2.now, clock: timeline2.clock, floors });
-      lines2.push(...step.lines), step.next && timeline2.onClock && timeline2.onClock(step.next);
+      lines3.push(...step.lines), step.next && timeline2.onClock && timeline2.onClock(step.next);
     }
     let picked = slices ? pickSlices(slices.list, slices) : [], sliceText = sliceLines(picked);
     picked.length && (out = { ...out, used: { ...out.used || {}, slices: picked.map((x) => x.id) } });
     let entries = entryList(state), host = !!(out.content || entries.length);
-    if (!lines2.length && !sliceText.length && !host) return out;
-    let tag = String(settings.tagName || "剧情参考").trim() || "剧情参考", close = `</${tag}>`, body = [...lines2.length ? ["KP 的安排（只管这一轮）：", ...lines2] : [], ...sliceText, ...host ? [KP_HOST_RULE] : []].join(`
+    if (!lines3.length && !sliceText.length && !host) return out;
+    let tag = String(settings.tagName || "剧情参考").trim() || "剧情参考", close = `</${tag}>`, body = [...lines3.length ? ["KP 的安排（只管这一轮）：", ...lines3] : [], ...sliceText, ...host ? [KP_HOST_RULE] : []].join(`
 `);
     if (!out.content) {
       let list = entries.length ? `目前可以去做的事：
@@ -10425,16 +10427,16 @@ ${facts.length ? facts.map((f) => `- ${f}`).join(`
     async function writeCatalog(p, c, t0) {
       let api = acuApi2(), col = LINE_CATALOG_COL, path = p.clue.bindings.scene && p.clue.bindings.scene.路径;
       if (!api || typeof api.updateCell != "function" || !path) return;
-      let [table, row2] = String(path).split("/").map((x) => x.trim()), want = sceneCatalogCell(c.state, c.plan || { recognize: [] }, c.prog), found = findSheet(c.snap.tables || {}, table);
+      let [table, row3] = String(path).split("/").map((x) => x.trim()), want = sceneCatalogCell(c.state, c.plan || { recognize: [] }, c.prog), found = findSheet(c.snap.tables || {}, table);
       if (found.error) return;
-      let { col: colOf, rows: rows2 } = sheetRows(found.sheet), ci = colOf(col), hits = findRow(rows2, row2);
+      let { col: colOf, rows: rows2 } = sheetRows(found.sheet), ci = colOf(col), hits = findRow(rows2, row3);
       if (ci < 0) return catalogMissing || (catalogMissing = !0, note(`线索控制表还没有「${col}」这一列：点一次「创建模板」补上`));
       if (hits.length !== 1 || cellText(hits[0][ci]) === want || !ticketValid(t0)) return;
       let index = found.sheet.content.indexOf(hits[0]);
       if (index < 1) return;
       let ok = await Promise.resolve(
         api.updateCell({ tableName: table, rowIndex: index, colIdentifier: col, value: want, skipNotify: !0 })
-      ).catch(() => !1), back = readCell(cloneTables(api.exportTableAsJson()), `${table}/${row2}/${col}`);
+      ).catch(() => !1), back = readCell(cloneTables(api.exportTableAsJson()), `${table}/${row3}/${col}`);
       ok && back.state === "ok" && cellText(back.value) === want ? note("场景目录已更新") : note("场景目录没写上，下次再试；没写进去的入口先不提示"), invalidate("clue-catalog");
     }
     async function fillRows(p, c, t0) {
@@ -10458,14 +10460,14 @@ ${facts.length ? facts.map((f) => `- ${f}`).join(`
       let factOk = new Set(c.snap.facts ? c.snap.facts.keys() : []), done = [];
       for (let f of ready) {
         if (!ticketValid(t0)) return;
-        let l = labelOf2(f.code), row2 = { [fb.编号列]: f.code, 标签: l.label, 登记口径: l.criterion || "" };
-        fb.状态列 && (row2[fb.状态列] = "未获得"), await Promise.resolve(api.insertRow({ tableName: fb.表, data: row2, skipNotify: !0 })).catch(() => -1) >= 0 && (factOk.add(f.code), done.push(f.code));
+        let l = labelOf2(f.code), row3 = { [fb.编号列]: f.code, 标签: l.label, 登记口径: l.criterion || "" };
+        fb.状态列 && (row3[fb.状态列] = "未获得"), await Promise.resolve(api.insertRow({ tableName: fb.表, data: row3, skipNotify: !0 })).catch(() => -1) >= 0 && (factOk.add(f.code), done.push(f.code));
       }
       if (kb)
         for (let k of diff.newKnows) {
           if (!factOk.has(k.fact) || !ticketValid(t0)) continue;
-          let row2 = { 键: k.key, [kb.事实列]: k.fact, [kb.角色列]: k.actor };
-          kb.方式列 && (row2[kb.方式列] = Array.isArray(kb.未知值) ? kb.未知值[0] : kb.未知值 || "未知"), kb.可信度列 && (row2[kb.可信度列] = "未核实"), await Promise.resolve(api.insertRow({ tableName: kb.表, data: row2, skipNotify: !0 })).catch(() => -1) >= 0 && done.push(k.key);
+          let row3 = { 键: k.key, [kb.事实列]: k.fact, [kb.角色列]: k.actor };
+          kb.方式列 && (row3[kb.方式列] = Array.isArray(kb.未知值) ? kb.未知值[0] : kb.未知值 || "未知"), kb.可信度列 && (row3[kb.可信度列] = "未核实"), await Promise.resolve(api.insertRow({ tableName: kb.表, data: row3, skipNotify: !0 })).catch(() => -1) >= 0 && done.push(k.key);
         }
       done.length && (note(`自动补了${done.length}行：${done.slice(0, 6).join("、")}${done.length > 6 ? "……" : ""}`), invalidate("clue-rows"));
     }
@@ -10590,7 +10592,7 @@ ${facts.length ? facts.map((f) => `- ${f}`).join(`
         res && Array.isArray(res.errors) && res.errors.length && failed.push(`${j.what}：${res.errors[0]}`);
       }
       if (!ticketValid(t0) || isoKey() !== iso0) return { table: "partial", why: "改表途中切换了聊天、项目或数据隔离，没法确认表格结果" };
-      let tables = cloneTables(api.exportTableAsJson()), fr = readFacts(tables, [fb]), kr = kb && kb.方式列 ? readKnowledge(tables, [kb]) : null, fact = fr.facts.get(id), knows = kr ? kr.rows.filter((row2) => row2.fact === id) : [], factOk = !fr.problems.length && (!fact || fact.status === "unconfirmed" && !fact.claimed), knowOk = !kr || !kr.problems.length && !knows.length;
+      let tables = cloneTables(api.exportTableAsJson()), fr = readFacts(tables, [fb]), kr = kb && kb.方式列 ? readKnowledge(tables, [kb]) : null, fact = fr.facts.get(id), knows = kr ? kr.rows.filter((row3) => row3.fact === id) : [], factOk = !fr.problems.length && (!fact || fact.status === "unconfirmed" && !fact.claimed), knowOk = !kr || !kr.problems.length && !knows.length;
       if (factOk && knowOk && !failed.length) return { table: "ok", why: "" };
       let why = [
         failed.join("；"),
@@ -12066,12 +12068,12 @@ label.pi-wb-row{cursor:pointer}
   function options(list, value) {
     return list.map((item) => `<option value="${esc(item.value)}"${String(item.value) === String(value) ? " selected" : ""}>${esc(item.label)}</option>`).join("");
   }
-  function openDialog({ title: title2, html = "", actions: actions12 = [{ label: "确定", value: !0, primary: !0 }], onMount } = {}) {
+  function openDialog({ title: title2, html = "", actions: actions13 = [{ label: "确定", value: !0, primary: !0 }], onMount } = {}) {
     let doc = hostDocument();
     return new Promise((resolve) => {
       let root = el(`<div class="pi-root pi-dialog"><div class="pi-dialog-box" role="dialog">
             ${title2 ? `<h4>${esc(title2)}</h4>` : ""}<div class="pi-dlg-body">${html}</div>
-            <div class="pi-dlg-acts">${actions12.map((action, index) => `<button type="button" class="pi-btn${action.primary ? " is-primary" : ""}${action.danger ? " is-danger" : ""}" data-dlg="${index}">${esc(action.label)}</button>`).join("")}</div>
+            <div class="pi-dlg-acts">${actions13.map((action, index) => `<button type="button" class="pi-btn${action.primary ? " is-primary" : ""}${action.danger ? " is-danger" : ""}" data-dlg="${index}">${esc(action.label)}</button>`).join("")}</div>
         </div></div>`), finish = (value) => {
         doc.removeEventListener("keydown", onKey, !0), root.remove(), resolve(value);
       }, onKey = (event) => {
@@ -12083,7 +12085,7 @@ label.pi-wb-row{cursor:pointer}
         if (pick) return finish(pick.dataset.dlgValue);
         let button = event.target.closest("[data-dlg]");
         if (!button) return;
-        let action = actions12[Number(button.dataset.dlg)], value = typeof action.value == "function" ? action.value(root) : action.value;
+        let action = actions13[Number(button.dataset.dlg)], value = typeof action.value == "function" ? action.value(root) : action.value;
         value !== void 0 && finish(value);
       }), doc.addEventListener("keydown", onKey, !0), layerParent(doc).appendChild(root), onMount && onMount(root), root.querySelector("input,textarea,select")?.focus();
     });
@@ -12331,8 +12333,8 @@ ${floor.text}`)].join(`
   function kpPendingSays({ compiled, state, conds }) {
     let done = new Set(Object.keys(conds || {}).map(sayKey)), out = [], add = (cond) => sayAtoms(cond).forEach((t) => !done.has(sayKey(t)) && !out.includes(t) && out.push(t)), units = compiled.units || [];
     for (let [i, unit] of units.entries()) {
-      let st9 = state.stageStates.get(unit.id);
-      if (!st9 || st9.entered.v !== "true" || st9.done) continue;
+      let st10 = state.stageStates.get(unit.id);
+      if (!st10 || st10.entered.v !== "true" || st10.done) continue;
       add(unit.clue.end);
       let next = units[i + 1];
       next && next.clue && next.clue.hasEnter && add(next.clue.enter);
@@ -12474,8 +12476,8 @@ ${rules}`
   function kpRecheckCandidates({ compiled, state, snap: snap2, effective, checks }) {
     let out = [], seen = /* @__PURE__ */ new Set();
     for (let unit of compiled.units || []) {
-      let st9 = state.stageStates.get(unit.id);
-      if (!(!st9 || st9.entered.v !== "true" || st9.done)) {
+      let st10 = state.stageStates.get(unit.id);
+      if (!(!st10 || st10.entered.v !== "true" || st10.done)) {
         for (let ns of state.nodeStates)
           if (!(ns.node.unit !== unit || ns.skipped || ns.disabled || ns.status === "done"))
             for (let d of discoveryList(isPlainObject(ns.node.item) ? ns.node.item : {})) {
@@ -13190,13 +13192,13 @@ ${CLUE_TPL_MARK_END}`;
     let body = src.slice(0, close).replace(/\s+$/, ""), tail = src.slice(close), defs = body.slice(body.indexOf("(") + 1).replace(/--[^\n]*/g, "");
     if (/(?:^|,)\s*(?:(?:CONSTRAINT|UNIQUE|CHECK|FOREIGN\s+KEY)\b|PRIMARY\s+KEY\s*\()/im.test(defs))
       return { ok: !1, ddl: src, why: "表定义里有表级约束" };
-    let lines2 = body.split(`
-`), last = lines2.length - 1;
-    for (; last >= 0 && !lines2[last].trim(); ) last--;
-    let m = /^(.*?)(\s*--.*)?$/.exec(lines2[last]);
-    lines2[last] = `${m[1].replace(/,\s*$/, "")},${m[2] || ""}`;
+    let lines3 = body.split(`
+`), last = lines3.length - 1;
+    for (; last >= 0 && !lines3[last].trim(); ) last--;
+    let m = /^(.*?)(\s*--.*)?$/.exec(lines3[last]);
+    lines3[last] = `${m[1].replace(/,\s*$/, "")},${m[2] || ""}`;
     let added = cols.map((c, i) => `  ${c.sql} TEXT${i < cols.length - 1 ? "," : ""} -- ${c.label}`);
-    return { ok: !0, ddl: `${lines2.slice(0, last + 1).join(`
+    return { ok: !0, ddl: `${lines3.slice(0, last + 1).join(`
 `)}
 ${added.join(`
 `)}
@@ -13242,8 +13244,8 @@ ${tail}` };
           continue;
         }
         ddl.ddl && (have.sheet.sourceData = { ...have.sheet.sourceData, ddl: ddl.ddl }), have.sheet.content[0].push(LINE_CATALOG_COL);
-        for (let row2 of have.sheet.content.slice(1)) Array.isArray(row2) && row2.push("");
-        Array.isArray(have.sheet.seedRows) && have.sheet.seedRows.forEach((row2) => Array.isArray(row2) && row2.push("")), changes.push(`「线索控制表」新增列：${LINE_CATALOG_COL}（由插件写入现在可去做的剧情；原有列和行不动）`), missing.length = 0;
+        for (let row3 of have.sheet.content.slice(1)) Array.isArray(row3) && row3.push("");
+        Array.isArray(have.sheet.seedRows) && have.sheet.seedRows.forEach((row3) => Array.isArray(row3) && row3.push("")), changes.push(`「线索控制表」新增列：${LINE_CATALOG_COL}（由插件写入现在可去做的剧情；原有列和行不动）`), missing.length = 0;
       }
       if (missing.length) {
         problems2.push(`已有的「${sheet.name}」缺少列：${missing.join("、")}。没有改动这张表，请检查是否是别的用途的同名表`);
@@ -13275,8 +13277,8 @@ ${tail}` };
             `「重要角色表」的DDL ${ddl.why || "无法解析"}，没有加列（剧情身份、当前动向）；需要的话请在数据库里手动加`
           );
         sheet.sourceData = { ...sheet.sourceData, ddl: ddl.ddl }, head.push(...add.map((c) => c.label));
-        for (let row2 of sheet.content.slice(1)) Array.isArray(row2) && row2.push(...add.map(() => ""));
-        Array.isArray(sheet.seedRows) && sheet.seedRows.forEach((row2) => Array.isArray(row2) && row2.push(...add.map(() => ""))), changes.push(`「重要角色表」新增列：${add.map((c) => c.label).join("、")}（原有列不动）`);
+        for (let row3 of sheet.content.slice(1)) Array.isArray(row3) && row3.push(...add.map(() => ""));
+        Array.isArray(sheet.seedRows) && sheet.seedRows.forEach((row3) => Array.isArray(row3) && row3.push(...add.map(() => ""))), changes.push(`「重要角色表」新增列：${add.map((c) => c.label).join("、")}（原有列不动）`);
       }
     }), patchDefault("任务与事件表"), patchDefault("选项表"), {
       template: tpl,
@@ -13325,16 +13327,16 @@ ${tail}` };
           `「${name}」的列和数据库默认不一致（缺${want.filter((c) => !head.includes(c)).join("、")}），没有改它的规则；需要的话请手动加上防剧透要求`
         );
       sheet.sourceData = { ...sheet.sourceData || {} }, extra && extra(sheet);
-      for (let [field2, rep] of Object.entries(CLUE_TPL_REPLACE[name] || {})) {
-        let cur = String(sheet.sourceData[field2] || "");
+      for (let [field3, rep] of Object.entries(CLUE_TPL_REPLACE[name] || {})) {
+        let cur = String(sheet.sourceData[field3] || "");
         if (cur.includes(rep.to)) continue;
         let official = rep.whole || rep.from, norm3 = (t) => t.replace(
           /\r\n?/g,
           `
 `
         ).trim();
-        norm3(cur) === norm3(official) ? (sheet.sourceData[field2] = cur.replace(rep.from, rep.to), changes.push(`「${name}」的${field2 === "initNode" ? "初始化" : "新增"}规则：「${rep.from}」改为「${rep.to}」`)) : problems2.push(
-          `「${name}」的${field2 === "initNode" ? "初始化" : "新增"}规则和数据库默认不同，没有替换；请确认它不会按设定预写内容`
+        norm3(cur) === norm3(official) ? (sheet.sourceData[field3] = cur.replace(rep.from, rep.to), changes.push(`「${name}」的${field3 === "initNode" ? "初始化" : "新增"}规则：「${rep.from}」改为「${rep.to}」`)) : problems2.push(
+          `「${name}」的${field3 === "initNode" ? "初始化" : "新增"}规则和数据库默认不同，没有替换；请确认它不会按设定预写内容`
         );
       }
       let note = String(sheet.sourceData.note || ""), next = withRuleBlock(note, CLUE_TPL_RULES[name]);
@@ -13527,9 +13529,9 @@ ${stageToText(stage).replace(/^/gm, "  ").trimEnd()}
     return SAMPLE_STAGE;
   }
   function changesBlock(units, title2) {
-    let lines2 = units.flatMap((unit) => changeLines(unit.stage.data).map((text2) => `- ${stageLabel(unit.stage.key)}：${text2}`));
-    return lines2.length ? `【${title2}】
-${lines2.join(`
+    let lines3 = units.flatMap((unit) => changeLines(unit.stage.data).map((text2) => `- ${stageLabel(unit.stage.key)}：${text2}`));
+    return lines3.length ? `【${title2}】
+${lines3.join(`
 `)}` : "";
   }
   function restText(units, from, rest = null) {
@@ -13794,9 +13796,9 @@ ${recent}` : ""
       { role: "user", content: user }
     ];
   }
-  function yamlBlockLines(lines2) {
+  function yamlBlockLines(lines3) {
     let inBlock = /* @__PURE__ */ new Set(), head = -1, body = -1;
-    return lines2.forEach((line, i) => {
+    return lines3.forEach((line, i) => {
       let ind = /^( *)/.exec(line)[1].length;
       if (head >= 0 && (!line.trim() || (body < 0 && ind > head && (body = ind), body >= 0 && ind >= body)))
         return inBlock.add(i);
@@ -13804,24 +13806,24 @@ ${recent}` : ""
     }), inBlock;
   }
   function fixOffByOneKeys(yaml) {
-    let lines2 = yaml.split(`
-`), inBlock = yamlBlockLines(lines2);
-    for (let i = 1; i < lines2.length; i++) {
+    let lines3 = yaml.split(`
+`), inBlock = yamlBlockLines(lines3);
+    for (let i = 1; i < lines3.length; i++) {
       if (inBlock.has(i)) continue;
-      let m = /^( +)([^\s#-][^:]*):(\s.*)?$/.exec(lines2[i]);
+      let m = /^( +)([^\s#-][^:]*):(\s.*)?$/.exec(lines3[i]);
       if (!m || m[1].length % 2 === 0) continue;
-      let n = m[1].length, prev = lines2.slice(0, i).map((l, k) => inBlock.has(k) ? "" : l).reverse().find((l) => /^( *)[^\s#-][^:]*:/.test(l) && /^( *)/.exec(l)[1].length <= n + 1);
+      let n = m[1].length, prev = lines3.slice(0, i).map((l, k) => inBlock.has(k) ? "" : l).reverse().find((l) => /^( *)[^\s#-][^:]*:/.test(l) && /^( *)/.exec(l)[1].length <= n + 1);
       if (!prev) continue;
       let p = /^( *)/.exec(prev)[1].length, opensMap = /:\s*$/.test(prev);
-      p === n + 1 ? lines2[i] = " " + lines2[i] : p === n - 1 && !opensMap && (lines2[i] = lines2[i].slice(1));
+      p === n + 1 ? lines3[i] = " " + lines3[i] : p === n - 1 && !opensMap && (lines3[i] = lines3[i].slice(1));
     }
-    return lines2.join(`
+    return lines3.join(`
 `);
   }
   function fixFullWidthKeys(yaml) {
-    let lines2 = yaml.split(`
-`), inBlock = yamlBlockLines(lines2);
-    return lines2.map((line, i) => inBlock.has(i) ? line : line.replace(/^( *(?:- )?)([^\s:：#-][^\s:：]*)：(?=\s|$)/, "$1$2:")).join(`
+    let lines3 = yaml.split(`
+`), inBlock = yamlBlockLines(lines3);
+    return lines3.map((line, i) => inBlock.has(i) ? line : line.replace(/^( *(?:- )?)([^\s:：#-][^\s:：]*)：(?=\s|$)/, "$1$2:")).join(`
 `);
   }
   function catalogNote(note, head, cap = 900) {
@@ -14348,7 +14350,7 @@ ${CLUE_LINE_RULES.join(`
     return queued(name, async () => {
       let data = clone2(await loadBook(name)), entry = data.entries[key];
       if (!entry) throw new Error("条目已不存在");
-      for (let field2 of ENTRY_FIELDS) Object.prototype.hasOwnProperty.call(patch, field2) && (entry[field2] = patch[field2]);
+      for (let field3 of ENTRY_FIELDS) Object.prototype.hasOwnProperty.call(patch, field3) && (entry[field3] = patch[field3]);
       Object.prototype.hasOwnProperty.call(patch, "keysecondary") && (entry.selective = patch.keysecondary.length > 0), await saveBook(name, data);
     });
   }
@@ -14359,7 +14361,7 @@ ${CLUE_LINE_RULES.join(`
         let entry = data.entries[key];
         if (entry) {
           backup.entries[key] = clone2(entry);
-          for (let field2 of ENTRY_FIELDS) Object.prototype.hasOwnProperty.call(patch, field2) && (entry[field2] = patch[field2]);
+          for (let field3 of ENTRY_FIELDS) Object.prototype.hasOwnProperty.call(patch, field3) && (entry[field3] = patch[field3]);
           Object.prototype.hasOwnProperty.call(patch, "keysecondary") && (entry.selective = patch.keysecondary.length > 0);
         }
       }
@@ -14554,9 +14556,9 @@ ${CLUE_LINE_RULES.join(`
   }
   async function pickOutlineLines(view, project, refs) {
     let vols = project.outline.volumes, c = view.runtime.activeId() === view.projectId && view.runtime.clue && view.runtime.clue.compute ? view.runtime.clue.compute() : null, stateOf = new Map((c && c.state && c.state.lineStates || []).map((s) => [s.line.volume && s.line.volume.id, s.state])), size = new Map(vols.map((v) => [v.id, outlineToText([v]).length])), picked = new Set(chosenLines(view, project, refs)), k = (n) => n >= 1e3 ? `${(n / 1e3).toFixed(1)}k` : String(n), rows2 = vols.map((v) => {
-      let st9 = stateOf.get(v.id) || "";
+      let st10 = stateOf.get(v.id) || "";
       return `<label class="pi-wb-row pi-ol-row"><input type="checkbox" data-ol-id="${esc(v.id)}"${picked.has(v.id) ? " checked" : ""}>
-                <span class="pi-wb-title">${esc(volumeShowName(v))}</span>${st9 ? `<span class="pi-badge ${STATE_BADGE[st9] || ""}">${esc(st9)}</span>` : ""}<span class="pi-meta">${k(size.get(v.id))}字</span></label>`;
+                <span class="pi-wb-title">${esc(volumeShowName(v))}</span>${st10 ? `<span class="pi-badge ${STATE_BADGE[st10] || ""}">${esc(st10)}</span>` : ""}<span class="pi-meta">${k(size.get(v.id))}字</span></label>`;
     }).join("");
     return openDialog({
       title: "附带大纲",
@@ -14687,10 +14689,10 @@ ${floor.text}`).join(`
                 <button type="button" class="pi-btn is-sm is-ghost" data-ref-all="${esc(book.name)}" data-on="1">全选</button>
                 <button type="button" class="pi-btn is-sm is-ghost" data-ref-all="${esc(book.name)}" data-on="0">全不选</button></span></div>
             ${hand.map((entry) => row(entryRefId(book.name, entry), entry, checked.has(entryRefId(book.name, entry)), ` data-ref-hand="${esc(book.name)}"`)).join("")}</div>` : "", acuHtml = fields.length ? `<div class="pi-wb-sec"><div class="pi-wb-sec-hd">数据库条目<small>${fields.reduce((sum, [, list]) => sum + list.length, 0)}</small></div>
-            ${fields.map(([field2, list]) => {
-        let memoField = isMemoField(field2), lead = memoField ? '<span class="pi-wb-pad"></span>' : `<input type="checkbox" data-ref-field="${esc(field2)}"${fieldChecked(rule, field2) ? " checked" : ""}>`, memoBox = memoField ? `<span class="pi-wb-memo">最近<input class="pi-inp is-num" type="number" min="0" data-ref-memo value="${memo}">条</span>` : "";
-        return `<div class="pi-wb-sub"><div class="pi-wb-sub-hd">${lead}<button type="button" class="pi-wb-name" data-ref-fold>${ICONS.caret}<span class="pi-wb-field">${esc(field2)}</span><small>${list.length}</small></button>${memoBox}</div>
-                    <div class="pi-wb-fold" hidden>${list.map((entry) => row(entryRefId(book.name, entry), entry, checked.has(entryRefId(book.name, entry)), ` data-ref-of="${esc(field2)}"${memoField ? " data-ref-memo-row" : ""}`)).join("")}</div></div>`;
+            ${fields.map(([field3, list]) => {
+        let memoField = isMemoField(field3), lead = memoField ? '<span class="pi-wb-pad"></span>' : `<input type="checkbox" data-ref-field="${esc(field3)}"${fieldChecked(rule, field3) ? " checked" : ""}>`, memoBox = memoField ? `<span class="pi-wb-memo">最近<input class="pi-inp is-num" type="number" min="0" data-ref-memo value="${memo}">条</span>` : "";
+        return `<div class="pi-wb-sub"><div class="pi-wb-sub-hd">${lead}<button type="button" class="pi-wb-name" data-ref-fold>${ICONS.caret}<span class="pi-wb-field">${esc(field3)}</span><small>${list.length}</small></button>${memoBox}</div>
+                    <div class="pi-wb-fold" hidden>${list.map((entry) => row(entryRefId(book.name, entry), entry, checked.has(entryRefId(book.name, entry)), ` data-ref-of="${esc(field3)}"${memoField ? " data-ref-memo-row" : ""}`)).join("")}</div></div>`;
       }).join("")}</div>` : "";
       return `<div class="pi-ref-book"><p class="pi-hint"><b>${esc(book.name)}</b> <span class="pi-badge">${esc(book.source)}</span></p>${handHtml}${acuHtml || ""}${!hand.length && !fields.length ? '<p class="pi-hint">没有条目</p>' : ""}</div>`;
     }).join("");
@@ -14754,8 +14756,8 @@ ${floor.text}`).join(`
             input2.checked = all.dataset.on === "1";
           }), sum());
         }), box.addEventListener("change", (event) => {
-          let field2 = event.target.dataset.refField;
-          field2 !== void 0 && [...box.querySelectorAll("[data-ref-of]")].filter((input2) => input2.dataset.refOf === field2).forEach((input2) => {
+          let field3 = event.target.dataset.refField;
+          field3 !== void 0 && [...box.querySelectorAll("[data-ref-of]")].filter((input2) => input2.dataset.refOf === field3).forEach((input2) => {
             input2.checked = event.target.checked;
           }), sum();
         }), box.addEventListener("input", (event) => {
@@ -15201,10 +15203,10 @@ ${block}`
   });
   function splitLongText(text2, { target = 8e3, overlap = 300 } = {}) {
     let src = String(text2 || "").replace(/\r\n?/g, `
-`), lines2 = src.split(`
+`), lines3 = src.split(`
 `), heads = [];
-    for (let i = 0, pos = 0; i < lines2.length; pos += lines2[i].length + 1, i++)
-      CHAPTER_HEAD.test(lines2[i].trim()) && heads.push({ pos, title: lines2[i].trim().replace(/^#+\s*/, "") });
+    for (let i = 0, pos = 0; i < lines3.length; pos += lines3[i].length + 1, i++)
+      CHAPTER_HEAD.test(lines3[i].trim()) && heads.push({ pos, title: lines3[i].trim().replace(/^#+\s*/, "") });
     let parts = [];
     (!heads.length || heads[0].pos > 0) && parts.push({ title: heads.length ? "开头" : "全文", start: 0, end: heads.length ? heads[0].pos : src.length }), heads.forEach((h, k) => parts.push({ title: h.title, start: h.pos, end: k + 1 < heads.length ? heads[k + 1].pos : src.length })), parts = parts.filter((p) => src.slice(p.start, p.end).trim());
     let out = [];
@@ -15284,10 +15286,10 @@ ${text2}` }
     ];
   }
   function salvageImportIndex(text2) {
-    let lines2 = String(text2 || "").replace(/\r\n?/g, `
+    let lines3 = String(text2 || "").replace(/\r\n?/g, `
 `).split(`
 `), secs = [], cur = null;
-    for (let line of lines2) {
+    for (let line of lines3) {
       let m = /^([^\s#\-][^:：]*?)\s*[:：](.*)$/.exec(line);
       m ? secs.push(cur = { key: m[1].trim(), head: m[2], body: [] }) : cur && cur.body.push(line);
     }
@@ -15553,7 +15555,7 @@ ${talk}`
     if (!isPlainObject(v)) throw new Error("格式错误：应为「名字: 内容」");
     if (String(key).endsWith("/line"))
       return { line: isPlainObject(v[VOLUME_LINE_KEY]) ? v[VOLUME_LINE_KEY] : Object.values(v).map((x) => isPlainObject(x) && x[VOLUME_LINE_KEY]).find(isPlainObject) || v };
-    let looks = (x) => isPlainObject(x) && (NODE_FIELDS.some(({ field: field2 }) => field2 in x) || "AI指令" in x || "进入条件" in x || "结束条件" in x), pick = null;
+    let looks = (x) => isPlainObject(x) && (NODE_FIELDS.some(({ field: field3 }) => field3 in x) || "AI指令" in x || "进入条件" in x || "结束条件" in x), pick = null;
     if (want && looks(v[want])) pick = [want, v[want]];
     else
       for (let [, inner] of Object.entries(v))
@@ -15563,7 +15565,7 @@ ${talk}`
       entries.length === 1 && (pick = entries[0]);
     }
     if (!pick) throw new Error("回复中没有这个阶段");
-    let nodes = NODE_FIELDS.reduce((n, { field: field2 }) => n + (Array.isArray(pick[1][field2]) ? pick[1][field2].length : 0), 0);
+    let nodes = NODE_FIELDS.reduce((n, { field: field3 }) => n + (Array.isArray(pick[1][field3]) ? pick[1][field3].length : 0), 0);
     if (oldNodes && !nodes) throw new Error("回复中这个阶段没有任何场景（格式可能有误），未采用");
     return { stage: { key: pick[0], data: nodeMapsToLists(pick[1]) } };
   }
@@ -15620,8 +15622,8 @@ ${add}` : add;
       stages: v.stages.map((s) => {
         if (!isPlainObject(s.data)) return s;
         let data = Object.fromEntries(Object.entries(s.data).filter(([k]) => IMPORT_STAGE_KEYS.includes(k)));
-        for (let { field: field2, kind } of NODE_FIELDS)
-          Array.isArray(data[field2]) && (data[field2] = data[field2].map((n) => {
+        for (let { field: field3, kind } of NODE_FIELDS)
+          Array.isArray(data[field3]) && (data[field3] = data[field3].map((n) => {
             if (!isPlainObject(n)) return n;
             let keep = {}, note = {}, authorKey = (k) => IMPORT_AUTHOR_KEYS.includes(k) && !(kind === "world" && k === "来源");
             for (let [k, v2] of Object.entries(n))
@@ -15654,20 +15656,20 @@ ${add}` : add;
     return [...out].map(([short2, full]) => ({ short: short2, full }));
   }
   function importVisibleText(volumes, mode2 = "clue") {
-    let out = [], stage = "", stageId = "", put = (layer, where, value, field2 = "") => {
+    let out = [], stage = "", stageId = "", put = (layer, where, value, field3 = "") => {
       let t = clueText2(typeof value == "string" ? value : value == null ? "" : JSON.stringify(value));
-      t && out.push({ layer, where, text: t, stage, stageId, field: field2 });
+      t && out.push({ layer, where, text: t, stage, stageId, field: field3 });
     };
     for (let vol of volumes || [])
-      for (let st9 of vol.stages || []) {
-        let where = stageLabel(st9.key), data = isPlainObject(st9.data) ? st9.data : {};
-        if (stage = st9.key, stageId = st9.id || "", put("body", where, stripAuthorDeep(String(st9.key || "")), "阶段名"), mode2 !== "clue") {
+      for (let st10 of vol.stages || []) {
+        let where = stageLabel(st10.key), data = isPlainObject(st10.data) ? st10.data : {};
+        if (stage = st10.key, stageId = st10.id || "", put("body", where, stripAuthorDeep(String(st10.key || "")), "阶段名"), mode2 !== "clue") {
           for (let [k, v] of Object.entries(outlineStageData(data))) put("body", where, v, k);
           continue;
         }
         put("body", where, data.AI指令, "AI指令"), put("body", where, data.时间范围, "时间范围");
-        for (let { field: field2 } of NODE_FIELDS)
-          for (let n of Array.isArray(data[field2]) ? data[field2] : []) {
+        for (let { field: field3 } of NODE_FIELDS)
+          for (let n of Array.isArray(data[field3]) ? data[field3] : []) {
             if (!isPlainObject(n)) {
               put("author", where, n);
               continue;
@@ -15750,10 +15752,10 @@ ${add}` : add;
       });
     let left = /* @__PURE__ */ new Set();
     for (let vol of volumes || [])
-      for (let st9 of vol.stages || [])
-        for (let { field: field2, kind } of NODE_FIELDS)
+      for (let st10 of vol.stages || [])
+        for (let { field: field3, kind } of NODE_FIELDS)
           if (kind !== "world")
-            for (let n of Array.isArray(st9.data && st9.data[field2]) ? st9.data[field2] : [])
+            for (let n of Array.isArray(st10.data && st10.data[field3]) ? st10.data[field3] : [])
               isPlainObject(n) && IMPORT_AUTHOR_KEYS.forEach((k) => k in n && left.add(k));
     for (let k of left) out.push({ level: "error", text: `正式大纲里还留着只给作者看的字段「${k}」` });
     if (!clue) return out;
@@ -15869,38 +15871,38 @@ ${add}` : add;
         k < 0 ? finds.push(d) : isPlainObject(d) && isPlainObject(finds[k]) && mergeFields(finds[k], d, ["事实"], { ...where, field: `发现 ${f}` });
       }
       return finds.length && (a.发现 = finds), mergeFields(a, b, ["id", "发现"], where), a;
-    }, idsOf = (st9) => NODE_FIELDS.flatMap(({ field: field2 }) => asList(st9.data && st9.data[field2]).map((n) => isPlainObject(n) ? n.id : "").filter(Boolean)), findNode = (id) => {
+    }, idsOf = (st10) => NODE_FIELDS.flatMap(({ field: field3 }) => asList(st10.data && st10.data[field3]).map((n) => isPlainObject(n) ? n.id : "").filter(Boolean)), findNode = (id) => {
       for (let x of stages)
-        for (let { field: field2 } of NODE_FIELDS) {
-          let n = asList(x.data && x.data[field2]).find((m) => isPlainObject(m) && m.id === id);
+        for (let { field: field3 } of NODE_FIELDS) {
+          let n = asList(x.data && x.data[field3]).find((m) => isPlainObject(m) && m.id === id);
           if (n) return { node: n, stage: x };
         }
       return null;
-    }, foldMoved = (st9, own) => {
-      if (!rewrite || !isPlainObject(st9.data)) return st9;
-      let data = { ...st9.data };
-      for (let { field: field2 } of NODE_FIELDS)
-        Array.isArray(data[field2]) && (data[field2] = data[field2].filter((n) => {
+    }, foldMoved = (st10, own) => {
+      if (!rewrite || !isPlainObject(st10.data)) return st10;
+      let data = { ...st10.data };
+      for (let { field: field3 } of NODE_FIELDS)
+        Array.isArray(data[field3]) && (data[field3] = data[field3].filter((n) => {
           if (!(isPlainObject(n) && n.id && seen.has(n.id) && !own.has(n.id))) return !0;
           let at = findNode(n.id);
           return at ? (mergeNode(at.node, n, { stage: stageLabel(at.stage.key), node: n.id }), skipped++, !1) : !0;
         }));
-      return { ...st9, data };
+      return { ...st10, data };
     };
     for (let v of vols || [])
       for (let st0 of v.stages || []) {
-        let hit0 = stages.find((x) => x.key === st0.key), st9 = foldMoved(JSON.parse(JSON.stringify(st0)), new Set(hit0 ? idsOf(hit0) : [])), hit = hit0;
+        let hit0 = stages.find((x) => x.key === st0.key), st10 = foldMoved(JSON.parse(JSON.stringify(st0)), new Set(hit0 ? idsOf(hit0) : [])), hit = hit0;
         if (!hit) {
-          let fresh = NODE_FIELDS.some(({ field: field2 }) => asList(st9.data && st9.data[field2]).length > 0);
+          let fresh = NODE_FIELDS.some(({ field: field3 }) => asList(st10.data && st10.data[field3]).length > 0);
           if (rewrite && idsOf(st0).length && !fresh) continue;
-          stages.push(st9), idsOf(st9).forEach((id) => seen.add(id));
+          stages.push(st10), idsOf(st10).forEach((id) => seen.add(id));
           continue;
         }
-        let where = { stage: stageLabel(st9.key) }, nodeKeys = NODE_FIELDS.map((f) => f.field);
-        isPlainObject(st9.data) && isPlainObject(hit.data) && mergeFields(hit.data, st9.data, nodeKeys, where);
-        for (let { field: field2 } of NODE_FIELDS)
-          for (let n of asList(st9.data && st9.data[field2])) {
-            let list = Array.isArray(hit.data[field2]) ? hit.data[field2] : hit.data[field2] = asList(hit.data[field2]), k = list.findIndex((x) => isPlainObject(x) && isPlainObject(n) && x.id && x.id === n.id);
+        let where = { stage: stageLabel(st10.key) }, nodeKeys = NODE_FIELDS.map((f) => f.field);
+        isPlainObject(st10.data) && isPlainObject(hit.data) && mergeFields(hit.data, st10.data, nodeKeys, where);
+        for (let { field: field3 } of NODE_FIELDS)
+          for (let n of asList(st10.data && st10.data[field3])) {
+            let list = Array.isArray(hit.data[field3]) ? hit.data[field3] : hit.data[field3] = asList(hit.data[field3]), k = list.findIndex((x) => isPlainObject(x) && isPlainObject(n) && x.id && x.id === n.id);
             k >= 0 ? mergeNode(list[k], n, { ...where, node: n.id }) : (list.push(n), isPlainObject(n) && n.id && seen.add(n.id));
           }
       }
@@ -15952,21 +15954,21 @@ ${IMPORT_LINE_INDEX}
       ).filter((k) => k >= 0));
     return { lines: out, notes };
   }
-  function importLineTable(lines2) {
-    return (lines2 || []).map(
+  function importLineTable(lines3) {
+    return (lines3 || []).map(
       (l) => `- ${l.编号}「${clueText2(l.名称)}」${l.文档里的序号 ? `（文档第 ${l.文档里的序号} 条）` : ""}${l.主要人物 ? ` 人物：${[].concat(l.主要人物).join("、")}` : ""}${l.开启条件原文 ? ` 开启：${clueText2(l.开启条件原文)}` : ""}${l.关系 ? ` 关系：${clueText2(l.关系)}` : ""}`
     ).join(`
 `);
   }
-  function importLineBatches(lines2, partNo) {
-    let mine = (lines2 || []).filter((l) => !Array.isArray(l.parts) || l.parts.includes(partNo)).map((l) => l.编号), out = [];
+  function importLineBatches(lines3, partNo) {
+    let mine = (lines3 || []).filter((l) => !Array.isArray(l.parts) || l.parts.includes(partNo)).map((l) => l.编号), out = [];
     for (let i = 0; i < mine.length; i += IMPORT_LINES_PER_CALL) out.push(mine.slice(i, i + IMPORT_LINES_PER_CALL));
     return out;
   }
   function importLineDraftMessages({
     part,
     index,
-    lines: lines2,
+    lines: lines3,
     only = [],
     mainLines = "",
     tableCatalog = "",
@@ -15987,12 +15989,12 @@ ${CLUE_LINE_RULES.join(`
   - 写的是「默认在 8 之后」：只写 {线: 文档第 8 条对应的编号 == 完成}，不要再加别的事实或门槛。写的是主线某一步之后：写开启时段或 {线: 主线编号 == …}。
   - 写的是表格和事件都表达不准的经历（「至少与三名队员有单独往来后」）：写「开启方式: 人工」，原话放进「原开启条件」。
 · 篇幅默认每条 1～2 个阶段、每个阶段 1～3 个节点，作者备注只写要点；原文里必要的结果和依赖不要为了篇幅删掉。${only.length ? `
-· 这一次**只写** ${only.join("、")} 这几条（本段里别的支线另外再写），每一条都要写。` : ""}`, mine = (lines2 || []).filter((l) => only.includes(l.编号)), said = (l) => [clueText2(l.开启条件原文), clueText2(l.关系)].filter(Boolean).join("；"), gate = mine.length ? `【这一次要写的线：文档对开启的说法】
+· 这一次**只写** ${only.join("、")} 这几条（本段里别的支线另外再写），每一条都要写。` : ""}`, mine = (lines3 || []).filter((l) => only.includes(l.编号)), said = (l) => [clueText2(l.开启条件原文), clueText2(l.关系)].filter(Boolean).join("；"), gate = mine.length ? `【这一次要写的线：文档对开启的说法】
 ${mine.map((l) => `- ${l.编号}：${said(l) || "（文档没写）"}`).join(`
 `)}
 照这里写开启条件：说法是「独立」或没写的，不写开启条件、不写开启时段，也不要加主线的条件；写了「在 N 之后」的，只等文档第 N 条对应的那条线；别的说法照原意写，写不准就人工。` : "", user = [
       `【线身份表（整份文档统一的支线编号，只能用这些）】
-${importLineTable(lines2)}`,
+${importLineTable(lines3)}`,
       mainLines && `【项目里已有的主线（只有文档明确提到主线时才引用）】
 ${mainLines}`,
       tableCatalog,
@@ -16473,7 +16475,7 @@ ${mainLines}`,
         volumes,
         facts.map((f) => f.code)
       ).map((x) => [x.code, x])
-    ), row2 = (f, i) => {
+    ), row3 = (f, i) => {
       let c = ctx2.get(f.code) || {}, have = f.now || storedLabel(stored, f.code, c), where = [c.stage, c.nodeName].filter(Boolean).join("，");
       return `<div class="pi-prebuild-row" data-fr-row="${i}">
           <div class="pi-fr-hd"><b>${esc(where || f.code)}</b><span class="pi-meta">${esc(f.code)}</span>${f.orphan || c.orphan ? '<span class="pi-badge is-warn">大纲里没有节点产出它</span>' : ""}<span class="pi-badge pi-fr-st${have && have.label ? " is-ok" : ""}" data-fr-st="${i}">${have && have.label ? "已填" : "待填"}</span></div>
@@ -16495,7 +16497,7 @@ ${mainLines}`,
           <p>这两样每一轮都会发给填表模型，所以<b>不能写出答案</b>：写「打开抽屉、读到单据时」，不写单据上写了什么。</p>
           <p class="is-example">例　标签：抽屉里的单据　｜　写到哪一步：主角打开抽屉、读到单据内容时算拿到；只看到锁着的抽屉不算</p></details>
           <div class="pi-tools is-c1"${intro ? " hidden" : ""}><button type="button" class="pi-btn is-sm" data-fr-check>检查</button></div>
-          ${facts.map(row2).join("")}</div>`;
+          ${facts.map(row3).join("")}</div>`;
   }
   function staleLabelCount(project, c) {
     let fb = (project.clue.bindings.facts || [])[0], found = fb && c.snap.tables ? findSheet2(c.snap.tables, fb.表) : null;
@@ -16522,18 +16524,18 @@ ${mainLines}`,
         volumes,
         facts.map((f) => f.code)
       ).map((x) => [x.code, x])
-    ), unsure = /* @__PURE__ */ new Map(), field2 = (i, k) => box.querySelector(`[data-${prefix}-${k}="${i}"]`), status = box.querySelector("[data-fr-status]"), secretsReady = Promise.all(
+    ), unsure = /* @__PURE__ */ new Map(), field3 = (i, k) => box.querySelector(`[data-${prefix}-${k}="${i}"]`), status = box.querySelector("[data-fr-status]"), secretsReady = Promise.all(
       ids.map(
         (id) => view.data.imports.get(id) ? Promise.resolve(view.data.imports.get(id)) : view.data.imports.load(id).catch(() => null)
       )
     ).then((jobs) => {
       let missing = jobs.filter((j) => !j).length;
-      secrets = [.../* @__PURE__ */ new Set([...jobs.filter(Boolean).flatMap((j) => importSecretNames(j.index) || []), ...projectSecretNames(project) || []])], secretsNote = missing ? `有${missing}份导入记录无法读取，未核对其中的保密名称。` : "", secretsNote && (status.textContent = `${status.textContent} ${secretsNote}`), facts.forEach((_, i) => (field2(i, "label").value.trim() || field2(i, "crit").value.trim()) && check(i));
+      secrets = [.../* @__PURE__ */ new Set([...jobs.filter(Boolean).flatMap((j) => importSecretNames(j.index) || []), ...projectSecretNames(project) || []])], secretsNote = missing ? `有${missing}份导入记录无法读取，未核对其中的保密名称。` : "", secretsNote && (status.textContent = `${status.textContent} ${secretsNote}`), facts.forEach((_, i) => (field3(i, "label").value.trim() || field3(i, "crit").value.trim()) && check(i));
     }), reviewed = /* @__PURE__ */ new Map(), made = /* @__PURE__ */ new Map(), isMade = (code, label, criterion) => {
       let m = made.get(code);
       return !!m && m.label === label && m.criterion === criterion;
     }, isWhole = (code, label, criterion) => isMade(code, label, criterion) && made.get(code).whole, check = (i) => {
-      let f = facts[i], value = { label: field2(i, "label").value.trim(), criterion: field2(i, "crit").value.trim() }, r = factLabelCheck({ ...value, unsure: unsure.get(f.code) || "" }, ctx2.get(f.code) || {}, { secrets }), out = box.querySelector(`[data-fr-warn="${i}"]`), rv = reviewed.get(f.code), same2 = rv && rv.label === value.label && rv.criterion === value.criterion, warns = [...r.warns], notes = [...r.notes];
+      let f = facts[i], value = { label: field3(i, "label").value.trim(), criterion: field3(i, "crit").value.trim() }, r = factLabelCheck({ ...value, unsure: unsure.get(f.code) || "" }, ctx2.get(f.code) || {}, { secrets }), out = box.querySelector(`[data-fr-warn="${i}"]`), rv = reviewed.get(f.code), same2 = rv && rv.label === value.label && rv.criterion === value.criterion, warns = [...r.warns], notes = [...r.notes];
       if (same2 && rv.leak) warns.push(`会透露答案：${rv.what || "标签或口径里写出了查到的内容"}`);
       else if (!same2) for (let s of r.suspects) warns.push(`${s.where}里有答案的片段「${s.piece}」`);
       return same2 && rv.fixed && notes.push(`已自动改写，原来的写法会透露答案（${rv.what || "写出了查到的内容"}）`), out.innerHTML = [
@@ -16543,10 +16545,10 @@ ${mainLines}`,
     }, rowState = (i, warn) => {
       let b = box.querySelector(`[data-fr-st="${i}"]`);
       if (!b) return;
-      let has = !!field2(i, "label").value.trim();
+      let has = !!field3(i, "label").value.trim();
       b.className = `pi-badge pi-fr-st${has ? warn ? " is-warn" : " is-ok" : ""}`, b.textContent = has ? warn ? "标黄" : "已填" : "待填", sync();
     }, dlg = root.closest && root.closest(".pi-dialog") || root, mainBtn = gate ? [...dlg.querySelectorAll("[data-dlg]")].find((b) => b.classList.contains("is-primary")) : null, startBtn = box.querySelector("[data-fr-auto]"), running2 = !1, sync = () => {
-      let left = facts.filter((_, i) => !field2(i, "label").value.trim()).length, open = facts.filter((_, i) => !field2(i, "label").value.trim() || !field2(i, "crit").value.trim()).length;
+      let left = facts.filter((_, i) => !field3(i, "label").value.trim()).length, open = facts.filter((_, i) => !field3(i, "label").value.trim() || !field3(i, "crit").value.trim()).length;
       mainBtn && (mainBtn.disabled = running2 || left > 0, mainBtn.textContent = running2 ? "正在填写…" : left ? `还差${left}条没填` : gate), startBtn && !running2 && (startBtn.classList.remove("is-busy"), startBtn.classList.toggle("is-done", !open), startBtn.innerHTML = startFace(open ? `开始自动填写（还有${open}条）` : ""));
     };
     sync(), box.addEventListener("input", (event) => {
@@ -16554,7 +16556,7 @@ ${mainLines}`,
       m && (unsure.delete(facts[Number(m.dataset.frRow)].code), check(Number(m.dataset.frRow)));
     });
     let got2 = /* @__PURE__ */ new Set(), reviewItem = ({ f, i }) => {
-      let c = ctx2.get(f.code) || {}, label = field2(i, "label").value.trim(), criterion = field2(i, "crit").value.trim();
+      let c = ctx2.get(f.code) || {}, label = field3(i, "label").value.trim(), criterion = field3(i, "crit").value.trim();
       return {
         code: f.code,
         label,
@@ -16567,7 +16569,7 @@ ${mainLines}`,
       };
     };
     async function reviewRows(rows2) {
-      let todo = rows2.filter(({ i }) => field2(i, "label").value.trim() || field2(i, "crit").value.trim()), fixed = 0, errs = [];
+      let todo = rows2.filter(({ i }) => field3(i, "label").value.trim() || field3(i, "crit").value.trim()), fixed = 0, errs = [];
       got2 = /* @__PURE__ */ new Set();
       let rows22 = todo.map((r) => ({ ...r, item: reviewItem(r) }));
       if (await runLabelPool(
@@ -16583,10 +16585,10 @@ ${mainLines}`,
       ), fixed = 0;
       for (let [k, { f, i }] of todo.entries()) {
         let v = map.get(f.code), sent = items[k], o = reviewOutcome(v, sent);
-        if (!(field2(i, "label").value.trim() !== sent.label || field2(i, "crit").value.trim() !== sent.criterion) && !(!v || v.leak === null || v.leak === void 0))
+        if (!(field3(i, "label").value.trim() !== sent.label || field3(i, "crit").value.trim() !== sent.criterion) && !(!v || v.leak === null || v.leak === void 0))
           if (got2.add(f.code), v.leak && o.ok && isWhole(f.code, sent.label, sent.criterion)) {
-            field2(i, "label").value = o.label, field2(i, "crit").value = o.criterion, fixed++;
-            let now = { label: field2(i, "label").value.trim(), criterion: field2(i, "crit").value.trim() };
+            field3(i, "label").value = o.label, field3(i, "crit").value = o.criterion, fixed++;
+            let now = { label: field3(i, "label").value.trim(), criterion: field3(i, "crit").value.trim() };
             made.set(f.code, { ...now, whole: !0 }), reviewed.set(f.code, { ...now, leak: !1, fixed: !0, what: v.what });
           } else
             reviewed.set(f.code, { label: sent.label, criterion: sent.criterion, leak: !!v.leak, what: v.what });
@@ -16603,7 +16605,7 @@ ${mainLines}`,
       btn.disabled = !0, status.innerHTML = '<span class="pi-spin"></span> 正在检查是否透露答案…';
       try {
         await secretsReady;
-        let sentRows = rows2.filter(({ i }) => field2(i, "label").value.trim() || field2(i, "crit").value.trim());
+        let sentRows = rows2.filter(({ i }) => field3(i, "label").value.trim() || field3(i, "crit").value.trim());
         await reviewRows(sentRows);
         let missed = sentRows.filter(({ f }) => !got2.has(f.code)).length, warned = facts.reduce((n, _, i) => n + (check(i) ? 1 : 0), 0);
         status.textContent = `${secretsNote}${missed ? `${missed}条尚未检查，可再点一次。` : ""}${warned ? `${warned}条标黄，原因见黄字。` : missed ? "" : "未发现问题。"}`;
@@ -16613,8 +16615,8 @@ ${mainLines}`,
         btn.disabled = !1;
       }
     }), box.querySelector("[data-fr-auto]").addEventListener("click", async (event) => {
-      let btn = event.currentTarget, todo = facts.map((f, i) => ({ f, i })).filter(({ i }) => !field2(i, "label").value.trim() || !field2(i, "crit").value.trim()), needReview = () => facts.map((f, i) => ({ f, i })).filter(({ f, i }) => {
-        let label = field2(i, "label").value.trim(), criterion = field2(i, "crit").value.trim(), rv = reviewed.get(f.code);
+      let btn = event.currentTarget, todo = facts.map((f, i) => ({ f, i })).filter(({ i }) => !field3(i, "label").value.trim() || !field3(i, "crit").value.trim()), needReview = () => facts.map((f, i) => ({ f, i })).filter(({ f, i }) => {
+        let label = field3(i, "label").value.trim(), criterion = field3(i, "crit").value.trim(), rv = reviewed.get(f.code);
         return isWhole(f.code, label, criterion) && !(rv && !rv.leak && rv.label === label && rv.criterion === criterion);
       });
       if (!todo.length && !needReview().length) return status.textContent = "都已经填好了。要重新生成，先清空对应的框。";
@@ -16642,14 +16644,14 @@ ${mainLines}`,
                 r.missing.push(f.code);
                 continue;
               }
-              let lf = field2(i, "label"), cf = field2(i, "crit"), whole = !lf.value.trim() && !cf.value.trim();
+              let lf = field3(i, "label"), cf = field3(i, "crit"), whole = !lf.value.trim() && !cf.value.trim();
               lf.value.trim() || (lf.value = v.label), cf.value.trim() || (cf.value = v.criterion), made.set(f.code, { label: lf.value.trim(), criterion: cf.value.trim(), whole }), v.unsure && unsure.set(f.code, v.unsure);
             }
             batch.forEach(({ i }) => check(i)), wrote += batch.length, prog.real(wrote / todo.length * 70, `已写${wrote}/${todo.length}条`);
           }),
           (e) => genErrs.push(e)
         ), genErrs.length && genErrs.length === batches.length) throw genErrs[0];
-        for (let { f, i } of todo) !field2(i, "label").value.trim() && !r.missing.includes(f.code) && r.missing.push(f.code);
+        for (let { f, i } of todo) !field3(i, "label").value.trim() && !r.missing.includes(f.code) && r.missing.push(f.code);
         todo.length && prog.step("第2步：检查有没有透露答案", 97, 25e3);
         let fixed = 0, reviewFailed = "", toReview = needReview();
         try {
@@ -16657,11 +16659,11 @@ ${mainLines}`,
         } catch (error) {
           reviewFailed = `检查未完成（${error.message}），下方按字面比对标出可能透露答案之处。`;
         }
-        let missed = toReview.filter(({ f }) => !got2.has(f.code)).length, warned = facts.reduce((n, _, i) => n + (check(i) ? 1 : 0), 0), got22 = todo.filter(({ i }) => field2(i, "label").value.trim()).length;
+        let missed = toReview.filter(({ f }) => !got2.has(f.code)).length, warned = facts.reduce((n, _, i) => n + (check(i) ? 1 : 0), 0), got22 = todo.filter(({ i }) => field3(i, "label").value.trim()).length;
         prog.done(`完成：已填好${got22}/${todo.length}条${warned ? `，${warned}条标黄` : ""}`), keep && (got22 || fixed) && keepLabels(
           view,
           facts.map((f, i) => {
-            let label = field2(i, "label").value.trim(), criterion = field2(i, "crit").value.trim();
+            let label = field3(i, "label").value.trim(), criterion = field3(i, "crit").value.trim();
             return { code: f.code, label, criterion, src: box.__srcOf(f.code, label, criterion) };
           })
         ), status.textContent = `${secretsNote}${reviewFailed}已填写${todo.length - r.missing.length}条${r.missing.length ? `；${r.missing.length}条未生成（${r.missing.join("、")}），可再点一次或手动填写` : ""}。${fixed ? `${fixed}条原写法会透露答案，已自动改写。` : ""}${missed && !reviewFailed ? `${missed}条尚未检查，再点「开始自动填写」仅补检查；直接确认的话，以后可在「修改线索」中点「检查」。` : ""}${warned ? `${warned}条标黄，原因见黄字，按提示修改文字后黄色消失；不修改也可以，标黄不影响导入。` : missed || reviewFailed ? "" : "未发现问题，可直接确认。"}`;
@@ -16829,12 +16831,12 @@ ${mainLines}`,
   }
   function clueOnInput(view, target) {
     if (target.dataset.clueLineQ === void 0) return !1;
-    let st9 = view.tabState("run"), q = (st9.lineQ = target.value).trim().toLowerCase(), card = target.closest(".pi-line-card"), c = view.runtime.clue.compute();
+    let st10 = view.tabState("run"), q = (st10.lineQ = target.value).trim().toLowerCase(), card = target.closest(".pi-line-card"), c = view.runtime.clue.compute();
     if (!card || !c) return !0;
-    let byId = new Map((c.state.lineStates || []).map((s) => [s.line.id, s])), tab = st9.lineTab || "now";
-    return card.querySelectorAll("[data-line-row]").forEach((row2) => {
-      let s = byId.get(row2.dataset.lineRow);
-      row2.hidden = !!q && !(s && lineMatches(s, q));
+    let byId = new Map((c.state.lineStates || []).map((s) => [s.line.id, s])), tab = st10.lineTab || "now";
+    return card.querySelectorAll("[data-line-row]").forEach((row3) => {
+      let s = byId.get(row3.dataset.lineRow);
+      row3.hidden = !!q && !(s && lineMatches(s, q));
     }), card.querySelectorAll("[data-line-grp]").forEach((g) => g.hidden = !q && g.dataset.lineGrp !== tab), card.querySelectorAll('[data-act="clue-line-tab"]').forEach((b) => b.classList.toggle("is-sel", !q && b.dataset.tab === tab)), !0;
   }
   async function foldAutoToggle(view, target) {
@@ -16912,7 +16914,7 @@ ${mainLines}`,
   function lineCard(c, project, st72 = {}, fold = null, view0 = null) {
     let list = c.state.lineStates || [];
     if (!list.length) return "";
-    let foldOf = new Map((fold && fold.lines || []).map((x) => [x.id, x])), autoFold = !!fold && !!FOLD_AUTO_RELEASED[fold.storage] && !fold.blocked, sides = list.filter((s) => s.line.kind === "side"), mains = list.filter((s) => s.line.kind === "main"), limit = c.plan ? c.plan.slots.limit : 1, used = c.plan ? c.plan.slots.used.length : 0, row2 = (s) => {
+    let foldOf = new Map((fold && fold.lines || []).map((x) => [x.id, x])), autoFold = !!fold && !!FOLD_AUTO_RELEASED[fold.storage] && !fold.blocked, sides = list.filter((s) => s.line.kind === "side"), mains = list.filter((s) => s.line.kind === "main"), limit = c.plan ? c.plan.slots.limit : 1, used = c.plan ? c.plan.slots.used.length : 0, row3 = (s) => {
       let l = s.line, wait = lineWaitText(s, c, isPlainObject(project.clue.labels) ? project.clue.labels : {}), btn = (v, label, cls = "", tip = "") => `<button type="button" class="pi-btn is-sm${cls}" data-act="clue-line" data-id="${esc(l.id)}" data-value="${v}"${tip ? ` title="${esc(tip)}"` : ""}>${label}</button>`, canEnter = !s.started && !s.manual.state && s.eligible && (l.kind === "main" ? !c.prog.mainPaused : !s.waitMain), inQueue = l.kind === "side" && l.mode !== "manual" && s.state === "可开启" && s.entries.length && c.plan && !c.plan.slots.full && !c.prog.sidePaused, undo = s.manual.evidence && s.manual.evidence !== "manual" && !s.manual.evidence.startsWith("auto@") && s.state === "进行中" ? btn("deny", "取消开启", " is-ghost", "取消自动开启：这条线回到可开启，同一次依据不再自动开启") : s.manual.started || s.manual.state ? btn("", "撤销手动操作", " is-ghost", "撤销这条线上的进入、暂停、完成、放弃操作，恢复按条件自动判断") : "", checks = !s.started && !s.manual.state && l.mode !== "manual" ? tableCondChecks2(l.open, c.snap.tables || {}) : [], stuck = checks.filter((x) => x.stuck), fix = stuck.length ? `<p class="pi-hint is-warn">开启条件读不出：${esc(stuck.flatMap((x) => x.notes).join("；"))}。这条线会一直无法开启。 <button type="button" class="pi-btn is-sm" data-act="clue-line-manual" data-id="${esc(l.id)}" title="开启条件移到「原开启条件」仅供查看，不再自动判断；执行页显示「进入」按钮，需要时点击">改为手动</button></p>` : "", orig = l.origCond ? `<p class="pi-hint">原开启条件（自行判断何时点「进入」）：${esc(l.origCond)}</p>` : "", tierBtns = checks.filter((x) => x.tierPending).map(
         (x) => `<p class="pi-hint is-warn">档位顺序由AI推断：${esc(x.tierPending.join(" < "))}。确认前这个条件视为未知。 <button type="button" class="pi-btn is-sm" data-act="clue-tiers" data-tiers="${esc(JSON.stringify(x.tierPending))}" title="大纲中使用相同档位的条件都视为已确认">顺序正确</button> <button type="button" class="pi-btn is-sm is-ghost" data-act="clue-line-manual" data-id="${esc(l.id)}">改为手动</button></p>`
       ).join(""), group = l.kind === "side" ? sides : mains, k = group.indexOf(s), arrows = group.length > 1 ? `<button type="button" class="pi-btn is-sm is-ghost" data-act="clue-line-move" data-id="${esc(l.id)}" data-dir="-1"${k <= 0 ? " disabled" : ""}>上移</button><button type="button" class="pi-btn is-sm is-ghost" data-act="clue-line-move" data-id="${esc(l.id)}" data-dir="1"${k >= group.length - 1 ? " disabled" : ""}>下移</button>` : "", title2 = lineDisplayName(l), main0 = canEnter ? btn("enter", "进入", " is-primary", l.mode === "manual" ? "手动开始这条线" : "主角已开始这件事但填表未识别时使用，或需要立即开始") : s.state === "暂停" ? btn("resume", "继续", " is-primary") : "", g1 = [...canEnter || s.state === "进行中" ? [btn("pause", "暂停", " is-ghost")] : []].join("") + arrows, g2 = [
@@ -16923,14 +16925,14 @@ ${mainLines}`,
       return `<div class="pi-line-row" data-line-row="${esc(l.id)}"${lineMatches(s, st72.lineQ) ? "" : " hidden"}><div class="pi-line-head"><b class="pi-line-name">${esc(title2)}</b><div class="pi-line-acts">${main0}${more}</div></div>
           <div class="pi-line-tags"><span class="pi-badge">${l.kind === "main" ? "主线" : "支线"}</span><span class="pi-badge ${s.missed ? "" : LINE_BADGE[s.state] || ""}">${esc(s.missed ? "已错过" : s.state)}</span>${l.kind === "side" && c.prog.sidePaused && s.state === "进行中" ? '<span class="pi-meta">全部支线已暂停</span>' : ""}${fm ? `<span class="pi-meta">${esc(fm.tag)}</span>` : ""}</div>
           ${l.brief ? `<p class="pi-hint">${esc(l.brief)}</p>` : ""}${wait ? `<p class="pi-hint">${esc(maskFacts(wait))}</p>` : ""}${fm ? fm.kept : ""}${orig}${fix}${tierBtns}</div>`;
-    }, mainBtn = mains.length > 1 || c.prog.mainPaused ? `<button type="button" class="pi-btn is-sm${c.prog.mainPaused ? " is-primary" : ""}" data-act="clue-pause-mains" data-value="${c.prog.mainPaused ? "" : "1"}" title="${c.prog.mainPaused ? "主线恢复注入，原进行中的主线继续" : "所有主线暂停推进与注入；支线照常"}">${c.prog.mainPaused ? "继续全部主线" : "暂停全部主线"}</button>` : "", sideBtn = sides.length ? `<button type="button" class="pi-btn is-sm${c.prog.sidePaused ? " is-primary" : ""}" data-act="clue-pause-side" data-value="${c.prog.sidePaused ? "" : "1"}" title="${c.prog.sidePaused ? "支线恢复注入和提示，原进行中的支线继续" : "所有支线停止注入和新提示；主线照常，进度和名额保留"}">${c.prog.sidePaused ? "继续全部支线" : "暂停全部支线"}</button>` : "", endNote = fold ? fold.blocked ? `<p class="pi-hint">${esc(fold.blocked)}，不收起。</p>` : autoFold ? "" : '<p class="pi-hint">可在「⋯」里手动收起。</p>' : "", foldedRows = fold ? fold.status.filter((x) => x.st === "folded" || x.st === "lost").length : 0, chatFold = autoFold && project.clue.foldAuto !== !1 ? view0.runtime.clue.foldChat() : "on", ask2 = chatFold === "" && fold.lines.some((x) => x.rows) ? '<p class="pi-hint">本聊天尚未开启自动收起。 <button type="button" class="pi-btn is-sm" data-act="clue-fold-chat" data-value="ask">开启</button></p>' : chatFold === "off" ? '<p class="pi-hint">本聊天不收起。 <button type="button" class="pi-btn is-sm" data-act="clue-fold-chat" data-value="ask">开启</button></p>' : "", endFoot = fold && fold.records.length ? `<div class="pi-line-endfoot"><span class="pi-meta">${foldedRows ? `已收起${foldedRows}行` : ""}</span><span class="pi-spacer"></span><button type="button" class="pi-btn is-sm is-ghost" data-act="clue-fold-log">收起记录</button></div>` : "", body = list.map(row2).join("");
+    }, mainBtn = mains.length > 1 || c.prog.mainPaused ? `<button type="button" class="pi-btn is-sm${c.prog.mainPaused ? " is-primary" : ""}" data-act="clue-pause-mains" data-value="${c.prog.mainPaused ? "" : "1"}" title="${c.prog.mainPaused ? "主线恢复注入，原进行中的主线继续" : "所有主线暂停推进与注入；支线照常"}">${c.prog.mainPaused ? "继续全部主线" : "暂停全部主线"}</button>` : "", sideBtn = sides.length ? `<button type="button" class="pi-btn is-sm${c.prog.sidePaused ? " is-primary" : ""}" data-act="clue-pause-side" data-value="${c.prog.sidePaused ? "" : "1"}" title="${c.prog.sidePaused ? "支线恢复注入和提示，原进行中的支线继续" : "所有支线停止注入和新提示；主线照常，进度和名额保留"}">${c.prog.sidePaused ? "继续全部支线" : "暂停全部支线"}</button>` : "", endNote = fold ? fold.blocked ? `<p class="pi-hint">${esc(fold.blocked)}，不收起。</p>` : autoFold ? "" : '<p class="pi-hint">可在「⋯」里手动收起。</p>' : "", foldedRows = fold ? fold.status.filter((x) => x.st === "folded" || x.st === "lost").length : 0, chatFold = autoFold && project.clue.foldAuto !== !1 ? view0.runtime.clue.foldChat() : "on", ask2 = chatFold === "" && fold.lines.some((x) => x.rows) ? '<p class="pi-hint">本聊天尚未开启自动收起。 <button type="button" class="pi-btn is-sm" data-act="clue-fold-chat" data-value="ask">开启</button></p>' : chatFold === "off" ? '<p class="pi-hint">本聊天不收起。 <button type="button" class="pi-btn is-sm" data-act="clue-fold-chat" data-value="ask">开启</button></p>' : "", endFoot = fold && fold.records.length ? `<div class="pi-line-endfoot"><span class="pi-meta">${foldedRows ? `已收起${foldedRows}行` : ""}</span><span class="pi-spacer"></span><button type="button" class="pi-btn is-sm is-ghost" data-act="clue-fold-log">收起记录</button></div>` : "", body = list.map(row3).join("");
     if (list.length === 1 && (body += lineGroup(list[0]) === "end" ? endNote + ask2 + endFoot : endFoot), list.length > 1) {
       let q = cellText2(st72.lineQ), tab = LINE_TABS.some(([k]) => k === st72.lineTab) ? st72.lineTab : "now", of = (g) => list.filter((s) => lineGroup(s) === g), empty2 = { now: "暂无进行中的剧情线。", idle: "暂无未进行的剧情线。", end: "暂无已结束的剧情线。" };
       body = `<div class="pi-seg pi-line-seg">${LINE_TABS.map(([k, label]) => `<button type="button" class="pi-seg-btn${k === tab && !q ? " is-sel" : ""}" data-act="clue-line-tab" data-tab="${k}">${label}（${of(k).length}）</button>`).join("")}</div>
         ${list.length > 8 ? `<input class="pi-inp pi-line-search" data-clue-line-q placeholder="搜索编号或名称" value="${esc(q)}">` : ""}
         ${LINE_TABS.map(([k]) => {
         let rows2 = of(k);
-        return `<div class="pi-line-grp" data-line-grp="${k}"${q || k === tab ? "" : " hidden"}>${k === "end" && rows2.length ? endNote + ask2 : ""}${rows2.map(row2).join("") || (q ? "" : `<p class="pi-hint">${empty2[k]}</p>`)}${k === "end" ? endFoot : ""}</div>`;
+        return `<div class="pi-line-grp" data-line-grp="${k}"${q || k === tab ? "" : " hidden"}>${k === "end" && rows2.length ? endNote + ask2 : ""}${rows2.map(row3).join("") || (q ? "" : `<p class="pi-hint">${empty2[k]}</p>`)}${k === "end" ? endFoot : ""}</div>`;
       }).join("")}`;
     }
     return `<div class="pi-card pi-line-card"><h3>剧情线${list.length > 1 ? `<span class="pi-meta">共${list.length}条</span>` : ""}${c.prog.mainPaused || c.prog.sidePaused ? `<span class="pi-spacer"></span>${c.prog.mainPaused ? mainBtn : ""}${c.prog.sidePaused ? sideBtn : ""}` : ""}</h3>
@@ -16942,8 +16944,8 @@ ${mainLines}`,
     return here || place ? `主角当前位置：${esc(here || "（表格未记录）")}${focus ? `；这一场的地点：${esc(place || "（大纲未写）")}` : ""}<br>` : "";
   }
   function stayNotice(view, c) {
-    let info = view.runtime.clue.stayInfo(), st9 = info && info.key ? stayState(view.runtime.progress().stays, chatMessages(), info) : null;
-    return st9 && st9.idle >= 7 ? `<p class="pi-hint is-warn">本场已连续${st9.idle}条回复未出现新发现。可让主角离开（点「已离开」）或暂停剧情；也可能是填表漏记，请对照正文检查。</p>` : "";
+    let info = view.runtime.clue.stayInfo(), st10 = info && info.key ? stayState(view.runtime.progress().stays, chatMessages(), info) : null;
+    return st10 && st10.idle >= 7 ? `<p class="pi-hint is-warn">本场已连续${st10.idle}条回复未出现新发现。可让主角离开（点「已离开」）或暂停剧情；也可能是填表漏记，请对照正文检查。</p>` : "";
   }
   function keepLabels(view, picked, pid = view.projectId) {
     let p = pid ? view.data.project(pid) : null;
@@ -17065,7 +17067,7 @@ ${mainLines}`,
     await Promise.all(Array.from({ length: Math.min(LABEL_CONCURRENCY, tasks.length) }, worker));
   }
   function labelsPendingHtml(project, c) {
-    let have = c && c.snap.facts || /* @__PURE__ */ new Map(), folded = c && c.snap.foldBusy || /* @__PURE__ */ new Set(), todo = labelsToPrepare(project.outline.volumes, project.clue.labels).filter((x) => !have.has(x.code) && !folded.has(x.code)), fresh = todo.filter((x) => !x.review).length, review = todo.length - fresh, lineOf = factLineOf(project.outline.volumes), lines2 = [...new Set(todo.map((x) => lineOf(x.code)).filter(Boolean))], who = lines2.length ? `${lines2.slice(0, 5).join("、")}${lines2.length > 5 ? ` 等${lines2.length}条线` : ""}：` : "", text2 = `${who}${[fresh && `${fresh}条线索的标签未准备`, review && `${review}条已生成、尚未检查是否透露答案`].filter(Boolean).join("，")}`, busy = labelJob ? labelProgress ? `正在准备${labelProgress.done} / ${labelProgress.total}` : "正在准备…" : "立即准备";
+    let have = c && c.snap.facts || /* @__PURE__ */ new Map(), folded = c && c.snap.foldBusy || /* @__PURE__ */ new Set(), todo = labelsToPrepare(project.outline.volumes, project.clue.labels).filter((x) => !have.has(x.code) && !folded.has(x.code)), fresh = todo.filter((x) => !x.review).length, review = todo.length - fresh, lineOf = factLineOf(project.outline.volumes), lines3 = [...new Set(todo.map((x) => lineOf(x.code)).filter(Boolean))], who = lines3.length ? `${lines3.slice(0, 5).join("、")}${lines3.length > 5 ? ` 等${lines3.length}条线` : ""}：` : "", text2 = `${who}${[fresh && `${fresh}条线索的标签未准备`, review && `${review}条已生成、尚未检查是否透露答案`].filter(Boolean).join("，")}`, busy = labelJob ? labelProgress ? `正在准备${labelProgress.done} / ${labelProgress.total}` : "正在准备…" : "立即准备";
     return todo.length ? `<div class="pi-row is-todo pi-labels-todo"><p class="pi-hint is-warn" title="${esc(todo.map((x) => x.code).join("、"))}">${text2}。未准备好的线开始后无法补表格行。</p><button type="button" class="pi-btn is-sm" data-act="clue-labels"${labelJob ? " disabled" : ""}>${busy}</button></div>` : "";
   }
   function unofferedHtml(c, project) {
@@ -17278,8 +17280,8 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
           view.renderBody(), foldRestoreToast(r);
         },
         "clue-line-tab"(view, target) {
-          let st9 = view.tabState("run");
-          st9.lineTab = target.dataset.tab, st9.lineQ = "", view.renderBody();
+          let st10 = view.tabState("run");
+          st10.lineTab = target.dataset.tab, st10.lineQ = "", view.renderBody();
         },
         "clue-line-move"(view, target) {
           view.runtime.clue.moveLine(target.dataset.id, Number(target.dataset.dir)), view.renderBody();
@@ -17760,7 +17762,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
   function lastCheckHtml(kp) {
     let log = Array.isArray(kp.log) ? kp.log : [], last = log[log.length - 1];
     if (!last) return "";
-    let row2 = (ok, text2, why) => `<p class="pi-hint"><span class="pi-badge ${ok ? "is-ok" : "is-warn"}">${ok ? "通过" : "没通过"}</span> ${esc(text2)}${why ? `：${esc(why)}` : ""}</p>`, items = [...last.facts.map((x) => row2(x.ok, x.label, x.check ? CHECK_WHY[x.check] : x.why)), ...last.conds.map((x) => row2(x.ok, x.text, x.why))];
+    let row3 = (ok, text2, why) => `<p class="pi-hint"><span class="pi-badge ${ok ? "is-ok" : "is-warn"}">${ok ? "通过" : "没通过"}</span> ${esc(text2)}${why ? `：${esc(why)}` : ""}</p>`, items = [...last.facts.map((x) => row3(x.ok, x.label, x.check ? CHECK_WHY[x.check] : x.why)), ...last.conds.map((x) => row3(x.ok, x.text, x.why))];
     return `<details class="pi-fold"><summary><b>上轮检测</b><span>${esc(kpSummary(last))}</span></summary>${items.join("") || '<p class="pi-hint">这一轮没有要判断的线索和条件。</p>'}${last.off ? `<p class="pi-hint is-warn">${esc(kpOffText(last.offKind))}</p>${last.offReason ? `<details class="pi-fold"><summary>查看原因（可能剧透）</summary><p class="pi-hint">${esc(last.offReason)}</p></details>` : ""}` : ""}</details>`;
   }
   function kpCard(view, project, c, d) {
@@ -18002,21 +18004,21 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
     let stage = (id) => volumes.flatMap((v) => v.stages).find((s) => s.id === id), locate = (uid) => {
       for (let v of volumes) for (let s of v.stages) for (let n of stageNodes(s.data)) if (isPlainObject(n.item) && nodeUid2(n.item) === uid) return n.item;
       return null;
-    }, each = (st9, fn) => {
-      if (!(!st9 || !isPlainObject(st9.data))) {
-        for (let k of STAGE_CONDS) st9.data[k] != null && (st9.data[k] = fn(st9.data[k]));
-        for (let n of stageNodes(st9.data)) if (isPlainObject(n.item)) for (let k of NODE_CONDS) n.item[k] != null && (n.item[k] = fn(n.item[k]));
+    }, each = (st10, fn) => {
+      if (!(!st10 || !isPlainObject(st10.data))) {
+        for (let k of STAGE_CONDS) st10.data[k] != null && (st10.data[k] = fn(st10.data[k]));
+        for (let n of stageNodes(st10.data)) if (isPlainObject(n.item)) for (let k of NODE_CONDS) n.item[k] != null && (n.item[k] = fn(n.item[k]));
       }
     };
     switch (q.op) {
       case "fallback":
-        for (let { uid, field: field2 } of q.nodes || []) {
+        for (let { uid, field: field3 } of q.nodes || []) {
           let it = locate(uid);
-          it && it[field2] != null && (it[field2] = withFallback(it[field2], q.items));
+          it && it[field3] != null && (it[field3] = withFallback(it[field3], q.items));
         }
         for (let id of q.ends || []) {
-          let st9 = stage(id);
-          st9 && st9.data && st9.data.结束条件 != null && (st9.data.结束条件 = withFallback(st9.data.结束条件, q.items));
+          let st10 = stage(id);
+          st10 && st10.data && st10.data.结束条件 != null && (st10.data.结束条件 = withFallback(st10.data.结束条件, q.items));
         }
         break;
       case "optional":
@@ -18026,8 +18028,8 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
         }
         break;
       case "gate": {
-        let st9 = stage(q.stage);
-        st9 && st9.data && (st9.data.进入条件 = withAll(st9.data.进入条件, q.nodes.map((uid) => ({ 节点: uid }))));
+        let st10 = stage(q.stage);
+        st10 && st10.data && (st10.data.进入条件 = withAll(st10.data.进入条件, q.nodes.map((uid) => ({ 节点: uid }))));
         break;
       }
       case "rename":
@@ -18313,6 +18315,50 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
     }
   });
 
+  // src/trpg/trpg-people.js
+  function mergeProfileField(key, old, add) {
+    let a = profText(old), b = profText(add);
+    if (!b || a === b) return a;
+    if (!a) return b;
+    let parts = [...new Set([...a.split("；"), ...b.split("；")].filter(Boolean))];
+    return key === "台词" ? parts.slice(0, 3).join("；") : parts.join("；").slice(0, 240);
+  }
+  function profileText(p) {
+    let name = String(p.名称 || "").trim(), pick = (k) => profText(p[k]), parts = [
+      pick("公开身份") && `公开身份：${pick("公开身份")}`,
+      pick("外貌") && `外貌：${pick("外貌")}`,
+      pick("性格") && `性格：${pick("性格")}`,
+      pick("口吻") && `说话方式：${pick("口吻")}`,
+      pick("对玩家的态度") && `对玩家的态度：${pick("对玩家的态度")}`,
+      pick("底线") && `底线：${pick("底线")}`,
+      pick("台词") && `台词示例：${pick("台词")}`
+    ].filter(Boolean);
+    return parts.length > (pick("公开身份") ? 1 : 0) ? `【${name}】出场时按下面的档案写，性格、口吻和底线不要偏离。
+${parts.join(`
+`)}` : "";
+  }
+  function peopleKeys(p) {
+    return [...new Set([p.名称, ...Array.isArray(p.别名) ? p.别名 : []].map((x) => String(x || "").trim()).filter((x) => x.length >= 2))];
+  }
+  function peopleLines(index, existing = [], seen = []) {
+    let people = index && Array.isArray(index.人物) ? index.人物 : [], have = /* @__PURE__ */ new Set([...seen, ...existing.flatMap((l) => [l.name, ...l.keys || []])]), lines3 = [], names2 = [];
+    for (let p of people) {
+      if (!isPlainObject(p) || !p.名称 || isSecret(p)) continue;
+      let name = String(p.名称).trim(), text2 = profileText(p), keys = peopleKeys(p);
+      if (!text2 || !keys.length || have.has(name)) continue;
+      let line = newLine(name, PEOPLE_GROUP);
+      lines3.push({ ...line, keys, constant: !1, stages: [{ ...newStage("档案"), text: text2 }] }), names2.push(name), have.add(name);
+    }
+    return { lines: lines3, names: names2 };
+  }
+  var PEOPLE_GROUP, PROFILE_KEYS, profText, isSecret, init_trpg_people = __esm({
+    "src/trpg/trpg-people.js"() {
+      init_outline();
+      init_personas();
+      PEOPLE_GROUP = "人物档案", PROFILE_KEYS = ["外貌", "性格", "口吻", "对玩家的态度", "底线", "台词"], profText = (v) => (Array.isArray(v) ? v.map((x) => String(x ?? "").trim()).filter(Boolean).join("；") : String(v ?? "").trim()).replace(/\s*\n\s*/g, "；"), isSecret = (p) => p.名字保密 === !0 || p.名字保密 === "true" || p.名字保密 === "是";
+    }
+  });
+
   // src/trpg/trpg-long-import.js
   var trpg_long_import_exports = {};
   __export(trpg_long_import_exports, {
@@ -18373,10 +18419,10 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
   });
   function splitLongText2(text2, { target = 8e3, overlap = 300 } = {}) {
     let src = String(text2 || "").replace(/\r\n?/g, `
-`), lines2 = src.split(`
+`), lines3 = src.split(`
 `), heads = [];
-    for (let i = 0, pos = 0; i < lines2.length; pos += lines2[i].length + 1, i++)
-      CHAPTER_HEAD2.test(lines2[i].trim()) && heads.push({ pos, title: lines2[i].trim().replace(/^#+\s*/, "") });
+    for (let i = 0, pos = 0; i < lines3.length; pos += lines3[i].length + 1, i++)
+      CHAPTER_HEAD2.test(lines3[i].trim()) && heads.push({ pos, title: lines3[i].trim().replace(/^#+\s*/, "") });
     let parts = [];
     (!heads.length || heads[0].pos > 0) && parts.push({ title: heads.length ? "开头" : "全文", start: 0, end: heads.length ? heads[0].pos : src.length }), heads.forEach((h, k) => parts.push({ title: h.title, start: h.pos, end: k + 1 < heads.length ? heads[k + 1].pos : src.length })), parts = parts.filter((p) => src.slice(p.start, p.end).trim());
     let out = [];
@@ -18456,10 +18502,10 @@ ${text2}` }
     ];
   }
   function salvageImportIndex2(text2) {
-    let lines2 = String(text2 || "").replace(/\r\n?/g, `
+    let lines3 = String(text2 || "").replace(/\r\n?/g, `
 `).split(`
 `), secs = [], cur = null;
-    for (let line of lines2) {
+    for (let line of lines3) {
       let m = /^([^\s#\-][^:：]*?)\s*[:：](.*)$/.exec(line);
       m ? secs.push(cur = { key: m[1].trim(), head: m[2], body: [] }) : cur && cur.body.push(line);
     }
@@ -18524,7 +18570,7 @@ ${s.body.join(`
         let name = String(p.名称), aliases = (Array.isArray(p.别名) ? p.别名 : []).map(String), same2 = [].concat(p.同一人 || []).map(String), hit = people.get(name) || [...same2, ...aliases].map((n) => byName.get(n)).find(Boolean);
         if (hit) {
           for (let [f, v] of Object.entries(p))
-            f === "名称" || f === "同一人" || (hit[f] == null || hit[f] === "" ? hit[f] = v : f === "别名" && (hit.别名 = [.../* @__PURE__ */ new Set([...hit.别名 || [], ...v || []])]));
+            f === "名称" || f === "同一人" || (PROFILE_KEYS.includes(f) ? hit[f] = mergeProfileField(f, hit[f], v) : hit[f] == null || hit[f] === "" ? hit[f] = v : f === "别名" && (hit.别名 = [.../* @__PURE__ */ new Set([...hit.别名 || [], ...v || []])]));
           hit.名称 !== name && (hit.别名 = [.../* @__PURE__ */ new Set([...hit.别名 || [], name])]), people.set(name, hit);
         } else {
           let entry = { ...p };
@@ -18727,7 +18773,7 @@ ${talk}`
     if (!isPlainObject(v)) throw new Error("格式不对：应该是「名字: 内容」");
     if (String(key).endsWith("/line"))
       return { line: isPlainObject(v[VOLUME_LINE_KEY]) ? v[VOLUME_LINE_KEY] : Object.values(v).map((x) => isPlainObject(x) && x[VOLUME_LINE_KEY]).find(isPlainObject) || v };
-    let looks = (x) => isPlainObject(x) && (NODE_FIELDS.some(({ field: field2 }) => field2 in x) || "AI指令" in x || "进入条件" in x || "结束条件" in x), pick = null;
+    let looks = (x) => isPlainObject(x) && (NODE_FIELDS.some(({ field: field3 }) => field3 in x) || "AI指令" in x || "进入条件" in x || "结束条件" in x), pick = null;
     if (want && looks(v[want])) pick = [want, v[want]];
     else
       for (let [, inner] of Object.entries(v))
@@ -18737,7 +18783,7 @@ ${talk}`
       entries.length === 1 && (pick = entries[0]);
     }
     if (!pick) throw new Error("回复里找不到这个阶段");
-    let nodes = NODE_FIELDS.reduce((n, { field: field2 }) => n + (Array.isArray(pick[1][field2]) ? pick[1][field2].length : 0), 0);
+    let nodes = NODE_FIELDS.reduce((n, { field: field3 }) => n + (Array.isArray(pick[1][field3]) ? pick[1][field3].length : 0), 0);
     if (oldNodes && !nodes) throw new Error("回复里这个阶段一个场景都没有（可能格式给错了），没有采用");
     return { stage: { key: pick[0], data: nodeMapsToLists(pick[1]) } };
   }
@@ -18794,8 +18840,8 @@ ${add}` : add;
       stages: v.stages.map((s) => {
         if (!isPlainObject(s.data)) return s;
         let data = Object.fromEntries(Object.entries(s.data).filter(([k]) => IMPORT_STAGE_KEYS2.includes(k)));
-        for (let { field: field2, kind } of NODE_FIELDS)
-          Array.isArray(data[field2]) && (data[field2] = data[field2].map((n) => {
+        for (let { field: field3, kind } of NODE_FIELDS)
+          Array.isArray(data[field3]) && (data[field3] = data[field3].map((n) => {
             if (!isPlainObject(n)) return n;
             let keep = {}, note = {}, authorKey = (k) => IMPORT_AUTHOR_KEYS2.includes(k) && !(kind === "world" && k === "来源");
             for (let [k, v2] of Object.entries(n))
@@ -18828,20 +18874,20 @@ ${add}` : add;
     return [...out].map(([short2, full]) => ({ short: short2, full }));
   }
   function importVisibleText2(volumes, mode2 = "clue") {
-    let out = [], stage = "", stageId = "", put = (layer, where, value, field2 = "") => {
+    let out = [], stage = "", stageId = "", put = (layer, where, value, field3 = "") => {
       let t = clueText(typeof value == "string" ? value : value == null ? "" : JSON.stringify(value));
-      t && out.push({ layer, where, text: t, stage, stageId, field: field2 });
+      t && out.push({ layer, where, text: t, stage, stageId, field: field3 });
     };
     for (let vol of volumes || [])
-      for (let st9 of vol.stages || []) {
-        let where = stageLabel(st9.key), data = isPlainObject(st9.data) ? st9.data : {};
-        if (stage = st9.key, stageId = st9.id || "", put("body", where, stripAuthorDeep2(String(st9.key || "")), "阶段名"), mode2 !== "clue") {
+      for (let st10 of vol.stages || []) {
+        let where = stageLabel(st10.key), data = isPlainObject(st10.data) ? st10.data : {};
+        if (stage = st10.key, stageId = st10.id || "", put("body", where, stripAuthorDeep2(String(st10.key || "")), "阶段名"), mode2 !== "clue") {
           for (let [k, v] of Object.entries(outlineStageData2(data))) put("body", where, v, k);
           continue;
         }
         put("body", where, data.AI指令, "AI指令"), put("body", where, data.时间范围, "时间范围");
-        for (let { field: field2 } of NODE_FIELDS)
-          for (let n of Array.isArray(data[field2]) ? data[field2] : []) {
+        for (let { field: field3 } of NODE_FIELDS)
+          for (let n of Array.isArray(data[field3]) ? data[field3] : []) {
             if (!isPlainObject(n)) {
               put("author", where, n);
               continue;
@@ -18924,10 +18970,10 @@ ${add}` : add;
       });
     let left = /* @__PURE__ */ new Set();
     for (let vol of volumes || [])
-      for (let st9 of vol.stages || [])
-        for (let { field: field2, kind } of NODE_FIELDS)
+      for (let st10 of vol.stages || [])
+        for (let { field: field3, kind } of NODE_FIELDS)
           if (kind !== "world")
-            for (let n of Array.isArray(st9.data && st9.data[field2]) ? st9.data[field2] : [])
+            for (let n of Array.isArray(st10.data && st10.data[field3]) ? st10.data[field3] : [])
               isPlainObject(n) && IMPORT_AUTHOR_KEYS2.forEach((k) => k in n && left.add(k));
     for (let k of left) out.push({ level: "error", text: `正式模组里还留着只给作者看的字段「${k}」` });
     if (!clue) return out;
@@ -19043,38 +19089,38 @@ ${add}` : add;
         k < 0 ? finds.push(d) : isPlainObject(d) && isPlainObject(finds[k]) && mergeFields(finds[k], d, ["事实"], { ...where, field: `发现 ${f}` });
       }
       return finds.length && (a.发现 = finds), mergeFields(a, b, ["id", "发现"], where), a;
-    }, idsOf = (st9) => NODE_FIELDS.flatMap(({ field: field2 }) => asList(st9.data && st9.data[field2]).map((n) => isPlainObject(n) ? n.id : "").filter(Boolean)), findNode = (id) => {
+    }, idsOf = (st10) => NODE_FIELDS.flatMap(({ field: field3 }) => asList(st10.data && st10.data[field3]).map((n) => isPlainObject(n) ? n.id : "").filter(Boolean)), findNode = (id) => {
       for (let x of stages)
-        for (let { field: field2 } of NODE_FIELDS) {
-          let n = asList(x.data && x.data[field2]).find((m) => isPlainObject(m) && m.id === id);
+        for (let { field: field3 } of NODE_FIELDS) {
+          let n = asList(x.data && x.data[field3]).find((m) => isPlainObject(m) && m.id === id);
           if (n) return { node: n, stage: x };
         }
       return null;
-    }, foldMoved = (st9, own) => {
-      if (!rewrite || !isPlainObject(st9.data)) return st9;
-      let data = { ...st9.data };
-      for (let { field: field2 } of NODE_FIELDS)
-        Array.isArray(data[field2]) && (data[field2] = data[field2].filter((n) => {
+    }, foldMoved = (st10, own) => {
+      if (!rewrite || !isPlainObject(st10.data)) return st10;
+      let data = { ...st10.data };
+      for (let { field: field3 } of NODE_FIELDS)
+        Array.isArray(data[field3]) && (data[field3] = data[field3].filter((n) => {
           if (!(isPlainObject(n) && n.id && seen.has(n.id) && !own.has(n.id))) return !0;
           let at = findNode(n.id);
           return at ? (mergeNode(at.node, n, { stage: stageLabel(at.stage.key), node: n.id }), skipped++, !1) : !0;
         }));
-      return { ...st9, data };
+      return { ...st10, data };
     };
     for (let v of vols || [])
       for (let st0 of v.stages || []) {
-        let hit0 = stages.find((x) => x.key === st0.key), st9 = foldMoved(JSON.parse(JSON.stringify(st0)), new Set(hit0 ? idsOf(hit0) : [])), hit = hit0;
+        let hit0 = stages.find((x) => x.key === st0.key), st10 = foldMoved(JSON.parse(JSON.stringify(st0)), new Set(hit0 ? idsOf(hit0) : [])), hit = hit0;
         if (!hit) {
-          let fresh = NODE_FIELDS.some(({ field: field2 }) => asList(st9.data && st9.data[field2]).length > 0);
+          let fresh = NODE_FIELDS.some(({ field: field3 }) => asList(st10.data && st10.data[field3]).length > 0);
           if (rewrite && idsOf(st0).length && !fresh) continue;
-          stages.push(st9), idsOf(st9).forEach((id) => seen.add(id));
+          stages.push(st10), idsOf(st10).forEach((id) => seen.add(id));
           continue;
         }
-        let where = { stage: stageLabel(st9.key) }, nodeKeys = NODE_FIELDS.map((f) => f.field);
-        isPlainObject(st9.data) && isPlainObject(hit.data) && mergeFields(hit.data, st9.data, nodeKeys, where);
-        for (let { field: field2 } of NODE_FIELDS)
-          for (let n of asList(st9.data && st9.data[field2])) {
-            let list = Array.isArray(hit.data[field2]) ? hit.data[field2] : hit.data[field2] = asList(hit.data[field2]), k = list.findIndex((x) => isPlainObject(x) && isPlainObject(n) && x.id && x.id === n.id);
+        let where = { stage: stageLabel(st10.key) }, nodeKeys = NODE_FIELDS.map((f) => f.field);
+        isPlainObject(st10.data) && isPlainObject(hit.data) && mergeFields(hit.data, st10.data, nodeKeys, where);
+        for (let { field: field3 } of NODE_FIELDS)
+          for (let n of asList(st10.data && st10.data[field3])) {
+            let list = Array.isArray(hit.data[field3]) ? hit.data[field3] : hit.data[field3] = asList(hit.data[field3]), k = list.findIndex((x) => isPlainObject(x) && isPlainObject(n) && x.id && x.id === n.id);
             k >= 0 ? mergeNode(list[k], n, { ...where, node: n.id }) : (list.push(n), isPlainObject(n) && n.id && seen.add(n.id));
           }
       }
@@ -19126,21 +19172,21 @@ ${IMPORT_LINE_INDEX2}
       ).filter((k) => k >= 0));
     return { lines: out, notes };
   }
-  function importLineTable2(lines2) {
-    return (lines2 || []).map(
+  function importLineTable2(lines3) {
+    return (lines3 || []).map(
       (l) => `- ${l.编号}「${clueText(l.名称)}」${l.文档里的序号 ? `（文档第 ${l.文档里的序号} 条）` : ""}${l.主要人物 ? ` 人物：${[].concat(l.主要人物).join("、")}` : ""}${l.开启条件原文 ? ` 开启：${clueText(l.开启条件原文)}` : ""}${l.关系 ? ` 关系：${clueText(l.关系)}` : ""}`
     ).join(`
 `);
   }
-  function importLineBatches2(lines2, partNo) {
-    let mine = (lines2 || []).filter((l) => !Array.isArray(l.parts) || l.parts.includes(partNo)).map((l) => l.编号), out = [];
+  function importLineBatches2(lines3, partNo) {
+    let mine = (lines3 || []).filter((l) => !Array.isArray(l.parts) || l.parts.includes(partNo)).map((l) => l.编号), out = [];
     for (let i = 0; i < mine.length; i += IMPORT_LINES_PER_CALL2) out.push(mine.slice(i, i + IMPORT_LINES_PER_CALL2));
     return out;
   }
   function importLineDraftMessages2({
     part,
     index,
-    lines: lines2,
+    lines: lines3,
     only = [],
     mainLines = "",
     tableCatalog = "",
@@ -19161,12 +19207,12 @@ ${CLUE_LINE_RULES.join(`
   - 写的是「默认在 8 之后」：只写 {线: 文档第 8 条对应的编号 == 完成}，不要再加别的事实或门槛。写的是主线某一步之后：写开启时段或 {线: 主线编号 == …}。
   - 写的是表格和事件都表达不准的经历（「至少与三名队员有单独往来后」）：写「开启方式: 人工」，原话放进「原开启条件」。
 · 篇幅默认每条 1～2 个阶段、每个阶段 1～3 个节点，作者备注只写要点；原文里必要的结果和依赖不要为了篇幅删掉。${only.length ? `
-· 这一次**只写** ${only.join("、")} 这几条（本段里别的支线另外再写），每一条都要写。` : ""}`, mine = (lines2 || []).filter((l) => only.includes(l.编号)), said = (l) => [clueText(l.开启条件原文), clueText(l.关系)].filter(Boolean).join("；"), gate = mine.length ? `【这一次要写的线：文档对开启的说法】
+· 这一次**只写** ${only.join("、")} 这几条（本段里别的支线另外再写），每一条都要写。` : ""}`, mine = (lines3 || []).filter((l) => only.includes(l.编号)), said = (l) => [clueText(l.开启条件原文), clueText(l.关系)].filter(Boolean).join("；"), gate = mine.length ? `【这一次要写的线：文档对开启的说法】
 ${mine.map((l) => `- ${l.编号}：${said(l) || "（文档没写）"}`).join(`
 `)}
 照这里写开启条件：说法是「独立」或没写的，不写开启条件、不写开启时段，也不要加主线的条件；写了「在 N 之后」的，只等文档第 N 条对应的那条线；别的说法照原意写，写不准就人工。` : "", user = [
       `【线身份表（整份文档统一的支线编号，只能用这些）】
-${importLineTable2(lines2)}`,
+${importLineTable2(lines3)}`,
       mainLines && `【项目里已有的主线（只有文档明确提到主线时才引用）】
 ${mainLines}`,
       tableCatalog,
@@ -19331,12 +19377,14 @@ ${mainLines}`,
       init_trpg_clue_model();
       init_trpg();
       init_trpg_import_check();
+      init_trpg_people();
       CHAPTER_HEAD2 = /^(?:#{1,4}\s+.+|第[0-9一二三四五六七八九十百零〇两]+[章回节幕部卷].*|Chapter\s+\d+.*|[一二三四五六七八九十]+、.+)$/i;
       IMPORT_INDEX_FORMAT2 = [
         "```yaml",
         "梗概: 这一段讲了什么（两三句）",
         "人物:",
-        "  - {名称: 常用称呼, 别名: [只属于这个人的其他称呼], 同一人: 前面索引里已有的名称（只有原文明说是同一个人时才写）, 公开身份: 别人眼里他是谁, 真实身份: 只有作者知道的（没有就省略）, 名字保密: 按上面的判断方法，需要时写 true（不需要就省略）, 首次登场: 本段 / 之前}",
+        "  - {名称: 常用称呼, 别名: [只属于这个人的其他称呼], 同一人: 前面索引里已有的名称（只有原文明说是同一个人时才写）, 公开身份: 别人眼里他是谁, 真实身份: 只有作者知道的（没有就省略）, 名字保密: 按上面的判断方法，需要时写 true（不需要就省略）, 首次登场: 本段 / 之前, 外貌: 一句话, 性格: 一句话, 口吻: 说话的习惯和语气, 对玩家的态度: 一句话, 底线: 他绝不会做或绝不会说的事, 台词: 原文里最能体现口吻的一句}",
+        "  # 外貌、性格、口吻、对玩家的态度、底线、台词：只写玩家在游戏里能观察到的、本段材料里明写或明显体现的；每项没有就省略，不要猜。真实身份、动机、幕后只写在「真实身份」或「作者资料」里。台词必须是原文原句。",
         "  # 「维修工」「老板」这类很多人都能叫的泛称不要写进别名；同一个人的化名、绰号才写。",
         "地点:",
         "  - {名称: …, 说明: 一句话}",
@@ -19595,13 +19643,13 @@ ${CLUE_TPL_MARK_END2}`;
     let body = src.slice(0, close).replace(/\s+$/, ""), tail = src.slice(close), defs = body.slice(body.indexOf("(") + 1).replace(/--[^\n]*/g, "");
     if (/(?:^|,)\s*(?:(?:CONSTRAINT|UNIQUE|CHECK|FOREIGN\s+KEY)\b|PRIMARY\s+KEY\s*\()/im.test(defs))
       return { ok: !1, ddl: src, why: "表定义里有表级约束" };
-    let lines2 = body.split(`
-`), last = lines2.length - 1;
-    for (; last >= 0 && !lines2[last].trim(); ) last--;
-    let m = /^(.*?)(\s*--.*)?$/.exec(lines2[last]);
-    lines2[last] = `${m[1].replace(/,\s*$/, "")},${m[2] || ""}`;
+    let lines3 = body.split(`
+`), last = lines3.length - 1;
+    for (; last >= 0 && !lines3[last].trim(); ) last--;
+    let m = /^(.*?)(\s*--.*)?$/.exec(lines3[last]);
+    lines3[last] = `${m[1].replace(/,\s*$/, "")},${m[2] || ""}`;
     let added = cols.map((c, i) => `  ${c.sql} TEXT${i < cols.length - 1 ? "," : ""} -- ${c.label}`);
-    return { ok: !0, ddl: `${lines2.slice(0, last + 1).join(`
+    return { ok: !0, ddl: `${lines3.slice(0, last + 1).join(`
 `)}
 ${added.join(`
 `)}
@@ -19647,8 +19695,8 @@ ${tail}` };
           continue;
         }
         ddl.ddl && (have.sheet.sourceData = { ...have.sheet.sourceData, ddl: ddl.ddl }), have.sheet.content[0].push(LINE_CATALOG_COL);
-        for (let row2 of have.sheet.content.slice(1)) Array.isArray(row2) && row2.push("");
-        Array.isArray(have.sheet.seedRows) && have.sheet.seedRows.forEach((row2) => Array.isArray(row2) && row2.push("")), changes.push(`「线索控制表」新增列：${LINE_CATALOG_COL}（由插件写入现在可去做的剧情；原有列和行不动）`), missing.length = 0;
+        for (let row3 of have.sheet.content.slice(1)) Array.isArray(row3) && row3.push("");
+        Array.isArray(have.sheet.seedRows) && have.sheet.seedRows.forEach((row3) => Array.isArray(row3) && row3.push("")), changes.push(`「线索控制表」新增列：${LINE_CATALOG_COL}（由插件写入现在可去做的剧情；原有列和行不动）`), missing.length = 0;
       }
       if (missing.length) {
         problems2.push(`已有的「${sheet.name}」缺少列：${missing.join("、")}。没有改动这张表，请检查是否是别的用途的同名表`);
@@ -19672,8 +19720,8 @@ ${tail}` };
             `「重要角色表」的DDL ${ddl.why || "无法解析"}，没有加列（剧情身份、当前动向）；需要的话请在数据库里手动加`
           );
         sheet.sourceData = { ...sheet.sourceData, ddl: ddl.ddl }, head.push(...add.map((c) => c.label));
-        for (let row2 of sheet.content.slice(1)) Array.isArray(row2) && row2.push(...add.map(() => ""));
-        Array.isArray(sheet.seedRows) && sheet.seedRows.forEach((row2) => Array.isArray(row2) && row2.push(...add.map(() => ""))), changes.push(`「重要角色表」新增列：${add.map((c) => c.label).join("、")}（原有列不动）`);
+        for (let row3 of sheet.content.slice(1)) Array.isArray(row3) && row3.push(...add.map(() => ""));
+        Array.isArray(sheet.seedRows) && sheet.seedRows.forEach((row3) => Array.isArray(row3) && row3.push(...add.map(() => ""))), changes.push(`「重要角色表」新增列：${add.map((c) => c.label).join("、")}（原有列不动）`);
       }
     }), patchDefault("任务与事件表"), patchDefault("选项表"), {
       template: tpl,
@@ -19725,16 +19773,16 @@ ${tail}` };
           `「${name}」的列和数据库默认不一致（缺${want.filter((c) => !head.includes(c)).join("、")}），没有改它的规则；需要的话请手动加上防剧透要求`
         );
       sheet.sourceData = { ...sheet.sourceData || {} }, extra && extra(sheet);
-      for (let [field2, rep] of Object.entries(CLUE_TPL_REPLACE2[name] || {})) {
-        let cur = String(sheet.sourceData[field2] || "");
+      for (let [field3, rep] of Object.entries(CLUE_TPL_REPLACE2[name] || {})) {
+        let cur = String(sheet.sourceData[field3] || "");
         if (cur.includes(rep.to)) continue;
         let official = rep.whole || rep.from, norm3 = (t) => t.replace(
           /\r\n?/g,
           `
 `
         ).trim();
-        norm3(cur) === norm3(official) ? (sheet.sourceData[field2] = cur.replace(rep.from, rep.to), changes.push(`「${name}」的${field2 === "initNode" ? "初始化" : "新增"}规则：「${rep.from}」改为「${rep.to}」`)) : problems2.push(
-          `「${name}」的${field2 === "initNode" ? "初始化" : "新增"}规则和数据库默认不同，没有替换；请确认它不会按设定预写内容`
+        norm3(cur) === norm3(official) ? (sheet.sourceData[field3] = cur.replace(rep.from, rep.to), changes.push(`「${name}」的${field3 === "initNode" ? "初始化" : "新增"}规则：「${rep.from}」改为「${rep.to}」`)) : problems2.push(
+          `「${name}」的${field3 === "initNode" ? "初始化" : "新增"}规则和数据库默认不同，没有替换；请确认它不会按设定预写内容`
         );
       }
       let note = String(sheet.sourceData.note || ""), next = withRuleBlock2(note, CLUE_TPL_RULES2[name]);
@@ -19948,8 +19996,8 @@ SQL示例: INSERT INTO important_non_romance (name, gender, age, brief_intro, ap
     if (!c) return modeCard2(project);
     FACT_NAMES2 = buildFactNames2(project, c);
     let lines0 = c.state.lineStates || [], multi0 = lines0.length > 0, problems2 = [...c.snap.problems, ...c.compiled.errors, ...c.state.cycles.map((u) => `节点${u}条件循环引用`)], focus = c.state.focus, focusNode = c.state.nodeStates.find((s) => s.node.uid === focus.uid), entries = runtime.entries(), clueEntry = entries.find((e) => e.slotId === CLUE_SLOT), enabled = c.snap.enabled === !1 ? '<span class="pi-badge is-warn">主线关闭</span>' : "", paused = c.prog.paused ? '<span class="pi-badge is-warn">已暂停</span>' : "", mainLine = multi0 ? lines0.find((x) => x.line.kind === "main" && x.state === "进行中") || lines0.find((x) => x.line.kind === "main") : null, shownUnits = mainLine && c.compiled.units.filter((u) => u.line && u.line.id === mainLine.line.id) || [], tlUnits = shownUnits.length ? shownUnits : c.compiled.units, anyLive = tlUnits.some((u) => {
-      let st9 = c.state.stageStates.get(u.id);
-      return st9.entered.v === "true" && !st9.done;
+      let st10 = c.state.stageStates.get(u.id);
+      return st10.entered.v === "true" && !st10.done;
     }), nextDone = !1, groups = [];
     for (let unit of tlUnits) {
       let stage = c.state.stageStates.get(unit.id), live2 = stage.entered.v === "true" && !stage.done, next = !live2 && !stage.done && !nextDone && (nextDone = !0);
@@ -19992,7 +20040,7 @@ SQL示例: INSERT INTO important_non_romance (name, gender, age, brief_intro, ap
         volumes,
         facts.map((f) => f.code)
       ).map((x) => [x.code, x])
-    ), row2 = (f, i) => {
+    ), row3 = (f, i) => {
       let c = ctx2.get(f.code) || {}, have = f.now || storedLabel2(stored, f.code, c), where = [c.stage, c.nodeName].filter(Boolean).join("，");
       return `<div class="pi-prebuild-row" data-fr-row="${i}">
           <div class="pi-fr-hd"><b>${esc(where || f.code)}</b><span class="pi-meta">${esc(f.code)}</span>${f.orphan || c.orphan ? '<span class="pi-badge is-warn">模组里没有节点产出它</span>' : ""}<span class="pi-badge pi-fr-st${have && have.label ? " is-ok" : ""}" data-fr-st="${i}">${have && have.label ? "已填" : "待填"}</span></div>
@@ -20013,7 +20061,7 @@ SQL示例: INSERT INTO important_non_romance (name, gender, age, brief_intro, ap
           <p>所以每条线索要两样东西：一个<b>标签</b>，让填表模型认出是哪一条；一句<b>「写到哪一步才算拿到」</b>。这句写得太宽，主角还没真正查到就会被算作拿到，剧情会提前推进。</p>
           <p>这两样每一轮都会发给填表模型，所以<b>不能写出答案</b>：写「打开抽屉、读到单据时」，不写单据上写了什么。</p>
           <p class="is-example">例　标签：抽屉里的单据　｜　写到哪一步：主角打开抽屉、读到单据内容时算拿到；只看到锁着的抽屉不算</p></details>
-          ${facts.map(row2).join("")}</div>`;
+          ${facts.map(row3).join("")}</div>`;
   }
   function storedLabel2(stored, code, c) {
     let have = stored && stored[code];
@@ -20027,15 +20075,15 @@ SQL示例: INSERT INTO important_non_romance (name, gender, age, brief_intro, ap
         volumes,
         facts.map((f) => f.code)
       ).map((x) => [x.code, x])
-    ), unsure = /* @__PURE__ */ new Map(), field2 = (i, k) => box.querySelector(`[data-${prefix}-${k}="${i}"]`), status = box.querySelector("[data-fr-status]"), secretsReady = Promise.all(
+    ), unsure = /* @__PURE__ */ new Map(), field3 = (i, k) => box.querySelector(`[data-${prefix}-${k}="${i}"]`), status = box.querySelector("[data-fr-status]"), secretsReady = Promise.all(
       ids.map(
         (id) => view.data.imports.get(id) ? Promise.resolve(view.data.imports.get(id)) : view.data.imports.load(id).catch(() => null)
       )
     ).then((jobs) => {
       let missing = jobs.filter((j) => !j).length;
-      secrets = [.../* @__PURE__ */ new Set([...jobs.filter(Boolean).flatMap((j) => importSecretNames2(j.index) || []), ...projectSecretNames(project) || []])], secretsNote = missing ? `有${missing}份导入记录读不到，这次没有核对其中的保密名字。` : "", secretsNote && (status.textContent = `${status.textContent} ${secretsNote}`), facts.forEach((_, i) => (field2(i, "label").value.trim() || field2(i, "crit").value.trim()) && check(i));
+      secrets = [.../* @__PURE__ */ new Set([...jobs.filter(Boolean).flatMap((j) => importSecretNames2(j.index) || []), ...projectSecretNames(project) || []])], secretsNote = missing ? `有${missing}份导入记录读不到，这次没有核对其中的保密名字。` : "", secretsNote && (status.textContent = `${status.textContent} ${secretsNote}`), facts.forEach((_, i) => (field3(i, "label").value.trim() || field3(i, "crit").value.trim()) && check(i));
     }), reviewed = /* @__PURE__ */ new Map(), check = (i) => {
-      let f = facts[i], value = { label: field2(i, "label").value.trim(), criterion: field2(i, "crit").value.trim() }, r = factLabelCheck({ ...value, unsure: unsure.get(f.code) || "" }, ctx2.get(f.code) || {}, { secrets }), out = box.querySelector(`[data-fr-warn="${i}"]`), rv = reviewed.get(f.code), same2 = rv && rv.label === value.label && rv.criterion === value.criterion, warns = [...r.warns], notes = [...r.notes];
+      let f = facts[i], value = { label: field3(i, "label").value.trim(), criterion: field3(i, "crit").value.trim() }, r = factLabelCheck({ ...value, unsure: unsure.get(f.code) || "" }, ctx2.get(f.code) || {}, { secrets }), out = box.querySelector(`[data-fr-warn="${i}"]`), rv = reviewed.get(f.code), same2 = rv && rv.label === value.label && rv.criterion === value.criterion, warns = [...r.warns], notes = [...r.notes];
       if (same2 && rv.leak) warns.push(`会透露答案：${rv.what || "标签或口径里写出了查到的内容"}`);
       else if (!same2) for (let s of r.suspects) warns.push(`${s.where}里有答案的片段「${s.piece}」`);
       return same2 && rv.fixed && notes.push(`已自动改写，原来的写法会透露答案（${rv.what || "写出了查到的内容"}）`), out.innerHTML = [
@@ -20045,10 +20093,10 @@ SQL示例: INSERT INTO important_non_romance (name, gender, age, brief_intro, ap
     }, rowState = (i, warn) => {
       let b = box.querySelector(`[data-fr-st="${i}"]`);
       if (!b) return;
-      let has = !!field2(i, "label").value.trim();
+      let has = !!field3(i, "label").value.trim();
       b.className = `pi-badge pi-fr-st${has ? warn ? " is-warn" : " is-ok" : ""}`, b.textContent = has ? warn ? "标黄" : "已填" : "待填", sync();
     }, dlg = root.closest && root.closest(".pi-dialog") || root, mainBtn = gate ? [...dlg.querySelectorAll("[data-dlg]")].find((b) => b.classList.contains("is-primary")) : null, startBtn = box.querySelector("[data-fr-auto]"), running2 = !1, sync = () => {
-      let left = facts.filter((_, i) => !field2(i, "label").value.trim()).length;
+      let left = facts.filter((_, i) => !field3(i, "label").value.trim()).length;
       mainBtn && (mainBtn.disabled = running2 || left > 0, mainBtn.textContent = running2 ? "正在填写…" : left ? `还差${left}条没填` : gate), startBtn && !running2 && (startBtn.classList.remove("is-busy"), startBtn.classList.toggle("is-done", !left), startBtn.innerHTML = startFace2(left ? `开始自动填写 · 还有${left}条` : ""));
     };
     sync(), box.addEventListener("input", (event) => {
@@ -20056,10 +20104,10 @@ SQL示例: INSERT INTO important_non_romance (name, gender, age, brief_intro, ap
       m && (unsure.delete(facts[Number(m.dataset.frRow)].code), check(Number(m.dataset.frRow)));
     });
     async function reviewRows(rows2) {
-      let todo = rows2.filter(({ i }) => field2(i, "label").value.trim() || field2(i, "crit").value.trim());
+      let todo = rows2.filter(({ i }) => field3(i, "label").value.trim() || field3(i, "crit").value.trim());
       if (!todo.length) return 0;
       let items = todo.map(({ f, i }) => {
-        let c = ctx2.get(f.code) || {}, label = field2(i, "label").value.trim(), criterion = field2(i, "crit").value.trim();
+        let c = ctx2.get(f.code) || {}, label = field3(i, "label").value.trim(), criterion = field3(i, "crit").value.trim();
         return {
           code: f.code,
           label,
@@ -20076,9 +20124,9 @@ SQL示例: INSERT INTO important_non_romance (name, gender, age, brief_intro, ap
       ), fixed = 0;
       for (let [k, { f, i }] of todo.entries()) {
         let v = map.get(f.code), sent = items[k];
-        !v || v.leak === null || field2(i, "label").value.trim() !== sent.label || field2(i, "crit").value.trim() !== sent.criterion || (v.leak && (v.label || v.criterion) ? (v.label && (field2(i, "label").value = v.label), v.criterion && (field2(i, "crit").value = v.criterion), fixed++, reviewed.set(f.code, {
-          label: field2(i, "label").value.trim(),
-          criterion: field2(i, "crit").value.trim(),
+        !v || v.leak === null || field3(i, "label").value.trim() !== sent.label || field3(i, "crit").value.trim() !== sent.criterion || (v.leak && (v.label || v.criterion) ? (v.label && (field3(i, "label").value = v.label), v.criterion && (field3(i, "crit").value = v.criterion), fixed++, reviewed.set(f.code, {
+          label: field3(i, "label").value.trim(),
+          criterion: field3(i, "crit").value.trim(),
           leak: !1,
           fixed: !0,
           what: v.what
@@ -20087,7 +20135,7 @@ SQL示例: INSERT INTO important_non_romance (name, gender, age, brief_intro, ap
       return fixed;
     }
     box.querySelector("[data-fr-auto]").addEventListener("click", async (event) => {
-      let btn = event.currentTarget, todo = facts.map((f, i) => ({ f, i })).filter(({ i }) => !field2(i, "label").value.trim() || !field2(i, "crit").value.trim());
+      let btn = event.currentTarget, todo = facts.map((f, i) => ({ f, i })).filter(({ i }) => !field3(i, "label").value.trim() || !field3(i, "crit").value.trim());
       if (!todo.length) return status.textContent = "都已经填好了。要重新生成，先清空对应的框。";
       let prog = startProgress(`fr-${prefix}`).step(`第1步：AI写标签（共${todo.length}条）`, 70, 2e4 + todo.length * 4e3);
       running2 = !0, btn.disabled = !0, btn.classList.add("is-busy"), btn.innerHTML = '<span class="pi-spin"></span><span>正在自动填写</span>', status.textContent = "生成期间可以先往下翻着看，写好后会一起填进框里。", sync();
@@ -20108,7 +20156,7 @@ SQL示例: INSERT INTO important_non_romance (name, gender, age, brief_intro, ap
         );
         for (let { f, i } of todo) {
           let got3 = r.items.get(f.code);
-          got3 && (field2(i, "label").value.trim() || (field2(i, "label").value = got3.label), field2(i, "crit").value.trim() || (field2(i, "crit").value = got3.criterion), got3.unsure && unsure.set(f.code, got3.unsure));
+          got3 && (field3(i, "label").value.trim() || (field3(i, "label").value = got3.label), field3(i, "crit").value.trim() || (field3(i, "crit").value = got3.criterion), got3.unsure && unsure.set(f.code, got3.unsure));
         }
         todo.forEach(({ i }) => check(i)), prog.step("第2步：检查有没有透露答案", 97, 25e3);
         let fixed = 0, reviewFailed = "";
@@ -20117,10 +20165,10 @@ SQL示例: INSERT INTO important_non_romance (name, gender, age, brief_intro, ap
         } catch (error) {
           reviewFailed = `检查没完成（${error.message}），下面按字面比对标出了可能透露答案的地方。`;
         }
-        let warned = facts.reduce((n, _, i) => n + (check(i) ? 1 : 0), 0), got2 = todo.filter(({ i }) => field2(i, "label").value.trim()).length;
+        let warned = facts.reduce((n, _, i) => n + (check(i) ? 1 : 0), 0), got2 = todo.filter(({ i }) => field3(i, "label").value.trim()).length;
         prog.done(`完成：已填好${got2}/${todo.length}条${warned ? `，${warned}条标黄` : ""}`), keep && got2 && keepLabels2(
           view,
-          facts.map((f, i) => ({ code: f.code, label: field2(i, "label").value.trim(), criterion: field2(i, "crit").value.trim() }))
+          facts.map((f, i) => ({ code: f.code, label: field3(i, "label").value.trim(), criterion: field3(i, "crit").value.trim() }))
         ), status.textContent = `${secretsNote}${reviewFailed}已填好${todo.length - r.missing.length}条${r.missing.length ? `，${r.missing.length}条没生成（${r.missing.join("、")}），可以再点一次或自己填` : ""}。${fixed ? `${fixed}条原来的写法会透露答案，已经自动改好。` : ""}${warned ? `${warned}条标黄：黄字说明了原因，照着改一下框里的字就行，改完黄色会消失。觉得没问题也可以不改，标黄不会挡住导入。` : "没有发现问题，可以直接确认。"}`;
       } catch (error) {
         prog.fail(), status.textContent = `生成失败：${error.message}。可以再试一次，或者自己填。`;
@@ -20241,7 +20289,7 @@ SQL示例: INSERT INTO important_non_romance (name, gender, age, brief_intro, ap
   function lineCard2(c, project) {
     let list = c.state.lineStates || [];
     if (!list.length) return "";
-    let sides = list.filter((s) => s.line.kind === "side"), mains = list.filter((s) => s.line.kind === "main"), limit = c.plan ? c.plan.slots.limit : 1, used = c.plan ? c.plan.slots.used.length : 0, row2 = (s) => {
+    let sides = list.filter((s) => s.line.kind === "side"), mains = list.filter((s) => s.line.kind === "main"), limit = c.plan ? c.plan.slots.limit : 1, used = c.plan ? c.plan.slots.used.length : 0, row3 = (s) => {
       let l = s.line, wait = lineWaitText2(s, c, isPlainObject(project.clue.labels) ? project.clue.labels : {}), btn = (v, label, cls = "", tip = "") => `<button type="button" class="pi-btn is-sm${cls}" data-act="clue-line" data-id="${esc(l.id)}" data-value="${v}"${tip ? ` title="${esc(tip)}"` : ""}>${label}</button>`, canEnter = !s.started && !s.manual.state && s.eligible && (l.kind === "main" ? !c.prog.mainPaused : !s.waitMain), inQueue = l.kind === "side" && l.mode !== "manual" && s.state === "可开启" && s.entries.length && c.plan && !c.plan.slots.full && !c.prog.sidePaused, undo = s.manual.evidence && s.manual.evidence !== "manual" && !s.manual.evidence.startsWith("auto@") && s.state === "进行中" ? btn("deny", "取消开启", " is-ghost", "插件认错了：这条线回到可开启，同一次依据不再自动开启") : s.manual.started || s.manual.state ? btn("", "还原", " is-ghost", "把你在这条线上点过的进入 / 暂停 / 完成 / 放弃还原，回到按条件自动判断") : "", checks = !s.started && !s.manual.state && l.mode !== "manual" ? tableCondChecks(l.open, c.snap.tables || {}) : [], stuck = checks.filter((x) => x.stuck), fix = stuck.length ? `<p class="pi-hint is-warn">开启条件读不出来：${esc(stuck.flatMap((x) => x.notes).join("；"))}。这样它会一直开不了。 <button type="button" class="pi-btn is-sm" data-act="clue-line-manual" data-id="${esc(l.id)}" title="开启条件挪到「原开启条件」里留着看，不再自动判断；执行页出现「进入」按钮，玩家想玩时点它">改成手动开始</button></p>` : "", orig = l.origCond ? `<p class="pi-hint">原来的开启要求（自己判断什么时候点「进入」）：${esc(l.origCond)}</p>` : "", tierBtns = checks.filter((x) => x.tierPending).map(
         (x) => `<p class="pi-hint is-warn">档位顺序是AI推断的：${esc(x.tierPending.join(" < "))}。确认前这个条件一直是未知。 <button type="button" class="pi-btn is-sm" data-act="clue-tiers" data-tiers="${esc(JSON.stringify(x.tierPending))}" title="模组里用同样档位的条件都算确认">从低到高没错</button> <button type="button" class="pi-btn is-sm is-ghost" data-act="clue-line-manual" data-id="${esc(l.id)}">改成手动开始</button></p>`
       ).join(""), group = l.kind === "side" ? sides : mains, k = group.indexOf(s), arrows = group.length > 1 ? `<button type="button" class="pi-btn is-sm is-ghost" data-act="clue-line-move" data-id="${esc(l.id)}" data-dir="-1"${k <= 0 ? " disabled" : ""}>往前排</button><button type="button" class="pi-btn is-sm is-ghost" data-act="clue-line-move" data-id="${esc(l.id)}" data-dir="1"${k >= group.length - 1 ? " disabled" : ""}>往后排</button>` : "", title2 = String(l.name || "").replace(/·/g, " ").replace(/^卷[^\s]*\s+/, "").replace(l.id ? new RegExp(`^${l.id}\\s*`) : /^$/, "") || lineDisplayName2(l), main0 = canEnter ? btn("enter", "进入", " is-primary", l.mode === "manual" ? "想玩这条线了：现在开始" : "主角已经开始做这件事了（填表没认出来时用），或者你现在就想开始") : s.state === "暂停" ? btn("resume", "继续", " is-primary") : "", g1 = [...canEnter || s.state === "进行中" ? [btn("pause", "暂停", " is-ghost")] : []].join("") + arrows, g2 = [
@@ -20252,15 +20300,15 @@ SQL示例: INSERT INTO important_non_romance (name, gender, age, brief_intro, ap
       return `<div class="pi-line-row"><div class="pi-line-head"><b class="pi-line-name" title="${esc(l.id)}">${esc(title2)}</b><span class="pi-kind pi-rl-kind">${l.kind === "main" ? "主线" : "支线"}</span><span class="pi-badge ${s.missed ? "" : LINE_BADGE2[s.state] || ""}">${esc(s.missed ? "已错过" : s.state)}</span>${l.kind === "side" && c.prog.sidePaused && s.state === "进行中" ? '<span class="pi-meta">全部支线已暂停</span>' : ""}<div class="pi-line-acts">${main0}${more}</div></div>
           ${l.brief ? `<p class="pi-hint">${esc(l.brief)}</p>` : ""}${wait && /^已离开/.test(wait) ? `<p class="pi-hint">${esc(wait)}</p>` : ""}${orig}${fix}${tierBtns}</div>`;
     };
-    return `<div class="pi-rl-lines">${list.map(row2).join("")}</div>`;
+    return `<div class="pi-rl-lines">${list.map(row3).join("")}</div>`;
   }
   function hereText2(c) {
     let g = findGlobalTable2(Object.values(c.snap.tables || {})), cell = g && g.place ? readCell(c.snap.tables || {}, `${g.name}/${g.row}/${g.place}`) : { state: "unknown" }, here = cell.state === "ok" ? cellText(cell.value) : "", focus = c.state.nodeStates.find((s) => s.node.uid && s.node.uid === c.state.focus.uid), place = focus ? clueText(isPlainObject(focus.node.item) ? focus.node.item.地点 : "") : "";
     return esc(here || place);
   }
   function stayNotice2(view, c) {
-    let info = view.runtime.clue.stayInfo(), st9 = info && info.key ? stayState2(view.runtime.progress().stays, chatMessages(), info) : null;
-    return st9 && st9.idle >= 7 ? `<p class="pi-hint is-warn">这一场很久没有新的发现了（连续${st9.idle}条回复）。想换个地方，可以让主角离开，或者点「离开这个调查」；想先玩日常，可以暂停剧情。也可能只是填表漏记了，可以对照正文看看。</p>` : "";
+    let info = view.runtime.clue.stayInfo(), st10 = info && info.key ? stayState2(view.runtime.progress().stays, chatMessages(), info) : null;
+    return st10 && st10.idle >= 7 ? `<p class="pi-hint is-warn">这一场很久没有新的发现了（连续${st10.idle}条回复）。想换个地方，可以让主角离开，或者点「离开这个调查」；想先玩日常，可以暂停剧情。也可能只是填表漏记了，可以对照正文看看。</p>` : "";
   }
   function keepLabels2(view, picked, pid = view.projectId) {
     let p = pid ? view.data.project(pid) : null;
@@ -21230,20 +21278,20 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
     if (c.kind === "group")
       return c.items.map((x) => condWords(x, names2)).filter(Boolean).join(c.mode === "any" ? "，或" : "，并且");
     if (c.kind === "cell") {
-      let [t, row2, col] = String(c.path).split("/").map((x) => x.trim());
-      return `（${t}）${row2}的${col}${c.pick ? `的「${c.pick}」项` : ""} ${OP_WORD[c.op] || c.op} ${c.value}${c.tiers ? `（${c.tiers.join(" < ")}）` : ""}`;
+      let [t, row3, col] = String(c.path).split("/").map((x) => x.trim());
+      return `（${t}）${row3}的${col}${c.pick ? `的「${c.pick}」项` : ""} ${OP_WORD[c.op] || c.op} ${c.value}${c.tiers ? `（${c.tiers.join(" < ")}）` : ""}`;
     }
     return c.kind === "line" ? `${line(c.line)} ${c.state === "开过" ? c.op === "==" ? "开始过" : "还没开始过" : c.state === "开着" ? c.op === "==" ? "正在进行" : "不在进行中" : `${c.op === "==" ? "是" : "不是"}「${c.state}」`}` : c.kind === "fact" ? `正文里发生了${fact(c.fact)}` : c.kind === "count" ? `${c.table}里${c.column} ${OP_WORD[c.op] || c.op} ${c.value}的${c.cmp}${c.n}行` : c.kind === "know" ? `${c.actor === "user" ? "主角" : c.actor}知道${fact(c.fact)}` : c.kind === "node" ? `场景${node(c.node)}完成` : c.raw || "";
   }
   function condNames(volumes) {
-    let comp = compileClue2(volumes || []), facts = {}, nodes = {}, lines2 = {};
+    let comp = compileClue2(volumes || []), facts = {}, nodes = {}, lines3 = {};
     for (let n of comp.nodes) {
       n.uid && (nodes[n.uid] = n.name);
       for (let d of discoveryList2(isPlainObject(n.item) ? n.item : {}))
         d.fact && !facts[d.fact] && d.text && (facts[d.fact] = d.text.length > 24 ? `${d.text.slice(0, 24)}…` : d.text);
     }
-    for (let l of comp.lines || []) lines2[l.id] = l.name;
-    return { facts, nodes, lines: lines2 };
+    for (let l of comp.lines || []) lines3[l.id] = l.name;
+    return { facts, nodes, lines: lines3 };
   }
   function lineReviewFromJob(job) {
     let good = Object.keys(job.drafts || {}).sort((a, b) => a - b).flatMap(
@@ -21385,7 +21433,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
     return `<div class="pi-rv-issue${x.level === "error" ? "" : " is-ask"}"><p>${esc(x.text)}</p>${btn ? `<div class="pi-row">${btn}</div>` : ""}</div>`;
   }
   function tableForm(vol, locked = !1) {
-    let l = vol.line || {}, t = (isPlainObject(l.表格条件草稿) ? { op: ">=", ...l.表格条件草稿 } : null) || simpleTableCond(l.开启条件) || { table: "", row: "", col: "", op: ">=", value: "" }, tables = currentTables(), sheets = tables ? sheetList2(tables) : [], attr = (k) => `data-rv-vol="${esc(vol.id)}" data-rv-tbl="${k}"${locked ? " disabled" : ""}`, opt = (list, val) => list.map((o) => `<option value="${esc(o.v)}"${o.v === val ? " selected" : ""}>${esc(o.label)}</option>`).join(""), pickOf = (list, val, ph) => opt([{ v: "", label: ph }, ...val && !list.includes(val) ? [val] : [], ...list].map((x) => typeof x == "string" ? { v: x, label: x } : x), val), sheet = sheets.find((x) => x.name === t.table), sr = sheet ? sheetRows2(sheet) : null, cols = sr ? sr.head.slice(1).map((c) => String(c ?? "").trim()).filter(Boolean) : [], rows2 = sr ? sr.rows.map((r) => String(r[1] ?? "").trim()).filter(Boolean) : [], field2 = (k, list, ph) => tables ? `<select class="pi-sel is-sm" ${attr(k)}>${pickOf(list, t[k], ph)}</select>` : `<input class="pi-inp is-sm" ${attr(k)} value="${esc(t[k])}" placeholder="${ph}">`, status = "", badge2 = "", tierFix = null;
+    let l = vol.line || {}, t = (isPlainObject(l.表格条件草稿) ? { op: ">=", ...l.表格条件草稿 } : null) || simpleTableCond(l.开启条件) || { table: "", row: "", col: "", op: ">=", value: "" }, tables = currentTables(), sheets = tables ? sheetList2(tables) : [], attr = (k) => `data-rv-vol="${esc(vol.id)}" data-rv-tbl="${k}"${locked ? " disabled" : ""}`, opt = (list, val) => list.map((o) => `<option value="${esc(o.v)}"${o.v === val ? " selected" : ""}>${esc(o.label)}</option>`).join(""), pickOf = (list, val, ph) => opt([{ v: "", label: ph }, ...val && !list.includes(val) ? [val] : [], ...list].map((x) => typeof x == "string" ? { v: x, label: x } : x), val), sheet = sheets.find((x) => x.name === t.table), sr = sheet ? sheetRows2(sheet) : null, cols = sr ? sr.head.slice(1).map((c) => String(c ?? "").trim()).filter(Boolean) : [], rows2 = sr ? sr.rows.map((r) => String(r[1] ?? "").trim()).filter(Boolean) : [], field3 = (k, list, ph) => tables ? `<select class="pi-sel is-sm" ${attr(k)}>${pickOf(list, t[k], ph)}</select>` : `<input class="pi-inp is-sm" ${attr(k)} value="${esc(t[k])}" placeholder="${ph}">`, status = "", badge2 = "", tierFix = null;
     if (t.table && t.row && t.col)
       if (!tables) status = "无法读取当前表格（数据库未开启或这张卡未绑定表格），保存后到执行页核对。";
       else {
@@ -21393,8 +21441,8 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
         num3 != null && (tierFix = { vol: vol.id, value: String(num3) }), status = t.value === "" ? "填上比较的值。" : r ? `${r.now ? `现在：${r.now}` : "现在：表里还没有这一格的值"}${num3 != null ? `。表格说明里「${t.value}」是${num3}，比大小请填数字` : r.notes.length ? `。${r.notes[0]}` : ""}` : errs.join("；"), badge2 = v === "true" ? '<span class="pi-badge is-ok">已满足</span>' : v === "false" ? '<span class="pi-badge is-warn">未满足</span>' : "";
       }
     return `<div class="pi-rv-tbl">
-      ${field2("table", sheets.map((x) => x.name), "选择表")}
-      <div class="pi-row pi-rv-tbl-row">${field2("row", rows2, "选择行")}${field2("col", cols, "选择列")}</div>
+      ${field3("table", sheets.map((x) => x.name), "选择表")}
+      <div class="pi-row pi-rv-tbl-row">${field3("row", rows2, "选择行")}${field3("col", cols, "选择列")}</div>
       <div class="pi-row pi-rv-tbl-row is-cmp"><select class="pi-sel is-sm" ${attr("op")}>${opt(TABLE_OPS, t.op)}</select><input class="pi-inp is-sm" ${attr("value")} value="${esc(t.value)}" placeholder="值，如2或熟悉"></div>
       ${isPlainObject(l.表格条件草稿) ? '<p class="pi-hint is-warn">条件未填完，保存前需补全。</p>' : ""}${status ? `<p class="pi-hint pi-rv-tbl-now">${esc(status)}${badge2}</p>` : '<p class="pi-hint">选择表、行、列并填写比较值。</p>'}${tierFix && !locked ? `<div class="pi-row"><button type="button" class="pi-btn is-sm" data-act="rv-tbl-num" data-vol="${esc(tierFix.vol)}" data-value="${esc(tierFix.value)}">改成${esc(tierFix.value)}</button></div>` : ""}
     </div>`;
@@ -21507,7 +21555,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
         `review:${projectId}`,
         () => reviseUnits(view, c2.jobId, c2, indexOf(c2.job), jobOf, { ...opts, onText: (t) => prog.real(0, `已收到${t.length}字`) })
       ).catch((e) => (ok = !1, toast("error", `修改中断：${e.message}。意见保留，可重试。`))), ok ? prog.done("改好了") : prog.fail(), clearProgress(key), view.renderBody();
-    }, actions12 = {
+    }, actions13 = {
       async "rv-go"(view, target) {
         let c = current(view);
         c && (await saveReview(view, c.jobId, (r) => ({ ...r, at: Number(target.dataset.i) || 0 })), view.renderBody());
@@ -21603,7 +21651,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
           ]
         });
         if (pick) {
-          if (pick === "redraft") return actions12["rv-redraft"](view, { dataset: { line: id } });
+          if (pick === "redraft") return actions13["rv-redraft"](view, { dataset: { line: id } });
           await saveReview(view, c.jobId, (r) => ({ ...r, dropped: pick === "drop" ? [.../* @__PURE__ */ new Set([...r.dropped || [], vid])] : (r.dropped || []).filter((x) => x !== vid) })), view.renderBody();
         }
       },
@@ -21707,7 +21755,7 @@ time: {路径: [全局数据表/全局状态/当前时间, 线索控制表/主�
         crumbBack(view, c && c.review && c.review.adoptedId);
       }
     };
-    return actions12;
+    return actions13;
   }
   async function reviseUnits(view, jobId, c, index, jobOf, opts = {}) {
     let review = c.review, units = reviewUnits(view.project(), review), overall = String(opts.overall || "").trim(), commented = sendableNotes(view.project(), review), overallVol = overall ? opts.overallVol || units[0] && units[0].volumeId : "", want = overall ? [.../* @__PURE__ */ new Set([...units.filter((u) => u.volumeId === overallVol).map((u) => u.key), ...commented])] : commented;
@@ -22016,16 +22064,16 @@ ${yamlOf(k)}`).join(`
     if (job.projectId !== task.projectId) throw new Error("这个导入任务不属于当前项目");
     let still = () => !signal.aborted && view.projectId === task.projectId && store.get(jobId), parts = job.parts && job.parts.length ? job.parts : splitLongText(text2, { target: IMPORT_PART_CHARS }).map(({ text: _t, ...p }) => p);
     job.parts && job.parts.length || await store.update(jobId, (j) => ({ ...j, parts, step: "index" }));
-    let partText = (p) => text2.slice(Math.max(0, p.start - p.lead), p.end), ok = (x) => isPlainObject(x) && !x.error, local = [...store.get(jobId).localIndex || []], lines2 = job.mode === "lines", okList = () => local.map((x) => ok(x) ? x : {}), read = (t) => {
+    let partText = (p) => text2.slice(Math.max(0, p.start - p.lead), p.end), ok = (x) => isPlainObject(x) && !x.error, local = [...store.get(jobId).localIndex || []], lines3 = job.mode === "lines", okList = () => local.map((x) => ok(x) ? x : {}), read = (t) => {
       let v = parseYaml(extractYaml(t));
       if (!isPlainObject(v)) throw new Error("没有读到索引内容");
       return v;
     }, indexMsgs = (p) => {
       let prevIdx = local.some(ok) ? {
         ...mergeImportIndex(okList()),
-        ...lines2 ? { 支线: mergeLineIdentity(okList()).lines.map(({ parts: _p, ...l }) => l) } : {}
+        ...lines3 ? { 支线: mergeLineIdentity(okList()).lines.map(({ parts: _p, ...l }) => l) } : {}
       } : null, base = importIndexMessages({ part: { ...p, text: partText(p) }, total: parts.length, prev: prevIdx ? stringifyYaml(prevIdx) : "", needs: job.needs });
-      return lines2 ? importLineIndexMessages(base) : base;
+      return lines3 ? importLineIndexMessages(base) : base;
     }, sent = /* @__PURE__ */ new Map(), readPart = async (p) => {
       if (!still() || ok(local[p.i])) return;
       let msgs = indexMsgs(p), reply2 = await askLive(view, jobId, `第${p.i + 1}段`, msgs), parsed = null;
@@ -22102,9 +22150,9 @@ ${yamlOf(k)}`).join(`
     return { want, ok, left: want - ok, bad: list.find((x) => x && x.error) || null };
   }
   function importFailedParts(job) {
-    let parts = job.parts || [], local = job.localIndex || [], drafts = job.drafts || {}, lines2 = job.mode === "lines";
+    let parts = job.parts || [], local = job.localIndex || [], drafts = job.drafts || {}, lines3 = job.mode === "lines";
     return parts.map((p) => {
-      let b = lines2 && drafts[p.i] && !drafts[p.i].error ? lineBatchState(job, p) : null, why = local[p.i] && local[p.i].error ? local[p.i].error : drafts[p.i] && drafts[p.i].error ? `第${p.i + 1}段转写失败：${drafts[p.i].error}` : b && b.bad ? `第${p.i + 1}段的${b.bad.only.join("、")}转写失败：${b.bad.error}` : b && b.left ? `第${p.i + 1}段有${b.left}批未完成，其他结果已保存` : drafts[p.i] ? "" : `第${p.i + 1}段还没整理`;
+      let b = lines3 && drafts[p.i] && !drafts[p.i].error ? lineBatchState(job, p) : null, why = local[p.i] && local[p.i].error ? local[p.i].error : drafts[p.i] && drafts[p.i].error ? `第${p.i + 1}段转写失败：${drafts[p.i].error}` : b && b.bad ? `第${p.i + 1}段的${b.bad.only.join("、")}转写失败：${b.bad.error}` : b && b.left ? `第${p.i + 1}段有${b.left}批未完成，其他结果已保存` : drafts[p.i] ? "" : `第${p.i + 1}段还没整理`;
       return why ? { i: p.i, title: p.title, why } : null;
     }).filter(Boolean);
   }
@@ -22113,7 +22161,7 @@ ${yamlOf(k)}`).join(`
     return issues.push(...(merged.conflicts || []).map((c) => ({ level: "warn", text: importConflictText(c) }))), { volumes: vols, notes, issues, index };
   }
   function importAdoptIssues(view, vol, take, index) {
-    let project = view.project(), clue = isClueMode(project), issues = [], basis = "", names2 = new Set(take.map((st9) => stageLabel(st9.key))), added = [{ ...vol, stages: take }], applied = [...project.outline.volumes, ...added];
+    let project = view.project(), clue = isClueMode(project), issues = [], basis = "", names2 = new Set(take.map((st10) => stageLabel(st10.key))), added = [{ ...vol, stages: take }], applied = [...project.outline.volumes, ...added];
     if (issues.push(...checkImportDraft(added, { index, mode: clue ? "clue" : "outline" }).filter((x) => !/按大纲推演|替代途径/.test(x.text))), !clue) return { issues, basis };
     let c = view.runtime.activeId() === view.projectId ? view.runtime.clue.compute() : null, { known, claimed } = chatFactSets2(c);
     return basis = c ? `按当前聊天的进度判断（已确认${known.length}个事实${claimed.length ? `，另有${claimed.length}个已出现的说法` : ""}）。` : "这个项目没有在当前聊天启用，按大纲本身判断（不计任何聊天的进度）。", issues.push(...importReachIssues(applied, { only: names2, knownFacts: known, claimedFacts: claimed })), issues.push(
@@ -22178,7 +22226,7 @@ ${yamlOf(k)}`).join(`
       }).finally(() => (s.loadingJob = !1, view.renderBody()))), '<div class="pi-empty"><span class="pi-spin"></span> 正在读取导入任务…</div>';
     if (importJobKind(job) === "edit")
       return job.review ? renderReview(view, job, job.review, null, '<div class="pi-imp-crumb"><button type="button" class="pi-imp-crumb-a" data-act="import-close">大纲</button><span>›</span><b>审阅修改</b><button type="button" class="pi-imp-crumb-a pi-imp-crumb-end" data-act="edit-back-discuss">返回讨论</button></div>' + pendingImportNote(view, project)) : '<div class="pi-empty">无法读取这次修改的内容。</div>';
-    let parts = job.parts || [], indexed = (job.localIndex || []).filter((x) => isPlainObject(x) && !x.error).length, lines2 = job.mode === "lines", whole = (p) => job.drafts && job.drafts[p.i] && !job.drafts[p.i].error && (!lines2 || !lineBatchState(job, p).left), drafted = parts.filter(whole).length, total = parts.length, failed = importFailedParts(job).filter((f) => !/还没整理/.test(f.why) && !(busy && /批未完成/.test(f.why))), doing = busy && lines2 && parts.find((p) => !whole(p) && job.drafts && job.drafts[p.i]), bs = doing ? lineBatchState(job, doing) : null, progress = `<p class="pi-hint">共${total || "?"}段，已读${indexed}段，已整理${drafted}段${job.step === "review" ? "，已完成" : ""}</p>${bs ? `<p class="pi-hint">正在整理第${doing.i + 1}段，已完成${bs.ok} / ${bs.want}批。</p>` : ""}${busy ? `<p class="pi-hint" data-imp-live="${esc(job.id)}">${esc(importLiveText(job.id))}</p>` : ""}${failed.map((f) => `<p class="pi-hint is-warn">${esc(f.why)}</p>`).join("")}`;
+    let parts = job.parts || [], indexed = (job.localIndex || []).filter((x) => isPlainObject(x) && !x.error).length, lines3 = job.mode === "lines", whole = (p) => job.drafts && job.drafts[p.i] && !job.drafts[p.i].error && (!lines3 || !lineBatchState(job, p).left), drafted = parts.filter(whole).length, total = parts.length, failed = importFailedParts(job).filter((f) => !/还没整理/.test(f.why) && !(busy && /批未完成/.test(f.why))), doing = busy && lines3 && parts.find((p) => !whole(p) && job.drafts && job.drafts[p.i]), bs = doing ? lineBatchState(job, doing) : null, progress = `<p class="pi-hint">共${total || "?"}段，已读${indexed}段，已整理${drafted}段${job.step === "review" ? "，已完成" : ""}</p>${bs ? `<p class="pi-hint">正在整理第${doing.i + 1}段，已完成${bs.ok} / ${bs.want}批。</p>` : ""}${busy ? `<p class="pi-hint" data-imp-live="${esc(job.id)}">${esc(importLiveText(job.id))}</p>` : ""}${failed.map((f) => `<p class="pi-hint is-warn">${esc(f.why)}</p>`).join("")}`;
     if (job.step !== "review")
       return `${crumbs(1)}<div class="pi-card"><h3>导入长文<span class="pi-spacer"></span><button type="button" class="pi-btn is-sm is-ghost" data-act="import-close">回到大纲</button></h3>${progress}
         <div class="pi-tools is-end">${busy ? '<button type="button" class="pi-btn is-sm is-danger" data-act="import-stop">停止</button>' : ""}<button type="button" class="pi-btn is-primary is-sm" data-act="import-run"${busy ? " disabled" : ""}>${busy ? '<span class="pi-spin"></span>整理中' : failed.length ? "重试失败的段" : drafted || indexed ? "继续" : "开始"}</button></div></div>`;
@@ -22199,14 +22247,14 @@ ${yamlOf(k)}`).join(`
         ${errs.length ? `<p class="pi-hint is-warn"><b>需要处理（${errs.length}）</b></p>${errs.map((x) => `<p class="pi-hint is-warn">${esc(x.text)}</p>`).join("")}` : '<p class="pi-hint">整份草稿的检查：没有发现必须处理的问题。采用时会按项目现有大纲和勾选的阶段再查一次。</p>'}
         ${warns.map((x) => `<p class="pi-hint">${esc(x.text)}</p>`).join("")}
         ${pending.length ? `<p class="pi-hint"><b>请确认</b></p>${pending.map((x) => `<p class="pi-hint">${esc(x)}</p>`).join("")}` : ""}
-        ${stages.map((st9) => {
-      let key = adoptKey(job.id, 0, st9.key), nodes = stageNodes(st9.data), done = adopted.has(key);
-      return `<div class="pi-imp-stage"><div class="pi-set-row"><b>${esc(stageLabel(st9.key))}</b><span class="pi-hint">　${nodes.length}个节点</span><span class="pi-spacer"></span>${done ? '<span class="pi-badge is-ok">已采用</span>' : `<label class="pi-check"><input type="checkbox" data-imp-pick="${esc(st9.key)}" checked><span>采用</span></label>`}</div>
+        ${stages.map((st10) => {
+      let key = adoptKey(job.id, 0, st10.key), nodes = stageNodes(st10.data), done = adopted.has(key);
+      return `<div class="pi-imp-stage"><div class="pi-set-row"><b>${esc(stageLabel(st10.key))}</b><span class="pi-hint">　${nodes.length}个节点</span><span class="pi-spacer"></span>${done ? '<span class="pi-badge is-ok">已采用</span>' : `<label class="pi-check"><input type="checkbox" data-imp-pick="${esc(st10.key)}" checked><span>采用</span></label>`}</div>
             ${nodes.map((n) => {
         let note = cand.notes[nodeUid(n.item)] || {};
         return `<p class="pi-hint">${esc(n.name)}${note.段 ? `<span class="pi-meta">　第${note.段}段</span>` : ""}${note.待确认 ? `<br><span class="is-warn">待确认：${esc(note.待确认)}</span>` : ""}</p>`;
       }).join("")}
-            <details><summary class="pi-hint">YAML</summary><pre class="pi-pre is-full">${esc(stringifyYaml({ [st9.key]: st9.data }))}</pre></details></div>`;
+            <details><summary class="pi-hint">YAML</summary><pre class="pi-pre is-full">${esc(stringifyYaml({ [st10.key]: st10.data }))}</pre></details></div>`;
     }).join("")}
         <div class="pi-tools is-end"><button type="button" class="pi-btn is-primary is-sm" data-act="import-adopt">追加所选阶段</button></div>
         ${cand.index ? `<details><summary class="pi-hint">作者索引（只给作者看）</summary><pre class="pi-pre is-full">${esc(stringifyYaml(Object.fromEntries(Object.entries(cand.index).filter(([k]) => k !== "secretFlag"))))}</pre></details>` : ""}</div>`;
@@ -22326,7 +22374,7 @@ ${yamlOf(k)}`).join(`
     if (await blockHalfTable(view, jobId, review, isEdit || review.reopened ? editedVolumes(review) : review.draft)) return;
     if (!isEdit && isPlainObject(line0) && !line0.编号 && !line0.开启条件 && !line0.开始时机已选 && !line0.开启方式 && !line0.接上一条)
       return await view.data.imports.update(jobId, (j) => ({ ...j, review: { ...j.review, at: 0 } })), view.renderBody(), toast("warning", "请先在第1页选择这条线的开启条件。");
-    let pending = Object.values(review.comments || {}).filter((c) => String(c || "").trim()).length, localOk = (job.localIndex || []).filter((x) => isPlainObject(x) && !x.error), index = localOk.length ? mergeImportIndex(localOk) : job.index || null, all = Object.values(reviewIssues(view, review, index)).flat(), errs = all.filter((x) => x.level === "error"), asks = all.filter((x) => x.level !== "error"), lines2 = [
+    let pending = Object.values(review.comments || {}).filter((c) => String(c || "").trim()).length, localOk = (job.localIndex || []).filter((x) => isPlainObject(x) && !x.error), index = localOk.length ? mergeImportIndex(localOk) : job.index || null, all = Object.values(reviewIssues(view, review, index)).flat(), errs = all.filter((x) => x.level === "error"), asks = all.filter((x) => x.level !== "error"), lines3 = [
       errs.length ? `还有${errs.length}个问题没解决：${errs.slice(0, 3).map((x) => x.plain || x.text).join("；")}` : "",
       asks.length ? `另有${asks.length}个问题未回答，会按原样保留。` : ""
     ].filter(Boolean);
@@ -22383,14 +22431,14 @@ ${yamlOf(k)}`).join(`
       let titleOf = (key) => lineTitle(draft.find((v) => v.id === key.split("/")[0]) || { key: "" }), changes = prep.changes.flatMap((c) => draft.length > 1 ? c.changes.map((t) => `${titleOf(c.key)}：${t}`) : c.changes);
       if (!await confirmDialog({
         title: "保存到大纲",
-        body: [`改动如下${shown2.length ? "；按这个聊天的进度：" : "。"}`, ...lines2].join(`
+        body: [`改动如下${shown2.length ? "；按这个聊天的进度：" : "。"}`, ...lines3].join(`
 `),
         list: [...changes.slice(0, 12), ...shown2],
         okLabel: "保存",
         danger: !!errs.length || !!(prep.guard && prep.guard.diffs.length)
       }))
         return;
-    } else if (!reopen && errs.length && !await confirmDialog({ title: `保存「${volumeLabelOf(review)}」到大纲`, body: lines2.join(`
+    } else if (!reopen && errs.length && !await confirmDialog({ title: `保存「${volumeLabelOf(review)}」到大纲`, body: lines3.join(`
 `), okLabel: "仍然保存", danger: !!errs.length })) return;
     if (view.projectId !== projectId || !importJobOf(view, jobId)) return toast("warning", "确认期间已切换项目，未保存。");
     if (reopen && targetStamp(view.project(), savedIds) !== stamp0) return toast("warning", "确认期间大纲中这些线已被修改或删除，未保存。草稿和意见都保留，请重新确认。");
@@ -22752,13 +22800,13 @@ ${r2.yaml}`,
               return { key: u.key, label: v ? stageLabel(v.key) : u.key, yaml: v ? stringifyYaml({ [v.key]: v.data }) : "", source: !whole && n && src ? sourceExcerpt2(src, n.起, n.止) : "" };
             });
             if (!list.length) return toast("info", "没有可以检查的阶段。");
-            let found = parseReviewReply(await ask(view, "outline", trpgReviewMessages({ units: list, whole })), list.length), pages = Object.keys(found).length, lines2 = Object.values(found).flat().length;
-            if (!lines2) return toast("success", "AI检查没有发现问题。");
+            let found = parseReviewReply(await ask(view, "outline", trpgReviewMessages({ units: list, whole })), list.length), pages = Object.keys(found).length, lines3 = Object.values(found).flat().length;
+            if (!lines3) return toast("success", "AI检查没有发现问题。");
             await saveReview3(view, c.jobId, (r) => {
               let comments = { ...r.comments };
               for (let [i, items] of Object.entries(found)) for (let x of items) comments[list[i].key] = appendComment2(comments[list[i].key], `${AI_CHECK_TAG}${x}`);
               return { ...r, comments };
-            }), toast("info", `AI检查找到${lines2}个问题（${pages}页），已加入各页意见。看过、删掉不同意的，再点「按意见修改」。`);
+            }), toast("info", `AI检查找到${lines3}个问题（${pages}页），已加入各页意见。看过、删掉不同意的，再点「按意见修改」。`);
           } catch (error) {
             toast("error", `AI检查失败：${error && error.message || error}`);
           } finally {
@@ -22835,20 +22883,20 @@ ${r2.yaml}`,
     if (c.kind === "group")
       return c.items.map((x) => condWords2(x, names2)).filter(Boolean).join(c.mode === "any" ? "，或者" : "，并且");
     if (c.kind === "cell") {
-      let [t, row2, col] = String(c.path).split("/").map((x) => x.trim());
-      return `（${t}）${row2}的${col}${c.pick ? `里「${c.pick}」那一项` : ""} ${OP_WORD2[c.op] || c.op} ${c.value}${c.tiers ? `（${c.tiers.join(" < ")}）` : ""}`;
+      let [t, row3, col] = String(c.path).split("/").map((x) => x.trim());
+      return `（${t}）${row3}的${col}${c.pick ? `里「${c.pick}」那一项` : ""} ${OP_WORD2[c.op] || c.op} ${c.value}${c.tiers ? `（${c.tiers.join(" < ")}）` : ""}`;
     }
     return c.kind === "line" ? `${line(c.line)} ${c.state === "开过" ? c.op === "==" ? "开始过" : "还没开始过" : c.state === "开着" ? c.op === "==" ? "正在进行" : "不在进行中" : `${c.op === "==" ? "是" : "不是"}「${c.state}」`}` : c.kind === "fact" ? `正文里发生了${fact(c.fact)}` : c.kind === "count" ? `${c.table}里${c.column} ${OP_WORD2[c.op] || c.op} ${c.value}的${c.cmp}${c.n}行` : c.kind === "know" ? `${c.actor === "user" ? "主角" : c.actor}知道${fact(c.fact)}` : c.kind === "node" ? `场景${node(c.node)}完成` : c.raw || "";
   }
   function condNames2(volumes) {
-    let comp = compileClue(volumes || []), facts = {}, nodes = {}, lines2 = {};
+    let comp = compileClue(volumes || []), facts = {}, nodes = {}, lines3 = {};
     for (let n of comp.nodes) {
       n.uid && (nodes[n.uid] = n.name);
       for (let d of discoveryList(isPlainObject(n.item) ? n.item : {}))
         d.fact && !facts[d.fact] && d.text && (facts[d.fact] = d.text.length > 24 ? `${d.text.slice(0, 24)}…` : d.text);
     }
-    for (let l of comp.lines || []) lines2[l.id] = l.name;
-    return { facts, nodes, lines: lines2 };
+    for (let l of comp.lines || []) lines3[l.id] = l.name;
+    return { facts, nodes, lines: lines3 };
   }
   function lineReviewFromJob2(job) {
     let good = Object.keys(job.drafts || {}).sort((a, b) => a - b).flatMap(
@@ -22998,7 +23046,7 @@ ${r2.yaml}`,
     return `<div class="pi-rv-issue${x.level === "error" ? "" : " is-ask"}"><p>${esc(x.text)}</p>${btn ? `<div class="pi-row">${btn}</div>` : ""}</div>`;
   }
   function tableForm2(vol, locked = !1) {
-    let l = vol.line || {}, t = (isPlainObject(l.表格条件草稿) ? { op: ">=", ...l.表格条件草稿 } : null) || simpleTableCond2(l.开启条件) || { table: "", row: "", col: "", op: ">=", value: "" }, tables = currentTables(), sheets = tables ? sheetList(tables) : [], attr = (k) => `data-rv-vol="${esc(vol.id)}" data-rv-tbl="${k}"${locked ? " disabled" : ""}`, opt = (list, val) => list.map((o) => `<option value="${esc(o.v)}"${o.v === val ? " selected" : ""}>${esc(o.label)}</option>`).join(""), pickOf = (list, val, ph) => opt([{ v: "", label: ph }, ...val && !list.includes(val) ? [val] : [], ...list].map((x) => typeof x == "string" ? { v: x, label: x } : x), val), sheet = sheets.find((x) => x.name === t.table), sr = sheet ? sheetRows(sheet) : null, cols = sr ? sr.head.slice(1).map((c) => String(c ?? "").trim()).filter(Boolean) : [], rows2 = sr ? sr.rows.map((r) => String(r[1] ?? "").trim()).filter(Boolean) : [], field2 = (k, list, ph) => tables ? `<select class="pi-sel is-sm" ${attr(k)}>${pickOf(list, t[k], ph)}</select>` : `<input class="pi-inp is-sm" ${attr(k)} value="${esc(t[k])}" placeholder="${ph}">`, status = "", badge2 = "", tierFix = null;
+    let l = vol.line || {}, t = (isPlainObject(l.表格条件草稿) ? { op: ">=", ...l.表格条件草稿 } : null) || simpleTableCond2(l.开启条件) || { table: "", row: "", col: "", op: ">=", value: "" }, tables = currentTables(), sheets = tables ? sheetList(tables) : [], attr = (k) => `data-rv-vol="${esc(vol.id)}" data-rv-tbl="${k}"${locked ? " disabled" : ""}`, opt = (list, val) => list.map((o) => `<option value="${esc(o.v)}"${o.v === val ? " selected" : ""}>${esc(o.label)}</option>`).join(""), pickOf = (list, val, ph) => opt([{ v: "", label: ph }, ...val && !list.includes(val) ? [val] : [], ...list].map((x) => typeof x == "string" ? { v: x, label: x } : x), val), sheet = sheets.find((x) => x.name === t.table), sr = sheet ? sheetRows(sheet) : null, cols = sr ? sr.head.slice(1).map((c) => String(c ?? "").trim()).filter(Boolean) : [], rows2 = sr ? sr.rows.map((r) => String(r[1] ?? "").trim()).filter(Boolean) : [], field3 = (k, list, ph) => tables ? `<select class="pi-sel is-sm" ${attr(k)}>${pickOf(list, t[k], ph)}</select>` : `<input class="pi-inp is-sm" ${attr(k)} value="${esc(t[k])}" placeholder="${ph}">`, status = "", badge2 = "", tierFix = null;
     if (t.table && t.row && t.col)
       if (!tables) status = "读不到当前的表格（数据库没打开或这张卡没绑表格），保存后到执行页核对。";
       else {
@@ -23006,8 +23054,8 @@ ${r2.yaml}`,
         num3 != null && (tierFix = { vol: vol.id, value: String(num3) }), status = t.value === "" ? "填上比较的值。" : r ? `${r.now ? `现在：${r.now}` : "现在：表里还没有这一格的值"}${num3 != null ? `。表格说明里「${t.value}」是${num3}，比大小请填数字` : r.notes.length ? `。${r.notes[0]}` : ""}` : errs.join("；"), badge2 = v === "true" ? '<span class="pi-badge is-ok">已满足</span>' : v === "false" ? '<span class="pi-badge is-warn">未满足</span>' : "";
       }
     return `<div class="pi-rv-tbl">
-      ${field2("table", sheets.map((x) => x.name), "选择表")}
-      <div class="pi-row pi-rv-tbl-row">${field2("row", rows2, "选择行")}${field2("col", cols, "选择列")}</div>
+      ${field3("table", sheets.map((x) => x.name), "选择表")}
+      <div class="pi-row pi-rv-tbl-row">${field3("row", rows2, "选择行")}${field3("col", cols, "选择列")}</div>
       <div class="pi-row pi-rv-tbl-row is-cmp"><select class="pi-sel is-sm" ${attr("op")}>${opt(TABLE_OPS2, t.op)}</select><input class="pi-inp is-sm" ${attr("value")} value="${esc(t.value)}" placeholder="值，如2或 熟悉"></div>
       ${isPlainObject(l.表格条件草稿) ? '<p class="pi-hint is-warn">条件还没填完，保存前要补全。</p>' : ""}${status ? `<p class="pi-hint pi-rv-tbl-now">${esc(status)}${badge2}</p>` : '<p class="pi-hint">选好表、行、列，填比较的值。</p>'}${tierFix && !locked ? `<div class="pi-row"><button type="button" class="pi-btn is-sm" data-act="rv-tbl-num" data-vol="${esc(tierFix.vol)}" data-value="${esc(tierFix.value)}">改成${esc(tierFix.value)}</button></div>` : ""}
     </div>`;
@@ -23130,7 +23178,7 @@ ${r2.yaml}`,
         `review:${projectId}`,
         () => reviseUnits2(view, c2.jobId, c2, indexOf(c2.job), jobOf, { ...opts, onText: (t) => prog.real(0, `已收到${t.length}字`) })
       ).catch((e) => (ok = !1, toast("error", `修改中断：${e.message}。意见保留，可重试。`))), ok ? prog.done("改好了") : prog.fail(), clearProgress(key), view.renderBody();
-    }, actions12 = {
+    }, actions13 = {
       async "rv-go"(view, target) {
         let c = current(view);
         c && (await saveReview2(view, c.jobId, (r) => ({ ...r, at: Number(target.dataset.i) || 0 })), view.renderBody());
@@ -23156,7 +23204,7 @@ ${r2.yaml}`,
         let x = (reviewIssues2(view, c.review, indexOf(c.job))[target.dataset.unit] || []).find((y) => y.id === target.dataset.issue);
         if (!x || !(x.alts || []).length) return;
         let v = await menuDialog({ title: "其他处理方式", items: x.alts.map((a, i) => ({ label: a.label, value: String(i) })) });
-        v != null && actions12["rv-quick"](view, { dataset: { unit: target.dataset.unit, issue: target.dataset.issue, pick: v } });
+        v != null && actions13["rv-quick"](view, { dataset: { unit: target.dataset.unit, issue: target.dataset.issue, pick: v } });
       },
       // 去执行页填故事时间的绑定（审阅内容已存，回来接着看）
       async "rv-bind"(view) {
@@ -23252,7 +23300,7 @@ ${r2.yaml}`,
           ]
         });
         if (pick) {
-          if (pick === "redraft") return actions12["rv-redraft"](view, { dataset: { line: id } });
+          if (pick === "redraft") return actions13["rv-redraft"](view, { dataset: { line: id } });
           await saveReview2(view, c.jobId, (r) => ({ ...r, dropped: pick === "drop" ? [.../* @__PURE__ */ new Set([...r.dropped || [], vid])] : (r.dropped || []).filter((x) => x !== vid) })), view.renderBody();
         }
       },
@@ -23356,7 +23404,7 @@ ${r2.yaml}`,
         crumbBack(view, c && c.review && c.review.adoptedId);
       }
     };
-    return Object.assign(actions12, trpgReviewActions({ current, saveReview: saveReview2, reviewUnits: reviewUnits2, lineLocked: lineLocked2 })), actions12;
+    return Object.assign(actions13, trpgReviewActions({ current, saveReview: saveReview2, reviewUnits: reviewUnits2, lineLocked: lineLocked2 })), actions13;
   }
   async function reviseUnits2(view, jobId, c, index, jobOf, opts = {}) {
     let review = c.review, units = reviewUnits2(view.project(), review), overall = String(opts.overall || "").trim(), commented = sendableNotes2(view.project(), review), overallVol = overall ? opts.overallVol || units[0] && units[0].volumeId : "", want = overall ? [.../* @__PURE__ */ new Set([...units.filter((u) => u.volumeId === overallVol).map((u) => u.key), ...commented])] : commented;
@@ -23607,35 +23655,35 @@ ${yamlOf(k)}`).join(`
     return { text: text2, x, right, y: solid[0].y, h, font, items: solid };
   }
   function streamLines(items) {
-    let lines2 = [], cur = [], curY = null, flush = () => {
+    let lines3 = [], cur = [], curY = null, flush = () => {
       let line = cur.length ? makeLine(cur) : null;
-      line && lines2.push(line), cur = [], curY = null;
+      line && lines3.push(line), cur = [], curY = null;
     };
     for (let it of items || [])
       it.h > 0 && it.str.trim() && (curY !== null && Math.abs(it.y - curY) > it.h * 0.5 && flush(), curY === null && (curY = it.y)), cur.push(it), it.eol && flush();
-    return flush(), lines2;
+    return flush(), lines3;
   }
-  function orderLooksBroken(lines2, width = 0) {
-    if (lines2.length < 6) return !1;
+  function orderLooksBroken(lines3, width = 0) {
+    if (lines3.length < 6) return !1;
     let jumps = 0, switches = 0;
-    for (let i = 1; i < lines2.length; i++)
-      lines2[i].y - lines2[i - 1].y > lines2[i].h * 2 && jumps++, width && Math.abs(lines2[i].x - lines2[i - 1].x) > width * 0.3 && switches++;
-    return jumps > Math.max(3, lines2.length * 0.12) || switches > Math.max(4, lines2.length * 0.3);
+    for (let i = 1; i < lines3.length; i++)
+      lines3[i].y - lines3[i - 1].y > lines3[i].h * 2 && jumps++, width && Math.abs(lines3[i].x - lines3[i - 1].x) > width * 0.3 && switches++;
+    return jumps > Math.max(3, lines3.length * 0.12) || switches > Math.max(4, lines3.length * 0.3);
   }
   function coordLines(items, width) {
     let rows2 = [];
     for (let it of items || []) {
       if (!(it.h > 0 && it.str.trim())) continue;
-      let row2 = rows2.find((r) => Math.abs(r.y - it.y) < it.h * 0.5);
-      row2 || rows2.push(row2 = { y: it.y, items: [] }), row2.items.push(it);
+      let row3 = rows2.find((r) => Math.abs(r.y - it.y) < it.h * 0.5);
+      row3 || rows2.push(row3 = { y: it.y, items: [] }), row3.items.push(it);
     }
     let mid = width / 2, pieces = [];
-    for (let row2 of rows2) {
-      row2.items.sort((a, b) => a.x - b.x);
+    for (let row3 of rows2) {
+      row3.items.sort((a, b) => a.x - b.x);
       let left = [], right = [], full = [];
-      for (let it of row2.items)
+      for (let it of row3.items)
         it.x < mid - 10 && it.x + it.w > mid + 10 ? full.push(it) : it.x + it.w / 2 < mid ? left.push(it) : right.push(it);
-      full.length ? pieces.push({ y: row2.y, col: "full", items: [...left, ...full, ...right].sort((a, b) => a.x - b.x) }) : (left.length && pieces.push({ y: row2.y, col: "L", items: left }), right.length && pieces.push({ y: row2.y, col: "R", items: right }));
+      full.length ? pieces.push({ y: row3.y, col: "full", items: [...left, ...full, ...right].sort((a, b) => a.x - b.x) }) : (left.length && pieces.push({ y: row3.y, col: "L", items: left }), right.length && pieces.push({ y: row3.y, col: "R", items: right }));
     }
     pieces.sort((a, b) => b.y - a.y);
     let out = [], band = [], flushBand = () => {
@@ -23680,8 +23728,8 @@ ${yamlOf(k)}`).join(`
   }
   function pdfPagesToText(input2, { keepToc = !1 } = {}) {
     let warnings = [], pages = (input2 || []).map((p, i) => {
-      let lines2 = streamLines(p.items);
-      return orderLooksBroken(lines2, p.width) && (lines2 = coordLines(p.items, p.width)), { no: i + 1, width: p.width, height: p.height, lines: lines2 };
+      let lines3 = streamLines(p.items);
+      return orderLooksBroken(lines3, p.width) && (lines3 = coordLines(p.items, p.width)), { no: i + 1, width: p.width, height: p.height, lines: lines3 };
     }), empty2 = pages.filter((p) => !p.lines.length).map((p) => p.no);
     empty2.length && warnings.push(`第${empty2.join("、")}页没有文字层（可能是图片或扫描页），没有转出文字。`);
     let toc = pages.filter((p) => p.lines.filter((l) => DOT_LEADER.test(l.text)).length >= 3);
@@ -23837,6 +23885,7 @@ ${yamlOf(k)}`).join(`
     sti: () => sti2,
     stopImport: () => stopImport2,
     syncEditSession: () => syncEditSession2,
+    syncPeople: () => syncPeople,
     syncSlices: () => syncSlices
   });
   function importLiveText2(jobId) {
@@ -23882,7 +23931,21 @@ ${yamlOf(k)}`).join(`
     return new Set(project && Array.isArray(project.importAdopted) ? project.importAdopted : []);
   }
   function afterAdopt2(view) {
-    afterAdopt(view), syncSlices(view);
+    afterAdopt(view), syncSlices(view), syncPeople(view);
+  }
+  function syncPeople(view) {
+    let project = view.project();
+    if (!project || !project.trpg) return;
+    let jobs = importJobIds2(project).map((id) => view.data.imports.get(id)).filter((j) => j && j.trpg && j.index), seen = project.trpg.peopleSeen || [], lines3 = project.personas && project.personas.lines || [], add = [], names2 = [];
+    for (let j of jobs) {
+      let r = peopleLines(j.index, [...lines3, ...add], [...seen, ...names2]);
+      add.push(...r.lines), names2.push(...r.names);
+    }
+    add.length && (view.data.updateProject(view.projectId, (p) => ({
+      ...p,
+      personas: normalizePersonas({ ...p.personas, lines: [...p.personas && p.personas.lines || [], ...add] }),
+      trpg: { ...p.trpg, peopleSeen: [.../* @__PURE__ */ new Set([...p.trpg && p.trpg.peopleSeen || [], ...names2])] }
+    })), view.runtime.refresh && view.runtime.refresh());
   }
   function syncSlices(view) {
     let project = view.project(), jobs = importJobIds2(project).map((id) => view.data.imports.get(id)).filter((j) => j && j.trpg && j.slicesByPart), incoming = jobs.flatMap((j) => Object.keys(j.slicesByPart).sort((a, b) => a - b).flatMap((k) => j.slicesByPart[k] || []));
@@ -23943,16 +24006,16 @@ ${yamlOf(k)}`).join(`
     if (job.projectId !== task.projectId) throw new Error("这个导入任务不属于当前项目");
     let still = () => !signal.aborted && view.projectId === task.projectId && store.get(jobId), parts = job.parts && job.parts.length ? job.parts : splitLongText2(text2, { target: IMPORT_PART_CHARS2 }).map(({ text: _t, ...p }) => p);
     job.parts && job.parts.length || await store.update(jobId, (j) => ({ ...j, parts, step: "index" }));
-    let partText = (p) => text2.slice(Math.max(0, p.start - p.lead), p.end), ok = (x) => isPlainObject(x) && !x.error, local = [...store.get(jobId).localIndex || []], lines2 = job.mode === "lines", okList = () => local.map((x) => ok(x) ? x : {}), read = (t) => {
+    let partText = (p) => text2.slice(Math.max(0, p.start - p.lead), p.end), ok = (x) => isPlainObject(x) && !x.error, local = [...store.get(jobId).localIndex || []], lines3 = job.mode === "lines", okList = () => local.map((x) => ok(x) ? x : {}), read = (t) => {
       let v = parseYaml(extractYaml(t));
       if (!isPlainObject(v)) throw new Error("没有读到索引内容");
       return v;
     }, indexMsgs = (p) => {
       let prevIdx = local.some(ok) ? {
         ...mergeImportIndex2(okList()),
-        ...lines2 ? { 支线: mergeLineIdentity2(okList()).lines.map(({ parts: _p, ...l }) => l) } : {}
+        ...lines3 ? { 支线: mergeLineIdentity2(okList()).lines.map(({ parts: _p, ...l }) => l) } : {}
       } : null, base = importIndexMessages2({ part: { ...p, text: partText(p) }, total: parts.length, prev: prevIdx ? stringifyYaml(prevIdx) : "", needs: job.needs });
-      return lines2 ? importLineIndexMessages2(base) : base;
+      return lines3 ? importLineIndexMessages2(base) : base;
     }, sent = /* @__PURE__ */ new Map(), readPart = async (p) => {
       if (!still() || ok(local[p.i])) return;
       let msgs = indexMsgs(p), reply2 = await askLive2(view, jobId, `第${p.i + 1}段`, msgs), parsed = null;
@@ -24032,9 +24095,9 @@ ${yamlOf(k)}`).join(`
     return { want, ok, left: want - ok, bad: list.find((x) => x && x.error) || null };
   }
   function importFailedParts2(job) {
-    let parts = job.parts || [], local = job.localIndex || [], drafts = job.drafts || {}, lines2 = job.mode === "lines";
+    let parts = job.parts || [], local = job.localIndex || [], drafts = job.drafts || {}, lines3 = job.mode === "lines";
     return parts.map((p) => {
-      let b = lines2 && drafts[p.i] && !drafts[p.i].error ? lineBatchState2(job, p) : null, why = local[p.i] && local[p.i].error ? local[p.i].error : drafts[p.i] && drafts[p.i].error ? `第${p.i + 1}段转写失败：${drafts[p.i].error}` : b && b.bad ? `第${p.i + 1}段的${b.bad.only.join("、")}转写失败：${b.bad.error}` : b && b.left ? `第${p.i + 1}段有${b.left}批未完成，其他结果已保存` : drafts[p.i] ? "" : `第${p.i + 1}段还没整理`;
+      let b = lines3 && drafts[p.i] && !drafts[p.i].error ? lineBatchState2(job, p) : null, why = local[p.i] && local[p.i].error ? local[p.i].error : drafts[p.i] && drafts[p.i].error ? `第${p.i + 1}段转写失败：${drafts[p.i].error}` : b && b.bad ? `第${p.i + 1}段的${b.bad.only.join("、")}转写失败：${b.bad.error}` : b && b.left ? `第${p.i + 1}段有${b.left}批未完成，其他结果已保存` : drafts[p.i] ? "" : `第${p.i + 1}段还没整理`;
       return why ? { i: p.i, title: p.title, why } : null;
     }).filter(Boolean);
   }
@@ -24043,7 +24106,7 @@ ${yamlOf(k)}`).join(`
     return issues.push(...(merged.conflicts || []).map((c) => ({ level: "warn", text: importConflictText2(c) }))), { volumes: vols, notes, issues, index };
   }
   function importAdoptIssues2(view, vol, take, index) {
-    let project = view.project(), clue = isClueMode2(project), issues = [], basis = "", names2 = new Set(take.map((st9) => stageLabel(st9.key))), added = [{ ...vol, stages: take }], applied = [...project.outline.volumes, ...added];
+    let project = view.project(), clue = isClueMode2(project), issues = [], basis = "", names2 = new Set(take.map((st10) => stageLabel(st10.key))), added = [{ ...vol, stages: take }], applied = [...project.outline.volumes, ...added];
     if (issues.push(...checkImportDraft2(added, { index, mode: clue ? "clue" : "outline" }).filter((x) => !/按模组推演|替代途径/.test(x.text))), !clue) return { issues, basis };
     let c = view.runtime.activeId() === view.projectId ? view.runtime.clue.compute() : null, { known, claimed } = chatFactSets(c);
     return basis = c ? `按当前聊天的进度判断（已确认${known.length}个事实${claimed.length ? `，另有${claimed.length}个已出现的说法` : ""}）。` : "这个项目没有在当前聊天启用，按模组本身判断（不计任何聊天的进度）。", issues.push(...importReachIssues2(applied, { only: names2, knownFacts: known, claimedFacts: claimed })), issues.push(
@@ -24109,7 +24172,7 @@ ${yamlOf(k)}`).join(`
       }).finally(() => (s.loadingJob = !1, view.renderBody()))), '<div class="pi-empty"><span class="pi-spin"></span> 正在读取导入任务…</div>';
     if (importJobKind2(job) === "edit")
       return job.review ? renderReview2(view, job, job.review, null, '<div class="pi-imp-crumb"><button type="button" class="pi-imp-crumb-a" data-act="import-close">模组</button><span>›</span><b>审阅修改</b><button type="button" class="pi-imp-crumb-a pi-imp-crumb-end" data-act="edit-back-discuss">返回讨论</button></div>' + pendingImportNote2(view, project)) : '<div class="pi-empty">这次修改的内容读不出来。</div>';
-    let parts = job.parts || [], indexed = (job.localIndex || []).filter((x) => isPlainObject(x) && !x.error).length, lines2 = job.mode === "lines", whole = (p) => job.drafts && job.drafts[p.i] && !job.drafts[p.i].error && (!lines2 || !lineBatchState2(job, p).left), drafted = parts.filter(whole).length, total = parts.length, failed = importFailedParts2(job).filter((f) => !/还没整理/.test(f.why) && !(busy && /批未完成/.test(f.why))), doing = busy && lines2 && parts.find((p) => !whole(p) && job.drafts && job.drafts[p.i]), bs = doing ? lineBatchState2(job, doing) : null, progress = `<p class="pi-hint">共${total || "?"}段，已读${indexed}段，已整理${drafted}段${job.step === "review" ? "，已完成" : ""}</p>${bs ? `<p class="pi-hint">正在整理第${doing.i + 1}段，已完成${bs.ok} / ${bs.want}批。</p>` : ""}${busy ? `<p class="pi-hint" data-imp-live="${esc(job.id)}">${esc(importLiveText2(job.id))}</p>` : ""}${failed.map((f) => `<p class="pi-hint is-warn">${esc(f.why)}</p>`).join("")}`;
+    let parts = job.parts || [], indexed = (job.localIndex || []).filter((x) => isPlainObject(x) && !x.error).length, lines3 = job.mode === "lines", whole = (p) => job.drafts && job.drafts[p.i] && !job.drafts[p.i].error && (!lines3 || !lineBatchState2(job, p).left), drafted = parts.filter(whole).length, total = parts.length, failed = importFailedParts2(job).filter((f) => !/还没整理/.test(f.why) && !(busy && /批未完成/.test(f.why))), doing = busy && lines3 && parts.find((p) => !whole(p) && job.drafts && job.drafts[p.i]), bs = doing ? lineBatchState2(job, doing) : null, progress = `<p class="pi-hint">共${total || "?"}段，已读${indexed}段，已整理${drafted}段${job.step === "review" ? "，已完成" : ""}</p>${bs ? `<p class="pi-hint">正在整理第${doing.i + 1}段，已完成${bs.ok} / ${bs.want}批。</p>` : ""}${busy ? `<p class="pi-hint" data-imp-live="${esc(job.id)}">${esc(importLiveText2(job.id))}</p>` : ""}${failed.map((f) => `<p class="pi-hint is-warn">${esc(f.why)}</p>`).join("")}`;
     if (job.step !== "review")
       return `${crumbs2(1)}<div class="pi-card"><h3>导入长文<span class="pi-spacer"></span><button type="button" class="pi-btn is-sm is-ghost" data-act="import-close">回到模组</button></h3>${progress}
         <div class="pi-tools is-end">${busy ? '<button type="button" class="pi-btn is-sm is-danger" data-act="import-stop">停止</button>' : ""}<button type="button" class="pi-btn is-primary is-sm" data-act="import-run"${busy ? " disabled" : ""}>${busy ? '<span class="pi-spin"></span>整理中' : failed.length ? "重试失败的段" : drafted || indexed ? "继续" : "开始"}</button></div></div>`;
@@ -24130,14 +24193,14 @@ ${yamlOf(k)}`).join(`
         ${errs.length ? `<p class="pi-hint is-warn"><b>需要处理（${errs.length}）</b></p>${errs.map((x) => `<p class="pi-hint is-warn">${esc(x.text)}</p>`).join("")}` : '<p class="pi-hint">整份草稿的检查：没有发现必须处理的问题。采用时会按项目现有模组和勾选的阶段再查一次。</p>'}
         ${warns.map((x) => `<p class="pi-hint">${esc(x.text)}</p>`).join("")}
         ${pending.length ? `<p class="pi-hint"><b>请确认</b></p>${pending.map((x) => `<p class="pi-hint">${esc(x)}</p>`).join("")}` : ""}
-        ${stages.map((st9) => {
-      let key = adoptKey2(job.id, 0, st9.key), nodes = stageNodes(st9.data), done = adopted.has(key);
-      return `<div class="pi-imp-stage"><div class="pi-set-row"><b>${esc(stageLabel(st9.key))}</b><span class="pi-hint">　${nodes.length}个节点</span><span class="pi-spacer"></span>${done ? '<span class="pi-badge is-ok">已采用</span>' : `<label class="pi-check"><input type="checkbox" data-imp-pick="${esc(st9.key)}" checked><span>采用</span></label>`}</div>
+        ${stages.map((st10) => {
+      let key = adoptKey2(job.id, 0, st10.key), nodes = stageNodes(st10.data), done = adopted.has(key);
+      return `<div class="pi-imp-stage"><div class="pi-set-row"><b>${esc(stageLabel(st10.key))}</b><span class="pi-hint">　${nodes.length}个节点</span><span class="pi-spacer"></span>${done ? '<span class="pi-badge is-ok">已采用</span>' : `<label class="pi-check"><input type="checkbox" data-imp-pick="${esc(st10.key)}" checked><span>采用</span></label>`}</div>
             ${nodes.map((n) => {
         let note = cand.notes[nodeUid2(n.item)] || {};
         return `<p class="pi-hint">${esc(n.name)}${note.段 ? `<span class="pi-meta">　第${note.段}段</span>` : ""}${note.待确认 ? `<br><span class="is-warn">待确认：${esc(note.待确认)}</span>` : ""}</p>`;
       }).join("")}
-            <details><summary class="pi-hint">YAML</summary><pre class="pi-pre is-full">${esc(stringifyYaml({ [st9.key]: st9.data }))}</pre></details></div>`;
+            <details><summary class="pi-hint">YAML</summary><pre class="pi-pre is-full">${esc(stringifyYaml({ [st10.key]: st10.data }))}</pre></details></div>`;
     }).join("")}
         <div class="pi-tools is-end"><button type="button" class="pi-btn is-primary is-sm" data-act="import-adopt">把勾选的阶段追加为新卷</button></div>
         ${cand.index ? `<details><summary class="pi-hint">作者索引（只给作者看）</summary><pre class="pi-pre is-full">${esc(stringifyYaml(Object.fromEntries(Object.entries(cand.index).filter(([k]) => k !== "secretFlag"))))}</pre></details>` : ""}</div>`;
@@ -24259,7 +24322,7 @@ ${yamlOf(k)}`).join(`
     if (await blockHalfTable2(view, jobId, review, isEdit || review.reopened ? editedVolumes(review) : review.draft)) return;
     if (!isEdit && isPlainObject(line0) && !line0.编号 && !line0.开启条件 && !line0.开始时机已选 && !line0.开启方式 && !line0.接上一条)
       return await view.data.imports.update(jobId, (j) => ({ ...j, review: { ...j.review, at: 0 } })), view.renderBody(), toast("warning", "先在第1页选这条线什么时候开始。");
-    let pending = Object.values(review.comments || {}).filter((c) => String(c || "").trim()).length, localOk = (job.localIndex || []).filter((x) => isPlainObject(x) && !x.error), index = localOk.length ? mergeImportIndex2(localOk) : job.index || null, all = Object.values(reviewIssues2(view, review, index)).flat(), errs = all.filter((x) => x.level === "error"), asks = all.filter((x) => x.level !== "error"), lines2 = [
+    let pending = Object.values(review.comments || {}).filter((c) => String(c || "").trim()).length, localOk = (job.localIndex || []).filter((x) => isPlainObject(x) && !x.error), index = localOk.length ? mergeImportIndex2(localOk) : job.index || null, all = Object.values(reviewIssues2(view, review, index)).flat(), errs = all.filter((x) => x.level === "error"), asks = all.filter((x) => x.level !== "error"), lines3 = [
       errs.length ? `还有${errs.length}个问题没解决：${errs.slice(0, 3).map((x) => x.plain || x.text).join("；")}` : "",
       asks.length ? `另有${asks.length}个问题你没回答，按原样保留。` : ""
     ].filter(Boolean);
@@ -24316,14 +24379,14 @@ ${yamlOf(k)}`).join(`
       let titleOf = (key) => lineTitle2(draft.find((v) => v.id === key.split("/")[0]) || { key: "" }), changes = prep.changes.flatMap((c) => draft.length > 1 ? c.changes.map((t) => `${titleOf(c.key)}：${t}`) : c.changes);
       if (!await confirmDialog({
         title: "保存到模组",
-        body: [`改动如下${shown2.length ? "；按这个聊天的进度：" : "。"}`, ...lines2].join(`
+        body: [`改动如下${shown2.length ? "；按这个聊天的进度：" : "。"}`, ...lines3].join(`
 `),
         list: [...changes.slice(0, 12), ...shown2],
         okLabel: "保存",
         danger: !!errs.length || !!(prep.guard && prep.guard.diffs.length)
       }))
         return;
-    } else if (!reopen && errs.length && !await confirmDialog({ title: `保存「${volumeLabelOf2(review)}」到模组`, body: lines2.join(`
+    } else if (!reopen && errs.length && !await confirmDialog({ title: `保存「${volumeLabelOf2(review)}」到模组`, body: lines3.join(`
 `), okLabel: "仍然保存", danger: !!errs.length })) return;
     if (view.projectId !== projectId || !importJobOf2(view, jobId)) return toast("warning", "确认期间切换了项目，没有保存。");
     if (reopen && targetStamp(view.project(), savedIds) !== stamp0) return toast("warning", "确认期间模组里这些线又被改过（或删掉了），没有保存。草稿和意见都还在，请再点一次核对。");
@@ -24532,6 +24595,8 @@ ${r2.yaml}`,
       init_trpg_import_store();
       init_pdf_load();
       init_trpg();
+      init_trpg_people();
+      init_personas();
       init_trpg_kp_rules();
       IMPORT_PART_CHARS2 = 8e3, liveImport2 = /* @__PURE__ */ new Map(), liveSeq2 = 0;
       importStops2 = /* @__PURE__ */ new Map();
@@ -24690,11 +24755,11 @@ ${r2.yaml}`,
     view.data.updateProject(view.projectId, (p) => p.trpg ? { ...p, trpg: { ...p.trpg, ...fn(p.trpg) } } : p);
   }
   function listHtml(project) {
-    let nodes = clueNodes2(project.outline.volumes).filter((n) => n.uid), name = (uid) => (nodes.find((n) => n.uid === uid) || {}).name || "", opt = (cur) => `<option value="">未指定场景</option>${nodes.map((n) => `<option value="${esc(n.uid)}"${n.uid === cur ? " selected" : ""}>${esc(n.name)}</option>`).join("")}`, row2 = (s) => `<div class="pi-sl-row" data-sl="${esc(s.id)}"><label class="pi-check"><input type="checkbox" data-sl-on${s.off ? "" : " checked"}><span>${esc(s.who ? `${s.who}：` : "")}${esc(s.kind === "seed" || s.kind === "taboo" ? `${s.hint}（原文：${s.text}）` : s.text)}</span></label>
+    let nodes = clueNodes2(project.outline.volumes).filter((n) => n.uid), name = (uid) => (nodes.find((n) => n.uid === uid) || {}).name || "", opt = (cur) => `<option value="">未指定场景</option>${nodes.map((n) => `<option value="${esc(n.uid)}"${n.uid === cur ? " selected" : ""}>${esc(n.name)}</option>`).join("")}`, row3 = (s) => `<div class="pi-sl-row" data-sl="${esc(s.id)}"><label class="pi-check"><input type="checkbox" data-sl-on${s.off ? "" : " checked"}><span>${esc(s.who ? `${s.who}：` : "")}${esc(s.kind === "seed" || s.kind === "taboo" ? `${s.hint}（原文：${s.text}）` : s.text)}</span></label>
             <select class="pi-inp" data-sl-node>${opt(s.node)}</select></div>`;
     return Object.entries(SLICE_KINDS).map(([kind, label]) => {
       let list = slicesOf(project).filter((s) => s.kind === kind);
-      return list.length ? `<h5>${esc(label)}（${list.length}）</h5>${list.map(row2).join("")}` : "";
+      return list.length ? `<h5>${esc(label)}（${list.length}）</h5>${list.map(row3).join("")}` : "";
     }).join("") || '<p class="pi-hint">还没有切片。</p>';
   }
   async function showList(view) {
@@ -25099,15 +25164,15 @@ ${r2.yaml}`,
     return checkCache.set(key, n), n;
   }
   function checkHtml(view, project) {
-    let clue = isClueMode(project), current = clue && view.runtime.activeId() === view.projectId ? view.runtime.clue.compute() : null, { known, claimed } = chatFactSets2(current), base = outlineIssues(project.outline.volumes).filter((x) => !clue || x.kind !== "no-time"), more = clue ? projectClueIssues3(project, project.outline.volumes, { secrets: projectSecretNames(project), knownFacts: known, claimedFacts: claimed }) : [], errs = more.filter((x) => x.level === "error"), asks = more.filter((x) => x.level !== "error"), total = base.length + more.length, idOf2 = (x) => x.stageId || x.stageIds && x.stageIds[0] || x.volumeId || "", row2 = (x) => {
+    let clue = isClueMode(project), current = clue && view.runtime.activeId() === view.projectId ? view.runtime.clue.compute() : null, { known, claimed } = chatFactSets2(current), base = outlineIssues(project.outline.volumes).filter((x) => !clue || x.kind !== "no-time"), more = clue ? projectClueIssues3(project, project.outline.volumes, { secrets: projectSecretNames(project), knownFacts: known, claimedFacts: claimed }) : [], errs = more.filter((x) => x.level === "error"), asks = more.filter((x) => x.level !== "error"), total = base.length + more.length, idOf2 = (x) => x.stageId || x.stageIds && x.stageIds[0] || x.volumeId || "", row3 = (x) => {
       let id = idOf2(x), body = `<span class="pi-pname">${esc(x.plain || x.text)}</span>${x.fix ? `<span class="pi-hint pi-check-fix">建议：${esc(x.fix)}</span>` : ""}`;
       return id ? `<button type="button" class="pi-titem is-issue pi-check-item" data-act="issue-go" data-id="${esc(id)}">${body}</button>` : `<div class="pi-titem is-issue pi-check-item">${body}</div>`;
     };
     return total ? `<div class="pi-card"><h3>${outlineWord(project)}检查<span class="pi-meta">${total}项</span></h3>
         ${clue ? '<p class="pi-hint">点击一条跳转到对应阶段。需要AI修改时，点「审阅修改」并在这条线的页上写意见。</p>' : ""}
-        ${errs.length ? `<div class="pi-rv-sec">要处理的问题（${errs.length}）</div>${errs.map(row2).join("")}` : ""}
-        ${base.length ? `${clue ? `<div class="pi-rv-sec">格式（${base.length}）</div>` : ""}${base.map(row2).join("")}` : ""}
-        ${asks.length ? `<details><summary class="pi-hint">另有${asks.length}项需确认</summary>${asks.map(row2).join("")}</details>` : ""}</div>` : `<div class="pi-card"><h3>${outlineWord(project)}检查</h3><p class="pi-hint">没有发现问题。${clue ? "（已检查：能否推进、线索能否获得、替代途径。）" : ""}</p></div>`;
+        ${errs.length ? `<div class="pi-rv-sec">要处理的问题（${errs.length}）</div>${errs.map(row3).join("")}` : ""}
+        ${base.length ? `${clue ? `<div class="pi-rv-sec">格式（${base.length}）</div>` : ""}${base.map(row3).join("")}` : ""}
+        ${asks.length ? `<details><summary class="pi-hint">另有${asks.length}项需确认</summary>${asks.map(row3).join("")}</details>` : ""}</div>` : `<div class="pi-card"><h3>${outlineWord(project)}检查</h3><p class="pi-hint">没有发现问题。${clue ? "（已检查：能否推进、线索能否获得、替代途径。）" : ""}</p></div>`;
   }
   function overviewHtml(view, project) {
     let { runtime } = view, units = flattenUnits(project.outline.volumes), states = runtime.activeId() === project.id ? unitStates(units, runtime.progress()) : {};
@@ -25142,16 +25207,16 @@ ${r2.yaml}`,
 `) : String(value[key] ?? ""), attrs = (key) => `data-node-field="${esc(meta2.field)}" data-i="${index}" data-k="${esc(key)}" data-play placeholder="${esc(PLAY_HINTS[key])}"`;
     return `<details class="pi-play"${keys.some((key) => shown2(key).trim()) ? " open" : ""}><summary>玩法</summary>
         ${keys.map((key) => {
-      let field2 = `<label class="pi-field"><span>${esc(key)}</span>${PLAY_LONG.has(key) ? `<textarea class="pi-ta" rows="2" ${attrs(key)}>${esc(shown2(key))}</textarea>` : `<input class="pi-inp" ${key === "进度钟" ? 'type="number" min="2" max="12" ' : ""}${attrs(key)} value="${esc(shown2(key))}">`}</label>`;
-      return PLAY_SHORT.has(key) ? `<div class="pi-pair">${field2}</div>` : field2;
+      let field3 = `<label class="pi-field"><span>${esc(key)}</span>${PLAY_LONG.has(key) ? `<textarea class="pi-ta" rows="2" ${attrs(key)}>${esc(shown2(key))}</textarea>` : `<input class="pi-inp" ${key === "进度钟" ? 'type="number" min="2" max="12" ' : ""}${attrs(key)} value="${esc(shown2(key))}">`}</label>`;
+      return PLAY_SHORT.has(key) ? `<div class="pi-pair">${field3}</div>` : field3;
     }).join("")}</details>`;
   }
   function playValue(key, raw) {
     let text2 = String(raw ?? "").trim();
     if (key === "步骤") {
-      let lines2 = text2.split(`
+      let lines3 = text2.split(`
 `).map((line) => line.trim()).filter(Boolean);
-      return lines2.length ? lines2 : void 0;
+      return lines3.length ? lines3 : void 0;
     }
     if (text2)
       return key === "进度钟" || key === "时限" && /^\d+$/.test(text2) ? Number(text2) : text2;
@@ -25292,8 +25357,8 @@ ${extra.length ? `<p class="pi-hint">另有字段：${esc(extra.join("、"))}（
   function liveProgress(view) {
     return view.runtime.activeId() === view.projectId ? view.runtime.progress() : null;
   }
-  function remapProgress(view, progress, stageId, field2, mapIndex) {
-    let meta2 = NODE_FIELDS.find((item) => item.field === field2);
+  function remapProgress(view, progress, stageId, field3, mapIndex) {
+    let meta2 = NODE_FIELDS.find((item) => item.field === field3);
     if (!meta2 || !progress) return;
     let next = remapNodes(progress, stageId, meta2.prefix, mapIndex);
     next !== progress && view.runtime.setProgress(next);
@@ -25361,11 +25426,11 @@ ${extra.length ? `<p class="pi-hint">另有字段：${esc(extra.join("、"))}（
     let projectId = view.projectId, prepare = () => {
       let p = view.project(), cur = isClueMode(p) && view.runtime.activeId() === projectId ? view.runtime.clue.compute() : null;
       return prepareReplace(p, incoming, { clue: cur ? { snap: cur.snap, prog: cur.prog, config: normalizeClue(p.clue) } : null });
-    }, effects = (pr) => [...pr.guard ? [...pr.guard.diffs, ...pr.guard.notes] : [], ...pr.restored.length ? [`已经完成的节点会保留：${pr.restored.join("、")}（完成条件不变）`] : []], prep = prepare(), shown2 = effects(prep), lines2 = planLines(prep.plan);
+    }, effects = (pr) => [...pr.guard ? [...pr.guard.diffs, ...pr.guard.notes] : [], ...pr.restored.length ? [`已经完成的节点会保留：${pr.restored.join("、")}（完成条件不变）`] : []], prep = prepare(), shown2 = effects(prep), lines3 = planLines(prep.plan);
     if (!await confirmDialog({
       title: "替换当前模组",
-      body: `${lines2.length ? "" : "内容没有变化，"}当前模组换成这份文件的内容，对得上的剧情线和阶段保留原来的编号和进度${shown2.length ? "；按这个聊天的进度：" : "。"}`,
-      list: [...lines2.slice(0, 40), ...lines2.length > 40 ? [`……另有${lines2.length - 40}项`] : [], ...shown2],
+      body: `${lines3.length ? "" : "内容没有变化，"}当前模组换成这份文件的内容，对得上的剧情线和阶段保留原来的编号和进度${shown2.length ? "；按这个聊天的进度：" : "。"}`,
+      list: [...lines3.slice(0, 40), ...lines3.length > 40 ? [`……另有${lines3.length - 40}项`] : [], ...shown2],
       okLabel: "替换",
       danger: !0
     }))
@@ -25485,8 +25550,8 @@ ${extra.length ? `<p class="pi-hint">另有字段：${esc(extra.join("、"))}（
     }, rows2 = vols.map((v) => ({ v, at: startOf(v.id) })).filter((x) => x.at >= 0);
     if (!rows2.length) return toast("info", "所有剧情线都已结束，没有可改写的阶段。"), null;
     let first = rows2.some((x) => x.v.id === cur) ? cur : rows2[0].v.id, hint = (id) => {
-      let row3 = rows2.find((x) => x.v.id === id) || rows2[0];
-      return `从「${stageLabel(units[row3.at].stage.key)}」起改写，其他剧情线不变。`;
+      let row4 = rows2.find((x) => x.v.id === id) || rows2[0];
+      return `从「${stageLabel(units[row4.at].stage.key)}」起改写，其他剧情线不变。`;
     }, picked = await openDialog({
       title: "让AI改写后续阶段",
       html: `<label class="pi-field"><span>改哪条剧情线</span><select class="pi-sel" data-rw-line>${options(
@@ -25509,8 +25574,8 @@ ${extra.length ? `<p class="pi-hint">另有字段：${esc(extra.join("、"))}（
       ]
     });
     if (!picked) return null;
-    let row2 = rows2.find((x) => x.v.id === picked.id) || rows2[0];
-    return { volumeId: row2.v.id, from: row2.at, reason: picked.reason, playing: row2.v.id === cur };
+    let row3 = rows2.find((x) => x.v.id === picked.id) || rows2[0];
+    return { volumeId: row3.v.id, from: row3.at, reason: picked.reason, playing: row3.v.id === cur };
   }
   function draftApplied(volumes, draft, incoming = draft.volumes) {
     return draft.volumeId ? replaceLineRest(volumes, draft.fromUnitId, incoming) : replaceRest(volumes, draft.fromUnitId, incoming);
@@ -25735,34 +25800,34 @@ ${extra.length ? `<p class="pi-hint">另有字段：${esc(extra.join("、"))}（
         return;
       }
       if (target.dataset.stageField) {
-        let field2 = target.dataset.stageField;
-        updateStage(view, stage.id, (item) => ({ ...item, data: { ...item.data, [field2]: target.value } }));
+        let field3 = target.dataset.stageField;
+        updateStage(view, stage.id, (item) => ({ ...item, data: { ...item.data, [field3]: target.value } }));
         return;
       }
       if (target.dataset.stageList) {
-        let field2 = target.dataset.stageList, lines2 = target.value.split(
+        let field3 = target.dataset.stageList, lines3 = target.value.split(
           `
 `
         ).map((line) => line.trim()).filter(Boolean);
         updateStage(view, stage.id, (item) => {
-          let data = { ...item.data, [field2]: lines2 };
-          return lines2.length || delete data[field2], { ...item, data };
+          let data = { ...item.data, [field3]: lines3 };
+          return lines3.length || delete data[field3], { ...item, data };
         });
         return;
       }
       if (target.dataset.nodeField) {
-        let field2 = target.dataset.nodeField, index = Number(target.dataset.i), key = target.dataset.k, pending = nameKey(stage.id, field2, index);
+        let field3 = target.dataset.nodeField, index = Number(target.dataset.i), key = target.dataset.k, pending = nameKey(stage.id, field3, index);
         if (["名称", "类型", "内容"].includes(key) && !pendingNames.has(pending)) {
-          let node = nodeAt(stage, field2, index);
+          let node = nodeAt(stage, field3, index);
           node && pendingNames.set(pending, node.name);
         }
         updateStage(view, stage.id, (item) => {
-          let list = [...item.data[field2]], prev = list[index] && typeof list[index] == "object" ? list[index] : {};
+          let list = [...item.data[field3]], prev = list[index] && typeof list[index] == "object" ? list[index] : {};
           if (list[index] = { ...prev, [key]: target.value }, target.dataset.play !== void 0) {
             let value = playValue(key, target.value);
             value === void 0 ? delete list[index][key] : list[index][key] = value;
           }
-          return { ...item, data: { ...item.data, [field2]: list } };
+          return { ...item, data: { ...item.data, [field3]: list } };
         });
       }
     }
@@ -25772,19 +25837,19 @@ ${extra.length ? `<p class="pi-hint">另有字段：${esc(extra.join("、"))}（
     if (target.dataset.nodeYaml !== void 0 || target.dataset.stageYaml !== void 0) return applyYamlField(view, target);
     target.dataset.nodeField && ["名称", "类型", "内容"].includes(target.dataset.k) && syncNodeName(view, target.dataset.nodeField, Number(target.dataset.i)), target.matches("[data-stage-key],[data-vol-key],[data-stage-field],[data-stage-list],[data-node-field]") && view.runtime.refresh();
   }
-  function nodeAt(stage, field2, index) {
-    return stage ? stageNodes(stage.data).find((item) => item.field === field2 && item.index === index) : null;
+  function nodeAt(stage, field3, index) {
+    return stage ? stageNodes(stage.data).find((item) => item.field === field3 && item.index === index) : null;
   }
-  function syncNodeName(view, field2, index) {
+  function syncNodeName(view, field3, index) {
     let { stage } = findSel(view.project(), st(view).sel);
     if (!stage) return;
-    let key = nameKey(stage.id, field2, index), from = pendingNames.get(key);
+    let key = nameKey(stage.id, field3, index), from = pendingNames.get(key);
     pendingNames.delete(key);
-    let node = nodeAt(stage, field2, index);
+    let node = nodeAt(stage, field3, index);
     if (!node) return;
     from && from !== node.name && view.data.updateProject(view.projectId, (project) => ({
       ...project,
-      outline: withRenames(project.outline, [{ stageId: stage.id, field: field2, from, to: node.name }])
+      outline: withRenames(project.outline, [{ stageId: stage.id, field: field3, from, to: node.name }])
     }));
     let progress = liveProgress(view);
     if (!progress) return;
@@ -25891,8 +25956,8 @@ ${f.text}`
       return value === void 0 ? delete out[key] : out[key] = value, out;
     };
     target.dataset.stageYaml !== void 0 ? updateStage(view, stage.id, (item) => ({ ...item, data: set(item.data) })) : updateStage(view, stage.id, (item) => {
-      let field2 = target.dataset.nodeYaml, list = [...item.data[field2]], index = Number(target.dataset.i);
-      return list[index] = set(isPlainObject(list[index]) ? list[index] : {}), { ...item, data: { ...item.data, [field2]: list } };
+      let field3 = target.dataset.nodeYaml, list = [...item.data[field3]], index = Number(target.dataset.i);
+      return list[index] = set(isPlainObject(list[index]) ? list[index] : {}), { ...item, data: { ...item.data, [field3]: list } };
     }), view.runtime.clue.invalidate(), view.runtime.refresh();
   }
   function currentTables() {
@@ -25984,12 +26049,12 @@ ${f.text}`
         "node-req"(view, target) {
           let { stage } = findSel(view.project(), st(view).sel);
           if (!stage) return;
-          let field2 = target.dataset.field, index = Number(target.dataset.i);
+          let field3 = target.dataset.field, index = Number(target.dataset.i);
           updateStage(view, stage.id, (item) => {
-            let list = [...item.data[field2] || []], node = list[index] && typeof list[index] == "object" ? { ...list[index] } : null;
+            let list = [...item.data[field3] || []], node = list[index] && typeof list[index] == "object" ? { ...list[index] } : null;
             if (!node) return item;
-            let kind = field2 === "主线节点" ? "main" : "side", req = isRequired2({ item: node, kind });
-            return req === (kind !== "main") ? delete node.必需 : node.必需 = !req, list[index] = node, { ...item, data: { ...item.data, [field2]: list } };
+            let kind = field3 === "主线节点" ? "main" : "side", req = isRequired2({ item: node, kind });
+            return req === (kind !== "main") ? delete node.必需 : node.必需 = !req, list[index] = node, { ...item, data: { ...item.data, [field3]: list } };
           }), view.runtime.refresh(), view.renderBody();
         },
         "node-kind"(view, target) {
@@ -26124,26 +26189,26 @@ ${f.text}`
           }
         },
         "node-add"(view, target) {
-          let { stage } = findSel(view.project(), st(view).sel), field2 = target.dataset.field;
+          let { stage } = findSel(view.project(), st(view).sel), field3 = target.dataset.field;
           updateStage(view, stage.id, (item) => ({
             ...item,
             data: {
               ...item.data,
-              [field2]: [...Array.isArray(item.data[field2]) ? item.data[field2] : [], { ...NEW_NODE[target.dataset.kind] }]
+              [field3]: [...Array.isArray(item.data[field3]) ? item.data[field3] : [], { ...NEW_NODE[target.dataset.kind] }]
             }
           })), view.renderBody();
         },
         "node-up"(view, target) {
-          let { stage } = findSel(view.project(), st(view).sel), field2 = target.dataset.field, index = Number(target.dataset.i);
+          let { stage } = findSel(view.project(), st(view).sel), field3 = target.dataset.field, index = Number(target.dataset.i);
           if (index <= 0) return;
           let before = liveProgress(view);
-          updateStage(view, stage.id, (item) => ({ ...item, data: { ...item.data, [field2]: moveUp(item.data[field2], index) } })), remapProgress(view, before, stage.id, field2, swapIndex(index - 1, index)), view.runtime.refresh(), view.renderBody();
+          updateStage(view, stage.id, (item) => ({ ...item, data: { ...item.data, [field3]: moveUp(item.data[field3], index) } })), remapProgress(view, before, stage.id, field3, swapIndex(index - 1, index)), view.runtime.refresh(), view.renderBody();
         },
         "node-down"(view, target) {
-          let { stage } = findSel(view.project(), st(view).sel), field2 = target.dataset.field, index = Number(target.dataset.i);
-          if (index >= (stage.data[field2] || []).length - 1) return;
+          let { stage } = findSel(view.project(), st(view).sel), field3 = target.dataset.field, index = Number(target.dataset.i);
+          if (index >= (stage.data[field3] || []).length - 1) return;
           let before = liveProgress(view);
-          updateStage(view, stage.id, (item) => ({ ...item, data: { ...item.data, [field2]: moveItem(item.data[field2], index, 1) } })), remapProgress(view, before, stage.id, field2, swapIndex(index, index + 1)), view.runtime.refresh(), view.renderBody();
+          updateStage(view, stage.id, (item) => ({ ...item, data: { ...item.data, [field3]: moveItem(item.data[field3], index, 1) } })), remapProgress(view, before, stage.id, field3, swapIndex(index, index + 1)), view.runtime.refresh(), view.renderBody();
         },
         async "node-menu"(view, target) {
           let index = Number(target.dataset.i), pick = await menuDialog({
@@ -26157,7 +26222,7 @@ ${f.text}`
           pick && await actions[pick](view, target);
         },
         async "node-del"(view, target) {
-          let { stage } = findSel(view.project(), st(view).sel), field2 = target.dataset.field, index = Number(target.dataset.i), node = stage.data[field2][index];
+          let { stage } = findSel(view.project(), st(view).sel), field3 = target.dataset.field, index = Number(target.dataset.i), node = stage.data[field3][index];
           if (!await confirmDialog({
             title: `删除「${node && (node.名称 || node.类型) || "节点"}」`,
             body: "删除节点后会重新对齐进度。",
@@ -26167,9 +26232,9 @@ ${f.text}`
             return;
           let before = liveProgress(view);
           updateStage(view, stage.id, (item) => {
-            let list = item.data[field2].filter((_, i) => i !== index), data = { ...item.data, [field2]: list };
-            return !list.length && field2 !== "主线节点" && delete data[field2], { ...item, data };
-          }), remapProgress(view, before, stage.id, field2, (i) => i === index ? null : i > index ? i - 1 : i), view.runtime.refresh(), view.renderBody();
+            let list = item.data[field3].filter((_, i) => i !== index), data = { ...item.data, [field3]: list };
+            return !list.length && field3 !== "主线节点" && delete data[field3], { ...item, data };
+          }), remapProgress(view, before, stage.id, field3, (i) => i === index ? null : i > index ? i - 1 : i), view.runtime.refresh(), view.renderBody();
         },
         async "outline-menu"(view) {
           let pick = await menuDialog({
@@ -26522,7 +26587,7 @@ ${yaml}
           st(view).draft = null, st(view).sel = keepId, view.runtime.refresh(), view.renderBody();
         }
       };
-      pendingNames = /* @__PURE__ */ new Map(), nameKey = (stageId, field2, index) => [stageId, field2, index].join("|");
+      pendingNames = /* @__PURE__ */ new Map(), nameKey = (stageId, field3, index) => [stageId, field3, index].join("|");
       refreshOn = [];
       CLUE_TEXT_KEYS = ["入口", "场景", "作者备注"], CLUE_YAML_KEYS = ["必需", "开放条件", "提前条件", "完成条件", "发现", "相关事实"];
       CLUE_PLACEHOLDER = {
@@ -26547,7 +26612,7 @@ ${yaml}
   init_store();
   init_files();
   init_st();
-  function createDataStore({ onChange: onChange8 = () => {
+  function createDataStore({ onChange: onChange9 = () => {
   }, onError = () => {
   } } = {}) {
     let index = emptyIndex(), ready = !1, projects = /* @__PURE__ */ new Map(), chats = /* @__PURE__ */ new Map(), loading2 = /* @__PURE__ */ new Map(), failed = /* @__PURE__ */ new Set(), writer = createWriter({
@@ -26559,18 +26624,18 @@ ${yaml}
           projects: index.projects.map(
             (item) => item === meta2 ? { ...item, bytes: { ...item.bytes, [kind]: bytes } } : item
           )
-        }), knownFile || (index = { ...index, files: [...index.files, name] }), (!knownFile || meta2 && meta2.bytes[kind] !== bytes) && writer.schedule(INDEX_FILE, index), onChange8("saved");
+        }), knownFile || (index = { ...index, files: [...index.files, name] }), (!knownFile || meta2 && meta2.bytes[kind] !== bytes) && writer.schedule(INDEX_FILE, index), onChange9("saved");
       },
       onError(name, error) {
-        failed.add(name), onError(error), onChange8("save-failed");
+        failed.add(name), onError(error), onChange9("save-failed");
       }
     });
     function setIndex(next) {
-      index = next, writer.schedule(INDEX_FILE, index), onChange8("index");
+      index = next, writer.schedule(INDEX_FILE, index), onChange9("index");
     }
     async function init() {
       let file = await readJsonFile(INDEX_FILE);
-      index = normalizeIndex(file && file.value), index.files.includes(INDEX_FILE) || (index = { ...index, files: [INDEX_FILE, ...index.files] }), ready = !0, onChange8("index");
+      index = normalizeIndex(file && file.value), index.files.includes(INDEX_FILE) || (index = { ...index, files: [INDEX_FILE, ...index.files] }), ready = !0, onChange9("index");
     }
     async function loadProject(id) {
       if (projects.has(id)) return projects.get(id);
@@ -26600,7 +26665,7 @@ ${yaml}
       });
     }
     function saveProject(project) {
-      projects.set(project.id, project), writer.schedule(projectFile(project.id), project), touch(project.id, { name: project.name }), onChange8("project", project.id);
+      projects.set(project.id, project), writer.schedule(projectFile(project.id), project), touch(project.id, { name: project.name }), onChange9("project", project.id);
     }
     function updateProject(id, fn) {
       let current = projects.get(id);
@@ -26621,7 +26686,7 @@ ${yaml}
           { id: project.id, name: project.name, group, updatedAt: Date.now(), bytes: { project: bytes } }
         ],
         files: index.files.includes(projectFile(project.id)) ? index.files : [...index.files, projectFile(project.id)]
-      }, writer.schedule(INDEX_FILE, index), onChange8("index"), project;
+      }, writer.schedule(INDEX_FILE, index), onChange9("index"), project;
     }
     let imports = createImportStore(), rawCreate = imports.create, rawDrop = imports.drop;
     imports.create = async (opts) => {
@@ -26664,7 +26729,7 @@ ${yaml}
       return chats.set(id, chat), chat;
     }
     function saveChat(id, chat) {
-      chats.set(id, chat), writer.schedule(chatFile(id), chat), onChange8("chat", id);
+      chats.set(id, chat), writer.schedule(chatFile(id), chat), onChange9("chat", id);
     }
     async function clearChat(id) {
       writer.cancel(chatFile(id)), await deleteFile(chatFile(id)), chats.set(id, emptyChat());
@@ -26693,7 +26758,7 @@ ${yaml}
     }
     function resetAll() {
       for (let name of [...index.files]) writer.cancel(name);
-      projects.clear(), chats.clear(), index = emptyIndex(), onChange8("index");
+      projects.clear(), chats.clear(), index = emptyIndex(), onChange9("index");
     }
     return {
       init,
@@ -26760,18 +26825,18 @@ ${yaml}
     return l && l.id && (name = name.replace(/^卷[^\s]*\s+/, "")), l && l.id && !name.startsWith(l.id) ? `${l.id} ${name}` : name;
   }
   function olLines(volumes) {
-    let lines2 = compileClue2(volumes || []).lines || [];
-    for (let l of lines2) {
+    let lines3 = compileClue2(volumes || []).lines || [];
+    for (let l of lines3) {
       let raw = isPlainObject(l.volume.line) ? l.volume.line.开启时段 : null;
       if (!l.window || !l.window.bad || !isPlainObject(raw)) continue;
-      let errs = [], w = resolveLineWindow2(raw, lines2.map((x) => ({ ...x, kind: "main" })), errs);
+      let errs = [], w = resolveLineWindow2(raw, lines3.map((x) => ({ ...x, kind: "main" })), errs);
       w && !w.bad && (l.window = w);
     }
-    return lines2;
+    return lines3;
   }
-  function nodeDoneIn(lines2, progress, links) {
+  function nodeDoneIn(lines3, progress, links) {
     let byUid = /* @__PURE__ */ new Map();
-    for (let l of lines2)
+    for (let l of lines3)
       for (let u of l.units)
         for (let n of stageNodes(u.stage.data)) isPlainObject(n.item) && n.item.id && byUid.set(String(n.item.id), { u, n });
     return (uid) => {
@@ -26779,8 +26844,8 @@ ${yaml}
       return hit ? new Set(offNodes(progress, hit.u, links)).has(hit.n.id) : void 0;
     };
   }
-  function olLineStates(lines2, progress, chat, env0 = {}, links = NO_LINKS) {
-    let prog = progress || {}, recs = isPlainObject(prog.lines) ? prog.lines : {}, eff = effectiveClueProgress(normalizeClueOps(prog.olOps), chat), ops = eff.lines, memo = /* @__PURE__ */ new Map(), visiting = /* @__PURE__ */ new Set(), forced = "", nodeDone = nodeDoneIn(lines2, prog, links), byId = new Map(lines2.map((l) => [l.id, l])), env = { facts: /* @__PURE__ */ new Map(), knowledge: [], tables: {}, ...env0, factOverrides: { ...env0.factOverrides || {}, ...eff.factOverrides }, nodeDone, lineState: (id) => byId.has(id) ? (stateOf(byId.get(id)) || { state: null }).state : void 0, lineStarted: (id) => !!(ops[id] && ops[id].started) };
+  function olLineStates(lines3, progress, chat, env0 = {}, links = NO_LINKS) {
+    let prog = progress || {}, recs = isPlainObject(prog.lines) ? prog.lines : {}, eff = effectiveClueProgress(normalizeClueOps(prog.olOps), chat), ops = eff.lines, memo = /* @__PURE__ */ new Map(), visiting = /* @__PURE__ */ new Set(), forced = "", nodeDone = nodeDoneIn(lines3, prog, links), byId = new Map(lines3.map((l) => [l.id, l])), env = { facts: /* @__PURE__ */ new Map(), knowledge: [], tables: {}, ...env0, factOverrides: { ...env0.factOverrides || {}, ...eff.factOverrides }, nodeDone, lineState: (id) => byId.has(id) ? (stateOf(byId.get(id)) || { state: null }).state : void 0, lineStarted: (id) => !!(ops[id] && ops[id].started) };
     function atOf(l) {
       let rec = recs[l.id] || {}, ids = l.units.map((u) => u.id);
       return ids.includes(prog.current) ? prog.current : ids.includes(rec.at) ? rec.at : "";
@@ -26807,12 +26872,12 @@ ${yaml}
       else if (man.state === "pause" && began) r.state = "暂停";
       else if (began) r.state = "进行中";
       else {
-        let k = lines2.indexOf(l), prev = k > 0 ? lines2[k - 1] : null, after = isPlainObject(l.volume.line) && truthy(l.volume.line.接上一条), ps = after && prev ? stateOf(prev) : null, cond = evalCondition2(sentenceize(l.open), env), win = windowOf(l), prevOk = !after || !prev || ps && OL_ENDED.includes(ps.state);
+        let k = lines3.indexOf(l), prev = k > 0 ? lines3[k - 1] : null, after = isPlainObject(l.volume.line) && truthy(l.volume.line.接上一条), ps = after && prev ? stateOf(prev) : null, cond = evalCondition2(sentenceize(l.open), env), win = windowOf(l), prevOk = !after || !prev || ps && OL_ENDED.includes(ps.state);
         r.eligible = cond.v === TRI2.t && win.v === TRI2.t && prevOk, r.missed = !!win.missed, r.why = prevOk ? waitWhy([...cond.reasons, ...win.reasons].filter(Boolean).join("；")) : `排在${prev.id}后面，要等它结束`, r.state = r.eligible ? "可开启" : "未触发", r.after = after;
       }
       return visiting.delete(l.id), memo.set(l.id, r), r;
     }
-    let all = () => lines2.map((l) => stateOf(l) || { line: l, state: "未触发", started: !1, eligible: !1, why: "线之间循环引用", at: "", auto: !1, missed: !1 }), list = all();
+    let all = () => lines3.map((l) => stateOf(l) || { line: l, state: "未触发", started: !1, eligible: !1, why: "线之间循环引用", at: "", auto: !1, missed: !1 }), list = all();
     if (!list.some((s) => s.state === "进行中")) {
       let fresh = !list.some((s) => s.ever || s.state === "已过"), pick = list.find((s) => s.state === "可开启" && (s.after || fresh && s.line.mode !== "manual"));
       if (pick) {
@@ -26823,9 +26888,9 @@ ${yaml}
     for (let x of list) x.state === "进行中" && !x.at && x.line.units.length && (x.at = x.line.units[0].id);
     return list;
   }
-  function olPendingFacts(lines2, lineStates, progress, chat, env0 = {}, { labels = {}, limit = 10, turn = 0 } = {}) {
+  function olPendingFacts(lines3, lineStates, progress, chat, env0 = {}, { labels = {}, limit = 10, turn = 0 } = {}) {
     let eff = effectiveClueProgress(normalizeClueOps((progress || {}).olOps), chat), env = { facts: /* @__PURE__ */ new Map(), ...env0, factOverrides: { ...env0.factOverrides || {}, ...eff.factOverrides } }, record = /* @__PURE__ */ new Map(), out = [], seen = /* @__PURE__ */ new Set();
-    for (let l of lines2)
+    for (let l of lines3)
       for (let u of l.units)
         for (let n of stageNodes(u.stage.data))
           for (let d of discoveryList2(isPlainObject(n.item) ? n.item : {})) d.fact && d.record && !record.has(d.fact) && record.set(d.fact, clueText2(d.record));
@@ -26849,8 +26914,8 @@ ${yaml}
     for (let s of lineStates || []) {
       let ids = s.line.units.map((u) => u.id);
       if (ids.forEach((id) => seen.add(id)), s.state === "进行中") {
-        let own = units.filter((u) => ids.includes(u.id)), st9 = unitStates(own, { ...progress, current: s.at || ids[0] }, links);
-        Object.assign(out, st9);
+        let own = units.filter((u) => ids.includes(u.id)), st10 = unitStates(own, { ...progress, current: s.at || ids[0] }, links);
+        Object.assign(out, st10);
         continue;
       }
       let pos = ids.indexOf(s.at), last = ids.length - 1;
@@ -27081,20 +27146,20 @@ ${yaml}
       return out;
     }
     function offerOffTrack({ result: result2, stage }) {
-      let actions12 = [], steer = (text2) => (saveKp2({ push: { kind: "steer", text: text2, floor: aiFloorCount2(chatMessages()) } }), notice.hide("kp-offtrack"));
-      result2.pullBack && (actions12.push({ label: "按建议拉回", primary: !0, run: () => steer(result2.pullBack) }), actions12.push({
+      let actions13 = [], steer = (text2) => (saveKp2({ push: { kind: "steer", text: text2, floor: aiFloorCount2(chatMessages()) } }), notice.hide("kp-offtrack"));
+      result2.pullBack && (actions13.push({ label: "按建议拉回", primary: !0, run: () => steer(result2.pullBack) }), actions13.push({
         label: "先看再改（可能剧透）",
         run: async () => {
           let text2 = await promptDialog({ title: "按建议拉回", label: "下一轮正文会这样把剧情引回来，可以修改", value: result2.pullBack, multiline: !0 });
           if (text2 == null || !String(text2).trim()) return offerOffTrack({ result: result2, stage });
           steer(String(text2).trim());
         }
-      })), result2.offReason && actions12.push({
+      })), result2.offReason && actions13.push({
         label: "查看原因（可能剧透）",
         run: async () => {
           await openDialog({ title: "偏离原因", html: `<p class="pi-hint">${esc(result2.offReason)}</p>` }), offerOffTrack({ result: result2, stage });
         }
-      }), actions12.push({
+      }), actions13.push({
         label: "给点线索",
         run: async () => {
           let c = deps.clue.compute(), target = c && kpPushTarget(c.state, c.snap, c.prog);
@@ -27102,7 +27167,7 @@ ${yaml}
           let pick = await menuDialog({ title: "给点线索", items: KP_LEVELS.map((x) => ({ label: x.label, value: String(x.level) })) });
           pick && (saveKp2({ push: { fact: target.fact, level: Number(pick), floor: aiFloorCount2(chatMessages()) } }), notice.hide("kp-offtrack"));
         }
-      }), actions12.push({ label: "这次不管", run: () => notice.hide("kp-offtrack") }), stage && actions12.push({ label: "本阶段不再提醒", run: () => (saveKp2({ offMuted: stage }), notice.hide("kp-offtrack")) }), notice.show({ id: "kp-offtrack", title: "剧情偏离模组", body: kpOffText(result2.offKind), actions: actions12 });
+      }), actions13.push({ label: "这次不管", run: () => notice.hide("kp-offtrack") }), stage && actions13.push({ label: "本阶段不再提醒", run: () => (saveKp2({ offMuted: stage }), notice.hide("kp-offtrack")) }), notice.show({ id: "kp-offtrack", title: "剧情偏离模组", body: kpOffText(result2.offKind), actions: actions13 });
     }
     async function recheck({ floors = 10 } = {}) {
       let project = deps.getProject();
@@ -27179,16 +27244,16 @@ ${yaml}
       let parts = fresh.map(([code, r]) => {
         let rescue = /-KP$/.test(code), base = code.replace(/-KP$/, ""), hit = c && kpFind(c.state, base), check = hit && hit.discovery.check;
         return { base, ...rollNoticeText(r, { hidden: !!(check && check.hidden), rescue, anyway: !!(check && check.fail && GOT_ANYWAY.test(check.fail)) }) };
-      }), rescueOf = parts.find((p) => p.canRescue && !(c && effectiveFact(p.base, c.snap, c.prog).confirmed)), body = [...parts.map((p) => p.body), ...probs.map(problemText)].join("；"), actions12 = [];
-      rescueOf && actions12.push({
+      }), rescueOf = parts.find((p) => p.canRescue && !(c && effectiveFact(p.base, c.snap, c.prog).confirmed)), body = [...parts.map((p) => p.body), ...probs.map(problemText)].join("；"), actions13 = [];
+      rescueOf && actions13.push({
         label: "补救检定",
         primary: !0,
         run: () => {
           let now = chatMessages(), tail = now[now.length - 1];
           saveKp2({ push: { fact: rescueOf.base, level: 2, floor: aiFloorCount2(now) + (tail && tail.is_user ? 1 : 0) } });
         }
-      }), actions12.push({ label: "关闭", run: () => {
-      } }), notice.show({ id: "kp-roll", title: parts.length === 1 ? parts[0].title : "判定结果", body, actions: actions12, ...rescueOf ? {} : { timeout: 8e3 } });
+      }), actions13.push({ label: "关闭", run: () => {
+      } }), notice.show({ id: "kp-roll", title: parts.length === 1 ? parts[0].title : "判定结果", body, actions: actions13, ...rescueOf ? {} : { timeout: 8e3 } });
     }
     let api = { run, recheck, applyRecheck, clearKp, autoVerifyEvery, setAutoVerify, rollNotice, reset: () => (again = !1, lastKey = "") };
     return api;
@@ -27438,10 +27503,10 @@ ${horrorGuide}` : "",
         aligned !== progress && (progress = aligned, writeProgress(progress), log("按大纲对照表归位了本聊天的进度")), alignedFrom = progress, alignedOutline = project.outline;
       }
       if (project && !isInfinite(project) && !isClueMode(project) && progress.current && progress.lineFlow === void 0 && !progress.lines && !normalizeClueOps(progress.olOps).ops.length && olByLine(project.outline.volumes, progress)) {
-        let lines2 = olLines(project.outline.volumes), k = lines2.findIndex((l) => l.units.some((u) => u.id === progress.current));
+        let lines3 = olLines(project.outline.volumes), k = lines3.findIndex((l) => l.units.some((u) => u.id === progress.current));
         if (k >= 0) {
-          let recs = {}, line = lines2[k], stage = line.units.findIndex((u) => u.id === progress.current) + 1;
-          lines2.slice(0, k).forEach((l) => recs[l.id] = { passed: !0 }), recs[line.id] = { at: progress.current, mig: !0 }, progress = { ...progress, lines: recs }, writeProgress(progress), log(`本聊天改为按剧情线推进：${line.id}第${stage}段继续，前${k}卷标为已过`);
+          let recs = {}, line = lines3[k], stage = line.units.findIndex((u) => u.id === progress.current) + 1;
+          lines3.slice(0, k).forEach((l) => recs[l.id] = { passed: !0 }), recs[line.id] = { at: progress.current, mig: !0 }, progress = { ...progress, lines: recs }, writeProgress(progress), log(`本聊天改为按剧情线推进：${line.id}第${stage}段继续，前${k}卷标为已过`);
           let key = `${chatId()}:${project.id}`;
           olMigrated !== key && notice.topBar && (olMigrated = key, notice.topBar({
             tag: "剧情线",
@@ -27460,7 +27525,7 @@ ${horrorGuide}` : "",
     function fameNow() {
       try {
         let igs = view.IGS, list = igs && igs.stats && typeof igs.stats.fame == "function" ? igs.stats.fame() : [], favor = igs && igs.stats && typeof igs.stats.favor == "function" ? igs.stats.favor() : [];
-        return [...Array.isArray(list) ? list : [], ...Array.isArray(favor) ? favor.map((row2) => ({ ...row2, kind: "favor" })) : []];
+        return [...Array.isArray(list) ? list : [], ...Array.isArray(favor) ? favor.map((row3) => ({ ...row3, kind: "favor" })) : []];
       } catch {
         return [];
       }
@@ -27486,11 +27551,11 @@ ${horrorGuide}` : "",
     }
     function olInfo(project = activeProject(), prog = currentProgress()) {
       if (!project || isInfinite(project) || isClueMode(project) || !prog || !olByLine(project.outline.volumes, prog)) return null;
-      let lines2 = olLines(project.outline.volumes);
-      if (!lines2.length) return null;
-      let ls = olLineStates(lines2, prog, chatMessages(), olEnv(project), links()), cur = ls.find((s) => s.state === "进行中") || null;
+      let lines3 = olLines(project.outline.volumes);
+      if (!lines3.length) return null;
+      let ls = olLineStates(lines3, prog, chatMessages(), olEnv(project), links()), cur = ls.find((s) => s.state === "进行中") || null;
       return {
-        lines: lines2,
+        lines: lines3,
         ls,
         cur,
         own: new Set(cur ? cur.line.units.map((u) => u.id) : []),
@@ -28171,7 +28236,7 @@ ${horrorGuide}` : "",
       if (isTrpg(activeProject())) return;
       let scope = ticket(), project = activeProject(), moves = resolveMoves(items, replyMoves);
       if (!moves.length || !project) return;
-      let lines2 = moves.map(moveText), adopt = () => {
+      let lines3 = moves.map(moveText), adopt = () => {
         if (!ticketValid(scope)) return;
         let prog = currentProgress(), env = personaEnv(activeProject(), prog, fameNow(), personaStates()), still = moves.filter((move) => {
           let line = activeProject().personas.lines.find((item) => item.id === move.item.lineId);
@@ -28181,13 +28246,13 @@ ${horrorGuide}` : "",
           log("人设阶段推进作废：阶段已被改动");
           return;
         }
-        setProgress(applyMoves(prog, activeProject(), still)), log(`人设阶段推进：${lines2.join("；")}`);
+        setProgress(applyMoves(prog, activeProject(), still)), log(`人设阶段推进：${lines3.join("；")}`);
       };
       if (data.settings().personaMode === "auto") {
         adopt(), notice.show({
           id: "persona",
           title: "人设阶段已推进",
-          body: lines2.join(`
+          body: lines3.join(`
 `),
           actions: [
             {
@@ -28202,7 +28267,7 @@ ${horrorGuide}` : "",
       notice.show({
         id: "persona",
         title: "人设阶段有变化",
-        body: lines2.join(`
+        body: lines3.join(`
 `),
         actions: [
           { label: "采用", primary: !0, run: adopt },
@@ -29207,18 +29272,18 @@ ${finds.map((d) => `- ${d.text}`).join(`
     tableSep: /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/
   }, cells = (line) => line.trim().replace(/^\||\|$/g, "").split("|").map((cell) => inline(cell.trim()));
   function renderMarkdown(src) {
-    let lines2 = String(src ?? "").replace(/\r\n?/g, `
+    let lines3 = String(src ?? "").replace(/\r\n?/g, `
 `).split(`
 `), out = [], i = 0;
-    for (; i < lines2.length; ) {
-      let line = lines2[i];
+    for (; i < lines3.length; ) {
+      let line = lines3[i];
       if (!line.trim()) {
         i += 1;
         continue;
       }
       if (RE.fence.test(line)) {
         let mark = line.trim().slice(0, 3), body = [];
-        for (i += 1; i < lines2.length && !lines2[i].trim().startsWith(mark); ) body.push(lines2[i++]);
+        for (i += 1; i < lines3.length && !lines3[i].trim().startsWith(mark); ) body.push(lines3[i++]);
         i += 1, out.push(`<pre class="pi-pre">${esc(body.join(`
 `))}</pre>`);
         continue;
@@ -29232,18 +29297,18 @@ ${finds.map((d) => `- ${d.text}`).join(`
         out.push("<hr>"), i += 1;
         continue;
       }
-      if (line.includes("|") && i + 1 < lines2.length && RE.tableSep.test(lines2[i + 1])) {
+      if (line.includes("|") && i + 1 < lines3.length && RE.tableSep.test(lines3[i + 1])) {
         let head = cells(line);
         i += 2;
         let rows2 = [];
-        for (; i < lines2.length && lines2[i].includes("|") && lines2[i].trim(); ) rows2.push(cells(lines2[i++]));
+        for (; i < lines3.length && lines3[i].includes("|") && lines3[i].trim(); ) rows2.push(cells(lines3[i++]));
         out.push(`<div class="pi-md-table"><table><thead><tr>${head.map((cell) => `<th>${cell}</th>`).join("")}</tr></thead>
-                <tbody>${rows2.map((row2) => `<tr>${row2.map((cell) => `<td>${cell}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`);
+                <tbody>${rows2.map((row3) => `<tr>${row3.map((cell) => `<td>${cell}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`);
         continue;
       }
       if (RE.quote.test(line)) {
         let body = [];
-        for (; i < lines2.length && RE.quote.test(lines2[i]); ) body.push(lines2[i++].replace(RE.quote, ""));
+        for (; i < lines3.length && RE.quote.test(lines3[i]); ) body.push(lines3[i++].replace(RE.quote, ""));
         out.push(`<blockquote>${renderMarkdown(body.join(`
 `))}</blockquote>`);
         continue;
@@ -29251,15 +29316,15 @@ ${finds.map((d) => `- ${d.text}`).join(`
       let list = RE.ul.test(line) ? "ul" : RE.ol.test(line) ? "ol" : "";
       if (list) {
         let items = [];
-        for (; i < lines2.length && RE[list].test(lines2[i]); ) {
-          let [, indent, text2] = RE[list].exec(lines2[i++]);
+        for (; i < lines3.length && RE[list].test(lines3[i]); ) {
+          let [, indent, text2] = RE[list].exec(lines3[i++]);
           items.push(`<li${indent.length >= 2 ? ' class="is-sub"' : ""}>${inline(text2)}</li>`);
         }
         out.push(`<${list}>${items.join("")}</${list}>`);
         continue;
       }
       let para = [];
-      for (; i < lines2.length && lines2[i].trim() && !RE.fence.test(lines2[i]) && !RE.heading.test(lines2[i]) && !RE.hr.test(lines2[i]) && !RE.quote.test(lines2[i]) && !RE.ul.test(lines2[i]) && !RE.ol.test(lines2[i]); ) para.push(inline(lines2[i++]));
+      for (; i < lines3.length && lines3[i].trim() && !RE.fence.test(lines3[i]) && !RE.heading.test(lines3[i]) && !RE.hr.test(lines3[i]) && !RE.quote.test(lines3[i]) && !RE.ul.test(lines3[i]) && !RE.ol.test(lines3[i]); ) para.push(inline(lines3[i++]));
       out.push(`<p>${para.join("<br>")}</p>`);
     }
     return out.join("");
@@ -29644,10 +29709,10 @@ ${parsed.body}` : parsed.body;
     view.data.saveChat(view.projectId, fn(chat));
   }
   function talkMarkdown(view, chat) {
-    let lines2 = [`# ${view.project().name}讨论记录`, ""];
-    chat.summary && lines2.push("## 早期摘要", "", chat.summary, "");
-    for (let msg of chat.messages) lines2.push(`## ${msg.role === "user" ? "我" : "AI"}`, "", msg.content, "");
-    return lines2.join(`
+    let lines3 = [`# ${view.project().name}讨论记录`, ""];
+    chat.summary && lines3.push("## 早期摘要", "", chat.summary, "");
+    for (let msg of chat.messages) lines3.push(`## ${msg.role === "user" ? "我" : "AI"}`, "", msg.content, "");
+    return lines3.join(`
 `);
   }
   var actions3 = {
@@ -29821,7 +29886,7 @@ ${parsed.body}` : parsed.body;
   init_personas();
   var PERSONA_FILE_KIND = "plot-injector-personas";
   function buildPersonaFile(personas2, { project = "", version = "" } = {}) {
-    let { lines: lines2 } = normalizePersonas(personas2), clean = lines2.map((line) => ({ ...line, source: null, sources: [] }));
+    let { lines: lines3 } = normalizePersonas(personas2), clean = lines3.map((line) => ({ ...line, source: null, sources: [] }));
     return { kind: PERSONA_FILE_KIND, version: 1, app: version, project, exportedAt: (/* @__PURE__ */ new Date()).toISOString(), lines: clean };
   }
   function parsePersonaFile(text2, { keepOutline = !1 } = {}) {
@@ -29832,9 +29897,9 @@ ${parsed.body}` : parsed.body;
       throw new Error("文件不是有效的JSON");
     }
     if (!data || data.kind !== PERSONA_FILE_KIND || !Array.isArray(data.lines)) throw new Error("这不是剧情注入器导出的人设文件");
-    let { lines: lines2 } = normalizePersonas({ lines: data.lines });
-    if (!lines2.length) throw new Error("文件里没有人设线");
-    return { project: String(data.project || ""), lines: lines2.map((line) => reidLine(line, keepOutline)) };
+    let { lines: lines3 } = normalizePersonas({ lines: data.lines });
+    if (!lines3.length) throw new Error("文件里没有人设线");
+    return { project: String(data.project || ""), lines: lines3.map((line) => reidLine(line, keepOutline)) };
   }
   function reidLine(line, keepOutline) {
     let ids = /* @__PURE__ */ new Map(), stages = line.stages.map((stage) => {
@@ -29921,8 +29986,8 @@ ${parsed.body}` : parsed.body;
   function pathNames(path) {
     let parts = String(path).split("/").map((item) => item.trim()), column = parts[parts.length - 1] || path;
     if (parts.length < 3) return { group: parts.length === 2 ? parts[0] : "", name: column };
-    let table = parts[0].replace(SUFFIX, ""), row2 = parts[1];
-    return { group: table && row2.includes(table) ? table : row2, name: column };
+    let table = parts[0].replace(SUFFIX, ""), row3 = parts[1];
+    return { group: table && row3.includes(table) ? table : row3, name: column };
   }
   var entryName = (title2) => (String(title2 || "").replace(/<!--[\s\S]*?-->/g, "").split(`
 `).map((line) => line.trim()).find(Boolean) || "").replace(/^[^\p{L}\p{N}[]+/u, "").replace(/^\[[^\]]*\]\s*/, "") || "未命名", loose = (value) => String(value).replace(/[\s　，。、；;：:！!？?·・.]/g, "").toLowerCase();
@@ -30005,12 +30070,12 @@ ${parsed.body}` : parsed.body;
     let pickMap = /* @__PURE__ */ new Map();
     for (let item of info.values())
       kinds.get(item.path) === "fixed" && pickMap.set(item.path, item.values.includes(picks[item.path]) ? picks[item.path] : item.values[0]);
-    let lines2 = /* @__PURE__ */ new Map(), lineFor = (path, kind, entry) => {
-      if (!lines2.has(path)) {
+    let lines3 = /* @__PURE__ */ new Map(), lineFor = (path, kind, entry) => {
+      if (!lines3.has(path)) {
         let names2 = pathNames(path);
-        lines2.set(path, { kind, path, group: names2.group, name: names2.name, entry, common: "", stages: /* @__PURE__ */ new Map(), sources: [] });
+        lines3.set(path, { kind, path, group: names2.group, name: names2.name, entry, common: "", stages: /* @__PURE__ */ new Map(), sources: [] });
       }
-      let line = lines2.get(path);
+      let line = lines3.get(path);
       return line.sources.some((source) => source.book === entry.book && source.uid === entry.uid) || line.sources.push({ book: entry.book, uid: String(entry.uid), key: String(entry.key) }), line;
     }, plainLines = [];
     for (let { entry, key, tree } of parsed) {
@@ -30066,7 +30131,7 @@ ${suffix.trim()}` : body;
       }
     }
     let out = [];
-    for (let line of lines2.values()) {
+    for (let line of lines3.values()) {
       if (!line.sources.some((source) => !blocked.has(`${source.book}\0${source.key}`))) continue;
       let base = { group: line.group, name: line.name, keys: line.entry.keys, constant: line.entry.constant, position: line.entry.position, depth: line.entry.depth, role: line.entry.role, order: line.entry.order, common: line.common, defaultStage: "", source: { book: line.entry.book, uid: String(line.entry.uid), varPath: line.path }, sources: line.sources };
       if (line.kind === "num")
@@ -30083,19 +30148,19 @@ ${suffix.trim()}` : body;
   }
   var lineKeyOf = (source) => `${source.book}\0${source.key ?? source.uid}`;
   function applyPlan(personas2, plan, entries) {
-    let ok = entries.filter((entry) => !plan.blocked.has(`${entry.book}\0${entry.key}`)), lines2 = plan.lines.map((line) => ({ id: makeId("pl"), enabled: !0, ...line })), imported = [...personas2.imported.filter((item) => !ok.some((entry) => entry.book === item.book && String(entry.key) === String(item.key))), ...ok.map((entry) => ({ book: entry.book, uid: String(entry.uid), key: String(entry.key), title: entry.title }))];
-    return { ...personas2, lines: [...personas2.lines, ...lines2], imported };
+    let ok = entries.filter((entry) => !plan.blocked.has(`${entry.book}\0${entry.key}`)), lines3 = plan.lines.map((line) => ({ id: makeId("pl"), enabled: !0, ...line })), imported = [...personas2.imported.filter((item) => !ok.some((entry) => entry.book === item.book && String(entry.key) === String(item.key))), ...ok.map((entry) => ({ book: entry.book, uid: String(entry.uid), key: String(entry.key), title: entry.title }))];
+    return { ...personas2, lines: [...personas2.lines, ...lines3], imported };
   }
   function releaseImported(personas2, item, { removeLines = !1 } = {}) {
     let imported = personas2.imported.filter((entry) => !(entry.book === item.book && String(entry.key) === String(item.key)));
     if (!removeLines) return { ...personas2, imported };
-    let gone = lineKeyOf(item), lines2 = personas2.lines.flatMap((line) => {
+    let gone = lineKeyOf(item), lines3 = personas2.lines.flatMap((line) => {
       let sources = Array.isArray(line.sources) && line.sources.length ? line.sources : line.source ? [{ book: line.source.book, uid: line.source.uid, key: line.source.uid }] : [];
       if (!sources.some((source) => lineKeyOf(source) === gone)) return [line];
       let rest = sources.filter((source) => lineKeyOf(source) !== gone);
       return rest.length ? [{ ...line, sources: rest }] : [];
     });
-    return { ...personas2, imported, lines: lines2 };
+    return { ...personas2, imported, lines: lines3 };
   }
 
   // src/ui/persona-import.js
@@ -30129,11 +30194,11 @@ ${suffix.trim()}` : body;
     return item.kind === "fixed" ? [...fix, ...line] : [...line, ...fix];
   }
   function previewHtml(plan) {
-    let issues = plan.issues.map((issue) => `<p class="pi-hint is-warn">${esc(issue.title)}：${esc(issue.text)}</p>`).join(""), lines2 = plan.lines.map((line) => `<div class="pi-wb-hit"><span class="pi-wb-title">${esc(line.group ? `${line.group}：` : "")}${esc(line.name)}</span>
+    let issues = plan.issues.map((issue) => `<p class="pi-hint is-warn">${esc(issue.title)}：${esc(issue.text)}</p>`).join(""), lines3 = plan.lines.map((line) => `<div class="pi-wb-hit"><span class="pi-wb-title">${esc(line.group ? `${line.group}：` : "")}${esc(line.name)}</span>
         <span class="pi-meta">${line.mode === "fame" ? "读声望" : line.mode === "check" ? "条件检测" : "手动"}，${line.stages.length}阶段</span></div>`).join(""), vars = plan.vars.filter((item) => item.kind !== "num").map((item) => `<div class="pi-wb-hit"><span class="pi-wb-title" title="${esc(item.path)}">${esc(item.name)}</span>
         <select class="pi-sel" data-pi-kind="${esc(item.path)}">${options(varChoices(item), item.kind === "fixed" ? `fix:${item.pick}` : "line")}</select></div>`).join("");
     return `${issues}
-        <div class="pi-wb-sec-hd">人设线<small>${plan.lines.length}</small></div>${lines2 || '<p class="pi-hint">没有可转入的内容。</p>'}
+        <div class="pi-wb-sec-hd">人设线<small>${plan.lines.length}</small></div>${lines3 || '<p class="pi-hint">没有可转入的内容。</p>'}
         ${vars ? `<div class="pi-wb-sec-hd">变量识别（可改判）</div>${vars}` : ""}`;
   }
   async function openImport(view) {
@@ -30435,15 +30500,83 @@ ${suffix.trim()}` : body;
     }
   };
 
+  // src/trpg/trpg-people-ui.js
+  var trpg_people_ui_exports = {};
+  __export(trpg_people_ui_exports, {
+    actions: () => actions5,
+    onChange: () => onChange3,
+    render: () => render5
+  });
+  init_dom();
+  init_styles();
+  init_tokens();
+  init_personas();
+  init_wbtools();
+  init_trpg_people();
+  var st5 = (view) => view.tabState("persona"), lines = (view) => view.project().personas && view.project().personas.lines || [];
+  function patchLines(view, fn) {
+    view.data.updateProject(view.projectId, (p) => ({ ...p, personas: { ...p.personas, lines: fn(p.personas && p.personas.lines || []) } })), view.runtime.refresh();
+  }
+  var patchLine2 = (view, id, fn) => patchLines(view, (all) => all.map((l) => l.id === id ? fn(l) : l)), textOf3 = (line) => line.stages[0] ? line.stages[0].text : "", field2 = (label, body) => `<label class="pi-field"><span>${label}</span>${body}</label>`;
+  function row2(line, open) {
+    let a = (f) => `data-tp="${esc(line.id)}" data-f="${f}"`, trig = line.constant ? "常驻" : "出场触发";
+    return `<div class="pi-entry${line.enabled ? "" : " is-off"}">
+        <div class="pi-entry-hd" data-act="tp-open" data-line="${esc(line.id)}">${open ? ICONS.caretDown : ICONS.caret}
+            <span class="pi-etitle">${esc(line.name)}</span><span class="pi-badge">${trig}</span>
+            <span class="pi-meta">≈${estimateTokens(textOf3(line))}</span>
+            <input type="checkbox" title="启用" data-tp-on="${esc(line.id)}"${line.enabled ? " checked" : ""}></div>
+        ${open ? `<div class="pi-entry-bd">
+            <div class="pi-pair">${field2("名字", `<input class="pi-inp" ${a("name")} value="${esc(line.name)}">`)}
+            ${field2("触发方式", `<select class="pi-sel" ${a("constant")}>${options([{ value: "0", label: "名字出现在最近正文里才注入" }, { value: "1", label: "常驻" }], line.constant ? "1" : "0")}</select>`)}</div>
+            ${line.constant ? "" : field2("触发词（逗号分隔，写名字和别名）", `<input class="pi-inp" ${a("keys")} value="${esc(line.keys.join("，"))}">`)}
+            ${field2("档案", `<textarea class="pi-ta" rows="9" ${a("text")}>${esc(textOf3(line))}</textarea>`)}
+            <p class="pi-hint">只写玩家能看到的：外貌、性格、说话方式、对玩家的态度、底线。真实身份和动机放进 KP 规则，别写在这里。</p>
+            <div class="pi-tools is-c1 is-end"><button type="button" class="pi-btn is-sm is-danger" data-act="tp-del" data-line="${esc(line.id)}">删除这个人物</button></div></div>` : ""}</div>`;
+  }
+  function render5(view) {
+    let all = lines(view), open = st5(view).open;
+    return `<div class="pi-card"><h3>人物档案<span class="pi-meta">${all.length}人</span><span class="pi-spacer"></span>
+        <button type="button" class="pi-btn is-sm is-primary" data-act="tp-add">${ICONS.plus}新建人物</button></h3>
+        <p class="pi-hint">每个人物一份档案，名字出现在最近几楼正文里时才给写正文的模型，避免人物写偏。导入模组时会自动整理，也可以自己改、自己加。</p>
+        ${all.map((l) => row2(l, open === l.id)).join("") || '<p class="pi-hint">还没有人物档案。导入模组时会自动生成，也可以手动新建。</p>'}</div>`;
+  }
+  function onChange3(view, target) {
+    let d = target.dataset;
+    if (d.tpOn)
+      return patchLine2(view, d.tpOn, (l) => ({ ...l, enabled: target.checked })), view.renderBody();
+    if (!d.tp) return;
+    let v = target.value;
+    return patchLine2(
+      view,
+      d.tp,
+      (l) => d.f === "name" ? { ...l, name: v.trim() || "未命名" } : d.f === "constant" ? { ...l, constant: v === "1" } : d.f === "keys" ? { ...l, keys: splitKeys(v) } : d.f === "text" ? { ...l, stages: [{ ...l.stages[0] || newStage("档案"), text: v }, ...l.stages.slice(1)] } : l
+    ), view.renderBody();
+  }
+  var actions5 = {
+    "tp-open"(view, target, event) {
+      if (event && event.target.closest("input")) return;
+      let s = st5(view);
+      s.open = s.open === target.dataset.line ? "" : target.dataset.line, view.renderBody();
+    },
+    "tp-add"(view) {
+      let line = { ...newLine("新人物", PEOPLE_GROUP), constant: !1 };
+      patchLines(view, (all) => [...all, line]), st5(view).open = line.id, view.renderBody();
+    },
+    async "tp-del"(view, target) {
+      let line = lines(view).find((l) => l.id === target.dataset.line);
+      !line || !await confirmDialog({ title: `删除「${line.name}」？`, okLabel: "删除", danger: !0 }) || (patchLines(view, (all) => all.filter((l) => l.id !== line.id)), view.renderBody());
+    }
+  };
+
   // src/ui/tab-run.js
   var tab_run_exports = {};
   __export(tab_run_exports, {
-    actions: () => actions5,
+    actions: () => actions6,
     activateCard: () => activateCard,
     entryRow: () => entryRow,
-    onChange: () => onChange3,
+    onChange: () => onChange4,
     onInput: () => onInput4,
-    render: () => render5
+    render: () => render6
   });
   init_clue_model();
   init_clue_run();
@@ -30462,18 +30595,18 @@ ${suffix.trim()}` : body;
   init_dom();
   init_styles();
   init_tab_outline();
-  var clueActions3 = routeActions(clueActions, clueActions2), renderClueRun3 = (view, project, st9) => (isTrpg(project) ? trpg_clue_run_exports : clue_run_exports).renderClueRun(view, project, st9), modeCard3 = (project) => (isTrpg(project) ? trpg_clue_run_exports : clue_run_exports).modeCard(project), clueOnChange3 = (view, target) => (viewIsTrpg(view) ? trpg_clue_run_exports : clue_run_exports).clueOnChange(view, target), clueOnInput2 = (view, target) => viewIsTrpg(view) ? void 0 : clueOnInput(view, target), lineDisplayName3 = lineDisplayName;
+  var clueActions3 = routeActions(clueActions, clueActions2), renderClueRun3 = (view, project, st10) => (isTrpg(project) ? trpg_clue_run_exports : clue_run_exports).renderClueRun(view, project, st10), modeCard3 = (project) => (isTrpg(project) ? trpg_clue_run_exports : clue_run_exports).modeCard(project), clueOnChange3 = (view, target) => (viewIsTrpg(view) ? trpg_clue_run_exports : clue_run_exports).clueOnChange(view, target), clueOnInput2 = (view, target) => viewIsTrpg(view) ? void 0 : clueOnInput(view, target), lineDisplayName3 = lineDisplayName;
   function toggleNode(view, unitId, nodeId, checked) {
     let unit = view.runtime.units().find((item) => item.id === unitId), node = unit && stageNodes(unit.stage.data).find((item) => item.id === nodeId), next = setNodeChecked(view.runtime.progress(), unitId, nodeId, checked, node ? node.name : ""), hook = checked && viewLive(view).hooks.find((item) => item.key === `${unitId}:${nodeId}`);
     hook && hook.steps.length && hook.step >= hook.steps.length && (next = patchLive(next, hook, { step: hook.steps.length - 1 })), view.runtime.setProgress(next);
   }
   function entryRow(entry, expanded) {
-    let atDepth = entry.position === 4, field2 = (name) => `data-kind="${entry.kind}" data-param="${name}"`, body = expanded ? `<div class="pi-entry-bd">
+    let atDepth = entry.position === 4, field3 = (name) => `data-kind="${entry.kind}" data-param="${name}"`, body = expanded ? `<div class="pi-entry-bd">
         <div class="pi-pair ${atDepth ? "is-c4" : ""}">
-            <label class="pi-field"><span>位置</span><select class="pi-sel" ${field2("position")}>${options(POSITIONS, entry.position)}</select></label>
-            ${atDepth ? `<label class="pi-field"><span>深度</span><input class="pi-inp" type="number" min="0" ${field2("depth")} value="${entry.depth}"></label>
-            <label class="pi-field"><span>角色</span><select class="pi-sel" ${field2("role")}>${options(ROLES, entry.role)}</select></label>` : ""}
-            <label class="pi-field"><span>顺序</span><input class="pi-inp" type="number" ${field2("order")} value="${entry.order}"></label>
+            <label class="pi-field"><span>位置</span><select class="pi-sel" ${field3("position")}>${options(POSITIONS, entry.position)}</select></label>
+            ${atDepth ? `<label class="pi-field"><span>深度</span><input class="pi-inp" type="number" min="0" ${field3("depth")} value="${entry.depth}"></label>
+            <label class="pi-field"><span>角色</span><select class="pi-sel" ${field3("role")}>${options(ROLES, entry.role)}</select></label>` : ""}
+            <label class="pi-field"><span>顺序</span><input class="pi-inp" type="number" ${field3("order")} value="${entry.order}"></label>
         </div>
         <pre class="pi-pre">${esc(entry.content)}</pre></div>` : "";
     return `<div class="pi-entry${entry.enabled ? "" : " is-off"}">
@@ -30506,12 +30639,12 @@ ${suffix.trim()}` : body;
   }
   function worldRow(live2) {
     if (!live2.clocks.length) return "";
-    let row2 = (clock) => {
+    let row3 = (clock) => {
       let phase = clockPhase(clock), dots = Array.from({ length: clock.total }, (_, i) => `<i${i < clock.filled ? ' class="is-on"' : ""}></i>`).join(""), mark = phase === "done" ? "已发生" : phase === "due" ? "已满" : `${clock.filled}/${clock.total}`;
       return `<button type="button" class="pi-check pi-clock${phase === "done" ? " is-quiet" : ""}" data-act="clock-menu" data-key="${esc(clock.key)}" title="${esc(clock.event)}">
             <span class="pi-clock-name">${esc(clock.node.name)}</span><span class="pi-clock-dots">${dots}</span><span class="pi-meta">${mark}</span></button>`;
     };
-    return `<p class="pi-hint">世界</p>${live2.clocks.map(row2).join("")}`;
+    return `<p class="pi-hint">世界</p>${live2.clocks.map(row3).join("")}`;
   }
   var switchCell = (key, label, on) => `<div class="pi-pace-cell"><span>${esc(label)}</span><button type="button" class="pi-switch${on ? " is-on" : ""}" role="switch" aria-checked="${on}" data-act="thread-switch" data-key="${key}" title="${on ? "已开启" : "已关闭"}"></button></div>`;
   function switchRow(sw) {
@@ -30554,9 +30687,9 @@ ${suffix.trim()}` : body;
                 <button type="button" class="pi-btn" data-act="activate-card">设为本卡默认</button></div></div>`;
   }
   var PERSONA_TAG_TONE = { 读声望中: "is-ok", 读不到声望: "is-warn", 数值不在任何区间: "is-warn", 手动: "is-accent" };
-  function personaCard(view, project, progress, st9) {
+  function personaCard(view, project, progress, st10) {
     if (!hasPersonas(project)) return "";
-    let all = project.personas, env = personaEnv(project, progress, view.runtime.fame(), view.runtime.personaStates()), muted = new Set(progress.personas && progress.personas.muted || []), collapsed = new Set(st9.personaFold || []), line = (item) => {
+    let all = project.personas, env = personaEnv(project, progress, view.runtime.fame(), view.runtime.personaStates()), muted = new Set(progress.personas && progress.personas.muted || []), collapsed = new Set(st10.personaFold || []), line = (item) => {
       let info = currentStage(item, progress, env), tags = [personaNote(item, progress, info), muted.has(item.id) ? "不提醒" : ""].filter(Boolean).map((text2) => `<span class="pi-pl-tag ${PERSONA_TAG_TONE[text2] || ""}">${esc(text2)}</span>`).join(""), caps = item.stages.map((stage, index) => `<button type="button" class="pi-chip${index === info.index ? " is-on" : index < info.index ? " is-past" : " is-next"}" data-act="persona-pick" data-line="${esc(item.id)}" data-stage="${esc(stage.id)}"${index === info.index ? ' aria-current="true"' : ""}>${esc(stage.name)}</button>`).join("");
       return `<div class="pi-pl-row${info.lost ? " is-lost" : ""}"><div class="pi-pl-hd"><span class="pi-pl-name">${esc(item.name)}</span>${tags}
             <button type="button" class="pi-icon-btn" data-act="persona-menu" data-line="${esc(item.id)}" title="更多">${ICONS.more}</button></div><div class="pi-refs">${caps}</div></div>`;
@@ -30566,20 +30699,20 @@ ${suffix.trim()}` : body;
       return `<div class="pi-group is-persona${shut ? " is-collapsed" : ""}"><button type="button" class="pi-group-hd" data-act="persona-fold" data-group="${esc(key)}">${shut ? ICONS.caret : ICONS.caretDown}${esc(group.name || "未分组")}<small>${group.lines.length}</small></button>${shut ? "" : group.lines.map(line).join("")}</div>`;
     }).join("") || '<p class="pi-hint">无启用的人设线。</p>'}</div>`;
   }
-  function render5(view) {
-    let { data, runtime } = view, project = view.project(), st9 = view.tabState("run"), notActive = activateCard(view, project);
+  function render6(view) {
+    let { data, runtime } = view, project = view.project(), st10 = view.tabState("run"), notActive = activateCard(view, project);
     if (notActive) return notActive;
-    if (isClueMode(project)) return renderClueRun3(view, project, st9);
+    if (isClueMode(project)) return renderClueRun3(view, project, st10);
     let progress = runtime.progress(), entries = runtime.entries(), sw = threadSwitches(project), units = maskUnits(flattenUnits(project.outline.volumes), sw), ov = runtime.olInfo ? runtime.olInfo() : null, states = ov ? ov.states : unitStates(units, progress), tlUnits = ov ? units.filter((u) => ov.own.has(u.id)) : units, seqBack = !ov && progress.lineFlow === "seq" && project.outline.volumes.some((v) => v.line && typeof v.line == "object"), total = entries.filter((entry) => entry.enabled).reduce((sum, entry) => sum + estimateTokens(entry.content), 0), settings = data.settings(), checking = runtime.isChecking(), book = runtime.injectMode() === "virtual" ? "" : '<span class="pi-badge is-warn">专用世界书</span>', gap = settings.checkEvery - (runtime.floorCount() - checkBase(progress));
     return `${modeCard3(project)}<div class="pi-card"><h3>注入条目${book}<span class="pi-meta">≈${total} token</span><span class="pi-spacer"></span>
             <button type="button" class="pi-btn is-sm is-ghost" data-act="preview">预览</button></h3>
-        ${entries.filter((entry) => entry.kind !== "persona").length ? entries.filter((entry) => entry.kind !== "persona").map((entry) => entryRow(entry, st9.open === entry.slotId)).join("") : '<p class="pi-hint">设定和大纲为空，无可注入内容。</p>'}
+        ${entries.filter((entry) => entry.kind !== "persona").length ? entries.filter((entry) => entry.kind !== "persona").map((entry) => entryRow(entry, st10.open === entry.slotId)).join("") : '<p class="pi-hint">设定和大纲为空，无可注入内容。</p>'}
         </div>
-        ${personaCard(view, project, progress, st9)}
-        ${ov ? olLineCard(ov, st9) : ""}
+        ${personaCard(view, project, progress, st10)}
+        ${ov ? olLineCard(ov, st10) : ""}
         <div class="pi-card"><h3>阶段<span class="pi-meta">${gap > 0 ? `${gap}楼后检测` : "下一楼检测"}</span><span class="pi-spacer"></span>
-            ${units.length ? `<button type="button" class="pi-btn is-sm is-ghost" data-act="index-toggle">${st9.indexOpen ? "收起索引" : "剧情索引"}</button>` : ""}</h3>
-        ${units.length ? `${seqBack ? '<div class="pi-row"><p class="pi-hint">本聊天按顺序推进，整本当一条线。</p><span class="pi-spacer"></span><button type="button" class="pi-btn is-sm is-ghost" data-act="ol-flow" data-flow="line">改回按线</button></div>' : ""}${st9.indexOpen ? `<pre class="pi-pre pi-index">${esc(buildIndexText(units, states, progress, { carryOver: settings.carryOver, hookCap: settings.hookCap, olView: ov }))}</pre>` : ""}
+            ${units.length ? `<button type="button" class="pi-btn is-sm is-ghost" data-act="index-toggle">${st10.indexOpen ? "收起索引" : "剧情索引"}</button>` : ""}</h3>
+        ${units.length ? `${seqBack ? '<div class="pi-row"><p class="pi-hint">本聊天按顺序推进，整本当一条线。</p><span class="pi-spacer"></span><button type="button" class="pi-btn is-sm is-ghost" data-act="ol-flow" data-flow="line">改回按线</button></div>' : ""}${st10.indexOpen ? `<pre class="pi-pre pi-index">${esc(buildIndexText(units, states, progress, { carryOver: settings.carryOver, hookCap: settings.hookCap, olView: ov }))}</pre>` : ""}
         <div class="pi-pace"><span class="pi-pace-label">推进速度</span><div class="pi-seg">${PACES.map((pace) => `<button type="button" class="pi-seg-btn${pace.value === progress.pace ? " is-sel" : ""}" data-act="pace" data-pace="${pace.value}">${pace.label}</button>`).join("")}</div></div>
         ${switchRow(sw)}
         <div class="pi-tools is-c3">
@@ -30587,7 +30720,7 @@ ${suffix.trim()}` : body;
             <button type="button" class="pi-btn is-sm" data-act="check"${checking ? " disabled" : ""}>${checking ? '<span class="pi-spin"></span>检测中' : "立即检测"}</button>
             <button type="button" class="pi-btn is-sm" data-act="rewrite">改写后续</button></div>
         ${ov ? `<p class="pi-hint">${ov.cur ? "只显示正在演的线。其他线在上面「剧情线」里查看。" : "没有正在演的剧情线。在上面「剧情线」里开始一条。"}</p>` : ""}
-        ${timeline(tlUnits, states, progress, settings.carryOver ? carriedNodes(tlUnits, states, progress, { withOff: !0 }) : [], liveOf(units, states, progress, settings), sw, st9.expiredOpen)}` : '<p class="pi-hint">大纲为空。可在「大纲」页导入剧情YAML、导入长文或由AI生成。</p>'}
+        ${timeline(tlUnits, states, progress, settings.carryOver ? carriedNodes(tlUnits, states, progress, { withOff: !0 }) : [], liveOf(units, states, progress, settings), sw, st10.expiredOpen)}` : '<p class="pi-hint">大纲为空。可在「大纲」页导入剧情YAML、导入长文或由AI生成。</p>'}
         </div>`;
   }
   var OL_TABS = [
@@ -30599,8 +30732,8 @@ ${suffix.trim()}` : body;
     let k = s.line.units.findIndex((u) => u.id === s.at);
     return k >= 0 && ["进行中", "暂停", "放弃"].includes(s.state) ? stageLabel(s.line.units[k].stage.key) : "";
   }
-  function olLineCard(ov, st9) {
-    let tab = OL_TABS.some(([k]) => k === st9.olTab) ? st9.olTab : "now", of = (g) => ov.ls.filter((s) => olGroup(s) === g), btn = (id, v, label, cls = " is-ghost") => `<button type="button" class="pi-btn is-sm${cls}" data-act="ol-line" data-id="${esc(id)}" data-value="${v}">${label}</button>`, row2 = (s) => {
+  function olLineCard(ov, st10) {
+    let tab = OL_TABS.some(([k]) => k === st10.olTab) ? st10.olTab : "now", of = (g) => ov.ls.filter((s) => olGroup(s) === g), btn = (id, v, label, cls = " is-ghost") => `<button type="button" class="pi-btn is-sm${cls}" data-act="ol-line" data-id="${esc(id)}" data-value="${v}">${label}</button>`, row3 = (s) => {
       let id = s.line.id, main0 = s.state === "可开启" ? btn(id, "start", "开始", " is-primary") : s.state === "暂停" ? btn(id, "resume", "继续", " is-primary") : "", g1 = [
         ...s.state === "进行中" ? [btn(id, "pause", "暂停"), btn(id, "done", "标记完成"), btn(id, "abandon", "放弃", " is-ghost is-danger")] : [],
         ...s.state === "暂停" ? [btn(id, "abandon", "放弃", " is-ghost is-danger")] : [],
@@ -30612,7 +30745,7 @@ ${suffix.trim()}` : body;
     }, empty2 = { now: "没有正在演的剧情线。", idle: "暂无未进行的剧情线。", end: "暂无已结束的剧情线。" };
     return `<div class="pi-card pi-line-card"><h3>剧情线<span class="pi-meta">共${ov.ls.length}条</span></h3>
         <div class="pi-seg pi-line-seg">${OL_TABS.map(([k, label]) => `<button type="button" class="pi-seg-btn${k === tab ? " is-sel" : ""}" data-act="ol-line-tab" data-tab="${k}">${label} ${of(k).length}</button>`).join("")}</div>
-        ${OL_TABS.map(([k]) => `<div class="pi-line-grp" data-line-grp="${k}"${k === tab ? "" : " hidden"}>${of(k).map(row2).join("") || `<p class="pi-hint">${empty2[k]}</p>`}</div>`).join("")}
+        ${OL_TABS.map(([k]) => `<div class="pi-line-grp" data-line-grp="${k}"${k === tab ? "" : " hidden"}>${of(k).map(row3).join("") || `<p class="pi-hint">${empty2[k]}</p>`}</div>`).join("")}
         <div class="pi-row pi-line-foot"><p class="pi-hint">同一时间只演一条线。开始另一条时，当前这条暂停，阶段和已演节点都保留。</p><span class="pi-spacer"></span><button type="button" class="pi-btn is-sm is-ghost" data-act="ol-flow" data-flow="seq">按顺序推进…</button></div></div>`;
   }
   function liveOf(units, states, progress, settings) {
@@ -30626,7 +30759,7 @@ ${suffix.trim()}` : body;
     let { runtime } = view;
     runtime.setProgress(patchSlot(runtime.progress(), slotId, patch));
   }
-  var actions5 = {
+  var actions6 = {
     "ol-line-tab"(view, target) {
       view.tabState("run").olTab = target.dataset.tab, view.renderBody();
     },
@@ -30658,21 +30791,21 @@ ${suffix.trim()}` : body;
       view.runtime.setProgress({ ...view.runtime.progress(), pace: target.dataset.pace }), view.renderBody();
     },
     "index-toggle"(view) {
-      let st9 = view.tabState("run");
-      st9.indexOpen = !st9.indexOpen, view.renderBody();
+      let st10 = view.tabState("run");
+      st10.indexOpen = !st10.indexOpen, view.renderBody();
     },
     "expired-toggle"(view) {
-      let st9 = view.tabState("run");
-      st9.expiredOpen = !st9.expiredOpen, view.renderBody();
+      let st10 = view.tabState("run");
+      st10.expiredOpen = !st10.expiredOpen, view.renderBody();
     },
     "toggle-entry"(view, target, event) {
       if (event.target.closest("input,select")) return;
-      let st9 = view.tabState("run");
-      st9.open = st9.open === target.dataset.slot ? "" : target.dataset.slot, view.renderBody();
+      let st10 = view.tabState("run");
+      st10.open = st10.open === target.dataset.slot ? "" : target.dataset.slot, view.renderBody();
     },
     "persona-fold"(view, target) {
-      let st9 = view.tabState("run"), set = new Set(st9.personaFold || []);
-      set.has(target.dataset.group) ? set.delete(target.dataset.group) : set.add(target.dataset.group), st9.personaFold = [...set], view.renderBody();
+      let st10 = view.tabState("run"), set = new Set(st10.personaFold || []);
+      set.has(target.dataset.group) ? set.delete(target.dataset.group) : set.add(target.dataset.group), st10.personaFold = [...set], view.renderBody();
     },
     "persona-pick"(view, target) {
       let line = view.project().personas.lines.find((item) => item.id === target.dataset.line);
@@ -30771,7 +30904,7 @@ ${suffix.trim()}` : body;
   function onInput4(view, target) {
     clueOnInput2(view, target);
   }
-  function onChange3(view, target) {
+  function onChange4(view, target) {
     if (clueOnChange3(view, target)) return;
     let { runtime } = view;
     if (target.dataset.param) {
@@ -30801,18 +30934,18 @@ ${suffix.trim()}` : body;
   // src/ui/tab-worlds.js
   var tab_worlds_exports = {};
   __export(tab_worlds_exports, {
-    actions: () => actions6,
-    onChange: () => onChange4,
+    actions: () => actions7,
+    onChange: () => onChange5,
     refreshOn: () => refreshOn4,
-    render: () => render6
+    render: () => render7
   });
   init_infinite();
   init_dom();
-  var st5 = (view) => view.tabState("worlds"), infOf = (view) => normalizeInfinite(view.project().infinite);
+  var st6 = (view) => view.tabState("worlds"), infOf = (view) => normalizeInfinite(view.project().infinite);
   function save3(view, fn) {
     view.data.updateProject(view.projectId, (project) => ({ ...project, infinite: fn(normalizeInfinite(project.infinite)) })), view.runtime.refresh();
   }
-  var lines = (text2) => String(text2 || "").split(`
+  var lines2 = (text2) => String(text2 || "").split(`
 `).map((line) => line.trim()).filter(Boolean);
   function wordTitle(key, hubName) {
     return { back: `返回${hubName}`, depart: "出发", away: "在副本里", hub: `在${hubName}` }[key];
@@ -30846,8 +30979,8 @@ ${suffix.trim()}` : body;
     return `<div class="pi-card"><h3>世界库<span class="pi-meta">${worlds.length}份</span></h3>
         ${worlds.length ? [...worlds].reverse().map((world) => worldRow2(world, s.open === world.id, currentId)).join("") : '<p class="pi-hint">这条聊天里还没有世界。到「执行」页点「进入新世界」，或等检测到下车时自动写出档案。</p>'}</div>`;
   }
-  function render6(view) {
-    let infinite = infOf(view), s = st5(view);
+  function render7(view) {
+    let infinite = infOf(view), s = st6(view);
     return `${libraryCard(view, s)}
         <div class="pi-card"><h3>骰池</h3>
         <p class="pi-hint">每行「名称|权重」。情欲浓度写进档案末尾，由代码决定。</p>
@@ -30859,9 +30992,9 @@ ${suffix.trim()}` : body;
         <p class="pi-hint">开副本时按「前缀 + 恐怖类型」到角色卡世界书里找同标题的条目（关闭的也能读到），正文放进造世界提示，不进正文注入。</p>
         <label class="pi-field"><span>条目标题前缀</span><input class="pi-inp" data-prefix value="${esc(infinite.config.horrorPrefix)}"></label></div>`;
   }
-  var actions6 = {
+  var actions7 = {
     "world-open"(view, target) {
-      let s = st5(view);
+      let s = st6(view);
       s.open = s.open === target.dataset.id ? "" : target.dataset.id, view.renderBody();
     },
     "world-reopen"(view, target) {
@@ -30878,19 +31011,19 @@ ${suffix.trim()}` : body;
       save3(view, (infinite) => ({ ...infinite, spec: "" })), view.renderBody();
     }
   };
-  function onChange4(view, target) {
+  function onChange5(view, target) {
     if (target.dataset.pool) {
       let key = target.dataset.pool, rows2 = textToPool(target.value);
       save3(view, (infinite) => ({ ...infinite, pools: { ...infinite.pools, [key]: rows2 } })), view.renderBody();
       return;
     }
     if (target.dataset.hub) {
-      let key = target.dataset.hub, value = key === "fieldNames" ? lines(target.value) : target.value.trim();
+      let key = target.dataset.hub, value = key === "fieldNames" ? lines2(target.value) : target.value.trim();
       save3(view, (infinite) => ({ ...infinite, config: { ...infinite.config, [key]: value } })), view.renderBody();
       return;
     }
     if (target.dataset.hubWords) {
-      let key = target.dataset.hubWords, rows2 = lines(target.value);
+      let key = target.dataset.hubWords, rows2 = lines2(target.value);
       save3(view, (infinite) => ({ ...infinite, config: { ...infinite.config, words: { ...infinite.config.words, [key]: rows2 } } })), view.renderBody();
       return;
     }
@@ -30906,16 +31039,16 @@ ${suffix.trim()}` : body;
   // src/ui/tab-infinite-run.js
   var tab_infinite_run_exports = {};
   __export(tab_infinite_run_exports, {
-    actions: () => actions7,
-    onChange: () => onChange3,
-    render: () => render7
+    actions: () => actions8,
+    onChange: () => onChange4,
+    render: () => render8
   });
   init_infinite();
   init_tokens();
   init_dom();
   var WORD_TITLES = { back: "返回", depart: "出发", away: "在副本里", hub: "在主空间" };
-  function render7(view) {
-    let { runtime } = view, project = view.project(), st9 = view.tabState("run"), notActive = activateCard(view, project);
+  function render8(view) {
+    let { runtime } = view, project = view.project(), st10 = view.tabState("run"), notActive = activateCard(view, project);
     if (notActive) return notActive;
     let state = runtime.infState();
     if (!state) return '<div class="pi-empty"><span class="pi-spin"></span> 正在读取进度…</div>';
@@ -30929,12 +31062,12 @@ ${suffix.trim()}` : body;
         ${blanked.length ? `<p class="pi-hint">${esc(blanked.map((key) => WORD_TITLES[key]).join("、"))}已清空，按默认词读取。</p>` : ""}</div>
         <div class="pi-card"><h3>注入条目${book}<span class="pi-meta">≈${total} token</span><span class="pi-spacer"></span>
             <button type="button" class="pi-btn is-sm is-ghost" data-act="preview">预览</button></h3>
-        ${entries.length ? entries.map((entry) => entryRow(entry, st9.open === entry.slotId)).join("") : '<p class="pi-hint">设定和世界库为空，无可注入内容。</p>'}</div>
+        ${entries.length ? entries.map((entry) => entryRow(entry, st10.open === entry.slotId)).join("") : '<p class="pi-hint">设定和世界库为空，无可注入内容。</p>'}</div>
         ${inf.log.length ? `<div class="pi-card"><h3>近期记录</h3><pre class="pi-pre">${esc(inf.log.slice().reverse().join(`
 `))}</pre></div>` : ""}`;
   }
-  var actions7 = {
-    ...actions5,
+  var actions8 = {
+    ...actions6,
     "inf-enter": (view) => view.runtime.openWorld(),
     async "inf-return"(view) {
       let hubName = resolveHub(view.runtime.infState()?.infinite.config).hubName;
@@ -30945,11 +31078,11 @@ ${suffix.trim()}` : body;
   // src/ui/page-settings.js
   var page_settings_exports = {};
   __export(page_settings_exports, {
-    actions: () => actions8,
-    onChange: () => onChange5,
+    actions: () => actions9,
+    onChange: () => onChange6,
     onInput: () => onInput5,
     refreshOn: () => refreshOn5,
-    render: () => render8
+    render: () => render9
   });
   init_guide();
   init_trpg();
@@ -30960,9 +31093,9 @@ ${suffix.trim()}` : body;
   init_st();
   init_dom();
   init_styles();
-  var st6 = (view) => view.tabState("settings"), currentRole = (view) => LLM_ROLES.some((item) => item.key === st6(view).role) ? st6(view).role : LLM_ROLES[0].key;
+  var st7 = (view) => view.tabState("settings"), currentRole = (view) => LLM_ROLES.some((item) => item.key === st7(view).role) ? st7(view).role : LLM_ROLES[0].key;
   function modelField(view, role, llm) {
-    let s = st6(view), models = s.models?.[role] || [];
+    let s = st7(view), models = s.models?.[role] || [];
     return `<div class="pi-field"><span>模型</span><div class="pi-inline">${!models.length || s.manual?.[role] ? `<input class="pi-inp" data-llm="${role}" data-k="model" value="${esc(llm.model)}" placeholder="模型名称">` : `<select class="pi-sel" data-llm="${role}" data-k="model">${llm.model && !models.includes(llm.model) ? `<option value="${esc(llm.model)}" selected>${esc(llm.model)}</option>` : ""}
             ${llm.model ? "" : '<option value="" selected disabled>选择模型</option>'}${options(
       models.map((model) => ({ value: model, label: model })),
@@ -31009,7 +31142,7 @@ ${suffix.trim()}` : body;
     return openDialog({ title: "载入接口预设", html: `<div class="pi-presets">${html}</div>`, actions: [{ label: "取消", value: null }] });
   }
   function guideCard(view, s) {
-    let open = st6(view).guideOpen, g = resolveGuide(s), preset = GUIDE_PRESETS.find((x) => x.value === s.guidePreset) || GUIDE_PRESETS[0], custom = s.guidePreset === "custom";
+    let open = st7(view).guideOpen, g = resolveGuide(s), preset = GUIDE_PRESETS.find((x) => x.value === s.guidePreset) || GUIDE_PRESETS[0], custom = s.guidePreset === "custom";
     return `<div class="pi-card"><h3>写作基准<span class="pi-spacer"></span>
             <button type="button" class="pi-btn is-sm is-ghost" data-act="guide-toggle">${open ? "收起" : "查看"}</button></h3>
         <p class="pi-hint">讨论页和设定页的AI按这份基准写作，正文模型不会读取。</p>
@@ -31021,7 +31154,7 @@ ${suffix.trim()}` : body;
         ${open ? custom ? `<textarea class="pi-ta is-mono is-tall" data-guide>${esc(s.guide || "")}</textarea>` : `<p class="pi-hint">内置版本不可直接修改。选择「自定义」可以此版本为底稿编辑。</p><pre class="pi-pre">${esc(g.text)}</pre>` : ""}</div>`;
   }
   function paceRow(view, s) {
-    let open = st6(view).paceOpen, changed = PACES.filter((item) => s.paceText[item.value]).map((item) => item.label), current = view.runtime.activeId() ? view.runtime.progress().pace : "", pace = PACES.some((item) => item.value === st6(view).pace) ? st6(view).pace : current || "normal", pick = PACES.map((item) => ({
+    let open = st7(view).paceOpen, changed = PACES.filter((item) => s.paceText[item.value]).map((item) => item.label), current = view.runtime.activeId() ? view.runtime.progress().pace : "", pace = PACES.some((item) => item.value === st7(view).pace) ? st7(view).pace : current || "normal", pick = PACES.map((item) => ({
       value: item.value,
       label: `${item.label}${item.value === current ? "（当前聊天使用）" : ""}${s.paceText[item.value] ? "（已修改）" : ""}`
     }));
@@ -31031,7 +31164,7 @@ ${suffix.trim()}` : body;
         <textarea class="pi-ta" rows="3" data-pace-text="${pace}">${esc(paceText(s, pace))}</textarea>
         <div class="pi-tools is-c1 is-end"><button type="button" class="pi-btn is-sm" data-act="pace-reset" data-pace="${pace}"${s.paceText[pace] ? "" : " disabled"}>恢复默认</button></div></div>` : ""}`;
   }
-  function render8(view) {
+  function render9(view) {
     let s = view.data.settings(), modes = [
       { value: "ask", label: "弹出确认" },
       { value: "auto", label: "自动推进（可撤销）" },
@@ -31048,7 +31181,7 @@ ${suffix.trim()}` : body;
       { value: "ask", label: "弹出确认" },
       { value: "auto", label: "自动收录为可选事件" },
       { value: "off", label: "不识别" }
-    ], advOpen = !!st6(view).advOpen;
+    ], advOpen = !!st7(view).advOpen;
     return `${llmCard(view, s)}
         <div class="pi-card"><h3>大纲推进</h3><p class="pi-hint">以下设置只用于大纲推进；线索推进不做定期检测。</p>
         <div class="pi-pair"><label class="pi-field"><span>检测间隔（楼）</span><input class="pi-inp" type="number" min="1" data-set="checkEvery" value="${s.checkEvery}"></label>
@@ -31063,8 +31196,8 @@ ${suffix.trim()}` : body;
         <div class="pi-card"><h3>注入内容</h3>
         <label class="pi-field"><span>详细条目的标签名</span><input class="pi-inp" data-set="tagName" value="${esc(s.tagName)}"></label>
         <div class="pi-set-row"><label class="pi-check"><input type="checkbox" data-set="bodyGuide"${s.bodyGuide ? " checked" : ""}><span>正文通用提示</span></label>${s.bodyGuideText ? '<span class="pi-badge">已修改</span>' : ""}<span class="pi-spacer"></span>
-            <button type="button" class="pi-btn is-sm is-ghost" data-act="body-guide-toggle">${st6(view).bodyGuideOpen ? "收起" : "编辑"}</button></div>
-        ${st6(view).bodyGuideOpen ? `<div class="pi-set-sub"><textarea class="pi-ta is-tall" data-body-guide>${esc(bodyGuideText({ ...s, bodyGuide: !0 }))}</textarea>
+            <button type="button" class="pi-btn is-sm is-ghost" data-act="body-guide-toggle">${st7(view).bodyGuideOpen ? "收起" : "编辑"}</button></div>
+        ${st7(view).bodyGuideOpen ? `<div class="pi-set-sub"><textarea class="pi-ta is-tall" data-body-guide>${esc(bodyGuideText({ ...s, bodyGuide: !0 }))}</textarea>
         <div class="pi-tools is-c1 is-end"><button type="button" class="pi-btn is-sm" data-act="body-guide-reset"${s.bodyGuideText ? "" : " disabled"}>恢复默认</button></div></div>` : ""}</div>
         <div class="pi-card pi-run-set"><h3><button type="button" class="pi-run-fold" data-act="adv-toggle" aria-expanded="${advOpen}">${foldIcon(advOpen)}<span>高级</span></button>${advOpen ? "" : '<span class="pi-meta">写作基准、实验功能</span>'}</h3></div>
         ${advOpen ? `${guideCard(view, s)}
@@ -31099,21 +31232,21 @@ ${suffix.trim()}` : body;
     }
     target.dataset.set && target.type !== "checkbox" && target.tagName !== "SELECT" && view.data.updateSettings({ [target.dataset.set]: readValue(target) }), target.dataset.llm && target.tagName === "INPUT" && setRole(view, target.dataset.llm, { [target.dataset.k]: target.value.trim() });
   }
-  function onChange5(view, target) {
+  function onChange6(view, target) {
     if (target.dataset.guidePreset !== void 0) {
       let s = view.data.settings(), next = target.value, patch = { guidePreset: next };
-      next === "custom" && !String(s.guide || "").trim() && (patch.guide = resolveGuide(s).text), view.data.updateSettings(patch), next === "custom" && (st6(view).guideOpen = !0), view.renderBody();
+      next === "custom" && !String(s.guide || "").trim() && (patch.guide = resolveGuide(s).text), view.data.updateSettings(patch), next === "custom" && (st7(view).guideOpen = !0), view.renderBody();
       return;
     }
     if (target.dataset.pacePick !== void 0) {
-      st6(view).pace = target.value, view.renderBody();
+      st7(view).pace = target.value, view.renderBody();
       return;
     }
-    target.dataset.set && (target.type === "checkbox" || target.tagName === "SELECT") && (view.data.updateSettings({ [target.dataset.set]: readValue(target) }), view.runtime.refresh(), view.renderBody()), target.dataset.llm && target.tagName === "SELECT" && (target.value === "__manual" ? st6(view).manual = { ...st6(view).manual, [target.dataset.llm]: !0 } : setRole(view, target.dataset.llm, { [target.dataset.k]: target.value }), view.renderBody()), target.dataset.set && target.tagName !== "SELECT" && target.type !== "checkbox" && view.runtime.refresh();
+    target.dataset.set && (target.type === "checkbox" || target.tagName === "SELECT") && (view.data.updateSettings({ [target.dataset.set]: readValue(target) }), view.runtime.refresh(), view.renderBody()), target.dataset.llm && target.tagName === "SELECT" && (target.value === "__manual" ? st7(view).manual = { ...st7(view).manual, [target.dataset.llm]: !0 } : setRole(view, target.dataset.llm, { [target.dataset.k]: target.value }), view.renderBody()), target.dataset.set && target.tagName !== "SELECT" && target.type !== "checkbox" && view.runtime.refresh();
   }
-  var CONN_KEYS2 = ["endpoint", "apiKey", "model", "temperature", "stream"], actions8 = {
+  var CONN_KEYS2 = ["endpoint", "apiKey", "model", "temperature", "stream"], actions9 = {
     async models(view, target) {
-      let role = target.dataset.role, s = st6(view);
+      let role = target.dataset.role, s = st7(view);
       if (!s.loading) {
         s.loading = role, view.renderBody();
         try {
@@ -31125,7 +31258,7 @@ ${suffix.trim()}` : body;
       }
     },
     "llm-role"(view, target) {
-      st6(view).role = target.dataset.role, view.renderBody();
+      st7(view).role = target.dataset.role, view.renderBody();
     },
     // 同名预设直接覆盖，不同名新建一份。
     async "preset-save"(view) {
@@ -31154,36 +31287,36 @@ ${suffix.trim()}` : body;
           }) && view.data.updateSettings({ presets: presets.filter((item) => item.id !== id) });
           continue;
         }
-        return setRole(view, role, { source: "custom", ...Object.fromEntries(CONN_KEYS2.map((key) => [key, preset[key]])) }), st6(view).manual = { ...st6(view).manual, [role]: !1 }, toast("success", `已为「${LLM_ROLES.find((item) => item.key === role).label}」载入预设「${preset.name}」。`), view.renderBody();
+        return setRole(view, role, { source: "custom", ...Object.fromEntries(CONN_KEYS2.map((key) => [key, preset[key]])) }), st7(view).manual = { ...st7(view).manual, [role]: !1 }, toast("success", `已为「${LLM_ROLES.find((item) => item.key === role).label}」载入预设「${preset.name}」。`), view.renderBody();
       }
     },
     "body-guide-toggle"(view) {
-      st6(view).bodyGuideOpen = !st6(view).bodyGuideOpen, view.renderBody();
+      st7(view).bodyGuideOpen = !st7(view).bodyGuideOpen, view.renderBody();
     },
     "body-guide-reset"(view) {
       view.data.updateSettings({ bodyGuideText: "" }), view.runtime.refresh(), view.renderBody();
     },
     "pace-toggle"(view) {
-      st6(view).paceOpen = !st6(view).paceOpen, view.renderBody();
+      st7(view).paceOpen = !st7(view).paceOpen, view.renderBody();
     },
     "pace-reset"(view, target) {
       view.data.updateSettings({ paceText: { ...view.data.settings().paceText, [target.dataset.pace]: "" } }), view.runtime.refresh(), view.renderBody();
     },
     "adv-toggle"(view) {
-      st6(view).advOpen = !st6(view).advOpen, view.renderBody();
+      st7(view).advOpen = !st7(view).advOpen, view.renderBody();
     },
     "guide-toggle"(view) {
-      st6(view).guideOpen = !st6(view).guideOpen, view.renderBody();
+      st7(view).guideOpen = !st7(view).guideOpen, view.renderBody();
     }
   }, refreshOn5 = [];
 
   // src/ui/page-data.js
   var page_data_exports = {};
   __export(page_data_exports, {
-    actions: () => actions9,
-    onChange: () => onChange6,
+    actions: () => actions10,
+    onChange: () => onChange7,
     refreshOn: () => refreshOn6,
-    render: () => render9
+    render: () => render10
   });
   init_import_store();
   init_store();
@@ -31264,7 +31397,7 @@ ${suffix.trim()}` : body;
   init_dom();
   init_outline();
   init_fact_labels();
-  var st7 = (view) => view.tabState("data");
+  var st8 = (view) => view.tabState("data");
   async function writeToCard(view, project, opts, packId) {
     let card = currentCard();
     if (!card) throw new Error("请先打开一张角色卡（群聊不支持）");
@@ -31308,7 +31441,7 @@ ${suffix.trim()}` : body;
     return names2;
   }
   function fileCell(view, label, name, bytes) {
-    let verified = st7(view).verified, missing = verified && verified[name] === !1;
+    let verified = st8(view).verified, missing = verified && verified[name] === !1;
     return !view.data.index().files.includes(name) && !bytes ? `<div class="pi-file-row"><span class="pi-file-k">${label}</span><span class="pi-meta pi-grow">—</span></div>` : `<div class="pi-file-row"><span class="pi-file-k">${label}</span><span class="pi-meta pi-grow${missing ? " is-missing" : ""}">${missing ? "已丢失" : formatBytes(bytes)}</span>
         ${missing ? "" : `<button type="button" class="pi-btn is-sm is-ghost" data-act="export-file" data-name="${esc(name)}">导出</button>`}
         <button type="button" class="pi-btn is-sm is-ghost is-danger" data-act="delete-file" data-name="${esc(name)}">删除</button></div>`;
@@ -31319,8 +31452,8 @@ ${suffix.trim()}` : body;
         ${fileCell(view, "设定+大纲", projectFile(item.id), item.bytes.project)}${fileCell(view, "讨论记录", chatFile(item.id), item.bytes.chat)}</div>`
     ).join("") || '<p class="pi-hint">没有项目</p>'}</div>`;
   }
-  function render9(view) {
-    let s = st7(view);
+  function render10(view) {
+    let s = st8(view);
     !s.verified && !s.verifying && verify(view);
     let orphans = s.verified ? Object.keys(s.verified).filter((name) => !referenced(view.data.index()).has(name)) : [], settings = view.data.settings();
     return `<div class="pi-card"><h3>本地文件</h3>
@@ -31340,7 +31473,7 @@ ${suffix.trim()}` : body;
   function exportCard(view) {
     let projects = view.data.index().projects;
     if (!projects.length) return "";
-    let s = st7(view), pick = projects.some((p) => p.id === s.exportId) ? s.exportId : projects.some((p) => p.id === view.projectId) ? view.projectId : projects[0].id;
+    let s = st8(view), pick = projects.some((p) => p.id === s.exportId) ? s.exportId : projects.some((p) => p.id === view.projectId) ? view.projectId : projects[0].id;
     return s.exportId = pick, `<div class="pi-card"><h3>导出项目</h3>
         <label class="pi-field"><span>项目</span><select class="pi-sel" data-export-pick>${options(
       projects.map((p) => ({ value: p.id, label: `${p.group ? `${p.group}／` : ""}${p.name}` })),
@@ -31350,12 +31483,12 @@ ${suffix.trim()}` : body;
         <div class="pi-tools is-c3 pi-acts"><button type="button" class="pi-btn is-sm" data-act="export-outline" title="只导出大纲">导出大纲</button><button type="button" class="pi-btn is-sm is-primary" data-act="export-project" title="导出完整项目：带上线索标签、保密名单和推进设置">导出项目</button><button type="button" class="pi-btn is-sm is-danger" data-act="delete-current" title="删除当前选中的项目">删除项目</button></div></div>`;
   }
   async function exportTarget(view) {
-    let id = st7(view).exportId, project = view.data.project(id) || await view.data.loadProject(id).catch(() => null);
+    let id = st8(view).exportId, project = view.data.project(id) || await view.data.loadProject(id).catch(() => null);
     if (!project) throw new Error("无法读取这个项目的文件");
     return project;
   }
-  function onChange6(view, target) {
-    if (target.matches("[data-export-pick]")) return void (st7(view).exportId = target.value);
+  function onChange7(view, target) {
+    if (target.matches("[data-export-pick]")) return void (st8(view).exportId = target.value);
     if (target.dataset.set !== "loaderRef") return;
     let ref = target.value.trim();
     if (/^\d+\.\d+\.\d+$/.test(ref) && (ref = `v${ref}`), ref && ref !== "main" && !/^v\d+\.\d+\.\d+$/.test(ref)) {
@@ -31365,7 +31498,7 @@ ${suffix.trim()}` : body;
     target.value = ref, view.data.updateSettings({ loaderRef: ref }), toast("success", ref ? `已指定${ref}，刷新酒馆页面生效。` : "已改为跟随最新版本，刷新酒馆页面生效。");
   }
   async function verify(view) {
-    let s = st7(view);
+    let s = st8(view);
     s.verifying = !0;
     try {
       let names2 = [.../* @__PURE__ */ new Set([...view.data.index().files, ...referenced(view.data.index())])];
@@ -31376,7 +31509,7 @@ ${suffix.trim()}` : body;
       s.verifying = !1, view.renderBody();
     }
   }
-  var actions9 = {
+  var actions10 = {
     "check-update"(view) {
       return checkLatest(view);
     },
@@ -31386,7 +31519,7 @@ ${suffix.trim()}` : body;
       await confirmDialog({ title: `更新到v${latest.version}`, body, okLabel: "更新并刷新" }) && (pinned && (view.data.updateSettings({ loaderRef: "" }), await view.data.flush()), writeUi({ loader: null }), hostWindow().location.reload());
     },
     verify(view) {
-      return st7(view).verified = null, verify(view);
+      return st8(view).verified = null, verify(view);
     },
     async "export-file"(view, target) {
       await view.data.flush().catch(() => {
@@ -31396,13 +31529,13 @@ ${suffix.trim()}` : body;
       downloadBlob(target.dataset.name, text2);
     },
     async "delete-current"(view) {
-      let id = st7(view).exportId, item = view.data.index().projects.find((p) => p.id === id);
+      let id = st8(view).exportId, item = view.data.index().projects.find((p) => p.id === id);
       item && await confirmDialog({
         title: `删除「${item.name}」`,
         body: "删除后不能恢复，建议先导出完整项目。聊天里记录的该项目进度保留。",
         okLabel: "删除",
         danger: !0
-      }) && (await view.data.deleteProject(id), view.projectId === id && (view.projectId = ""), view.runtime.refresh(), st7(view).verified = null, st7(view).exportId = "", view.render());
+      }) && (await view.data.deleteProject(id), view.projectId === id && (view.projectId = ""), view.runtime.refresh(), st8(view).verified = null, st8(view).exportId = "", view.render());
     },
     async "export-outline"(view) {
       let project = await exportTarget(view);
@@ -31468,25 +31601,25 @@ ${suffix.trim()}` : body;
       }))
         return;
       let id = /^pi-[pc]-(.+)\.json$/.exec(name)?.[1];
-      name.startsWith("pi-c-") ? await view.data.clearChat(id) : name.startsWith("pi-p-") && await view.data.deleteProject(id), st7(view).verified = null, view.render();
+      name.startsWith("pi-c-") ? await view.data.clearChat(id) : name.startsWith("pi-p-") && await view.data.deleteProject(id), st8(view).verified = null, view.render();
     },
     async orphans(view) {
-      let names2 = Object.keys(st7(view).verified || {}).filter(
-        (name) => !referenced(view.data.index()).has(name) && st7(view).verified[name]
-      ), gone = Object.keys(st7(view).verified || {}).filter(
-        (name) => !referenced(view.data.index()).has(name) && !st7(view).verified[name]
+      let names2 = Object.keys(st8(view).verified || {}).filter(
+        (name) => !referenced(view.data.index()).has(name) && st8(view).verified[name]
+      ), gone = Object.keys(st8(view).verified || {}).filter(
+        (name) => !referenced(view.data.index()).has(name) && !st8(view).verified[name]
       );
-      if (!names2.length && gone.length) return view.data.forgetFiles(gone), st7(view).verified = null, view.renderBody();
+      if (!names2.length && gone.length) return view.data.forgetFiles(gone), st8(view).verified = null, view.renderBody();
       if (await confirmDialog({ title: "清理孤立文件", body: "这些文件不属于任何项目：", list: names2, okLabel: "删除", danger: !0 })) {
         for (let name of names2) await deleteFile(name);
-        view.data.forgetFiles([...names2, ...gone]), st7(view).verified = null, view.renderBody();
+        view.data.forgetFiles([...names2, ...gone]), st8(view).verified = null, view.renderBody();
       }
     },
     async "clear-chats"(view) {
       let ids = view.data.index().projects.map((item) => item.id);
       if (await confirmDialog({ title: "清空全部讨论记录", list: ids.map(chatFile), okLabel: "清空", danger: !0 })) {
         for (let id of ids) await view.data.clearChat(id);
-        st7(view).verified = null, view.renderBody();
+        st8(view).verified = null, view.renderBody();
       }
     },
     async wipe(view) {
@@ -31512,7 +31645,7 @@ ${suffix.trim()}` : body;
         danger: !0
       })) {
         for (let file of files) await deleteFile(file.name);
-        await clearChatProgress(), view.data.resetAll(), view.projectId = "", st7(view).verified = null, view.runtime.refresh(), view.render(), toast("success", "已全部清除。");
+        await clearChatProgress(), view.data.resetAll(), view.projectId = "", st8(view).verified = null, view.runtime.refresh(), view.render(), toast("success", "已全部清除。");
       }
     }
   }, refreshOn6 = ["index"];
@@ -31520,11 +31653,11 @@ ${suffix.trim()}` : body;
   // src/ui/page-books.js
   var page_books_exports = {};
   __export(page_books_exports, {
-    actions: () => actions10,
-    onChange: () => onChange7,
+    actions: () => actions11,
+    onChange: () => onChange8,
     onInput: () => onInput6,
     refreshOn: () => refreshOn7,
-    render: () => render10
+    render: () => render11
   });
   init_inject();
   init_acu();
@@ -31534,17 +31667,17 @@ ${suffix.trim()}` : body;
   init_worldbook();
   init_dom();
   init_styles();
-  var st8 = (view) => view.tabState("books"), GROUPS = {
+  var st9 = (view) => view.tabState("books"), GROUPS = {
     on: (entries) => entries.filter((entry) => !acuField(entry.title) && !entry.disabled),
     off: (entries) => entries.filter((entry) => !acuField(entry.title) && entry.disabled)
   }, toggle = (entry) => `<button type="button" class="pi-switch${entry.disabled ? "" : " is-on"}" role="switch" aria-checked="${entry.disabled ? "false" : "true"}" data-act="wb-toggle" data-wb-toggle="${esc(entry.key)}" title="${entry.disabled ? "已关闭，点击开启" : "已开启，点击关闭"}"></button>`, norm2 = (text2) => String(text2 || "").trim().toLowerCase(), entryHit = (entry, q) => !q || [entry.title, entry.content, ...entry.keys, ...entry.keysSecondary].some((text2) => String(text2).toLowerCase().includes(q)), searchBox = (key, value, placeholder) => `<div class="pi-psearch is-wb">${ICONS.search}<input class="pi-inp" data-search="${key}" placeholder="${placeholder}" value="${esc(value || "")}">
     <button type="button" class="pi-icon-btn pi-search-x" data-act="search-close" title="关闭搜索">${ICONS.close}</button></div>`, title = (entry) => `<span class="pi-wb-title" title="${esc(entry.title)}">${esc(entry.title)}</span>`, num2 = (value) => value || "";
   function advanced(entry, key, open) {
-    let field2 = (f, label, value, attrs = 'type="number" min="0"') => `<label class="pi-field"><span>${label}</span><input class="pi-inp" ${attrs} data-wb-edit="${key}" data-f="${f}" value="${esc(value)}"></label>`, check = (f, label, on) => `<label class="pi-check"><input type="checkbox" data-wb-edit="${key}" data-f="${f}"${on ? " checked" : ""}><span>${label}</span></label>`;
+    let field3 = (f, label, value, attrs = 'type="number" min="0"') => `<label class="pi-field"><span>${label}</span><input class="pi-inp" ${attrs} data-wb-edit="${key}" data-f="${f}" value="${esc(value)}"></label>`, check = (f, label, on) => `<label class="pi-check"><input type="checkbox" data-wb-edit="${key}" data-f="${f}"${on ? " checked" : ""}><span>${label}</span></label>`;
     return `<button type="button" class="pi-wb-adv" data-act="wb-adv" data-key="${key}">${open ? ICONS.caretDown : ICONS.caret}<span>高级</span></button>
-        ${open ? `<div class="pi-wb-adv-bd"><div class="pi-pair">${field2("probability", "概率（0-100）", entry.probability, 'type="number" min="0" max="100"')}${field2("groupWeight", "组权重", entry.groupWeight)}</div>
-        ${field2("group", "分组", entry.group, 'type="text"')}
-        <div class="pi-pair is-c3">${field2("sticky", "粘性", num2(entry.sticky))}${field2("cooldown", "冷却", num2(entry.cooldown))}${field2("delay", "延迟", num2(entry.delay))}</div>
+        ${open ? `<div class="pi-wb-adv-bd"><div class="pi-pair">${field3("probability", "概率（0-100）", entry.probability, 'type="number" min="0" max="100"')}${field3("groupWeight", "组权重", entry.groupWeight)}</div>
+        ${field3("group", "分组", entry.group, 'type="text"')}
+        <div class="pi-pair is-c3">${field3("sticky", "粘性", num2(entry.sticky))}${field3("cooldown", "冷却", num2(entry.cooldown))}${field3("delay", "延迟", num2(entry.delay))}</div>
         <div class="pi-pair">${check("excludeRecursion", "不可被递归触发", entry.excludeRecursion)}${check("preventRecursion", "阻止进一步递归", entry.preventRecursion)}</div></div>` : ""}`;
   }
   function editor(entry, adv) {
@@ -31600,7 +31733,7 @@ ${suffix.trim()}` : body;
   }
   var SORTS = [{ value: "", label: "原顺序" }, { value: "order", label: "顺序值" }, { value: "tokens", label: "token从大到小" }, { value: "title", label: "标题" }], tokenOf = (s) => (entry) => s.tokenMap && s.tokenMap.has(entry.key) ? s.tokenMap.get(entry.key) : estimateTokens(entry.content), sortList = (s, list) => sortEntries(list, s.sort, tokenOf(s)), UNDO_MAX = 10, undoStacks = /* @__PURE__ */ new Map(), undoStack = (name) => undoStacks.get(name) || [];
   async function snap(view, label, merge = "") {
-    let name = st8(view).book;
+    let name = st9(view).book;
     if (merge && undoStack(name).at(-1)?.merge === merge) return;
     let entries = await snapshotEntries(name), stack = undoStack(name);
     if (merge && stack.at(-1)?.merge === merge) return;
@@ -31621,9 +31754,9 @@ ${suffix.trim()}` : body;
   function acuSection(entries, openFields, expandAll = !1) {
     let fields = groupByField(entries);
     if (!fields.length) return "";
-    let total = fields.reduce((sum, [, list]) => sum + list.length, 0), sub = ([field2, list]) => {
-      let on = list.filter((entry) => !entry.disabled).length, bulk = bulkBtn(`data-act="acu-field" data-field="${esc(field2)}" data-on="1"`, "一键开启", on === list.length) + bulkBtn(`data-act="acu-field" data-field="${esc(field2)}" data-on="0"`, "一键关闭", !on), open = expandAll || openFields.has(field2);
-      return `<div class="pi-wb-sub"><div class="pi-wb-sub-hd is-fold" data-act="acu-fold" data-field="${esc(field2)}">${open ? ICONS.caretDown : ICONS.caret}<span class="pi-wb-field" title="${esc(field2)}">${esc(field2)}</span><small>${on}/${list.length}</small><span class="pi-wb-bulk">${bulk}</span></div>
+    let total = fields.reduce((sum, [, list]) => sum + list.length, 0), sub = ([field3, list]) => {
+      let on = list.filter((entry) => !entry.disabled).length, bulk = bulkBtn(`data-act="acu-field" data-field="${esc(field3)}" data-on="1"`, "一键开启", on === list.length) + bulkBtn(`data-act="acu-field" data-field="${esc(field3)}" data-on="0"`, "一键关闭", !on), open = expandAll || openFields.has(field3);
+      return `<div class="pi-wb-sub"><div class="pi-wb-sub-hd is-fold" data-act="acu-fold" data-field="${esc(field3)}">${open ? ICONS.caretDown : ICONS.caret}<span class="pi-wb-field" title="${esc(field3)}">${esc(field3)}</span><small>${on}/${list.length}</small><span class="pi-wb-bulk">${bulk}</span></div>
             ${open ? list.map((entry) => `<div class="pi-wb-row${entry.disabled ? " is-off" : ""}">${toggle(entry)}${title(entry)}</div>`).join("") : ""}</div>`;
     };
     return `<div class="pi-wb-sec"><div class="pi-wb-sec-hd">数据库条目<small>${total}</small></div>${fields.map(sub).join("")}</div>`;
@@ -31643,8 +31776,8 @@ ${suffix.trim()}` : body;
     let hit = (name) => name.toLowerCase().includes(q), others = allBookNames().filter((name) => hit(name) && !listed.some((book) => book.name === name)).map((name) => ({ name, source: "其他" }));
     return [...listed.filter((book) => hit(book.name)), ...others];
   }
-  function render10(view) {
-    let s = st8(view), list = shownBooks(s).map((book) => {
+  function render11(view) {
+    let s = st9(view), list = shownBooks(s).map((book) => {
       let open = s.book === book.name, entries = open && s.entries ? s.entries : null;
       return `<div class="pi-book${open ? " is-open" : ""}"><div class="pi-book-hd" data-act="open-book" data-book="${esc(book.name)}">
             ${open ? ICONS.caretDown : ICONS.caret}<span class="pi-etitle" title="${esc(book.name)}">${esc(book.name)}</span><span class="pi-meta">${esc(book.source)}</span></div>
@@ -31658,36 +31791,36 @@ ${suffix.trim()}` : body;
         ${list || `<p class="pi-hint">${norm2(s.bookQuery) ? "没有匹配的世界书" : "没有关联或全局启用的世界书，可从「更多」搜索或打开其他世界书。"}</p>`}</div>`;
   }
   function editPatch(target) {
-    let field2 = target.dataset.f, value = target.value;
-    if (field2 === "constant") return { constant: value === "1" };
-    if (field2 === "key" || field2 === "keysecondary") return { [field2]: splitKeys(value) };
-    if (field2 === "position" || field2 === "role") return { [field2]: Number(value) };
-    if (field2 === "depth" || field2 === "order") return { [field2]: Math.max(0, Math.round(Number(value) || 0)) };
-    if (field2 === "content" || field2 === "comment" || field2 === "group") return { [field2]: value };
-    if (field2 === "probability") {
+    let field3 = target.dataset.f, value = target.value;
+    if (field3 === "constant") return { constant: value === "1" };
+    if (field3 === "key" || field3 === "keysecondary") return { [field3]: splitKeys(value) };
+    if (field3 === "position" || field3 === "role") return { [field3]: Number(value) };
+    if (field3 === "depth" || field3 === "order") return { [field3]: Math.max(0, Math.round(Number(value) || 0)) };
+    if (field3 === "content" || field3 === "comment" || field3 === "group") return { [field3]: value };
+    if (field3 === "probability") {
       let n = String(value).trim() === "" ? 100 : Math.min(100, Math.max(0, Math.round(Number(value) || 0)));
       return { probability: n, useProbability: n < 100 };
     }
-    return field2 === "groupWeight" ? { groupWeight: String(value).trim() === "" ? 100 : Math.max(0, Math.round(Number(value) || 0)) } : field2 === "sticky" || field2 === "cooldown" || field2 === "delay" ? { [field2]: value === "" ? null : Math.max(0, Math.round(Number(value) || 0)) } : field2 === "excludeRecursion" || field2 === "preventRecursion" ? { [field2]: !!target.checked } : null;
+    return field3 === "groupWeight" ? { groupWeight: String(value).trim() === "" ? 100 : Math.max(0, Math.round(Number(value) || 0)) } : field3 === "sticky" || field3 === "cooldown" || field3 === "delay" ? { [field3]: value === "" ? null : Math.max(0, Math.round(Number(value) || 0)) } : field3 === "excludeRecursion" || field3 === "preventRecursion" ? { [field3]: !!target.checked } : null;
   }
   async function saveEdit(view, target) {
     let key = target.dataset.wbEdit, patch = editPatch(target);
-    !patch || !(st8(view).entries || []).some((item) => item.key === key) || (await snap(view, "编辑条目", `${key}:${target.dataset.f}`), await updateEntry(st8(view).book, key, patch), st8(view).entries = bookEntries(await loadBook(st8(view).book)), (target.tagName === "SELECT" || target.dataset.f === "comment") && view.renderBody());
+    !patch || !(st9(view).entries || []).some((item) => item.key === key) || (await snap(view, "编辑条目", `${key}:${target.dataset.f}`), await updateEntry(st9(view).book, key, patch), st9(view).entries = bookEntries(await loadBook(st9(view).book)), (target.tagName === "SELECT" || target.dataset.f === "comment") && view.renderBody());
   }
   function onInput6(view, target, event) {
-    !target.dataset.search || event.isComposing || (st8(view)[target.dataset.search === "book" ? "bookQuery" : "query"] = target.value, view.renderBody());
+    !target.dataset.search || event.isComposing || (st9(view)[target.dataset.search === "book" ? "bookQuery" : "query"] = target.value, view.renderBody());
   }
-  async function onChange7(view, target) {
+  async function onChange8(view, target) {
     if (target.dataset.wbSort !== void 0)
-      return st8(view).sort = target.value, view.renderBody();
+      return st9(view).sort = target.value, view.renderBody();
     if (target.dataset.wbPick) {
-      let picked = st8(view).picked;
+      let picked = st9(view).picked;
       return target.checked ? picked.add(target.dataset.wbPick) : picked.delete(target.dataset.wbPick), view.renderBody();
     }
     if (target.dataset.wbEdit) return saveEdit(view, target);
   }
   async function reloadBook(view) {
-    let s = st8(view);
+    let s = st9(view);
     s.entries = bookEntries(await loadBook(s.book));
     let keys = new Set(s.entries.map((entry) => entry.key));
     s.picked = new Set([...s.picked || []].filter((key) => keys.has(key))), view.renderBody(), countBook(view);
@@ -31699,7 +31832,7 @@ ${suffix.trim()}` : body;
     return count == null ? null : (tokenCache.size >= TOKEN_CACHE_MAX && tokenCache.delete(tokenCache.keys().next().value), tokenCache.set(text2, count), count);
   }
   async function countBook(view) {
-    let s = st8(view), book = s.book, entries = s.entries || [], counts = [];
+    let s = st9(view), book = s.book, entries = s.entries || [], counts = [];
     for (let i = 0; i < entries.length; i += TOKEN_BATCH)
       if (counts.push(...await Promise.all(entries.slice(i, i + TOKEN_BATCH).map((entry) => entry.content ? entryTokens(entry.content) : 0))), s.book !== book || s.entries !== entries) return;
     let exact = counts.every((count) => count != null), on = 0, all = 0;
@@ -31710,9 +31843,9 @@ ${suffix.trim()}` : body;
     let box = hostDocument().querySelector(".pi-wb-tokens");
     box && (box.innerHTML = tokenText(s));
   }
-  var handwritten = (entries) => entries.filter((entry) => !acuField(entry.title)), pickedEntries = (s) => handwritten(s.entries || []).filter((entry) => s.picked.has(entry.key)), PREVIEW_MAX = 30, previewList = (lines2) => lines2.length > PREVIEW_MAX ? [...lines2.slice(0, PREVIEW_MAX), `另有${lines2.length - PREVIEW_MAX}条`] : lines2;
+  var handwritten = (entries) => entries.filter((entry) => !acuField(entry.title)), pickedEntries = (s) => handwritten(s.entries || []).filter((entry) => s.picked.has(entry.key)), PREVIEW_MAX = 30, previewList = (lines3) => lines3.length > PREVIEW_MAX ? [...lines3.slice(0, PREVIEW_MAX), `另有${lines3.length - PREVIEW_MAX}条`] : lines3;
   async function applyPatches(view, plan, { label, backup = !1 }) {
-    let s = st8(view);
+    let s = st9(view);
     await snap(view, label);
     let result2 = await patchEntries(s.book, plan.map((item) => ({ key: item.key, patch: item.patch })));
     backup && downloadBlob(`${s.book}-${label}前备份.json`, JSON.stringify(result2, null, 2)), toast("success", `${label}：已修改${plan.length}条。`), await reloadBook(view);
@@ -31751,35 +31884,35 @@ ${suffix.trim()}` : body;
       actions: [{ label: "取消", value: null }, { label: "预览", primary: !0, value: (box) => ({ start: box.querySelector('[data-f="start"]').value, step: box.querySelector('[data-f="step"]').value, by: box.querySelector('[data-f="by"]').value }) }]
     });
   }
-  var actions10 = {
+  var actions11 = {
     // 整区一次改完：「全部关闭」关已开启区，「全部开启」开已关闭区；数据库条目不在其中。
     async "wb-bulk"(view, target) {
       let group = target.dataset.group, pick = GROUPS[group];
       if (!pick) return;
-      let keys = pick(shownEntries(st8(view))).map((entry) => entry.key);
-      keys.length && (target.disabled = !0, await snap(view, "整区开关"), await setEntriesDisabled(st8(view).book, keys, group === "on"), await reloadBook(view));
+      let keys = pick(shownEntries(st9(view))).map((entry) => entry.key);
+      keys.length && (target.disabled = !0, await snap(view, "整区开关"), await setEntriesDisabled(st9(view).book, keys, group === "on"), await reloadBook(view));
     },
     async "wb-toggle"(view, target) {
-      let key = target.dataset.wbToggle, entry = (st8(view).entries || []).find((item) => item.key === key);
-      entry && (target.disabled = !0, await snap(view, "开关条目"), await setEntriesDisabled(st8(view).book, [key], !entry.disabled), await reloadBook(view));
+      let key = target.dataset.wbToggle, entry = (st9(view).entries || []).find((item) => item.key === key);
+      entry && (target.disabled = !0, await snap(view, "开关条目"), await setEntriesDisabled(st9(view).book, [key], !entry.disabled), await reloadBook(view));
     },
     "wb-open"(view, target) {
-      let s = st8(view);
+      let s = st9(view);
       s.openKey = s.openKey === target.dataset.key ? "" : target.dataset.key, view.renderBody();
     },
     "acu-fold"(view, target, event) {
       if (event.target.closest("button")) return;
-      let s = st8(view), open = new Set(s.openFields || []);
+      let s = st9(view), open = new Set(s.openFields || []);
       open.has(target.dataset.field) ? open.delete(target.dataset.field) : open.add(target.dataset.field), s.openFields = open, view.renderBody();
     },
     // 一个字段的数据库条目整体开或关（写进世界书）。
     async "acu-field"(view, target) {
-      let on = target.dataset.on === "1", keys = shownEntries(st8(view)).filter((entry) => acuField(entry.title) === target.dataset.field && entry.disabled === on).map((entry) => entry.key);
-      keys.length && (target.disabled = !0, await snap(view, "数据库字段开关"), await setEntriesDisabled(st8(view).book, keys, !on), await reloadBook(view));
+      let on = target.dataset.on === "1", keys = shownEntries(st9(view)).filter((entry) => acuField(entry.title) === target.dataset.field && entry.disabled === on).map((entry) => entry.key);
+      keys.length && (target.disabled = !0, await snap(view, "数据库字段开关"), await setEntriesDisabled(st9(view).book, keys, !on), await reloadBook(view));
     },
     async "open-book"(view, target, event) {
       if (event.target.closest("button,input")) return;
-      let s = st8(view);
+      let s = st9(view);
       if (s.book === target.dataset.book)
         return s.book = "", s.entries = null, view.renderBody();
       await openBook(view, target.dataset.book);
@@ -31803,29 +31936,29 @@ ${suffix.trim()}` : body;
       allBookNames().includes(name) && (name = await promptDialog({ title: "导入世界书", label: `已有「${name}」，请换一个名字`, value: `${name}-导入` }), name == null) || (await openBook(view, await createBook(name, data)), toast("success", `已导入「${name.trim()}」，${Object.keys(data.entries).length}条。`));
     },
     async "book-open"(view) {
-      let shown2 = new Set(listedBooks(st8(view)).map((book) => book.name)), names2 = allBookNames().filter((name2) => !shown2.has(name2));
+      let shown2 = new Set(listedBooks(st9(view)).map((book) => book.name)), names2 = allBookNames().filter((name2) => !shown2.has(name2));
       if (!names2.length) return toast("info", "没有其他世界书。");
       let name = await menuDialog({ title: "打开其他世界书", items: names2.map((item) => ({ label: item, value: item, icon: ICONS.book })) });
       name && await openBook(view, name);
     },
     async "book-rename"(view) {
-      let from = st8(view).book, to = await promptDialog({ title: "重命名世界书", label: "新名称", value: from });
+      let from = st9(view).book, to = await promptDialog({ title: "重命名世界书", label: "新名称", value: from });
       if (to == null || to.trim() === from) return;
       let result2 = await renameBook(from, to);
       undoStacks.delete(from), result2.failed.length ? toast("warning", `已另存为「${result2.name}」，但${result2.failed.join("、")}的绑定未能迁移，原书「${from}」已保留，请在酒馆中手动改绑后删除。`) : toast("success", `已重命名为「${result2.name}」。`), await openBook(view, result2.name);
     },
     async "book-copy"(view) {
-      let s = st8(view), to = await promptDialog({ title: "另存副本", label: "副本名称", value: `${s.book}-副本` });
+      let s = st9(view), to = await promptDialog({ title: "另存副本", label: "副本名称", value: `${s.book}-副本` });
       if (to == null) return;
       let name = await duplicateBook(s.book, to);
       s.extra = [.../* @__PURE__ */ new Set([...s.extra || [], name])], toast("success", `已另存为「${name}」。`), view.renderBody();
     },
     async "book-export"(view) {
-      let s = st8(view);
+      let s = st9(view);
       downloadBlob(`${s.book}.json`, JSON.stringify(await loadBook(s.book), null, 2));
     },
     async "book-delete"(view) {
-      let s = st8(view), name = s.book;
+      let s = st9(view), name = s.book;
       if (!await confirmDialog({ title: `删除世界书「${name}」`, body: "先下载整本备份，再删除并解除聊天、角色卡和全局的绑定，无法撤销。", list: [`${s.entries.length}条条目`], okLabel: "删除", danger: !0 })) return;
       downloadBlob(`${name}-备份.json`, JSON.stringify(await loadBook(name), null, 2));
       let result2 = await removeBook(name);
@@ -31835,21 +31968,21 @@ ${suffix.trim()}` : body;
       openSearch(view, "book");
     },
     "wb-search"(view) {
-      if (st8(view).search === "entry") return actions10["search-close"](view);
+      if (st9(view).search === "entry") return actions11["search-close"](view);
       openSearch(view, "entry");
     },
     "search-close"(view) {
-      let s = st8(view);
+      let s = st9(view);
       s.search = "", s.query = "", s.bookQuery = "", view.renderBody();
     },
     async "wb-add"(view) {
-      let s = st8(view);
+      let s = st9(view);
       await snap(view, "新建条目");
       let [key] = await addEntries(s.book);
       await reloadBook(view), s.openKey = key, view.renderBody();
     },
     async "wb-dup"(view, target) {
-      await snap(view, "复制条目"), await addEntries(st8(view).book, [target.dataset.key]), await reloadBook(view);
+      await snap(view, "复制条目"), await addEntries(st9(view).book, [target.dataset.key]), await reloadBook(view);
     },
     // 「更多」菜单：页面级、整本书级、选中条目级各一份，选中后转给对应的操作。
     async "page-more"(view, target, event) {
@@ -31858,10 +31991,10 @@ ${suffix.trim()}` : body;
         { label: "搜索世界书", value: "book-search", icon: ICONS.search },
         { label: "打开其他世界书", value: "book-open", icon: ICONS.folder }
       ] });
-      if (pick) return actions10[pick](view, target, event);
+      if (pick) return actions11[pick](view, target, event);
     },
     async "book-more"(view, target, event) {
-      let pick = await menuDialog({ title: st8(view).book, items: [
+      let pick = await menuDialog({ title: st9(view).book, items: [
         { label: "触发测试", value: "wb-trigger", icon: ICONS.search },
         { label: "体检", value: "wb-health", icon: ICONS.pulse },
         { label: "重命名", value: "book-rename", icon: ICONS.pencil },
@@ -31869,41 +32002,41 @@ ${suffix.trim()}` : body;
         { label: "导出", value: "book-export", icon: ICONS.download },
         { label: "删除本书", value: "book-delete", icon: ICONS.trash, danger: !0 }
       ] });
-      if (pick) return actions10[pick](view, target, event);
+      if (pick) return actions11[pick](view, target, event);
     },
     async "pick-more"(view, target, event) {
-      let pick = await menuDialog({ title: `已选${st8(view).picked.size}条`, items: [
+      let pick = await menuDialog({ title: `已选${st9(view).picked.size}条`, items: [
         { label: "开启", value: "wb-pick-on", icon: ICONS.eye },
         { label: "关闭", value: "wb-pick-off", icon: ICONS.eyeOff }
       ] });
-      if (pick) return actions10[pick](view, target, event);
+      if (pick) return actions11[pick](view, target, event);
     },
     "wb-pick-on": (view) => setPicked(view, !1),
     "wb-pick-off": (view) => setPicked(view, !0),
     async "wb-pick-delete"(view) {
-      let s = st8(view), entries = pickedEntries(s);
+      let s = st9(view), entries = pickedEntries(s);
       if (!await confirmDialog({ title: `从「${s.book}」删除${entries.length}条`, body: "删除前会下载这些条目的备份。", list: previewList(entries.map((entry) => entry.title)), okLabel: "删除", danger: !0 })) return;
       await snap(view, "批量删除");
       let backup = await deleteEntries(s.book, entries.map((entry) => entry.key));
       downloadBlob(`${s.book}-已删条目备份.json`, JSON.stringify(backup, null, 2)), s.picked = /* @__PURE__ */ new Set(), await reloadBook(view);
     },
     "wb-picking"(view) {
-      let s = st8(view);
+      let s = st9(view);
       s.picking = !s.picking, s.picked = /* @__PURE__ */ new Set(), s.openKey = "", view.renderBody();
     },
     "wb-pick-all"(view) {
-      let s = st8(view), list = handwritten(shownEntries(s)), all = list.every((entry) => s.picked.has(entry.key)), picked = new Set(s.picked);
+      let s = st9(view), list = handwritten(shownEntries(s)), all = list.every((entry) => s.picked.has(entry.key)), picked = new Set(s.picked);
       for (let entry of list) all ? picked.delete(entry.key) : picked.add(entry.key);
       s.picked = picked, view.renderBody();
     },
     // 关键词里写成「甲，乙、丙」的一整条拆成三个，去掉首尾标点与空格、重复项；/正则/ 形式的关键词不动。
     async "wb-punct"(view) {
-      let s = st8(view), plan = punctPlan(handwritten(s.entries || []));
+      let s = st9(view), plan = punctPlan(handwritten(s.entries || []));
       if (!plan.length) return toast("info", "关键词没有需要修复的标点。");
       await confirmDialog({ title: `修复关键词标点（${plan.length}条）`, body: "以下条目的关键词将改为：", list: previewList(plan.map((item) => `${item.title}：${item.before} → ${item.after}`)), okLabel: "修复" }) && await applyPatches(view, plan, { label: "修复关键词标点" });
     },
     async "wb-regex"(view) {
-      let s = st8(view), usePicked = s.picking && s.picked.size, entries = usePicked ? pickedEntries(s) : handwritten(s.entries || []), input2 = await regexDialog(usePicked ? `已选${entries.length}条` : `全部手写条目${entries.length}条`);
+      let s = st9(view), usePicked = s.picking && s.picked.size, entries = usePicked ? pickedEntries(s) : handwritten(s.entries || []), input2 = await regexDialog(usePicked ? `已选${entries.length}条` : `全部手写条目${entries.length}条`);
       if (!input2) return;
       if (!input2.fields.content && !input2.fields.comment && !input2.fields.keys) throw new Error("请至少选择一个替换范围");
       let plan = regexPlan(entries, buildPattern(input2.find, input2), input2.replace, input2.fields);
@@ -31912,13 +32045,13 @@ ${suffix.trim()}` : body;
       await confirmDialog({ title: `正则替换（${plan.length}条，共${total}处）`, body: "替换前会下载这些条目的备份。", list: previewList(plan.map((item) => `${item.title}：${item.hits}处`)), okLabel: "替换", danger: !0 }) && await applyPatches(view, plan, { label: "正则替换", backup: !0 });
     },
     async "wb-order"(view) {
-      let s = st8(view), input2 = await orderDialog(s.picked.size);
+      let s = st9(view), input2 = await orderDialog(s.picked.size);
       if (!input2) return;
       let plan = orderPlan(pickedEntries(s), input2);
       await confirmDialog({ title: `顺序重排（${plan.length}条）`, list: previewList(plan.map((item) => `${item.title}：${item.from} → ${item.to}`)), okLabel: "重排" }) && await applyPatches(view, plan.map((item) => ({ key: item.key, patch: { order: item.to } })), { label: "顺序重排" });
     },
     async "wb-move"(view) {
-      let s = st8(view), input2 = await moveDialog(s.book, s.picked.size);
+      let s = st9(view), input2 = await moveDialog(s.book, s.picked.size);
       if (!input2) return;
       if (!input2.to) throw new Error("请选择或填写目标世界书");
       let entries = pickedEntries(s), isNew = !allBookNames().includes(input2.to);
@@ -31938,16 +32071,16 @@ ${suffix.trim()}` : body;
       toast("success", `已${input2.move ? "移动" : "复制"} ${result2.copied}条到「${input2.to}」${result2.created ? "（新建）" : ""}。`), s.picked = /* @__PURE__ */ new Set(), await reloadBook(view);
     },
     "wb-adv"(view, target) {
-      let s = st8(view), open = new Set(s.advOpen || []);
+      let s = st9(view), open = new Set(s.advOpen || []);
       open.has(target.dataset.key) ? open.delete(target.dataset.key) : open.add(target.dataset.key), s.advOpen = open, view.renderBody();
     },
     async "wb-undo"(view) {
-      let s = st8(view), stack = undoStack(s.book), last = stack.at(-1);
+      let s = st9(view), stack = undoStack(s.book), last = stack.at(-1);
       last && await confirmDialog({ title: `撤销：${last.label}`, body: "整本世界书将写回该操作之前的状态。本书在这之后的其他改动也会一并撤回。", okLabel: "撤销", danger: !0 }) && (await restoreEntries(s.book, last.entries), undoStacks.set(s.book, stack.slice(0, -1)), toast("success", `已撤销：${last.label}`), await reloadBook(view));
     },
     // 触发测试：文本框可贴文字，也可取最近 N 楼；按酒馆规则模拟当前书的触发（不含递归、概率、分组）。
     async "wb-trigger"(view) {
-      let s = st8(view), entries = handwritten(s.entries || []), tk = tokenOf(s), row2 = (item, extra) => `<div class="pi-wb-hit"><span class="pi-wb-title" title="${esc(item.title)}">${esc(item.title)}</span><span class="pi-meta">${extra}${item.tokens} token</span></div>`, group = (name, list, extra) => list.length ? `<div class="pi-wb-sec-hd">${name}<small>${list.length}</small></div>${list.map((item) => row2(item, extra(item))).join("")}` : "", run = (box) => {
+      let s = st9(view), entries = handwritten(s.entries || []), tk = tokenOf(s), row3 = (item, extra) => `<div class="pi-wb-hit"><span class="pi-wb-title" title="${esc(item.title)}">${esc(item.title)}</span><span class="pi-meta">${extra}${item.tokens} token</span></div>`, group = (name, list, extra) => list.length ? `<div class="pi-wb-sec-hd">${name}<small>${list.length}</small></div>${list.map((item) => row3(item, extra(item))).join("")}` : "", run = (box) => {
         let text2 = box.querySelector('[data-f="text"]').value, globals = worldInfoMatchSettings(), result2 = triggerTest(entries, text2, tk, globals), body = group("常驻", result2.constant, () => "") + group("关键词命中", result2.keyword, (item) => `${esc(item.matched.join("、"))}：`);
         box.querySelector('[data-f="result"]').innerHTML = `${body || '<p class="pi-hint">没有命中的条目</p>'}
                 <p class="pi-meta">合计${result2.tokens.total} token（常驻${result2.tokens.constant}，关键词${result2.tokens.keyword}）</p>
@@ -31972,7 +32105,7 @@ ${suffix.trim()}` : body;
     },
     // 体检：只看手写条目；问题按类列出，点条目跳转并展开。
     async "wb-health"(view, target, event) {
-      let s = st8(view), entries = handwritten(s.entries || []), report = healthCheck(entries, tokenOf(s)), punct = punctPlan(entries), item = (key, name, detail = "") => `<button type="button" class="pi-menu-item" data-dlg-value="${esc(key)}"><span>${esc(name)}</span>${detail ? `<span class="pi-meta">${esc(detail)}</span>` : ""}</button>`, sec = (name, list, build) => list.length ? `<div class="pi-wb-sec-hd">${name}<small>${list.length}</small></div><div class="pi-menu-list">${list.map(build).join("")}</div>` : "", c = report.constant, html = `${sec("过短的关键词", report.shortKeys, (x) => item(x.key, x.title, x.words.join("、")))}
+      let s = st9(view), entries = handwritten(s.entries || []), report = healthCheck(entries, tokenOf(s)), punct = punctPlan(entries), item = (key, name, detail = "") => `<button type="button" class="pi-menu-item" data-dlg-value="${esc(key)}"><span>${esc(name)}</span>${detail ? `<span class="pi-meta">${esc(detail)}</span>` : ""}</button>`, sec = (name, list, build) => list.length ? `<div class="pi-wb-sec-hd">${name}<small>${list.length}</small></div><div class="pi-menu-list">${list.map(build).join("")}</div>` : "", c = report.constant, html = `${sec("过短的关键词", report.shortKeys, (x) => item(x.key, x.title, x.words.join("、")))}
             ${sec("没有主要关键词的开启条目", report.noKeys, (x) => item(x.key, x.title))}
             ${sec("多个条目共用的关键词", report.shared, (x) => item(x.entries[0].key, x.word, x.entries.map((e) => e.title).join("、")))}
             ${sec("标题重复", report.dupTitles, (x) => item(x.entries[0].key, x.title, `${x.entries.length}条`))}
@@ -31980,28 +32113,28 @@ ${suffix.trim()}` : body;
             <div class="pi-wb-sec-hd">常驻条目</div>
             <p class="${c.warn ? "pi-hint is-warn" : "pi-meta"}">${c.count}条，${c.tokens} token，占开启条目${Math.round(c.ratio * 100)}%${c.warn ? "，占比偏高" : ""}</p>`, pick = await openDialog({ title: "体检", html, actions: [{ label: "关闭", value: null }] });
       if (pick) {
-        if (pick === "::punct") return actions10["wb-punct"](view, target, event);
+        if (pick === "::punct") return actions11["wb-punct"](view, target, event);
         s.picking = !1, s.query = "", s.search === "entry" && (s.search = ""), s.openKey = pick, view.renderBody(), [...hostDocument().querySelectorAll(".pi-root .pi-wb-name")].find((node) => node.dataset.key === pick)?.scrollIntoView({ block: "center" });
       }
     },
     async "wb-delete"(view, target) {
-      let keys = [target.dataset.key], titles = st8(view).entries.filter((entry) => keys.includes(entry.key)).map((entry) => entry.title);
-      if (!await confirmDialog({ title: `从「${st8(view).book}」删除条目`, body: "删除前会下载这个条目的备份。", list: titles, okLabel: "删除", danger: !0 })) return;
+      let keys = [target.dataset.key], titles = st9(view).entries.filter((entry) => keys.includes(entry.key)).map((entry) => entry.title);
+      if (!await confirmDialog({ title: `从「${st9(view).book}」删除条目`, body: "删除前会下载这个条目的备份。", list: titles, okLabel: "删除", danger: !0 })) return;
       await snap(view, "删除条目");
-      let backup = await deleteEntries(st8(view).book, keys);
-      downloadBlob(`${st8(view).book}-已删条目备份.json`, JSON.stringify(backup, null, 2)), await reloadBook(view);
+      let backup = await deleteEntries(st9(view).book, keys);
+      downloadBlob(`${st9(view).book}-已删条目备份.json`, JSON.stringify(backup, null, 2)), await reloadBook(view);
     }
   };
   async function setPicked(view, disabled) {
-    let s = st8(view);
+    let s = st9(view);
     await snap(view, disabled ? "批量关闭" : "批量开启"), await setEntriesDisabled(s.book, [...s.picked], disabled), await reloadBook(view);
   }
   function openSearch(view, key) {
-    let s = st8(view);
+    let s = st9(view);
     s.search = key, key === "book" ? s.query = "" : s.bookQuery = "", view.renderBody(), hostDocument().querySelector(`.pi-root [data-search="${key}"]`)?.focus();
   }
   async function openBook(view, name) {
-    let s = st8(view);
+    let s = st9(view);
     listedBooks(s).some((book) => book.name === name) || (s.extra = [.../* @__PURE__ */ new Set([...s.extra || [], name])]), s.book = name, s.entries = null, s.openKey = "", s.query = "", s.search === "entry" && (s.search = ""), s.tokens = null, s.tokenMap = null, s.picking = !1, s.picked = /* @__PURE__ */ new Set(), await reloadBook(view);
   }
   var refreshOn7 = ["chat"];
@@ -32009,11 +32142,11 @@ ${suffix.trim()}` : body;
   // src/ui/page-diag.js
   var page_diag_exports = {};
   __export(page_diag_exports, {
-    actions: () => actions11,
+    actions: () => actions12,
     auditHtml: () => auditHtml,
     clueDiagCard: () => clueDiagCard,
     foldHtml: () => foldHtml,
-    render: () => render11
+    render: () => render12
   });
   init_fold();
   init_trpg_route();
@@ -32081,16 +32214,16 @@ ${suffix.trim()}` : body;
     ];
   }
   function plainText(info) {
-    let lines2 = ["【剧情注入器诊断】", ...rows(info).map(([k, v]) => `${k}：${v}`), "", "【事件】"];
+    let lines3 = ["【剧情注入器诊断】", ...rows(info).map(([k, v]) => `${k}：${v}`), "", "【事件】"];
     for (let item of info.events)
-      lines2.push(
+      lines3.push(
         `${item.key}（${item.name || "酒馆未提供"}）：${item.bound ? `已绑定，收到${item.count}次，最近${time(item.at)}` : "未绑定"}`
       );
     let list = problems(info);
-    return lines2.push("", "【问题】", ...list.length ? list.map((item) => `- ${item.text}`) : ["无"]), lines2.push("", "【最近记录】", ...info.logs.length ? info.logs.map((item) => `${time(item.at)} ${item.text}`) : ["无"]), lines2.join(`
+    return lines3.push("", "【问题】", ...list.length ? list.map((item) => `- ${item.text}`) : ["无"]), lines3.push("", "【最近记录】", ...info.logs.length ? info.logs.map((item) => `${time(item.at)} ${item.text}`) : ["无"]), lines3.join(`
 `);
   }
-  function render11(view) {
+  function render12(view) {
     let info = collect(view), list = problems(info), fixes = { rebind: "重新绑定事件", "reset-base": "从当前楼重新计数" }, problemHtml = list.length ? list.map(
       (item) => `<div class="pi-diag-row"><span class="pi-badge is-warn">问题</span><span class="pi-diag-text">${esc(item.text)}</span>${item.fix ? `<button type="button" class="pi-btn is-sm" data-act="${item.fix}">${fixes[item.fix]}</button>` : ""}</div>`
     ).join("") : '<p class="pi-hint">没有发现问题。</p>', events = info.events.map(
@@ -32124,7 +32257,7 @@ ${suffix.trim()}` : body;
       return box.remove(), ok;
     }
   }
-  var actions11 = {
+  var actions12 = {
     async check(view) {
       await view.runtime.checkNow({ manual: !0 }), view.renderBody();
     },
@@ -32206,7 +32339,7 @@ ${suffix.trim()}` : body;
     { key: "persona", label: "人设", mod: tab_persona_exports },
     { key: "outline", label: "大纲", mod: tab_outline_exports },
     { key: "run", label: "执行", mod: tab_run_exports }
-  ], INFINITE_TABS = { outline: { label: "世界库", mod: tab_worlds_exports }, run: { mod: tab_infinite_run_exports } }, TRPG_TABS = { setting: { label: "公共设定" }, outline: { label: "模组" }, persona: { hidden: !0 } }, PAGES = {
+  ], INFINITE_TABS = { outline: { label: "世界库", mod: tab_worlds_exports }, run: { mod: tab_infinite_run_exports } }, TRPG_TABS = { setting: { label: "公共设定" }, outline: { label: "模组" }, persona: { label: "人物档案", mod: trpg_people_ui_exports } }, PAGES = {
     books: { label: "世界书管理", icon: "book", mod: page_books_exports },
     data: { label: "数据管理", icon: "box", mod: page_data_exports },
     diag: { label: "诊断", icon: "pulse", mod: page_diag_exports },
@@ -32248,7 +32381,7 @@ ${suffix.trim()}` : body;
       busy: {},
       loadError: {},
       restored: !1,
-      render: render12,
+      render: render13,
       renderBody,
       renderSide,
       project: () => view.projectId ? data.project(view.projectId) : null,
@@ -32355,7 +32488,7 @@ ${suffix.trim()}` : body;
         box && (box.focus(), box.setSelectionRange(compose.start, compose.end));
       }
     }
-    function render12() {
+    function render13() {
       renderSide(), renderBody();
     }
     let tour = createTour({ getRoot: () => root, data });
@@ -32373,29 +32506,29 @@ ${suffix.trim()}` : body;
       hostWindow().setTimeout(tick, 300);
     }
     async function selectProject(id, tab) {
-      if (view.page = "", setDrawer(!1), view.projectId = id, delete view.loadError[id], writeUi({ projectId: id, page: "" }), render12(), !!id)
+      if (view.page = "", setDrawer(!1), view.projectId = id, delete view.loadError[id], writeUi({ projectId: id, page: "" }), render13(), !!id)
         try {
           let project = await data.loadProject(id);
           if (view.projectId !== id) return;
           if (!project) {
-            view.loadError[id] = "项目文件丢失，可在数据管理里查看", render12();
+            view.loadError[id] = "项目文件丢失，可在数据管理里查看", render13();
             return;
           }
-          view.tab = tab || (project.outline.volumes.length ? "run" : "discuss"), writeUi({ tab: view.tab }), render12();
+          view.tab = tab || (project.outline.volumes.length ? "run" : "discuss"), writeUi({ tab: view.tab }), render13();
         } catch (error) {
           if (view.projectId !== id) return;
-          view.loadError[id] = error.message, render12();
+          view.loadError[id] = error.message, render13();
         }
     }
     function restore() {
       let ui = readUi(), activeId = runtime.activeId(), remembered = data.index().projects.some((item) => item.id === ui.projectId) ? ui.projectId : "", id = activeId || remembered || data.index().projects[0] && data.index().projects[0].id || "";
-      view.restored = !0, render12();
+      view.restored = !0, render13();
       let page = PAGES[ui.page] ? ui.page : "";
-      id && selectProject(id, TABS.some((tab) => tab.key === ui.tab) ? ui.tab : void 0), page && (view.page = page, writeUi({ page }), render12());
+      id && selectProject(id, TABS.some((tab) => tab.key === ui.tab) ? ui.tab : void 0), page && (view.page = page, writeUi({ page }), render13());
     }
     view.switchTab = go;
     function go(tab) {
-      view.page = "", view.tab = tab, writeUi({ tab, page: "" }), render12();
+      view.page = "", view.tab = tab, writeUi({ tab, page: "" }), render13();
     }
     let NEW_GROUP = "::new";
     function groupField(preset) {
@@ -32412,9 +32545,9 @@ ${suffix.trim()}` : body;
                 <label class="pi-field" data-f="new-group-row" hidden><span>新分组名</span><input class="pi-inp" data-f="new-group" placeholder="如：龙宫篇"></label>`;
     }
     function mountGroupField(box) {
-      let select = box.querySelector("[data-f=group]"), row2 = box.querySelector("[data-f=new-group-row]");
+      let select = box.querySelector("[data-f=group]"), row3 = box.querySelector("[data-f=new-group-row]");
       select.addEventListener("change", () => {
-        row2.hidden = select.value !== NEW_GROUP, row2.hidden || box.querySelector("[data-f=new-group]").focus();
+        row3.hidden = select.value !== NEW_GROUP, row3.hidden || box.querySelector("[data-f=new-group]").focus();
       });
     }
     function readGroupField(box) {
@@ -32577,7 +32710,7 @@ ${suffix.trim()}` : body;
           await runtime.switchProject(id, pick), toast(
             "success",
             pick === "card" ? `「${meta2.name}」已设为本卡默认，当前聊天也已换用。` : `当前聊天改用「${meta2.name}」。`
-          ), render12();
+          ), render13();
         } catch (error) {
           toast("error", `切换失败：${error.message}`);
         }
@@ -32620,13 +32753,13 @@ ${suffix.trim()}` : body;
           }))
             return;
           try {
-            await data.deleteProject(id), view.projectId === id && (view.projectId = ""), runtime.refresh(), render12();
+            await data.deleteProject(id), view.projectId === id && (view.projectId = ""), runtime.refresh(), render13();
           } catch (error) {
             toast("error", `删除失败：${error.message}`);
           }
           return;
         }
-        data.project(id) || await data.loadProject(id), data.renameProject(id, result2.name, result2.group), result2.mode !== mode2 && data.updateProject(id, (project) => ({ ...project, mode: result2.mode, infinite: normalizeInfinite(project.infinite) })), result2.trpg !== null && result2.trpg !== isTrpg(data.project(id)) && setTrpg(id, result2.trpg && result2.mode !== "infinite"), runtime.refresh(), render12();
+        data.project(id) || await data.loadProject(id), data.renameProject(id, result2.name, result2.group), result2.mode !== mode2 && data.updateProject(id, (project) => ({ ...project, mode: result2.mode, infinite: normalizeInfinite(project.infinite) })), result2.trpg !== null && result2.trpg !== isTrpg(data.project(id)) && setTrpg(id, result2.trpg && result2.mode !== "infinite"), runtime.refresh(), render13();
       }
     }
     function onClick(event) {
@@ -32640,12 +32773,12 @@ ${suffix.trim()}` : body;
       if (act === "project") return selectProject(target.dataset.id);
       if (act === "new-project") return newProject2();
       if (act === "tab") return go(target.dataset.tab);
-      if (act === "page") return view.page = target.dataset.page, writeUi({ page: view.page }), setDrawer(!1), render12();
+      if (act === "page") return view.page = target.dataset.page, writeUi({ page: view.page }), setDrawer(!1), render13();
       if (act === "drawer") return setDrawer(!view.drawer);
       if (act === "theme") return setNight(!isNight()), writeUi({ night: isNight() }), renderSide();
       if (act === "rename") return editProject(view.projectId);
       if (act === "retry-project") return selectProject(view.projectId, view.tab);
-      if (act === "retry-render") return render12();
+      if (act === "retry-render") return render13();
       if (act === "group") {
         let name = target.dataset.group;
         return view.collapsed.has(name) ? view.collapsed.delete(name) : view.collapsed.add(name), writeUi({ collapsed: [...view.collapsed] }), renderSide();
@@ -32677,7 +32810,7 @@ ${suffix.trim()}` : body;
       let item = event.target.closest(".pi-pitem");
       !item || !root.contains(item) || (event.preventDefault(), cancelPress(), !swallowAfterPress(event) && projectMenu(item.dataset.id));
     }
-    function onChange8(event) {
+    function onChange9(event) {
       let target = event.target;
       if (target.dataset.psearch !== void 0) return;
       let handler = current().onChange;
@@ -32694,13 +32827,13 @@ ${suffix.trim()}` : body;
     function open() {
       ensureStyle(), !root && (view.drawer = !1, lastSide = "", lastTop = "", root = el(`<div class="pi-root pi-overlay"><div class="pi-panel"><aside class="pi-side"></aside>
             <div class="pi-scrim" data-act="drawer"></div>
-            <section class="pi-main"><header class="pi-top"></header><div class="pi-body"></div></section></div></div>`), root.addEventListener("click", onClick), root.addEventListener("contextmenu", onContext), root.addEventListener("pointerdown", onPointerDown), root.addEventListener("pointermove", onPointerMove), root.addEventListener("pointerup", cancelPress), root.addEventListener("pointercancel", cancelPress), root.addEventListener("scroll", cancelPress, !0), root.addEventListener("change", onChange8), root.addEventListener("input", onInput7), root.addEventListener("compositionend", (event) => {
+            <section class="pi-main"><header class="pi-top"></header><div class="pi-body"></div></section></div></div>`), root.addEventListener("click", onClick), root.addEventListener("contextmenu", onContext), root.addEventListener("pointerdown", onPointerDown), root.addEventListener("pointermove", onPointerMove), root.addEventListener("pointerup", cancelPress), root.addEventListener("pointercancel", cancelPress), root.addEventListener("scroll", cancelPress, !0), root.addEventListener("change", onChange9), root.addEventListener("input", onInput7), root.addEventListener("compositionend", (event) => {
         event.target.dataset.search && onInput7(event);
       }), root.addEventListener("focusout", (event) => current().onBlur?.(view, event.target, event)), root.addEventListener("mousedown", (event) => {
         event.target === root && (root.dataset.down = "1");
       }), root.addEventListener("mouseup", (event) => {
         event.target === root && root.dataset.down && close(), delete root.dataset.down;
-      }), doc.addEventListener("keydown", onKey, !0), layerParent(doc).appendChild(root), view.restored = !1, data.isReady() ? restore() : render12(), maybeAutoTour());
+      }), doc.addEventListener("keydown", onKey, !0), layerParent(doc).appendChild(root), view.restored = !1, data.isReady() ? restore() : render13(), maybeAutoTour());
     }
     function close() {
       tour.stop(!1), root && (current().unmount?.(view), doc.removeEventListener("keydown", onKey, !0), root.remove(), root = null, data.flush().catch(() => {
@@ -32737,16 +32870,16 @@ ${suffix.trim()}` : body;
     function hide(id) {
       view.clearTimeout(timers.get(id)), timers.delete(id), box?.querySelector(`[data-notice="${id}"]`)?.remove();
     }
-    function show({ id, title: title2, body = "", actions: actions12 = [], timeout = 0 }) {
+    function show({ id, title: title2, body = "", actions: actions13 = [], timeout = 0 }) {
       hide(id);
       let card = el(`<div class="pi-notice" data-notice="${esc(id)}"><b>${badge(id)}<span>${esc(title2)}</span></b>${body ? `<p>${esc(body)}</p>` : ""}
-            <div class="pi-row">${actions12.map((action, index) => `<button type="button" class="pi-btn is-sm${action.primary ? " is-primary" : ""}" data-act="${index}">${esc(action.label)}</button>`).join("")}</div></div>`);
+            <div class="pi-row">${actions13.map((action, index) => `<button type="button" class="pi-btn is-sm${action.primary ? " is-primary" : ""}" data-act="${index}">${esc(action.label)}</button>`).join("")}</div></div>`);
       card.addEventListener("click", (event) => {
         let button = event.target.closest("[data-act]");
         if (button) {
           hide(id);
           try {
-            actions12[Number(button.dataset.act)].run();
+            actions13[Number(button.dataset.act)].run();
           } catch (error) {
             console.error("[剧情注入器]", error);
           }
@@ -32802,7 +32935,7 @@ ${suffix.trim()}` : body;
   }
 
   // src/index.js
-  var VERSION = "0.4.16", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.4.17", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")
