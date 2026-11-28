@@ -20,6 +20,19 @@ export const PLOT_SCENE_TEXT = `${PLOT_SCENE_MARK}
 3. 都不是，或者场景列表为空、看不懂，选${PLOT_SCENE_NONE}。
 在输出的最后单独写一行 <${PLOT_SCENE_TAG}>选中的编号或${PLOT_SCENE_NONE}</${PLOT_SCENE_TAG}>，这一行之外的输出照原来的要求写。`;
 
+// 时间跳跃（大纲里有时间条件时才加，接在场景判断后面，同一次调用）：用户这一轮明确跳过一段时间时，多写一行 <pi_time>。
+// 插件只在这一轮算条件时用（比表格时间晚才用），不写表；真实时间仍由填表写。自然流逝不判断，等填表。
+export const PLOT_TIME_TAG = 'pi_time';
+export function plotTimeText(table, column) {
+    return `【剧情注入器：故事时间】
+表格记录的当前时间：{[sql "SELECT ${column} FROM ${table}"]}
+只有用户这一轮让故事时间明确跳过了一段，才判断跳到了什么时候。算跳过的：睡到第二天、等到晚上、几个小时后、几天后、直接说了要到哪天哪个时刻。
+不算的：正常对话、走动、做事（哪怕做了一阵子）；回忆过去；约好以后再做；只是提到别的日子。上面的当前时间是空的，也不写。
+算的话，跳到的时间照上面当前时间的写法写（同样的日期、钟点格式；只说了时段的，取那个时段常见的钟点），在 <${PLOT_SCENE_TAG}> 那一行之后再单独写一行 <${PLOT_TIME_TAG}>跳到的时间</${PLOT_TIME_TAG}>；不算就不写这一行。`;
+}
+// 插进推进任务的整段：场景判断，有时间判断时接在后面
+export const plotTaskText = (timeText = '') => (timeText ? `${PLOT_SCENE_TEXT}\n\n${timeText}` : PLOT_SCENE_TEXT);
+
 const clone = (x) => JSON.parse(JSON.stringify(x));
 const isOurs = (seg) => isPlainObject(seg) && String(seg.content || '').startsWith(PLOT_SCENE_MARK);
 const isAssistant = (seg) => isPlainObject(seg) && /^(assistant|ai)$/i.test(String(seg.role || ''));
@@ -33,7 +46,7 @@ export function stripSceneTask(preset) {
 }
 
 // 复制品：第一个启用的任务里，结尾连续的 assistant 段（预填）之前插入那一段。没有可用任务返回 null。
-export function withSceneTask(preset, name) {
+export function withSceneTask(preset, name, timeText = '') {
     if (!isPlainObject(preset)) return null;
     let out = stripSceneTask(preset),
         tasks = Array.isArray(out.plotTasks) ? out.plotTasks : [],
@@ -42,16 +55,17 @@ export function withSceneTask(preset, name) {
     let g = task.promptGroup,
         at = g.length;
     while (at > 0 && isAssistant(g[at - 1])) at--;
-    g.splice(at, 0, { role: 'USER', content: PLOT_SCENE_TEXT, deletable: !0 });
+    g.splice(at, 0, { role: 'USER', content: plotTaskText(timeText), deletable: !0 });
     out.name = name;
     return out;
 }
 
-// 复制品是不是由这份原预设按当前这段文字生成的
-export function sceneTaskCurrent(copy, base) {
+// 复制品是不是由这份原预设按当前这段文字（含不含时间判断）生成的
+export function sceneTaskCurrent(copy, base, timeText = '') {
     if (!isPlainObject(copy) || !isPlainObject(base)) return !1;
-    let has = (Array.isArray(copy.plotTasks) ? copy.plotTasks : []).some(
-            (t) => isPlainObject(t) && Array.isArray(t.promptGroup) && t.promptGroup.some((s) => isOurs(s) && s.content === PLOT_SCENE_TEXT),
+    let text = plotTaskText(timeText),
+        has = (Array.isArray(copy.plotTasks) ? copy.plotTasks : []).some(
+            (t) => isPlainObject(t) && Array.isArray(t.promptGroup) && t.promptGroup.some((s) => isOurs(s) && s.content === text),
         ),
         bare = (p) => JSON.stringify({ ...stripSceneTask(p), name: '' });
     return has && bare(copy) === bare(base);
@@ -66,9 +80,18 @@ export function readPlotScene(text) {
     return last;
 }
 
-// 正文请求里不该出现这一行（推进没提取到任何标签时，数据库会把整段原文交给正文）
+// 推进输出里最后一个 <pi_time>…</pi_time> 的内容；不带数字的（「三天后」这类没法比的）不算，返回 ''
+export function readPlotTime(text) {
+    let re = new RegExp(`<${PLOT_TIME_TAG}>\\s*([\\s\\S]*?)\\s*</${PLOT_TIME_TAG}>`, 'gi'),
+        m,
+        last = '';
+    while ((m = re.exec(String(text || '')))) last = m[1].trim();
+    return /\d/.test(last) ? last : '';
+}
+
+// 正文请求里不该出现这两行（推进没提取到任何标签时，数据库会把整段原文交给正文）
 export function stripPlotScene(text) {
-    return String(text).replace(new RegExp(`[ \\t]*<${PLOT_SCENE_TAG}>[\\s\\S]*?</${PLOT_SCENE_TAG}>[ \\t]*\\n?`, 'gi'), '');
+    return String(text).replace(new RegExp(`[ \\t]*<(${PLOT_SCENE_TAG}|${PLOT_TIME_TAG})>[\\s\\S]*?</\\1>[ \\t]*\\n?`, 'gi'), '');
 }
 
 // 一条消息上存的推进原文（每个任务一份，旧版只有 qrf_plot）

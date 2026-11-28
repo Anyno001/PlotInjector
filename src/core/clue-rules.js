@@ -320,6 +320,8 @@ export function evalAtom(atom, env) {
             if (!cell) return { v: TRI.u, why: misses.join('；') };
             let label = atom.kind === 'time' ? '时间' : atom.path,
                 value = cell.value;
+            // 剧情推进判断用户这一轮跳到的时间：比表格里记的晚才用，只用于这一轮（不写表，填表后表格会追上）
+            atom.kind === 'time' && env.roundTime && compareTime(env.roundTime, value) > 0 && ((value = env.roundTime), (label = '时间（本轮跳到）'));
             if (atom.sample && !sampleAgrees(atom))
                 return { v: TRI.u, why: `${label}：这种写法插件暂时读不出来（样例核对没通过），可以改成手动开始` };
             if (atom.pick) {
@@ -418,6 +420,16 @@ export function conditionRefs(
                   cond.kind === 'choice' && (out.choices.push({ node: cond.node, what: cond.what, value: cond.value }), out.nodes.add(cond.node)),
                   out)
             : out
+    );
+}
+
+// 大纲里有没有时间条件（阶段进入 / 结束、节点各条件、线的开启条件）：有才在推进里加时间判断
+export function usesTimeCond(compiled) {
+    let has = (c) => !!c && (c.kind === 'time' || (c.kind === 'group' && c.items.some(has)));
+    return (
+        compiled.units.some((u) => u.clue && (has(u.clue.enter) || has(u.clue.end))) ||
+        compiled.nodes.some((n) => nodeConds(n).some(has)) ||
+        (compiled.lines || []).some((l) => has(l.open))
     );
 }
 
@@ -633,6 +645,7 @@ export function computeClueState(compiled, snapshot, clueProg, config = DEFAULT_
             knowledge: snapshot.knowledge || [],
             tables: snapshot.tables || {},
             timePath: config.bindings && config.bindings.time && config.bindings.time.路径,
+            roundTime: snapshot.roundTime || '',
             factOverrides: clueProg.factOverrides || {},
             nodeDone: (uid) => {
                 let node = byUid.get(uid);

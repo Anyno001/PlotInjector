@@ -1,9 +1,10 @@
-import { PLOT_SUFFIX, PLOT_SCENE_NONE, withSceneTask, sceneTaskCurrent, readPlotScene, plotOutputOf } from '../core/plot-scene.js';
+import { PLOT_SUFFIX, PLOT_SCENE_NONE, withSceneTask, sceneTaskCurrent, readPlotScene, readPlotTime, plotOutputOf } from '../core/plot-scene.js';
 import { chatMessages, hostWindow } from '../host/st.js';
 
 // 推进预设的复制品和每轮的场景判断（见 core/plot-scene.js）。
 // 复制品按聊天绑定（官方 switchPlotPreset 只改当前聊天），原预设改了就重新生成；手改复制品会被覆盖。
 // 只给线索模式（跑团项目由外层 runtime.js 挡住）；d.off() 为真时不复制、不切换、不读场景。
+// d.timeText()：要加时间判断时返回那一段（大纲里有时间条件、时间绑定能用 SQL 读），否则 ''。
 export const PLOT_WAIT = { ms: 2e3, step: 100 };
 const SYNC_GAP_MS = 2e4;
 const API_FNS = ['getCurrentPlotPreset', 'getPlotPresetDetails', 'importPlotPresetFromData', 'switchPlotPreset'];
@@ -11,7 +12,8 @@ const API_FNS = ['getCurrentPlotPreset', 'getPlotPresetDetails', 'importPlotPres
 export function createPlotOps(d) {
     let lastSync = 0,
         builtFor = {},
-        scene = null;
+        scene = null,
+        time = null;
     const usable = (api) => !!api && API_FNS.every((k) => typeof api[k] == 'function') && !(d.off && d.off());
     const current = (api) => {
         try {
@@ -33,11 +35,12 @@ export function createPlotOps(d) {
             name = src + PLOT_SUFFIX,
             base = api.getPlotPresetDetails(src);
         if (!base) return;
-        let want = withSceneTask(base, name);
+        let timeText = (d.timeText && d.timeText()) || '',
+            want = withSceneTask(base, name, timeText);
         if (!want) return;
         let have = api.getPlotPresetDetails(name),
-            key = JSON.stringify(base);
-        if (!have || (!sceneTaskCurrent(have, base) && builtFor[name] !== key)) {
+            key = JSON.stringify(base) + timeText;
+        if (!have || (!sceneTaskCurrent(have, base, timeText) && builtFor[name] !== key)) {
             let r = await api.importPlotPresetFromData(want, { overwrite: !0 });
             if (!r || !r.success) return void d.note(`推进预设复制失败：${(r && r.message) || '数据库未返回结果'}`);
             ((builtFor[name] = key), d.note(`已按「${src}」生成推进预设「${name}」`));
@@ -46,7 +49,7 @@ export function createPlotOps(d) {
     }
     // 本轮的推进结果：最后一条用户消息上存的原文。正常发送时数据库稍后才写上，最多等 PLOT_WAIT.ms。
     async function awaitScene() {
-        scene = null;
+        ((scene = null), (time = null));
         let api = d.api();
         if (!usable(api) || !current(api).endsWith(PLOT_SUFFIX)) return;
         let chat = chatMessages(),
@@ -61,6 +64,15 @@ export function createPlotOps(d) {
         let uid = readPlotScene(text);
         scene = { msg, uid: uid && uid !== PLOT_SCENE_NONE ? uid : '' };
         d.note(uid ? `剧情推进判断本轮${scene.uid ? `进入场景${scene.uid}` : '没有进入新场景'}` : '剧情推进的结果里没有场景判断');
+        let t = readPlotTime(text);
+        t && ((time = { msg, value: t }), d.note(`剧情推进判断本轮时间跳到 ${t}`));
+    }
+    // 本轮判断出的时间跳跃（同样只认这一轮那条用户消息）
+    function roundTime() {
+        if (!time || (d.off && d.off())) return '';
+        let chat = chatMessages();
+        for (let i = chat.length - 1; i >= 0; i--) if (chat[i] && chat[i].is_user) return chat[i] === time.msg ? time.value : '';
+        return '';
     }
     // 本轮判断出的场景（只认这一轮那条用户消息仍是最后一条用户消息时）
     function roundScene() {
@@ -69,5 +81,5 @@ export function createPlotOps(d) {
         for (let i = chat.length - 1; i >= 0; i--) if (chat[i] && chat[i].is_user) return chat[i] === scene.msg ? scene.uid : '';
         return '';
     }
-    return { syncPreset, awaitScene, roundScene, clear: () => ((scene = null), (lastSync = 0)) };
+    return { syncPreset, awaitScene, roundScene, roundTime, clear: () => ((scene = null), (time = null), (lastSync = 0)) };
 }

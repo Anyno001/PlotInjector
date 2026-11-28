@@ -1,4 +1,4 @@
-// PlotInjector v0.4.18
+// PlotInjector v0.4.19
 (() => {
   var __defProp = Object.defineProperty;
   var __getOwnPropNames = Object.getOwnPropertyNames;
@@ -7035,6 +7035,7 @@ ${guide ? `${guide}
     splitCompare: () => splitCompare2,
     tableConsistencyHints: () => tableConsistencyHints2,
     tierOrderKnown: () => tierOrderKnown2,
+    usesTimeCond: () => usesTimeCond,
     withLineIds: () => withLineIds2
   });
   function clockOf(value) {
@@ -7227,7 +7228,7 @@ ${guide ? `${guide}
         }
         if (!cell) return { v: TRI2.u, why: misses.join("；") };
         let label = atom.kind === "time" ? "时间" : atom.path, value = cell.value;
-        if (atom.sample && !sampleAgrees2(atom))
+        if (atom.kind === "time" && env.roundTime && compareTime(env.roundTime, value) > 0 && (value = env.roundTime, label = "时间（本轮跳到）"), atom.sample && !sampleAgrees2(atom))
           return { v: TRI2.u, why: `${label}：这种写法插件暂时读不出来（样例核对没通过），可以改成手动开始` };
         if (atom.pick) {
           let got2 = pickEntry2(value, atom.pick);
@@ -7284,6 +7285,10 @@ ${guide ? `${guide}
     lines: /* @__PURE__ */ new Set()
   }) {
     return out.knows || (out.knows = /* @__PURE__ */ new Set()), out.lines || (out.lines = /* @__PURE__ */ new Set()), out.choices || (out.choices = []), cond ? cond.kind === "group" ? (cond.items.forEach((item) => conditionRefs2(item, out)), out) : ((cond.kind === "fact" || cond.kind === "know") && out.facts.add(cond.fact), cond.kind === "know" && out.knows.add(`${cond.fact}@${cond.actor}`), cond.kind === "node" && out.nodes.add(cond.node), cond.kind === "line" && out.lines.add(cond.line), cond.kind === "choice" && (out.choices.push({ node: cond.node, what: cond.what, value: cond.value }), out.nodes.add(cond.node)), out) : out;
+  }
+  function usesTimeCond(compiled) {
+    let has = (c) => !!c && (c.kind === "time" || c.kind === "group" && c.items.some(has));
+    return compiled.units.some((u) => u.clue && (has(u.clue.enter) || has(u.clue.end))) || compiled.nodes.some((n) => nodeConds(n).some(has)) || (compiled.lines || []).some((l) => has(l.open));
   }
   function nodeConds(node) {
     let out = [node.open, node.early, node.done];
@@ -7411,6 +7416,7 @@ ${guide ? `${guide}
       knowledge: snapshot.knowledge || [],
       tables: snapshot.tables || {},
       timePath: config.bindings && config.bindings.time && config.bindings.time.路径,
+      roundTime: snapshot.roundTime || "",
       factOverrides: clueProg.factOverrides || {},
       nodeDone: (uid) => {
         let node = byUid.get(uid);
@@ -8416,24 +8422,31 @@ ${guide ? `${guide}
   });
 
   // src/core/plot-scene.js
+  function plotTimeText(table, column) {
+    return `【剧情注入器：故事时间】
+表格记录的当前时间：{[sql "SELECT ${column} FROM ${table}"]}
+只有用户这一轮让故事时间明确跳过了一段，才判断跳到了什么时候。算跳过的：睡到第二天、等到晚上、几个小时后、几天后、直接说了要到哪天哪个时刻。
+不算的：正常对话、走动、做事（哪怕做了一阵子）；回忆过去；约好以后再做；只是提到别的日子。上面的当前时间是空的，也不写。
+算的话，跳到的时间照上面当前时间的写法写（同样的日期、钟点格式；只说了时段的，取那个时段常见的钟点），在 <${PLOT_SCENE_TAG}> 那一行之后再单独写一行 <${PLOT_TIME_TAG}>跳到的时间</${PLOT_TIME_TAG}>；不算就不写这一行。`;
+  }
   function stripSceneTask(preset) {
     if (!isPlainObject(preset)) return preset;
     let out = clone(preset);
     for (let t of Array.isArray(out.plotTasks) ? out.plotTasks : []) isPlainObject(t) && Array.isArray(t.promptGroup) && (t.promptGroup = t.promptGroup.filter((s) => !isOurs(s)));
     return out;
   }
-  function withSceneTask(preset, name) {
+  function withSceneTask(preset, name, timeText = "") {
     if (!isPlainObject(preset)) return null;
     let out = stripSceneTask(preset), tasks = Array.isArray(out.plotTasks) ? out.plotTasks : [], task = tasks.find((t) => isPlainObject(t) && t.enabled !== !1 && Array.isArray(t.promptGroup));
     if (!task) return null;
     let g = task.promptGroup, at = g.length;
     for (; at > 0 && isAssistant(g[at - 1]); ) at--;
-    return g.splice(at, 0, { role: "USER", content: PLOT_SCENE_TEXT, deletable: !0 }), out.name = name, out;
+    return g.splice(at, 0, { role: "USER", content: plotTaskText(timeText), deletable: !0 }), out.name = name, out;
   }
-  function sceneTaskCurrent(copy, base) {
+  function sceneTaskCurrent(copy, base, timeText = "") {
     if (!isPlainObject(copy) || !isPlainObject(base)) return !1;
-    let has = (Array.isArray(copy.plotTasks) ? copy.plotTasks : []).some(
-      (t) => isPlainObject(t) && Array.isArray(t.promptGroup) && t.promptGroup.some((s) => isOurs(s) && s.content === PLOT_SCENE_TEXT)
+    let text3 = plotTaskText(timeText), has = (Array.isArray(copy.plotTasks) ? copy.plotTasks : []).some(
+      (t) => isPlainObject(t) && Array.isArray(t.promptGroup) && t.promptGroup.some((s) => isOurs(s) && s.content === text3)
     ), bare = (p) => JSON.stringify({ ...stripSceneTask(p), name: "" });
     return has && bare(copy) === bare(base);
   }
@@ -8442,8 +8455,13 @@ ${guide ? `${guide}
     for (; m = re.exec(String(text3 || "")); ) last = m[1].trim();
     return last;
   }
+  function readPlotTime(text3) {
+    let re = new RegExp(`<${PLOT_TIME_TAG}>\\s*([\\s\\S]*?)\\s*</${PLOT_TIME_TAG}>`, "gi"), m, last = "";
+    for (; m = re.exec(String(text3 || "")); ) last = m[1].trim();
+    return /\d/.test(last) ? last : "";
+  }
   function stripPlotScene(text3) {
-    return String(text3).replace(new RegExp(`[ \\t]*<${PLOT_SCENE_TAG}>[\\s\\S]*?</${PLOT_SCENE_TAG}>[ \\t]*\\n?`, "gi"), "");
+    return String(text3).replace(new RegExp(`[ \\t]*<(${PLOT_SCENE_TAG}|${PLOT_TIME_TAG})>[\\s\\S]*?</\\1>[ \\t]*\\n?`, "gi"), "");
   }
   function plotOutputOf(msg) {
     if (!isPlainObject(msg)) return "";
@@ -8451,7 +8469,7 @@ ${guide ? `${guide}
     return tasks.length ? tasks.join(`
 `) : typeof msg.qrf_plot == "string" ? msg.qrf_plot : "";
   }
-  var PLOT_SUFFIX, PLOT_SCENE_TAG, PLOT_SCENE_MARK, PLOT_SCENE_NONE, PLOT_SCENE_TEXT, clone, isOurs, isAssistant, init_plot_scene = __esm({
+  var PLOT_SUFFIX, PLOT_SCENE_TAG, PLOT_SCENE_MARK, PLOT_SCENE_NONE, PLOT_SCENE_TEXT, PLOT_TIME_TAG, plotTaskText, clone, isOurs, isAssistant, init_plot_scene = __esm({
     "src/core/plot-scene.js"() {
       init_outline();
       PLOT_SUFFIX = "（线索模式）", PLOT_SCENE_TAG = "pi_scene", PLOT_SCENE_MARK = "【剧情注入器：可去的剧情场景】", PLOT_SCENE_NONE = "无", PLOT_SCENE_TEXT = `${PLOT_SCENE_MARK}
@@ -8462,13 +8480,16 @@ ${guide ? `${guide}
 1. 要去的地方：用户这一轮人进了那里，才选它。只是打算、约定、托人去、聊起、拒绝、经过没进去，都不算。
 2. 会找上门的事（附近传来动静、有人来找、突然出事；只用于这类场景）：用户这一轮人在外面（出门、在路上、在街上，正往家走也算），就算碰上了，选它，不用管离那个地点多远。人已经在家里或在室内忙别的，不算。
 3. 都不是，或者场景列表为空、看不懂，选${PLOT_SCENE_NONE}。
-在输出的最后单独写一行 <${PLOT_SCENE_TAG}>选中的编号或${PLOT_SCENE_NONE}</${PLOT_SCENE_TAG}>，这一行之外的输出照原来的要求写。`, clone = (x) => JSON.parse(JSON.stringify(x)), isOurs = (seg) => isPlainObject(seg) && String(seg.content || "").startsWith(PLOT_SCENE_MARK), isAssistant = (seg) => isPlainObject(seg) && /^(assistant|ai)$/i.test(String(seg.role || ""));
+在输出的最后单独写一行 <${PLOT_SCENE_TAG}>选中的编号或${PLOT_SCENE_NONE}</${PLOT_SCENE_TAG}>，这一行之外的输出照原来的要求写。`, PLOT_TIME_TAG = "pi_time";
+      plotTaskText = (timeText = "") => timeText ? `${PLOT_SCENE_TEXT}
+
+${timeText}` : PLOT_SCENE_TEXT, clone = (x) => JSON.parse(JSON.stringify(x)), isOurs = (seg) => isPlainObject(seg) && String(seg.content || "").startsWith(PLOT_SCENE_MARK), isAssistant = (seg) => isPlainObject(seg) && /^(assistant|ai)$/i.test(String(seg.role || ""));
     }
   });
 
   // src/app/clue-plot.js
   function createPlotOps(d) {
-    let lastSync = 0, builtFor = {}, scene = null, usable = (api) => !!api && API_FNS.every((k) => typeof api[k] == "function") && !(d.off && d.off()), current = (api) => {
+    let lastSync = 0, builtFor = {}, scene = null, time2 = null, usable = (api) => !!api && API_FNS.every((k) => typeof api[k] == "function") && !(d.off && d.off()), current = (api) => {
       try {
         return String(api.getCurrentPlotPreset() || "");
       } catch {
@@ -8483,10 +8504,10 @@ ${guide ? `${guide}
       lastSync = Date.now();
       let src = cur.endsWith(PLOT_SUFFIX) ? cur.slice(0, -PLOT_SUFFIX.length) : cur, name = src + PLOT_SUFFIX, base = api.getPlotPresetDetails(src);
       if (!base) return;
-      let want = withSceneTask(base, name);
+      let timeText = d.timeText && d.timeText() || "", want = withSceneTask(base, name, timeText);
       if (!want) return;
-      let have = api.getPlotPresetDetails(name), key = JSON.stringify(base);
-      if (!have || !sceneTaskCurrent(have, base) && builtFor[name] !== key) {
+      let have = api.getPlotPresetDetails(name), key = JSON.stringify(base) + timeText;
+      if (!have || !sceneTaskCurrent(have, base, timeText) && builtFor[name] !== key) {
         let r = await api.importPlotPresetFromData(want, { overwrite: !0 });
         if (!r || !r.success) return void d.note(`推进预设复制失败：${r && r.message || "数据库未返回结果"}`);
         builtFor[name] = key, d.note(`已按「${src}」生成推进预设「${name}」`);
@@ -8494,7 +8515,7 @@ ${guide ? `${guide}
       cur !== name && api.switchPlotPreset(name) && d.note(`本聊天的推进预设换成「${name}」`);
     }
     async function awaitScene() {
-      scene = null;
+      scene = null, time2 = null;
       let api = d.api();
       if (!usable(api) || !current(api).endsWith(PLOT_SUFFIX)) return;
       let chat = chatMessages(), i = chat.length - 1;
@@ -8505,6 +8526,14 @@ ${guide ? `${guide}
       if (!text3) return void d.note("本轮没读到剧情推进的结果，场景按填表结果走");
       let uid = readPlotScene(text3);
       scene = { msg, uid: uid && uid !== PLOT_SCENE_NONE ? uid : "" }, d.note(uid ? `剧情推进判断本轮${scene.uid ? `进入场景${scene.uid}` : "没有进入新场景"}` : "剧情推进的结果里没有场景判断");
+      let t = readPlotTime(text3);
+      t && (time2 = { msg, value: t }, d.note(`剧情推进判断本轮时间跳到 ${t}`));
+    }
+    function roundTime() {
+      if (!time2 || d.off && d.off()) return "";
+      let chat = chatMessages();
+      for (let i = chat.length - 1; i >= 0; i--) if (chat[i] && chat[i].is_user) return chat[i] === time2.msg ? time2.value : "";
+      return "";
     }
     function roundScene() {
       if (!scene || !scene.uid || d.off && d.off()) return "";
@@ -8512,7 +8541,7 @@ ${guide ? `${guide}
       for (let i = chat.length - 1; i >= 0; i--) if (chat[i] && chat[i].is_user) return chat[i] === scene.msg ? scene.uid : "";
       return "";
     }
-    return { syncPreset, awaitScene, roundScene, clear: () => (scene = null, lastSync = 0) };
+    return { syncPreset, awaitScene, roundScene, roundTime, clear: () => (scene = null, time2 = null, lastSync = 0) };
   }
   var PLOT_WAIT, SYNC_GAP_MS, API_FNS, init_clue_plot = __esm({
     "src/app/clue-plot.js"() {
@@ -8826,7 +8855,14 @@ ${guide ? `${guide}
         let cell = readCell2(tables, sw.路径);
         cell.state !== "ok" ? (problems2.push(`主线开关：${cell.reason}`), enabled = !1) : enabled = sameValue2(cell.value, sw.开启值 ?? 1);
       }
-      return { facts: f.facts, knowledge: k.rows, knowPresent, tables, problems: problems2, enabled, api: !0, choices: choiceLog(p) };
+      return { facts: f.facts, knowledge: k.rows, knowPresent, tables, problems: problems2, enabled, api: !0, choices: choiceLog(p), roundTime: roundTimeNow() };
+    }
+    function roundTimeNow() {
+      try {
+        return plot.roundTime();
+      } catch {
+        return "";
+      }
     }
     function choiceLog(p) {
       return readChoiceLog(chatMessages(), p.id, { enabled: choiceOn(), generating: !!round });
@@ -9205,7 +9241,19 @@ ${guide ? `${guide}
         problems: rows2.problems
       };
     }
-    let plot = createPlotOps({ api: acuApi, note }), fold = createFoldOps({
+    let plot = createPlotOps({ api: acuApi, note, timeText: plotTimeTask });
+    function plotTimeTask() {
+      let p = project(), c = p && compute();
+      if (!c || !usesTimeCond(c.compiled)) return "";
+      for (let path of [].concat((p.clue.bindings.time || {}).路径 || [])) {
+        let [table, , column] = String(path || "").split("/").map((x) => x.trim()), found = table ? findSheet2(c.snap.tables || {}, table) : { error: "x" };
+        if (found.error || !SQL_WORD2.test(table) || !SQL_WORD2.test(column || "")) continue;
+        let { col, rows: rows2 } = sheetRows2(found.sheet);
+        if (col(column) >= 0 && rows2.length <= 1) return plotTimeText(table, column);
+      }
+      return "";
+    }
+    let fold = createFoldOps({
       project,
       api: acuApi,
       getProgress,
@@ -10007,7 +10055,15 @@ ${guide ? `${guide}
       foldFillBusy: () => fold.fillBusy(),
       auditFinalRequest,
       stripPlotSceneFrom,
-      awaitPlotScene: () => plot.awaitScene(),
+      // 读到本轮的时间跳跃时重算（条件要按跳到的时间算）；新开放的场景当轮写进场景目录——
+      // 入口只提示目录里有的（填表模型要认得编号），平时目录在填表后才更新
+      awaitPlotScene: async () => {
+        let before = roundTimeNow();
+        if (await plot.awaitScene(), roundTimeNow() === before) return;
+        invalidate();
+        let p = project(), c = p && compute();
+        c && c.plan && await writeCatalog(p, c, ticket()).catch((e) => note(`场景目录写入出错：${e.message}`));
+      },
       syncPlotPreset: (o) => plot.syncPreset(o),
       record,
       ensureRound,
@@ -33725,7 +33781,7 @@ ${suffix.trim()}` : body;
   }
 
   // src/index.js
-  var VERSION = "0.4.18", KEY2 = "__plotInjector", BUTTON = "剧情注入";
+  var VERSION = "0.4.19", KEY2 = "__plotInjector", BUTTON = "剧情注入";
   function boot() {
     let host = hostWindow();
     if (host[KEY2] && typeof host[KEY2].destroy == "function")

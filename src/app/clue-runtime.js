@@ -10,6 +10,7 @@ import {
     NODE_STATUS_LABELS,
     effectiveFact,
     AWAY_PREFIX,
+    usesTimeCond,
 } from '../core/clue-rules.js';
 import {
     focusTakenOver,
@@ -27,7 +28,7 @@ import {
 import { ENDED_STATES, FOLD_AUTO_RELEASED, FOLD_QUIET, foldPlan, foldRows, foldFill, normalizeFolds, foldStatus, foldView, foldBusyCodes, pauseRounds } from '../core/fold.js';
 import { createFoldOps } from './clue-fold.js';
 import { createPlotOps } from './clue-plot.js';
-import { stripPlotScene } from '../core/plot-scene.js';
+import { stripPlotScene, plotTimeText } from '../core/plot-scene.js';
 import {
     catalogKnown,
     lineEntryPlan,
@@ -161,7 +162,15 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
                 ? (problems.push(`主线开关：${cell.reason}`), (enabled = !1))
                 : (enabled = sameValue(cell.value, sw.开启值 ?? 1));
         }
-        return { facts: f.facts, knowledge: k.rows, knowPresent, tables, problems, enabled, api: !0, choices: choiceLog(p) };
+        return { facts: f.facts, knowledge: k.rows, knowPresent, tables, problems, enabled, api: !0, choices: choiceLog(p), roundTime: roundTimeNow() };
+    }
+    // 剧情推进判断的本轮时间跳跃（clue-plot.js）；条件求值时比表格时间晚才用
+    function roundTimeNow() {
+        try {
+            return plot.roundTime();
+        } catch {
+            return '';
+        }
     }
     // 抉择记录（在用户消息上）；功能关闭时 enabled 为 false，各处走原路径
     function choiceLog(p) {
@@ -763,7 +772,21 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
             problems: rows.problems,
         };
     }
-    let plot = createPlotOps({ api: acuApi, note });
+    let plot = createPlotOps({ api: acuApi, note, timeText: plotTimeTask });
+    // 推进里的时间判断那一段：大纲里有时间条件，且时间绑定指向一张单行表里存在的列（SQL 按表名、列名读）时才加
+    function plotTimeTask() {
+        let p = project(),
+            c = p && compute();
+        if (!c || !usesTimeCond(c.compiled)) return '';
+        for (let path of [].concat((p.clue.bindings.time || {}).路径 || [])) {
+            let [table, , column] = String(path || '').split('/').map((x) => x.trim()),
+                found = table ? findSheet(c.snap.tables || {}, table) : { error: 'x' };
+            if (found.error || !SQL_WORD.test(table) || !SQL_WORD.test(column || '')) continue;
+            let { col, rows } = sheetRows(found.sheet);
+            if (col(column) >= 0 && rows.length <= 1) return plotTimeText(table, column);
+        }
+        return '';
+    }
     let fold = createFoldOps({
         project,
         api: acuApi,
@@ -1886,7 +1909,17 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
         foldFillBusy: () => fold.fillBusy(),
         auditFinalRequest,
         stripPlotSceneFrom,
-        awaitPlotScene: () => plot.awaitScene(),
+        // 读到本轮的时间跳跃时重算（条件要按跳到的时间算）；新开放的场景当轮写进场景目录——
+        // 入口只提示目录里有的（填表模型要认得编号），平时目录在填表后才更新
+        awaitPlotScene: async () => {
+            let before = roundTimeNow();
+            await plot.awaitScene();
+            if (roundTimeNow() === before) return;
+            invalidate();
+            let p = project(),
+                c = p && compute();
+            c && c.plan && (await writeCatalog(p, c, ticket()).catch((e) => note(`场景目录写入出错：${e.message}`)));
+        },
         syncPlotPreset: (o) => plot.syncPreset(o),
         record,
         ensureRound,
