@@ -85,6 +85,7 @@ function boot() {
                 /* 酒馆助手已卸载 */
             }
             app.close();
+            app.destroyExtras();
             if (started) runtime.stop();
             notice.destroy();
             removeStyle();

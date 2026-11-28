@@ -169,6 +169,15 @@ export function auditOutlineRequest(requestText, project, states, projection, { 
     return { leaks, projectionCount, duplicated: projectionCount > 1, chars: hay.length };
 }
 
+// 数据库的条件块（<if cell="…">…</if>、<if cond>、<if sql>，可嵌套、可带 <else>）：核验时还没被数据库求值，
+// 发出前才按条件留下或删掉（数据库在 CHAT_COMPLETION_SETTINGS_READY 里处理，比核验晚）。核验时整块不看，免得把没生效的条件世界书当成泄露。
+const IF_BLOCK_RE = /<if\b[^>]*>(?:(?!<if\b)[\s\S])*?<\/if>/g;
+export function dropConditionalBlocks(text) {
+    let t = String(text || '');
+    for (let i = 0; i < 16 && IF_BLOCK_RE.test(t); i++) (IF_BLOCK_RE.lastIndex = 0), (t = t.replace(IF_BLOCK_RE, ''));
+    return t;
+}
+
 export function requestToText(payload) {
     if (payload == null) return '';
     if (typeof payload == 'string') return payload;

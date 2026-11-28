@@ -97,8 +97,14 @@ export function readCell(tables, path) {
     if (found.error) return { state: 'unknown', reason: found.error };
     let { col, rows } = sheetRows(found.sheet),
         c = col(column),
-        know = col('事实') >= 0 && col('角色') >= 0,
-        hits = c < 0 ? [] : findRow(rows, rowKey, { know });
+        know = col('事实') >= 0 && col('角色') >= 0;
+    // 行标识写「*」：单行表（如全局表）的唯一一行。官方全局表没有固定的行标识列，第一列是会变的地点
+    if (rowKey === '*') {
+        if (c < 0) return { state: 'unknown', reason: `表「${table}」缺少列「${column}」` };
+        if (rows.length !== 1) return { state: 'unknown', reason: rows.length ? `表「${table}」有${rows.length}行，「*」只用于单行表` : `表「${table}」还没有行` };
+        return cellText(rows[0][c]) === '' ? { state: 'unknown', reason: `「${path}」尚未填写` } : { state: 'ok', value: rows[0][c] };
+    }
+    let hits = c < 0 ? [] : findRow(rows, rowKey, { know });
     if ((!hits.length && col(rowKey) >= 0 && findRow(rows, column).length && ((c = col(rowKey)), (hits = findRow(rows, column))), c < 0))
         return { state: 'unknown', reason: `表「${table}」缺少列「${column}」` };
     if (!hits.length) return { state: 'unknown', reason: `表「${table}」没有行「${rowKey}」` };

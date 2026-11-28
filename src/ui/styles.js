@@ -62,3 +62,27 @@ export const ICONS = {
 export function foldIcon(open) {
     return `<span class="pi-fold-ic${open ? ' is-open' : ''}">${ICONS.chev}</span>`;
 }
+
+// 抉择卡片（输入框上方）、骰子小标与明细（用户消息里）
+export const CHOICE_CSS = `
+.pi-choice{margin:0 0 8px;background:var(--pi-bg);border:1px solid var(--pi-line);border-radius:var(--pi-r);box-shadow:0 6px 24px rgba(30,30,46,.10);padding:10px 6px 6px;animation:pi-choice-up .3s ease}
+.pi-choice-sit{font-size:12.5px;color:var(--pi-txt2);padding:0 10px 6px;font-style:italic}
+.pi-choice-opt{display:flex;align-items:center;gap:8px;width:100%;padding:8px 10px;border:0;border-radius:9px;background:none;color:var(--pi-txt);font:inherit;font-size:13.5px;text-align:left;cursor:pointer}
+.pi-choice-opt:hover{background:var(--pi-surf)}
+.pi-choice-opt i{font-style:normal;color:var(--pi-accent);font-weight:700}
+.pi-choice-opt.is-own{color:var(--pi-txt2)}
+.pi-choice-foot{display:flex;justify-content:flex-end;align-items:center;gap:8px;padding:2px 10px 0}
+.pi-choice-final{margin-right:auto;font-size:11.5px;color:var(--pi-warn)}
+.pi-choice-link{border:0;background:none;padding:0;color:var(--pi-txt2);font:inherit;font-size:11.5px;cursor:pointer}
+.pi-choice-picked{display:flex;align-items:center;gap:8px;margin:0 0 8px;padding:0 4px;font-size:12px;color:var(--pi-txt2)}
+.pi-choice-picked b{color:var(--pi-txt);font-weight:600}
+.pi-choice-picked .pi-choice-link{margin-left:auto;color:var(--pi-accent);font-size:12px}
+.pi-dice-tag{display:inline-flex;margin-left:6px;padding:0;border:0;background:none;color:inherit;opacity:.6;cursor:pointer;vertical-align:middle}
+.pi-dice-tag svg{width:13px;height:13px}
+.pi-dice-pop{display:flex;align-items:center;gap:10px;margin:6px 0 0;padding:8px 10px;border-radius:10px;background:var(--pi-surf);font-size:12px;line-height:1.7;color:var(--pi-txt)}
+.pi-dice-pop .pi-dice-faces{display:flex;gap:5px}
+.pi-dice-pop .pi-dice-faces svg{width:26px;height:26px}
+.pi-dice-pop .pi-dice-g{color:var(--pi-txt2)}
+.pi-dice-pop .pi-dice-tier{color:var(--pi-accent);font-weight:700}
+@keyframes pi-choice-up{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+`;

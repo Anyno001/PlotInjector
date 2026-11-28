@@ -15,7 +15,7 @@ export const OL_ENDED = ['完成', '放弃'];
 
 // 开启条件写成一句话（不是 事实 / 节点 / 线 / 表 这些写法）：交给定期检测判断，确认后记成编号「句：原话」
 const SENTENCE_ID = '句：';
-const KEYWORD = /^(事实|知情|核实|节点|表|时间|线|计数)\s*[:：]/;
+const KEYWORD = /^(事实|知情|核实|节点|表|时间|线|计数|抉择)\s*[:：]/;
 function sentenceize(cond) {
     if (!cond) return cond;
     if (cond.kind === 'group') return { ...cond, items: cond.items.map(sentenceize) };

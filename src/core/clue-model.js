@@ -8,7 +8,7 @@ export const PLOT_MODES = [
 ];
 
 
-export const CLUE_NODE_KEYS = ['id', '必需', '开放条件', '提前条件', '完成条件', '入口', '场景', '发现', '场景值', '作者备注', '相关事实'];
+export const CLUE_NODE_KEYS = ['id', '必需', '开放条件', '提前条件', '完成条件', '入口', '场景', '发现', '场景值', '作者备注', '相关事实', '抉择', '收尾'];
 
 export const CLUE_STAGE_KEYS = ['进入条件', '结束条件', '作者备注'];
 
@@ -136,6 +136,20 @@ export function keepNodeIds(raw, view) {
     return out;
 }
 
+// 抉择的选项编号：没写就补一个，之后固定（改文字、调顺序都不变）
+function withOptionIds(choice) {
+    if (!isPlainObject(choice) || !Array.isArray(choice.选项)) return choice;
+    let taken = new Set(choice.选项.map((o) => isPlainObject(o) && String(o.id || '').trim()).filter(Boolean)),
+        changed = !1,
+        opts = choice.选项.map((o) => {
+            if (!isPlainObject(o) || String(o.id || '').trim()) return o;
+            let id = makeId('o');
+            for (; taken.has(id); ) id = makeId('o');
+            return (taken.add(id), (changed = !0), { ...o, id });
+        });
+    return changed ? { ...choice, 选项: opts } : choice;
+}
+
 export function withNodeIds(volumes, idOf = () => makeId('n')) {
     let changed = !1,
         next = (volumes || []).map((volume) => {
@@ -148,9 +162,12 @@ export function withNodeIds(volumes, idOf = () => makeId('n')) {
                     for (let { field } of NODE_FIELDS) {
                         if (!Array.isArray(data[field])) continue;
                         let listChanged = !1,
-                            list = data[field].map((item) =>
-                                isPlainObject(item) && !nodeUid(item) ? ((listChanged = !0), { ...item, id: idOf() }) : item,
-                            );
+                            list = data[field].map((item) => {
+                                if (!isPlainObject(item)) return item;
+                                let next = nodeUid(item) ? item : ((listChanged = !0), { ...item, id: idOf() }),
+                                    ch = withOptionIds(next.抉择);
+                                return ch !== next.抉择 ? ((listChanged = !0), { ...next, 抉择: ch }) : next;
+                            });
                         listChanged && ((patch[field] = list), (stageChanged = !0));
                     }
                     return stageChanged ? ((volChanged = !0), { ...stage, data: { ...data, ...patch } }) : stage;
@@ -314,6 +331,12 @@ export function normalizeClue(value) {
         // 事实的标签和登记口径（采用大纲时生成、复审后存下，多线自动补行用）：{ 编号: { label, criterion, sig } }。
         // sig：生成时依据的内容签名；大纲里这条事实的内容变了就要重新生成。
         labels: normalizeLabels(src.labels),
+        // 抉择（实验）的属性：[{ 名, 路径? }]，至多 5 个；有路径就读表，没有就每个聊天自己设（-1 到 +3）
+        attrs: (Array.isArray(src.attrs) ? src.attrs : [])
+            .filter(isPlainObject)
+            .map((a) => ({ 名: String(a.名 || '').trim(), 路径: String(a.路径 || '').trim() }))
+            .filter((a, i, all) => a.名 && all.findIndex((x) => x.名 === a.名) === i)
+            .slice(0, 5),
     };
 }
 

@@ -60,7 +60,7 @@ import {
 } from '../core/outline.js';
 import { discoveryList, clueText, otherLinesText, crossLineLoss } from '../core/clue-project.js';
 
-import { requestToText, auditOutlineRequest } from '../core/clue-audit.js';
+import { requestToText, auditOutlineRequest, dropConditionalBlocks } from '../core/clue-audit.js';
 
 import { isBackgroundRequest, requestLlm } from '../host/llm.js';
 
@@ -155,6 +155,8 @@ export function createRuntime({ data, notice, emit, askReason = async () => '' }
         log,
         ticket: () => ticket(),
         ticketValid: (t) => ticketValid(t),
+        // 抉择（实验）只用于线索模式，跑团项目不碰
+        choiceAllowed: () => !isTrpg(activeProject()),
     };
     // 跑团项目走 src/trpg 里的拷贝，其余项目走原文件；两套同时存在，但每次只有当前项目对应的那套干活。
     let clueOrig = createClueRuntime(clueDeps),
@@ -1499,10 +1501,14 @@ ${finds.map((d) => `- ${d.text}`).join(`
         !dryRun && clueOnly() && (await clue.syncPlotPreset({ force: !0 }).catch((e) => log(`推进预设出错：${e.message}`)));
     }
     function onGenerationEnded() {
-        ((generating = !1), clue.endRound(), runPending());
+        ((generating = !1), clue.endRound(), clue.invalidate(), runPending(), emit('floor'));
     }
     function onGenerationStopped() {
         (clue.discardPendingCandidates(), onGenerationEnded());
+    }
+    // 抉择（实验）：真实用户消息入库后提交待选，记录写在这条消息上
+    function onMessageSent(messageId) {
+        clueOnly() && clue.choice.commit(Number(messageId));
     }
     function onMessageReceived(messageId) {
         const floors = floorCount(),
@@ -1542,6 +1548,7 @@ ${finds.map((d) => `- ${d.text}`).join(`
     async function onChatChanged() {
         ((olNotified = null),
             bumpEpoch(),
+            clue.choice.off(),
             clue.onChatChanged(),
             clue.register(),
             (alignedPersonas = null),
@@ -1601,7 +1608,7 @@ ${finds.map((d) => `- ${d.text}`).join(`
         let project = activeProject(),
             prog = currentProgress();
         if (!project || !prog) return null;
-        let text = requestToText(payload);
+        let text = dropConditionalBlocks(requestToText(payload));
         if (!text) return null;
         let list = flattenUnits(project.outline.volumes),
             states = isInfinite(project) ? Object.fromEntries(list.map((u) => [u.id, 'done'])) : unitStates(list, prog),
@@ -1646,6 +1653,8 @@ ${finds.map((d) => `- ${d.text}`).join(`
         ['WORLDINFO_ENTRIES_LOADED', onEntriesLoaded],
         ['CHAT_CHANGED', onChatChanged],
         ['MESSAGE_RECEIVED', onMessageReceived],
+        ['MESSAGE_SENT', onMessageSent],
+        ['MORE_MESSAGES_LOADED', () => emit('more-messages')],
         ['MESSAGE_UPDATED', onMessageChanged],
         ['MESSAGE_DELETED', onMessageChanged],
         ['MESSAGE_SWIPED', onMessageChanged],

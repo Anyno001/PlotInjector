@@ -1,4 +1,5 @@
 import { catalogKnown, sceneCatalogCell, mainInProgress, aiFloorCount, START_MIN_AI } from '../core/lines.js';
+import { choiceRunBlock, choiceRunActions } from './choice-card.js';
 import { ENDED_STATES, FOLD_AUTO_RELEASED } from '../core/fold.js';
 import {
     discoveryList,
@@ -160,10 +161,10 @@ export function nodeRow(s, focusUid, open) {
         ]
             .filter(Boolean)
             .join('，'),
-        why = s.status === 'locked' ? reasonList(s.open) : s.status !== 'done' ? reasonList(s.done) : '';
+        why = s.closedBy ? `<li>${esc(s.closedBy)}</li>` : s.status === 'locked' ? reasonList(s.open) : s.status !== 'done' ? reasonList(s.done) : '';
     return `<div class="pi-clue-node${s.node.uid === focusUid ? ' is-focus' : ''}">
         <div class="pi-clue-hd" data-act="clue-node-open" data-uid="${esc(s.node.uid)}">
-            <span class="pi-badge ${badge}">${esc(NODE_STATUS_LABELS[s.status])}</span>
+            <span class="pi-badge ${badge}">${esc(s.closedBy ? '已关闭' : NODE_STATUS_LABELS[s.status])}</span>
             <span class="pi-clue-name">${esc(s.node.name)}</span>
             ${flags ? `<span class="pi-meta">${esc(flags)}</span>` : ''}
             ${s.node.uid ? `<button type="button" class="pi-icon-btn" data-act="clue-node-menu" data-uid="${esc(s.node.uid)}" title="手动调整" aria-label="手动调整">${ICONS.more}</button>` : ''}</div>
@@ -276,7 +277,7 @@ export function renderClueRun(view, project, st7) {
     if (!c) return modeCard(project);
     FACT_NAMES = buildFactNames(project, c);
     let multi = (c.state.lineStates || []).length > 0,
-        problems = [...c.snap.problems, ...c.compiled.errors, ...c.state.cycles.map((u) => `节点${u}条件循环引用`)],
+        problems = [...c.snap.problems, ...c.compiled.errors, ...(c.compiled.warnings || []), ...c.state.cycles.map((u) => `节点${u}条件循环引用`)],
         focus = c.state.focus,
         focusNode = c.state.nodeStates.find((s) => s.node.uid === focus.uid),
         entries = runtime.entries(),
@@ -345,7 +346,7 @@ export function renderClueRun(view, project, st7) {
                 : [],
         sceneLine = `<p class="pi-hint">${hereText(c)}本轮场景：${focusNode ? `<b>${esc(focusNode.node.name)}</b>（${esc(FOCUS_SOURCE[focus.source])}）` : esc(FOCUS_SOURCE[focus.source])}${focusNode ? ` <button type="button" class="pi-btn is-sm is-ghost" data-act="clue-leave" data-uid="${esc(focusNode.node.uid)}" title="主角已离开这件事：不再注入这件事的场景和发现，仅提供入口">已离开</button>` : ''}${c.prog.focus ? ` <button type="button" class="pi-btn is-sm is-ghost" data-act="clue-unfocus" title="回到按填表判断本轮场景">${c.prog.focus.startsWith(AWAY_PREFIX) ? '未离开' : '取消手选'}</button>` : ''}</p>`;
     return `${progressHtml('prebuild')}${todo.length ? `<div class="pi-card"><h3>需要处理<span class="pi-badge is-warn">${todo.length}</span></h3><div class="pi-rl-stack">${todo.join('')}</div></div>` : ''}
-        ${mainlineCard(c, enabled)}${lineCard(c, project, st7, multi ? clue.foldCheck() : null, view)}
+        ${choiceRunBlock(runtime)}${mainlineCard(c, enabled)}${lineCard(c, project, st7, multi ? clue.foldCheck() : null, view)}
         <div class="pi-card"><h3>本轮场景${paused}<span class="pi-spacer"></span>
             <button type="button" class="pi-btn is-sm is-ghost" data-act="clue-refresh">重新读表</button>
             <button type="button" class="pi-btn is-sm is-ghost" data-act="preview">预览</button></h3>
@@ -827,6 +828,7 @@ export function prebuildColumnProblems(tables, bindings, diff) {
 }
 
 export const clueActions = {
+    ...choiceRunActions,
     async 'clue-mode'(view, target) {
         let mode = target.dataset.mode,
             project = view.project();

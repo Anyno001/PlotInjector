@@ -85,12 +85,14 @@ import {
     knowKey,
 } from '../core/clue-tables.js';
 
-import { hostWindow, chatMessages, ctx, toast } from '../host/st.js';
+import { hostWindow, chatMessages, chatId, ctx, toast } from '../host/st.js';
+import { readChoiceLog } from './choice-log.js';
+import { createChoiceOps } from './choice-runtime.js';
 import { isClueMode, withNodeIds } from '../core/clue-model.js';
 
 import { isPlainObject, lineShowName } from '../core/outline.js';
 
-import { requestToText, auditRequest } from '../core/clue-audit.js';
+import { requestToText, auditRequest, dropConditionalBlocks } from '../core/clue-audit.js';
 
 export const CLUE_LOG_MAX = 40;
 
@@ -103,7 +105,7 @@ export function acuApi() {
     return w.AutoCardUpdaterAPI || window.AutoCardUpdaterAPI || null;
 }
 
-export function createClueRuntime({ data, getProject, getProgress, setProgress, emit, log, ticket = () => null, ticketValid = () => !0 }) {
+export function createClueRuntime({ data, getProject, getProgress, setProgress, emit, log, ticket = () => null, ticketValid = () => !0, choiceAllowed = () => !0 }) {
     let lastTableUpdate = 0,
         lastAudit = null,
         lastInjected = null,
@@ -142,6 +144,7 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
                 tables: {},
                 problems: ['未检测到数据库插件（shujuku），所有线索按未知处理。请确认数据库插件已安装并开启'],
                 api: !1,
+                choices: choiceLog(p),
             };
         // 模板初始行只在数据库仍会使用时才算数（新聊天沿用 D21）
         let tables = withSeedGate(cloneTables(api.exportTableAsJson()), seedRowsState(chatMessages(), isoKey())),
@@ -158,12 +161,19 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
                 ? (problems.push(`主线开关：${cell.reason}`), (enabled = !1))
                 : (enabled = sameValue(cell.value, sw.开启值 ?? 1));
         }
-        return { facts: f.facts, knowledge: k.rows, knowPresent, tables, problems, enabled, api: !0 };
+        return { facts: f.facts, knowledge: k.rows, knowPresent, tables, problems, enabled, api: !0, choices: choiceLog(p) };
+    }
+    // 抉择记录（在用户消息上）；功能关闭时 enabled 为 false，各处走原路径
+    function choiceLog(p) {
+        return readChoiceLog(chatMessages(), p.id, { enabled: choiceOn(), generating: !!round });
+    }
+    function choiceOn() {
+        return !!data.settings().choiceLab && choiceAllowed();
     }
     function compute() {
         let p = project();
         if (!p) return null;
-        if (!dirty && cache && cache.projectId === p.id && cache.outline === p.outline && cache.clue === p.clue) return cache;
+        if (!dirty && cache && cache.projectId === p.id && cache.outline === p.outline && cache.clue === p.clue && cache.choiceOn === choiceOn()) return cache;
         p = ensureIds(p);
         let compiled = compileClue(p.outline.volumes),
             snap = snapshot(p),
@@ -254,6 +264,7 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
             (lastStatus = { projectId: p.id, map: status }),
             (cache = {
                 projectId: p.id,
+                choiceOn: choiceOn(),
                 outline: p.outline,
                 clue: p.clue,
                 compiled,
@@ -538,15 +549,16 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
                 dirty = !0;
                 let c = compute();
                 if (!c || !c.snap.api) return;
-                if (await checkRegistrations(p, c, ticket())) c = compute();
-                if (!c) return;
                 c.plan && p.clue.bindings.scene && plot.syncPreset().catch((e) => note(`推进预设出错：${e.message}`));
                 let t0 = ticket(),
                     chat = chatMessages(),
                     changed = !1,
                     lastAi = -1;
                 needRestart(p, c, chat) && scheduleRestart(p);
-                if (!c.plan) return void (await writeCatalog(p, c, t0));
+                if (!c.plan) {
+                    (await checkRegistrations(p, c, t0)) && (c = compute());
+                    return void (c && (await writeCatalog(p, c, t0)));
+                }
                 for (let i = chat.length - 1; i >= 0; i--)
                     if (chat[i] && !chat[i].is_user) {
                         lastAi = i;
@@ -640,6 +652,9 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
                     return;
                 changed && (dirty = !0);
                 let now = compute();
+                // 越序登记放在开线之后查：同一楼走进支线入口、又登记了入口场景的发现，线开始后它的前提就成立了，不该撤回
+                now && (await checkRegistrations(p, now, t0)) && (now = compute());
+                if (!ticketValid(t0)) return;
                 now && (await writeCatalog(p, now, t0), await fillRows(p, now, t0));
                 // 已收起的行：线不再是已结束、或有没结束的线要读，恢复回表里
                 ticketValid(t0) && (await fold.maintain(compute()).catch((e) => note(`恢复已收起的行出错：${e.message}`)));
@@ -1533,6 +1548,7 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
                 notReady: c.notReady,
                 arrive,
             });
+        out.used && out.used.choice && choice.cue(out.used.choice);
         return {
             ...out,
             reason: out.content ? '' : '当前无可进行的线索场景',
@@ -1634,7 +1650,7 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
         let c = compute();
         if (!c) return null;
         let p = project(),
-            text = requestToText(payload);
+            text = dropConditionalBlocks(requestToText(payload));
         if (!text) return null;
         let fresh = lastInjected && Date.now() - lastInjected.at < ROUND_TTL_MS,
             out = fresh ? lastInjected.content : '',
@@ -1676,7 +1692,7 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
             }),
             api.registerTableUpdateCallback(tableCallback),
             typeof api.registerTableFillStartCallback == 'function' &&
-                ((fillStartCallback = () => ((lastFillStart = Date.now()), fold.onFillStart())), api.registerTableFillStartCallback(fillStartCallback)),
+                ((fillStartCallback = () => ((lastFillStart = Date.now()), fold.onFillStart(), emit('fill-start'))), api.registerTableFillStartCallback(fillStartCallback)),
             project() && scheduleSync());
     }
     function unregisterAll() {
@@ -1797,7 +1813,26 @@ export function createClueRuntime({ data, getProject, getProgress, setProgress, 
             injected: lastInjected ? String(lastInjected.content || '').length : null,
         };
     }
+    const choice = createChoiceOps({
+        compute,
+        project,
+        enabled: choiceOn,
+        generating: () => !!round,
+        fillBusy: () => fold.fillBusy(),
+        getProgress,
+        setProgress,
+        chatMessages,
+        chatId,
+        act,
+        invalidate: () => invalidate('choice'),
+        note,
+        save: () => {
+            let c = ctx();
+            c && typeof c.saveChat === 'function' && Promise.resolve(c.saveChat()).catch((e) => note(`保存聊天出错：${e.message}`));
+        },
+    });
     return {
+        choice,
         compute,
         invalidate,
         projection,

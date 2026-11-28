@@ -1,7 +1,10 @@
 import {
     lineTriggerFacts,
+    REACH_CHOICES,
     sampleAgrees,
     conditionRefs,
+    nodeConds,
+    evalCondition,
     effectiveFact,
     compileClue,
     computeClueState,
@@ -15,6 +18,15 @@ import { stripAuthorBlocks, nodeUid, normalizeClue } from './clue-model.js';
 import { isPlainObject, stageLabel, flattenUnits, stageNodes, NODE_FIELDS, volumeShowName, outlineToText } from './outline.js';
 
 import { bodyGuideText } from './inject.js';
+import { choiceMaterial, endingMaterial } from './choice.js';
+
+// 抉择节点在注入里的状态：功能关闭或不是抉择节点时为 ''（走原路径）
+function choicePhase(snapshot, node) {
+    let cv = snapshot && snapshot.choices;
+    if (!cv || !cv.enabled || !node.choice) return '';
+    let got = cv.stateOf(node.uid);
+    return got ? (got.performing ? 'performing' : 'done') : 'pending';
+}
 
 export function clueText(value) {
     return Array.isArray(value)
@@ -101,7 +113,7 @@ export function volumeUses(compiled, v) {
     let refs = { facts: new Set(), nodes: new Set(), lines: new Set(), knows: new Set() },
         use = (c) => (conditionRefs(c, refs), condPathFacts(c, refs));
     for (let n of compiled.nodes.filter((n) => n.unit.volume === v)) {
-        [n.open, n.early, n.done].forEach(use);
+        nodeConds(n).forEach(use);
         let extra = isPlainObject(n.item) && n.item.相关事实;
         for (let f of Array.isArray(extra) ? extra : extra ? [extra] : []) String(f).trim() && refs.facts.add(String(f).trim());
     }
@@ -272,7 +284,7 @@ export function prebuildPlan(volumes, { actors = ['user'] } = {}) {
     }
     let refs = { facts: /* @__PURE__ */ new Set(), nodes: /* @__PURE__ */ new Set(), knows: /* @__PURE__ */ new Set() };
     for (let unit of compiled.units) unit.clue && (conditionRefs(unit.clue.enter, refs), conditionRefs(unit.clue.end, refs));
-    for (let n of compiled.nodes) for (let c of [n.open, n.early, n.done]) conditionRefs(c, refs);
+    for (let n of compiled.nodes) for (let c of nodeConds(n)) conditionRefs(c, refs);
     for (let l of compiled.lines || []) conditionRefs(l.open, refs);
     for (let k of refs.knows) knows.add(k);
     let cellKnows = (cond) => {
@@ -285,7 +297,7 @@ export function prebuildPlan(volumes, { actors = ['user'] } = {}) {
         }
     };
     for (let unit of compiled.units) unit.clue && (cellKnows(unit.clue.enter), cellKnows(unit.clue.end));
-    for (let n of compiled.nodes) [n.open, n.early, n.done].forEach(cellKnows);
+    for (let n of compiled.nodes) nodeConds(n).forEach(cellKnows);
     for (let l of compiled.lines || []) cellKnows(l.open);
     for (let [f, ids] of lineTriggerFacts(compiled))
         facts.has(f) ||
@@ -362,7 +374,7 @@ export function rowScope(compiled, started, frontier = null) {
         let r = { facts: /* @__PURE__ */ new Set(), nodes: /* @__PURE__ */ new Set(), knows: /* @__PURE__ */ new Set(), lines: /* @__PURE__ */ new Set() };
         for (let u of units) u.clue && (conditionRefs(u.clue.enter, r), conditionRefs(u.clue.end, r), condPathFacts(u.clue.enter, r), condPathFacts(u.clue.end, r));
         for (let n of nodes) {
-            for (let c of [n.open, n.early, n.done]) (conditionRefs(c, r), condPathFacts(c, r));
+            for (let c of nodeConds(n)) (conditionRefs(c, r), condPathFacts(c, r));
             let extra = isPlainObject(n.item) && n.item.相关事实;
             for (let f of Array.isArray(extra) ? extra : extra ? [extra] : []) String(f).trim() && r.facts.add(String(f).trim());
         }
@@ -409,7 +421,7 @@ export function nodeFrontier(compiled, state, snap, prog, config, { cap = FRONTI
     let knowAtoms = /* @__PURE__ */ new Set(),
         refs = (c) => conditionRefs(c).knows.forEach((k) => knowAtoms.add(k));
     for (let u of compiled.units) u.clue && (refs(u.clue.enter), refs(u.clue.end));
-    for (let n of compiled.nodes) [n.open, n.early, n.done].forEach(refs);
+    for (let n of compiled.nodes) nodeConds(n).forEach(refs);
     let facts = new Map((snap && snap.facts) || []);
     for (let id of have) facts.set(id, { ...(facts.get(id) || {}), id, status: 'confirmed', raw: '已核实', text: (facts.get(id) || {}).text || '' });
     let knowledge = [
@@ -723,7 +735,7 @@ export function checkClueDraft(
                 (r.facts.forEach((f) => used.add(f)), r.nodes.forEach((id) => allIds.has(id) || badNodes.add(id)));
             });
     for (let n of draft.nodes)
-        [n.open, n.early, n.done].forEach((c) => {
+        nodeConds(n).forEach((c) => {
             let r = conditionRefs(c);
             (r.facts.forEach((f) => used.add(f)), r.nodes.forEach((id) => allIds.has(id) || badNodes.add(id)));
         });
@@ -768,10 +780,12 @@ export function checkClueDraft(
         badLines = /* @__PURE__ */ new Set();
     for (let l of draft.lines || []) for (let id of conditionRefs(l.open).lines) allLines.has(id) || badLines.add(id);
     badLines.size && out.push(`开启条件引用了不存在的线：${[...badLines].join('、')}`);
-    let noDone = draft.nodes.filter((n) => n.kind === 'main' && !n.done).map((n) => n.uid || n.name);
+    // 带抉择、收尾的节点由玩家的选择或收尾完成，不需要完成条件和发现
+    let plain = (n) => n.kind === 'main' && !n.choice && !n.ending,
+        noDone = draft.nodes.filter((n) => plain(n) && !n.done).map((n) => n.uid || n.name);
     noDone.length && out.push(`这些剧情节点没有完成条件，只能人工标记完成：${noDone.join('、')}`);
     let noFind = draft.nodes
-        .filter((n) => n.kind === 'main' && !discoveryList(isPlainObject(n.item) ? n.item : {}).length)
+        .filter((n) => plain(n) && !discoveryList(isPlainObject(n.item) ? n.item : {}).length)
         .map((n) => n.uid || n.name);
     if ((noFind.length && out.push(`这些剧情节点没有「发现」：${noFind.join('、')}`), !applied)) return out;
     let reach = clueReachability(applied, { knownFacts: obtainedFacts, claimedFacts }),
@@ -782,7 +796,7 @@ export function checkClueDraft(
                 .join('；');
     (reach.verdict === 'blocked' && out.push(`按大纲自身推演，有走不通的地方：${list([...reach.stuckStages, ...reach.stuckNodes])}`),
         reach.verdict === 'unknown' &&
-            out.push(`有些地方要看时间、知情或表格里的值才能走通，这里判断不了：${list([...reach.stuckStages, ...reach.stuckNodes])}`));
+            out.push(`有些地方要看时间、知情、表格里的值或玩家的选择才能走通，这里判断不了：${list([...reach.stuckStages, ...reach.stuckNodes])}`));
     for (let r of clueAlternativeRoutes(applied, { knownFacts: obtainedFacts, claimedFacts }))
         r.ok || out.push(`替代途径走不通：${r.stage}·${r.node} 单独走完时，${r.why}`);
     return out;
@@ -947,7 +961,11 @@ export function buildClueProjection(
             voiced = finds.filter((d) => !got.includes(d) && isClaimed(d)),
             held = finds.filter((d) => !got.includes(d) && !voiced.includes(d) && d.fact && notReady && notReady.has(d.fact)),
             pending = finds.filter((d) => !got.includes(d) && !voiced.includes(d) && !held.includes(d)),
-            gotFacts = new Set([...got, ...voiced].map((d) => d.fact));
+            gotFacts = new Set([...got, ...voiced].map((d) => d.fact)),
+            phase = choicePhase(snapshot, node);
+        // 抉择待决定或正在演出：不给这个节点的发现内容，只给抉择材料（成功的结果不能当候选交给正文）
+        phase && phase !== 'done' && ((pending = []), (held = []), lines.push(...choiceMaterial(node.choice, phase, snapshot.choices.stateOf(node.uid)?.rec, (o) => !o.whenCond || (state.env && evalCondition(o.whenCond, state.env).v === TRI.t))));
+        phase === 'pending' && (used.choice = node.uid);
         (held.length && (used.held = held.map((d) => d.fact)),
             held.length && !pending.length && lines.push('这一场的具体发现还在准备，这一轮先写到人物和环境，不要写出调查结果。'),
             pending.length &&
@@ -1073,6 +1091,18 @@ export function buildClueProjection(
             (used.leads = leads.map((l) => l.uid)),
             leads.forEach((l) => used.scenes.push({ uid: l.uid, entry: l.text, place: l.place, focus: !1 })));
     }
+    // 这次生成正好是抉择 / 收尾记录后面的那条回复：不论焦点在哪，都给它的结果
+    let cv = snapshot.choices;
+    if (cv && cv.enabled) {
+        for (let [uid, got] of cv.choices)
+            got.performing &&
+                uid !== (focus && focus.node.uid) &&
+                (() => {
+                    let s = state.nodeStates.find((x) => x.node.uid === uid);
+                    s && s.node.choice && lines.push(...choiceMaterial(s.node.choice, 'performing', got.rec));
+                })();
+        cv.ending && lines.push(...endingMaterial(cv.ending.rec, cv.ending.performing ? 'performing' : 'done'));
+    }
     if (!lines.length) return { content: '', used };
     let note = pace === 'slow' ? '节奏放慢，细写当下。' : pace === 'fast' ? '节奏加快，次要细节一笔带过。' : '',
         guide = bodyGuideText(settings);
@@ -1144,14 +1174,14 @@ export function clueReachability(volumes, { knownFacts = [], claimedFacts = [] }
             }
         };
     for (let u of compiled.units) u.clue && (extAtoms(u.clue.enter), extAtoms(u.clue.end));
-    for (let n of compiled.nodes) [n.open, n.early, n.done].forEach(extAtoms);
+    for (let n of compiled.nodes) nodeConds(n).forEach(extAtoms);
     for (let l of compiled.lines || []) extAtoms(l.open);
     for (let [f, ids] of lineTriggerFacts(compiled)) (have.add(f), assumptions.add(`正文里发生线 ${ids.join('、')} 要等的事（${f}）`));
     let allFacts = /* @__PURE__ */ new Set([...have, ...claimed]);
     for (let u of compiled.units)
         u.clue && [u.clue.enter, u.clue.end].forEach((c) => conditionRefs(c).facts.forEach((f) => allFacts.add(f)));
     for (let n of compiled.nodes)
-        ([n.open, n.early, n.done].forEach((c) => conditionRefs(c).facts.forEach((f) => allFacts.add(f))),
+        (nodeConds(n).forEach((c) => conditionRefs(c).facts.forEach((f) => allFacts.add(f))),
             gives.get(n).forEach((f) => allFacts.add(f)));
     let state = null,
         lineProg = { lines: {} };
@@ -1160,7 +1190,7 @@ export function clueReachability(volumes, { knownFacts = [], claimedFacts = [] }
             knowledge = [...knowActors].flatMap(([fact, actors]) =>
                 have.has(fact) ? [...actors].map((actor) => ({ fact, actor, way: '亲见', verified: !0 })) : [],
             );
-        state = computeClueState(compiled, { facts, knowledge, tables: {}, problems: [] }, { ...emptyClueProgress(), ...lineProg }, cfg);
+        state = computeClueState(compiled, { facts, knowledge, tables: {}, problems: [], choices: REACH_CHOICES }, { ...emptyClueProgress(), ...lineProg }, cfg);
         let before0 = Object.keys(lineProg.lines).length;
         for (let s of state.lineStates || [])
             (s.state === '可开启' || (s.state === '未触发' && s.cond.v === TRI.u)) && (lineProg.lines[s.line.id] = { started: !0 });
@@ -1243,7 +1273,7 @@ export function clueAlternativeRoutes(volumes, { knownFacts = [], claimedFacts =
     for (let u of units)
         u.clue && [u.clue.enter, u.clue.end].forEach((c) => (conditionRefs(c).facts.forEach((f) => all.add(f)), knowAtoms(c)));
     for (let n of compiled.nodes)
-        ([n.open, n.early, n.done].forEach((c) => (conditionRefs(c).facts.forEach((f) => all.add(f)), knowAtoms(c))),
+        (nodeConds(n).forEach((c) => (conditionRefs(c).facts.forEach((f) => all.add(f)), knowAtoms(c))),
             gives(n).forEach((f) => all.add(f)));
     let snapshot = (have) => ({
         facts: claimSnapshot(all, have, claimed),
@@ -1252,6 +1282,7 @@ export function clueAlternativeRoutes(volumes, { knownFacts = [], claimedFacts =
         ),
         tables: {},
         problems: [],
+        choices: REACH_CHOICES,
     });
     for (let [ui, u] of units.entries()) {
         let own = compiled.nodes.filter((n) => n.unit === u),
@@ -1272,7 +1303,9 @@ export function clueAlternativeRoutes(volumes, { knownFacts = [], claimedFacts =
         let base = new Set(knownFacts),
             got = obtainable(),
             required = own.filter((n) => n.required);
-        for (let n of compiled.nodes) units.indexOf(n.unit) < ui && gives(n).forEach((f) => got.has(f) && base.add(f));
+        // 支线和主线并行，不看它的卷排在前还是后：别的支线推演里拿得到的事实也算起点（跨线「全部」条件不误报）
+        for (let n of compiled.nodes)
+            (units.indexOf(n.unit) < ui || (n.unit.line && n.unit.line !== u.line && n.unit.line.kind === 'side')) && gives(n).forEach((f) => got.has(f) && base.add(f));
         if (units.length && computeClueState(compiled, snapshot(base), emptyClueProgress(), cfg).stageStates.get(u.id).entered.v !== TRI.t)
             continue;
         for (let start of starts) {
@@ -1354,7 +1387,7 @@ export function tableCondReport(volumes, tables) {
         visit = (cond, where) => tableCondChecks(cond, tables, where, out);
     for (let l of compiled.lines || []) visit(l.open, `线 ${l.id}「${l.name}」的开启条件`);
     for (let u of compiled.units) u.clue && [u.clue.enter, u.clue.end].forEach((c) => visit(c, stageLabel(u.stage.key)));
-    for (let n of compiled.nodes) [n.open, n.early, n.done].forEach((c) => visit(c, `${stageLabel(n.unit.stage.key)}·${n.name}`));
+    for (let n of compiled.nodes) nodeConds(n).forEach((c) => visit(c, `${stageLabel(n.unit.stage.key)}·${n.name}`));
     return out;
 }
 

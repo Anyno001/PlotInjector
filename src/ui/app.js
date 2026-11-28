@@ -7,6 +7,7 @@ import { cardKey, cardName, currentCard, hostDocument, hostWindow, toast } from 
 import { confirmDialog, el, ensureStyle, esc, isNight, layerParent, menuDialog, openDialog, options, pickFiles, setNight } from './dom.js';
 import { parseProjectFile, importedName, missingBoundTables } from '../core/project-file.js';
 import { applyCardUpdate, cardPackState, readCardPack } from '../core/card-pack.js';
+import { createChoiceCard } from './choice-card.js';
 import { ICONS } from './styles.js';
 import * as discuss from './tab-discuss.js';
 import * as setting from './tab-setting.js';
@@ -708,6 +709,8 @@ export function createApp({ data, runtime, version, notice = null }) {
                 data.isReady() ? restore() : render(),
                 maybeAutoTour()));
     }
+    const choiceCard = createChoiceCard(runtime);
+    view.choiceCard = choiceCard;
     function close() {
         (tour.stop(!1),
             root &&
@@ -719,6 +722,8 @@ export function createApp({ data, runtime, version, notice = null }) {
     }
     function refresh(reason) {
         (reason === 'chat' || reason === 'index') && checkCardPack();
+        choiceCard.update();
+        if (reason === 'more-messages') return;
         if (!root) return;
         if (!view.restored && data.isReady()) return restore();
         (reason === 'index' || reason === 'switch' || reason === 'chat') && renderSide();
@@ -732,5 +737,5 @@ export function createApp({ data, runtime, version, notice = null }) {
         const only = current().refreshOn;
         (only && !only.includes(reason)) || typing || renderBody();
     }
-    return { open, close, refresh, isOpen: () => !!root, view, cardName };
+    return { open, close, refresh, isOpen: () => !!root, view, cardName, destroyExtras: () => choiceCard.destroy() };
 }

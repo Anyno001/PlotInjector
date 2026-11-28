@@ -6,6 +6,8 @@ import { clueText, discoveryList } from './clue-project.js';
 
 import { nodeUid, DEFAULT_CLUE } from './clue-model.js';
 
+import { readChoice, readEnding, TIERS, CUSTOM } from './choice.js';
+
 export const COND_MAX_DEPTH = 2;
 
 // 时间条件只比钟点（evalAtom 用）：表格里的时间值 → 当天分钟数，取最后一个钟点；读不到返回 null
@@ -35,6 +37,9 @@ export const ATOM_KEYS = ['事实', '知情', '核实', '节点', '表', '时间
 
 export const TRI = { t: 'true', f: 'false', u: 'unknown' };
 
+// 作者检查推演时用：抉择、收尾节点都当作能完成，具体选了什么不知道
+export const REACH_CHOICES = { enabled: !0, assumeAll: !0, choices: new Map(), ending: null, stateOf: () => null };
+
 export function atomString(key, value) {
     let v = String(value ?? '').trim();
     return key === '时间' ? `时间 ${v}` : `${key}: ${v}`;
@@ -63,6 +68,12 @@ export function parseAtom(text) {
     if ((m = /^(知情|核实)\s*[:：]\s*([^@\s]+)\s*@\s*(.+)$/.exec(raw)))
         return { kind: 'know', fact: m[2], actor: m[3].trim(), verified: m[1] === '核实', raw };
     if ((m = /^节点\s*[:：]\s*(\S+)$/.exec(raw))) return { kind: 'node', node: m[1], raw };
+    if ((m = /^抉择\s*[:：]\s*(\S+)\s+(选了|结果)\s*[:：]?\s*(\S+)$/.exec(raw))) {
+        let [, node, what, value] = m;
+        return what === '结果' && !TIERS.includes(value)
+            ? { kind: 'bad', raw, error: `抉择的结果只能写 ${TIERS.join(' / ')}` }
+            : { kind: 'choice', node, what, value, raw };
+    }
     if ((m = splitCompare(raw, /^表\s*[:：]\s*(.+?)\s*(==|!=|>=|<=|>|<|不包含|包含)\s*(.*)$/)))
         return { kind: 'cell', path: m[1].trim(), op: m[2], value: m[3].trim(), raw };
     if ((m = /^时间\s*(==|!=|>=|<=|>|<)\s*(.+)$/.exec(raw))) return { kind: 'time', op: m[1], value: m[2].trim(), raw };
@@ -89,6 +100,14 @@ export function parseCondition(value, errors = [], depth = 0) {
     let mode = 'all',
         items;
     if (isPlainObject(value) && Object.keys(value).length === 1 && value.计数 !== void 0) return parseCountAtom(value.计数, errors);
+    // {抉择: 节点id, 选了: 选项id | 自定义} / {抉择: 节点id, 结果: 顺利 | 有代价 | 失败}；两项都写就是「两项都满足」。
+    // 多套了一层（{抉择: {抉择: …, 选了: …}}）也认。
+    if (isPlainObject(value) && Object.keys(value).length === 1 && isPlainObject(value.抉择)) return parseCondition(value.抉择, errors, depth);
+    if (isPlainObject(value) && value.抉择 !== void 0 && !isPlainObject(value.抉择) && (value.选了 !== void 0 || value.结果 !== void 0) && Object.keys(value).every((k) => ['抉择', '选了', '结果'].includes(k))) {
+        let one = (what) => parseCondition(`抉择: ${String(value.抉择).trim()} ${what} ${String(value[what]).trim()}`, errors, depth),
+            parts = ['选了', '结果'].filter((w) => value[w] !== void 0).map(one);
+        return parts.length === 1 ? parts[0] : { kind: 'group', mode: 'all', items: parts };
+    }
     if (
         isPlainObject(value) &&
         value.表 !== void 0 &&
@@ -108,7 +127,15 @@ export function parseCondition(value, errors = [], depth = 0) {
     if (Array.isArray(value)) items = value;
     else if (isPlainObject(value) && Array.isArray(value.全部) && Object.keys(value).length === 1) items = value.全部;
     else if (isPlainObject(value) && Array.isArray(value.任一) && Object.keys(value).length === 1) ((mode = 'any'), (items = value.任一));
-    else return (errors.push(`无法识别的条件结构：${JSON.stringify(value).slice(0, 60)}`), { kind: 'bad', raw: '', error: '结构错误' });
+    // {其中至少: N, 条件: [...]}：下面的条件满足至少 N 条
+    else if (isPlainObject(value) && Array.isArray(value.条件) && Object.keys(value).length === 2 && value.其中至少 !== void 0) {
+        let n = Math.round(Number(value.其中至少));
+        if (!(n >= 1 && n <= value.条件.length))
+            return (errors.push(`「其中至少」要写 1 到 ${value.条件.length} 之间的整数`), { kind: 'bad', raw: '', error: '数量错误' });
+        return depth >= COND_MAX_DEPTH
+            ? (errors.push('条件嵌套超过两层'), { kind: 'bad', raw: '', error: '嵌套过深' })
+            : { kind: 'group', mode: 'atleast', n, items: value.条件.map((item) => parseCondition(item, errors, depth + 1)).filter(Boolean) };
+    } else return (errors.push(`无法识别的条件结构：${JSON.stringify(value).slice(0, 60)}`), { kind: 'bad', raw: '', error: '结构错误' });
     return depth >= COND_MAX_DEPTH
         ? (errors.push('条件嵌套超过两层'), { kind: 'bad', raw: '', error: '嵌套过深' })
         : { kind: 'group', mode, items: items.map((item) => parseCondition(item, errors, depth + 1)).filter(Boolean) };
@@ -116,6 +143,38 @@ export function parseCondition(value, errors = [], depth = 0) {
 
 export function digitsOf(text) {
     return (String(text).match(/\d+/g) || []).map(Number);
+}
+
+// 时间值 → [日期里的数字…, 时, 分]。日期只取第一个钟点之前的部分；钟点按 clockOf 认（下午2:00 → 14:00）；「周3」「星期3」不算数字
+const WEEKDAY_RE = /(周|星期|礼拜)\s*[\d一二三四五六日天]/g;
+function timeDigits(text) {
+    let t = cellText(text).replace(WEEKDAY_RE, ' '),
+        m = new RegExp(CLOCK_RE.source).exec(t),
+        clock = clockOf(t),
+        date = digitsOf(m ? t.slice(0, m.index) : t);
+    return clock == null ? date : [...date, Math.floor(clock / 60), clock % 60];
+}
+// 条件只写到日期（2008-05-10）而表格带钟点时，只比到日期：「<= 2008-05-10」当天任何时刻都成立，「> 2008-05-10」要到第二天
+export function compareTime(cell, wanted) {
+    let a = timeDigits(cell),
+        b = timeDigits(wanted);
+    if (!a.length || !b.length) return null;
+    let n = a.length > b.length ? b.length : Math.max(a.length, b.length);
+    for (let i = 0; i < n; i += 1) {
+        let x = a[i] ?? 0,
+            y = b[i] ?? 0;
+        if (x !== y) return x - y;
+    }
+    return 0;
+}
+// 故事时间的绑定路径：每条再补一个「表/*/列」（单行表的唯一一行）。旧聊天存的绑定可能是按地点值找行的，主角换了地方就读不到
+function withStarRows(paths) {
+    let out = [...paths];
+    for (let p of paths) {
+        let s = String(p).split('/').map((x) => x.trim());
+        s.length === 3 && s[1] !== '*' && out.push(`${s[0]}/*/${s[2]}`);
+    }
+    return out.filter((x, i, a) => a.indexOf(x) === i);
 }
 
 export function compareValues(a, b) {
@@ -216,6 +275,21 @@ export function evalAtom(atom, env) {
                     : { v: TRI.u, why: label }
             );
         }
+        case 'choice': {
+            let view = env.choices;
+            if (!view || !view.enabled) return { v: TRI.u, why: '抉择功能未开启' };
+            if (view.assumeAll) return { v: TRI.u, why: `取决于玩家在「${atom.node}」的选择` };
+            let got = view.stateOf(atom.node);
+            if (!got)
+                return env.nodeForced && env.nodeForced(atom.node)
+                    ? { v: TRI.f, why: `抉择${atom.node}已标为已处理` }
+                    : env.choicesFinal
+                      ? { v: TRI.f, why: `抉择${atom.node}没有做过` }
+                      : { v: TRI.u, why: `抉择${atom.node}还没做` };
+            let rec = got.rec,
+                hit = atom.what === '选了' ? (atom.value === CUSTOM ? rec.kind === 'custom' : rec.option === atom.value) : rec.tier === atom.value;
+            return { v: hit ? TRI.t : TRI.f, why: `抉择${atom.node}：${rec.kind === 'custom' ? '自己的办法' : rec.action}${rec.tier ? `，${rec.tier}` : ''}` };
+        }
         case 'node': {
             let done = env.nodeDone(atom.node);
             return done === void 0
@@ -226,7 +300,12 @@ export function evalAtom(atom, env) {
         }
         case 'cell':
         case 'time': {
-            let paths = atom.kind === 'time' ? [].concat(env.timePath || []).filter(Boolean) : [atom.path];
+            // 结局预览：作者假设这一格满足 / 不满足 / 读不到
+            if (env.assumeCell) {
+                let a = env.assumeCell(atom.raw);
+                return { v: a === 'yes' ? TRI.t : a === 'no' ? TRI.f : TRI.u, why: `（假设）${atom.raw}` };
+            }
+            let paths = atom.kind === 'time' ? withStarRows([].concat(env.timePath || []).filter(Boolean)) : [atom.path];
             if (!paths.length) return { v: TRI.u, why: '未绑定故事时间' };
             let cell = null,
                 misses = [];
@@ -259,6 +338,13 @@ export function evalAtom(atom, env) {
                     hit = { '>=': d >= 0, '>': d > 0, '<=': d <= 0, '<': d < 0, '==': d === 0, '!=': d !== 0 }[atom.op];
                 return { v: hit ? TRI.t : TRI.f, why: `时间 ${clockText(now)}${hit ? '已到' : '未到'} ${clockText(want)}` };
             }
+            // 带日期的时间比先后：按条件写到的精度比（只写日期就按天），钟点认上午下午，星期不当数字
+            if (atom.kind === 'time' && ['>=', '>', '<=', '<'].includes(atom.op)) {
+                let d = compareTime(value, atom.value);
+                if (d === null) return { v: TRI.u, why: `时间「${cellText(value)}」无法与「${atom.value}」比较` };
+                let hit = { '>=': d >= 0, '>': d > 0, '<=': d <= 0, '<': d < 0 }[atom.op];
+                return { v: hit ? TRI.t : TRI.f, why: `时间 = ${cellText(value)}` };
+            }
             let ok =
                 atom.op === '包含' || atom.op === '不包含'
                     ? cellText(value).includes(atom.value) === (atom.op === '包含')
@@ -286,6 +372,14 @@ export function evalCondition(cond, env) {
         return { v: r.v, reasons: [r.why] };
     }
     let results = cond.items.map((item) => evalCondition(item, env));
+    if (cond.mode === 'atleast') {
+        let yes = results.filter((r) => r.v === TRI.t).length,
+            maybe = results.filter((r) => r.v === TRI.u).length,
+            head = `${cond.items.length}条里满足${yes}条（要至少${cond.n}条）`;
+        return yes >= cond.n
+            ? { v: TRI.t, reasons: [head] }
+            : { v: yes + maybe < cond.n ? TRI.f : TRI.u, reasons: [head, ...results.filter((r) => r.v !== TRI.t).flatMap((r) => r.reasons)] };
+    }
     if (cond.mode === 'all') {
         let bad = results.filter((r) => r.v !== TRI.t);
         return bad.length
@@ -313,6 +407,7 @@ export function conditionRefs(
     return (
         out.knows || (out.knows = /* @__PURE__ */ new Set()),
         out.lines || (out.lines = /* @__PURE__ */ new Set()),
+        out.choices || (out.choices = []),
         cond
             ? cond.kind === 'group'
                 ? (cond.items.forEach((item) => conditionRefs(item, out)), out)
@@ -320,9 +415,19 @@ export function conditionRefs(
                   cond.kind === 'know' && out.knows.add(`${cond.fact}@${cond.actor}`),
                   cond.kind === 'node' && out.nodes.add(cond.node),
                   cond.kind === 'line' && out.lines.add(cond.line),
+                  cond.kind === 'choice' && (out.choices.push({ node: cond.node, what: cond.what, value: cond.value }), out.nodes.add(cond.node)),
                   out)
             : out
     );
+}
+
+// 一个节点的全部条件（开放、提前、完成，以及抉择的有利 / 不利、收尾的结局 / 尾声条件）。
+// 收集引用（建行、缺行、跨线）都用它；求值仍按各自的用途分开。
+export function nodeConds(node) {
+    let out = [node.open, node.early, node.done];
+    node.choice && node.choice.options.forEach((o) => out.push(...(o.proCond || []), ...(o.conCond || []), o.whenCond));
+    node.ending && [...node.ending.endings, ...node.ending.segments.flatMap((s) => s.versions)].forEach((x) => out.push(x.cond));
+    return out.filter(Boolean);
 }
 
 // skip：还没开始的线的事实（大型项目第 2 批），暂不建行，不算缺。checkFacts / checkKnowledge：false 时不报这种表的缺行。
@@ -330,7 +435,7 @@ export function conditionRefs(
 export function prebuiltGaps(compiled, snapshot, { checkFacts = !0, checkKnowledge = !0, skip = null } = {}) {
     let refs = { facts: /* @__PURE__ */ new Set(), nodes: /* @__PURE__ */ new Set(), knows: /* @__PURE__ */ new Set() };
     for (let unit of compiled.units) unit.clue && (conditionRefs(unit.clue.enter, refs), conditionRefs(unit.clue.end, refs));
-    for (let node of compiled.nodes) for (let cond of [node.open, node.early, node.done]) conditionRefs(cond, refs);
+    for (let node of compiled.nodes) for (let cond of nodeConds(node)) conditionRefs(cond, refs);
     for (let l of compiled.lines || []) (conditionRefs(l.open, refs), l.legacyFact && refs.facts.add(l.legacyFact));
     if (skip && skip.size) {
         for (let id of skip) refs.facts.delete(id);
@@ -411,7 +516,18 @@ export function compileClue(volumes) {
                     open: parseCondition(item.开放条件, nerrs),
                     early: parseCondition(item.提前条件, nerrs),
                     done: parseCondition(item.完成条件, nerrs),
+                    choice: readChoice(item.抉择, nerrs),
+                    ending: readEnding(item.收尾, nerrs),
                 };
+            // 有利 / 不利、结局条件也走同一套条件解析，写法错误在这里报
+            c.choice &&
+                c.choice.options.forEach((o) => {
+                    o.proCond = o.pro.map((x) => parseCondition(x, nerrs));
+                    o.whenCond = o.when == null ? null : parseCondition(o.when, nerrs);
+                    o.conCond = o.con.map((x) => parseCondition(x, nerrs));
+                });
+            c.ending &&
+                [...c.ending.endings, ...c.ending.segments.flatMap((s) => s.versions)].forEach((x) => (x.cond = x.when == null ? null : parseCondition(x.when, nerrs)));
             (nerrs.forEach((e) => errors.push(`${where}·${node.name}：${e}`)),
                 uid
                     ? ids.has(uid)
@@ -450,7 +566,54 @@ export function compileClue(volumes) {
     for (let node of nodes)
         [node.open, node.early, node.done].forEach((c) => refCheck(c, `${stageLabel(node.unit.stage.key)}·${node.name}`));
     for (let unit of units) [unit.clue.enter, unit.clue.end].forEach((c) => refCheck(c, stageLabel(unit.stage.key)));
-    return { units, nodes, errors, lines };
+    // 抉择条件：引用的节点要有「抉择」，选项要存在
+    let byUid = new Map(nodes.filter((n) => n.uid).map((n) => [n.uid, n])),
+        choiceCheck = (cond, where) => {
+            for (let ref of conditionRefs(cond).choices) {
+                let n = byUid.get(ref.node);
+                !n || !n.choice
+                    ? errors.push(`${where}：引用的「${ref.node}」不是带抉择的节点`)
+                    : ref.what === '选了' && ref.value !== CUSTOM && !n.choice.options.some((o) => o.id === ref.value) && errors.push(`${where}：抉择「${ref.node}」没有选项「${ref.value}」`);
+            }
+        };
+    for (let l of lines) choiceCheck(l.open, `线 ${l.id} 的开启条件`);
+    for (let node of nodes) {
+        let where = `${stageLabel(node.unit.stage.key)}·${node.name}`;
+        [node.open, node.early, node.done].forEach((c) => choiceCheck(c, where));
+        node.ending && [...node.ending.endings, ...node.ending.segments.flatMap((s) => s.versions)].forEach((x) => choiceCheck(x.cond, `${where}·收尾`));
+        node.choice && node.done && errors.push(`${where}：带抉择的节点由抉择完成，「完成条件」不会被使用`);
+    }
+    for (let unit of units) [unit.clue.enter, unit.clue.end].forEach((c) => choiceCheck(c, stageLabel(unit.stage.key)));
+    // 失败会不会卡住主线：必需节点的开放条件、阶段的进入 / 结束条件，只能靠某个抉择的某一档才成立
+    let warnings = [],
+        // 能证明「只有某个抉择的某几档才成立」时返回 { node, values }；证明不了就返回 null（不下确定结论）
+        mustTier = (cond) => {
+        if (!cond) return null;
+        if (cond.kind === 'choice') return cond.what === '结果' ? { node: cond.node, values: new Set([cond.value]) } : null;
+        if (cond.kind !== 'group') return null;
+        if (cond.mode === 'all') return cond.items.map(mustTier).find(Boolean) || null;
+        let hits = cond.items.map(mustTier),
+            merge = (xs) => {
+                if (!xs.length || xs.some((x) => !x) || new Set(xs.map((x) => x.node)).size !== 1) return null;
+                let values = new Set(xs.flatMap((x) => [...x.values]));
+                return values.size >= TIERS.length ? null : { node: xs[0].node, values };
+            };
+        // 任一：每一项都只靠同一个抉择的某几档，合起来又没覆盖全部三档
+        if (cond.mode === 'any') return merge(hits);
+        // 其中至少 N 条：不靠档位的条目凑不够 N 条时，必须有档位条目成立
+        let free = hits.filter((x) => !x).length;
+        return free >= cond.n ? null : merge(hits.filter(Boolean));
+    };
+    for (let node of nodes) {
+        let hit = node.required && mustTier(node.open);
+        hit && warnings.push(`${stageLabel(node.unit.stage.key)}·${node.name}是必需节点，只在抉择「${hit.node}」${[...hit.values].join(' / ')}时开放；其他结果会卡住这一阶段，可以改成非必需或补一条别的路`);
+    }
+    for (let unit of units)
+        for (let [label, cond] of [['进入条件', unit.clue.enter], ['结束条件', unit.clue.end]]) {
+            let hit = mustTier(cond);
+            hit && warnings.push(`${stageLabel(unit.stage.key)}的${label}只在抉择「${hit.node}」${[...hit.values].join(' / ')}时成立；其他结果会卡住，可以补一条别的路`);
+        }
+    return { units, nodes, errors, warnings, lines };
 }
 
 // opts.endedOpen：判断新登记合不合法时用（线索建行与登记方案 二.3）——正常结束的线，节点照常按条件判断开放。
@@ -486,17 +649,41 @@ export function computeClueState(compiled, snapshot, clueProg, config = DEFAULT_
                 let l = byLine.get(id);
                 return !!l && lineEvidence(l);
             },
+            choices: snapshot.choices || null,
+            nodeForced: (uid) => (overrides[uid] || {}).done === 'force',
         };
+    // 已关闭：开放条件不成立，而且它读的抉择都已经做过了（再也不会成立）。只用于显示
+    function choiceClosed(cond) {
+        if (!choiceOn || !cond) return '';
+        let refs = conditionRefs(cond).choices;
+        if (!refs.length) return '';
+        let made = refs.map((r) => ({ r, got: snapshot.choices.stateOf(r.node), forced: (overrides[r.node] || {}).done === 'force' }));
+        if (!made.every((x) => x.got || x.forced)) return '';
+        // 只读抉择的条件才算「已关闭」；混着事实、表格的，以后还可能成立
+        let only = (c) => !c || (c.kind === 'group' ? c.items.every(only) : c.kind === 'choice');
+        if (!only(cond)) return '';
+        let x = made[0];
+        return x.forced ? `抉择「${x.r.node}」已标为已处理` : `抉择「${x.r.node}」选了「${x.got.rec.kind === 'custom' ? '自己的办法' : x.got.rec.action}」${x.got.rec.tier ? `，${x.got.rec.tier}` : ''}`;
+    }
+    // 抉择功能开启时，带抉择的节点由抉择完成：有记录且已有回复；或者人工标记完成（「标为已处理」）
+    let choiceOn = !!(snapshot.choices && snapshot.choices.enabled);
     function nodeDone(node) {
         if (node.uid && doneMemo.has(node.uid)) return doneMemo.get(node.uid);
         let over = (node.uid && overrides[node.uid]) || {},
+            picked = choiceOn && node.choice ? snapshot.choices.stateOf(node.uid) : null,
             result;
         return (
             over.done === 'force'
                 ? (result = { v: TRI.t, reasons: ['人工标记完成'], manual: !0 })
                 : over.done === 'undo'
                   ? (result = { v: TRI.f, reasons: ['人工撤销完成'], manual: !0 })
-                  : node.done
+                  : choiceOn && snapshot.choices.assumeAll && (node.choice || node.ending)
+                    ? (result = { v: TRI.t, reasons: ['（推演）抉择或收尾会由玩家完成'] })
+                  : choiceOn && node.choice
+                    ? (result = picked && picked.shown ? { v: TRI.t, reasons: ['抉择已做'] } : { v: TRI.f, reasons: [picked ? '抉择结果还在演出' : '抉择待决定'] })
+                    : choiceOn && node.ending && snapshot.choices.ending && snapshot.choices.ending.rec.node === node.uid && snapshot.choices.ending.shown
+                      ? (result = { v: TRI.t, reasons: ['已收尾'] })
+                      : node.done
                     ? node.uid && visiting.has(node.uid)
                         ? (cycles.push(node.uid), (result = { v: TRI.u, reasons: [`节点${node.uid}条件循环引用`] }))
                         : (node.uid && visiting.add(node.uid),
@@ -714,8 +901,9 @@ export function computeClueState(compiled, snapshot, clueProg, config = DEFAULT_
                           ? { v: TRI.t, reasons: ['提前条件满足', ...early.reasons] }
                           : normal;
             }
-            let status = done.v === TRI.t ? 'done' : open.v === TRI.t ? 'available' : 'locked';
-            return { node, status, open, done, skipped: !!over.skip, disabled: over.open === 'block', manualOpen: over.open === 'force' };
+            let status = done.v === TRI.t ? 'done' : open.v === TRI.t ? 'available' : 'locked',
+                closedBy = status === 'locked' && open.v === TRI.f ? choiceClosed(node.open) : '';
+            return { node, status, open, done, skipped: !!over.skip, disabled: over.open === 'block', manualOpen: over.open === 'force', ...(closedBy ? { closedBy } : {}) };
         }),
         focus = pickFocus(nodeStates, clueProg, lines.length ? { ...config, autoFocusSingle: !1 } : config, snapshot, stageStates);
     for (let state of nodeStates)
@@ -725,7 +913,7 @@ export function computeClueState(compiled, snapshot, clueProg, config = DEFAULT_
             let s = stageStates.get(unit.id);
             return s.entered.v === TRI.t && !s.done;
         }) || null;
-    return { nodeStates, stageStates, focus, current, lineStates, cycles: [...new Set(cycles)], problems: snapshot.problems || [] };
+    return { nodeStates, stageStates, focus, current, lineStates, cycles: [...new Set(cycles)], problems: snapshot.problems || [], env };
 }
 
 export function pickFocus(nodeStates, clueProg, config, snapshot, stageStates) {

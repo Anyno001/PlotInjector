@@ -1,3 +1,4 @@
+import { CHOICE_WRITE_RULE, CHOICE_KEEP_RULE } from './choice.js';
 import {
     isPlainObject,
     changeLines,
@@ -219,12 +220,13 @@ export function outlineMessages({
     progress = '',
     recent = '',
     tableCatalog = '',
+    choice = !1,
 }) {
     let clue = mode === 'clue',
         known = knownVolumesText(volumes),
         system = clue
             ? `你按用户的设定写线索推进模式的剧情大纲，格式必须与样例一致。
-${CLUE_OUTLINE_RULES_WITH_LINES}
+${CLUE_OUTLINE_RULES_WITH_LINES}${choice ? `\n${CHOICE_WRITE_RULE}` : ''}
 
 【格式样例】
 ${CLUE_SAMPLE_STAGE}`
@@ -330,12 +332,12 @@ export function syncSettingMessages({ guide, setting, units, fromUnitIndex = 0, 
     ];
 }
 
-export function fixYamlMessages(text, error, mode = 'outline') {
+export function fixYamlMessages(text, error, mode = 'outline', choice = !1) {
     return [
         {
             role: 'system',
             content: `修正下面 YAML 的格式错误，内容不变。
-${mode === 'clue' ? CLUE_OUTLINE_RULES : OUTLINE_RULES}`,
+${mode === 'clue' ? CLUE_OUTLINE_RULES : OUTLINE_RULES}${mode === 'clue' && choice ? `\n${CHOICE_KEEP_RULE}` : ''}`,
         },
         {
             role: 'user',
@@ -403,12 +405,13 @@ const STAGE_OPS = {
     merge: '与下一段合并：把「当前阶段」和「下一阶段」合成一个阶段，阶段名取能概括两段的标题，时间范围覆盖两段，节点、支线事件、世界动态按时间顺序合并并去掉重复，状态变化全部保留。输出一个阶段。',
 };
 
-export function stageOpMessages({ setting, talk = '', refs = [], volumes, unit, next, op, request, mode = 'outline', progress = '' }) {
+export function stageOpMessages({ setting, talk = '', refs = [], volumes, unit, next, op, request, mode = 'outline', progress = '', choice = !1 }) {
     const rule = mode === 'clue' ? STAGE_OPS[op] && STAGE_OPS[op].replace('节点、支线事件、世界动态', '剧情节点、可选事件、世界动态') : STAGE_OPS[op];
     if (!rule) throw new Error('不支持的阶段操作');
     const system = [
         '你在调整剧情大纲中的单个阶段，格式必须与样例一致。',
         mode === 'clue' ? CLUE_OUTLINE_RULES : OUTLINE_RULES,
+        ...(mode === 'clue' && choice ? [CHOICE_KEEP_RULE] : []),
         ...(mode === 'clue'
             ? [
                   '保留已有节点的 id、发现里的事实编号和完成条件。已完成节点、已确认事实是已经发生的历史，不能改写或删掉。拆分阶段时，同一个节点只放在其中一个阶段。',
@@ -574,6 +577,7 @@ export function clueRewriteMessages({
     talk = '',
     rest: only = null,
     others = '',
+    choice = !1,
 }) {
     let rest = only || units.slice(fromUnitIndex),
         byVolume = /* @__PURE__ */ new Map();
@@ -584,7 +588,7 @@ ${CLUE_OUTLINE_RULES}
 改写时另外遵守：
 · 已完成节点、已确认事实是已经发生的历史，不能改写、不能删除，后面的条件可以继续引用它们。
 · 尚未完成的节点保留原来的 id；内容可以调整。新增节点用新的 id。
-· 和已发生剧情冲突的地方，在相关节点的作者备注里用 <仅作者> 写出「原计划 → 调整」，不要默默改掉。
+· 和已发生剧情冲突的地方，在相关节点的作者备注里用 <仅作者> 写出「原计划 → 调整」，不要默默改掉。${choice ? `\n· 已经做过的抉择是历史，后续按它的结果改写。\n${CHOICE_KEEP_RULE}` : ''}
 
 【格式样例】
 ${CLUE_SAMPLE_STAGE}`,

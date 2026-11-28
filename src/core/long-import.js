@@ -1,4 +1,5 @@
 import { CLUE_LINE_RULES, CLUE_OUTLINE_RULES_WITH_LINES, CLUE_OUTLINE_RULES, OUTLINE_RULES, ENTRY_HINT_RULE, BRIEF_RULE } from './prompts.js';
+import { CHOICE_DRAFT_RULE, CHOICE_KEEP_RULE } from './choice.js';
 import { discoveryList, clueText, clueAlternativeRoutes, clueReachability, checkClueDraft } from './clue-project.js';
 import {
     volumeLabel,
@@ -262,7 +263,7 @@ export function mergeImportIndex(list) {
 
 export const IMPORT_AUTHOR_KEYS = ['原文出处', '来源', '待确认', '补写'];
 
-export function importDraftMessages({ part, index, prevTail = '', mode = 'clue', needs = '', actors = '', done = '', kind = '' }) {
+export function importDraftMessages({ part, index, prevTail = '', mode = 'clue', needs = '', actors = '', done = '', kind = '', choice = !1 }) {
     let clue = mode === 'clue',
         rules = clue ? CLUE_OUTLINE_RULES : OUTLINE_RULES,
         onlyClue = (x) => (clue ? x : '');
@@ -322,6 +323,7 @@ export function importDraftMessages({ part, index, prevTail = '', mode = 'clue',
                 ),
                 '要求正文「不要提某人的名字 / 某个真相」时，AI指令和入口里**不能写出那个名字或真相本身**（写出来就已经告诉正文了）。改成「幕后的人此时没有名字，只称『发号施令的人』」这样的写法；具体名字只放在作者备注的 <仅作者> 里，或者等揭示它的那个发现的「内容」里。',
                 clue && (kind === 'main' || kind === 'side') ? importLineHeadRule(kind, part) : '',
+                clue && choice ? CHOICE_DRAFT_RULE : '',
                 actors && `角色对应：${actors}`,
                 needs && `作者的要求：${needs}`,
                 rules,
@@ -374,7 +376,7 @@ export function importJobKind(job) {
 // overall：整体意见，只对当前这条线；此时 units 里有这条线的所有部分（u.overall 不为 false），
 //   别的线上写了意见的部分也可能在里面（u.overall = false，只按它自己的意见改）；只输出真要改的。
 // talk：讨论记录（作为参考）；mode：'outline' 时用按阶段推进的规则（不加线索字段）。
-export function reviewReviseMessages({ units, context = '', secrets = [], tableCatalog = '', mainLines = '', overall = '', talk = '', mode = 'clue' }) {
+export function reviewReviseMessages({ units, context = '', secrets = [], tableCatalog = '', mainLines = '', overall = '', talk = '', mode = 'clue', choice = !1 }) {
     let fence = '```',
         clue = mode !== 'outline';
     return [
@@ -398,6 +400,7 @@ export function reviewReviseMessages({ units, context = '', secrets = [], tableC
                 clue && mainLines && `【已有的主线】\n${mainLines}`,
                 // 大纲规则第一句「只输出一个代码块」和上面的按部分输出冲突，去掉
                 (clue ? CLUE_OUTLINE_RULES_WITH_LINES : OUTLINE_RULES).split('\n').filter((l) => !/^只输出一个 ```yaml 代码块/.test(l)).join('\n'),
+                clue && choice ? CHOICE_KEEP_RULE : '',
             ]
                 .filter(Boolean)
                 .join('\n'),
@@ -693,7 +696,7 @@ export function checkImportDraft(volumes, { index = null, secrets = null, mode =
     let out = [],
         clue = mode === 'clue',
         compiled = clue ? compileClue(volumes || []) : { errors: [] };
-    out.push(...compiled.errors.map((t) => ({ level: 'error', text: t })));
+    out.push(...compiled.errors.map((t) => ({ level: 'error', text: t })), ...(compiled.warnings || []).map((t) => ({ level: 'warn', text: t })));
     // 秘密名字：按运行时可见层检查。正文层、填表层出现就报错；「可能的发现」里出现提醒作者确认它确实是这个节点当场揭示的。
     // shortsSure：作者在审阅页点了「是同一人」的短名，当作保密名字检查（会报成要改的问题）；shortsNot：点了「不是」的，不再提示
     let base = secrets || importSecretNames(index),
@@ -1135,8 +1138,9 @@ export function importLineDraftMessages({
     prevTail = '',
     needs = '',
     done = '',
+    choice = !1,
 }) {
-    let base = importDraftMessages({ part, index, prevTail, mode: 'clue', needs, done }),
+    let base = importDraftMessages({ part, index, prevTail, mode: 'clue', needs, done, choice }),
         sys = `${base[0].content}
 ${CLUE_LINE_RULES.join(`
 `)}

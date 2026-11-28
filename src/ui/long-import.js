@@ -250,11 +250,12 @@ async function runImportJobInner(view, jobId, signal) {
                     needs: cur.needs,
                     done,
                     kind: importJobKind(cur),
+                    choice: !!view.data.settings().choiceLab,
                 }),
             ),
             r = parseOutlineReply(reply2);
         (r.ok && r.volumes.length) ||
-            (r = parseOutlineReply(await askLive(view, jobId, `第${p.i + 1}段`, fixYamlMessages(r.yaml, r.error || '没有读到任何阶段', cur.mode))));
+            (r = parseOutlineReply(await askLive(view, jobId, `第${p.i + 1}段`, fixYamlMessages(r.yaml, r.error || '没有读到任何阶段', cur.mode, !!view.data.settings().choiceLab))));
         let entry =
             r.ok && r.volumes.length
                 ? { yaml: r.yaml, volumes: r.volumes, notes: splitImportAuthorFields(r.volumes, p).notes }
@@ -1161,11 +1162,12 @@ export async function runLineDrafts(view, jobId, parts, partText, local, index, 
                             tableCatalog: catalog,
                             needs: cur.needs,
                             done,
+                            choice: !!view.data.settings().choiceLab,
                         }),
                     ),
                 r = parseOutlineReply(await draft(only));
             (r.ok && r.volumes.length) ||
-                (r = parseOutlineReply(await askLive(view, jobId, `第${p.i + 1}段第${g + 1}批`, fixYamlMessages(r.yaml, r.error || '没有读到任何剧情线（YAML 顶层的卷）', 'clue'))));
+                (r = parseOutlineReply(await askLive(view, jobId, `第${p.i + 1}段第${g + 1}批`, fixYamlMessages(r.yaml, r.error || '没有读到任何剧情线（YAML 顶层的卷）', 'clue', !!view.data.settings().choiceLab))));
             let lost = r.ok ? lineIdsMissing(r.volumes, only) : [];
             if (lost.length && still()) {
                 let r2 = parseOutlineReply(await draft(lost));
@@ -1227,12 +1229,13 @@ export async function redraftLine(view, jobId, lineId) {
                     mainLines: mainLinesText(view.project().outline.volumes),
                     tableCatalog: tables ? tableCatalogText(tables) : '',
                     needs: job.needs,
+                    choice: !!view.data.settings().choiceLab,
                     // 别的线已经写好的内容：告诉 AI 这些属于别的线，不要再写进这一条
                     done: importDoneText([...others, ...got]),
                 }),
             ),
         );
-        r.ok || (r = parseOutlineReply(await ask(view, 'outline', fixYamlMessages(r.yaml, r.error || '格式错误', 'clue'))));
+        r.ok || (r = parseOutlineReply(await ask(view, 'outline', fixYamlMessages(r.yaml, r.error || '格式错误', 'clue', !!view.data.settings().choiceLab))));
         r.ok && got.push(...r.volumes.filter((v) => isPlainObject(v.line) && String(v.line.编号 || '').trim() === lineId));
     }
     if (!importJobOf(view, jobId)) return { ok: !1, why: '确认期间切换了项目' };

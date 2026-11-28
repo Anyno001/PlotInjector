@@ -1,5 +1,5 @@
 import { hostDocument } from '../host/st.js';
-import { CSS } from './styles.js';
+import { CSS, CHOICE_CSS } from './styles.js';
 
 const STYLE_ID = 'pi-style';
 
@@ -12,7 +12,7 @@ export function ensureStyle() {
     if (doc.getElementById(STYLE_ID)) return;
     const style = doc.createElement('style');
     style.id = STYLE_ID;
-    style.textContent = CSS;
+    style.textContent = CSS + CHOICE_CSS;
     doc.head.appendChild(style);
 }
 

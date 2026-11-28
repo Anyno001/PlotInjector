@@ -1,3 +1,5 @@
+import { choiceRules } from './choice-card.js';
+import { endingPreview, endingPreviewable } from './choice-card.js';
 import {
     tableCondReport,
     clueIndexText,
@@ -782,6 +784,7 @@ export async function startRewrite(view) {
             'outline',
             material
                 ? clueRewriteMessages({
+                      choice: choiceRules(view, project),
                       setting: project.setting.text,
                       volumes: project.outline.volumes,
                       fromUnitIndex: from,
@@ -969,9 +972,10 @@ function setTalkRef(view) {
 }
 
 // 第 k 卷的请求：volumes 带已有卷和本轮前面已写好的卷。
-function volumeRequest({ project, talk, wb, material, extra = [], no, k, n, request, tableCatalog }) {
+function volumeRequest({ view, project, talk, wb, material, extra = [], no, k, n, request, tableCatalog }) {
     const volumes = [...project.outline.volumes, ...extra];
     return outlineMessages({
+        choice: choiceRules(view, project),
         setting: project.setting.text,
         talk,
         refs: wb,
@@ -1020,7 +1024,7 @@ async function writeVolumes(view, n, request, onConfirmed = null) {
     const base = project.outline.volumes.length + 1;
     if (n <= 1) {
         const reply = await runTask(view, 'outline', () =>
-            ask(view, 'outline', volumeRequest({ project, talk, wb, material, no: base, k: 1, n: 1, request })),
+            ask(view, 'outline', volumeRequest({ view, project, talk, wb, material, no: base, k: 1, n: 1, request })),
         );
         if (reply) setDraft(view, 'volume', reply, { task, scope: material.scope });
         return;
@@ -1054,6 +1058,7 @@ async function writeVolumes(view, n, request, onConfirmed = null) {
                         view,
                         'outline',
                         volumeRequest({
+                            view,
                             project,
                             talk,
                             wb,
@@ -1369,10 +1374,12 @@ export const actions = {
                     : []),
                 { label: '从世界书导入', value: 'import-wb' },
                 { label: '导出', value: 'export', disabled: !view.project().outline.volumes.length },
+                ...(endingPreviewable(view) ? [{ label: '结局预览…', value: 'ending-preview' }] : []),
             ],
         });
         pick && (await actions[pick](view));
     },
+    'ending-preview': (view) => endingPreview(view),
     async 'import-file'(view) {
         const files = await pickFiles({ accept: '.yaml,.yml,.txt', multiple: !0 });
         files.length &&
@@ -1462,7 +1469,7 @@ export const actions = {
             box = target.closest('.pi-vitem')?.querySelector('[data-draft-yaml]'),
             text = box ? box.value : draft.items[i].yaml,
             reply = await runTask(view, 'outline', () =>
-                ask(view, 'outline', fixYamlMessages(text, draft.items[i].error, isClueMode(view.project()) ? 'clue' : 'outline')),
+                ask(view, 'outline', fixYamlMessages(text, draft.items[i].error, isClueMode(view.project()) ? 'clue' : 'outline', choiceRules(view, view.project()))),
             );
         reply && setMultiItem(view, i, parseOutlineReply(reply, void 0, { all: !0 }));
     },
@@ -1522,6 +1529,7 @@ ${yaml}
                     view,
                     'outline',
                     volumeRequest({
+                        view,
                         project,
                         talk,
                         wb,
@@ -1551,7 +1559,7 @@ ${yaml}
         const box = target.closest('.pi-card').querySelector('[data-draft-yaml]'),
             text = box ? box.value : draft.yaml,
             reply = await runTask(view, 'outline', () =>
-                ask(view, 'outline', fixYamlMessages(text, draft.error, isClueMode(view.project()) ? 'clue' : 'outline')),
+                ask(view, 'outline', fixYamlMessages(text, draft.error, isClueMode(view.project()) ? 'clue' : 'outline', choiceRules(view, view.project()))),
             );
         reply &&
             setDraft(view, draft.mode, reply, {
@@ -1829,6 +1837,7 @@ async function stageOp(view, op) {
             view,
             'outline',
             stageOpMessages({
+                choice: choiceRules(view, project),
                 setting: project.setting.text,
                 talk,
                 refs: wb,

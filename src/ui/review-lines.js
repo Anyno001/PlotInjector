@@ -64,6 +64,7 @@ export function reviewCheck(view, items, opts = {}) {
         if (x.dropped) out[x.id] = { issues: [], conds: [], line };
         else {
             (comp.errors.filter(mine).forEach((t) => issues.push({ level: 'error', text: t })),
+                (comp.warnings || []).filter(mine).forEach((t) => issues.push({ level: 'warn', text: t })),
                 depends.filter((t) => t.startsWith(`线 ${x.id}`)).forEach((t) => issues.push({ level: 'error', text: t })),
                 draftIssues
                     .filter((t) => t.startsWith(`线 ${x.id} `))
@@ -117,11 +118,11 @@ export function condWords(c, names = {}) {
     let fact = (id) => (names.facts && names.facts[id] ? `「${names.facts[id]}」` : id),
         node = (id) => (names.nodes && names.nodes[id] ? `「${names.nodes[id]}」` : id),
         line = (id) => (names.lines && names.lines[id] ? `「${names.lines[id]}」` : `线${id}`);
-    if (c.kind === 'group')
-        return c.items
-            .map((x) => condWords(x, names))
-            .filter(Boolean)
-            .join(c.mode === 'any' ? '，或' : '，并且');
+    if (c.kind === 'group') {
+        let parts = c.items.map((x) => condWords(x, names)).filter(Boolean);
+        return c.mode === 'atleast' ? `下面${parts.length}条里至少${c.n}条：${parts.join('；')}` : parts.join(c.mode === 'any' ? '，或' : '，并且');
+    }
+    if (c.kind === 'choice') return `抉择${node(c.node)}${c.what === '选了' ? `选了「${c.value}」` : `的结果是「${c.value}」`}`;
     if (c.kind === 'cell') {
         let [t, row, col] = String(c.path)
             .split('/')

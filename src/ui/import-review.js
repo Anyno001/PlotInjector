@@ -1,3 +1,4 @@
+import { choiceRules } from './choice-card.js';
 // 逐页审阅。
 // 一条剧情线：第 1 页「这条线」（线头：类型、简介、入口、什么时候开始），后面每个阶段一页。
 // 审阅只改草稿（job.review）；点「保存到大纲」才经 prepareCommit（review-draft）写入项目，保存逻辑在 long-import.js。
@@ -875,6 +876,7 @@ async function reviseUnits(view, jobId, c, index, jobOf, opts = {}) {
             view,
             'outline',
             reviewReviseMessages({
+                choice: choiceRules(view, view.project()),
                 units: want.map((k) => ({ key: k, label: labelOf(k), yaml: yamlOf(k), comment: (review.comments || {})[k] || '', source: commented.includes(k) ? sourceOf(k) : '', overall: !overall || k.split('/')[0] === overallVol })),
                 context: ctxText,
                 secrets,

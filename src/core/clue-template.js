@@ -192,7 +192,7 @@ export function clueSheets({ factRows = [], knowRows = [], controlRow = null, sc
 // 列按名字找，列多列少都不影响；插件只改它的更新频率，读时间、地点两格，不增删列、不改它的填表规则。
 export const GLOBAL_TABLE_NAMES = ['全局数据表', '全局表', '全局状态表'];
 export const GLOBAL_TIME_COLS = ['当前时间', '时间', '当前日期时间', '游戏时间'];
-export const GLOBAL_PLACE_COLS = ['当前详细地点', '当前位置', '当前地点', '所在地点', '地点'];
+export const GLOBAL_PLACE_COLS = ['当前详细地点', '主角当前所在地点', '当前位置', '当前地点', '所在地点', '地点'];
 export function findGlobalTable(sheets) {
     let list = (sheets || []).filter((s) => s && s.name),
         head = (s) => clueTplHeader(s),
@@ -202,12 +202,15 @@ export function findGlobalTable(sheets) {
     let h = head(sheet),
         rows = Array.isArray(sheet.content) ? sheet.content.slice(1).filter(Array.isArray) : [],
         seeds = Array.isArray(sheet.seedRows) ? sheet.seedRows.filter(Array.isArray) : [],
-        first = (rows[0] || seeds[0] || [])[1];
+        first = (rows[0] || seeds[0] || [])[1],
+        rowKey = String(first ?? '').trim() || '全局状态';
     return {
         sheet,
         name: String(sheet.name).trim(),
-        // 行标识：第一行第一列的值（默认模板是「全局状态」）；还没有行时用默认的「全局状态」
-        row: String(first ?? '').trim() || '全局状态',
+        // 行标识：单行表用「*」（唯一那一行）。官方全局表第一列是会变的地点，按第一格的值找，主角一换地方就找不到了。
+        // 已经有多行时才按第一行第一列的值找（默认模板是「全局状态」）。
+        row: Math.max(rows.length, seeds.length) > 1 ? rowKey : '*',
+        rowKey,
         time: GLOBAL_TIME_COLS.find((c) => h.includes(c)) || '',
         place: GLOBAL_PLACE_COLS.find((c) => h.includes(c)) || '',
     };
@@ -503,7 +506,7 @@ export function synthesizeClueTemplate(base, { clue = {} } = {}) {
                     },
                 ],
                 scene: { 路径: '线索控制表/主线/当前场景', 离场值: '无' },
-                time: { 路径: [...(g && g.time ? [`${g.name}/${g.row}/${g.time}`] : []), '全局数据表/全局状态/当前时间', '线索控制表/主线/当前时间'].filter((x, i, a) => a.indexOf(x) === i) },
+                time: { 路径: [...(g && g.time ? [`${g.name}/${g.row}/${g.time}`, `${g.name}/${g.rowKey}/${g.time}`] : []), '全局数据表/全局状态/当前时间', '线索控制表/主线/当前时间'].filter((x, i, a) => a.indexOf(x) === i) },
             },
         }
     );
