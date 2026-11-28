@@ -18,6 +18,7 @@ import { conditionRefs, parseCondition, compileClue } from './trpg-clue-rules.js
 import { CLUE_STAGE_KEYS, CLUE_NODE_KEYS, nodeUid, stripAuthorDeep, outlineStageData } from './trpg-clue-model.js';
 import { TRPG_IMPORT_RULES } from './trpg.js';
 import { importFlowIssues } from './trpg-import-check.js';
+import { PROFILE_KEYS, mergeProfileField } from './trpg-people.js';
 
 export const CHAPTER_HEAD =
     /^(?:#{1,4}\s+.+|第[0-9一二三四五六七八九十百零〇两]+[章回节幕部卷].*|Chapter\s+\d+.*|[一二三四五六七八九十]+、.+)$/i;
@@ -73,7 +74,8 @@ export const IMPORT_INDEX_FORMAT = [
     '```yaml',
     '梗概: 这一段讲了什么（两三句）',
     '人物:',
-    '  - {名称: 常用称呼, 别名: [只属于这个人的其他称呼], 同一人: 前面索引里已有的名称（只有原文明说是同一个人时才写）, 公开身份: 别人眼里他是谁, 真实身份: 只有作者知道的（没有就省略）, 名字保密: 按上面的判断方法，需要时写 true（不需要就省略）, 首次登场: 本段 / 之前}',
+    '  - {名称: 常用称呼, 别名: [只属于这个人的其他称呼], 同一人: 前面索引里已有的名称（只有原文明说是同一个人时才写）, 公开身份: 别人眼里他是谁, 真实身份: 只有作者知道的（没有就省略）, 名字保密: 按上面的判断方法，需要时写 true（不需要就省略）, 首次登场: 本段 / 之前, 外貌: 一句话, 性格: 一句话, 口吻: 说话的习惯和语气, 对玩家的态度: 一句话, 底线: 他绝不会做或绝不会说的事, 台词: 原文里最能体现口吻的一句}',
+    '  # 外貌、性格、口吻、对玩家的态度、底线、台词：只写玩家在游戏里能观察到的、本段材料里明写或明显体现的；每项没有就省略，不要猜。真实身份、动机、幕后只写在「真实身份」或「作者资料」里。台词必须是原文原句。',
     '  # 「维修工」「老板」这类很多人都能叫的泛称不要写进别名；同一个人的化名、绰号才写。',
     '地点:',
     '  - {名称: …, 说明: 一句话}',
@@ -229,7 +231,9 @@ export function mergeImportIndex(list) {
                 for (let [f, v] of Object.entries(p))
                     f === '名称' ||
                         f === '同一人' ||
-                        (hit[f] == null || hit[f] === ''
+                        (PROFILE_KEYS.includes(f)
+                            ? (hit[f] = mergeProfileField(f, hit[f], v))
+                            : hit[f] == null || hit[f] === ''
                             ? (hit[f] = v)
                             : f === '别名' && (hit.别名 = [.../* @__PURE__ */ new Set([...(hit.别名 || []), ...(v || [])])]));
                 (hit.名称 !== name && (hit.别名 = [.../* @__PURE__ */ new Set([...(hit.别名 || []), name])]), people.set(name, hit));

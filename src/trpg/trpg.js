@@ -13,13 +13,16 @@ export const KP_BLOCK = 'KP规则';
 
 export function normalizeTrpg(value) {
     if (!isPlainObject(value)) return null;
-    let slices = normalizeSlices(value.slices);
+    let slices = normalizeSlices(value.slices),
+        peopleSeen = Array.isArray(value.peopleSeen) ? value.peopleSeen.map(String).filter(Boolean) : [];
     // slices：模组原文切片（trpg-slices.js）；sliceOff：用户关掉了「使用原文切片」。没有就不带这两个键，老项目不变。
     return {
         on: value.on !== !1,
         rule: TRPG_RULES.some((r) => r.value === value.rule) ? value.rule : 'coc7',
         ...(slices.length ? { slices } : {}),
         ...(value.sliceOff === !0 ? { sliceOff: !0 } : {}),
+        // 人物档案已经从导入索引处理过的名字（用户删掉的不再补回）
+        ...(peopleSeen.length ? { peopleSeen } : {}),
     };
 }
 

@@ -504,8 +504,11 @@ export function computeClueState(compiled, snapshot, clueProg, config = DEFAULT_
             let own = nodes.filter((n) => n.unit === unit),
                 required = own.filter((n) => n.required),
                 gate = k === 0 && firstEntered ? firstEntered() : null,
+                hand = (clueProg.stages || {})[unit.id] || '',
                 entered =
-                    gate && gate.v !== TRI.t
+                    hand === 'enter' || hand === 'done'
+                        ? { v: TRI.t, reasons: ['人工设为已进入'], manual: !0 }
+                        : gate && gate.v !== TRI.t
                         ? gate
                         : unit.clue.hasEnter
                           ? evalCondition(unit.clue.enter, env)
@@ -514,8 +517,8 @@ export function computeClueState(compiled, snapshot, clueProg, config = DEFAULT_
                             : { v: TRI.f, reasons: ['上一阶段尚未结束'] },
                 requiredLeft = required.filter((n) => !(overrides[n.uid] || {}).skip && nodeDone(n).v !== TRI.t),
                 end = evalCondition(unit.clue.end, env),
-                done = entered.v === TRI.t && !requiredLeft.length && end.v === TRI.t;
-            (gate && gate.v !== TRI.t && (entered = gate),
+                done = hand === 'done' ? !0 : hand === 'enter' ? !1 : entered.v === TRI.t && !requiredLeft.length && end.v === TRI.t;
+            (gate && gate.v !== TRI.t && !hand && (entered = gate),
                 stageStates.set(unit.id, { unit, entered, end, requiredLeft, done: entered.v === TRI.t && done }),
                 (prevDone = entered.v === TRI.t && done));
         }

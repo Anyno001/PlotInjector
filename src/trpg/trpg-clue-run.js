@@ -168,7 +168,8 @@ export function stageBlock(unit, stage, nodes, focusUid, st7, { next = !1, expan
         endWhy = live && !stage.requiredLeft.length && stage.end.v !== 'true' ? `结束条件：${stage.end.reasons.join('；')}` : '',
         enterWhy = !live && !stage.done ? stage.entered.reasons.join('；') : '',
         cls = stage.done ? 'done' : live ? 'active' : next ? 'next' : 'todo',
-        head = `<span class="pi-tl-name">${esc(stageLabel(unit.stage.key))}</span>${left ? `<span class="pi-tl-state is-left">${left}</span>` : ''}${state ? `<span class="pi-tl-state">${state}</span>` : ''}`;
+        hand = stage.entered.manual,
+        head = `<span class="pi-tl-name">${esc(stageLabel(unit.stage.key))}</span>${left ? `<span class="pi-tl-state is-left">${left}</span>` : ''}${state ? `<span class="pi-tl-state">${state}${hand ? '（手动）' : ''}</span>` : ''}<button type="button" class="pi-icon-btn" data-act="clue-stage-menu" data-id="${esc(unit.id)}" title="手动调整阶段" aria-label="手动调整阶段">${ICONS.more}</button>`;
     return `<div class="pi-tl-item is-${cls}"><span class="pi-tl-dot"></span><div class="pi-tl-box">
         ${live ? `<div class="pi-tl-hd">${head}</div>` : `<div class="pi-tl-hd is-fold" data-act="run-fold" data-key="${esc(key)}" role="button" aria-expanded="${open}">${head}<span class="pi-tl-state">${open ? '▾' : '▸'}</span></div>`}
         ${open ? `${[endWhy, enterWhy].filter(Boolean).map((t) => `<p class="pi-hint">${esc(t)}</p>`).join('')}<div class="pi-tl-nodes">${nodes.map((s) => nodeRow(s, focusUid, st7.nodeOpen === s.node.uid)).join('')}</div>` : ''}</div></div>`;
@@ -1295,6 +1296,27 @@ export const clueActions = {
         (view.runtime.clue.leaveScene(target.dataset.uid),
             toast('info', '已记下主角离开了这件事：不再注入它的场景，只给入口。'),
             view.renderBody());
+    },
+    // 阶段「⋯」：手动设进行中 / 已结束 / 改回按条件判断
+    async 'clue-stage-menu'(view, target) {
+        let clue = view.runtime.clue,
+            c = clue.compute(),
+            id = target.dataset.id,
+            s = c && c.state.stageStates.get(id);
+        if (!s) return;
+        let hand = (c.prog.stages || {})[id] || '',
+            live = s.entered.v === 'true' && !s.done,
+            pick = await menuDialog({
+                title: stageLabel(s.unit.stage.key),
+                items: [
+                    ...(live && hand !== 'enter' ? [] : [{ label: '设为进行中', value: 'enter' }]),
+                    ...(s.done && hand === 'done' ? [] : [{ label: '标记为已结束', value: 'done' }]),
+                    ...(hand ? [{ label: '改回按条件判断', value: '' }] : []),
+                ],
+            });
+        if (pick === null || pick === void 0) return;
+        let note = pick ? await promptDialog({ title: '记录原因（可空）', label: '为什么手动处理' }) : '';
+        note !== null && (clue.act({ kind: 'stage', target: id, value: pick, note }), view.renderBody());
     },
     async 'clue-node-menu'(view, target) {
         let clue = view.runtime.clue,

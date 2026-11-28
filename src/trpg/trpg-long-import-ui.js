@@ -53,6 +53,8 @@ import { adoptKey } from './trpg-import-store.js';
 // 跑团模式（core/trpg.js）：PDF 转文字、跑团模组导入
 import { isPdfFile, pdfFileToText } from '../host/pdf-load.js';
 import { isTrpg } from './trpg.js';
+import { peopleLines } from './trpg-people.js';
+import { normalizePersonas } from '../core/personas.js';
 import { runKpRules } from './trpg-kp-rules.js';
 
 export const IMPORT_PART_CHARS = 8e3;
@@ -125,6 +127,31 @@ export function projectAdopted(project) {
 function afterAdopt(view) {
     baseAfterAdopt(view);
     syncSlices(view);
+    syncPeople(view);
+}
+
+// 导入索引里的人物档案并进项目的人设线（关键词触发）。用户改过、删掉的不会被覆盖或补回。
+export function syncPeople(view) {
+    let project = view.project();
+    if (!project || !project.trpg) return;
+    let jobs = importJobIds(project)
+            .map((id) => view.data.imports.get(id))
+            .filter((j) => j && j.trpg && j.index),
+        seen = project.trpg.peopleSeen || [],
+        lines = (project.personas && project.personas.lines) || [],
+        add = [],
+        names = [];
+    for (let j of jobs) {
+        let r = peopleLines(j.index, [...lines, ...add], [...seen, ...names]);
+        (add.push(...r.lines), names.push(...r.names));
+    }
+    if (!add.length) return;
+    view.data.updateProject(view.projectId, (p) => ({
+        ...p,
+        personas: normalizePersonas({ ...p.personas, lines: [...((p.personas && p.personas.lines) || []), ...add] }),
+        trpg: { ...p.trpg, peopleSeen: [...new Set([...((p.trpg && p.trpg.peopleSeen) || []), ...names])] },
+    }));
+    view.runtime.refresh && view.runtime.refresh();
 }
 
 export function syncSlices(view) {
